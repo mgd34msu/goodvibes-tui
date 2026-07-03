@@ -90,7 +90,35 @@ describe('applyConversationOverlays onboarding shell', () => {
 
   test('preserves modalReturnFocus while escape unwinds nested onboarding modals', () => {
     const input = makeInput();
+    // Panel focus is only real while a panel workspace is actually open — focus
+    // ownership now lives in PanelManager and self-heals against visibility — so
+    // open a panel before claiming panel focus for this modalReturnFocus test.
+    const pm = input.uiServices.shell.panelManager;
+    pm.registerType({
+      id: 'focus-fixture',
+      name: 'Focus Fixture',
+      icon: 'F',
+      category: 'runtime-ops',
+      description: '',
+      factory: () => ({
+        id: 'focus-fixture',
+        name: 'Focus Fixture',
+        icon: 'F',
+        category: 'runtime-ops',
+        isTransient: false,
+        isPinned: false,
+        needsRender: true,
+        onActivate() {},
+        onDeactivate() {},
+        onDestroy() {},
+        render: () => [],
+        invalidate() {},
+        markRendered() {},
+      }) as never,
+    });
+    pm.open('focus-fixture');
     input.panelFocused = true;
+    expect(input.panelFocused).toBe(true);
     input.openOnboardingWizard({ mode: 'edit', preload: () => {} });
     input.panelFocused = false;
     input.modelPicker.openProviders(['openai'], 'openai');

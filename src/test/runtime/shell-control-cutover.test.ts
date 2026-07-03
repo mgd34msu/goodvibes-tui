@@ -120,7 +120,6 @@ describe('GC-ARCH-004: shell control cutover enforcement', () => {
   test('known panel-local repaint files do not emit render:request', () => {
     const violations: string[] = [];
     const restrictedFiles = [
-      'src/panels/provider-stats-panel.ts',
       'src/panels/provider-health-panel.ts',
       'src/panels/debug-panel.ts',
     ];
@@ -156,9 +155,10 @@ describe('GC-ARCH-004: shell control cutover enforcement', () => {
     const violations: string[] = [];
     const restrictedFiles = [
       'src/panels/thinking-panel.ts',
-      'src/panels/context-visualizer-panel.ts',
+      // WO-113: context-visualizer-panel.ts merged into token-budget-panel.ts;
+      // the successor inherits the legacy-turn-bus ban.
+      'src/panels/token-budget-panel.ts',
       'src/panels/debug-panel.ts',
-      'src/panels/provider-stats-panel.ts',
       'src/panels/provider-health-panel.ts',
       'src/panels/cost-tracker-panel.ts',
       'src/main.ts',
@@ -195,7 +195,7 @@ describe('GC-ARCH-004: shell control cutover enforcement', () => {
     const violations: string[] = [];
     const restrictedFiles = [
       'src/runtime/bootstrap.ts',
-      'src/panels/agent-logs-panel.ts',
+      'src/panels/agent-inspector-panel.ts',
       'src/panels/cost-tracker-panel.ts',
     ];
 
@@ -264,7 +264,6 @@ describe('GC-ARCH-004: shell control cutover enforcement', () => {
     const violations: string[] = [];
     const restrictedFiles = [
       'src/runtime/bootstrap.ts',
-      'src/panels/provider-stats-panel.ts',
       'src/panels/provider-health-panel.ts',
       'src/panels/ops-strategy-panel.ts',
     ];

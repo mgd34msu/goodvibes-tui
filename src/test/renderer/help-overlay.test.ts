@@ -19,7 +19,10 @@ const SAMPLE_COMMANDS: SlashCommand[] = [
 
 function renderAllText(commands?: SlashCommand[]): string {
   const frames: string[] = [];
-  for (let offset = 0; offset <= 30; offset += 6) {
+  // The overlay is one tall scrolling surface (workspace bindings + in-panel
+  // contract + command groups), so scan a wide offset range to capture every
+  // section regardless of where it lands in the window.
+  for (let offset = 0; offset <= 66; offset += 3) {
     frames.push(linesToText(renderHelpOverlay(W, KEYBINDINGS, commands, offset, TALL_VIEWPORT)).join('\n'));
   }
   return frames.join('\n');
@@ -72,9 +75,31 @@ describe('renderHelpOverlay', () => {
   test('contains Quick Start section when featured commands are registered', () => {
     // Quick Start is built from the live registry: need at least one featured command.
     const cmds: SlashCommand[] = [{ name: 'cockpit', description: 'Control room', handler: () => {} }];
-    const lines = renderHelpOverlay(W, KEYBINDINGS, cmds, 14, TALL_VIEWPORT);
-    const texts = linesToText(lines).join('\n');
+    const texts = renderAllText(cmds);
     expect(texts).toContain('Quick Start');
+  });
+
+  test('contains an Essentials command group with the memorable commands', () => {
+    const cmds: SlashCommand[] = [
+      { name: 'model', description: 'Select model', handler: () => {} },
+      { name: 'keybindings', description: 'Customize keys', handler: () => {} },
+      { name: 'clear', description: 'Clear conversation', handler: () => {} },
+    ];
+    const texts = renderAllText(cmds);
+    expect(texts).toContain('Essentials');
+    expect(texts).toContain('/keybindings');
+  });
+
+  test('enumerates workspace panel bindings including Alt+digit tab jumps', () => {
+    const texts = renderAllText();
+    // Bindings are pulled from KeybindingsManager.getAll(); the Alt+digit jumps
+    // are real, rebindable actions and must be discoverable here.
+    expect(texts).toContain('Alt+1');
+    expect(texts).toContain('Alt+9');
+    expect(texts).toContain('Jump to workspace panel tab');
+    // The shared in-panel contract is documented alongside the global bindings.
+    expect(texts).toContain('In-Panel Controls');
+    expect(texts).toContain('j / k');
   });
 
   test('shows the onboarding wizard quick-start row when onboarding is registered', () => {
@@ -104,21 +129,18 @@ describe('renderHelpOverlay', () => {
   });
 
   test('renders command list when commands provided', () => {
-    const lines = renderHelpOverlay(W, KEYBINDINGS, SAMPLE_COMMANDS, 47, TALL_VIEWPORT);
-    const texts = linesToText(lines).join('\n');
+    const texts = renderAllText(SAMPLE_COMMANDS);
     expect(texts).toContain('/model');
     expect(texts).toContain('/help');
   });
 
   test('shows command aliases when provided when command is in the expanded list', () => {
-    const lines = renderHelpOverlay(W, KEYBINDINGS, SAMPLE_COMMANDS, 47, TALL_VIEWPORT);
-    const texts = linesToText(lines).join('\n');
+    const texts = renderAllText(SAMPLE_COMMANDS);
     expect(texts).toContain('/model');
   });
 
   test('shows fallback command list when no commands provided', () => {
-    const lines = renderHelpOverlay(W, KEYBINDINGS, undefined, 47, TALL_VIEWPORT);
-    const texts = linesToText(lines).join('\n');
+    const texts = renderAllText(undefined);
     // The fallback string includes known command names
     expect(texts).toContain('/help');
   });

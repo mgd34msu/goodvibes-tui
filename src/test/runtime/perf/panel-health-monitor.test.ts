@@ -6,7 +6,6 @@
  * - Render cost budget enforcement and degradation
  * - Render storm containment (many rapid requests do not cascade globally)
  * - Recovery after sustained clean windows
- * - Diagnostics snapshot via PanelResourcesPanel
  */
 
 import { describe, test, expect, beforeEach } from 'bun:test';
@@ -14,7 +13,6 @@ import {
   ComponentHealthMonitor,
 } from '../../../runtime/perf/panel-health-monitor.ts';
 import { buildContract } from '../../../runtime/perf/panel-contracts.ts';
-import { PanelResourcesPanel } from '../../../runtime/diagnostics/panels/panel-resources.ts';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -290,93 +288,6 @@ describe('ComponentHealthMonitor: render storm containment', () => {
     expect(h.throttleStatus).toBe('normal');
     expect(h.healthStatus).toBe('healthy');
     expect(h.consecutiveViolations).toBe(0);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// PanelResourcesPanel (diagnostics data provider)
-// ---------------------------------------------------------------------------
-
-describe('PanelResourcesPanel: diagnostics snapshot', () => {
-  test('empty snapshot when no panels are registered', () => {
-    const monitor = new ComponentHealthMonitor();
-    const panel = new PanelResourcesPanel(monitor);
-    const snap = panel.getSnapshot();
-    expect(snap.panels).toHaveLength(0);
-    expect(snap.overloadedCount).toBe(0);
-    expect(snap.warningCount).toBe(0);
-    expect(snap.healthyCount).toBe(0);
-    expect(snap.totalSuppressed).toBe(0);
-    panel.dispose();
-  });
-
-  test('refresh builds snapshot from shared monitor state', () => {
-    const monitor = new ComponentHealthMonitor();
-    monitor.register('diag-panel-1', 'development');
-    monitor.register('diag-panel-2', 'monitoring');
-
-    // Simulate some renders
-    monitor.canRender('diag-panel-1', 1000);
-    monitor.recordRender('diag-panel-1', 3, 1003);
-
-    const provider = new PanelResourcesPanel(monitor);
-    const snap = provider.refresh(2000);
-
-    expect(snap.panels).toHaveLength(2);
-    expect(snap.panels.some((p) => p.componentId === 'diag-panel-1')).toBe(true);
-    expect(snap.capturedAt).toBe(2000);
-    provider.dispose();
-  });
-
-  test('overloaded panels sort before healthy in snapshot', () => {
-    const monitor = new ComponentHealthMonitor();
-
-    // Heavy panel — will be overloaded
-    monitor.register('heavy-diag', 'monitoring', {
-      maxUpdatesPerSecond: 1,
-      throttleIntervalMs: 10,
-      degradeAfterViolations: 2,
-      degradedIntervalMs: 200,
-    });
-    // Calm panel — stays healthy
-    monitor.register('calm-diag', 'development');
-
-    // Storm heavy panel
-    for (let i = 0; i < 20; i++) {
-      monitor.canRender('heavy-diag', 500 + i * 5);
-    }
-
-    const provider = new PanelResourcesPanel(monitor);
-    const snap = provider.refresh(700);
-
-    expect(snap.panels.length).toBeGreaterThanOrEqual(1);
-    const heavyIdx = snap.panels.findIndex((p) => p.componentId === 'heavy-diag');
-    const calmIdx = snap.panels.findIndex((p) => p.componentId === 'calm-diag');
-    if (heavyIdx !== -1 && calmIdx !== -1) {
-      expect(heavyIdx).toBeLessThan(calmIdx);
-    }
-    provider.dispose();
-  });
-
-  test('totalSuppressed aggregates across all panels', () => {
-    const monitor = new ComponentHealthMonitor();
-
-    monitor.register('a', 'monitoring', { maxUpdatesPerSecond: 1, throttleIntervalMs: 100, degradeAfterViolations: 10 });
-    monitor.register('b', 'monitoring', { maxUpdatesPerSecond: 1, throttleIntervalMs: 100, degradeAfterViolations: 10 });
-
-    for (let i = 0; i < 10; i++) {
-      monitor.canRender('a', 1000 + i * 20);
-      monitor.canRender('b', 1000 + i * 20);
-    }
-
-    const provider = new PanelResourcesPanel(monitor);
-    const snap = provider.refresh(1300);
-
-    const aEntry = snap.panels.find((p) => p.componentId === 'a');
-    const bEntry = snap.panels.find((p) => p.componentId === 'b');
-    const indivSum = (aEntry?.totalSuppressed ?? 0) + (bEntry?.totalSuppressed ?? 0);
-    expect(snap.totalSuppressed).toBe(indivSum);
-    provider.dispose();
   });
 });
 

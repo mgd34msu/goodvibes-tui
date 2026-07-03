@@ -13,31 +13,26 @@
 import type { Line } from '../types/grid.ts';
 import type { MemoryRegistry } from '@pellux/goodvibes-sdk/platform/state';
 import type { MemoryClass, MemoryRecord, MemoryReviewState } from '@pellux/goodvibes-sdk/platform/state';
-import { ScrollableListPanel, SearchableListPanel } from './scrollable-list-panel.ts';
+import { ScrollableListPanel } from './scrollable-list-panel.ts';
 import { truncateDisplay } from '../utils/terminal-width.ts';
 import { type ConfirmState, handleConfirmInput, renderConfirmLines } from './confirm-state.ts';
 import {
   buildBodyText,
-  buildGuidanceLine,
   buildKeyValueLine,
   buildPanelLine,
   buildPanelWorkspace,
   extendPalette,
   DEFAULT_PANEL_PALETTE,
 } from './polish.ts';
-import {
-  getPanelSearchFocusTransition,
-  isPanelSearchCancel,
-} from './search-focus.ts';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 
 // ---------------------------------------------------------------------------
 // Colour palette
 // ---------------------------------------------------------------------------
 
+// Domain accents only — one hue per memory class (base chrome: header/
+// headerBg/selectBg come from DEFAULT_PANEL_PALETTE).
 const C = extendPalette(DEFAULT_PANEL_PALETTE, {
-  header: '#94a3b8',
-  headerBg: '#1e293b',
   decision: '#38bdf8',
   constraint: '#f97316',
   incident: '#ef4444',
@@ -47,9 +42,6 @@ const C = extendPalette(DEFAULT_PANEL_PALETTE, {
   runbook: '#eab308',
   architecture: '#60a5fa',
   ownership: '#14b8a6',
-  selected: '#1e3a5f',
-  searchBg: '#0f172a',
-  searchFg: '#e2e8f0',
 });
 
 // ---------------------------------------------------------------------------
@@ -104,14 +96,13 @@ function formatConfidence(confidence: number): string {
 // MemoryPanel
 // ---------------------------------------------------------------------------
 
-export class MemoryPanel extends SearchableListPanel<MemoryRecord> {
+export class MemoryPanel extends ScrollableListPanel<MemoryRecord> {
   private readonly registry: MemoryRegistry;
   private filterMode: FilterMode = 'all';
-  private filterFocused = false;
   private unsubscribe?: () => void;
 
-  // Review-mode confirm state (for destructive stale/contradict actions)
-  private confirm: ConfirmState<{ id: string; action: 'stale' | 'contradicted' }> | null = null;
+  // Confirm state (for destructive stale/contradict/delete actions)
+  private confirm: ConfirmState<{ id: string; action: 'stale' | 'contradicted' | 'delete' }> | null = null;
 
   // Cached records for review-mode (reviewQueue-first, same as former KnowledgePanel)
   private reviewRecords: MemoryRecord[] = [];
@@ -119,6 +110,10 @@ export class MemoryPanel extends SearchableListPanel<MemoryRecord> {
   constructor(registry: MemoryRegistry) {
     super('memory', 'Memory', 'M', 'agent');
     this.registry = registry;
+    // WO-153: converged modal '/' filter — only active in 'all' mode; review
+    // mode uses r/s/c/f/d single-letter actions instead of text filtering.
+    this.filterEnabled = true;
+    this.filterLabel = 'Search';
   }
 
   // ---------------------------------------------------------------------------
@@ -127,13 +122,11 @@ export class MemoryPanel extends SearchableListPanel<MemoryRecord> {
 
   override onActivate(): void {
     super.onActivate();
-    this.searchQuery = '';
-    this.invalidateFilter();
-    this.filterFocused = false;
+    this.filterQuery = '';
+    this.filterActive = false;
     this.confirm = null;
     this.refreshReviewRecords();
     this.unsubscribe = this.registry.subscribe(() => {
-      this.invalidateFilter();
       this.refreshReviewRecords();
       this.markDirty();
     });
@@ -149,16 +142,11 @@ export class MemoryPanel extends SearchableListPanel<MemoryRecord> {
   }
 
   // ---------------------------------------------------------------------------
-  // SearchableListPanel implementation (used in 'all' filter mode)
+  // ScrollableListPanel implementation (filter is only enabled in 'all' mode)
   // ---------------------------------------------------------------------------
 
-  protected getAllItems(): readonly MemoryRecord[] {
-    return this.registry.search({ limit: 100 });
-  }
-
-  protected matchesSearch(record: MemoryRecord, query: string): boolean {
-    const q = query.trim().toLowerCase();
-    if (!q) return true;
+  /** `q` arrives already trimmed + lower-cased from ScrollableListPanel.getVisibleItems(). */
+  protected override filterMatches(record: MemoryRecord, q: string): boolean {
     const haystack = [
       record.summary,
       record.detail ?? '',
@@ -181,7 +169,7 @@ export class MemoryPanel extends SearchableListPanel<MemoryRecord> {
       ]);
     }
     // All-mode row: scope/class + id + time + summary (matches former MemoryPanel row)
-    const bg = selected ? C.selected : undefined;
+    const bg = selected ? C.selectBg : undefined;
     return buildPanelLine(width, [
       ['  ', C.label, bg],
       [`[${record.scope.slice(0, 1).toUpperCase()}/${record.cls.slice(0, 3).toUpperCase()}] `, classColor(record.cls), bg],
@@ -197,9 +185,9 @@ export class MemoryPanel extends SearchableListPanel<MemoryRecord> {
 
   protected override getEmptyStateMessage() {
     if (this.filterMode === 'review') return 'No records in the review queue.';
-    return this.searchQuery
-      ? ` No records matching "${this.searchQuery}"`
-      : ' No memory records. Use /recall add <class> <summary> to create one.';
+    // The filter-narrowed-to-empty case is handled by ScrollableListPanel's
+    // own 'No matches for "..."' message (renderList) before this is reached.
+    return ' No memory records. Use /recall add <class> <summary> to create one.';
   }
 
   protected override getEmptyStateActions() {
@@ -215,14 +203,15 @@ export class MemoryPanel extends SearchableListPanel<MemoryRecord> {
   // ---------------------------------------------------------------------------
 
   /**
-   * Override getItems() so that ScrollableListPanel infrastructure (renderList,
-   * clampSelection, navigation bounds) all operate on reviewRecords in review
-   * mode — preventing the render/action index desync where rendered list index N
-   * did not correspond to reviewRecords[N] when the two lists differ.
+   * getItems() so that ScrollableListPanel infrastructure (renderList,
+   * clampSelection, navigation bounds, and — in 'all' mode — the modal '/'
+   * filter) all operate on the right data set per mode — preventing the
+   * render/action index desync where rendered list index N did not
+   * correspond to reviewRecords[N] when the two lists differ.
    */
-  protected override getItems(): readonly MemoryRecord[] {
+  protected getItems(): readonly MemoryRecord[] {
     if (this.filterMode === 'review') return this.reviewRecords;
-    return super.getItems();
+    return this.registry.search({ limit: 100 });
   }
 
   private refreshReviewRecords(): void {
@@ -230,11 +219,19 @@ export class MemoryPanel extends SearchableListPanel<MemoryRecord> {
     this.clampSelection();
   }
 
+  /** Count of records beyond the 100-record fetch cap in getItems(). */
+  private getHiddenCount(): number {
+    const total = this.registry.search({}).length;
+    return Math.max(0, total - 100);
+  }
+
   private cycleFilter(): void {
     const modes: FilterMode[] = ['all', 'review'];
     const next = modes[(modes.indexOf(this.filterMode) + 1) % modes.length];
     this.filterMode = next;
-    this.invalidateFilter();
+    // The modal '/' filter only applies in 'all' mode — review mode uses
+    // r/s/c/f/d single-letter actions instead of text filtering.
+    this.filterEnabled = next === 'all';
     this.refreshReviewRecords();
     this.markDirty();
   }
@@ -250,6 +247,16 @@ export class MemoryPanel extends SearchableListPanel<MemoryRecord> {
       if (result === 'confirmed') {
         const { id, action } = this.confirm.subject;
         this.confirm = null;
+        if (action === 'delete') {
+          try {
+            this.registry.delete(id);
+          } catch (e) {
+            this.setError(`Delete failed: ${summarizeError(e)}`);
+          }
+          this.refreshReviewRecords();
+          this.markDirty();
+          return true;
+        }
         const record = this.reviewRecords.find((r) => r.id === id);
         if (record) {
           try {
@@ -292,7 +299,9 @@ export class MemoryPanel extends SearchableListPanel<MemoryRecord> {
 
     // Review-mode specific actions (r/s/c/f)
     if (this.filterMode === 'review') {
-      const selected = this.reviewRecords[this.selectedIndex];
+      // In review mode getItems() returns reviewRecords and filterEnabled is
+      // false, so getSelectedItem() resolves the highlighted review record.
+      const selected = this.getSelectedItem();
 
       if (key === 'enter' || key === 'return' || key === 'r') {
         if (!selected) return false;
@@ -328,46 +337,35 @@ export class MemoryPanel extends SearchableListPanel<MemoryRecord> {
         this.markDirty();
         return true;
       }
-    }
-
-    // All-mode: search filter focus
-    if (this.filterMode === 'all') {
-      if (this.filterFocused) {
-        const items = this.getItems();
-        const transition = getPanelSearchFocusTransition(key, { selectedIndex: this.selectedIndex, itemCount: items.length });
-        if (transition === 'focus-list') {
-          this.filterFocused = false;
-          this.markDirty();
-          return true;
-        }
-        if (isPanelSearchCancel(key)) {
-          this.filterFocused = false;
-          return super.handleInput(key);
-        }
-        return super.handleInput(key);
-      }
-
-      const items = this.getItems();
-      const transition = getPanelSearchFocusTransition(key, { selectedIndex: this.selectedIndex, itemCount: items.length });
-      if (transition === 'focus-search') {
-        this.filterFocused = true;
+      if (key === 'd') {
+        if (!selected) return false;
+        this.confirm = { subject: { id: selected.id, action: 'delete' }, label: truncateDisplay(selected.summary, 40) };
         this.markDirty();
         return true;
       }
+    }
 
+    // All-mode: 'r' reload and 'd' delete are single-letter actions that
+    // coexist with the modal '/' filter — they only fire outside filter
+    // mode, so they remain typeable into the filter query while it's active.
+    if (this.filterMode === 'all' && !this.filterActive) {
       if (key === 'r') {
-        this.invalidateFilter();
+        this.markDirty();
+        return true;
+      }
+
+      if (key === 'd') {
+        const selected = this.getSelectedItem();
+        if (!selected) return false;
+        this.confirm = { subject: { id: selected.id, action: 'delete' }, label: truncateDisplay(selected.summary, 40) };
         this.markDirty();
         return true;
       }
     }
 
-    // In review mode, navigation keys (j/k/up/down/etc.) must bypass
-    // SearchableListPanel's printable-character interception, which would
-    // otherwise swallow single-char keys like 'j' and 'k' as search input.
-    if (this.filterMode === 'review') {
-      return ScrollableListPanel.prototype.handleInput.call(this, key);
-    }
+    // Navigation + (in 'all' mode) the modal '/' filter: delegate to
+    // ScrollableListPanel. filterEnabled is false in review mode, so '/' is
+    // inert there and single-char keys like 'j'/'k' navigate normally.
     return super.handleInput(key);
   }
 
@@ -403,13 +401,16 @@ export class MemoryPanel extends SearchableListPanel<MemoryRecord> {
   }
 
   private renderAllMode(width: number, height: number, filterToggleLine: Line): Line[] {
-    const records = this.getItems();
+    // getVisibleItems() applies the modal '/' filter (getItems() is the
+    // unfiltered 100-cap fetch); the filter input line itself is
+    // auto-injected by renderList() below (filterEnabled=true in 'all' mode).
+    const records = this.getVisibleItems();
     const byClass = new Map<MemoryClass, number>();
     for (const record of records) {
       byClass.set(record.cls, (byClass.get(record.cls) ?? 0) + 1);
     }
 
-    const filterInputLine = this.buildFilterInputLine(width, 'Search', this.filterFocused);
+    const hiddenCount = this.getHiddenCount();
 
     const summaryLines: Line[] = [
       buildKeyValueLine(width, [
@@ -420,11 +421,12 @@ export class MemoryPanel extends SearchableListPanel<MemoryRecord> {
         { label: 'runbooks', value: String(byClass.get('runbook') ?? 0), valueColor: C.runbook },
       ], C),
       filterToggleLine,
-      filterInputLine,
-      buildGuidanceLine(width, '/recall review', 'review durable knowledge and queue posture from the command surface', C),
+      ...(hiddenCount > 0
+        ? [buildPanelLine(width, [[`  +${hiddenCount} hidden (100-record cap)`, C.dim]])]
+        : []),
     ];
 
-    const selected = records[this.selectedIndex];
+    const selected = this.getSelectedItem();
     const selectedLines: Line[] = [];
     if (selected) {
       selectedLines.push(buildKeyValueLine(width, [
@@ -450,7 +452,7 @@ export class MemoryPanel extends SearchableListPanel<MemoryRecord> {
       header: summaryLines,
       footer: [
         ...selectedLines,
-        buildPanelLine(width, [['  / search  j/k or Up/Down move  r reload  Tab: Review Queue  Esc clear search', C.dim]]),
+        buildPanelLine(width, [['  / search  j/k or Up/Down move  r reload  d delete  Tab: Review Queue  Esc clear search', C.dim]]),
       ],
     });
   }
@@ -500,10 +502,9 @@ export class MemoryPanel extends SearchableListPanel<MemoryRecord> {
         ['  team ', C.label], [String(byScope.get('team') ?? 0), C.good],
       ]),
       filterToggleLine,
-      buildGuidanceLine(width, '/recall review', 'work the stale and contradicted queue from the command surface', C),
     ];
 
-    const selectedRecord = this.reviewRecords[this.selectedIndex];
+    const selectedRecord = this.getSelectedItem();
     const selectedLines: Line[] = [];
     if (selectedRecord) {
       selectedLines.push(buildPanelLine(width, [['  Selected', C.label]]));
@@ -550,7 +551,7 @@ export class MemoryPanel extends SearchableListPanel<MemoryRecord> {
       header: [...classLines, ...reviewLines],
       footer: [
         ...(selectedLines.length > 0 ? selectedLines : []),
-        buildPanelLine(width, [['  Tab: All Records  Up/Down move  r/Enter reviewed  s stale  c contradicted  f fresh', C.dim]]),
+        buildPanelLine(width, [['  Tab: All Records  Up/Down move  r/Enter reviewed  s stale  c contradicted  f fresh  d delete', C.dim]]),
       ],
     });
   }

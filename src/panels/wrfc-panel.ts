@@ -21,6 +21,9 @@ import {
   handleConfirmInput,
 } from './confirm-state.ts';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
+import { formatDuration } from '../utils/format-duration.ts';
+import { AgentInspectorPanel } from './agent-inspector-panel.ts';
+import type { PanelIntegrationContext } from './types.ts';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -73,6 +76,17 @@ export class WrfcPanel extends BasePanel {
   private chains: WrfcChain[] = [];
   private selectedIndex = 0;
   private scrollOffset = 0;
+
+  /**
+   * The chain under the cursor. This panel owns its own selection state
+   * (`selectedIndex` navigates `this.chains` directly), so every selected-row
+   * read routes through this one accessor — indexing `this.chains` by the
+   * cursor directly is banned by the no-raw-selectedindex-read architecture rule.
+   */
+  private selectedChain(): WrfcChain | undefined {
+    return this.chains.at(this.selectedIndex);
+  }
+
   private expandedChainIds = new Set<string>();
   private unsubscribers: Array<() => void> = [];
   /** Last event timestamp per chain id, for stall detection. */
@@ -137,8 +151,62 @@ export class WrfcPanel extends BasePanel {
       case 'enter': this.toggleExpanded();  return true;
       case 'c':     this.beginCancelConfirm(); return true;
       case 'r':     this.doResume();           return true;
+      // 'a' jumps to the selected chain's owner agent in the Inspector. The
+      // actual navigation happens in handlePanelIntegrationAction (it needs
+      // the PanelManager); consuming the key here just requires a selected
+      // chain to exist so the router below fires next.
+      case 'a':     return this.selectedChain() !== undefined;
       default:      return false;
     }
+  }
+
+  /**
+   * Cross-panel jump: 'a' on a selected chain opens the Inspector focused on
+   * that chain's owner agent (inspectAgent, reverse of the forward jump
+   * agent-detail-modal.ts makes from an agent record's wrfcId to its chain).
+   */
+  handlePanelIntegrationAction(key: string, ctx: PanelIntegrationContext): boolean {
+    if (key !== 'a') return false;
+    const chain = this.selectedChain();
+    if (!chain) return false;
+    const inspector = ctx.panelManager.open('inspector');
+    if (inspector instanceof AgentInspectorPanel) {
+      inspector.inspectAgent(chain.ownerAgentId);
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * Mouse-wheel scroll: pan the chain list viewport without moving the
+   * selection cursor (BasePanel's default forwards wheel deltas into
+   * handleInput('up'/'down'), which would also move the selected row).
+   * scrollOffset is a hint consumed by resolveScrollablePanelSection's
+   * tracked window on the next render, which clamps it into range and keeps
+   * the selected row inside the guard band — so an over-large delta here is
+   * always safe.
+   */
+  override handleScroll(deltaRows: number): boolean {
+    if (this.confirmCancel) return false;
+    const rows = Math.trunc(deltaRows);
+    if (rows === 0) return false;
+    const next = Math.max(0, this.scrollOffset + rows);
+    if (next === this.scrollOffset) return false;
+    this.scrollOffset = next;
+    this.markDirty();
+    return true;
+  }
+
+  /**
+   * Cross-panel jump target: select the chain by id and expand it. Used by
+   * WorkPlanPanel's 'w' jump key when an item links a wrfcId.
+   */
+  selectChain(chainId: string): void {
+    const index = this.chains.findIndex((chain) => chain.id === chainId);
+    if (index < 0) return;
+    this.selectedIndex = index;
+    this.expandedChainIds.add(chainId);
+    this.markDirty();
   }
 
   // -------------------------------------------------------------------------
@@ -159,7 +227,8 @@ export class WrfcPanel extends BasePanel {
             ' No WRFC chains yet',
             'WRFC chains appear here as review/fix cycles execute. Expanded rows show scores, gates, issues, and failure detail.',
             [
-              { command: '/wrfc run <task>', summary: 'start a write-review-fix-commit chain for a task' },
+              { command: '/teamwork create-mode local-engineer <task>', summary: 'run an engineer task through the write-review-fix-commit loop (reviewMode: wrfc)' },
+              { command: '/teamwork modes', summary: 'list every teamwork mode and see which ones use reviewMode wrfc' },
             ],
             DEFAULT_PANEL_PALETTE,
           ),
@@ -194,21 +263,25 @@ export class WrfcPanel extends BasePanel {
       const stalled    = this.isStalled(chain, now);
 
       if (isSelected) selectedLineIndex = chainLines.length;
-      chainLines.push(...this.renderChainRow(chain, width, isSelected, isExpanded, rowBg, rowFg, stalled));
+      chainLines.push(...this.renderChainRow(chain, width, isSelected, isExpanded, rowBg, rowFg, stalled, now));
 
       if (isExpanded) {
         chainLines.push(...this.renderChainDetail(chain, width, 12));
       }
     }
 
-    const selectedChain = this.chains[this.selectedIndex];
+    const selectedChain = this.selectedChain();
     const selectedLines: Line[] = selectedChain
       ? [
           buildPanelLine(width, [
             [' State ', DEFAULT_PANEL_PALETTE.label],
             [stateLabel(selectedChain.state), stateColor(selectedChain.state)],
-            ['   Task ', DEFAULT_PANEL_PALETTE.label],
-            [truncate(selectedChain.task, Math.max(8, width - 24)), DEFAULT_PANEL_PALETTE.value],
+            [TERMINAL_STATES.includes(selectedChain.state) ? '   Duration ' : '   Elapsed ', DEFAULT_PANEL_PALETTE.label],
+            [this.durationLabel(selectedChain, now), DEFAULT_PANEL_PALETTE.info],
+          ]),
+          buildPanelLine(width, [
+            [' Task ', DEFAULT_PANEL_PALETTE.label],
+            [truncate(selectedChain.task, Math.max(8, width - 8)), DEFAULT_PANEL_PALETTE.value],
           ]),
           buildPanelLine(width, [
             [' Reviews ', DEFAULT_PANEL_PALETTE.label],
@@ -283,7 +356,7 @@ export class WrfcPanel extends BasePanel {
     } : null;
 
     // Footer: show resume-disabled reason for the selected chain.
-    const selectedForFooter = this.chains[this.selectedIndex];
+    const selectedForFooter = this.selectedChain();
     const resumeReason = selectedForFooter ? this.resumeDisabledReason(selectedForFooter) : null;
     const footerLines: Line[] = [
       buildPanelLine(width, [
@@ -292,6 +365,7 @@ export class WrfcPanel extends BasePanel {
         ['   c', DEFAULT_PANEL_PALETTE.info],      [' cancel',   DEFAULT_PANEL_PALETTE.dim],
         ['   r', resumeReason ? DEFAULT_PANEL_PALETTE.dim : DEFAULT_PANEL_PALETTE.info],
         [resumeReason ? ` resume (${resumeReason})` : ' resume', DEFAULT_PANEL_PALETTE.dim],
+        ['   a', DEFAULT_PANEL_PALETTE.info],      [' jump to agent', DEFAULT_PANEL_PALETTE.dim],
       ]),
     ];
 
@@ -353,6 +427,7 @@ export class WrfcPanel extends BasePanel {
     bg: string,
     fg: string,
     stalled = false,
+    now: number = Date.now(),
   ): Line[] {
     const stateCol   = stalled ? C.warn : stateColor(chain.state);
     const stateTag   = stalled
@@ -367,6 +442,7 @@ export class WrfcPanel extends BasePanel {
       ? ` ${chain.reviewScores[chain.reviewScores.length - 1].toFixed(1)}/10`
       : '';
     const stalledBadge = stalled ? ' [STALLED]' : '';
+    const durationTag = ` ${this.durationLabel(chain, now)}`;
     // Constraint badge: c:sat/total — only when constraints exist
     let constraintBadge = '';
     if (chain.constraints.length > 0) {
@@ -375,7 +451,7 @@ export class WrfcPanel extends BasePanel {
       const satisfied = findings ? findings.filter(f => f.satisfied).length : 0;
       constraintBadge = ` c:${satisfied}/${total}`;
     }
-    const rightInfo  = `${stalledBadge}${latestScore}${fixes}${cycles}${constraintBadge} `;
+    const rightInfo  = `${stalledBadge}${durationTag}${latestScore}${fixes}${cycles}${constraintBadge} `;
 
     // Compute how much space the task text can use, then check if rightInfo fits.
     // If the terminal is narrow and rightInfo would overflow, omit it entirely
@@ -433,6 +509,11 @@ export class WrfcPanel extends BasePanel {
   }
 
   private renderChainDetail(chain: WrfcChain, width: number, maxLines: number): Line[] {
+    // Build the FULL detail content first (no per-section maxLines guards
+    // below), then apply one cap at the end so a truncation always ends with
+    // a visible "+N more" indicator instead of silently dropping content —
+    // the constraint sub-list keeps its own independent (+N more) cap since
+    // that is documented, unrelated badge/marker behavior (PRESERVE).
     const lines: Line[] = [];
     const indent = '     ';
 
@@ -459,13 +540,12 @@ export class WrfcPanel extends BasePanel {
     }
 
     // Constraints section (between Cycles and Gates)
-    if (chain.constraints.length > 0 && lines.length < maxLines) {
+    if (chain.constraints.length > 0) {
       lines.push(buildStyledPanelLine(width, [{ text: `${indent}Constraints`, fg: C.label }]));
       const MAX_CONSTRAINTS = 10;
       const findings = chain.reviewerReport?.constraintFindings;
       const displayed = chain.constraints.slice(0, MAX_CONSTRAINTS);
       for (const constraint of displayed) {
-        if (lines.length >= maxLines) break;
         const marker = constraintStatusMarker(constraint, findings);
         const statusTag = marker.tag;
         const rowPrefix = `${indent}  ${statusTag}  `;
@@ -479,7 +559,7 @@ export class WrfcPanel extends BasePanel {
         ]));
       }
       const remaining = chain.constraints.length - MAX_CONSTRAINTS;
-      if (remaining > 0 && lines.length < maxLines) {
+      if (remaining > 0) {
         lines.push(buildStyledPanelLine(width, [
           { text: `${indent}  (+${remaining} more)`, fg: C.dim, dim: true },
         ]));
@@ -490,7 +570,6 @@ export class WrfcPanel extends BasePanel {
     if (chain.gateResults && chain.gateResults.length > 0) {
       lines.push(buildStyledPanelLine(width, [{ text: `${indent}Gates`, fg: C.label }]));
       for (const gate of chain.gateResults) {
-        if (lines.length >= maxLines) break;
         lines.push(this.renderGateResult(gate, width, indent + '  '));
       }
     }
@@ -503,10 +582,9 @@ export class WrfcPanel extends BasePanel {
     }
 
     // Synthetic issues injected by controller (continuity violations)
-    if (chain.syntheticIssues && chain.syntheticIssues.length > 0 && lines.length < maxLines) {
+    if (chain.syntheticIssues && chain.syntheticIssues.length > 0) {
       lines.push(buildStyledPanelLine(width, [{ text: `${indent}Controller flags`, fg: C.issueCrit, bold: true }]));
       for (const synthetic of chain.syntheticIssues) {
-        if (lines.length >= maxLines) break;
         const prefix = `${indent}  [CRIT] `;
         const descMax = Math.max(8, width - prefix.length);
         const desc = truncate(synthetic.description, descMax);
@@ -519,10 +597,9 @@ export class WrfcPanel extends BasePanel {
 
     // Issues from reviewer
     const issues = chain.reviewerReport?.issues ?? [];
-    if (issues.length > 0 && lines.length < maxLines) {
+    if (issues.length > 0) {
       lines.push(buildStyledPanelLine(width, [{ text: `${indent}Issues`, fg: C.label }]));
       for (const issue of issues) {
-        if (lines.length >= maxLines) break;
         const prefix = `${indent}  ${issuePrefix(issue.severity)}`;
         const descMax = width - prefix.length;
         const desc = truncate(issue.description, Math.max(8, descMax));
@@ -534,7 +611,7 @@ export class WrfcPanel extends BasePanel {
     }
 
     // Error
-    if (chain.error && lines.length < maxLines) {
+    if (chain.error) {
       const errPrefix = `${indent}Error   `;
       lines.push(buildStyledPanelLine(width, [
         { text: errPrefix,                                fg: C.failed, bold: true },
@@ -543,11 +620,15 @@ export class WrfcPanel extends BasePanel {
     }
 
     // Divider after expanded section
-    if (lines.length < maxLines) {
-      lines.push(buildStyledPanelLine(width, [{ text: '  ' + '-'.repeat(Math.max(0, width - 4)) + '  ', fg: C.border, dim: true }]));
-    }
+    lines.push(buildStyledPanelLine(width, [{ text: '  ' + '-'.repeat(Math.max(0, width - 4)) + '  ', fg: C.border, dim: true }]));
 
-    return lines.slice(0, maxLines);
+    if (lines.length <= maxLines) return lines;
+    const visible = lines.slice(0, Math.max(0, maxLines - 1));
+    const hidden = lines.length - visible.length;
+    visible.push(buildStyledPanelLine(width, [
+      { text: `${indent}+${hidden} more (press a to inspect the owner agent for full detail)`, fg: C.dim, dim: true },
+    ]));
+    return visible;
   }
 
   private renderGateResult(gate: QualityGateResult, width: number, indent: string): Line {
@@ -575,7 +656,7 @@ export class WrfcPanel extends BasePanel {
   }
 
   private toggleExpanded(): void {
-    const chain = this.chains[this.selectedIndex];
+    const chain = this.selectedChain();
     if (!chain) return;
     if (this.expandedChainIds.has(chain.id)) {
       this.expandedChainIds.delete(chain.id);
@@ -658,7 +739,7 @@ export class WrfcPanel extends BasePanel {
 
   /** Initiate cancel-confirm flow for the selected chain (noop if terminal). */
   private beginCancelConfirm(): void {
-    const chain = this.chains[this.selectedIndex];
+    const chain = this.selectedChain();
     if (!chain || TERMINAL_STATES.includes(chain.state)) return;
     this.confirmCancel = {
       subject: chain.id,
@@ -673,7 +754,7 @@ export class WrfcPanel extends BasePanel {
    * Emits a visible noop reason when the chain is not resumable.
    */
   private doResume(): void {
-    const chain = this.chains[this.selectedIndex];
+    const chain = this.selectedChain();
     if (!chain) return;
     if (!RESUMABLE_STATES.includes(chain.state)) return;
     this.deps.controller.resumeChain(chain.id);
@@ -694,5 +775,16 @@ export class WrfcPanel extends BasePanel {
     if (TERMINAL_STATES.includes(chain.state)) return false;
     const last = this.lastEventAt.get(chain.id) ?? chain.createdAt;
     return (now - last) >= STALL_THRESHOLD_MS;
+  }
+
+  /**
+   * Elapsed time since createdAt for an active chain, or total duration from
+   * createdAt to completedAt for a terminal one. createdAt/completedAt are
+   * already consumed for chain sort order (syncFromController) — this just
+   * surfaces the same fields as a human-readable label.
+   */
+  private durationLabel(chain: WrfcChain, now: number): string {
+    const end = chain.completedAt ?? now;
+    return formatDuration(Math.max(0, end - chain.createdAt));
   }
 }

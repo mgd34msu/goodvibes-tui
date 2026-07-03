@@ -175,8 +175,12 @@ export function registerOperatorRuntimeCommands(registry: CommandRegistry): void
       const sub = args[0];
 
       if (sub === 'view' || sub === undefined) {
+        // Parity with the Ctrl+O keybind (handler-shortcuts.ts): prefer the
+        // flag-wired opener, else fall back to the always-registered panel,
+        // which renders its own honest not-configured state.
         if (ctx.openOpsPanel) ctx.openOpsPanel();
-        else ctx.print('Operator Control Plane panel is not available. Enable the operator-control-plane feature flag.');
+        else if (ctx.showPanel) ctx.showPanel('ops-control');
+        else ctx.print('Operator Control Plane panel is not available in this shell.');
         return;
       }
 

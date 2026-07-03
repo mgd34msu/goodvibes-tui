@@ -14,7 +14,7 @@ function makePanel(id: string, name = id): Panel & {
     id,
     name,
     icon: id[0]?.toUpperCase() ?? 'X',
-    category: 'monitoring',
+    category: 'runtime-ops',
     isTransient: false,
     isPinned: false,
     needsRender: true,
@@ -31,7 +31,7 @@ function makePanel(id: string, name = id): Panel & {
 }
 
 describe('PanelManager', () => {
-  test('preloaded panels are retained across close and reused on reopen', () => {
+  test('preloaded + retainOnClose panels are retained across close and reused on reopen', () => {
     const manager = new PanelManager();
     const panel = makePanel('system-messages', 'System Messages');
 
@@ -39,9 +39,10 @@ describe('PanelManager', () => {
       id: 'system-messages',
       name: 'System Messages',
       icon: 'J',
-      category: 'monitoring',
+      category: 'runtime-ops',
       description: 'System traffic',
       preload: true,
+      retainOnClose: true,
       factory: () => panel,
     });
 
@@ -56,6 +57,59 @@ describe('PanelManager', () => {
     expect(panel.activate).toHaveBeenCalledTimes(2);
   });
 
+  test('WO-152: preload and retainOnClose are independent lifecycle flags', () => {
+    // preload without retainOnClose: eagerly instantiated, but destroyed on close.
+    const preloadOnlyManager = new PanelManager();
+    const preloadOnlyPanel = makePanel('preload-only', 'Preload Only');
+    preloadOnlyManager.registerType({
+      id: 'preload-only',
+      name: 'Preload Only',
+      icon: 'A',
+      category: 'runtime-ops',
+      description: '',
+      preload: true,
+      factory: () => preloadOnlyPanel,
+    });
+    preloadOnlyManager.prewarmRegistered();
+    preloadOnlyManager.open('preload-only');
+    preloadOnlyManager.close('preload-only');
+    expect(preloadOnlyPanel.destroy).toHaveBeenCalledTimes(1);
+
+    // retainOnClose without preload: lazily instantiated on first open, but
+    // kept alive (not destroyed) across a subsequent close.
+    const retainOnlyManager = new PanelManager();
+    const retainOnlyPanel = makePanel('retain-only', 'Retain Only');
+    retainOnlyManager.registerType({
+      id: 'retain-only',
+      name: 'Retain Only',
+      icon: 'B',
+      category: 'runtime-ops',
+      description: '',
+      retainOnClose: true,
+      factory: () => retainOnlyPanel,
+    });
+    retainOnlyManager.prewarmRegistered(); // no-op: not preload
+    retainOnlyManager.open('retain-only');
+    retainOnlyManager.close('retain-only');
+    expect(retainOnlyPanel.destroy).not.toHaveBeenCalled();
+    const reopenedRetainOnly = retainOnlyManager.open('retain-only');
+    expect(reopenedRetainOnly).toBe(retainOnlyPanel);
+  });
+
+  test('WO-152: registerType asserts icon uniqueness across the registry', () => {
+    const manager = new PanelManager();
+    manager.registerType({ id: 'panel-a', name: 'A', icon: 'Z', category: 'runtime-ops', description: '', factory: () => makePanel('panel-a', 'A') });
+    expect(() => {
+      manager.registerType({ id: 'panel-b', name: 'B', icon: 'Z', category: 'runtime-ops', description: '', factory: () => makePanel('panel-b', 'B') });
+    }).toThrow();
+
+    // Re-registering the SAME id with the same icon is a legitimate update,
+    // not a collision (tests and hot-reload paths replace factories in place).
+    expect(() => {
+      manager.registerType({ id: 'panel-a', name: 'A2', icon: 'Z', category: 'runtime-ops', description: '', factory: () => makePanel('panel-a', 'A2') });
+    }).not.toThrow();
+  });
+
   test('workspace tab navigation cycles across panes', () => {
     const manager = new PanelManager();
     const topPanel = makePanel('system-messages', 'System Messages');
@@ -65,7 +119,7 @@ describe('PanelManager', () => {
       id: 'system-messages',
       name: 'System Messages',
       icon: 'J',
-      category: 'monitoring',
+      category: 'runtime-ops',
       description: 'System traffic',
       factory: () => topPanel,
     });
@@ -102,9 +156,9 @@ describe('PanelManager', () => {
     const panelB = makePanel('panel-b', 'B');
     const panelC = makePanel('panel-c', 'C');
 
-    manager.registerType({ id: 'panel-a', name: 'A', icon: 'A', category: 'monitoring', description: '', factory: () => panelA });
-    manager.registerType({ id: 'panel-b', name: 'B', icon: 'B', category: 'monitoring', description: '', factory: () => panelB });
-    manager.registerType({ id: 'panel-c', name: 'C', icon: 'C', category: 'monitoring', description: '', factory: () => panelC });
+    manager.registerType({ id: 'panel-a', name: 'A', icon: 'A', category: 'runtime-ops', description: '', factory: () => panelA });
+    manager.registerType({ id: 'panel-b', name: 'B', icon: 'B', category: 'runtime-ops', description: '', factory: () => panelB });
+    manager.registerType({ id: 'panel-c', name: 'C', icon: 'C', category: 'runtime-ops', description: '', factory: () => panelC });
 
     manager.open('panel-a', 'top');
     manager.open('panel-b', 'top');
@@ -143,6 +197,75 @@ describe('PanelManager', () => {
     expect(tabCAfter.focused).toBe(true);
   });
 
+  test('focus ownership: workspace focus can never disagree with visibility', () => {
+    const manager = new PanelManager();
+    manager.registerType({ id: 'panel-a', name: 'A', icon: 'A', category: 'runtime-ops', description: '', factory: () => makePanel('panel-a', 'A') });
+    manager.registerType({ id: 'panel-b', name: 'B', icon: 'B', category: 'runtime-ops', description: '', factory: () => makePanel('panel-b', 'B') });
+
+    // The invariant: focus may only rest on the panel workspace while the
+    // workspace is actually on screen with an active panel.
+    const assertInvariant = () => {
+      if (manager.getFocusTarget() === 'panel') {
+        expect(manager.isVisible()).toBe(true);
+        expect(manager.getAllOpen().length).toBeGreaterThan(0);
+        expect(manager.getActivePanel()).not.toBeNull();
+      }
+    };
+
+    // Fresh manager: focus is on the prompt.
+    expect(manager.getFocusTarget()).toBe('prompt');
+
+    // focusPanels with nothing open cannot steal focus.
+    manager.focusPanels();
+    expect(manager.getFocusTarget()).toBe('prompt');
+    assertInvariant();
+
+    // Open a panel and focus the workspace.
+    manager.open('panel-a', 'top');
+    manager.focusPanels();
+    expect(manager.getFocusTarget()).toBe('panel');
+    assertInvariant();
+
+    // Closing the last panel must drop focus back to the prompt automatically.
+    manager.close('panel-a');
+    expect(manager.getFocusTarget()).toBe('prompt');
+    assertInvariant();
+
+    // Two panels across both panes, focused, then close-all.
+    manager.open('panel-a', 'top');
+    manager.open('panel-b', 'bottom');
+    manager.focusPanels();
+    expect(manager.getFocusTarget()).toBe('panel');
+    assertInvariant();
+    for (const p of manager.getAllOpen()) manager.close(p.id);
+    expect(manager.getFocusTarget()).toBe('prompt');
+    assertInvariant();
+
+    // Hiding the workspace while a panel is retained also heals focus.
+    manager.open('panel-a', 'top');
+    manager.focusPanels();
+    expect(manager.getFocusTarget()).toBe('panel');
+    manager.hide();
+    expect(manager.getFocusTarget()).toBe('prompt');
+    assertInvariant();
+  });
+
+  test('open(id, pane) honors the requested pane by relocating an already-open panel', () => {
+    const manager = new PanelManager();
+    manager.registerType({ id: 'panel-a', name: 'A', icon: 'A', category: 'runtime-ops', description: '', factory: () => makePanel('panel-a', 'A') });
+
+    manager.open('panel-a', 'top');
+    expect(manager.getPaneOf('panel-a')).toBe('top');
+
+    // Re-opening with an explicit different pane must actually move it there,
+    // not silently keep it where it was (the '/panel open <id> top' lie).
+    const relocated = manager.open('panel-a', 'bottom');
+    expect(relocated.id).toBe('panel-a');
+    expect(manager.getPaneOf('panel-a')).toBe('bottom');
+    expect(manager.getBottomPane().panels.some((p) => p.id === 'panel-a')).toBe(true);
+    expect(manager.getTopPane().panels.some((p) => p.id === 'panel-a')).toBe(false);
+  });
+
   test('getWorkspaceTabs renderer: both panes show selected tab with active indicator after focus switch', () => {
     // Snapshot-style: after switching focus, both active tabs show their indicator
     // (active=true) so the renderer can distinguish them from non-selected tabs.
@@ -150,8 +273,8 @@ describe('PanelManager', () => {
     const panelA = makePanel('snap-a', 'SnapA');
     const panelB = makePanel('snap-b', 'SnapB');
 
-    manager.registerType({ id: 'snap-a', name: 'SnapA', icon: 'A', category: 'monitoring', description: '', factory: () => panelA });
-    manager.registerType({ id: 'snap-b', name: 'SnapB', icon: 'B', category: 'monitoring', description: '', factory: () => panelB });
+    manager.registerType({ id: 'snap-a', name: 'SnapA', icon: 'A', category: 'runtime-ops', description: '', factory: () => panelA });
+    manager.registerType({ id: 'snap-b', name: 'SnapB', icon: 'B', category: 'runtime-ops', description: '', factory: () => panelB });
 
     manager.open('snap-a', 'top');
     manager.open('snap-b', 'bottom');

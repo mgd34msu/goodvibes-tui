@@ -1,11 +1,11 @@
 import type { Line } from '../types/grid.ts';
 import { createEmptyLine } from '../types/grid.ts';
 import { BasePanel } from './base-panel.ts';
+import type { PanelIntegrationContext } from './types.ts';
 import type { UiReadModel, UiRemoteSnapshot } from '../runtime/ui-read-models.ts';
 import {
   buildDetailBlock,
   buildEmptyState,
-  buildGuidanceLine,
   buildPanelListRow,
   buildPanelLine,
   buildSummaryBlock,
@@ -17,28 +17,22 @@ import {
 import { truncateDisplay } from '../utils/terminal-width.ts';
 import { getTrackedVisibleWindow } from '../renderer/surface-layout.ts';
 
-const C = {
-  ...DEFAULT_PANEL_PALETTE,
-  header: '#94a3b8',
-  headerBg: '#1e293b',
-  dim: '#475569',
-  ok: '#22c55e',
-  warn: '#eab308',
-  error: '#ef4444',
-} as const;
+// Base chrome only — title band, state colors, and text tokens all come
+// straight from DEFAULT_PANEL_PALETTE (WO-002).
+const C = DEFAULT_PANEL_PALETTE;
 
 function stateColor(state: string): string {
   switch (state) {
     case 'connected':
     case 'syncing':
-      return C.ok;
+      return C.good;
     case 'degraded':
     case 'reconnecting':
     case 'authenticating':
     case 'initializing':
       return C.warn;
     case 'terminal_failure':
-      return C.error;
+      return C.bad;
     default:
       return C.dim;
   }
@@ -52,15 +46,39 @@ function truncate(text: string, width: number): string {
   return truncateDisplay(text, width);
 }
 
+// Splits a machine-generated slash-command string (e.g. `/remote show foo`)
+// into the { name, args } shape ctx.executeCommand expects — the same
+// leading-slash-stripping approach panel-integration-actions.ts uses for
+// ApprovalPanel's dispatched command.
+function parseCommand(command: string): { name: string; args: string[] } | null {
+  const parts = command.replace(/^\//, '').split(/\s+/).filter(Boolean);
+  const [name, ...args] = parts;
+  return name ? { name, args } : null;
+}
+
+// Mirrors RemoteSupervisor's own stateIsDegraded()/degradedConnections
+// definition (sdk/platform/runtime/remote/supervisor.js) so "degraded/stale"
+// means the same thing here as it does in the posture summary above.
+function isSupervisorEntryDegraded(entry: { transportState: string; heartbeat: { status: string } }): boolean {
+  const degradedTransport = entry.transportState === 'degraded'
+    || entry.transportState === 'reconnecting'
+    || entry.transportState === 'terminal_failure';
+  return degradedTransport || entry.heartbeat.status !== 'fresh';
+}
+
 export class RemotePanel extends BasePanel {
   private readonly readModel?: UiReadModel<UiRemoteSnapshot>;
   private readonly unsub: (() => void) | null;
   private selectedIndex = 0;
   private scrollOffset = 0;
   private browseMode: 'connections' | 'contracts' = 'connections';
+  // Set by handleInput (enter/r) and consumed on the very next
+  // handlePanelIntegrationAction dispatch of that same key, mirroring the
+  // token-budget-panel pattern — handleInput has no ctx.executeCommand.
+  private pendingCommand: { name: string; args: string[] } | null = null;
 
   public constructor(readModel?: UiReadModel<UiRemoteSnapshot>) {
-    super('remote', 'Remote', 'R', 'monitoring');
+    super('remote', 'Remote', '▰', 'providers');
     this.readModel = readModel;
     this.unsub = readModel ? readModel.subscribe(() => this.markDirty()) : null;
   }
@@ -70,6 +88,29 @@ export class RemotePanel extends BasePanel {
   }
 
   public handleInput(key: string): boolean {
+    // r = dispatch /remote recover for whatever is currently selected (or
+    // the runtime's first non-fresh session when nothing is selected).
+    if (this.readModel && key === 'r') {
+      const runnerId = this.getSelectedRunnerId();
+      const parsed = parseCommand(runnerId ? `/remote recover ${runnerId}` : '/remote recover');
+      if (parsed) {
+        this.pendingCommand = parsed;
+        return true;
+      }
+    }
+    // Enter on a degraded/stale supervisor selection dispatches its
+    // top recovery action (already machine-readable via .recovery[0].command)
+    // instead of requiring the operator to retype it.
+    if (this.readModel && (key === 'enter' || key === 'return')) {
+      const entry = this.getSelectedSupervisorEntry();
+      if (entry && isSupervisorEntryDegraded(entry) && entry.recovery.length > 0) {
+        const parsed = parseCommand(entry.recovery[0].command);
+        if (parsed) {
+          this.pendingCommand = parsed;
+          return true;
+        }
+      }
+    }
     const activeConnections = this.getActiveConnections();
     const contracts = this.readModel?.getSnapshot().contracts ?? [];
     const browseCount = this.browseMode === 'connections' && activeConnections.length > 0
@@ -107,6 +148,40 @@ export class RemotePanel extends BasePanel {
 
   private getActiveConnections() {
     return this.readModel?.getSnapshot().acp.activeConnections ?? [];
+  }
+
+  // Runner id backing the currently browsed row, whichever browse mode is
+  // active — shared by the Enter/r dispatch logic and render()'s own
+  // selection lookups so they never drift apart.
+  private getSelectedRunnerId(): string | null {
+    const snapshot = this.readModel?.getSnapshot();
+    if (!snapshot) return null;
+    const activeConnections = this.getActiveConnections();
+    const contracts = snapshot.contracts;
+    const viewingConnections = this.browseMode === 'connections' && activeConnections.length > 0;
+    // selectedIndex indexes only the mode's active list (activeConnections when
+    // viewing connections, otherwise contracts); .at() keeps that read off any
+    // raw source array (no-raw-selectedindex-read rule).
+    if (viewingConnections) {
+      return activeConnections.at(this.selectedIndex)?.agentId ?? null;
+    }
+    return contracts.at(this.selectedIndex)?.runnerId ?? null;
+  }
+
+  private getSelectedSupervisorEntry() {
+    const snapshot = this.readModel?.getSnapshot();
+    if (!snapshot) return null;
+    const runnerId = this.getSelectedRunnerId();
+    if (!runnerId) return null;
+    return snapshot.supervisor.sessions.find((entry) => entry.runnerId === runnerId) ?? null;
+  }
+
+  public handlePanelIntegrationAction(_key: string, ctx: PanelIntegrationContext): boolean {
+    if (!this.pendingCommand) return false;
+    const { name, args } = this.pendingCommand;
+    this.pendingCommand = null;
+    void ctx.executeCommand?.(name, args);
+    return true;
   }
 
   public render(width: number, height: number): Line[] {
@@ -161,9 +236,9 @@ export class RemotePanel extends BasePanel {
         [' daemon ', C.label],
         [daemon.transportState.toUpperCase(), stateColor(daemon.transportState)],
         ['  running ', C.label],
-        [daemon.isRunning ? 'yes' : 'no', daemon.isRunning ? C.ok : C.dim],
+        [daemon.isRunning ? 'yes' : 'no', daemon.isRunning ? C.good : C.dim],
         ['  reconnects ', C.label],
-        [String(daemon.reconnectAttempts), daemon.reconnectAttempts > 0 ? C.warn : C.ok],
+        [String(daemon.reconnectAttempts), daemon.reconnectAttempts > 0 ? C.warn : C.good],
         ['  jobs ', C.label],
         [String(daemon.runningJobCount), daemon.runningJobCount > 0 ? C.info : C.dim],
       ]),
@@ -181,17 +256,17 @@ export class RemotePanel extends BasePanel {
         ['  pools ', C.label],
         [String(pools.length), pools.length > 0 ? C.info : C.dim],
         ['  review artifacts ', C.label],
-        [String(artifactCount), artifactCount > 0 ? C.ok : C.dim],
+        [String(artifactCount), artifactCount > 0 ? C.good : C.dim],
       ]),
       buildPanelLine(width, [
         [' supervisor ', C.label],
         [String(supervisor.sessions.length), C.info],
         ['  degraded ', C.label],
-        [String(supervisor.degradedConnections), supervisor.degradedConnections > 0 ? C.warn : C.ok],
+        [String(supervisor.degradedConnections), supervisor.degradedConnections > 0 ? C.warn : C.good],
         [' distributed peers ', C.label],
         [String(distributed.peers?.total ?? 0), C.info],
         ['  connected ', C.label],
-        [String(distributed.peers?.connected ?? 0), (distributed.peers?.connected ?? 0) > 0 ? C.ok : C.dim],
+        [String(distributed.peers?.connected ?? 0), (distributed.peers?.connected ?? 0) > 0 ? C.good : C.dim],
         ['  queued work ', C.label],
         [String(distributed.work?.queued ?? 0), (distributed.work?.queued ?? 0) > 0 ? C.info : C.dim],
       ]),
@@ -200,23 +275,17 @@ export class RemotePanel extends BasePanel {
     if (daemon.lastError) {
       postureLines.push(buildPanelLine(width, [
         [' daemon error ', C.label],
-        [truncateDisplay(daemon.lastError, Math.max(0, width - 14)), C.error],
+        [truncateDisplay(daemon.lastError, Math.max(0, width - 14)), C.bad],
       ]));
     }
-    postureLines.push(
-      buildGuidanceLine(width, '/remote recover', 'resume remote state with runner, capability, and disconnect recovery hints', C),
-      buildGuidanceLine(width, '/remote capabilities', 'inspect transport support before routing remote work or reattaching a session', C),
-    );
-
     const canBrowse = activeConnections.length > 0 || contracts.length > 0;
     const canSwitch = contracts.length > 0 && activeConnections.length > 0;
     const navHint = !canBrowse
       ? `  focus=${this.browseMode}  idle - no connections or contracts to browse`
       : canSwitch
-        ? `  focus=${this.browseMode}  Up/Down move  Tab switch connections/contracts`
-        : `  focus=${this.browseMode}  Up/Down move`;
+        ? `  focus=${this.browseMode}  Up/Down move  Tab switch connections/contracts  r=recover  Enter=recover selection`
+        : `  focus=${this.browseMode}  Up/Down move  r=recover  Enter=recover selection`;
     const footerLines = [
-      buildGuidanceLine(width, '/remote setup', 'review bridge, tunnel, env, and bootstrap flows for self-hosted remote work', C),
       buildPanelLine(width, [[navHint, C.dim]]),
     ] as const;
 
@@ -252,8 +321,8 @@ export class RemotePanel extends BasePanel {
       Math.max(0, (viewingConnections ? activeConnections.length : contracts.length) - 1),
     );
     const browseCount = viewingConnections ? activeConnections.length : contracts.length;
-    const selected = viewingConnections ? activeConnections[this.selectedIndex] ?? null : null;
-    const selectedContract = !viewingConnections ? contracts[this.selectedIndex] ?? null : null;
+    const selected = viewingConnections ? activeConnections.at(this.selectedIndex) ?? null : null;
+    const selectedContract = !viewingConnections ? contracts.at(this.selectedIndex) ?? null : null;
     const detailRows: Line[] = [];
 
     if (selected) {
@@ -276,7 +345,7 @@ export class RemotePanel extends BasePanel {
       if (selected.lastError) {
         detailRows.push(buildPanelLine(width, [
           ['  Last error: ', C.label],
-          [selected.lastError.slice(0, Math.max(0, width - 13)), C.error],
+          [selected.lastError.slice(0, Math.max(0, width - 13)), C.bad],
         ]));
       }
 
@@ -319,13 +388,19 @@ export class RemotePanel extends BasePanel {
       if (supervisorEntry) {
         detailRows.push(buildPanelLine(width, [
           ['  Heartbeat: ', C.label],
-          [supervisorEntry.heartbeat.status, supervisorEntry.heartbeat.status === 'fresh' ? C.ok : supervisorEntry.heartbeat.status === 'stale' ? C.warn : C.error],
+          [supervisorEntry.heartbeat.status, supervisorEntry.heartbeat.status === 'fresh' ? C.good : supervisorEntry.heartbeat.status === 'stale' ? C.warn : C.bad],
           ['  Protocol: ', C.label],
           [supervisorEntry.negotiation.executionProtocol, C.value],
           ['  Review: ', C.label],
-          [supervisorEntry.negotiation.reviewMode, supervisorEntry.negotiation.reviewMode === 'wrfc' ? C.ok : C.dim],
+          [supervisorEntry.negotiation.reviewMode, supervisorEntry.negotiation.reviewMode === 'wrfc' ? C.good : C.dim],
         ]));
         detailRows.push(buildPanelLine(width, [[truncateDisplay(`  ${supervisorEntry.heartbeat.detail}`, width), C.dim]]));
+        if (isSupervisorEntryDegraded(supervisorEntry) && supervisorEntry.recovery.length > 0) {
+          detailRows.push(buildPanelLine(width, [
+            ['  Enter recovers: ', C.label],
+            [supervisorEntry.recovery[0].reason, C.warn],
+          ]));
+        }
       }
 
       const recentArtifact = snapshot.artifacts.find((artifact) => artifact.runnerId === selected.agentId);
@@ -377,19 +452,22 @@ export class RemotePanel extends BasePanel {
       if (supervisorEntry) {
         detailRows.push(buildPanelLine(width, [
           ['  Heartbeat: ', C.label],
-          [supervisorEntry.heartbeat.status, supervisorEntry.heartbeat.status === 'fresh' ? C.ok : supervisorEntry.heartbeat.status === 'stale' ? C.warn : C.error],
+          [supervisorEntry.heartbeat.status, supervisorEntry.heartbeat.status === 'fresh' ? C.good : supervisorEntry.heartbeat.status === 'stale' ? C.warn : C.bad],
           ['  Lane: ', C.label],
           [supervisorEntry.negotiation.communicationLane, C.info],
         ]));
-        for (const action of supervisorEntry.recovery.slice(0, 2)) {
-          detailRows.push(buildGuidanceLine(width, action.command, action.reason, C));
+        if (isSupervisorEntryDegraded(supervisorEntry) && supervisorEntry.recovery.length > 0) {
+          detailRows.push(buildPanelLine(width, [
+            ['  Enter recovers: ', C.label],
+            [supervisorEntry.recovery[0].reason, C.warn],
+          ]));
         }
       }
       const recentArtifact = snapshot.artifacts.find((artifact) => artifact.runnerId === selectedContract.runnerId);
       if (recentArtifact) {
         detailRows.push(buildPanelLine(width, [
           ['  Recent artifact: ', C.label],
-          [recentArtifact.id, C.ok],
+          [recentArtifact.id, C.good],
           ['  Status: ', C.label],
           [recentArtifact.task.status, stateColor(recentArtifact.evidence.transportState)],
         ]));

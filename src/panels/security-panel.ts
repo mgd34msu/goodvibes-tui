@@ -6,35 +6,29 @@ import type { UiReadModel, UiSecuritySnapshot } from '../runtime/ui-read-models.
 import {
   buildAlignedRow,
   buildEmptyState,
-  buildGuidanceLine,
+  buildKeyboardHints,
   buildPanelLine,
   buildPanelWorkspace,
   buildStatusPill,
   DEFAULT_PANEL_PALETTE,
 } from './polish.ts';
 import { createEmptyLine } from '../types/grid.ts';
+import type { PanelIntegrationContext } from './types.ts';
 
-const C = {
-  ...DEFAULT_PANEL_PALETTE,
-  header: '#94a3b8',
-  headerBg: '#1e293b',
-  dim: '#475569',
-  ok: '#22c55e',
-  warn: '#eab308',
-  error: '#ef4444',
-  selectBg: '#0f172a',
-} as const;
+// Base chrome only — title band, state colors, and text tokens all come
+// straight from DEFAULT_PANEL_PALETTE (WO-002).
+const C = DEFAULT_PANEL_PALETTE;
 
 function managedColor(managed: boolean): string {
   return managed ? C.warn : C.info;
 }
 
 function resultColor(result: TokenAuditResult): string {
-  if (result.blocked) return C.error;
-  if (result.scope.outcome === 'violation') return C.error;
-  if (result.rotation.outcome === 'overdue') return C.error;
+  if (result.blocked) return C.bad;
+  if (result.scope.outcome === 'violation') return C.bad;
+  if (result.rotation.outcome === 'overdue') return C.bad;
   if (result.rotation.outcome === 'warning') return C.warn;
-  return C.ok;
+  return C.good;
 }
 
 function resultSummary(result: TokenAuditResult): string {
@@ -50,20 +44,55 @@ function severityColor(severity: 'low' | 'medium' | 'high' | 'critical'): string
   switch (severity) {
     case 'critical':
     case 'high':
-      return C.error;
+      return C.bad;
     case 'medium':
       return C.warn;
     case 'low':
     default:
-      return C.ok;
+      return C.good;
   }
 }
 
+// Relative-time formatting for audit/rotation timestamps — humanized instead
+// of raw ISO strings (WO-137). Mirrors the fmtAgo pattern already used by
+// approval-panel.ts / debug-panel.ts / communication-panel.ts.
+function fmtAgo(ts: number): string {
+  const sec = Math.max(0, Math.floor((Date.now() - ts) / 1000));
+  if (sec < 5) return 'just now';
+  if (sec < 60) return `${sec}s ago`;
+  if (sec < 3600) return `${Math.floor(sec / 60)}m ago`;
+  if (sec < 86400) return `${Math.floor(sec / 3600)}h ago`;
+  return `${Math.floor(sec / 86400)}d ago`;
+}
+
+function fmtDue(msUntilDue: number): string {
+  const overdue = msUntilDue < 0;
+  const sec = Math.floor(Math.abs(msUntilDue) / 1000);
+  const unit = sec < 3600
+    ? `${Math.max(1, Math.floor(sec / 60))}m`
+    : sec < 86400
+      ? `${Math.floor(sec / 3600)}h`
+      : `${Math.floor(sec / 86400)}d`;
+  return overdue ? `overdue by ${unit}` : `in ${unit}`;
+}
+
+// Attack-path finding rows: 3 rendered lines each (severity/route, reason,
+// evidence). Bounds the per-render window to the panel's actual height
+// instead of a fixed "3 findings" cap, and pages through the rest via
+// attackPathScroll ('[' / ']').
+const ATTACK_PATH_FINDING_LINES = 3;
+
 export class SecurityPanel extends ScrollableListPanel<TokenAuditResult> {
   private readonly unsub: (() => void) | null;
+  /** Scroll offset into attackPathReview.findings (in finding units, not lines). */
+  private attackPathScroll = 0;
+  /** Set by 'f'; consumed by handlePanelIntegrationAction to dispatch /policy preflight. */
+  private pendingPreflight = false;
+  /** Set by 'i'; consumed by handlePanelIntegrationAction to jump to the incident panel. */
+  private pendingIncidentJump = false;
 
   public constructor(private readonly readModel: UiReadModel<UiSecuritySnapshot>) {
-    super('security', 'Security', 'U', 'monitoring');
+    super('security', 'Security', '▬', 'security-policy');
     this.showSelectionGutter = true; // I5: non-color selection affordance
     this.filterEnabled = true;
     this.filterLabel = 'Filter tokens';
@@ -77,9 +106,13 @@ export class SecurityPanel extends ScrollableListPanel<TokenAuditResult> {
   protected override getPalette() { return C; }
   protected override getEmptyStateMessage() { return ' No API tokens are registered with the security auditor yet.'; }
   protected override getEmptyStateActions() {
+    // WO-160: '/policy preflight' dropped — 'f' already dispatches it for
+    // real (see handleInput/handlePanelIntegrationAction) and is advertised
+    // as a live key hint in the footer even in this empty state, so listing
+    // it here too was a redundant action substitute. '/storage review' and
+    // '/mcp trust' stay: neither has an in-panel key equivalent.
     return [
       { command: '/storage review', summary: 'inspect secure secret storage and environment overrides' },
-      { command: '/policy preflight', summary: 'run a live preflight posture review' },
       { command: '/mcp trust', summary: 'inspect active MCP trust and quarantine posture' },
     ];
   }
@@ -109,10 +142,56 @@ export class SecurityPanel extends ScrollableListPanel<TokenAuditResult> {
 
   public handleInput(key: string): boolean {
     if (!this.filterActive && key === 'r') {
+      // Real re-audit: force the read model to recompute (ApiTokenAuditor.auditAll
+      // under the hood) right now instead of waiting on the next incidental
+      // render, so lastAuditAt visibly advances the instant 'r' is pressed.
+      this.readModel.getSnapshot();
+      this.markDirty();
+      return true;
+    }
+    if (!this.filterActive && key === 'f') {
+      this.pendingPreflight = true;
+      this.markDirty();
+      return true;
+    }
+    if (!this.filterActive && key === 'i') {
+      if (!this.readModel.getSnapshot().latestIncident) return false;
+      this.pendingIncidentJump = true;
+      this.markDirty();
+      return true;
+    }
+    if (!this.filterActive && key === '[') {
+      this.attackPathScroll = Math.max(0, this.attackPathScroll - 1);
+      this.markDirty();
+      return true;
+    }
+    if (!this.filterActive && key === ']') {
+      this.attackPathScroll += 1;
       this.markDirty();
       return true;
     }
     return super.handleInput(key);
+  }
+
+  /**
+   * f (preflight) and i (jump to incident) both require the integration
+   * context (executeCommand / panelManager), which is only available here —
+   * same staged-pending-action pattern as worktree-panel.ts and
+   * incident-review-panel.ts.
+   */
+  public handlePanelIntegrationAction(_key: string, ctx: PanelIntegrationContext): boolean {
+    if (this.pendingPreflight) {
+      this.pendingPreflight = false;
+      if (!ctx.executeCommand) return false;
+      void ctx.executeCommand('policy', ['preflight']).catch(() => { /* surfaced via /policy output */ });
+      return true;
+    }
+    if (this.pendingIncidentJump) {
+      this.pendingIncidentJump = false;
+      ctx.panelManager.open('incident');
+      return true;
+    }
+    return false;
   }
 
   protected override filterMatches(result: TokenAuditResult, q: string): boolean {
@@ -136,7 +215,10 @@ export class SecurityPanel extends ScrollableListPanel<TokenAuditResult> {
     const untrustedPlugins = snapshot.untrustedPlugins;
     const attackPathReview = snapshot.attackPathReview;
     const intro = 'Token audit, policy posture, MCP attack-path review, plugin trust, and incident pressure.';
-    const footerLine = buildGuidanceLine(width, '/policy preflight', 'run a proactive policy review before risky work starts', C);
+    // WO-160: dropped the printed '/policy preflight' guidance line — 'f' is
+    // already bound to dispatch it for real (see handleInput/
+    // handlePanelIntegrationAction below) and is advertised in the keyboard
+    // hints footer, so the printed command was a pure action substitute.
 
     const governanceLines: Line[] = [
       buildPanelLine(width, [
@@ -212,7 +294,7 @@ export class SecurityPanel extends ScrollableListPanel<TokenAuditResult> {
           { title: 'Governance', lines: emptyStateLines },
           { title: 'Attack Paths', lines: attackPathLines },
         ],
-        footerLines: [footerLine],
+        footerLines: [buildKeyboardHints(width, [{ keys: 'f', label: 'preflight' }], C)],
         palette: C,
       });
       while (workspace.length < height) workspace.push(createEmptyLine(width));
@@ -221,7 +303,15 @@ export class SecurityPanel extends ScrollableListPanel<TokenAuditResult> {
 
     if (attackPathReview.findings.length > 0) {
       attackPathLines.push(buildPanelLine(width, [[' MCP attack-path review', C.label]]));
-      for (const finding of attackPathReview.findings.slice(0, 3)) {
+      // Fully scrollable — no fixed "3 findings" cap. The visible window
+      // scales with the panel's actual height; '[' / ']' page through the
+      // rest when there are more findings than currently fit.
+      const windowSize = Math.max(1, Math.floor((height - 16) / ATTACK_PATH_FINDING_LINES));
+      const maxScroll = Math.max(0, attackPathReview.findings.length - windowSize);
+      this.attackPathScroll = Math.min(this.attackPathScroll, maxScroll);
+      const start = this.attackPathScroll;
+      const end = Math.min(attackPathReview.findings.length, start + windowSize);
+      for (const finding of attackPathReview.findings.slice(start, end)) {
         attackPathLines.push(buildPanelLine(width, [[
           truncateDisplay(`  ${finding.severity.toUpperCase()} ${finding.serverName}: ${finding.route}`, width),
           severityColor(finding.severity),
@@ -232,6 +322,12 @@ export class SecurityPanel extends ScrollableListPanel<TokenAuditResult> {
         ]]));
         attackPathLines.push(buildPanelLine(width, [[
           truncateDisplay(`    evidence: ${finding.evidence.join(' | ')}`, width),
+          C.dim,
+        ]]));
+      }
+      if (attackPathReview.findings.length > windowSize) {
+        attackPathLines.push(buildPanelLine(width, [[
+          `  showing ${start + 1}-${end} of ${attackPathReview.findings.length} findings ([ / ] to scroll)`,
           C.dim,
         ]]));
       }
@@ -258,7 +354,9 @@ export class SecurityPanel extends ScrollableListPanel<TokenAuditResult> {
       ),
     ];
 
-    const selected = view.results[this.selectedIndex];
+    // Detail must track the filtered view the list highlights, not the raw
+    // audit results — under an applied token filter they diverge.
+    const selected = this.getSelectedItem();
     const detailLines: Line[] = [];
     if (selected) {
       detailLines.push(buildPanelLine(width, [
@@ -267,44 +365,44 @@ export class SecurityPanel extends ScrollableListPanel<TokenAuditResult> {
         ['  Policy: ', C.label],
         [selected.scope.policyId, C.info],
         ['  Blocked: ', C.label],
-        [selected.blocked ? 'yes' : 'no', selected.blocked ? C.error : C.ok],
+        [selected.blocked ? 'yes' : 'no', selected.blocked ? C.bad : C.good],
       ]));
       detailLines.push(buildPanelLine(width, [
         ['  Scope: ', C.label],
-        [selected.scope.outcome, selected.scope.outcome === 'violation' ? C.error : C.ok],
+        [selected.scope.outcome, selected.scope.outcome === 'violation' ? C.bad : C.good],
         ['  Excess: ', C.label],
-        [truncateDisplay(selected.scope.excessScopes.length > 0 ? selected.scope.excessScopes.join(', ') : 'none', Math.max(0, width - 27)), selected.scope.excessScopes.length > 0 ? C.error : C.dim],
+        [truncateDisplay(selected.scope.excessScopes.length > 0 ? selected.scope.excessScopes.join(', ') : 'none', Math.max(0, width - 27)), selected.scope.excessScopes.length > 0 ? C.bad : C.dim],
       ]));
       detailLines.push(buildPanelLine(width, [
         ['  Rotation: ', C.label],
-        [selected.rotation.outcome, selected.rotation.outcome === 'ok' ? C.ok : selected.rotation.outcome === 'warning' ? C.warn : C.error],
+        [selected.rotation.outcome, selected.rotation.outcome === 'ok' ? C.good : selected.rotation.outcome === 'warning' ? C.warn : C.bad],
         ['  Due: ', C.label],
-        [new Date(selected.rotation.dueAt).toISOString(), C.value],
+        [fmtDue(selected.rotation.msUntilDue), selected.rotation.msUntilDue < 0 ? C.bad : C.value],
         ['  Age(d): ', C.label],
         [String(Math.floor(selected.rotation.ageMs / (24 * 60 * 60 * 1000))), C.value],
       ]));
       detailLines.push(buildPanelLine(width, [[
-        `Last audit: ${view.lastAuditAt ? new Date(view.lastAuditAt).toISOString() : 'never'}  Press r to refresh.`,
+        `Last audit: ${view.lastAuditAt ? fmtAgo(view.lastAuditAt) : 'never'}  Press r to refresh.`,
         C.dim,
       ]]));
       if (preflightStatus !== 'n/a') {
         detailLines.push(buildPanelLine(width, [[
           truncateDisplay(`Policy preflight: ${preflightStatus} (${preflightIssueCount} issue${preflightIssueCount === 1 ? '' : 's'})`, width),
-          preflightStatus === 'block' ? C.error : preflightStatus === 'warn' ? C.warn : C.dim,
+          preflightStatus === 'block' ? C.bad : preflightStatus === 'warn' ? C.warn : C.dim,
         ]]));
       }
       if (quarantinedMcp.length > 0) {
         const server = quarantinedMcp[0]!;
         detailLines.push(buildPanelLine(width, [[
           truncateDisplay(`MCP quarantine: ${server.name} ${server.quarantineReason ?? 'unknown'}${server.quarantineDetail ? ` - ${server.quarantineDetail}` : ''}`, width),
-          C.error,
+          C.bad,
         ]]));
       }
       if (quarantinedPlugins.length > 0) {
         const plugin = quarantinedPlugins[0]!;
         detailLines.push(buildPanelLine(width, [[
           truncateDisplay(`Plugin quarantine: ${plugin.name} (${plugin.trustTier})`, width),
-          C.error,
+          C.bad,
         ]]));
       } else if (untrustedPlugins.length > 0) {
         const plugin = untrustedPlugins[0]!;
@@ -331,6 +429,9 @@ export class SecurityPanel extends ScrollableListPanel<TokenAuditResult> {
           { keys: '↑/↓', label: 'select token' },
           { keys: '/', label: 'filter' },
           { keys: 'r', label: 'refresh audit' },
+          { keys: 'f', label: 'preflight' },
+          ...(latestIncident ? [{ keys: 'i', label: 'jump to incident' }] : []),
+          ...(attackPathReview.findings.length > 0 ? [{ keys: '[ / ]', label: 'scroll attack paths' }] : []),
         ];
 
     return this.renderList(width, height, {
@@ -339,7 +440,6 @@ export class SecurityPanel extends ScrollableListPanel<TokenAuditResult> {
       footer: [
         ...detailLines,
         ...attackPathLines,
-        footerLine,
       ],
       hints,
     });

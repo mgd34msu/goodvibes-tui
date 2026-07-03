@@ -1,6 +1,9 @@
 import { describe, expect, test, mock } from 'bun:test';
 import { WrfcPanel } from '../../panels/wrfc-panel.ts';
 import { sparkline, stateColor, stateLabel, truncate, constraintStatusMarker } from '../../panels/wrfc-panel.ts';
+import { AgentInspectorPanel } from '../../panels/agent-inspector-panel.ts';
+import { PanelManager } from '../../panels/panel-manager.ts';
+import { handlePanelIntegrationAction } from '../../input/handler.ts';
 import type { WrfcChain, WrfcState } from '@pellux/goodvibes-sdk/platform/agents';
 import type { Line } from '../../types/grid.ts';
 import type { UiEventFeed } from '../../runtime/ui-events.ts';
@@ -189,6 +192,31 @@ describe('WrfcPanel render', () => {
     const text = linesText(panel.render(120, 24));
     expect(text).toContain('WRFC Chain Monitor');
     expect(text).toContain('No WRFC chains yet');
+  });
+
+  test('empty state names the real chain producer (/teamwork), not /wrfc run', () => {
+    const { panel } = makePanel([]);
+    const text = linesText(panel.render(120, 24));
+    expect(text).toContain('/teamwork create-mode');
+    expect(text).not.toContain('/wrfc run');
+  });
+
+  test('active chain row and selected section show elapsed time', () => {
+    const chain = makeChain({ state: 'engineering', createdAt: Date.now() - 5000 });
+    const { panel } = makePanel([chain]);
+    const text = linesText(panel.render(120, 24));
+    expect(text).toContain('Elapsed');
+  });
+
+  test('terminal chain row and selected section show duration', () => {
+    const chain = makeChain({
+      state: 'passed',
+      createdAt: Date.now() - 20_000,
+      completedAt: Date.now() - 5_000,
+    });
+    const { panel } = makePanel([chain]);
+    const text = linesText(panel.render(120, 24));
+    expect(text).toContain('Duration');
   });
 
   test('renders chain row with task and state', () => {
@@ -478,6 +506,139 @@ describe('WrfcPanel navigation', () => {
 // ---------------------------------------------------------------------------
 // Narrow terminal
 // ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// Detail cap
+// ---------------------------------------------------------------------------
+
+describe('WrfcPanel detail cap', () => {
+  test('expanded detail beyond the 12-line cap shows a +N more indicator', () => {
+    const chain = makeChain({
+      reviewScores: [7],
+      fixAttempts: 1,
+      reviewCycles: 1,
+      reviewerReport: {
+        version: 1,
+        archetype: 'reviewer',
+        summary: 'many issues',
+        score: 4,
+        passed: false,
+        dimensions: [],
+        issues: Array.from({ length: 15 }, (_, i) => ({
+          severity: 'minor' as const,
+          description: `Issue number ${i + 1}`,
+          pointValue: 1,
+        })),
+      },
+    });
+    const { panel } = makePanel([chain]);
+    panel.handleInput('enter'); // expand
+    const text = linesText(panel.render(120, 60));
+    expect(text).toContain('more');
+    expect(text).toContain('press a to inspect the owner agent');
+  });
+
+  test('detail well under the cap has no +N more indicator', () => {
+    const chain = makeChain({ reviewScores: [8.5], fixAttempts: 1 });
+    const { panel } = makePanel([chain]);
+    panel.handleInput('enter');
+    const text = linesText(panel.render(120, 60));
+    expect(text).not.toContain('press a to inspect the owner agent');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Jump to owner agent ('a')
+// ---------------------------------------------------------------------------
+
+describe('WrfcPanel jump to owner agent', () => {
+  function makeInspectorPanelManager() {
+    const panelManager = new PanelManager();
+    panelManager.registerType({
+      id: 'inspector',
+      name: 'Inspector',
+      icon: 'I',
+      category: 'agent',
+      description: 'inspector',
+      factory: () => new AgentInspectorPanel({
+        agentManager: { list: () => [], getStatus: () => null, cancel: () => true },
+        agentMessageBus: { getMessages: () => [] },
+        workingDirectory: '/tmp/test',
+        cancelAgent: () => true,
+        agentEvents: { on: () => () => {}, onEnvelope: () => () => {}, emit: () => {} } as unknown as UiEventFeed<never>,
+      }),
+    });
+    return panelManager;
+  }
+
+  test('a on a selected chain opens the inspector focused on its owner agent', () => {
+    const chain = makeChain({ ownerAgentId: 'agent-77' });
+    const { panel } = makePanel([chain]);
+    panel.render(120, 24);
+
+    const panelManager = makeInspectorPanelManager();
+    expect(handlePanelIntegrationAction(panelManager, panel, 'a')).toBe(true);
+
+    const inspector = panelManager.getPanel('inspector') as AgentInspectorPanel;
+    expect(inspector).toBeInstanceOf(AgentInspectorPanel);
+    const inspectorText = linesText(inspector.render(100, 24));
+    expect(inspectorText).toContain('agent-77');
+  });
+
+  test('a with no chains does not consume the key', () => {
+    const { panel } = makePanel([]);
+    expect(panel.handleInput('a')).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Mouse wheel scroll
+// ---------------------------------------------------------------------------
+
+describe('WrfcPanel handleScroll', () => {
+  test('scrolling down pans the viewport without moving the selected chain', () => {
+    const chains = Array.from({ length: 20 }, (_, i) => makeChain({ id: `chain-${i}`, task: `Task ${i}` }));
+    const { panel } = makePanel(chains);
+
+    panel.render(120, 12); // establish a scroll window smaller than the chain count
+    const consumed = panel.handleScroll(3);
+    expect(consumed).toBe(true);
+    // Selection stays at index 0 (no 'down' keys were sent).
+    const text = linesText(panel.render(120, 12));
+    expect(text).toContain('Task');
+  });
+
+  test('scrolling up at the top is a no-op', () => {
+    const chain = makeChain();
+    const { panel } = makePanel([chain]);
+    panel.render(120, 24);
+    expect(panel.handleScroll(-5)).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Cross-panel jump target (selectChain)
+// ---------------------------------------------------------------------------
+
+describe('WrfcPanel selectChain', () => {
+  test('selects and expands the chain with the given id', () => {
+    const chains = [
+      makeChain({ id: 'chain-a', task: 'Task A' }),
+      makeChain({ id: 'chain-b', task: 'Task B', reviewScores: [9] }),
+    ];
+    const { panel } = makePanel(chains);
+
+    panel.selectChain('chain-b');
+    const text = linesText(panel.render(120, 40));
+    expect(text).toContain('Scores'); // expanded detail visible for chain-b
+  });
+
+  test('unknown chain id is a no-op', () => {
+    const chain = makeChain({ id: 'chain-a' });
+    const { panel } = makePanel([chain]);
+    expect(() => panel.selectChain('does-not-exist')).not.toThrow();
+  });
+});
 
 describe('WrfcPanel narrow terminal', () => {
   test('renders without throwing at very narrow width', () => {

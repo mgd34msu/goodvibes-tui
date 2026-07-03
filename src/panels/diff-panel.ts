@@ -6,6 +6,10 @@ import type { Line } from '../types/grid.ts';
 import { createStyledCell, createEmptyLine } from '../types/grid.ts';
 import { truncateDisplay, getDisplayWidth } from '../utils/terminal-width.ts';
 import { BasePanel } from './base-panel.ts';
+import { UI_TONES } from '../renderer/ui-primitives.ts';
+import { FilePreviewPanel } from './file-preview-panel.ts';
+import type { PanelIntegrationContext } from './types.ts';
+import { logger } from '@pellux/goodvibes-sdk/platform/utils';
 import {
   buildBodyText,
   buildEmptyState,
@@ -14,31 +18,63 @@ import {
   buildStyledPanelLine,
   type PanelWorkspaceSection,
   DEFAULT_PANEL_PALETTE,
+  extendPalette,
 } from './polish.ts';
 
 // ---------------------------------------------------------------------------
-// Colour palette
+// Colour palette — dedicated diff-viewer scheme (like a mini syntax
+// highlighter). Each hex literal is named once and reused for every role
+// that shares it, including the workspace-chrome aliases (info/dim/value/
+// empty) so the raw-hex count never grows. The title band itself is NOT
+// overridden — buildPanelWorkspace always falls back to the canonical
+// DEFAULT_PANEL_PALETTE.headerBg (WO-002: one title band everywhere).
 // ---------------------------------------------------------------------------
 
-const COLOR = {
-  addition:    '#00ff88',
-  additionBg:  '#001a0d',
-  deletion:    '#ff4444',
-  deletionBg:  '#1a0000',
-  hunk:        '#88aaff',
-  hunkBg:      '#0a0a1a',
-  header:      '#aaaaaa',
-  lineNum:     '#555555',
-  lineNumAdd:  '#00aa55',
-  lineNumDel:  '#aa2222',
-  filename:    '#ffffff',
-  tabActive:   '#ffffff',
-  tabActiveBg: '#333333',
-  tabInactive: '#666666',
-  tabBg:       '#222222',
-  context:     '#888888',
-  statusBar:   '#444444',
-} as const;
+const HUNK_BLUE = '#88aaff';
+// Context rows and line-number gutter use the shared theme's muted/dim
+// foreground tones rather than dedicated gray hex literals.
+const CONTEXT_GRAY = UI_TONES.fg.muted;
+const FILENAME_WHITE = '#ffffff';
+const ADD_GREEN = '#00ff88';
+const ADD_BG = '#001a0d';
+const DEL_RED = '#ff4444';
+const DEL_BG = '#1a0000';
+const HUNK_BG = '#0a0a1a';
+const MARKER_GRAY = '#aaaaaa';
+const LINE_NUM_GRAY = UI_TONES.fg.dim;
+const LINE_NUM_ADD = '#00aa55';
+const LINE_NUM_DEL = '#aa2222';
+const TAB_ACTIVE_BG = '#333333';
+const TAB_INACTIVE_GRAY = '#666666';
+const TAB_BG = '#222222';
+const STATUS_BAR_BG = '#444444';
+
+const COLOR = extendPalette(DEFAULT_PANEL_PALETTE, {
+  // Workspace-chrome aliases (title band excluded — no headerBg override)
+  info:  HUNK_BLUE,
+  dim:   CONTEXT_GRAY,
+  value: FILENAME_WHITE,
+  empty: CONTEXT_GRAY,
+
+  // Domain accents
+  addition:    ADD_GREEN,
+  additionBg:  ADD_BG,
+  deletion:    DEL_RED,
+  deletionBg:  DEL_BG,
+  hunk:        HUNK_BLUE,
+  hunkBg:      HUNK_BG,
+  markerText:  MARKER_GRAY,
+  lineNum:     LINE_NUM_GRAY,
+  lineNumAdd:  LINE_NUM_ADD,
+  lineNumDel:  LINE_NUM_DEL,
+  filename:    FILENAME_WHITE,
+  tabActive:   FILENAME_WHITE,
+  tabActiveBg: TAB_ACTIVE_BG,
+  tabInactive: TAB_INACTIVE_GRAY,
+  tabBg:       TAB_BG,
+  context:     CONTEXT_GRAY,
+  statusBar:   STATUS_BAR_BG,
+} as const);
 
 // ---------------------------------------------------------------------------
 // Types
@@ -190,6 +226,9 @@ export class DiffPanel extends BasePanel {
   private selectedFile = 0;
   private scrollOffset = 0;
 
+  /** Set by the 'o' key; consumed by handlePanelIntegrationAction on the next dispatch. */
+  private pendingOpenPreview = false;
+
   constructor(workingDirectory: string) {
     super('diff', 'Diff', 'D', 'development');
     this.workingDirectory = workingDirectory;
@@ -233,9 +272,14 @@ export class DiffPanel extends BasePanel {
     const raw = await new Response(proc.stdout).text();
     await proc.exited;
     this.loadRawDiff(raw);
+    this.enrichSemanticDiffs(files, ref ?? 'HEAD').catch((err) => { logger.debug('DiffPanel: semantic diff enrichment failed', { err }); });
   }
 
-  /** Run `git diff` and populate all changed files. */
+  /**
+   * Run `git diff` and populate all changed files. Self-load entry point for
+   * the 'w' (working tree, no ref) and 'h' (vs HEAD) keys. Automatically
+   * enriches every loaded file with a semantic-diff summary in the background.
+   */
   async showGitDiff(ref?: string): Promise<void> {
     const args = ['diff', ...(ref ? [ref] : [])];
     const proc = Bun.spawn(['git', ...args], { stdout: 'pipe', stderr: 'pipe', cwd: this.workingDirectory });
@@ -266,6 +310,73 @@ export class DiffPanel extends BasePanel {
     this.selectedFile = Math.min(this.selectedFile, Math.max(0, this.entries.length - 1));
     this.scrollOffset = 0;
     this.markDirty();
+    this.enrichSemanticDiffs(newEntries.map((e) => e.filePath), 'HEAD').catch((err) => { logger.debug('DiffPanel: semantic diff enrichment failed', { err }); });
+  }
+
+  /**
+   * Run `git diff --cached` and populate the staged changes. Self-load entry
+   * point for the 's' key — its own diff plumbing, independent of the
+   * `/diff staged` command handler.
+   */
+  async showStagedDiff(): Promise<void> {
+    const proc = Bun.spawn(['/bin/sh', '-c', 'git diff --cached'], { stdout: 'pipe', stderr: 'pipe', cwd: this.workingDirectory });
+    const [raw, errText] = await Promise.all([
+      new Response(proc.stdout).text(),
+      new Response(proc.stderr).text(),
+    ]);
+    const exitCode = await proc.exited;
+    if (exitCode !== 0) {
+      const errorText = errText.trim() || 'git diff --cached failed';
+      this.showDiff('(error)', `--- error\n+++ error\n@@ -0,0 +1,1 @@\n+${errorText}`);
+      return;
+    }
+    if (!raw.trim()) {
+      this.showDiff('(no staged changes)', '@@ -0,0 +0,0 @@\n No staged changes.');
+      return;
+    }
+    this.loadRawDiff(raw);
+    this.enrichSemanticDiffs(this.entries.map((e) => e.filePath), 'HEAD').catch((err) => { logger.debug('DiffPanel: semantic diff enrichment failed', { err }); });
+  }
+
+  /**
+   * Best-effort semantic-diff enrichment for a set of files, run against the
+   * before-content at `ref` and the current on-disk after-content. Self-contained
+   * diff plumbing — does not depend on the `/diff` command handler.
+   */
+  private async enrichSemanticDiffs(files: string[], ref: string): Promise<void> {
+    if (files.length === 0) return;
+    const { computeSemanticDiff, formatSemanticDiffSummary } = await import('../renderer/semantic-diff.ts');
+    const { join, relative: pathRelative } = await import('path');
+    const repoRootProc = Bun.spawn(['git', 'rev-parse', '--show-toplevel'], { stdout: 'pipe', cwd: this.workingDirectory });
+    await repoRootProc.exited;
+    const repoRoot = (await new Response(repoRootProc.stdout).text()).trim() || this.workingDirectory;
+    await Promise.allSettled(
+      files.map(async (filePath) => {
+        try {
+          const absPath = filePath.startsWith('/') ? filePath : join(this.workingDirectory, filePath);
+          const repoRelPath = filePath.startsWith('/') ? pathRelative(repoRoot, filePath) : filePath;
+          const [beforeResult, afterResult] = await Promise.allSettled([
+            (async () => {
+              const proc = Bun.spawn(
+                ['git', 'show', `${ref}:${repoRelPath}`],
+                { stdout: 'pipe', stderr: 'pipe', cwd: repoRoot },
+              );
+              const [text, exitCode] = await Promise.all([new Response(proc.stdout).text(), proc.exited]);
+              if (exitCode !== 0) throw new Error(`git show failed for ${repoRelPath}`);
+              return text;
+            })(),
+            Bun.file(absPath).text(),
+          ]);
+          if (beforeResult.status !== 'fulfilled' || afterResult.status !== 'fulfilled') return;
+          const semanticDiff = await computeSemanticDiff(filePath, beforeResult.value, afterResult.value);
+          if (!semanticDiff) return;
+          const summary = formatSemanticDiffSummary(semanticDiff);
+          if (summary) this.setSemanticSummary(filePath, summary);
+        } catch {
+          // best-effort only
+        }
+      }),
+    );
   }
 
   /**
@@ -306,10 +417,60 @@ export class DiffPanel extends BasePanel {
       case 'up':    this.scrollUp();   return true;
       case 'down':  this.scrollDown(); return true;
       case 'tab':   this.nextFile();   return true;
+      // Shift+Tab: most terminals send the bare CSI-Z ("backtab") escape
+      // sequence rather than a Tab keypress with a shift modifier, and the
+      // input tokenizer passes that sequence through unchanged as the
+      // logical key name — so it (and the friendlier aliases some terminals/
+      // future tokenizer versions may emit) are matched explicitly here.
+      case '\x1b[Z':
+      case 'shift-tab':
+      case 'backtab': this.prevFile(); return true;
       case 'pageup':   this.scrollPageUp();   return true;
       case 'pagedown': this.scrollPageDown(); return true;
+      case 'w': void this.showGitDiff();       return true;
+      case 'h': void this.showGitDiff('HEAD'); return true;
+      case 's': void this.showStagedDiff();    return true;
+      case 'o': {
+        if (!this.currentEntry()) return false;
+        this.pendingOpenPreview = true;
+        return true;
+      }
       default: return false;
     }
+  }
+
+  /**
+   * Cross-panel integration hook — 'o' opens the currently selected file in
+   * the preview panel via the same open/focus bridge FileExplorerPanel uses
+   * (src/input/panel-integration-actions.ts), without this panel needing to
+   * know about PanelManager pane/focus mechanics beyond what ctx exposes.
+   */
+  handlePanelIntegrationAction(_key: string, ctx: PanelIntegrationContext): boolean {
+    if (!this.pendingOpenPreview) return false;
+    this.pendingOpenPreview = false;
+    const entry = this.currentEntry();
+    if (!entry) return false;
+
+    const pm = ctx.panelManager;
+    let previewPanel = pm.getPanel('preview');
+    if (previewPanel instanceof FilePreviewPanel) {
+      const pane = pm.getPaneOf('preview');
+      pm.activateById('preview');
+      if (pane) pm.focusPane(pane);
+    } else {
+      const targetPane: 'top' | 'bottom' = pm.isBottomPaneVisible()
+        ? (pm.getFocusedPane() === 'top' ? 'bottom' : 'top')
+        : 'bottom';
+      const opened = pm.open('preview', targetPane);
+      pm.show();
+      pm.focusPane(targetPane);
+      previewPanel = opened instanceof FilePreviewPanel ? opened : null;
+    }
+    if (previewPanel instanceof FilePreviewPanel) {
+      previewPanel.openFile(entry.filePath);
+      return true;
+    }
+    return false;
   }
 
   private scrollUp(): void {
@@ -349,6 +510,13 @@ export class DiffPanel extends BasePanel {
     this.markDirty();
   }
 
+  private prevFile(): void {
+    if (this.entries.length === 0) return;
+    this.selectedFile = (this.selectedFile - 1 + this.entries.length) % this.entries.length;
+    this.scrollOffset = 0;
+    this.markDirty();
+  }
+
   private currentEntry(): DiffEntry | null {
     return this.entries[this.selectedFile] ?? null;
   }
@@ -364,26 +532,20 @@ export class DiffPanel extends BasePanel {
     if (this.entries.length === 0) {
       return buildPanelWorkspace(width, height, {
         title: 'Diff Workspace',
-        palette: {
-          ...DEFAULT_PANEL_PALETTE,
-          info: COLOR.hunk,
-          dim: COLOR.context,
-          value: COLOR.filename,
-        },
+        palette: COLOR,
         sections: [{
           title: 'Diff',
           lines: buildEmptyState(
             width,
             ' No diff to display.',
-            'Load a git diff or select a changed file to populate the workspace.',
-            [{ command: '/git diff', summary: 'load the current working-tree diff into the diff workspace' }],
-            {
-              ...DEFAULT_PANEL_PALETTE,
-              info: COLOR.hunk,
-              dim: COLOR.context,
-              value: COLOR.filename,
-              empty: COLOR.context,
-            },
+            'Load a git diff or select a changed file to populate the workspace. w=working h=HEAD s=staged self-load right here.',
+            // WO-160: corrected — bare /diff loads files changed *this
+            // session* (falling back to the full HEAD diff when none are
+            // tracked yet), not the working-tree diff the w key already
+            // loads in-panel; the old summary text described the wrong
+            // command.
+            [{ command: '/diff', summary: 'load files changed this session into the diff workspace (falls back to the HEAD diff if none yet)' }],
+            COLOR,
           ),
         }],
       });
@@ -396,20 +558,10 @@ export class DiffPanel extends BasePanel {
 
     const compact = height <= 12;
     const summaryLines = entry.semanticSummary
-      ? buildBodyText(width, `Semantic summary: ${entry.semanticSummary}`, {
-          ...DEFAULT_PANEL_PALETTE,
-          dim: COLOR.context,
-          value: COLOR.filename,
-        }, COLOR.context)
+      ? buildBodyText(width, `Semantic summary: ${entry.semanticSummary}`, COLOR, COLOR.context)
       : [];
     const previewSection = resolveScrollablePanelSection(width, height, {
-      palette: {
-        ...DEFAULT_PANEL_PALETTE,
-        info: COLOR.hunk,
-        dim: COLOR.context,
-        value: COLOR.filename,
-        headerBg: COLOR.tabBg,
-      },
+      palette: COLOR,
       footerLines: [this.renderStatusBar(width, entry)],
       beforeSections: [
         {
@@ -444,13 +596,7 @@ export class DiffPanel extends BasePanel {
     ];
     return buildPanelWorkspace(width, height, {
       title: 'Diff Workspace',
-      palette: {
-        ...DEFAULT_PANEL_PALETTE,
-        info: COLOR.hunk,
-        dim: COLOR.context,
-        value: COLOR.filename,
-        headerBg: COLOR.tabBg,
-      },
+      palette: COLOR,
       sections,
       footerLines: [this.renderStatusBar(width, entry)],
     });
@@ -509,7 +655,7 @@ export class DiffPanel extends BasePanel {
       { text: ' -', fg: COLOR.tabInactive, bg: COLOR.statusBar },
       { text: String(stat.removed), fg: COLOR.deletion, bg: COLOR.statusBar },
       { text: `  L${this.scrollOffset + 1}/${entry.lines.length}`, fg: COLOR.tabInactive, bg: COLOR.statusBar },
-      { text: '  Tab next  ↑/↓ scroll', fg: COLOR.context, bg: COLOR.statusBar },
+      { text: '  Tab/S-Tab file  o open  w/h/s load  ↑/↓ scroll', fg: COLOR.context, bg: COLOR.statusBar },
     ];
     if (entry.semanticSummary) {
       segments.push({ text: `  ◈ ${entry.semanticSummary}`, fg: COLOR.hunk, bg: COLOR.statusBar });
@@ -531,7 +677,7 @@ export class DiffPanel extends BasePanel {
       case 'hunk':
         return renderText(width, pl.text, COLOR.hunk, COLOR.hunkBg, false);
       case 'header':
-        return renderText(width, pl.text, COLOR.header, '', false);
+        return renderText(width, pl.text, COLOR.markerText, '', false);
       case 'context':
       default:
         return makeLine(width, left, right, `  ${pl.text}`, COLOR.context, '', COLOR.lineNum, false);

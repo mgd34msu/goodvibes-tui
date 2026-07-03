@@ -1,5 +1,6 @@
 import type { Line } from '../types/grid.ts';
 import { ScrollableListPanel } from './scrollable-list-panel.ts';
+import type { PanelIntegrationContext } from './types.ts';
 import {
   buildBodyText,
   buildDetailBlock,
@@ -15,10 +16,18 @@ import { truncateDisplay } from '../utils/terminal-width.ts';
 import type { PolicyRuntimeState, PermissionAuditEntry } from '@/runtime/index.ts';
 import { buildPermissionRuleSuggestions } from '@/runtime/index.ts';
 
-const C = {
-  ...DEFAULT_PANEL_PALETTE,
-  headerBg: '#111827',
-} as const;
+// Splits a computed '/command arg1 arg2' string into the { name, args } shape
+// ctx.executeCommand expects — same leading-slash-stripping approach used by
+// remote-panel.ts / session-browser-panel.ts for their own dispatched commands.
+function parseCommand(command: string): { name: string; args: string[] } | null {
+  const parts = command.replace(/^\//, '').split(/\s+/).filter(Boolean);
+  const [name, ...args] = parts;
+  return name ? { name, args } : null;
+}
+
+// Base chrome only — title band comes straight from DEFAULT_PANEL_PALETTE
+// (WO-002).
+const C = DEFAULT_PANEL_PALETTE;
 
 // Reference catalog of approval lanes and where each one is reviewed. Used to
 // resolve the next-step command for a live request and as a fallback reference
@@ -71,11 +80,43 @@ function fmtAgo(ts: number): string {
 
 export class ApprovalPanel extends ScrollableListPanel<PermissionAuditEntry> {
   private readonly policyRuntimeState: Pick<PolicyRuntimeState, 'getSnapshot'>;
+  // p / 1-3 = dispatch '/policy simulate' or a rule-suggestion command via the
+  // handleInput -> handlePanelIntegrationAction bridge (handleInput has no
+  // ctx.executeCommand — same pattern as remote-panel.ts / session-browser-panel.ts).
+  private pendingCommand: { name: string; args: string[] } | null = null;
 
   public constructor(policyRuntimeState: Pick<PolicyRuntimeState, 'getSnapshot'>) {
-    super('approval', 'Approval', 'A', 'monitoring');
+    super('approval', 'Approval', 'A', 'security-policy');
     this.showSelectionGutter = true; // I5: non-color selection affordance
     this.policyRuntimeState = policyRuntimeState;
+  }
+
+  private getRuleSuggestions() {
+    const audit = this.policyRuntimeState.getSnapshot().recentPermissionAudit;
+    return buildPermissionRuleSuggestions(audit).slice(0, 3);
+  }
+
+  override handleInput(key: string): boolean {
+    if (key === 'p') {
+      this.pendingCommand = parseCommand('/policy simulate');
+      return true;
+    }
+    if (key === '1' || key === '2' || key === '3') {
+      const suggestion = this.getRuleSuggestions()[Number(key) - 1];
+      if (!suggestion) return false;
+      this.pendingCommand = parseCommand(suggestion.command);
+      return true;
+    }
+    return super.handleInput(key);
+  }
+
+  /** Drains `pendingCommand` (set by 'p' or '1'/'2'/'3') via the ctx.executeCommand bridge. */
+  handlePanelIntegrationAction(_key: string, ctx: PanelIntegrationContext): boolean {
+    if (!this.pendingCommand) return false;
+    const { name, args } = this.pendingCommand;
+    this.pendingCommand = null;
+    void ctx.executeCommand?.(name, args);
+    return true;
   }
 
   protected override getPalette() { return C; }
@@ -112,8 +153,7 @@ export class ApprovalPanel extends ScrollableListPanel<PermissionAuditEntry> {
 
   /** Next-step review command for the currently selected request (if any). */
   public getSelectedCommand(): string | null {
-    const items = this.getVisibleItems();
-    const selected = items[this.selectedIndex];
+    const selected = this.getSelectedItem();
     return selected ? reviewFor(selected).command : null;
   }
 
@@ -124,8 +164,7 @@ export class ApprovalPanel extends ScrollableListPanel<PermissionAuditEntry> {
     const denialCount = audit.filter((e) => e.approved === false).length;
     const pendingCount = audit.filter((e) => e.approved === undefined).length;
 
-    const items = this.getVisibleItems();
-    const selected = items[this.selectedIndex] ?? null;
+    const selected = this.getSelectedItem() ?? null;
 
     // ---- Posture summary (severity + counts first) ----
     const headerLines: Line[] = [
@@ -139,7 +178,10 @@ export class ApprovalPanel extends ScrollableListPanel<PermissionAuditEntry> {
       ]),
       pendingCount > 0
         ? buildPanelLine(width, [[`  ${pendingCount} request${pendingCount !== 1 ? 's' : ''} awaiting a decision — select one to see its review path.`, C.warn]])
-        : buildGuidanceLine(width, '/policy simulate', 'preview which requests a scoped rule change would auto-approve', C),
+        : buildPanelLine(width, [
+            ['  p ', C.info],
+            ['/policy simulate — preview which requests a scoped rule change would auto-approve', C.dim],
+          ]),
     ];
 
     // ---- Detail block for the selected request ----
@@ -162,18 +204,25 @@ export class ApprovalPanel extends ScrollableListPanel<PermissionAuditEntry> {
         ...(selected.reasons[0]
           ? buildBodyText(width, `why prompted: ${selected.reasons[0]}`, C, C.dim)
           : buildBodyText(width, `why prompted: ${review.why}`, C, C.dim)),
-        buildGuidanceLine(width, review.command, `review and decide the ${laneOf(selected)} request`, C),
+        // WO-160: dropped the printed `review.command` guidance line here —
+        // Enter is already wired by the shell to dispatch that exact command
+        // (see onSelect below and the "Enter: review (<command>)" footer
+        // hint), so restating it as a signpost was a pure action substitute.
       ], C));
     }
 
-    // ---- Durable-rule suggestions from repeated denials ----
+    // ---- Durable-rule suggestions from repeated denials (dispatchable via 1/2/3) ----
+    const suggestions = this.getRuleSuggestions();
     const ruleSuggestionLines: Line[] = [];
-    for (const suggestion of buildPermissionRuleSuggestions(audit).slice(0, 3)) {
-      ruleSuggestionLines.push(buildPanelLine(width, [[`  ${truncateDisplay(suggestion.summary, Math.max(0, width - 4))}`, C.info]]));
+    suggestions.forEach((suggestion, index) => {
+      ruleSuggestionLines.push(buildPanelLine(width, [
+        [`  ${index + 1}) `, C.info],
+        [truncateDisplay(suggestion.summary, Math.max(0, width - 8)), C.info],
+      ]));
       ruleSuggestionLines.push(buildGuidanceLine(width, suggestion.command, suggestion.reason, C));
-    }
+    });
     if (ruleSuggestionLines.length > 0) {
-      ruleSuggestionLines.unshift(buildPanelLine(width, [['  Suggested durable rules', C.label]]));
+      ruleSuggestionLines.unshift(buildPanelLine(width, [['  Suggested durable rules (press 1/2/3 to apply)', C.label]]));
     }
 
     // ---- Context-aware footer: only show review key when a request is selected ----
@@ -187,6 +236,8 @@ export class ApprovalPanel extends ScrollableListPanel<PermissionAuditEntry> {
           { keys: '↑/↓', label: 'select' },
           { keys: 'g/G', label: 'top/bottom' },
         ];
+    if (suggestions.length > 0) hints.push({ keys: '1-3', label: 'apply rule suggestion' });
+    if (pendingCount === 0) hints.push({ keys: 'p', label: 'policy simulate' });
 
     return this.renderList(width, height, {
       title: 'Approval Control Room',

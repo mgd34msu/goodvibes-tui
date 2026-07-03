@@ -5,14 +5,12 @@
 import type { Line } from '../types/grid.ts';
 import { BasePanel } from './base-panel.ts';
 import { buildKeyboardHints, buildPanelLine, buildPanelWorkspace, buildSearchInputLine, resolveScrollablePanelSection, extendPalette, DEFAULT_PANEL_PALETTE } from './polish.ts';
-import type { ProviderModelCatalogQuery, ToolCatalogQuery } from '../runtime/ui-service-queries.ts';
-import {
-  getPanelSearchFocusTransition,
-  isPanelSearchBackspace,
-  isPanelSearchCancel,
-  isPanelSearchCommit,
-  isPanelSearchPrintable,
-} from './search-focus.ts';
+import type { ToolCatalogQuery } from '../runtime/ui-service-queries.ts';
+import type { ModelDefinition } from '@pellux/goodvibes-sdk/platform/providers';
+import type { KeybindingsManager } from '../input/keybindings.ts';
+import type { PanelIntegrationContext } from './types.ts';
+import { ToolInspectorPanel } from './tool-inspector-panel.ts';
+import { isPanelSearchBackspace, isPanelSearchPrintable } from './search-focus.ts';
 
 const C = extendPalette(DEFAULT_PANEL_PALETTE, {
   // Panel-specific domain colors with no clean shared equivalent.
@@ -21,31 +19,17 @@ const C = extendPalette(DEFAULT_PANEL_PALETTE, {
   selected:  '#00ffff',
 });
 
-// ---------------------------------------------------------------------------
-// Hardcoded keyboard shortcut reference
-// ---------------------------------------------------------------------------
-const SHORTCUTS: Array<{ key: string; desc: string }> = [
-  { key: 'Ctrl+C',      desc: 'Cancel generation / exit (double)' },
-  { key: 'Ctrl+P',      desc: 'Open panel picker' },
-  { key: 'Ctrl+F',      desc: 'Search conversation' },
-  { key: 'Ctrl+K',      desc: 'Copy last response to clipboard' },
-  { key: 'Ctrl+L',      desc: 'Clear screen' },
-  { key: 'Ctrl+Z',      desc: 'Undo input' },
-  { key: 'Alt+Enter',   desc: 'Insert newline in prompt' },
-  { key: 'PageUp/Down', desc: 'Scroll conversation' },
-  { key: 'Alt+PgUp/Dn', desc: 'Scroll panel' },
-  { key: 'Tab',         desc: 'Path completion / tab panels' },
-  { key: '/',           desc: 'Start slash command' },
-  { key: 'Enter',       desc: 'Submit prompt' },
-  { key: 'Esc',         desc: 'Close overlay / cancel search' },
-  { key: 'Up/Down',      desc: 'Scroll history / navigate list' },
-  { key: 'Alt+Up/Down',  desc: 'Move cursor in multi-line input' },
-  { key: 'Ctrl+A/E',    desc: 'Jump to start/end of line' },
-  { key: 'Ctrl+W',      desc: 'Delete word backward' },
-  { key: 'Ctrl+U',      desc: 'Clear line' },
-  { key: 'F1',          desc: 'Toggle help overlay' },
-  { key: 'F2',          desc: 'Toggle shortcuts overlay' },
-];
+/**
+ * Minimal provider-registry surface DocsPanel needs: list models, read the
+ * live active model (to mark it in the list), and switch models (Enter on a
+ * model row is a real in-panel action, not a printed signpost). Structurally
+ * satisfied by the full ProviderRegistry passed in from bootstrap.
+ */
+interface DocsProviderRegistry {
+  listModels(): ModelDefinition[];
+  getCurrentModel?(): ModelDefinition | undefined;
+  setCurrentModel?(registryKey: string): void;
+}
 
 type DocSection = 'tools' | 'models' | 'shortcuts';
 
@@ -55,6 +39,12 @@ interface FlatRow {
   fg: string;
   bg: string;
   bold?: boolean;
+  /** Present on tool 'item' rows — the tool name Enter should filter the inspector to. */
+  toolName?: string;
+  /** Present on model 'item' rows — the model's registryKey (provider:id) for setCurrentModel. */
+  modelKey?: string;
+  /** Present on model 'item' rows — whether Enter is allowed to switch to this model. */
+  modelSelectable?: boolean;
 }
 
 function renderRow(width: number, row: FlatRow, isCursor: boolean): Line {
@@ -67,18 +57,22 @@ function renderRow(width: number, row: FlatRow, isCursor: boolean): Line {
 
 export class DocsPanel extends BasePanel {
   private toolRegistry: ToolCatalogQuery | null = null;
-  private providerRegistry: ProviderModelCatalogQuery | null = null;
+  private providerRegistry: DocsProviderRegistry | null = null;
+  private keybindingsManager: KeybindingsManager | null = null;
   private section: DocSection = 'tools';
   private searchQuery = '';
   private searching = false;
   private rows: FlatRow[] = [];
   private cursorIndex = 0;
   private scrollOffset = 0;
+  /** Set by handleInput('enter') on a tool row; consumed by handlePanelIntegrationAction, which has the PanelManager reference needed to open the sibling inspector. */
+  private _pendingToolJump: string | null = null;
 
-  constructor(toolRegistry?: ToolCatalogQuery, providerRegistry?: ProviderModelCatalogQuery) {
+  constructor(toolRegistry?: ToolCatalogQuery, providerRegistry?: DocsProviderRegistry, keybindingsManager?: KeybindingsManager) {
     super('docs', 'Docs', '?', 'session');
     this.toolRegistry = toolRegistry ?? null;
     this.providerRegistry = providerRegistry ?? null;
+    this.keybindingsManager = keybindingsManager ?? null;
   }
 
   override onActivate(): void {
@@ -86,17 +80,21 @@ export class DocsPanel extends BasePanel {
     this._buildRows();
   }
 
-  handleInput(key: string): boolean {
+  /**
+   * WO-153: converged modal '/' filter (mirrors ScrollableListPanel's
+   * _handleFilterKey). Returns `true`/`false` when consumed/ignored in
+   * filter context, or `null` to fall through to section hotkeys/navigation.
+   */
+  private _handleSearchKey(key: string): boolean | null {
     if (this.searching) {
-      const transition = getPanelSearchFocusTransition(key, { selectedIndex: this.cursorIndex, itemCount: this.rows.length });
-      if (transition === 'focus-list') {
+      if (key === 'escape') {
         this.searching = false;
-        this.cursorIndex = 0;
-        this.markDirty();
+        this.searchQuery = '';
+        this._buildRows();
         return true;
       }
-      if (isPanelSearchCancel(key) || isPanelSearchCommit(key)) {
-        this.searching = false;
+      if (key === 'return' || key === 'enter') {
+        this.searching = false; // commit; keep the query applied
         this._buildRows();
         return true;
       }
@@ -105,6 +103,11 @@ export class DocsPanel extends BasePanel {
         this._buildRows();
         return true;
       }
+      // Arrow/paging keys navigate the filtered rows — fall through.
+      if (key === 'up' || key === 'down' || key === 'pageup' || key === 'pagedown') {
+        return null;
+      }
+      // Any printable character (including section hotkeys like t/m/k) extends the query.
       if (isPanelSearchPrintable(key)) {
         this.searchQuery += key;
         this._buildRows();
@@ -112,12 +115,16 @@ export class DocsPanel extends BasePanel {
       }
       return false;
     }
-
-    const transition = getPanelSearchFocusTransition(key, { selectedIndex: this.cursorIndex, itemCount: this.rows.length });
-    if (transition === 'focus-search') {
+    if (key === '/') {
       this._startSearch();
       return true;
     }
+    return null;
+  }
+
+  handleInput(key: string): boolean {
+    const searchResult = this._handleSearchKey(key);
+    if (searchResult !== null) return searchResult;
 
     switch (key) {
       case 'up':       this._move(-1);         return true;
@@ -127,18 +134,54 @@ export class DocsPanel extends BasePanel {
       case 't':        this._setSection('tools');     return true;
       case 'm':        this._setSection('models');    return true;
       case 'k':        this._setSection('shortcuts'); return true;
+      case 'enter':
+      case 'return':   return this._activateSelected();
       default:         return false;
     }
+  }
+
+  /**
+   * Enter on the cursor row. Tool rows can't act directly — opening the tool
+   * inspector needs the PanelManager, which only handlePanelIntegrationAction
+   * has — so this just records intent and lets that hook finish the jump.
+   * Model rows need no cross-panel access: switching the active model is a
+   * direct providerRegistry call, so it happens right here.
+   */
+  private _activateSelected(): boolean {
+    const row = this.rows[this.cursorIndex];
+    if (!row || row.kind !== 'item') return false;
+    if (this.section === 'tools' && row.toolName) {
+      this._pendingToolJump = row.toolName;
+      return true;
+    }
+    if (this.section === 'models' && row.modelKey) {
+      if (row.modelSelectable && this.providerRegistry?.setCurrentModel) {
+        this.providerRegistry.setCurrentModel(row.modelKey);
+        this._buildRows();
+      }
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * Cross-panel integration hook — opens ToolInspectorPanel filtered to the
+   * tool selected on Enter (session.ts:102 sibling-open pattern), consuming
+   * the intent recorded by _activateSelected.
+   */
+  handlePanelIntegrationAction(_key: string, ctx: PanelIntegrationContext): boolean {
+    if (!this._pendingToolJump) return false;
+    const tool = this._pendingToolJump;
+    this._pendingToolJump = null;
+    const inspector = ctx.panelManager.open('tools');
+    if (!(inspector instanceof ToolInspectorPanel)) return false;
+    inspector.filterByTool(tool);
+    return true;
   }
 
   render(width: number, height: number): Line[] {
     if (height <= 0 || width <= 0) return [];
     const sectionLabel = this.section === 'tools' ? 'Tools' : this.section === 'models' ? 'Models' : 'Shortcuts';
-    const searchLine = this.searching
-      ? ` Search: ${this.searchQuery}\u258a`
-      : this.searchQuery
-      ? ` Filter: ${this.searchQuery}  (/ or up at top to edit)`
-      : ` / or up at top to search`;
     this.cursorIndex = Math.max(0, Math.min(this.cursorIndex, Math.max(0, this.rows.length - 1)));
     const controlsSection = {
       title: 'Controls',
@@ -147,23 +190,25 @@ export class DocsPanel extends BasePanel {
           [' t', DEFAULT_PANEL_PALETTE.info], [' tools', DEFAULT_PANEL_PALETTE.dim],
           ['   m', DEFAULT_PANEL_PALETTE.info], [' models', DEFAULT_PANEL_PALETTE.dim],
           ['   k', DEFAULT_PANEL_PALETTE.info], [' shortcuts', DEFAULT_PANEL_PALETTE.dim],
-          ['   /', DEFAULT_PANEL_PALETTE.info], [' search', DEFAULT_PANEL_PALETTE.dim],
+          ['   /', DEFAULT_PANEL_PALETTE.info], [' filter', DEFAULT_PANEL_PALETTE.dim],
         ]),
-        buildSearchInputLine(width, '', searchLine.trimStart(), DEFAULT_PANEL_PALETTE, { active: this.searching }),
+        this._buildFilterLine(width),
       ],
     } as const;
-    // Context-aware footer: while searching, surface only the keys that work in
-    // the search field; otherwise surface section + navigation keys.
+    // Context-aware footer: while filtering, surface only the keys that work in
+    // the filter field; otherwise surface section + navigation keys.
     const footerLines = [this.searching
       ? buildKeyboardHints(width, [
           { keys: 'type', label: 'filter' },
-          { keys: 'Enter/Esc', label: 'apply / exit search' },
-          { keys: '↓', label: 'back to list' },
+          { keys: 'Enter', label: 'apply' },
+          { keys: 'Esc', label: 'clear' },
         ], DEFAULT_PANEL_PALETTE)
       : buildKeyboardHints(width, [
           { keys: 't/m/k', label: 'tools / models / shortcuts' },
           { keys: '↑/↓', label: 'navigate' },
-          { keys: '/', label: 'search' },
+          ...(this.section === 'tools' ? [{ keys: 'Enter', label: 'open in tool inspector' }] : []),
+          ...(this.section === 'models' ? [{ keys: 'Enter', label: 'set active model' }] : []),
+          { keys: '/', label: 'filter' },
         ], DEFAULT_PANEL_PALETTE)];
 
     const sectionWindow = resolveScrollablePanelSection(width, height, {
@@ -209,6 +254,24 @@ export class DocsPanel extends BasePanel {
     this.markDirty();
   }
 
+  /**
+   * The filter input line — pinned rendering contract shared with
+   * ScrollableListPanel.buildFilterLine: 'Filter: ' unfocused / '[Filter] '
+   * focused, literal trailing '_' cursor while active (active:false is
+   * passed to buildSearchInputLine to suppress its block-glyph cursor
+   * substitution).
+   */
+  private _buildFilterLine(width: number): Line {
+    const label = this.searching ? '[Filter] ' : 'Filter: ';
+    const value = this.searching ? `${this.searchQuery}_` : this.searchQuery;
+    return buildSearchInputLine(width, label, value, DEFAULT_PANEL_PALETTE, {
+      active: false,
+      bg: this.searching ? DEFAULT_PANEL_PALETTE.inputBg : DEFAULT_PANEL_PALETTE.sectionBg,
+      emptyLabel: '(/ to filter)',
+      valueColor: this.searching ? DEFAULT_PANEL_PALETTE.info : (this.searchQuery ? DEFAULT_PANEL_PALETTE.value : DEFAULT_PANEL_PALETTE.dim),
+    });
+  }
+
   private _move(delta: number): void {
     if (this.rows.length === 0) return;
     this.cursorIndex = Math.max(0, Math.min(this.rows.length - 1, this.cursorIndex + delta));
@@ -227,7 +290,7 @@ export class DocsPanel extends BasePanel {
       } else {
         rows.push({ kind: 'header', text: ` Tools (${filtered.length})`, fg: C.sectionFg, bg: C.sectionBg, bold: true });
         for (const tool of filtered) {
-          rows.push({ kind: 'item', text: `  ${tool.definition.name}`, fg: C.toolFg, bg: '', bold: true });
+          rows.push({ kind: 'item', text: `  ${tool.definition.name}`, fg: C.toolFg, bg: '', bold: true, toolName: tool.definition.name });
           if (tool.definition.description) {
             rows.push({ kind: 'detail', text: `    ${tool.definition.description}`, fg: C.label, bg: '' });
           }
@@ -262,23 +325,46 @@ export class DocsPanel extends BasePanel {
           if (!arr) { arr = []; byProvider.set(m.provider, arr); }
           arr.push(m);
         }
+        // Live active-model marker (WO-136): Enter on a selectable row calls
+        // providerRegistry.setCurrentModel, so re-derive this on every build
+        // instead of caching it — it can change without this panel's input.
+        const activeKey = this.providerRegistry?.getCurrentModel?.()?.registryKey;
         for (const [provider, pModels] of byProvider) {
           rows.push({ kind: 'header', text: ` ${provider} (${pModels.length})`, fg: C.sectionFg, bg: C.sectionBg, bold: true });
           for (const m of pModels) {
             const ctxK = m.contextWindow > 0 ? `${(m.contextWindow / 1000).toFixed(0)}k` : '?';
             const caps = [m.contextWindow > 0 ? `ctx:${ctxK}` : ''].filter(Boolean).join(' ');
-            rows.push({ kind: 'item', text: `  ${m.displayName}  ${caps}`, fg: C.toolFg, bg: '' });
-            rows.push({ kind: 'detail', text: `    ${m.id}`, fg: C.label, bg: '' });
+            const isActive = m.registryKey === activeKey;
+            const activeTag = isActive ? '  ACTIVE' : '';
+            rows.push({
+              kind: 'item',
+              text: `  ${m.displayName}  ${caps}${activeTag}`,
+              fg: isActive ? C.good : C.toolFg,
+              bg: '',
+              modelKey: m.registryKey,
+              modelSelectable: m.selectable,
+            });
+            rows.push({ kind: 'detail', text: `    ${m.id}${m.selectable ? '' : '  (not selectable)'}`, fg: C.label, bg: '' });
           }
         }
       }
     } else {
-      // Shortcuts
-      const filtered = q ? SHORTCUTS.filter(s => s.key.toLowerCase().includes(q) || s.desc.toLowerCase().includes(q)) : SHORTCUTS;
-      rows.push({ kind: 'header', text: ' Keyboard Shortcuts', fg: C.sectionFg, bg: C.sectionBg, bold: true });
-      for (const s of filtered) {
-        const key = s.key.padEnd(16);
-        rows.push({ kind: 'item', text: `  ${key} ${s.desc}`, fg: C.value, bg: '' });
+      // Shortcuts — live bindings from KeybindingsManager.getAll() (WO-136),
+      // including any user overrides from ~/.goodvibes/tui/keybindings.json.
+      const km = this.keybindingsManager;
+      const shortcuts = (km?.getAll() ?? []).map((entry) => ({
+        key: entry.combos.length > 0 ? entry.combos.map((combo) => km!.formatCombo(combo)).join(', ') : '(unbound)',
+        desc: entry.description,
+      }));
+      const filtered = q ? shortcuts.filter(s => s.key.toLowerCase().includes(q) || s.desc.toLowerCase().includes(q)) : shortcuts;
+      if (shortcuts.length === 0) {
+        rows.push({ kind: 'empty', text: ' Keybindings manager not wired into this session.', fg: C.dim, bg: '' });
+      } else {
+        rows.push({ kind: 'header', text: ' Keyboard Shortcuts', fg: C.sectionFg, bg: C.sectionBg, bold: true });
+        for (const s of filtered) {
+          const key = s.key.padEnd(20);
+          rows.push({ kind: 'item', text: `  ${key} ${s.desc}`, fg: C.value, bg: '' });
+        }
       }
     }
 

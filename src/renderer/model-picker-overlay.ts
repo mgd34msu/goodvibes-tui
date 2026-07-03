@@ -13,6 +13,7 @@ import {
   putOverlayText,
 } from './overlay-box.ts';
 import { getOverlaySurfaceMetrics } from './overlay-viewport.ts';
+import { formatHints, type HintSpec } from './hint-grammar.ts';
 
 /** Format a context window number into a short human-readable string. */
 function fmtContext(n: number): string {
@@ -413,13 +414,26 @@ export function renderModelPickerOverlay(
   const groupByLabel = picker.groupBy ?? 'provider';
   const selectedModel = picker.mode === 'model' ? picker.getSelected() : null;
   const showContextCapHint = selectedModel != null && selectedModel.contextWindowProvenance !== undefined;
-  const hints = picker.mode === 'model'
-    ? showContextCapHint
-      ? `[Up/Down] [Enter] [/] Search [Space] Ctx [Esc] [Tab] Filter: ${filterLabelFooter} [G] Group: ${groupByLabel}`
-      : `[Up/Down] [Enter] [/] Search [Esc] [Tab] Filter: ${filterLabelFooter} [G] Group: ${groupByLabel}`
-    : picker.mode === 'contextCap'
-    ? '[Enter] Confirm  [Esc] Cancel'
-    : '[Up/Down] Nav  [Enter] Select  [Esc] Cancel';
+  let hints: string;
+  if (picker.mode === 'model') {
+    // The model-picker box caps at 72 cols, so the footer stays compact: the
+    // list nav (Up/Down/Enter) is the obvious interaction and lives in the
+    // /shortcuts overlay; the footer prioritizes the stateful controls. The
+    // live filter/group value is folded into each key's verb so it stays
+    // adjacent to its control and reads inside the width.
+    const modelHints: HintSpec[] = [{ key: '/', verb: 'Search' }];
+    if (showContextCapHint) modelHints.push({ key: 'Space', verb: 'Ctx' });
+    modelHints.push(
+      { key: 'Tab', verb: `Filter: ${filterLabelFooter}` },
+      { key: 'G', verb: `Group: ${groupByLabel}` },
+      { key: 'Esc', verb: 'Close' },
+    );
+    hints = formatHints(modelHints);
+  } else if (picker.mode === 'contextCap') {
+    hints = formatHints([{ key: 'Enter', verb: 'Confirm' }, { key: 'Esc', verb: 'Cancel' }]);
+  } else {
+    hints = formatHints([{ key: 'Up/Down', verb: 'Move' }, { key: 'Enter', verb: 'Select' }, { key: 'Esc', verb: 'Cancel' }]);
+  }
   const footerLine = createOverlayFilledBorderLine(width, layout, OVERLAY_GLYPHS.bottomLeft, OVERLAY_GLYPHS.horizontal, OVERLAY_GLYPHS.bottomRight, borderFg, DEFAULT_OVERLAY_PALETTE.sectionBg);
   putRowText(footerLine, layout.margin + 2, contentW, fitDisplay(truncateDisplay(hints, contentW), contentW), mutedFg, '', false, true);
   lines.push(footerLine);

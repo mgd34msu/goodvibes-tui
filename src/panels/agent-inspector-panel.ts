@@ -1,6 +1,7 @@
 // ---------------------------------------------------------------------------
 // AgentInspectorPanel — detailed view of a specific agent's messages and tool
-// calls, with expandable tool call details, scroll, and agent selector.
+// calls. WO-110: merged agent-logs-panel.ts in (pause/filter/follow/auto-
+// select/stall-fix) on top of this panel's correct JSONL parser + cancel.
 // ---------------------------------------------------------------------------
 
 import { join } from 'node:path';
@@ -10,6 +11,8 @@ import { createEmptyLine } from '../types/grid.ts';
 import { BasePanel } from './base-panel.ts';
 import type { AgentManager, AgentRecord } from '@pellux/goodvibes-sdk/platform/tools';
 import type { AgentMessageBus } from '@pellux/goodvibes-sdk/platform/agents';
+import type { AgentEvent } from '@/runtime/index.ts';
+import type { UiEventFeed } from '../runtime/ui-events.ts';
 import { logger } from '@pellux/goodvibes-sdk/platform/utils';
 import {
   buildEmptyState,
@@ -20,22 +23,29 @@ import {
   buildPanelWorkspace,
   resolveScrollablePanelSection,
   DEFAULT_PANEL_PALETTE,
+  extendPalette,
 } from './polish.ts';
 import {
   type ConfirmState,
   handleConfirmInput,
 } from './confirm-state.ts';
 import { truncateDisplay } from '../utils/terminal-width.ts';
+import { abbreviateCount } from '../utils/format-number.ts';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 import {
   type AgentDisplayRow as DisplayRow,
   type AgentInspectorEntryKind as EntryKind,
   type AgentTimelineEntry as TimelineEntry,
+  type AgentInspectorFilterType as FilterType,
   agentKindStyle,
-  agentStatusColor,
   formatAgentDuration as formatMs,
   formatAgentTime as shortTime,
   jsonlToTimeline,
+  matchesInspectorFilter,
+  buildWrfcCostSegments,
+  subscribeAgentActivity,
+  AGENT_INSPECTOR_FILTER_CYCLE,
+  AGENT_INSPECTOR_FILTER_LABELS,
   AGENT_TERMINAL_STATUSES,
   AGENT_STALL_THRESHOLD_MS,
 } from './agent-inspector-shared.ts';
@@ -47,12 +57,12 @@ import {
 const REFRESH_MS = 500;
 const MAX_JSONL_ENTRIES = 200;
 
-const COLOR = {
-  // Header / chrome
-  headerBg:    '#1a1a2e',
-  headerFg:    '#ffffff',
+// Domain accents only — base chrome (header/headerBg/label/value/dim/selectBg/
+// warn) comes from DEFAULT_PANEL_PALETTE via extendPalette; the title band is
+// the one canonical UI_TONES.bg.title, not a per-panel override.
+const COLOR = extendPalette(DEFAULT_PANEL_PALETTE, {
+  // Agent selector chrome
   statusBar:   '#222233',
-  statusFg:    '#aaaaaa',
   separator:   '#333355',
 
   // Timeline roles
@@ -64,22 +74,10 @@ const COLOR = {
   system:      '#888888',   // dim grey
   timestamp:   '#555577',
 
-  // Status badges
-  pending:     '#ffcc44',
-  running:     '#44ffcc',
-  completed:   '#44ff88',
-  failed:      '#ff4444',
-  cancelled:   '#888888',
-
   // Selector / labels
-  label:       '#8888bb',
-  value:       '#ccccdd',
   selected:    '#ffee88',
-  dimmed:      '#555566',
   expandHint:  '#445566',
-  stalled:     '#f59e0b',   // amber — stalled-agent warning
-  cursorBg:    '#1a2233',   // timeline cursor row background
-} as const;
+} as const);
 
 // ---------------------------------------------------------------------------
 // AgentInspectorPanel
@@ -93,6 +91,8 @@ export interface AgentInspectorPanelDeps {
   readonly workingDirectory: string;
   /** Cancel the agent by id. Uses the same orphan-free path as WRFC. Returns true if cancelled. */
   readonly cancelAgent: (agentId: string) => boolean;
+  /** Agent lifecycle feed; drives auto-select-on-spawn + event-driven stall detection (WO-110). */
+  readonly agentEvents: UiEventFeed<AgentEvent>;
   /**
    * Request a compositor repaint. The 500ms refresh timer and other async
    * update paths call this (via markDirty) so live agent output is painted
@@ -129,8 +129,19 @@ export class AgentInspectorPanel extends BasePanel {
   /** True while this panel is the active view — gates async repaint requests. */
   private _active = false;
 
+  // ---- ported from agent-logs (WO-110 merge) -------------------------------
+  /** Freezes the 500ms JSONL refresh tick while true; manual navigation still works. */
+  private paused = false;
+  /** When true, cursor snaps to the newest row on every render (tail -f style). */
+  private autoFollow = true;
+  private filter: FilterType = 'all';
+  /** Per-agent last-activity timestamp derived from AGENT_* events — stall detection uses this, not startedAt. */
+  private readonly lastActivityByAgent = new Map<string, number>();
+  private unsubs: Array<() => void> = [];
+
   constructor(private readonly deps: AgentInspectorPanelDeps) {
     super('inspector', 'Inspector', 'I', 'agent');
+    this._subscribeAgentEvents();
   }
 
   // -------------------------------------------------------------------------
@@ -161,6 +172,7 @@ export class AgentInspectorPanel extends BasePanel {
     this.scrollOffset = 0;
     this.cursorIndex = 0;
     this.timeline = [];
+    this.autoFollow = true;
     this.markDirty();
     this._refreshTimeline().catch((err) => { logger.debug('agent inspector timeline refresh failed', { err }); });
   }
@@ -182,6 +194,8 @@ export class AgentInspectorPanel extends BasePanel {
 
   override onDestroy(): void {
     this._stopRefresh();
+    for (const unsub of this.unsubs) unsub();
+    this.unsubs = [];
     super.onDestroy();
   }
 
@@ -220,6 +234,10 @@ export class AgentInspectorPanel extends BasePanel {
       case 'return':   this._toggleExpand();          return true;
       case 'tab':      this._nextAgent();             return true;
       case 'c':        this._beginCancelConfirm();    return true;
+      case ' ':        this._togglePause();           return true;
+      case 'f':        this._cycleFilter();           return true;
+      case 'g':        this._jumpTop();               return true;
+      case 'G':        this._jumpBottom();            return true;
       default:         return false;
     }
   }
@@ -243,6 +261,10 @@ export class AgentInspectorPanel extends BasePanel {
         [String(agents.length), DEFAULT_PANEL_PALETTE.value],
         ['   Selected ', DEFAULT_PANEL_PALETTE.label],
         [this.selectedAgentId ? this.selectedAgentId.slice(-8) : 'none', this.selectedAgentId ? DEFAULT_PANEL_PALETTE.info : DEFAULT_PANEL_PALETTE.dim],
+        ['   Filter ', DEFAULT_PANEL_PALETTE.label],
+        [AGENT_INSPECTOR_FILTER_LABELS[this.filter], DEFAULT_PANEL_PALETTE.info],
+        ['   Mode ', DEFAULT_PANEL_PALETTE.label],
+        [this.paused ? 'paused' : this.autoFollow ? 'auto-follow' : 'manual', this.paused ? DEFAULT_PANEL_PALETTE.warn : this.autoFollow ? DEFAULT_PANEL_PALETTE.good : DEFAULT_PANEL_PALETTE.dim],
       ]),
     ];
 
@@ -275,10 +297,12 @@ export class AgentInspectorPanel extends BasePanel {
     }
 
     summaryLines.push(this._renderAgentInfoSummary(width, rec));
+    const wrfcCostLine = this._renderWrfcCostLine(width, rec);
+    if (wrfcCostLine) summaryLines.push(wrfcCostLine);
     const now = Date.now();
     const isStalled = this._isAgentStalled(rec, now);
     if (isStalled) {
-      summaryLines.push(buildPanelLine(width, [['  STALLED', COLOR.stalled], [' — no activity for 5+ minutes', DEFAULT_PANEL_PALETTE.dim]]));
+      summaryLines.push(buildPanelLine(width, [['  STALLED', COLOR.warn], [' — no activity for 5+ minutes', DEFAULT_PANEL_PALETTE.dim]]));
     }
     const allRows = this._getCachedRows();
     if (allRows.length === 0) {
@@ -303,13 +327,23 @@ export class AgentInspectorPanel extends BasePanel {
           },
         ],
         footerLines: [
-          buildPanelLine(width, [[' Tab', DEFAULT_PANEL_PALETTE.info], [' cycle agents', DEFAULT_PANEL_PALETTE.dim], ['   Up/Down', DEFAULT_PANEL_PALETTE.info], [' navigate', DEFAULT_PANEL_PALETTE.dim], ['   Enter', DEFAULT_PANEL_PALETTE.info], [' expand', DEFAULT_PANEL_PALETTE.dim]]),
+          buildPanelLine(width, [
+            [' Tab', DEFAULT_PANEL_PALETTE.info], [' cycle agents', DEFAULT_PANEL_PALETTE.dim],
+            ['   Up/Down', DEFAULT_PANEL_PALETTE.info], [' navigate', DEFAULT_PANEL_PALETTE.dim],
+            ['   Enter', DEFAULT_PANEL_PALETTE.info], [' expand', DEFAULT_PANEL_PALETTE.dim],
+            ['   Space', DEFAULT_PANEL_PALETTE.info], [this.paused ? ' resume' : ' pause', DEFAULT_PANEL_PALETTE.dim],
+            ['   f', DEFAULT_PANEL_PALETTE.info], [' filter', DEFAULT_PANEL_PALETTE.dim],
+          ]),
         ],
         palette: DEFAULT_PANEL_PALETTE,
       });
     }
 
-    this.cursorIndex = Math.max(0, Math.min(this.cursorIndex, allRows.length - 1));
+    if (this.autoFollow) {
+      this.cursorIndex = allRows.length - 1;
+    } else {
+      this.cursorIndex = Math.max(0, Math.min(this.cursorIndex, allRows.length - 1));
+    }
     const selectedRec = this.selectedAgentId
       ? this.deps.agentManager.getStatus(this.selectedAgentId)
       : null;
@@ -340,6 +374,9 @@ export class AgentInspectorPanel extends BasePanel {
       ['   Tab', DEFAULT_PANEL_PALETTE.info], [' cycle agents', DEFAULT_PANEL_PALETTE.dim],
       ['   Up/Down', DEFAULT_PANEL_PALETTE.info], [' navigate', DEFAULT_PANEL_PALETTE.dim],
       ['   Enter', DEFAULT_PANEL_PALETTE.info], [' expand', DEFAULT_PANEL_PALETTE.dim],
+      ['   Space', DEFAULT_PANEL_PALETTE.info], [this.paused ? ' resume' : ' pause', DEFAULT_PANEL_PALETTE.dim],
+      ['   f', DEFAULT_PANEL_PALETTE.info], [' filter', DEFAULT_PANEL_PALETTE.dim],
+      ['   g/G', DEFAULT_PANEL_PALETTE.info], [this.autoFollow ? ' top/follow' : ' top/bottom', DEFAULT_PANEL_PALETTE.dim],
       ['   c', cancelHintFg], [cancellable ? ' cancel' : ' cancel (n/a)', DEFAULT_PANEL_PALETTE.dim],
     ]);
 
@@ -381,17 +418,17 @@ export class AgentInspectorPanel extends BasePanel {
   ): Line {
     if (agents.length === 0) {
       return buildStyledPanelLine(width, [
-        { text: ' (no agents)', fg: COLOR.dimmed, bg: COLOR.statusBar, dim: true },
+        { text: ' (no agents)', fg: COLOR.dim, bg: COLOR.statusBar, dim: true },
       ]);
     }
-    const segments: StyledPanelSegment[] = [{ text: ' ', fg: COLOR.statusFg, bg: COLOR.statusBar }];
+    const segments: StyledPanelSegment[] = [{ text: ' ', fg: COLOR.dim, bg: COLOR.statusBar }];
     for (const agent of agents) {
       const isSelected = agent.id === this.selectedAgentId;
       const shortId = agent.id.slice(-8);
       const badge = ` ${shortId} `;
       segments.push({
         text: badge,
-        fg: isSelected ? COLOR.selected : COLOR.dimmed,
+        fg: isSelected ? COLOR.selected : COLOR.dim,
         bg: COLOR.statusBar,
         bold: isSelected,
       });
@@ -422,6 +459,12 @@ export class AgentInspectorPanel extends BasePanel {
     ]);
   }
 
+  /** WRFC badge + per-agent tokens/cost (WO-110); null when neither applies. */
+  private _renderWrfcCostLine(width: number, rec: AgentRecord): Line | null {
+    const segments = buildWrfcCostSegments(rec, DEFAULT_PANEL_PALETTE, abbreviateCount);
+    return segments ? buildPanelLine(width, segments) : null;
+  }
+
   // -------------------------------------------------------------------------
   // Timeline row rendering
   // -------------------------------------------------------------------------
@@ -431,7 +474,7 @@ export class AgentInspectorPanel extends BasePanel {
     row: DisplayRow,
     isCursor: boolean,
   ): Line {
-    const bg = isCursor ? COLOR.cursorBg : '';
+    const bg = isCursor ? COLOR.selectBg : '';
     const ts = shortTime(row.timestamp);
     const { fg, prefix } = agentKindStyle(row.kind, COLOR);
     const hint = row.hasDetail ? (row.expanded ? ' ▾' : ' ▸') : '';
@@ -456,10 +499,7 @@ export class AgentInspectorPanel extends BasePanel {
   // Private — data
   // -------------------------------------------------------------------------
 
-  /**
-   * Build the flat list of DisplayRow items from timeline + expanded detail
-   * sub-rows. This is what the renderer walks.
-   */
+  /** Flat DisplayRow list from timeline + expanded detail sub-rows, filtered by `this.filter`. */
   private _buildVisibleRows(): DisplayRow[] {
     const rows: DisplayRow[] = [];
 
@@ -481,10 +521,10 @@ export class AgentInspectorPanel extends BasePanel {
 
     merged.sort((a, b) => a.timestamp - b.timestamp);
 
-    // Deduplicate: bus messages that already appear in JSONL will have
-    // approximate timestamps. We just show all — bus msgs tend to have
-    // unique content.
+    // Entries are filtered against `this.filter` here (WO-110).
     for (const entry of merged) {
+      if (!matchesInspectorFilter(entry.kind, this.filter)) continue;
+
       rows.push({
         kind: entry.kind,
         timestamp: entry.timestamp,
@@ -614,6 +654,9 @@ export class AgentInspectorPanel extends BasePanel {
   private _startRefresh(): void {
     if (this.refreshTimerId) return;
     this.refreshTimerId = this.registerTimer(setInterval(() => {
+      // WO-110: Space pause/resume freezes the JSONL tail (ported from
+      // agent-logs); manual navigation and agent switching still work.
+      if (this.paused) return;
       this._refreshTimeline().catch((err) => { logger.debug('agent inspector timeline refresh tick failed', { err }); });
     }, REFRESH_MS));
   }
@@ -623,6 +666,51 @@ export class AgentInspectorPanel extends BasePanel {
       this.clearTimer(this.refreshTimerId);
       this.refreshTimerId = null;
     }
+  }
+
+  // -------------------------------------------------------------------------
+  // Private — agent lifecycle event subscriptions (WO-110 merge)
+  // -------------------------------------------------------------------------
+
+  /** Auto-select-on-spawn + real event-driven last-activity (stall fix), ported from agent-logs. */
+  private _subscribeAgentEvents(): void {
+    this.unsubs.push(...subscribeAgentActivity(this.deps.agentEvents, {
+      onActivity: (agentId) => {
+        this.lastActivityByAgent.set(agentId, Date.now());
+        if (!this.paused && agentId === this.selectedAgentId) this.markDirty();
+      },
+      onSpawn: (agentId) => {
+        const current = this.selectedAgentId ? this.deps.agentManager.getStatus(this.selectedAgentId) : null;
+        if (!current || AGENT_TERMINAL_STATUSES.has(current.status)) this.inspectAgent(agentId);
+      },
+      onTerminal: (agentId) => {
+        this.lastActivityByAgent.delete(agentId);
+        this.markDirty();
+      },
+    }));
+  }
+
+  private _togglePause(): void {
+    this.paused = !this.paused;
+    this.markDirty();
+  }
+
+  private _cycleFilter(): void {
+    const idx = AGENT_INSPECTOR_FILTER_CYCLE.indexOf(this.filter);
+    this.filter = AGENT_INSPECTOR_FILTER_CYCLE[(idx + 1) % AGENT_INSPECTOR_FILTER_CYCLE.length]!;
+    this.cursorIndex = 0;
+    this.markDirty();
+  }
+
+  private _jumpTop(): void {
+    this.autoFollow = false;
+    this.cursorIndex = 0;
+    this.markDirty();
+  }
+
+  private _jumpBottom(): void {
+    this.autoFollow = true;
+    this.markDirty();
   }
 
   // -------------------------------------------------------------------------
@@ -679,10 +767,11 @@ export class AgentInspectorPanel extends BasePanel {
     this.markDirty();
   }
 
-  /** Returns whether an agent is considered stalled (non-terminal, running past threshold). */
+  /** Stalled = non-terminal + no AGENT_* activity for AGENT_STALL_THRESHOLD_MS (not just elapsed-since-start). */
   private _isAgentStalled(rec: AgentRecord, now: number): boolean {
     if (AGENT_TERMINAL_STATUSES.has(rec.status)) return false;
-    return (now - rec.startedAt) >= AGENT_STALL_THRESHOLD_MS;
+    const lastActivity = this.lastActivityByAgent.get(rec.id) ?? rec.startedAt;
+    return (now - lastActivity) >= AGENT_STALL_THRESHOLD_MS;
   }
 
   /**

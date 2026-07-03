@@ -199,10 +199,56 @@ describe('operator surfaces gate', () => {
     expect(ids).toContain('remote');
     expect(ids).toContain('incident');
     expect(ids).toContain('orchestration');
-    expect(ids).toContain('forensics');
-    expect(ids).toContain('providers');
+    // WO-114: the 'forensics' panel merged into the incident console; the
+    // retired id survives only as a PanelManager alias, so it must resolve
+    // to the same instance instead of appearing as a standalone type.
+    expect(manager.open('forensics')).toBe(manager.open('incident'));
+    // WO-112: the 'providers' stats panel and 'accounts' panel merged into
+    // the provider-health console; both retired ids survive only as
+    // PanelManager aliases, so they must resolve to the same instance.
+    expect(ids).toContain('provider-health');
+    expect(manager.open('providers')).toBe(manager.open('provider-health'));
+    expect(manager.open('accounts')).toBe(manager.open('provider-health'));
+    // WO-110: the 'agent-logs' console merged into inspector; the retired id
+    // survives only as a PanelManager alias.
+    expect(manager.open('agent-logs')).toBe(manager.open('inspector'));
+    // WO-113: the 'context' visualizer merged into the tokens console; the
+    // retired id survives only as a PanelManager alias.
+    expect(manager.open('context')).toBe(manager.open('tokens'));
     expect(ids).toContain('sessions');
     expect(ids).toContain('ops');
+  });
+
+  test('WO-152: cost/memory/incident/eval are always registered and open to a "not configured" state without their optional dependency', () => {
+    const manager = new PanelManager();
+    const uiServices = createUiRuntimeServices(runtimeServices);
+    // Deliberately omit forensicsRegistry, memoryRegistry, evalRegistry, and
+    // getOrchestratorUsage — the exact conditions that used to skip
+    // registration entirely and make `/panel open <id>` report "Unknown panel".
+    registerBuiltinPanels(manager, {
+      providerRegistry: runtimeServices.providerRegistry,
+      uiServices,
+      policyRuntimeState,
+      tokenAuditor: runtimeServices.tokenAuditor,
+      componentHealthMonitor: runtimeServices.componentHealthMonitor,
+      worktreeRegistry: runtimeServices.worktreeRegistry,
+      sandboxSessionRegistry: runtimeServices.sandboxSessionRegistry,
+      systemMessagesPanel: new SystemMessagesPanel(runtimeServices.configManager, runtimeServices.componentHealthMonitor),
+    });
+    const ids = manager.getRegisteredTypes().map((entry) => entry.id);
+    expect(ids).toContain('cost');
+    expect(ids).toContain('memory');
+    expect(ids).toContain('incident');
+    expect(ids).toContain('eval');
+
+    for (const id of ['cost', 'memory', 'incident', 'eval']) {
+      // Must not throw "Unknown panel" — the registration always exists now.
+      const panel = manager.open(id);
+      expect(panel.id).toBe(id);
+      const text = panel.render(80, 24).map((line) => line.map((c) => c.char ?? ' ').join('')).join('\n');
+      expect(text.toLowerCase()).toContain('not configured');
+      manager.close(id);
+    }
   });
 
   test('command registry exposes the provider, policy, and session control surfaces', () => {

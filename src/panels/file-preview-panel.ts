@@ -1,5 +1,5 @@
-import type { Stats } from 'node:fs';
-import { promises as fsPromises, readFileSync, statSync } from 'node:fs';
+import type { Stats, FSWatcher } from 'node:fs';
+import { promises as fsPromises, readFileSync, statSync, watch } from 'node:fs';
 import * as path from 'node:path';
 import type { Line, Cell } from '../types/grid.ts';
 import { createStyledCell, createEmptyLine } from '../types/grid.ts';
@@ -20,12 +20,7 @@ import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 
 const MAX_FILE_SIZE = 100 * 1024; // 100 KB
 const BG = '#0d0d0d';
-const HEADER_BG = '#1e1e1e';
-const HEADER_FG = '#d4d4d4';
-const HEADER_ACCENT = '#4ec9b0';
 const LINE_NUM_FG = '238';
-const WARNING_FG = '#f44747';
-const EMPTY_FG = '244';
 
 // ─── Language Detection (from file extension) ─────────────────────────────────
 
@@ -64,8 +59,31 @@ export class FilePreviewPanel extends BasePanel {
   /** Per-file scroll position memory: path -> scrollOffset */
   private readonly scrollMemory = new Map<string, number>();
 
+  /**
+   * 1-based line number to visibly highlight, set by goToLine() (e.g. a
+   * symbol-outline jump). Cleared when a new file is opened.
+   */
+  private highlightedLine: number | null = null;
+
+  /**
+   * Monotonic counter bumped every time fileLines is replaced. Combined with
+   * filePath/width/highlightedLine, forms the cache key for the built
+   * preview lines so render() doesn't rebuild the whole file every frame.
+   */
+  private contentVersion = 0;
+  private cachedPreviewLines: { key: string; lines: Line[] } | null = null;
+
+  /** Set by the 'r' key; consumed by handlePanelIntegrationAction on the next
+   *  dispatch, which awaits the reload before re-syncing the symbol outline
+   *  (panel-integration-actions.ts owns the panelManager reference this
+   *  panel doesn't have). */
+  private pendingReload = false;
+
+  /** Optional live-refresh watcher on the currently open file. */
+  private watcher: FSWatcher | null = null;
+
   constructor() {
-    super('preview', 'Preview', 'P', 'development');
+    super('preview', 'Preview', '◑', 'development');
   }
 
   // ─── Public API ─────────────────────────────────────────────────────────────
@@ -83,6 +101,7 @@ export class FilePreviewPanel extends BasePanel {
     this.filePath = filePath;
     this.oversized = false;
     this.fenceTag = extToFenceTag(filePath);
+    this.highlightedLine = null;
 
     // Restore scroll position for this file, or start at top
     this.scrollOffset = this.scrollMemory.get(filePath) ?? 0;
@@ -101,8 +120,51 @@ export class FilePreviewPanel extends BasePanel {
     } catch {
       this.fileLines = [`(cannot open: ${filePath})`];
     }
+    this.contentVersion++;
 
+    this._startWatching(filePath);
     void this._loadFileAsync(filePath);
+  }
+
+  /**
+   * Re-read the current file from disk (the 'r' reload key). Returns the
+   * pending load's promise so callers can chain follow-up work (e.g.
+   * re-syncing the symbol outline) after it settles, or null if there is no
+   * open file or no reload was queued via the 'r' key.
+   */
+  consumePendingReload(): Promise<void> | null {
+    if (!this.pendingReload) return null;
+    this.pendingReload = false;
+    if (this.filePath === null) return null;
+    return this._loadFileAsync(this.filePath);
+  }
+
+  /**
+   * Start (or restart) an optional fs.watch auto-refresh on the given file.
+   * Best-effort: some filesystems/platforms don't support watch, so failures
+   * are swallowed and auto-refresh is simply unavailable for this file — the
+   * explicit 'r' reload key always still works.
+   */
+  private _startWatching(filePath: string): void {
+    this._stopWatching();
+    try {
+      const watcher = watch(filePath, { persistent: false }, (eventType) => {
+        if (eventType !== 'change' && eventType !== 'rename') return;
+        if (this.filePath !== filePath) return; // stale watcher from a since-replaced file
+        void this._loadFileAsync(filePath);
+      });
+      watcher.on('error', () => this._stopWatching());
+      this.watcher = watcher;
+    } catch {
+      this.watcher = null;
+    }
+  }
+
+  private _stopWatching(): void {
+    if (this.watcher) {
+      try { this.watcher.close(); } catch { /* already closed */ }
+      this.watcher = null;
+    }
   }
 
   private async _loadFileAsync(filePath: string): Promise<void> {
@@ -148,6 +210,7 @@ export class FilePreviewPanel extends BasePanel {
     } catch (err) {
       this.setError(summarizeError(err));
     }
+    this.contentVersion++;
     this.markDirty();
   }
 
@@ -162,7 +225,9 @@ export class FilePreviewPanel extends BasePanel {
 
   goToLine(line: number): void {
     if (!Number.isFinite(line)) return;
-    this.scrollOffset = Math.max(0, Math.min(Math.floor(line) - 1, Math.max(0, this.fileLines.length - 1)));
+    const target = Math.max(0, Math.min(Math.floor(line) - 1, Math.max(0, this.fileLines.length - 1)));
+    this.scrollOffset = target;
+    this.highlightedLine = target + 1;
     this.markDirty();
   }
 
@@ -183,6 +248,11 @@ export class FilePreviewPanel extends BasePanel {
     }
   }
 
+  override onDestroy(): void {
+    this._stopWatching();
+    super.onDestroy();
+  }
+
   // ─── Input handling ──────────────────────────────────────────────────────────
 
   handleInput(key: string): boolean {
@@ -193,6 +263,12 @@ export class FilePreviewPanel extends BasePanel {
       case 'pagedown':  return this.scrollPage(1);
       case 'home':      return this.scrollTo(0);
       case 'end':       return this.scrollTo(Infinity);
+      case 'r':
+        if (this.filePath === null) return false;
+        this.pendingReload = true;
+        return true;
+      case 'd':
+        return this.filePath !== null;
       default:          return false;
     }
   }
@@ -280,24 +356,42 @@ export class FilePreviewPanel extends BasePanel {
         { keys: 'Home/End', label: 'top/bottom' },
       ], DEFAULT_PANEL_PALETTE),
     ];
-    const fullCode = this.fileLines.join('\n');
-    const hlLines = this.fenceTag
-      ? this.syntaxHighlighter.highlight(fullCode, this.fenceTag)
-      : null;
+    // Line-build cache keyed on (filePath, contentVersion, width, highlightedLine):
+    // rebuilding every line on every frame showed up as an O(file-length)
+    // cost per render even when nothing changed (e.g. while idly scrolling
+    // within the same file). Only re-tokenize/re-render when the underlying
+    // content, panel width, or highlighted row actually changes.
+    const cacheKey = `${this.filePath ?? ''} ${this.contentVersion} ${width} ${this.highlightedLine ?? ''}`;
+    let previewLines: Line[];
+    if (this.cachedPreviewLines && this.cachedPreviewLines.key === cacheKey) {
+      previewLines = this.cachedPreviewLines.lines;
+    } else {
+      const fullCode = this.fileLines.join('\n');
+      const hlLines = this.fenceTag
+        ? this.syntaxHighlighter.highlight(fullCode, this.fenceTag)
+        : null;
 
-    const lineNumW = String(this.fileLines.length).length;
-    const contentX = lineNumW + 2; // "NNN | "
-    const previewLines: Line[] = [];
-    for (let fileIdx = 0; fileIdx < this.fileLines.length; fileIdx++) {
+      const lineNumW = String(this.fileLines.length).length;
+      const contentX = lineNumW + 2; // "NNN | "
+      const built: Line[] = [];
+      for (let fileIdx = 0; fileIdx < this.fileLines.length; fileIdx++) {
 
-      const rawLine = this.fileLines[fileIdx];
-      const tokens: SyntaxToken[] =
-        hlLines && fileIdx < hlLines.length && hlLines[fileIdx].length > 0
-          ? (hlLines[fileIdx] as SyntaxToken[])
-          : [{ text: rawLine, fg: '' }];
+        const rawLine = this.fileLines[fileIdx];
+        const tokens: SyntaxToken[] =
+          hlLines && fileIdx < hlLines.length && hlLines[fileIdx].length > 0
+            ? (hlLines[fileIdx] as SyntaxToken[])
+            : [{ text: rawLine, fg: '' }];
 
-      previewLines.push(this.renderCodeLine(fileIdx, lineNumW, contentX, tokens, width));
+        const highlighted = this.highlightedLine !== null && fileIdx === this.highlightedLine - 1;
+        built.push(this.renderCodeLine(fileIdx, lineNumW, contentX, tokens, width, highlighted));
+      }
+      previewLines = built;
+      this.cachedPreviewLines = { key: cacheKey, lines: previewLines };
     }
+    // Once a goToLine target is set, track it with a selectedIndex so the
+    // scrollable-section window keeps that row visible (with guard rows)
+    // the same way list-cursor panels do; plain free-scroll (no active
+    // highlight) keeps using the scrollOffset-only window it always has.
     const previewSection = resolveScrollablePanelSection(width, height, {
       intro,
       footerLines,
@@ -307,6 +401,7 @@ export class FilePreviewPanel extends BasePanel {
         title: 'Preview',
         scrollableLines: previewLines,
         scrollOffset: this.scrollOffset,
+        selectedIndex: this.highlightedLine !== null ? this.highlightedLine - 1 : undefined,
         minRows: 8,
       },
     });
@@ -347,9 +442,14 @@ export class FilePreviewPanel extends BasePanel {
     contentX: number,
     tokens: SyntaxToken[],
     width: number,
+    highlighted = false,
   ): Line {
+    // The goToLine target row (e.g. a symbol-outline jump) renders on the
+    // theme's selection background instead of the plain code background so
+    // it's visibly distinguishable from the rest of the file.
+    const bg = highlighted ? DEFAULT_PANEL_PALETTE.selectBg : BG;
     const line: Cell[] = new Array(width).fill(null).map(() =>
-      createStyledCell(' ', { bg: BG }),
+      createStyledCell(' ', { bg }),
     );
 
     // Line number gutter
@@ -357,12 +457,12 @@ export class FilePreviewPanel extends BasePanel {
     let cx = 0;
     for (const ch of lineNum) {
       if (cx >= lineNumW) break;
-      line[cx++] = createStyledCell(ch, { fg: LINE_NUM_FG, bg: BG, dim: true });
+      line[cx++] = createStyledCell(ch, { fg: LINE_NUM_FG, bg, dim: true });
     }
     // Separator " | "
-    line[cx++] = createStyledCell(' ', { bg: BG });
-    line[cx++] = createStyledCell('│', { fg: LINE_NUM_FG, bg: BG, dim: true });
-    line[cx++] = createStyledCell(' ', { bg: BG });
+    line[cx++] = createStyledCell(' ', { bg });
+    line[cx++] = createStyledCell('│', { fg: LINE_NUM_FG, bg, dim: true });
+    line[cx++] = createStyledCell(' ', { bg });
 
     // Syntax tokens
     for (const token of tokens) {
@@ -373,7 +473,7 @@ export class FilePreviewPanel extends BasePanel {
         const cw = getDisplayWidth(ch);
         line[cx] = createStyledCell(ch, {
           fg: token.fg || '',
-          bg: BG,
+          bg,
           bold: token.bold,
           italic: token.italic,
         });
@@ -382,31 +482,6 @@ export class FilePreviewPanel extends BasePanel {
       }
     }
 
-    return line;
-  }
-
-  private renderEmpty(width: number, height: number, message: string): Line[] {
-    const lines: Line[] = [];
-    const msgLine = createEmptyLine(width);
-    const isWarning = message.startsWith('File too large');
-    const fg = isWarning ? WARNING_FG : EMPTY_FG;
-    let cx = 2;
-    for (const ch of message) {
-      if (cx >= width - 1) break;
-      msgLine[cx++] = createStyledCell(ch, { fg, bg: BG });
-    }
-    lines.push(msgLine);
-    for (let i = 1; i < height; i++) {
-      lines.push(this.renderBgLine(width));
-    }
-    return lines;
-  }
-
-  private renderBgLine(width: number): Line {
-    const line = createEmptyLine(width);
-    for (let x = 0; x < width; x++) {
-      line[x] = createStyledCell(' ', { bg: BG });
-    }
     return line;
   }
 

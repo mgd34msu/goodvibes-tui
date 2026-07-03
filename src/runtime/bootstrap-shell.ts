@@ -109,12 +109,41 @@ export function createBootstrapShell(options: BootstrapShellOptions): BootstrapS
     homeDirectory: services.homeDirectory,
   });
 
+  const foundationClients = createRuntimeFoundationClients({
+    runtimeServices: services,
+    tasksReadModel: uiServices.readModels.tasks,
+    taskManager,
+    opsControlPlane,
+  });
+  const {
+    directTransport,
+    hookApi,
+    knowledgeApi,
+    mcpApi,
+    opsApi,
+    providerApi,
+  } = foundationClients;
+  const planRuntime = createShellPlanRuntime({
+    adaptivePlanner: services.adaptivePlanner,
+    runtimeBus,
+  });
+
   const openAgentDetailRef: { fn: (agentId: string) => void } = { fn: (_agentId: string) => {} };
+
+  // WO-139: initial cost-budget alert threshold (USD; 0/unset = disabled).
+  // Once the session starts, the real control surface is the CostTrackerPanel
+  // itself — the in-panel 'b' key and /cost budget <usd> both call
+  // CostTrackerPanel.setBudgetThreshold() directly on the live panel instance.
+  const parsedBudgetThreshold = Number(process.env.GOODVIBES_COST_BUDGET_USD);
+  const initialCostBudgetThreshold = Number.isFinite(parsedBudgetThreshold) && parsedBudgetThreshold > 0
+    ? parsedBudgetThreshold
+    : 0;
 
   let commandContextRef: CommandContext | null = null;
   registerBuiltinPanels(services.panelManager, {
     configManager,
     getOrchestratorUsage: () => orchestrator.usage as { input: number; output: number; cacheRead: number; cacheWrite: number; model?: string },
+    budgetThreshold: initialCostBudgetThreshold,
     toolRegistry,
     providerRegistry: services.providerRegistry,
     contextWindow: services.providerRegistry.getContextWindowForModel(services.providerRegistry.getCurrentModel()),
@@ -153,6 +182,12 @@ export function createBootstrapShell(options: BootstrapShellOptions): BootstrapS
     mcpRegistry: services.mcpRegistry,
     openAgentDetail: (agentId: string) => openAgentDetailRef.fn(agentId),
     daemonHomeDir: join(services.homeDirectory, '.goodvibes', 'daemon'),
+    opsApi,
+    planRuntime,
+    watcherRegistry: services.watcherRegistry,
+    runtimeStore,
+    openPanel: (panelId: string) => { services.panelManager.open(panelId); },
+    knowledgeApi,
   });
   services.panelManager.prewarmRegistered();
 
@@ -170,28 +205,10 @@ export function createBootstrapShell(options: BootstrapShellOptions): BootstrapS
 
   const commandRegistry = new CommandRegistry();
   registerBuiltinCommands(commandRegistry);
-  const foundationClients = createRuntimeFoundationClients({
-    runtimeServices: services,
-    tasksReadModel: uiServices.readModels.tasks,
-    taskManager,
-    opsControlPlane,
-  });
-  const {
-    directTransport,
-    hookApi,
-    knowledgeApi,
-    mcpApi,
-    opsApi,
-    providerApi,
-  } = foundationClients;
   const remoteRuntime = createShellRemoteCommandService({
     readModels: uiServices.readModels,
     remoteRunnerRegistry: services.remoteRunnerRegistry,
     runtimeStore,
-  });
-  const planRuntime = createShellPlanRuntime({
-    adaptivePlanner: services.adaptivePlanner,
-    runtimeBus,
   });
 
   const commandContext: CommandContext = createBootstrapCommandContext({

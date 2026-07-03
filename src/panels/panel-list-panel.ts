@@ -4,11 +4,12 @@
  * Features:
  * - Arrow keys to navigate, Enter to open the selected panel
  * - Open/closed indicator (● open, ○ closed)
- * - Search/filter by typing
+ * - Press `/` to filter; typing narrows, Esc clears, action keys work outside filter mode
  * - Grouped by category
  * - `T` / `B` to place a panel in the top/bottom pane
  * - `M` to move an open panel to the other pane
  * - `S` to toggle the split and Tab to switch pane focus
+ * - `w` to close the selected panel if it is currently open (either pane)
  *
  * Open via /panel list.
  */
@@ -27,56 +28,54 @@ import {
   buildSummaryBlock,
   buildPanelWorkspace,
   DEFAULT_PANEL_PALETTE,
+  extendPalette,
   resolvePrimaryScrollableSection,
   type PanelWorkspaceSection,
 } from './polish.ts';
 import { fitDisplay, truncateDisplay } from '../utils/terminal-width.ts';
 import { wrapWithHangingIndent } from '../renderer/text-layout.ts';
-import {
-  getPanelSearchFocusTransition,
-  isPanelSearchBackspace,
-  isPanelSearchCancel,
-  isPanelSearchCommit,
-  isPanelSearchPrintable,
-} from './search-focus.ts';
+import { isPanelSearchPrintable } from './search-focus.ts';
 import { logger } from '@pellux/goodvibes-sdk/platform/utils';
 
 // ── Colour palette ────────────────────────────────────────────────────────────
-const C = {
-  ...DEFAULT_PANEL_PALETTE,
-  header:      '#94a3b8',
-  headerBg:    '#1e293b',
-  category:    '#64748b',
-  categoryBg:  '#1e293b',
-  icon:        '#38bdf8',
-  name:        '#e2e8f0',
-  desc:        '#64748b',
-  openDot:     '#22c55e',
-  closedDot:   '#475569',
-  selected:    '#e2e8f0',
-  selectedBg:  '#1e3a5f',
-  selIcon:     '#38bdf8',
-  hint:        '#475569',
-  search:      '#f97316',
-  searchBg:    '#1e293b',
-  dim:         '#334155',
-  paneTop:     '#38bdf8',
-  paneBottom:  '#a78bfa',
-  intro:       '#94a3b8',
-} as const;
+// Domain accents only; base chrome (header/headerBg/label/value/dim/good/bad/
+// info/selectBg) comes from DEFAULT_PANEL_PALETTE.
+const C = extendPalette(DEFAULT_PANEL_PALETTE, {
+  search:      '#f97316',   // active search-filter highlight
+  paneBottom:  '#a78bfa',   // bottom-pane placement marker (distinct from top/info cyan)
+} as const);
 
-const CATEGORY_ORDER: PanelCategory[] = ['development', 'agent', 'monitoring', 'session', 'ai'];
+// WO-152: the former single 'monitoring' bucket is split into five operator
+// domains (see PanelCategory in types.ts). Order groups related domains
+// together in the picker: build/dev surfaces, agent-facing surfaces, then
+// the five former-monitoring domains (providers -> security -> automation ->
+// incidents -> live runtime consoles), then session/AI utility surfaces.
+const CATEGORY_ORDER: PanelCategory[] = [
+  'development',
+  'agent',
+  'providers',
+  'security-policy',
+  'automation-control',
+  'incidents-diagnostics',
+  'runtime-ops',
+  'session',
+  'ai',
+];
 const CATEGORY_LABELS: Record<PanelCategory, string> = {
-  development: 'Development',
-  agent:       'Agent',
-  monitoring:  'Monitoring',
-  session:     'Session',
-  ai:          'AI',
+  development:            'Development',
+  agent:                  'Agent',
+  providers:               'Providers',
+  'security-policy':       'Security & Policy',
+  'automation-control':    'Automation Control',
+  'incidents-diagnostics': 'Incidents & Diagnostics',
+  'runtime-ops':           'Runtime Ops',
+  session:                 'Session',
+  ai:                      'AI',
 };
 
 // ── Layout constants ──────────────────────────────────────────────────────────
 const NAME_COL_WIDTH = 22;
-const PREFIX_WIDTH = 4; // arrow + dot + space + space
+const PREFIX_WIDTH = 5; // arrow + dot + health-flag + space + space
 
 /** A flat entry in the navigable list — either a section header or a panel row. */
 type ListEntry =
@@ -92,9 +91,23 @@ function panelPlacementMarker(options: {
   focusedPane: 'top' | 'bottom';
 }): { text: string; color: string } {
   const { isTopOpen, isBottomOpen, focusedPane } = options;
-  if (isTopOpen && isBottomOpen) return { text: '◆', color: C.selected };
-  if (isTopOpen) return { text: focusedPane === 'top' ? '▲' : '△', color: C.paneTop };
+  if (isTopOpen && isBottomOpen) return { text: '◆', color: C.value };
+  if (isTopOpen) return { text: focusedPane === 'top' ? '▲' : '△', color: C.info };
   if (isBottomOpen) return { text: focusedPane === 'bottom' ? '▼' : '▽', color: C.paneBottom };
+  return { text: ' ', color: C.dim };
+}
+
+/**
+ * Optional per-row resource-health flag, sourced straight from the injected
+ * ComponentHealthMonitor (fills the gap left by WO-004's panel-resources
+ * panel removal — health is still readable, just from here instead of a
+ * dedicated panel). Blank for panels with no health record yet (never
+ * rendered) or currently healthy.
+ */
+function panelHealthMarker(health: { healthStatus: 'healthy' | 'warning' | 'overloaded' } | undefined): { text: string; color: string } {
+  if (!health) return { text: ' ', color: C.dim };
+  if (health.healthStatus === 'overloaded') return { text: '!', color: C.bad };
+  if (health.healthStatus === 'warning') return { text: '~', color: C.warn };
   return { text: ' ', color: C.dim };
 }
 
@@ -110,7 +123,8 @@ export class PanelListPanel extends BasePanel {
   private _selectedIndex  = 0;
   private _scrollOffset   = 0;
   private _query          = '';
-  private _filterFocused  = false;
+  /** WO-153: converged modal '/' filter — mirrors ScrollableListPanel's _handleFilterKey contract. */
+  private _filterActive   = false;
   private _cachedEntries: ListEntry[] | null = null;
   private _entriesDirty   = true;
 
@@ -126,7 +140,7 @@ export class PanelListPanel extends BasePanel {
     this._selectedIndex  = 0;
     this._scrollOffset   = 0;
     this._query          = '';
-    this._filterFocused  = false;
+    this._filterActive   = false;
     this._entriesDirty   = true;
   }
 
@@ -135,33 +149,24 @@ export class PanelListPanel extends BasePanel {
     this._entriesDirty = true;
   }
 
-  public handleInput(key: string): boolean {
-    const entries = this._buildEntries();
-    const panelCount = entries.filter(e => e.kind === 'panel').length;
-
-    if (this._filterFocused) {
-      const transition = getPanelSearchFocusTransition(key, { selectedIndex: this._selectedIndex, itemCount: panelCount });
-      if (transition === 'focus-list') {
-        this._filterFocused = false;
+  /**
+   * Filter-mode key handling (WO-153: converged modal '/' filter, mirrors
+   * ScrollableListPanel's private _handleFilterKey). Returns `true`/`false`
+   * when consumed/ignored in filter context, or `null` to fall through to
+   * normal navigation and single-letter action keys (T/B/M/S/w/tab).
+   */
+  private _handleFilterKey(key: string): boolean | null {
+    if (this._filterActive) {
+      if (key === 'escape') {
+        this._filterActive = false;
+        this._query = '';
         this._selectedIndex = 0;
         this._scrollOffset = 0;
         this.markDirty();
         return true;
       }
-      if (isPanelSearchBackspace(key)) {
-        if (this._query.length === 0) return true;
-        this._query = this._query.slice(0, -1);
-        this._clampSelection(entries);
-        this.markDirty();
-        return true;
-      }
-      if (isPanelSearchCancel(key)) {
-        this._filterFocused = false;
-        this.markDirty();
-        return true;
-      }
-      if (isPanelSearchCommit(key)) {
-        this._filterFocused = false;
+      if (key === 'return' || key === 'enter') {
+        this._filterActive = false; // commit; keep the query applied
         const selectedPanel = this._getSelectedPanelEntry(this._buildEntries());
         if (selectedPanel) {
           try {
@@ -173,6 +178,17 @@ export class PanelListPanel extends BasePanel {
         this.markDirty();
         return true;
       }
+      if (key === 'backspace' || key === 'delete') {
+        this._query = this._query.slice(0, -1);
+        this._clampSelection(this._buildEntries());
+        this.markDirty();
+        return true;
+      }
+      // Arrow/paging keys navigate the filtered list — fall through.
+      if (key === 'up' || key === 'down' || key === 'pageup' || key === 'pagedown' || key === 'home' || key === 'end') {
+        return null;
+      }
+      // Any printable character (including single-letter action keys like T/B) extends the query.
       if (isPanelSearchPrintable(key)) {
         this._query += key;
         this._selectedIndex = 0;
@@ -182,13 +198,37 @@ export class PanelListPanel extends BasePanel {
       }
       return false;
     }
-
-    const transition = getPanelSearchFocusTransition(key, { selectedIndex: this._selectedIndex, itemCount: panelCount });
-    if (transition === 'focus-search') {
-      this._filterFocused = true;
+    if (key === '/') {
+      this._filterActive = true;
       this.markDirty();
       return true;
     }
+    return null;
+  }
+
+  /**
+   * The filter input line — pinned rendering contract shared with
+   * ScrollableListPanel.buildFilterLine: 'Filter: ' unfocused / '[Filter] '
+   * focused, literal trailing '_' cursor while active (active:false is
+   * passed to buildSearchInputLine to suppress its block-glyph cursor
+   * substitution).
+   */
+  private _buildFilterLine(width: number): Line {
+    const label = this._filterActive ? '[Filter] ' : 'Filter: ';
+    const value = this._filterActive ? `${this._query}_` : this._query;
+    return buildSearchInputLine(width, label, value, C, {
+      active: false,
+      bg: this._filterActive ? C.headerBg : C.sectionBg,
+      emptyLabel: '(/ to filter)',
+      valueColor: this._filterActive ? C.search : (this._query ? C.value : C.dim),
+    });
+  }
+
+  public handleInput(key: string): boolean {
+    const filterResult = this._handleFilterKey(key);
+    if (filterResult !== null) return filterResult;
+
+    const entries = this._buildEntries();
 
     // Navigation
     if (key === 'up' || key === 'k') {
@@ -251,35 +291,27 @@ export class PanelListPanel extends BasePanel {
       return true;
     }
 
+    if (key === 'w') {
+      const selectedPanel = this._getSelectedPanelEntry(entries);
+      if (selectedPanel) {
+        try {
+          // Existing public PanelManager.close() API only — panel-manager.ts
+          // itself is WO-150's surface this wave.
+          this.panelManager.close(selectedPanel.reg.id);
+        } catch (err) {
+          logger.warn(`[panel-list] failed to close panel: ${err}`);
+        }
+        this.markDirty();
+      }
+      return true;
+    }
+
     if (key === 'tab') {
       this.panelManager.togglePaneFocus();
       this.markDirty();
       return true;
     }
 
-    // Search: backspace
-    if (isPanelSearchBackspace(key)) {
-      if (this._query.length > 0) {
-        this._query = this._query.slice(0, -1);
-        this._clampSelection(entries);
-        this.markDirty();
-        return true;
-      }
-      return false;
-    }
-
-    // Escape: clear search
-    if (isPanelSearchCancel(key)) {
-      if (this._query.length > 0) {
-        this._query = '';
-        this._clampSelection(entries);
-        this.markDirty();
-        return true;
-      }
-      return false;
-    }
-
-    // Printable character: append to search query
     return false;
   }
 
@@ -298,18 +330,17 @@ export class PanelListPanel extends BasePanel {
         intro,
         sections: [{
           title: 'Filter',
-          lines: [buildSearchInputLine(width, 'Filter: ', `${this._query}${this._filterFocused ? '_' : ''}`, C, {
-            active: this._filterFocused,
-            bg: C.searchBg,
-            emptyLabel: this._filterFocused ? '(type to filter)' : '(/ or up at top)',
-            valueColor: C.search,
-          })],
+          lines: [this._buildFilterLine(width)],
         }, {
           lines: buildEmptyState(
             width,
             ' No panels match filter.',
             'Clear the filter or search for another panel by id, name, description, or category.',
-            [{ command: '/panel list', summary: 'reopen the panel workspace from the shell' }],
+            // The real remedy for a stuck filter is clearing it in-panel;
+            // '/panel list' would just re-activate this same instance with
+            // the filter still applied. A committed filter needs '/' to
+            // re-enter editing before Esc clears it.
+            [{ command: '/ then Esc', summary: 'clear the filter and show every panel' }],
             C,
           ),
         }],
@@ -326,24 +357,25 @@ export class PanelListPanel extends BasePanel {
     const topIds = new Set(pm.getTopPane().panels.map(p => p.id));
     const bottomIds = new Set(pm.getBottomPane().panels.map(p => p.id));
     const focusedPane = pm.getFocusedPane();
-    const footerLines = [buildPanelLine(width, [[truncateDisplay(` [${this._selectedIndex + 1}/${panelEntries.length}] ↑/↓ nav  Enter open  T/B place  M move  S split  Tab focus`, width), C.hint]])];
+    const footerLines = [buildPanelLine(width, [[truncateDisplay(` [${this._selectedIndex + 1}/${panelEntries.length}] ↑/↓ nav  Enter open  w close  T/B place  M move  S split  Tab focus`, width), C.dim]])];
+    // Optional health rollup — only present when a ComponentHealthMonitor was
+    // injected (fills the gap left by WO-004's panel-resources panel removal).
+    const allHealth = this.componentHealthMonitor?.getAllHealth() ?? [];
+    const unhealthyCount = allHealth.filter((h) => h.healthStatus !== 'healthy').length;
+
     const postureLines: Line[] = [
       buildKeyValueLine(width, [
-        { label: 'visible panels', value: String(pm.getAllOpen().length), valueColor: pm.getAllOpen().length > 0 ? C.name : C.dim },
-        { label: 'focused pane', value: focusedPane, valueColor: focusedPane === 'top' ? C.paneTop : C.paneBottom },
+        { label: 'visible panels', value: String(pm.getAllOpen().length), valueColor: pm.getAllOpen().length > 0 ? C.value : C.dim },
+        { label: 'focused pane', value: focusedPane, valueColor: focusedPane === 'top' ? C.info : C.paneBottom },
         { label: 'split', value: pm.isBottomPaneVisible() ? 'dual' : 'single', valueColor: pm.isBottomPaneVisible() ? C.info : C.dim },
         { label: 'results', value: String(panelEntries.length), valueColor: C.value },
+        ...(this.componentHealthMonitor
+          ? [{ label: 'flagged', value: String(unhealthyCount), valueColor: unhealthyCount > 0 ? C.warn : C.good }]
+          : []),
       ], C),
-      buildPanelLine(width, [[` Filter owns input only when selected. Open and switch operations should land directly in focused panel state.`, C.intro]]),
+      buildPanelLine(width, [[` Filter owns input only when selected. Open and switch operations should land directly in focused panel state.`, C.header]]),
     ];
-    const entryLines: Line[] = [
-      buildSearchInputLine(width, 'Filter: ', `${this._query}${this._filterFocused ? '_' : ''}`, C, {
-        active: this._filterFocused,
-        bg: C.searchBg,
-        emptyLabel: this._filterFocused ? '(type to filter)' : '(/ or up at top)',
-        valueColor: C.search,
-      }),
-    ];
+    const entryLines: Line[] = [this._buildFilterLine(width)];
     const renderedBlocks: Array<{ entry: ListEntry; lines: Line[]; panelFlatIndex?: number }> = [];
     let flatPanelIndex = 0;
     for (const entry of entries) {
@@ -351,7 +383,7 @@ export class PanelListPanel extends BasePanel {
         const label = ` ── ${entry.label} ${'─'.repeat(Math.max(0, width - 6 - entry.label.length))}`;
         renderedBlocks.push({
           entry,
-          lines: [buildPanelLine(width, [[truncateDisplay(label, width), C.category, C.categoryBg]])],
+          lines: [buildPanelLine(width, [[truncateDisplay(label, width), C.label, C.headerBg]])],
         });
       } else {
         const flatIdx = flatPanelIndex++;
@@ -359,13 +391,14 @@ export class PanelListPanel extends BasePanel {
         const isTopOpen = topIds.has(entry.reg.id);
         const isBottomOpen = bottomIds.has(entry.reg.id);
         const dot = isTopOpen || isBottomOpen ? '●' : '○';
-        const dotColor = isTopOpen || isBottomOpen ? C.openDot : C.closedDot;
-        const nameColor = isSelected ? C.selected : C.name;
+        const dotColor = isTopOpen || isBottomOpen ? C.good : C.dim;
+        const nameColor = C.value;
         const nameStr = fitDisplay(entry.reg.name, NAME_COL_WIDTH);
         const descStartCol = PREFIX_WIDTH + NAME_COL_WIDTH + 1;
         const descWidth = Math.max(1, width - descStartCol);
         const descLines = wrapPanelDescription(entry.reg.description, descWidth, 2);
         const placement = panelPlacementMarker({ isTopOpen, isBottomOpen, focusedPane });
+        const health = panelHealthMarker(this.componentHealthMonitor?.getHealth(entry.reg.id));
         // When searching, the flat result list loses its category grouping — so
         // tag each result with a dim [Category] so the origin stays discoverable.
         const categoryTag = this._query
@@ -375,18 +408,19 @@ export class PanelListPanel extends BasePanel {
           buildPanelListRow(width, [
             { text: dot, fg: dotColor },
             { text: placement.text, fg: placement.color },
+            { text: health.text, fg: health.color },
             { text: ' ', fg: C.dim },
             { text: `${nameStr} `, fg: nameColor },
-            { text: categoryTag, fg: C.category },
-            { text: descLines[0] ?? '', fg: C.desc },
-          ], C, { selected: isSelected, selectedBg: C.selectedBg, markerColor: C.selIcon }),
+            { text: categoryTag, fg: C.label },
+            { text: descLines[0] ?? '', fg: C.label },
+          ], C, { selected: isSelected, selectedBg: C.selectBg, markerColor: C.info }),
         ];
         if ((descLines[1] ?? '').length > 0) {
           blockLines.push(buildPanelLine(width, [
-            [' '.repeat(PREFIX_WIDTH), C.dim, isSelected ? C.selectedBg : C.surfaceBg],
-            [' '.repeat(NAME_COL_WIDTH), C.dim, isSelected ? C.selectedBg : C.surfaceBg],
-            [' ', C.dim, isSelected ? C.selectedBg : C.surfaceBg],
-            [descLines[1] ?? '', C.desc, isSelected ? C.selectedBg : C.surfaceBg],
+            [' '.repeat(PREFIX_WIDTH), C.dim, isSelected ? C.selectBg : C.surfaceBg],
+            [' '.repeat(NAME_COL_WIDTH), C.dim, isSelected ? C.selectBg : C.surfaceBg],
+            [' ', C.dim, isSelected ? C.selectBg : C.surfaceBg],
+            [descLines[1] ?? '', C.label, isSelected ? C.selectBg : C.surfaceBg],
           ]));
         }
         renderedBlocks.push({ entry, lines: blockLines, panelFlatIndex: flatIdx });
@@ -490,17 +524,6 @@ export class PanelListPanel extends BasePanel {
     this._cachedEntries = entries;
     this._entriesDirty = false;
     return entries;
-  }
-
-  /** Get the flat panel index (counting only panel entries) for a given panel id. */
-  private _flatPanelIndex(entries: ListEntry[], id: string): number {
-    let idx = 0;
-    for (const e of entries) {
-      if (e.kind !== 'panel') continue;
-      if (e.reg.id === id) return idx;
-      idx++;
-    }
-    return -1;
   }
 
   /** Get the ListEntry for the currently selected panel. */

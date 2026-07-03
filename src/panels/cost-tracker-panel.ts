@@ -24,6 +24,7 @@ import {
 } from './polish.ts';
 import { calcSessionCost } from '../export/cost-utils.ts';
 import { abbreviateCount } from '../utils/format-number.ts';
+import { isTextBackspace } from '../input/delete-key-policy.ts';
 
 // Pricing lookups are provided by ../export/cost-utils.ts (single source of truth).
 
@@ -103,14 +104,26 @@ export class CostTrackerPanel extends BasePanel {
   // Per-agent tracking (keyed by agent id)
   private agents = new Map<string, AgentEntry>();
 
-  // Budget alert threshold in USD (0 = disabled)
+  // Budget alert threshold in USD (0 = disabled). Mutable at runtime via the
+  // in-panel 'b' numeric entry or the /cost budget <usd> command — both call
+  // setBudgetThreshold() below.
   private budgetThreshold: number;
+
+  // Draft buffer for the in-panel budget-entry mode ('b' key). Non-null while
+  // entry is active; unlike LocalAuthPanel's masked entry, the value is not
+  // secret so it is echoed directly.
+  private budgetEntry: string | null = null;
 
   // Scroll offset for agent list
   private scrollOffset = 0;
 
   // Unsubscribe functions
   private unsubs: Array<() => void> = [];
+
+  // Polls getAgentStatus() for agents still marked 'running' so their token/
+  // cost columns fill in as usage streams, instead of staying pinned at
+  // 'unknown'/$0 until AGENT_COMPLETED fires.
+  private statusPollTimer: ReturnType<typeof setInterval> | null = null;
 
   // Getter for live orchestrator usage
   private readonly getOrchestratorUsage: () => UsageSnapshot & { model?: string };
@@ -125,7 +138,7 @@ export class CostTrackerPanel extends BasePanel {
     getOrchestratorUsage: () => UsageSnapshot & { model?: string },
     opts: { budgetThreshold?: number; getAgentStatus?: (agentId: string) => AgentRecord | null } = {},
   ) {
-    super('cost', 'Cost', '$', 'monitoring');
+    super('cost', 'Cost', '$', 'providers');
     this.getOrchestratorUsage = getOrchestratorUsage;
     this.getAgentStatus = opts.getAgentStatus;
     this.budgetThreshold = opts.budgetThreshold ?? 0;
@@ -139,7 +152,14 @@ export class CostTrackerPanel extends BasePanel {
   private attachEvents(turnEvents: UiEventFeed<TurnEvent>, agentEvents: UiEventFeed<AgentEvent>): void {
     // Refresh after every completed turn
     this.unsubs.push(
-      turnEvents.on('TURN_COMPLETED', () => this.onTurnComplete()),
+      turnEvents.on('TURN_COMPLETED', () => this.refreshSessionCost()),
+    );
+
+    // Refresh mid-turn too: a single turn can span many LLM calls (tool
+    // loops), so waiting for TURN_COMPLETED leaves the meter frozen for the
+    // whole turn. LLM_RESPONSE_RECEIVED fires per call — same refresh path.
+    this.unsubs.push(
+      turnEvents.on('LLM_RESPONSE_RECEIVED', () => this.refreshSessionCost()),
     );
 
     // Track agent spawns
@@ -190,7 +210,7 @@ export class CostTrackerPanel extends BasePanel {
     );
   }
 
-  private onTurnComplete(): void {
+  private refreshSessionCost(): void {
     const usage = this.getOrchestratorUsage();
     this.sessionUsage = {
       input: usage.input,
@@ -226,6 +246,13 @@ export class CostTrackerPanel extends BasePanel {
       cacheWrite: usage.cacheWrite,
     };
     this.needsRender = true;
+    this.startStatusPollTimer();
+  }
+
+  override onDeactivate(): void {
+    // Stop polling while hidden — nothing to catch up on that a fresh
+    // onActivate() poll won't cover.
+    this.stopStatusPollTimer();
   }
 
   override onDestroy(): void {
@@ -233,11 +260,69 @@ export class CostTrackerPanel extends BasePanel {
     this.unsubs = [];
   }
 
+  private startStatusPollTimer(): void {
+    if (this.statusPollTimer !== null || !this.getAgentStatus) return;
+    this.statusPollTimer = this.registerTimer(setInterval(() => this.pollRunningAgents(), 3_000));
+  }
+
+  private stopStatusPollTimer(): void {
+    if (this.statusPollTimer !== null) {
+      this.clearTimer(this.statusPollTimer);
+      this.statusPollTimer = null;
+    }
+  }
+
+  /**
+   * Poll getAgentStatus() for every agent still marked 'running'. Completion
+   * already captures real usage via AGENT_COMPLETED, but a long-running agent
+   * would otherwise show 'unknown' tokens / $0 cost for its entire lifetime —
+   * this fills the row in as usage becomes available mid-flight.
+   */
+  private pollRunningAgents(): void {
+    if (!this.getAgentStatus) return;
+    let changed = false;
+    for (const [agentId, entry] of this.agents) {
+      if (entry.status !== 'running') continue;
+      const rec = this.getAgentStatus(agentId);
+      if (!rec?.usage) continue;
+      const inputTokens = rec.usage.inputTokens + (rec.usage.cacheReadTokens ?? 0) + (rec.usage.cacheWriteTokens ?? 0);
+      const outputTokens = rec.usage.outputTokens;
+      const cost = calcSessionCost(rec.usage.inputTokens, rec.usage.outputTokens, rec.usage.cacheReadTokens ?? 0, rec.usage.cacheWriteTokens ?? 0, rec.model ?? entry.model);
+      if (inputTokens !== entry.inputTokens || outputTokens !== entry.outputTokens || cost !== entry.cost) {
+        entry.inputTokens = inputTokens;
+        entry.outputTokens = outputTokens;
+        entry.cost = cost;
+        changed = true;
+      }
+      if (rec.model && rec.model !== 'unknown' && rec.model !== entry.model) {
+        entry.model = rec.model;
+        changed = true;
+      }
+    }
+    if (changed) this.markDirty();
+  }
+
+  /** Set the budget alert threshold (USD; 0 disables it). Shared by the
+   * in-panel 'b' entry and the /cost budget <usd> command. */
+  public setBudgetThreshold(usd: number): void {
+    if (!Number.isFinite(usd) || usd < 0) return;
+    this.budgetThreshold = usd;
+    this.markDirty();
+  }
+
   // -------------------------------------------------------------------------
   // Input
   // -------------------------------------------------------------------------
 
   handleInput(key: string): boolean {
+    if (this.budgetEntry !== null) return this.handleBudgetEntryInput(key);
+
+    if (key === 'b') {
+      this.budgetEntry = this.budgetThreshold > 0 ? String(this.budgetThreshold) : '';
+      this.markDirty();
+      return true;
+    }
+
     switch (key) {
       case 'up':   return this.scroll(-1);
       case 'down': return this.scroll(1);
@@ -247,9 +332,53 @@ export class CostTrackerPanel extends BasePanel {
     }
   }
 
+  private handleBudgetEntryInput(key: string): boolean {
+    if (key === 'escape') {
+      this.budgetEntry = null;
+      this.markDirty();
+      return true;
+    }
+    if (key === 'enter' || key === 'return') {
+      const raw = this.budgetEntry ?? '';
+      this.budgetEntry = null;
+      const parsed = Number(raw);
+      if (raw.length > 0 && Number.isFinite(parsed) && parsed >= 0) {
+        this.setBudgetThreshold(parsed);
+      } else {
+        this.markDirty();
+      }
+      return true;
+    }
+    if (isTextBackspace(key)) {
+      if (this.budgetEntry && this.budgetEntry.length > 0) {
+        this.budgetEntry = this.budgetEntry.slice(0, -1);
+        this.markDirty();
+      }
+      return true;
+    }
+    // Digits and a single decimal point only — this is a USD amount, not free text.
+    if (key.length === 1 && /[0-9.]/.test(key) && !(key === '.' && this.budgetEntry?.includes('.'))) {
+      this.budgetEntry = (this.budgetEntry ?? '') + key;
+      this.markDirty();
+      return true;
+    }
+    return true; // absorb everything else while entry is active
+  }
+
+  /**
+   * Scroll the agent list. Over-consumption fix: only absorbs the key (and
+   * only advances) when the agent list is actually long enough to scroll —
+   * mirrors the same `> 5` threshold render() uses to decide whether to show
+   * scroll hints (below). Previously this always returned true and grew
+   * scrollOffset unboundedly even with a handful of agents, swallowing
+   * up/down/page keys that had nothing to do.
+   */
   private scroll(delta: number): boolean {
+    const agentCount = this.agents.size;
+    if (agentCount <= 5) return false;
+    const maxOffset = Math.max(0, agentCount - 1);
     const prev = this.scrollOffset;
-    this.scrollOffset = Math.max(0, this.scrollOffset + delta);
+    this.scrollOffset = Math.max(0, Math.min(maxOffset, this.scrollOffset + delta));
     if (this.scrollOffset !== prev) this.markDirty();
     return true;
   }
@@ -260,6 +389,7 @@ export class CostTrackerPanel extends BasePanel {
 
   render(width: number, height: number): Line[] {
     if (height <= 0 || width <= 0) return [];
+    if (this.budgetEntry !== null) return this.renderBudgetEntryPrompt(width, height);
 
     const totalInputTokens = this.sessionUsage.input + this.sessionUsage.cacheRead + this.sessionUsage.cacheWrite;
     const sessionCost = calcSessionCost(this.sessionUsage.input, this.sessionUsage.output, this.sessionUsage.cacheRead, this.sessionUsage.cacheWrite, this.sessionModel);
@@ -312,9 +442,10 @@ export class CostTrackerPanel extends BasePanel {
       ? buildKeyboardHints(width, [
           { keys: 'Up/Down', label: 'scroll agents' },
           { keys: 'PgUp/PgDn', label: 'page' },
+          { keys: 'b', label: 'set budget' },
         ], DEFAULT_PANEL_PALETTE)
       : buildKeyboardHints(width, [
-          { keys: '/cost budget <usd>', label: 'set budget alert' },
+          { keys: 'b', label: 'set budget alert' },
         ], DEFAULT_PANEL_PALETTE);
     if (agentList.length > 0) {
       const planCost = agentList.reduce((sum, a) => sum + a.cost, 0);
@@ -382,8 +513,12 @@ export class CostTrackerPanel extends BasePanel {
           width,
           ' No agents spawned this session',
           'Agent-level cost estimates appear here once delegated or background agents start running.',
+          // WO-160: 'b' already opens the in-panel budget-entry field (see
+          // handleInput/handleBudgetEntryInput above) and is advertised in
+          // the footer's 'b: set budget' hint, so the printed
+          // '/cost budget <usd>' command was a redundant action substitute.
           [
-            { command: '/cost budget <usd>', summary: 'set a session budget alert to track spend against a cap' },
+            { command: 'b', summary: 'set a session budget alert to track spend against a cap' },
           ],
           DEFAULT_PANEL_PALETTE,
         ),
@@ -417,6 +552,29 @@ export class CostTrackerPanel extends BasePanel {
       ...(label.length > 0 ? [{ text: `${fitDisplay(label, 10)} `, fg: C.label }] : []),
       { text: value, fg: valueFg },
     ]);
+  }
+
+  // Non-masked numeric entry for the 'b' budget-alert key — the value is a
+  // USD amount, not a secret, so (unlike LocalAuthPanel's masked entry) it is
+  // echoed directly rather than dotted out.
+  private renderBudgetEntryPrompt(width: number, height: number): Line[] {
+    const draft = this.budgetEntry ?? '';
+    const display = `$${draft}█`;
+    const promptLines: Line[] = [
+      buildPanelLine(width, [[' Set the session budget alert (USD). 0 disables it.', C.label]]),
+      buildPanelLine(width, [['', C.label]]),
+      buildPanelLine(width, [[' Budget  ', C.label], [display, C.cost]]),
+      buildPanelLine(width, [['', C.label]]),
+      buildPanelLine(width, [[' [Enter] Confirm   [Esc] Cancel   [Backspace] Delete char', C.dim]]),
+    ];
+    const workspace = buildPanelWorkspace(width, height, {
+      title: ' Cost Tracker — Budget',
+      intro: 'Type a USD amount and press Enter to set the budget alert threshold.',
+      sections: [{ lines: promptLines }],
+      palette: DEFAULT_PANEL_PALETTE,
+    });
+    while (workspace.length < height) workspace.push(createEmptyLine(width));
+    return workspace.slice(0, height);
   }
 
 }

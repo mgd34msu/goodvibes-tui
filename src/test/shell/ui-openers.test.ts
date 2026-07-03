@@ -14,16 +14,19 @@ describe('wireShellUiOpeners', () => {
     testManagers = createTestManagers();
     commandContext = {};
     input = {
-      panelFocused: false,
+      indicatorFocused: false,
       modelPicker: {},
       modalOpened: mock(() => {}),
     };
     panelManager = {
       isVisible: mock(() => false),
       getAllOpen: mock(() => []),
+      getFocusTarget: mock(() => 'prompt'),
       open: mock(() => ({})),
       show: mock(() => {}),
       hide: mock(() => {}),
+      focusPanels: mock(() => {}),
+      focusPrompt: mock(() => {}),
     };
     conversation = {
       setSplashSuppressed: mock(() => {}),
@@ -53,26 +56,28 @@ describe('wireShellUiOpeners', () => {
     (commandContext.openPanelPicker as () => void)();
     expect(panelManager.open).toHaveBeenCalledWith('panel-list');
     expect(panelManager.show).toHaveBeenCalled();
-    expect(input.panelFocused).toBe(true);
+    expect(panelManager.focusPanels).toHaveBeenCalled();
+    expect(panelManager.hide).not.toHaveBeenCalled();
     expect(conversation.setSplashSuppressed).toHaveBeenCalledWith(true);
   });
 
-  test('openPanelPicker focuses an already-visible workspace instead of hiding it', () => {
+  test('openPanelPicker focuses an already-visible-but-unfocused workspace instead of hiding it', () => {
     (panelManager.isVisible as ReturnType<typeof mock>).mockReturnValue(true);
     (panelManager.getAllOpen as ReturnType<typeof mock>).mockReturnValue([{ id: 'system-messages' }]);
+    (panelManager.getFocusTarget as ReturnType<typeof mock>).mockReturnValue('prompt');
     (commandContext.openPanelPicker as () => void)();
     expect(panelManager.hide).not.toHaveBeenCalled();
     expect(panelManager.show).toHaveBeenCalled();
-    expect(input.panelFocused).toBe(true);
+    expect(panelManager.focusPanels).toHaveBeenCalled();
   });
 
-  test('openPanelPicker clears panel focus when hiding the workspace', () => {
+  test('openPanelPicker clears panel focus when hiding an already-focused workspace', () => {
     (panelManager.isVisible as ReturnType<typeof mock>).mockReturnValue(true);
     (panelManager.getAllOpen as ReturnType<typeof mock>).mockReturnValue([{ id: 'docs' }]);
-    input.panelFocused = true;
+    (panelManager.getFocusTarget as ReturnType<typeof mock>).mockReturnValue('panel');
     (commandContext.openPanelPicker as () => void)();
     expect(panelManager.hide).toHaveBeenCalled();
-    expect(input.panelFocused).toBe(false);
+    expect(panelManager.focusPrompt).toHaveBeenCalled();
     expect(conversation.setSplashSuppressed).toHaveBeenCalledWith(false);
   });
 
@@ -80,7 +85,7 @@ describe('wireShellUiOpeners', () => {
     (commandContext.showPanel as (panelId: string) => void)('tasks');
     expect(panelManager.open).toHaveBeenCalledWith('tasks', undefined);
     expect(panelManager.show).toHaveBeenCalled();
-    expect(input.panelFocused).toBe(true);
+    expect(panelManager.focusPanels).toHaveBeenCalled();
     expect(conversation.setSplashSuppressed).toHaveBeenCalledWith(true);
   });
 

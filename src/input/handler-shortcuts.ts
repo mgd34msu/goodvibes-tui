@@ -115,6 +115,21 @@ export function handleGlobalShortcutToken(
       state.requestRender();
       return true;
 
+    case 'panel-focus-toggle': {
+      // Global entry point for the focus-toggle key (Ctrl+G): from the prompt
+      // it grabs focus for the panel workspace. Once the workspace already has
+      // focus we let it fall through (return false) so handlePanelFocusToken
+      // can do the top/bottom pane swap — keeping that behavior in one place.
+      if (state.panelFocused) return false;
+      const pm = state.panelManager;
+      if (pm.isVisible() && pm.getAllOpen().length > 0) {
+        state.panelFocused = true;
+        state.requestRender();
+        return true;
+      }
+      return false;
+    }
+
     case 'panel-tab-next':
       state.cyclePanelTab('next');
       return true;
@@ -122,6 +137,42 @@ export function handleGlobalShortcutToken(
     case 'panel-tab-prev':
       state.cyclePanelTab('prev');
       return true;
+
+    case 'panel-tab-1':
+    case 'panel-tab-2':
+    case 'panel-tab-3':
+    case 'panel-tab-4':
+    case 'panel-tab-5':
+    case 'panel-tab-6':
+    case 'panel-tab-7':
+    case 'panel-tab-8':
+    case 'panel-tab-9': {
+      // Alt+1..9: jump directly to the Nth workspace tab. Routed globally (like
+      // panel-tab-next/prev) so the jump works whether focus is on the prompt or
+      // the workspace; gated on visibility, matching cyclePanelTab semantics.
+      const pm = state.panelManager;
+      if (pm.isVisible()) {
+        const index = Number(action.slice('panel-tab-'.length)) - 1;
+        pm.activateWorkspaceIndex(index);
+        state.requestRender();
+      }
+      return true;
+    }
+
+    case 'panel-ops': {
+      // Ctrl+O: open the Ops Control panel. Prefer the command-context callback
+      // (wired only when the operator-control-plane feature flag is on) so it
+      // reuses whatever show/open semantics bootstrap.ts set up; otherwise fall
+      // back to opening the always-registered 'ops-control' panel type directly
+      // — it renders an honest not-configured state when its deps are absent.
+      if (state.commandContext?.openOpsPanel) {
+        state.commandContext.openOpsPanel();
+      } else {
+        state.panelManager.open('ops-control');
+        state.requestRender();
+      }
+      return true;
+    }
 
     case 'history-search':
       state.historySearch.open(state.prompt);

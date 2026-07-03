@@ -6,6 +6,7 @@ import type { Line } from '../types/grid.ts';
 import { BasePanel } from './base-panel.ts';
 import type { ToolEvent, TurnEvent } from '@/runtime/index.ts';
 import type { UiEventFeed } from '../runtime/ui-events.ts';
+import type { PanelIntegrationContext } from './types.ts';
 import {
   buildEmptyState,
   buildPanelLine,
@@ -16,6 +17,7 @@ import {
   extendPalette,
   type PanelWorkspaceSection,
 } from './polish.ts';
+import { type ConfirmState, handleConfirmInput, renderConfirmLines } from './confirm-state.ts';
 import { truncateDisplay } from '../utils/terminal-width.ts';
 import { formatDuration } from '../utils/format-duration.ts';
 
@@ -33,15 +35,23 @@ interface ToolCallRecord {
   callId: string;
   tool: string;
   args: Record<string, unknown>;
+  /** Wall-clock time the call was received from the LLM (queued, not yet executing). */
   startMs: number;
+  /**
+   * Real execution-start time from TOOL_EXECUTING.startedAt — used for duration
+   * math when present so displayed durations reflect actual run time rather
+   * than time spent in permission/hook queueing. Falls back to `startMs` when
+   * a call completes without ever reaching TOOL_EXECUTING (e.g. denied before
+   * execution).
+   */
+  execStartMs?: number;
   endMs?: number;
   result?: unknown;
   error?: string;
+  cancelled?: boolean;
   expanded: boolean;
   approved?: boolean;
   outputClass?: string;
-  policyAction?: string;
-  spillBackend?: string;
   resultSummary?: string;
 }
 
@@ -80,6 +90,20 @@ function summarizeResult(result: unknown): string | undefined {
   return undefined;
 }
 
+function statusLabel(rec: ToolCallRecord): string {
+  if (rec.endMs === undefined) return 'running';
+  if (rec.cancelled) return 'cancelled';
+  if (rec.error) return 'error';
+  return 'completed';
+}
+
+function statusColor(rec: ToolCallRecord): string {
+  if (rec.endMs === undefined) return DEFAULT_PANEL_PALETTE.warn;
+  if (rec.cancelled) return DEFAULT_PANEL_PALETTE.dim;
+  if (rec.error) return DEFAULT_PANEL_PALETTE.bad;
+  return DEFAULT_PANEL_PALETTE.good;
+}
+
 function detectOutputClass(tool: string, args: Record<string, unknown>): string {
   const name = tool.toLowerCase();
   if (name.includes('read') || name.includes('find') || name.includes('inspect') || name.includes('grep')) return 'read';
@@ -97,6 +121,10 @@ export class ToolInspectorPanel extends BasePanel {
   private scrollOffset = 0;
   private autoScroll = true;
   private _flatCache: FlatRow[] | null = null;
+  /** Pending confirm for 'c' clear — destructive (drops call history), so it goes through the project-standard confirm contract. */
+  private _confirm: ConfirmState<'clear'> | null = null;
+  /** Set by handleInput('a') when the selected call is awaiting a permission decision; consumed by handlePanelIntegrationAction. */
+  private _pendingApprovalJump = false;
 
   constructor(
     private readonly toolEvents: UiEventFeed<ToolEvent>,
@@ -124,17 +152,54 @@ export class ToolInspectorPanel extends BasePanel {
   }
 
   handleInput(key: string): boolean {
+    const confirmResult = handleConfirmInput(this._confirm, key);
+    if (confirmResult === 'confirmed') {
+      this.records = [];
+      this._confirm = null;
+      this.markDirty();
+      return true;
+    }
+    if (confirmResult === 'cancelled') {
+      this._confirm = null;
+      this.markDirty();
+      return true;
+    }
+    if (confirmResult === 'absorbed') return true;
+
     switch (key) {
       case 'up':       this._move(-1);           this.autoScroll = false; return true;
       case 'down':     this._move(1);            return true;
       case 'pageup':   this._move(-10);          this.autoScroll = false; return true;
       case 'pagedown': this._move(10);           return true;
       case 'return':   this._toggleExpand();     return true;
-      case 'c':        this.records = []; this.markDirty(); return true;
+      case 'c': {
+        if (this.records.length === 0) return false;
+        this._confirm = { subject: 'clear', label: `${this.records.length} tool call${this.records.length === 1 ? '' : 's'}`, verb: 'Clear' };
+        this.markDirty();
+        return true;
+      }
       case 'g':        this.autoScroll = true;   this.markDirty(); return true;
       case 'f':        this._cycleFilter();      return true;
+      case 'a': {
+        const rec = this._selectedRecord();
+        if (!rec || rec.approved !== undefined || rec.endMs !== undefined) return false;
+        this._pendingApprovalJump = true;
+        return true;
+      }
       default:         return false;
     }
+  }
+
+  /**
+   * Cross-panel hook — invoked immediately after handleInput('a') returns true
+   * for a call still awaiting a permission decision. Jumps to the Approval
+   * panel; the actual PanelManager reference is only available here.
+   */
+  handlePanelIntegrationAction(_key: string, ctx: PanelIntegrationContext): boolean {
+    if (!this._pendingApprovalJump) return false;
+    this._pendingApprovalJump = false;
+    ctx.panelManager.open('approval');
+    return true;
   }
 
   render(width: number, height: number): Line[] {
@@ -157,7 +222,19 @@ export class ToolInspectorPanel extends BasePanel {
       footerSegments.push(['   c', DEFAULT_PANEL_PALETTE.info], [' clear', DEFAULT_PANEL_PALETTE.dim]);
       footerSegments.push(['   g', DEFAULT_PANEL_PALETTE.info], [this.autoScroll ? ' end (live)' : ' jump to end', DEFAULT_PANEL_PALETTE.dim]);
     }
+    const selectedRecordForFooter = this._selectedRecord();
+    if (selectedRecordForFooter && selectedRecordForFooter.approved === undefined && selectedRecordForFooter.endMs === undefined) {
+      footerSegments.push(['   a', DEFAULT_PANEL_PALETTE.info], [' review approval', DEFAULT_PANEL_PALETTE.dim]);
+    }
     const footerLines = [buildPanelLine(width, footerSegments)];
+
+    if (this._confirm) {
+      return buildPanelWorkspace(width, height, {
+        title,
+        sections: [{ title: 'Confirmation', lines: renderConfirmLines(width, this._confirm) }],
+        palette: DEFAULT_PANEL_PALETTE,
+      });
+    }
 
     const flat = this._getFlat();
 
@@ -168,7 +245,7 @@ export class ToolInspectorPanel extends BasePanel {
     if (flat.length === 0) {
       return buildPanelWorkspace(width, height, {
         title,
-        intro: 'Inspect chronological tool activity, arguments, results, errors, and running calls.',
+        intro: 'Inspect chronological tool activity, arguments, results, errors, and running calls — including calls made by delegated subagents.',
         sections: [
           {
             title: 'Calls',
@@ -179,7 +256,7 @@ export class ToolInspectorPanel extends BasePanel {
                 : ' No tool calls yet',
               this.records.length > 0 && this.filterMode !== 'all'
                 ? 'The active tool filter hides every recorded call.'
-                : 'Tool executions appear here as the agent works. Expand a call to inspect its arguments and result payload.',
+                : 'Tool executions appear here as the agent works, including calls made by delegated subagents. Expand a call to inspect its arguments and result payload.',
               this.records.length > 0 && this.filterMode !== 'all'
                 ? [{ command: 'f', summary: 'cycle the tool filter back to all calls' }]
                 : [{ command: '/spawn <task>', summary: 'run an agent to populate the tool-call timeline' }],
@@ -215,22 +292,14 @@ export class ToolInspectorPanel extends BasePanel {
         : this.records.filter(r => r.tool === this.filterMode);
       const rec = filtered[selected.recordIndex];
       if (rec) {
-        detailLines.push(buildPanelLine(width, [[' Tool ', DEFAULT_PANEL_PALETTE.label], [rec.tool, DEFAULT_PANEL_PALETTE.info], ['   Started ', DEFAULT_PANEL_PALETTE.label], [shortTime(rec.startMs), DEFAULT_PANEL_PALETTE.value]]));
-        detailLines.push(buildPanelLine(width, [[' Status ', DEFAULT_PANEL_PALETTE.label], [rec.endMs === undefined ? 'running' : rec.error ? 'error' : 'completed', rec.endMs === undefined ? DEFAULT_PANEL_PALETTE.warn : rec.error ? DEFAULT_PANEL_PALETTE.bad : DEFAULT_PANEL_PALETTE.good]]));
+        detailLines.push(buildPanelLine(width, [[' Tool ', DEFAULT_PANEL_PALETTE.label], [rec.tool, DEFAULT_PANEL_PALETTE.info], ['   Started ', DEFAULT_PANEL_PALETTE.label], [shortTime(rec.execStartMs ?? rec.startMs), DEFAULT_PANEL_PALETTE.value]]));
+        detailLines.push(buildPanelLine(width, [[' Status ', DEFAULT_PANEL_PALETTE.label], [statusLabel(rec), statusColor(rec)]]));
         detailLines.push(buildPanelLine(width, [
-          [' Risk ', DEFAULT_PANEL_PALETTE.label],
+          [' Class ', DEFAULT_PANEL_PALETTE.label],
           [rec.outputClass ?? detectOutputClass(rec.tool, rec.args), DEFAULT_PANEL_PALETTE.warn],
           ['   Approved ', DEFAULT_PANEL_PALETTE.label],
           [rec.approved === undefined ? 'unknown' : rec.approved ? 'yes' : 'no', rec.approved === false ? DEFAULT_PANEL_PALETTE.bad : DEFAULT_PANEL_PALETTE.value],
         ]));
-        if (rec.policyAction || rec.spillBackend) {
-          detailLines.push(buildPanelLine(width, [
-            [' Output ', DEFAULT_PANEL_PALETTE.label],
-            [rec.policyAction ?? 'none', rec.policyAction && rec.policyAction !== 'none' ? DEFAULT_PANEL_PALETTE.warn : DEFAULT_PANEL_PALETTE.value],
-            ['   Spill ', DEFAULT_PANEL_PALETTE.label],
-            [rec.spillBackend ?? 'none', rec.spillBackend ? DEFAULT_PANEL_PALETTE.info : DEFAULT_PANEL_PALETTE.dim],
-          ]));
-        }
         if (rec.resultSummary) {
           detailLines.push(buildPanelLine(width, [[' Summary ', DEFAULT_PANEL_PALETTE.label], [rec.resultSummary, DEFAULT_PANEL_PALETTE.value]]));
         }
@@ -240,7 +309,7 @@ export class ToolInspectorPanel extends BasePanel {
 
     const selectedSection: PanelWorkspaceSection = { title: 'Selected', lines: detailLines };
     const callsSection = resolveScrollablePanelSection(width, height, {
-      intro: 'Inspect chronological tool activity, arguments, results, errors, and running calls.',
+      intro: 'Inspect chronological tool activity, arguments, results, errors, and running calls — including calls made by delegated subagents.',
       footerLines,
       palette: DEFAULT_PANEL_PALETTE,
       beforeSections: [summary],
@@ -257,7 +326,7 @@ export class ToolInspectorPanel extends BasePanel {
 
     return buildPanelWorkspace(width, height, {
       title,
-      intro: 'Inspect chronological tool activity, arguments, results, errors, and running calls.',
+      intro: 'Inspect chronological tool activity, arguments, results, errors, and running calls — including calls made by delegated subagents.',
       sections: [
         summary,
         callsSection.section,
@@ -291,25 +360,24 @@ export class ToolInspectorPanel extends BasePanel {
 
     for (let i = 0; i < filtered.length; i++) {
       const rec = filtered[i]!;
-      const dur = rec.endMs !== undefined ? ` (${formatMs(rec.endMs - rec.startMs)})` : ' (running)';
+      // Duration is measured from real execution start (TOOL_EXECUTING.startedAt) when
+      // known, not from queue/receive time, so it reflects actual run time rather than
+      // time spent waiting on permission/hook checks. Falls back to startMs for calls
+      // that never reached TOOL_EXECUTING (e.g. denied before execution).
+      const durBaseMs = rec.execStartMs ?? rec.startMs;
+      const dur = rec.cancelled
+        ? ` (cancelled${rec.endMs !== undefined ? ` ${formatMs(rec.endMs - durBaseMs)}` : ''})`
+        : rec.endMs !== undefined ? ` (${formatMs(rec.endMs - durBaseMs)})` : ' (running)';
       const expand = rec.expanded ? ' ▾' : ' ▸';
       const ts = shortTime(rec.startMs);
-      const risk = rec.outputClass ?? detectOutputClass(rec.tool, rec.args);
-      const action = rec.policyAction && rec.policyAction !== 'none' ? ` ${rec.policyAction}` : '';
-      const callText = `${ts} ${rec.tool} [${risk}]${action}${dur}${expand}`;
+      const cls = rec.outputClass ?? detectOutputClass(rec.tool, rec.args);
+      const callText = `${ts} ${rec.tool} [${cls}]${dur}${expand}`;
       flat.push({ kind: 'call', recordIndex: i, text: callText });
 
       if (rec.expanded) {
         const argsStr = truncateJson(rec.args, 200);
         flat.push({ kind: 'detail', text: `Args: ${argsStr}`, isError: false });
-        flat.push({ kind: 'detail', text: `Risk: ${risk}${rec.approved === undefined ? '' : `  Approved: ${rec.approved ? 'yes' : 'no'}`}`, isError: false });
-        if (rec.policyAction || rec.spillBackend) {
-          flat.push({
-            kind: 'detail',
-            text: `Output policy: ${rec.policyAction ?? 'none'}${rec.spillBackend ? `  Spill: ${rec.spillBackend}` : ''}`,
-            isError: false,
-          });
-        }
+        flat.push({ kind: 'detail', text: `Class: ${cls}${rec.approved === undefined ? '' : `  Approved: ${rec.approved ? 'yes' : 'no'}`}`, isError: false });
         if (rec.resultSummary) {
           flat.push({ kind: 'detail', text: `Summary: ${rec.resultSummary}`, isError: false });
         }
@@ -338,6 +406,17 @@ export class ToolInspectorPanel extends BasePanel {
     }
   }
 
+  /** The tool-call record backing the currently-selected flat row, if any. */
+  private _selectedRecord(): ToolCallRecord | undefined {
+    const flat = this._getFlat();
+    const row = flat[this.cursorIndex];
+    if (!row || row.kind !== 'call') return undefined;
+    const filtered = this.filterMode === 'all'
+      ? this.records
+      : this.records.filter(r => r.tool === this.filterMode);
+    return filtered[row.recordIndex];
+  }
+
   private _cycleFilter(): void {
     const tools = [...new Set(this.records.map(r => r.tool))];
     if (tools.length === 0) return;
@@ -347,6 +426,18 @@ export class ToolInspectorPanel extends BasePanel {
       const idx = tools.indexOf(this.filterMode);
       this.filterMode = idx >= tools.length - 1 ? 'all' : tools[idx + 1]!;
     }
+    this.markDirty();
+  }
+
+  /**
+   * Public counterpart to the 'f' cycle — sets the filter directly to a named
+   * tool. Used by cross-panel jumps (WO-136: DocsPanel Enter on a tool row)
+   * so the inspector opens already scoped to the tool the operator picked.
+   */
+  public filterByTool(tool: string): void {
+    this.filterMode = tool;
+    this.cursorIndex = 0;
+    this.autoScroll = false;
     this.markDirty();
   }
 
@@ -382,11 +473,17 @@ export class ToolInspectorPanel extends BasePanel {
       this.markDirty();
     }));
 
+    // Real execution start — recorded separately from TOOL_RECEIVED's queue time so
+    // displayed durations reflect actual run time, not time spent waiting on
+    // permission/hook checks ahead of execution.
+    this.unsubs.push(this.toolEvents.on('TOOL_EXECUTING', (data) => {
+      const rec = this.records.findLast(r => r.callId === data.callId);
+      if (rec) rec.execStartMs = data.startedAt;
+      this.markDirty();
+    }));
+
     // NOTE: After SDK OBS-05 (0.21.31), TOOL_SUCCEEDED/TOOL_FAILED.result is a ToolResultSummary
-    // ({ kind, byteSize, preview? }) rather than the raw ToolResult object. The previous
-    // `_policyAudit` extraction is no longer reachable via this event — policy audit metadata
-    // must be sourced from a different channel (approval broker / tool result store) if the
-    // Tool Inspector is to display it in future.
+    // ({ kind, byteSize, preview? }) rather than the raw ToolResult object.
     this.unsubs.push(this.toolEvents.on('TOOL_SUCCEEDED', (data) => {
       const rec = this.records.findLast(r => r.callId === data.callId);
       if (rec) {
@@ -404,6 +501,19 @@ export class ToolInspectorPanel extends BasePanel {
         rec.result = data.result;
         rec.error = data.error;
         rec.resultSummary = summarizeResult(data.result) ?? data.error;
+      }
+      this.markDirty();
+    }));
+
+    // Terminal state for a cancelled call — without this subscription, a call
+    // cancelled mid-flight (e.g. via Ctrl+C) never gets an endMs and shows as
+    // "running" forever.
+    this.unsubs.push(this.toolEvents.on('TOOL_CANCELLED', (data) => {
+      const rec = this.records.findLast(r => r.callId === data.callId);
+      if (rec) {
+        rec.endMs = Date.now();
+        rec.cancelled = true;
+        rec.resultSummary = data.reason ?? 'cancelled';
       }
       this.markDirty();
     }));

@@ -14,7 +14,7 @@ function makePanel(id: string): Panel {
     id,
     name: id,
     icon: id[0]!,
-    category: 'monitoring',
+    category: 'runtime-ops',
     needsRender: false,
     isTransient: false,
     isPinned: false,
@@ -33,7 +33,7 @@ function makeReg(id: string): PanelRegistration {
     name: id,
     icon: id[0]!,
     description: id,
-    category: 'monitoring',
+    category: 'runtime-ops',
     factory: () => makePanel(id),
   };
 }

@@ -13,6 +13,7 @@ import type { Line } from '../../types/grid.ts';
 import { PanelListPanel } from '../../panels/panel-list-panel.ts';
 import { PanelManager } from '../../panels/panel-manager.ts';
 import type { Panel, PanelRegistration } from '../../panels/types.ts';
+import { ComponentHealthMonitor } from '../../runtime/perf/panel-health-monitor.ts';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -32,18 +33,35 @@ function countLinesContaining(lines: Line[], needle: string): number {
   ).length;
 }
 
+// PanelManager.registerType now asserts icon uniqueness across its registry
+// (WO-152), so this file's fixtures — which register dozens of panels
+// against one shared `mgr` per test — need a default icon that is unique
+// per id rather than one constant literal. Cached so re-registering the
+// same id (e.g. the beforeEach block's fixed panels) is stable.
+const ICON_POOL = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'.split('');
+const _iconsByRegId = new Map<string, string>();
+function defaultIconForId(id: string): string {
+  let icon = _iconsByRegId.get(id);
+  if (!icon) {
+    icon = ICON_POOL[_iconsByRegId.size % ICON_POOL.length]!;
+    _iconsByRegId.set(id, icon);
+  }
+  return icon;
+}
+
 /** Make a minimal PanelRegistration for tests. */
 function makeReg(overrides: Partial<PanelRegistration> & { id: string }): PanelRegistration {
+  const icon = overrides.icon ?? defaultIconForId(overrides.id);
   return {
     id: overrides.id,
     name: overrides.name ?? `Panel ${overrides.id}`,
-    icon: overrides.icon ?? 'X',
+    icon,
     category: overrides.category ?? 'session',
     description: overrides.description ?? `Desc for ${overrides.id}`,
     factory: overrides.factory ?? (() => ({
       id: overrides.id,
       name: overrides.name ?? `Panel ${overrides.id}`,
-      icon: overrides.icon ?? 'X',
+      icon,
       category: overrides.category ?? 'session',
       isTransient: false,
       isPinned: false,
@@ -235,13 +253,14 @@ describe('PanelListPanel', () => {
   // ── search input ─────────────────────────────────────────────────────────
 
   describe('search input', () => {
-    test('up at top focuses filter; down returns focus to list', () => {
-      panel.handleInput('up');
+    test('/ activates the filter; Esc deactivates and B works as an action key again', () => {
+      panel.handleInput('/');
       panel.handleInput('a');
       let text = linesText(panel.render(80, 20));
-      expect(text).toContain('Filter: a█');
+      // WO-153: converged modal filter — pinned '[Filter] ' + literal '_' cursor contract.
+      expect(text).toContain('[Filter] a_');
 
-      panel.handleInput('down');
+      panel.handleInput('escape');
       panel.handleInput('B');
       expect(mgr.isBottomPaneVisible()).toBe(true);
     });
@@ -352,7 +371,9 @@ describe('PanelListPanel', () => {
       panel.handleInput('T');
       const text = linesText(panel.render(80, 20));
       expect(text).not.toContain('T*Panel List');
-      expect(text).toContain('▸ ●▲ Alpha Panel');
+      // WO-141: a health-flag column (blank when no ComponentHealthMonitor is
+      // injected, as here) now sits between the placement marker and the name.
+      expect(text).toContain('▸ ●▲  Alpha Panel');
     });
   });
 
@@ -389,7 +410,7 @@ describe('PanelListPanel', () => {
         mgr.registerType(makeReg({
           id: `bulk-${i}`,
           name: `Bulk ${i}`,
-          category: i % 2 === 0 ? 'monitoring' : 'ai',
+          category: i % 2 === 0 ? 'runtime-ops' : 'ai',
           description: `Bulk panel ${i}`,
         }));
       }
@@ -493,6 +514,65 @@ describe('PanelListPanel', () => {
       for (const ch of 'beta') panel.handleInput(ch);
       const text = linesText(panel.render(95, 40));
       expect(text).not.toContain('Recent');
+    });
+  });
+
+  // ── w = close open panel (WO-141) ────────────────────────────────────────
+
+  describe('w closes the selected panel', () => {
+    test('w closes an open panel via PanelManager.close', () => {
+      panel.handleInput('T'); // opens alpha in the top pane
+      expect(mgr.getTopPane().panels.map((p: Panel) => p.id)).toContain('alpha');
+      expect(panel.handleInput('w')).toBe(true);
+      expect(mgr.getTopPane().panels.map((p: Panel) => p.id)).not.toContain('alpha');
+    });
+
+    test('w on a panel that is not open is a no-op that still returns true', () => {
+      expect(mgr.getAllOpen().map((p: Panel) => p.id)).not.toContain('alpha');
+      expect(panel.handleInput('w')).toBe(true);
+      expect(mgr.getAllOpen().map((p: Panel) => p.id)).not.toContain('alpha');
+    });
+  });
+
+  // ── modal '/' filter convergence (WO-153) ────────────────────────────────
+
+  describe('typing a printable character without pressing / first', () => {
+    test('is a no-op — the modal filter requires / to enter (single filter interaction everywhere)', () => {
+      panel.handleInput('g');
+      panel.handleInput('a');
+      const text = linesText(panel.render(80, 20));
+      expect(text).toContain('Filter: (/ to filter)');
+      // No filter query was typed, so every panel is still visible.
+      expect(text).toContain('Alpha');
+      expect(text).toContain('Gamma');
+    });
+  });
+
+  // ── optional health flags (WO-141, fills WO-004 panel-resources gap) ────
+
+  describe('health flags from the injected ComponentHealthMonitor', () => {
+    test('a panel with no health record renders no flag glyph', () => {
+      const monitor = new ComponentHealthMonitor();
+      const withMonitor = new PanelListPanel(mgr, monitor);
+      withMonitor.onActivate();
+      const text = linesText(withMonitor.render(80, 20));
+      expect(text).toContain('Alpha Panel');
+      expect(monitor.getHealth('alpha')).toBeUndefined();
+    });
+
+    test('an overloaded panel surfaces a visible health flag', () => {
+      const monitor = new ComponentHealthMonitor();
+      monitor.register('alpha', 'development');
+      // development's contract caps render cost at 20ms and degrades after 5
+      // consecutive violations — 10s renders blow through both immediately.
+      for (let i = 0; i < 20; i++) {
+        monitor.recordRender('alpha', 10_000, Date.now());
+      }
+      expect(monitor.getHealth('alpha')?.healthStatus).toBe('overloaded');
+      const withMonitor = new PanelListPanel(mgr, monitor);
+      withMonitor.onActivate();
+      const text = linesText(withMonitor.render(80, 20));
+      expect(text).toMatch(/![ ]*Alpha Panel/);
     });
   });
 

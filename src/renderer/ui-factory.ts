@@ -4,10 +4,12 @@ import { VERSION } from '../version.ts';
 import { fitDisplay, getDisplayWidth, truncateDisplay, wrapText, interpolateColor } from '../utils/terminal-width.ts';
 import type { GitHeaderInfo } from './git-status.ts';
 import { renderConversationFragment, renderConversationStatusLine, type ConversationStatusSegment } from './conversation-surface.ts';
-import { GLYPHS } from './ui-primitives.ts';
+import { GLYPHS, UI_TONES } from './ui-primitives.ts';
 import { formatElapsed } from '../utils/format-elapsed.ts';
 import { abbreviateCount } from '../utils/format-number.ts';
 import { computeContextUsage } from '../core/context-usage.ts';
+import { calcSessionCost } from '../export/cost-utils.ts';
+import { buildFooterTip, isAgentActive } from './footer-tips.ts';
 
 /** Number of frames before the animated gradient completes one full cycle. */
 const GRADIENT_CYCLE_FRAMES = 50;
@@ -35,15 +37,23 @@ function fmtNum(n: number): string {
   return abbreviateCount(n, { bSuffix: true });
 }
 
+/** Format a running USD cost estimate with a precision that suits its magnitude. */
+function fmtCost(usd: number): string {
+  if (!(usd > 0)) return '0.00';
+  if (usd < 0.01) return usd.toFixed(4);
+  if (usd < 1) return usd.toFixed(3);
+  return usd.toFixed(2);
+}
+
 /**
  * UIFactory - Generates standard UI fragments without needing Ink/React overhead.
  */
 export class UIFactory {
   public static createHeader(width: number, model: string, provider: string, title?: string, gitInfo?: GitHeaderInfo): Line[] {
     const lines: Line[] = [];
-    const CYAN = '#00ffff';
-    const GREY = '244';
-    const TITLE_COLOR = '250';
+    const CYAN = UI_TONES.accent.brand;
+    const GREY = UI_TONES.fg.dim;
+    const TITLE_COLOR = UI_TONES.fg.muted;
     const brand = ` GoodVibes `;
     const ver = `v${VERSION} `;
     const stats = ` ${model} `;
@@ -77,11 +87,11 @@ export class UIFactory {
     }
     // Build git info segment
     let gitStr = '';
-    let gitFg = '238';
+    let gitFg: string = UI_TONES.fg.dim;
     if (gitInfo) {
       gitStr = buildGitSegment(gitInfo).text;
       if (gitInfo.dirty || gitInfo.ahead > 0 || gitInfo.behind > 0) {
-        gitFg = '220'; // yellow when dirty or out-of-sync
+        gitFg = UI_TONES.state.warn; // yellow when dirty or out-of-sync
       }
     }
     const rightSideText = stats + prov;
@@ -91,7 +101,7 @@ export class UIFactory {
     for (const char of stats) { if (rightX < width) line[rightX++] = { char, fg: CYAN, bg: '', bold: true, dim: false, underline: false, italic: false, strikethrough: false }; }
     for (const char of prov) { if (rightX < width) line[rightX++] = { char, fg: GREY, bg: '', bold: false, dim: true, underline: false, italic: false, strikethrough: false }; }
     lines.push(line);
-    lines.push(this.stringToLine('━'.repeat(width), width, { fg: '244' }));
+    lines.push(this.stringToLine('━'.repeat(width), width, { fg: UI_TONES.fg.dim }));
     return lines;
   }
 
@@ -101,12 +111,12 @@ export class UIFactory {
    */
   public static createMessageBar(
     width: number, text: string,
-    bgColor = '#2a2a2a', textColor = '252', prefixStr = ' › ',
+    bgColor: string = '#2a2a2a', textColor: string = UI_TONES.fg.secondary, prefixStr: string = ' › ',
     strikethrough = false
   ): Line[] {
     return renderConversationFragment(text, width, {
       prefix: prefixStr,
-      prefixFg: '135',
+      prefixFg: UI_TONES.state.reasoning,
       text: textColor,
       bodyBg: bgColor,
       strikethrough,
@@ -119,8 +129,8 @@ export class UIFactory {
   public static createQueuedMessageFragment(width: number, text: string): Line[] {
     return renderConversationFragment(text, width, {
       prefix: ' (...) ',
-      prefixFg: '135',
-      text: '240',
+      prefixFg: UI_TONES.state.reasoning,
+      text: UI_TONES.fg.dim,
       bodyBg: '#1a1a1a',
       dim: true,
     });
@@ -148,6 +158,7 @@ export class UIFactory {
     composerStatus?: string,
     composerFlags?: readonly string[],
     composerPendingRisk?: 'none' | 'approval-wait' | 'shell' | 'command' | 'remote',
+    compact: boolean = false,
   ): Line[] {
     const lines: Line[] = [];
     const promptLines = prompt.split('\n');
@@ -253,7 +264,9 @@ export class UIFactory {
       }
     }
     lines.push(bottomLine);
-    lines.push(createBaseLine());
+    // --- Composer posture block (mode / risk / status / flags) ------------
+    // Suppressed in compact mode; the ctx-info line no longer duplicates these
+    // tokens, so this block is the single home for mode/status/flags.
     const composerTokens: Array<{ text: string; fg: string; bold?: boolean; dim?: boolean }> = [];
     if (composerMode) composerTokens.push({ text: ` ${GLYPHS.status.active} ${composerMode} `, fg: '#38bdf8', bold: true });
     if (composerPendingRisk && composerPendingRisk !== 'none') {
@@ -268,7 +281,7 @@ export class UIFactory {
     }
     if (composerStatus && composerStatus !== 'idle') composerTokens.push({ text: ` state:${composerStatus} `, fg: '244', dim: true });
     if (composerFlags && composerFlags.length > 0) composerTokens.push({ text: ` flags:${composerFlags.join(',')} `, fg: '244', dim: true });
-    if (composerTokens.length > 0) {
+    if (!compact && composerTokens.length > 0) {
       const postureLine = createBaseLine();
       let px = 2;
       for (const token of composerTokens) {
@@ -289,10 +302,10 @@ export class UIFactory {
         if (px >= width) break;
       }
       lines.push(postureLine);
-      lines.push(createBaseLine());
     }
     const isRecentlyCopied = Date.now() - lastCopyTime < 2000;
-    // Token usage line
+    // Token usage line + running ~$ cost estimate (derived from the usage
+    // object and the active model via cost-utils).
     const u = usage as { input?: number; output?: number; cacheRead?: number; cacheWrite?: number; up?: number; down?: number };
     const inp = u.input ?? u.up ?? 0;
     const out = u.output ?? u.down ?? 0;
@@ -300,12 +313,13 @@ export class UIFactory {
     const cw = u.cacheWrite ?? 0;
     const total = inp + out + cr + cw;
     const tokenSep = ` ${GLYPHS.navigation.pipeSeparator} `;
-    const tokenLine = ` Token Usage [ Input: ${fmtNum(inp)}${tokenSep}Output: ${fmtNum(out)}${tokenSep}Cache Read: ${fmtNum(cr)}${tokenSep}Cache Write: ${fmtNum(cw)}${tokenSep}Total: ${fmtNum(total)} ]`;
+    const costSegment = model ? `${tokenSep}~$${fmtCost(calcSessionCost(inp, out, cr, cw, model))}` : '';
+    const tokenLine = ` Token Usage [ Input: ${fmtNum(inp)}${tokenSep}Output: ${fmtNum(out)}${tokenSep}Cache Read: ${fmtNum(cr)}${tokenSep}Cache Write: ${fmtNum(cw)}${tokenSep}Total: ${fmtNum(total)}${costSegment} ]`;
     const copiedNotice = isRecentlyCopied ? ` [COPIED] ` : '';
     const statsLine = '  ' + tokenLine + ' '.repeat(Math.max(0, width - 4 - getDisplayWidth(tokenLine) - getDisplayWidth(copiedNotice))) + copiedNotice;
     lines.push(this.stringToLine(statsLine, width, { fg: isRecentlyCopied ? '81' : '244', bold: isRecentlyCopied }));
-    // Context usage progress bar
-    if (contextWindow && contextWindow > 0) {
+    // Context usage progress bar — suppressed in compact mode.
+    if (!compact && contextWindow && contextWindow > 0) {
       const ctxTokens = lastInputTokens ?? 0;
       const label = '   Context Usage: ';
       const suffix = ` [ ${fmtNum(ctxTokens)} / ${fmtNum(contextWindow)} ]`;
@@ -315,11 +329,12 @@ export class UIFactory {
       const thresholdFraction = (compactThreshold !== undefined && compactThreshold > 0)
         ? Math.min(1, compactThreshold)
         : undefined;
-      lines.push(createBaseLine());
       lines.push(this.createProgressBarLine(label, ctxPct, barWidth, width, suffix, thresholdFraction));
     }
-    // Context info line (working dir, model+provider, tools)
-    if (workingDir || model) {
+    // Context info line (working dir, model+provider, tools, hitl).
+    // Suppressed in compact mode. mode/status/flags are intentionally omitted —
+    // the posture block above owns them, so they are not duplicated here.
+    if (!compact && (workingDir || model)) {
       const home = typeof process !== 'undefined' ? process.env.HOME ?? '' : '';
       const displayDir = workingDir && home && workingDir.startsWith(home)
         ? '~' + workingDir.slice(home.length)
@@ -331,19 +346,16 @@ export class UIFactory {
       }
       if (toolCount) ctxParts.push(`${toolCount} tools`);
       if (hitlMode) ctxParts.push(`hitl:${hitlMode}`);
-      if (composerMode) ctxParts.push(`mode:${composerMode}`);
-      if (composerStatus && composerStatus !== 'idle') ctxParts.push(`status:${composerStatus}`);
-      if (composerFlags && composerFlags.length > 0) ctxParts.push(composerFlags.join(','));
       const ctxLine = '   ' + ctxParts.join(`  ${GLYPHS.navigation.pipeSeparator}  `);
-      lines.push(createBaseLine());
       lines.push(this.stringToLine(truncateDisplay(ctxLine, width), width, { fg: '240', dim: true }));
-      lines.push(createBaseLine());
     }
     if (showExitNotice) {
       const notice = `   !!! Press Ctrl+C again to exit !!! `;
       lines.push(this.stringToLine(fitDisplay(notice, width), width, { fg: '196', bold: true }));
     } else {
-      const help = `   /help for commands  -  Ctrl+C to quit `;
+      // Persistent discoverability tip. Rotates by context (agent-aware): the
+      // process-monitor tip leads while a turn is in flight. See footer-tips.ts.
+      const help = `   ${buildFooterTip({ agentActive: isAgentActive(composerStatus) })} `;
       const dangerWarn = dangerMode ? `! DANGER MODE - ALL CHANGES AUTO-APPROVED ` : '';
       const helpW = getDisplayWidth(help);
       const dangerW = getDisplayWidth(dangerWarn);
@@ -363,7 +375,6 @@ export class UIFactory {
       }
       lines.push(line);
     }
-    lines.push(createBaseLine());
     return lines;
   }
 
@@ -392,8 +403,8 @@ export class UIFactory {
   ];
 
   /** Gradient colors for thinking text — cyan to purple (matches splash). */
-  private static readonly THINK_GRADIENT_START = '#00ffff';
-  private static readonly THINK_GRADIENT_END = '#d000ff';
+  private static readonly THINK_GRADIENT_START = UI_TONES.accent.gradientStart;
+  private static readonly THINK_GRADIENT_END = UI_TONES.accent.gradientEnd;
 
   public static createThinkingFragment(width: number, spinner: string, frame: number = 0, tokenSpeed?: number, toolPreview?: string, inputTokens?: number, outputTokens?: number, elapsedMs?: number, ttftMs?: number): Line[] {
     // Rotate phrase every ~30 seconds (frame ticks at 80ms, so ~375 frames)

@@ -294,10 +294,23 @@ describe('TokenBudgetPanel', () => {
       expect(text).toContain('no data');
     });
 
-    test('shows "No turns recorded" when no turn history', () => {
+    test('shows "No turns recorded" before any turn completes', () => {
       const lines = panel.render(80, 20);
       const text = linesText(lines);
       expect(text).toContain('No turns recorded');
+    });
+  });
+
+  describe('recordTurn()', () => {
+    test('populates Recent Turns and clears the pre-first-turn empty state', () => {
+      const orch = makeOrchMock({ input: 1200, output: 400, cacheRead: 100, cacheWrite: 50 });
+      panel.wire(asOrchestratorMock(orch), () => 0);
+      panel.onActivate();
+      panel.recordTurn();
+      const lines = panel.render(80, 30);
+      const text = linesText(lines);
+      expect(text).not.toContain('No turns recorded');
+      expect(text).toContain('Recent Turns');
     });
   });
 
@@ -377,6 +390,24 @@ describe('TokenBudgetPanel', () => {
       expect(text).toContain('CRITICAL');
     });
 
+    test('WO-160: maintenance guidance advertises the C key, not a printed /compact, once C is armed', () => {
+      // 92% fill both crosses the default 80% auto-compact threshold (so
+      // evaluateSessionMaintenance's nextSteps[0] is '/compact') and the
+      // panel's own 70% WARN_YELLOW elevation gate that arms the C key —
+      // so the two are never actually out of sync here.
+      const orch = makeOrchMock({ lastInputTokens: 92000 });
+      panel.wire(asOrchestratorMock(orch), () => 100000);
+      panel.onActivate();
+      const lines = panel.render(80, 34);
+      const text = linesText(lines);
+      // No printed '/compact' signpost anywhere while C is already armed.
+      expect(text).not.toContain('/compact');
+      expect(text).toContain('compact context now');
+      expect(text).toContain('compact now');
+      // The C key really does dispatch compact-now from this state.
+      expect(panel.handleInput('C')).toBe(true);
+    });
+
     test('context bar not shown when contextWindow is 0', () => {
       const orch = makeOrchMock({ lastInputTokens: 50000 });
       panel.wire(asOrchestratorMock(orch), () => 0); // unknown window size
@@ -446,6 +477,36 @@ describe('GitPanel', () => {
     test('loading state renders correct number of lines for varying heights', () => {
       expect(panel.render(80, 5)).toHaveLength(5);
       expect(panel.render(80, 30)).toHaveLength(30);
+    });
+  });
+
+  describe('commit-compose and confirm render states', () => {
+    test('c opens the commit-message compose UI at exact W×H', () => {
+      expect(panel.handleInput('c')).toBe(true);
+      const lines = panel.render(80, 20);
+      expect(lines).toHaveLength(20);
+      for (const line of lines) expect(line).toHaveLength(80);
+      expect(linesText(lines)).toContain('Commit message');
+    });
+
+    test('typing then Enter opens a Commit confirm at exact W×H', () => {
+      panel.handleInput('c');
+      for (const ch of 'wip') panel.handleInput(ch);
+      expect(panel.handleInput('enter')).toBe(true);
+      const lines = panel.render(80, 20);
+      expect(lines).toHaveLength(20);
+      for (const line of lines) expect(line).toHaveLength(80);
+      const text = linesText(lines);
+      expect(text).toContain('Commit');
+      expect(text).toContain('wip');
+    });
+
+    test('Esc cancels compose without opening a confirm', () => {
+      panel.handleInput('c');
+      panel.handleInput('a');
+      expect(panel.handleInput('escape')).toBe(true);
+      const text = linesText(panel.render(80, 20));
+      expect(text).not.toContain('Commit message');
     });
   });
 

@@ -1,18 +1,30 @@
 import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
-import { formatLatencyMs } from '../utils/format-duration.ts';
 import { BasePanel } from './base-panel.ts';
-import { createEmptyLine, createStyledCell, type Line } from '../types/grid.ts';
-import type { ProviderAuthRouteDescriptor } from '@pellux/goodvibes-sdk/platform/providers';
-import type { ProviderEvent, TurnEvent } from '@/runtime/index.ts';
+import type { Line } from '../types/grid.ts';
+import type { ModelDomainState, ProviderEvent, TurnEvent } from '@/runtime/index.ts';
+import { createInitialModelState, evaluateSessionMaintenance } from '@/runtime/index.ts';
 import type { UiEventFeed } from '../runtime/ui-events.ts';
 import {
   type ProviderRuntimeInspectionQuery,
 } from '../runtime/ui-service-queries.ts';
-import { ProviderHealthTracker, type ProviderStatus } from './provider-health-tracker.ts';
+import {
+  ProviderHealthTracker,
+  type ProviderHealthMeta,
+} from './provider-health-tracker.ts';
+import {
+  buildAccountPosture,
+  type ProviderAccountPosture,
+} from './provider-health-routes.ts';
 import {
   buildProviderHealthDomainSummaries,
   type HealthDomainSummary,
 } from './provider-health-domains.ts';
+import {
+  ProviderHealthDataProvider,
+  type FallbackChainData,
+  type ProviderHealthEntry,
+} from '../runtime/ui/provider-health/index.ts';
+import type { PanelIntegrationContext } from './types.ts';
 import type {
   UiContinuitySnapshot,
   UiIntelligenceSnapshot,
@@ -25,15 +37,9 @@ import type {
   UiSettingsSnapshot,
   UiWorktreeSnapshot,
 } from '../runtime/ui-read-models.ts';
-import { evaluateSessionMaintenance } from '@/runtime/index.ts';
 import {
-  buildAlignedRow,
-  buildBodyText,
-  buildDetailBlock,
   buildEmptyState,
-  buildGuidanceLine,
   buildKeyboardHints,
-  buildKeyValueLine,
   buildPanelWorkspace,
   buildSummaryBlock,
   DEFAULT_PANEL_PALETTE,
@@ -41,6 +47,17 @@ import {
   resolvePrimaryScrollableSection,
   type PanelWorkspaceSection,
 } from './polish.ts';
+import {
+  buildChainLines,
+  buildDomainLines,
+  buildMaintenanceLines,
+  buildPostureLines,
+  buildProviderColumnHeader,
+  buildProviderRow,
+  buildRouteColumnHeader,
+  buildRouteViewLines,
+  buildSelectedDetailSection,
+} from './provider-health-views.ts';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -59,307 +76,60 @@ export interface ProviderHealthPanelDeps {
   readonly intelligence: UiReadModel<UiIntelligenceSnapshot>;
   readonly continuity: UiReadModel<UiContinuitySnapshot>;
   readonly worktrees: UiReadModel<UiWorktreeSnapshot>;
+  /**
+   * Model-domain access wired from the runtime store at the composition root
+   * (selectModel over RuntimeStore). Drives fallback-chain rendering and
+   * TURN_ERROR attribution to the active provider.
+   */
+  readonly modelState?: {
+    readonly get: () => ModelDomainState;
+    readonly subscribe: (listener: () => void) => () => void;
+  };
 }
 
-// Colors
-// ---------------------------------------------------------------------------
+type ConsoleView = 'providers' | 'routes' | 'domains';
 
+const CONSOLE_VIEWS: readonly ConsoleView[] = ['providers', 'routes', 'domains'] as const;
+
+// Base chrome plus console accents (domain accents only — hex ratchet).
 const C = extendPalette(DEFAULT_PANEL_PALETTE, {
   title:   '#00ffff',
   unknown: '244',
   rowSelectBg: '#111827',
 });
 
-const LATENCY_WARN_MS = 2_000;
-const LATENCY_BAD_MS  = 5_000;
+const INTRO = 'Provider console: status, latency timelines, error attribution, auth routes, and fallback posture.';
 
 // ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-function statusDot(status: ProviderStatus): { char: string; color: string } {
-  switch (status) {
-    case 'healthy':      return { char: '●', color: C.good };
-    case 'degraded':     return { char: '◑', color: C.warn };
-    case 'rate_limited': return { char: '◐', color: C.warn };
-    case 'auth_error':   return { char: '✕', color: C.bad };
-    case 'unavailable':  return { char: '✕', color: C.bad };
-    default:             return { char: '○', color: C.unknown };
-  }
-}
-
-function statusLabel(status: ProviderStatus): string {
-  switch (status) {
-    case 'healthy':      return 'online';
-    case 'degraded':     return 'degraded';
-    case 'rate_limited': return 'rate-limited';
-    case 'auth_error':   return 'auth error';
-    case 'unavailable':  return 'unavailable';
-    default:             return 'unknown';
-  }
-}
-
-function latencyColor(ms: number): string {
-  if (ms >= LATENCY_BAD_MS)  return C.bad;
-  if (ms >= LATENCY_WARN_MS) return C.warn;
-  return C.good;
-}
-
-function fmtMs(ms: number): string {
-  return formatLatencyMs(ms);
-}
-
-function fmtAgo(ts: number | undefined): string {
-  if (!ts) return 'n/a';
-  const sec = Math.floor((Date.now() - ts) / 1000);
-  if (sec < 60)  return `${sec}s ago`;
-  if (sec < 3600) return `${Math.floor(sec / 60)}m ago`;
-  return `${Math.floor(sec / 3600)}h ago`;
-}
-
-function fmtCooldown(expiresAt: number): string {
-  const remaining = Math.ceil((expiresAt - Date.now()) / 1000);
-  if (remaining <= 0) return 'expiring';
-  return `${remaining}s cooldown`;
-}
-
-type ProviderPanelAuthRoute = ProviderAuthRouteDescriptor['route'] | 'unconfigured';
-type ProviderPanelAuthFreshness = NonNullable<ProviderAuthRouteDescriptor['freshness']> | 'unconfigured';
-
-interface ProviderRuntimeRecord {
-  readonly providerId: string;
-  readonly active: boolean;
-  readonly modelCount: number;
-  readonly activeRoute: ProviderPanelAuthRoute;
-  readonly preferredRoute: ProviderPanelAuthRoute;
-  readonly activeRouteReason: string;
-  readonly authFreshness: ProviderPanelAuthFreshness;
-  readonly fallbackRisk?: string;
-  readonly issues: readonly string[];
-  readonly recommendedActions: readonly string[];
-}
-
-function domainColor(level: HealthDomainSummary['level']): string {
-  switch (level) {
-    case 'good':
-      return C.good;
-    case 'warn':
-      return C.warn;
-    case 'bad':
-      return C.bad;
-    default:
-      return C.value;
-  }
-}
-
-const AUTH_ROUTE_PRIORITY: readonly ProviderPanelAuthRoute[] = [
-  'subscription-oauth',
-  'service-oauth',
-  'secret-ref',
-  'api-key',
-  'anonymous',
-  'none',
-  'unconfigured',
-] as const;
-
-function routePriority(route: ProviderPanelAuthRoute): number {
-  const priority = AUTH_ROUTE_PRIORITY.indexOf(route);
-  return priority >= 0 ? priority : AUTH_ROUTE_PRIORITY.length;
-}
-
-function routeColor(route: ProviderPanelAuthRoute): string {
-  switch (route) {
-    case 'subscription-oauth':
-      return C.title;
-    case 'service-oauth':
-      return C.good;
-    case 'api-key':
-      return C.warn;
-    case 'secret-ref':
-      return C.value;
-    case 'anonymous':
-    case 'none':
-      return C.dim;
-    default:
-      return C.value;
-  }
-}
-
-function freshnessColor(freshness: ProviderPanelAuthFreshness): string {
-  switch (freshness) {
-    case 'expired':
-      return C.bad;
-    case 'expiring':
-    case 'pending':
-      return C.warn;
-    case 'healthy':
-      return C.good;
-    default:
-      return C.dim;
-  }
-}
-
-function buildSyntheticAuthRoutes(
-  auth: {
-    readonly mode: 'api-key' | 'oauth' | 'anonymous' | 'none';
-    readonly configured: boolean;
-    readonly detail?: string;
-    readonly envVars?: readonly string[];
-  } | undefined,
-): readonly ProviderAuthRouteDescriptor[] {
-  if (!auth) return [];
-  switch (auth.mode) {
-    case 'none':
-      return [{
-        route: 'none',
-        label: 'No auth required',
-        configured: true,
-        usable: true,
-        freshness: 'healthy',
-        detail: auth.detail ?? 'Provider does not require interactive credentials.',
-      }];
-    case 'anonymous':
-      return [{
-        route: 'anonymous',
-        label: 'Anonymous / local access',
-        configured: auth.configured,
-        usable: auth.configured,
-        freshness: auth.configured ? 'healthy' : 'unconfigured',
-        detail: auth.detail ?? 'Provider can be used without stored credentials.',
-      }];
-    case 'api-key':
-      return [{
-        route: 'api-key',
-        label: 'Ambient API key',
-        configured: auth.configured,
-        usable: auth.configured,
-        freshness: auth.configured ? 'healthy' : 'unconfigured',
-        detail: auth.detail ?? 'Provider expects a configured API key.',
-        ...(auth.envVars?.length ? { envVars: auth.envVars } : {}),
-        ...(auth.envVars?.length
-          ? { repairHints: [`Set ${auth.envVars.join(' or ')} in the environment or secrets store.`] }
-          : {}),
-      }];
-    case 'oauth':
-      return [{
-        route: 'service-oauth',
-        label: 'OAuth session',
-        configured: auth.configured,
-        usable: auth.configured,
-        freshness: auth.configured ? 'healthy' : 'unconfigured',
-        detail: auth.detail ?? 'Provider expects an OAuth-backed credential.',
-        repairHints: ['Refresh or repair the provider OAuth session before relying on it.'],
-      }];
-    default:
-      return [];
-  }
-}
-
-function getUsableRoute(route: ProviderAuthRouteDescriptor): boolean {
-  return route.usable ?? route.configured;
-}
-
-function pickRoute(
-  routes: readonly ProviderAuthRouteDescriptor[],
-): ProviderAuthRouteDescriptor | null {
-  if (routes.length === 0) return null;
-  return [...routes].sort((left, right) => routePriority(left.route) - routePriority(right.route))[0] ?? null;
-}
-
-function buildProviderRuntimeRecord(
-  snapshot: {
-    readonly providerId: string;
-    readonly active: boolean;
-    readonly modelCount: number;
-    readonly runtime: {
-      readonly auth?: {
-        readonly mode: 'api-key' | 'oauth' | 'anonymous' | 'none';
-        readonly configured: boolean;
-        readonly detail?: string;
-        readonly envVars?: readonly string[];
-        readonly routes?: readonly ProviderAuthRouteDescriptor[];
-      };
-    };
-  },
-): ProviderRuntimeRecord {
-  const auth = snapshot.runtime.auth;
-  const routes = auth?.routes?.length ? auth.routes : buildSyntheticAuthRoutes(auth);
-  const configuredRoutes = routes.filter((route) => route.configured);
-  const usableRoutes = routes.filter(getUsableRoute);
-  const preferredRoute = pickRoute(configuredRoutes.length > 0 ? configuredRoutes : routes);
-  const activeRoute = pickRoute(usableRoutes.length > 0 ? usableRoutes : (preferredRoute ? [preferredRoute] : []));
-  const activeRouteId = activeRoute?.route ?? 'unconfigured';
-  const preferredRouteId = preferredRoute?.route ?? activeRouteId;
-  const authFreshness = activeRoute?.freshness ?? (activeRouteId === 'none' ? 'healthy' : 'unconfigured');
-  const fallbackRisk = usableRoutes.length > 1
-    ? 'Multiple auth routes are simultaneously usable; verify route priority before switching providers.'
-    : undefined;
-
-  const issueSet = new Set<string>();
-  const actionSet = new Set<string>();
-
-  if (activeRouteId === 'unconfigured' && auth?.mode !== 'none') {
-    issueSet.add('Provider has no usable auth route configured.');
-  }
-
-  for (const route of routes) {
-    if (route.freshness === 'expired') {
-      issueSet.add(route.detail ?? `${route.label} is expired.`);
-    } else if (route.freshness === 'pending') {
-      issueSet.add(route.detail ?? `${route.label} is pending completion.`);
-    } else if (route.configured && !getUsableRoute(route)) {
-      issueSet.add(route.detail ?? `${route.label} is configured but not currently usable.`);
-    }
-    for (const hint of route.repairHints ?? []) {
-      if (hint.trim().length > 0) actionSet.add(hint);
-    }
-  }
-
-  if (fallbackRisk) issueSet.add(fallbackRisk);
-  if (issueSet.size > 0 && actionSet.size === 0 && activeRouteId !== 'none') {
-    actionSet.add(`Review ${snapshot.providerId} provider credentials and routing metadata.`);
-  }
-
-  return {
-    providerId: snapshot.providerId,
-    active: snapshot.active,
-    modelCount: snapshot.modelCount,
-    activeRoute: activeRouteId,
-    preferredRoute: preferredRouteId,
-    activeRouteReason: activeRoute?.detail
-      ?? auth?.detail
-      ?? (activeRouteId === 'none'
-        ? 'Provider does not require interactive credentials.'
-        : 'No usable auth route is configured for this provider.'),
-    authFreshness,
-    ...(fallbackRisk ? { fallbackRisk } : {}),
-    issues: [...issueSet],
-    recommendedActions: [...actionSet],
-  };
-}
-
-// ---------------------------------------------------------------------------
-// ProviderHealthPanel
+// ProviderHealthPanel — the merged provider console (WO-112)
 // ---------------------------------------------------------------------------
 
 /**
- * Real-time provider health / status dashboard.
- *
- * Displays for each known provider:
- *  - Status indicator (online / rate-limited / error / unknown)
- *  - Last response latency
- *  - Last seen timestamp
- *  - Last error message (if any)
- *  - Active cooldown timer for rate-limited providers
+ * Single provider console. Absorbs the retired providers (stats) and accounts
+ * panels:
+ *  - Status, latency avg/p95, error attribution, sparkline timelines, and
+ *    per-provider token/cost totals in one table (ProviderHealthDataProvider).
+ *  - Fallback chain with current node and fallover count.
+ *  - Auth routes with per-route freshness, issues, and repair hints
+ *    (ProviderRuntimeInspectionQuery.inspectAll() is the single route source).
+ *  - Repair Domains + Session Maintenance as a secondary 't' view.
+ *  - Enter dispatches '/accounts repair <provider>' through the panel
+ *    integration context; r forces a posture refresh.
  */
 export class ProviderHealthPanel extends BasePanel {
   private _unsubs: Array<() => void> = [];
-  private _refreshTimerId: ReturnType<typeof setInterval> | null = null;
+  private _tickTimerId: ReturnType<typeof setInterval> | null = null;
   private _selectedIndex = 0;
   private _scrollOffset = 0;
-  private _accountRecords = new Map<string, ProviderRuntimeRecord>();
+  private _view: ConsoleView = 'providers';
+  private _accountRecords = new Map<string, ProviderAccountPosture>();
   private _accountRefreshAt = 0;
   private _accountLoading = false;
+  private _inflightProvider: string | null = null;
+  private _lastResponseProvider: string | null = null;
+  private _unattributedError: string | null = null;
+  private _modelState: ModelDomainState;
+  private readonly _dataProvider: ProviderHealthDataProvider;
   private readonly providerHealthTracker = new ProviderHealthTracker();
 
   constructor(
@@ -367,10 +137,13 @@ export class ProviderHealthPanel extends BasePanel {
     private readonly deps: ProviderHealthPanelDeps,
     private readonly requestRender: () => void = () => {},
   ) {
-    super('provider-health', 'Health', 'N', 'monitoring');
+    super('provider-health', 'Health', 'N', 'providers');
+    this._modelState = deps.modelState?.get() ?? this._syntheticModelState();
+    this._dataProvider = new ProviderHealthDataProvider(this._buildHealthState(), this._modelState);
     this._subscribe();
     void this._refreshAccountPosture(true);
-    this._ensureRefreshTimer();
+    // Background 30s posture refresh (auth routes go stale otherwise); cleared on destroy.
+    this.registerTimer(setInterval(() => { void this._refreshAccountPosture(); }, 30_000));
   }
 
   // -------------------------------------------------------------------------
@@ -390,32 +163,78 @@ export class ProviderHealthPanel extends BasePanel {
       }),
     );
 
+    // The provider named on the in-flight LLM request is the authoritative
+    // attribution target when the turn subsequently errors.
+    this._unsubs.push(
+      this.deps.turnEvents.on('LLM_REQUEST_STARTED', (payload) => {
+        this._inflightProvider = payload.provider;
+      }),
+    );
+
     this._unsubs.push(
       this.deps.turnEvents.on('LLM_RESPONSE_RECEIVED', (payload) => {
-        this.providerHealthTracker.onLlmResponse(payload.provider);
+        this.providerHealthTracker.onLlmResponse(payload.provider, {
+          model: payload.model,
+          inputTokens: payload.inputTokens,
+          outputTokens: payload.outputTokens,
+          ...(payload.cacheReadTokens !== undefined ? { cacheReadTokens: payload.cacheReadTokens } : {}),
+          ...(payload.cacheWriteTokens !== undefined ? { cacheWriteTokens: payload.cacheWriteTokens } : {}),
+        });
+        this._lastResponseProvider = payload.provider;
+        this._pushHealthState();
         this._markDirtyAndRender();
       }),
     );
 
     this._unsubs.push(
       this.deps.turnEvents.on('TURN_ERROR', (payload) => {
-        this.providerHealthTracker.onTurnError(payload.error);
+        const providerId = this._resolveActiveProviderId();
+        if (providerId) {
+          this.providerHealthTracker.onTurnError(payload.error, providerId);
+          this._unattributedError = null;
+        } else {
+          // No provider is resolvable (nothing registered yet) — surface the
+          // error in the posture block instead of inventing a phantom row.
+          this._unattributedError = payload.error.slice(0, 120);
+        }
+        this._inflightProvider = null;
+        this._pushHealthState();
         this._markDirtyAndRender();
       }),
     );
 
     this._unsubs.push(
+      this.deps.turnEvents.on('TURN_COMPLETED', () => {
+        this._inflightProvider = null;
+      }),
+    );
+
+    this._unsubs.push(
+      this.deps.turnEvents.on('TURN_CANCEL', () => {
+        this._inflightProvider = null;
+      }),
+    );
+
+    this._unsubs.push(
       this.deps.providerEvents.on('PROVIDERS_CHANGED', () => {
-        this.providerHealthTracker.onProvidersChanged([
-          ...new Set([
-            ...this.deps.providers.getSnapshot().providerIds,
-            ...this.providerRuntime.listProviderIds(),
-          ]),
-        ]);
+        this.providerHealthTracker.onProvidersChanged(this._knownProviders());
         void this._refreshAccountPosture(true);
+        this._pushHealthState();
         this._markDirtyAndRender();
       }),
     );
+
+    if (this.deps.modelState) {
+      const modelState = this.deps.modelState;
+      this._unsubs.push(modelState.subscribe(() => {
+        const next = modelState.get();
+        if (next !== this._modelState) {
+          this._modelState = next;
+          this._dataProvider.updateModelState(next);
+          this._markDirtyAndRender();
+        }
+      }));
+    }
 
     for (const readModel of [
       this.deps.providers,
@@ -445,39 +264,57 @@ export class ProviderHealthPanel extends BasePanel {
     super.onActivate();
     this.markDirty();
     void this._refreshAccountPosture(true);
-    this._ensureRefreshTimer();
+    this._startTickTimer();
   }
 
   override onDeactivate(): void {
     super.onDeactivate();
+    // Stop the per-second display tick while hidden (TokenBudgetPanel pattern);
+    // the 30s posture refresh keeps running so data stays warm for preload.
+    this._stopTickTimer();
   }
 
   override onDestroy(): void {
     super.onDestroy();
-    this._refreshTimerId = null;
+    this._tickTimerId = null;
+    this._dataProvider.dispose();
     for (const unsub of this._unsubs) unsub();
     this._unsubs = [];
   }
 
-  private _ensureRefreshTimer(): void {
-    if (this._refreshTimerId !== null) return;
-    this._refreshTimerId = this.registerTimer(setInterval(() => {
-      if (Date.now() - this._accountRefreshAt > 30_000) {
-        void this._refreshAccountPosture();
-      }
+  private _startTickTimer(): void {
+    if (this._tickTimerId !== null) return;
+    this._tickTimerId = this.registerTimer(setInterval(() => {
       this.markDirty();
       this.requestRender();
     }, 1_000));
   }
 
+  private _stopTickTimer(): void {
+    if (this._tickTimerId !== null) {
+      this.clearTimer(this._tickTimerId);
+      this._tickTimerId = null;
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // Input
+  // -------------------------------------------------------------------------
+
   handleInput(key: string): boolean {
-    const knownSet = new Set([
-      ...this.deps.providers.getSnapshot().providerIds,
-      ...this.providerRuntime.listProviderIds(),
-      ...this._accountRecords.keys(),
-    ]);
-    for (const h of this.providerHealthTracker.getAll()) knownSet.add(h.name);
-    const providers = [...knownSet].sort();
+    if (key === 't' || key === 'tab') {
+      const next = CONSOLE_VIEWS[(CONSOLE_VIEWS.indexOf(this._view) + 1) % CONSOLE_VIEWS.length];
+      this._view = next ?? 'providers';
+      this._scrollOffset = 0;
+      this.markDirty();
+      return true;
+    }
+    if (key === 'r') {
+      void this._refreshAccountPosture(true);
+      this.markDirty();
+      return true;
+    }
+    const providers = this._knownProviders();
     if (providers.length === 0) return false;
     if (key === 'j' || key === 'down' || key === '\x1b[B') {
       this._selectedIndex = Math.min(providers.length - 1, this._selectedIndex + 1);
@@ -492,6 +329,95 @@ export class ProviderHealthPanel extends BasePanel {
     return false;
   }
 
+  /** Enter dispatches the real repair command for the selected provider. */
+  handlePanelIntegrationAction(key: string, ctx: PanelIntegrationContext): boolean {
+    if (key !== 'enter' && key !== 'return') return false;
+    if (!ctx.executeCommand) return false;
+    const provider = this._selectedProvider();
+    if (!provider) return false;
+    void ctx.executeCommand('accounts', ['repair', provider]).catch(() => {
+      // Command output surfaces in conversation; dispatch failures are non-fatal here.
+    });
+    return true;
+  }
+
+  // -------------------------------------------------------------------------
+  // Data plumbing
+  // -------------------------------------------------------------------------
+
+  private _knownProviders(): string[] {
+    const known = new Set<string>([
+      ...this.deps.providers.getSnapshot().providerIds,
+      ...this.providerRuntime.listProviderIds(),
+      ...this._accountRecords.keys(),
+    ]);
+    for (const health of this.providerHealthTracker.getAll()) known.add(health.name);
+    return [...known].sort();
+  }
+
+  private _selectedProvider(): string | undefined {
+    const providers = this._knownProviders();
+    return providers[Math.min(this._selectedIndex, Math.max(0, providers.length - 1))];
+  }
+
+  /**
+   * Resolve the provider that should own a TURN_ERROR: the in-flight LLM
+   * request's provider, then the store model domain, then the configured
+   * provider.model, then the last responding provider, then the sole known
+   * provider. Never returns 'unknown'.
+   */
+  private _resolveActiveProviderId(): string | undefined {
+    if (this._inflightProvider) return this._inflightProvider;
+    if (this.deps.modelState) {
+      const storeProvider = this.deps.modelState.get().activeProviderId;
+      if (storeProvider && storeProvider !== 'unknown') return storeProvider;
+    }
+    const raw = this.deps.configManager.get('provider.model');
+    if (typeof raw === 'string' && raw.includes(':')) {
+      const providerId = raw.split(':')[0];
+      if (providerId) return providerId;
+    }
+    if (this._lastResponseProvider) return this._lastResponseProvider;
+    const known = this._knownProviders();
+    if (known.length === 1) return known[0];
+    return undefined;
+  }
+
+  private _syntheticModelState(): ModelDomainState {
+    const base = createInitialModelState();
+    const raw = this.deps.configManager.get('provider.model');
+    if (typeof raw !== 'string' || !raw.includes(':')) return base;
+    const [providerId = '', ...rest] = raw.split(':');
+    const modelId = rest.join(':');
+    if (!providerId || !modelId) return base;
+    return {
+      ...base,
+      activeProviderId: providerId,
+      activeModelId: modelId,
+      displayName: raw,
+      registryKey: raw,
+      source: 'provider-health-panel',
+      lastUpdatedAt: Date.now(),
+    };
+  }
+
+  private _buildHealthState() {
+    const activeId = this._resolveActiveProviderId();
+    const meta: ProviderHealthMeta[] = this._knownProviders().map((providerId) => {
+      const account = this._accountRecords.get(providerId);
+      return {
+        providerId,
+        isActive: providerId === activeId,
+        isConfigured: account ? account.activeRoute !== 'unconfigured' : true,
+      };
+    });
+    return this.providerHealthTracker.buildHealthDomainState(meta);
+  }
+
+  private _pushHealthState(): void {
+    this._dataProvider.updateHealthState(this._buildHealthState());
+  }
+
   private async _refreshAccountPosture(force = false): Promise<void> {
     if (this._accountLoading) return;
     if (!force && Date.now() - this._accountRefreshAt < 15_000) return;
@@ -500,10 +426,11 @@ export class ProviderHealthPanel extends BasePanel {
       const snapshots = await this.providerRuntime.inspectAll();
       this._accountRecords = new Map(
         snapshots
-          .map((snapshot) => buildProviderRuntimeRecord(snapshot))
+          .map((snapshot) => buildAccountPosture(snapshot))
           .map((record) => [record.providerId, record] as const),
       );
       this._accountRefreshAt = Date.now();
+      this._pushHealthState();
       this.markDirty();
       this.requestRender();
     } finally {
@@ -511,76 +438,8 @@ export class ProviderHealthPanel extends BasePanel {
     }
   }
 
-  // -------------------------------------------------------------------------
-  // Rendering
-  // -------------------------------------------------------------------------
-
-  override render(width: number, height: number): Line[] {
-    const intro = 'Cross-domain health workspace for providers, auth, settings, remote, MCP, continuity, worktrees, and maintenance posture.';
-
-    const knownSet = new Set([
-      ...this.deps.providers.getSnapshot().providerIds,
-      ...this.providerRuntime.listProviderIds(),
-      ...this._accountRecords.keys(),
-    ]);
-    for (const h of this.providerHealthTracker.getAll()) knownSet.add(h.name);
-    const providers = [...knownSet].sort();
-    this._selectedIndex = Math.min(this._selectedIndex, Math.max(0, providers.length - 1));
-
-    if (providers.length === 0) {
-      return buildPanelWorkspace(width, height, {
-        title: 'Health',
-        intro,
-        sections: [{
-          lines: buildEmptyState(
-            width,
-            ' No providers registered.',
-            'Provider health appears here once model providers are available and the runtime begins making requests.',
-            [
-              { command: '/provider', summary: 'review current provider and model selection' },
-              { command: '/subscription', summary: 'review provider login and subscription state' },
-            ],
-            { ...DEFAULT_PANEL_PALETTE, header: C.title },
-          ),
-        }],
-        palette: { ...DEFAULT_PANEL_PALETTE, header: C.title },
-      });
-    }
-
-    let online = 0;
-    let rateLimited = 0;
-    let errored = 0;
-    let accountIssues = 0;
-    let expiringAuth = 0;
-    for (const name of providers) {
-      const status = this.providerHealthTracker.get(name)?.status ?? 'unknown';
-      if (status === 'healthy') online++;
-      else if (status === 'rate_limited') rateLimited++;
-      else if (status === 'degraded' || status === 'auth_error' || status === 'unavailable') errored++;
-      const account = this._accountRecords.get(name);
-      if (account) {
-        accountIssues += account.issues.length;
-        if (account.authFreshness === 'expiring' || account.authFreshness === 'expired' || account.authFreshness === 'pending') {
-          expiringAuth++;
-        }
-      }
-    }
-
-    const postureLines = [
-      buildKeyValueLine(width, [
-        { label: 'providers', value: String(providers.length), valueColor: C.value },
-        { label: 'online', value: String(online), valueColor: C.good },
-        { label: 'rate-limited', value: String(rateLimited), valueColor: C.warn },
-        { label: 'error', value: String(errored), valueColor: C.bad },
-        { label: 'auth alerts', value: String(expiringAuth), valueColor: expiringAuth > 0 ? C.warn : C.dim },
-        { label: 'account issues', value: String(accountIssues), valueColor: accountIssues > 0 ? C.bad : C.dim },
-      ], { ...DEFAULT_PANEL_PALETTE, header: C.title }),
-      buildGuidanceLine(width, '/provider', 'review provider selection and routing if health posture degrades', { ...DEFAULT_PANEL_PALETTE, header: C.title }),
-      buildGuidanceLine(width, '/accounts', 'inspect auth routes, fallback posture, and billing-path safety', { ...DEFAULT_PANEL_PALETTE, header: C.title }),
-    ];
-
-    const domainLines: Line[] = [];
-    for (const domain of buildProviderHealthDomainSummaries({
+  private _collectDomainSummaries(): HealthDomainSummary[] {
+    return [...buildProviderHealthDomainSummaries({
       configManager: this.deps.configManager,
       auth: this.deps.localAuth.getSnapshot(),
       settings: this.deps.settings.getSnapshot(),
@@ -590,151 +449,134 @@ export class ProviderHealthPanel extends BasePanel {
       continuity: this.deps.continuity.getSnapshot(),
       worktrees: this.deps.worktrees.getSnapshot(),
       session: this.deps.session.getSnapshot(),
-    })) {
-      domainLines.push(buildAlignedRow(
-        width,
-        [
-          { text: domain.name, fg: C.value, bold: true },
-          { text: domain.summary, fg: domainColor(domain.level) },
-          { text: domain.next, fg: C.dim },
-        ],
-        [
-          { width: 14 },
-          { width: Math.max(10, width - 38) },
-          { width: 20 },
-        ],
-      ));
-      for (const detail of domain.details.slice(0, 2)) {
-        domainLines.push(...buildBodyText(width, `    ${detail}`, { ...DEFAULT_PANEL_PALETTE, header: C.title }, C.dim));
-      }
-      if (domain.nextSteps.length > 1) {
-        domainLines.push(...buildBodyText(width, `    next: ${domain.nextSteps.join('  |  ')}`, { ...DEFAULT_PANEL_PALETTE, header: C.title }, C.title));
-      }
-    }
+    })];
+  }
 
-    const selectedName = providers[this._selectedIndex];
-    const selectedHealth = selectedName ? this.providerHealthTracker.get(selectedName) : undefined;
-    const selectedAccount = selectedName ? this._accountRecords.get(selectedName) : undefined;
-    const selectedLines: Line[] = [];
-    const maintenanceLines: Line[] = [];
+  private _evaluateMaintenance() {
     const session = this.deps.session.getSnapshot();
-    const maintenance = evaluateSessionMaintenance({
+    return evaluateSessionMaintenance({
       configManager: this.deps.configManager,
       currentTokens: session.estimatedContextTokens,
       contextWindow: session.contextWindow,
       messageCount: session.messageCount,
       session: session.session,
     });
-    maintenanceLines.push(buildKeyValueLine(width, [
-      { label: 'level', value: maintenance.level, valueColor: maintenance.level === 'needs-repair' ? C.bad : maintenance.level === 'suggest-compact' || maintenance.level === 'watch' ? C.warn : C.good },
-      { label: 'guidance', value: maintenance.guidanceMode, valueColor: C.value },
-      { label: 'usage', value: `${maintenance.usagePct}%`, valueColor: maintenance.usagePct >= 80 ? C.bad : maintenance.usagePct >= 70 ? C.warn : C.value },
-      { label: 'remaining', value: maintenance.remainingTokens.toLocaleString(), valueColor: C.value },
-    ], { ...DEFAULT_PANEL_PALETTE, header: C.title }));
-    for (const reason of maintenance.reasons.slice(0, 3)) {
-      maintenanceLines.push(...buildBodyText(width, reason, { ...DEFAULT_PANEL_PALETTE, header: C.title }, C.dim));
-    }
-    if (maintenance.nextSteps.length > 0) {
-      maintenanceLines.push(...buildBodyText(width, `Next: ${maintenance.nextSteps.join('  |  ')}`, { ...DEFAULT_PANEL_PALETTE, header: C.title }, C.title));
-    }
-    if (selectedName) {
-      const status = selectedHealth?.status ?? 'unknown';
-      selectedLines.push(buildKeyValueLine(width, [
-        { label: 'provider', value: selectedName, valueColor: C.value },
-        { label: 'status', value: statusLabel(status), valueColor: statusDot(status).color },
-        { label: 'last ok', value: fmtAgo(selectedHealth?.lastSuccessAt), valueColor: C.value },
-      ], { ...DEFAULT_PANEL_PALETTE, header: C.title }));
-      if (selectedHealth?.rateLimitExpiresAt && selectedHealth.rateLimitExpiresAt > Date.now()) {
-        selectedLines.push(...buildBodyText(width, `Cooldown: ${fmtCooldown(selectedHealth.rateLimitExpiresAt)}`, { ...DEFAULT_PANEL_PALETTE, header: C.title }, C.warn));
-      }
-      if (selectedHealth?.lastErrorMessage) {
-        selectedLines.push(...buildBodyText(width, `Last error: ${selectedHealth.lastErrorMessage}`, { ...DEFAULT_PANEL_PALETTE, header: C.title }, C.bad));
-      }
-      if (selectedAccount) {
-        selectedLines.push(buildKeyValueLine(width, [
-          { label: 'route', value: selectedAccount.activeRoute, valueColor: routeColor(selectedAccount.activeRoute) },
-          { label: 'preferred', value: selectedAccount.preferredRoute, valueColor: C.dim },
-          { label: 'freshness', value: selectedAccount.authFreshness, valueColor: freshnessColor(selectedAccount.authFreshness) },
-        ], { ...DEFAULT_PANEL_PALETTE, header: C.title }));
-        selectedLines.push(buildKeyValueLine(width, [
-          { label: 'models', value: String(selectedAccount.modelCount), valueColor: C.value },
-          { label: 'active', value: selectedAccount.active ? 'yes' : 'no', valueColor: selectedAccount.active ? C.good : C.dim },
-        ], { ...DEFAULT_PANEL_PALETTE, header: C.title }));
-        selectedLines.push(...buildBodyText(width, `Auth route: ${selectedAccount.activeRouteReason}`, { ...DEFAULT_PANEL_PALETTE, header: C.title }, C.dim));
-        if (selectedAccount.fallbackRisk) {
-          selectedLines.push(...buildBodyText(width, `Fallback: ${selectedAccount.fallbackRisk}`, { ...DEFAULT_PANEL_PALETTE, header: C.title }, C.warn));
-        }
-        if (selectedAccount.issues.length > 0) {
-          selectedLines.push(...buildBodyText(width, `Issue: ${selectedAccount.issues[0]!}`, { ...DEFAULT_PANEL_PALETTE, header: C.title }, C.bad));
-        }
-        if (selectedAccount.recommendedActions.length > 0) {
-          selectedLines.push(...buildBodyText(width, `Next: ${selectedAccount.recommendedActions[0]!}`, { ...DEFAULT_PANEL_PALETTE, header: C.title }, C.title));
-        }
-      }
+  }
+
+  // -------------------------------------------------------------------------
+  // Rendering
+  // -------------------------------------------------------------------------
+
+  override render(width: number, height: number): Line[] {
+    const palette = { ...DEFAULT_PANEL_PALETTE, header: C.title };
+
+    const providers = this._knownProviders();
+    this._selectedIndex = Math.min(this._selectedIndex, Math.max(0, providers.length - 1));
+
+    if (providers.length === 0) {
+      return buildPanelWorkspace(width, height, {
+        title: 'Health',
+        intro: INTRO,
+        sections: [{
+          lines: buildEmptyState(
+            width,
+            ' No providers registered.',
+            'Provider health appears here once model providers are available and the runtime begins making requests.',
+            [
+              { command: '/provider', summary: 'review current provider and model selection' },
+              { command: '/subscription', summary: 'review provider login and subscription state' },
+            ],
+            palette,
+          ),
+        }],
+        palette,
+      });
     }
 
-    const postureSection: PanelWorkspaceSection = { lines: buildSummaryBlock(width, 'Health posture', postureLines, { ...DEFAULT_PANEL_PALETTE, header: C.title }) };
-    const domainsSection: PanelWorkspaceSection = { title: 'Repair Domains', lines: domainLines };
-    const maintenanceSections = maintenanceLines.length > 0 ? [{ title: 'Session Maintenance', lines: maintenanceLines } satisfies PanelWorkspaceSection] : [];
-    const selectedSections = selectedLines.length > 0 ? [{ lines: buildDetailBlock(width, 'Selected provider', selectedLines, { ...DEFAULT_PANEL_PALETTE, header: C.title }) } satisfies PanelWorkspaceSection] : [];
+    const snapshot = this._dataProvider.getSnapshot();
+    const entriesById = new Map(snapshot.entries.map((entry) => [entry.providerId, entry] as const));
+    const selectedName = providers[this._selectedIndex];
+
     const footerHint = buildKeyboardHints(width, [
-      { keys: 'j/k or Up/Down', label: 'select provider' },
+      { keys: 'j/k', label: 'select provider' },
+      { keys: 'enter', label: 'repair auth routes' },
+      { keys: 'r', label: 'refresh posture' },
+      { keys: 't', label: `view: ${this._view}` },
       { keys: '/provider', label: 'switch model' },
-      { keys: '/accounts', label: 'auth routes' },
-    ], { ...DEFAULT_PANEL_PALETTE, header: C.title });
-    const providerColumnHeader = buildAlignedRow(
-      width,
-      [
-        { text: 'provider', fg: C.label, bold: true },
-        { text: 'status', fg: C.label, bold: true },
-        { text: 'lat', fg: C.label, bold: true },
-        { text: 'last ok', fg: C.label, bold: true },
-        { text: 'auth', fg: C.label, bold: true },
-      ],
-      [
-        { width: 18 },
-        { width: 13 },
-        { width: 8, align: 'right' },
-        { width: 10, align: 'right' },
-        { width: 12 },
-      ],
-      { marker: '▸' },
-    );
-    const resolvedProvidersSection = resolvePrimaryScrollableSection(width, height, {
-      intro,
+    ], palette);
+
+    const collapsedDomains = this._view !== 'domains'
+      ? {
+        attention: this._collectDomainSummaries().filter((summary) => summary.level === 'warn' || summary.level === 'bad').length,
+        maintenanceLevel: this._evaluateMaintenance().level,
+      }
+      : undefined;
+
+    const postureSection: PanelWorkspaceSection = {
+      lines: buildSummaryBlock(width, 'Provider console posture', buildPostureLines(width, C, palette, {
+        providers,
+        entriesById,
+        accounts: this._accountRecords,
+        trackerRecords: this.providerHealthTracker.getAll(),
+        compositeStatus: snapshot.compositeStatus,
+        falloverCount: snapshot.fallbackChain.falloverCount,
+        activeProvider: this._resolveActiveProviderId(),
+        ...(collapsedDomains ? { collapsedDomains } : {}),
+        unattributedError: this._unattributedError,
+      }), palette),
+    };
+
+    if (this._view === 'domains') {
+      return this._renderDomainsView(width, height, postureSection, footerHint, palette);
+    }
+    if (this._view === 'routes') {
+      return this._renderRoutesView(width, height, postureSection, footerHint, palette, selectedName);
+    }
+    return this._renderProvidersView(width, height, postureSection, footerHint, palette, providers, entriesById, snapshot.fallbackChain, selectedName);
+  }
+
+  private _renderProvidersView(
+    width: number,
+    height: number,
+    postureSection: PanelWorkspaceSection,
+    footerHint: Line,
+    palette: typeof DEFAULT_PANEL_PALETTE,
+    providers: readonly string[],
+    entriesById: ReadonlyMap<string, ProviderHealthEntry>,
+    chain: FallbackChainData,
+    selectedName: string | undefined,
+  ): Line[] {
+    const chainLines = buildChainLines(width, C, palette, chain);
+    const chainSections: PanelWorkspaceSection[] = chainLines.length > 0
+      ? [{ title: 'Fallback Chain', lines: chainLines }]
+      : [];
+
+    const rows = providers.map((name, absolute) => buildProviderRow(width, C, {
+      name,
+      entry: entriesById.get(name),
+      health: this.providerHealthTracker.get(name),
+      account: this._accountRecords.get(name),
+      selected: absolute === this._selectedIndex,
+    }));
+
+    const selectedSections: PanelWorkspaceSection[] = selectedName
+      ? [buildSelectedDetailSection(width, C, palette, {
+        selectedName,
+        entry: entriesById.get(selectedName),
+        health: this.providerHealthTracker.get(selectedName),
+        account: this._accountRecords.get(selectedName),
+      })]
+      : [];
+
+    const resolved = resolvePrimaryScrollableSection(width, height, {
+      intro: INTRO,
       footerLines: [footerHint],
-      palette: { ...DEFAULT_PANEL_PALETTE, header: C.title },
-      beforeSections: [postureSection, domainsSection, ...maintenanceSections],
+      palette,
+      beforeSections: [postureSection, ...chainSections],
       section: {
         title: 'Providers',
-        fixedLines: [providerColumnHeader],
-        scrollableLines: providers.map((name, absolute) => {
-          const health = this.providerHealthTracker.get(name);
-          const status = health?.status ?? 'unknown';
-          const dot = statusDot(status);
-          const latency = health?.lastLatencyMs !== undefined ? fmtMs(health.lastLatencyMs) : 'n/a';
-          const latencyFg = health?.lastLatencyMs !== undefined ? latencyColor(health.lastLatencyMs) : C.dim;
-          const account = this._accountRecords.get(name);
-          const authFg = account ? freshnessColor(account.authFreshness) : C.dim;
-          return buildAlignedRow(
-            width,
-            [
-              { text: `${dot.char} ${name}`, fg: C.value, bold: absolute === this._selectedIndex },
-              { text: statusLabel(status), fg: dot.color },
-              { text: latency, fg: latencyFg },
-              { text: fmtAgo(health?.lastSuccessAt), fg: C.value },
-              { text: account ? account.authFreshness : '-', fg: authFg },
-            ],
-            [
-              { width: 18 },
-              { width: 13 },
-              { width: 8, align: 'right' },
-              { width: 10, align: 'right' },
-              { width: 12 },
-            ],
-            { selected: absolute === this._selectedIndex, selectedBg: C.rowSelectBg, marker: '▸' },
-          );
-        }),
+        fixedLines: [buildProviderColumnHeader(width, C)],
+        scrollableLines: rows,
         selectedIndex: this._selectedIndex,
         scrollOffset: this._scrollOffset,
         guardRows: 1,
@@ -743,20 +585,94 @@ export class ProviderHealthPanel extends BasePanel {
       },
       afterSections: selectedSections,
     });
-    this._scrollOffset = resolvedProvidersSection.scrollOffset;
-    const sections: PanelWorkspaceSection[] = [
-      postureSection,
-      domainsSection,
-      ...maintenanceSections,
-      resolvedProvidersSection.section,
-      ...selectedSections,
-    ];
+    this._scrollOffset = resolved.scrollOffset;
+
     return buildPanelWorkspace(width, height, {
       title: 'Health',
-      intro,
-      sections,
+      intro: INTRO,
+      sections: [postureSection, ...chainSections, resolved.section, ...selectedSections],
       footerLines: [footerHint],
-      palette: { ...DEFAULT_PANEL_PALETTE, header: C.title },
+      palette,
+    });
+  }
+
+  private _renderRoutesView(
+    width: number,
+    height: number,
+    postureSection: PanelWorkspaceSection,
+    footerHint: Line,
+    palette: typeof DEFAULT_PANEL_PALETTE,
+    selectedName: string | undefined,
+  ): Line[] {
+    const account = selectedName ? this._accountRecords.get(selectedName) : undefined;
+    const routeLines = buildRouteViewLines(width, C, palette, account);
+
+    const resolved = resolvePrimaryScrollableSection(width, height, {
+      intro: INTRO,
+      footerLines: [footerHint],
+      palette,
+      beforeSections: [postureSection],
+      section: {
+        title: `Auth Routes — ${selectedName ?? 'n/a'}`,
+        fixedLines: [buildRouteColumnHeader(width, C)],
+        scrollableLines: routeLines,
+        selectedIndex: 0,
+        scrollOffset: this._scrollOffset,
+        guardRows: 1,
+        minRows: 4,
+        appendWindowSummary: { dimColor: C.dim },
+      },
+      afterSections: [],
+    });
+    this._scrollOffset = resolved.scrollOffset;
+
+    return buildPanelWorkspace(width, height, {
+      title: 'Health',
+      intro: INTRO,
+      sections: [postureSection, resolved.section],
+      footerLines: [footerHint],
+      palette,
+    });
+  }
+
+  private _renderDomainsView(
+    width: number,
+    height: number,
+    postureSection: PanelWorkspaceSection,
+    footerHint: Line,
+    palette: typeof DEFAULT_PANEL_PALETTE,
+  ): Line[] {
+    const domainLines = buildDomainLines(width, C, palette, this._collectDomainSummaries());
+    const maintenanceSection: PanelWorkspaceSection = {
+      title: 'Session Maintenance',
+      lines: buildMaintenanceLines(width, C, palette, this._evaluateMaintenance()),
+    };
+
+    const resolved = resolvePrimaryScrollableSection(width, height, {
+      intro: INTRO,
+      footerLines: [footerHint],
+      palette,
+      beforeSections: [postureSection],
+      section: {
+        title: 'Repair Domains',
+        fixedLines: [],
+        scrollableLines: domainLines,
+        selectedIndex: 0,
+        scrollOffset: this._scrollOffset,
+        guardRows: 1,
+        minRows: 4,
+        appendWindowSummary: { dimColor: C.dim },
+      },
+      afterSections: [maintenanceSection],
+    });
+    this._scrollOffset = resolved.scrollOffset;
+
+    return buildPanelWorkspace(width, height, {
+      title: 'Health',
+      intro: INTRO,
+      sections: [postureSection, resolved.section, maintenanceSection],
+      footerLines: [footerHint],
+      palette,
     });
   }
 }

@@ -3,7 +3,9 @@ import { createEmptyLine } from '../types/grid.ts';
 import { BasePanel } from './base-panel.ts';
 import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import { buildSandboxReview, listSandboxPresets, listSandboxProfiles } from '@/runtime/index.ts';
-import type { SandboxSessionRegistry } from '@/runtime/index.ts';
+import type { SandboxProfile, SandboxReview, SandboxSession, SandboxSessionRegistry } from '@/runtime/index.ts';
+import { type ConfirmState, handleConfirmInput, renderConfirmLines } from './confirm-state.ts';
+import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 import {
   buildAlignedRow,
   buildBodyText,
@@ -15,34 +17,137 @@ import {
   buildPanelWorkspace,
   resolveStackedScrollableSections,
   DEFAULT_PANEL_PALETTE,
+  type PanelPalette,
   type PanelWorkspaceSection,
 } from './polish.ts';
 
-const C = {
-  ...DEFAULT_PANEL_PALETTE,
-  header: '#e2e8f0',
-  headerBg: '#0f172a',
-} as const;
+// Base chrome only — title band comes straight from DEFAULT_PANEL_PALETTE
+// (WO-002).
+const C = DEFAULT_PANEL_PALETTE;
+
+/** Poll cadence for live session-state refresh; SandboxSessionRegistry has no event subscription. */
+const POLL_INTERVAL_MS = 3_000;
+
+type Selectable =
+  | { readonly kind: 'profile'; readonly id: SandboxProfile['id'] }
+  | { readonly kind: 'session'; readonly id: string };
+
+/**
+ * One contextual next-step line, derived from the current review/session
+ * state instead of the previous nine-line guidance wall. Picks the single
+ * most relevant action given host warnings, QEMU config gaps, and whether
+ * any session is running yet.
+ */
+function buildContextualGuidance(width: number, review: SandboxReview, sessionCount: number, palette: PanelPalette): Line {
+  if (review.host.warnings.length > 0) {
+    return buildGuidanceLine(width, '/sandbox review', `resolve ${review.host.warnings.length} host warning(s) before enabling QEMU-backed execution`, palette);
+  }
+  if (review.config.vmBackend === 'qemu' && !review.config.qemuImagePath) {
+    return buildGuidanceLine(width, '/sandbox set-qemu-image <path>', 'set the guest image path before enabling QEMU-backed session execution', palette);
+  }
+  if (review.config.vmBackend === 'qemu' && !review.config.qemuExecWrapper) {
+    return buildGuidanceLine(width, '/sandbox set-qemu-wrapper <path>', 'configure the host bridge that actually executes commands inside the QEMU guest', palette);
+  }
+  if (sessionCount === 0) {
+    return buildGuidanceLine(width, 's', 'select a profile below and press s to start a sandbox session', palette);
+  }
+  return buildGuidanceLine(width, '/sandbox session run <id> <command> [args...]', 'run a custom command against a running session from the command line', palette);
+}
+
+const SANDBOX_HINTS = [
+  { keys: '↑/↓', label: 'select' },
+  { keys: 'Home/End', label: 'first profile/session' },
+  { keys: 's', label: 'start' },
+  { keys: 'x', label: 'stop' },
+  { keys: 'e', label: 'execute probe' },
+] as const;
 
 export class SandboxPanel extends BasePanel {
   private selectedIndex = 0;
-  private scrollOffset = 0;
+
+  /**
+   * The profile/session row under the cursor. This panel owns its own
+   * selection state (`selectedIndex` navigates the combined `_selectable()`
+   * list directly), so every selected-row read routes through this one
+   * accessor — indexing the `_selectable()` list by the cursor directly is
+   * banned by the no-raw-selectedindex-read architecture rule.
+   */
+  private selectedSelectable(): Selectable | undefined {
+    return this._selectable().at(this.selectedIndex);
+  }
+
+  private sessionsScrollOffset = 0;
+  private profilesScrollOffset = 0;
+  private confirm: ConfirmState<string> | null = null;
   private readonly config: ConfigManager;
   private readonly sessions: SandboxSessionRegistry;
+  private readonly requestRender: () => void;
 
   public constructor(
     config: ConfigManager,
     sessions: SandboxSessionRegistry,
+    requestRender: () => void = () => {},
   ) {
-    super('sandbox', 'Sandbox', 'X', 'monitoring');
+    super('sandbox', 'Sandbox', '▪', 'security-policy');
     this.config = config;
     this.sessions = sessions;
+    this.requestRender = requestRender;
+    // Live state: SandboxSessionRegistry has no event subscription, so poll
+    // for session state changes (start/stop/execute results) while the
+    // panel is registered.
+    this.registerTimer(setInterval(() => {
+      this.markDirty();
+      this.requestRender();
+    }, POLL_INTERVAL_MS));
+  }
+
+  private _selectable(): Selectable[] {
+    const profiles = listSandboxProfiles(this.config);
+    const sessions = this.sessions.list();
+    return [
+      ...profiles.map((profile): Selectable => ({ kind: 'profile', id: profile.id })),
+      ...sessions.map((session): Selectable => ({ kind: 'session', id: session.id })),
+    ];
   }
 
   public handleInput(key: string): boolean {
-    const profileCount = listSandboxProfiles(this.config).length;
-    const sessionCount = this.sessions.list().length;
-    const itemCount = profileCount + sessionCount;
+    if (this.lastError !== null) this.clearError();
+
+    const confirmResult = handleConfirmInput(this.confirm, key);
+    if (confirmResult === 'confirmed') {
+      const sessionId = this.confirm!.subject;
+      this.confirm = null;
+      this.sessions.stop(sessionId);
+      this.markDirty();
+      return true;
+    }
+    if (confirmResult === 'cancelled') {
+      this.confirm = null;
+      this.markDirty();
+      return true;
+    }
+    if (confirmResult === 'absorbed') return true;
+
+    const selectable = this._selectable();
+    const profileCount = selectable.filter((entry) => entry.kind === 'profile').length;
+    const sessionCount = selectable.length - profileCount;
+    const selected = this.selectedSelectable();
+
+    if (key === 's' && selected?.kind === 'profile') {
+      void this._startSession(selected.id);
+      return true;
+    }
+    if (key === 'x' && selected?.kind === 'session') {
+      this.confirm = { subject: selected.id, label: `sandbox session ${selected.id}`, verb: 'Stop' };
+      this.markDirty();
+      return true;
+    }
+    if (key === 'e' && selected?.kind === 'session') {
+      void this._executeProbe(selected.id);
+      return true;
+    }
+
+    const itemCount = selectable.length;
     if (itemCount === 0) return false;
     if (key === 'up' || key === 'k') {
       this.selectedIndex = Math.max(0, this.selectedIndex - 1);
@@ -67,18 +172,57 @@ export class SandboxPanel extends BasePanel {
     return false;
   }
 
+  /** Start a sandbox session for `profileId` via the shared registry, then repaint. */
+  private async _startSession(profileId: SandboxProfile['id']): Promise<void> {
+    try {
+      await this.sessions.start(profileId, undefined, this.config);
+    } catch (err) {
+      this.setError(summarizeError(err));
+    } finally {
+      this.markDirty();
+      this.requestRender();
+    }
+  }
+
+  /**
+   * Execute a lightweight liveness probe against the selected session so its
+   * live state (last run, exit status, stdout/stderr preview) is genuinely
+   * populated from `SandboxSessionRegistry.execute()`. Panels have no
+   * free-text input widget today, so this proves the execute verb is wired
+   * without inventing one; `/sandbox session run <id> <command> [args...]`
+   * remains available for arbitrary commands.
+   */
+  private async _executeProbe(sessionId: string): Promise<void> {
+    try {
+      this.sessions.execute(sessionId, process.execPath, ['-e', "console.log('sandbox panel probe ok')"], this.config, { timeoutMs: 5_000 });
+    } catch (err) {
+      this.setError(summarizeError(err));
+    } finally {
+      this.markDirty();
+      this.requestRender();
+    }
+  }
+
   public render(width: number, height: number): Line[] {
     this.needsRender = false;
+
+    if (this.confirm) {
+      const lines = buildPanelWorkspace(width, height, {
+        title: 'Sandbox Control Room',
+        sections: [{ title: 'Confirmation', lines: renderConfirmLines(width, this.confirm) }],
+        palette: C,
+      });
+      while (lines.length < height) lines.push(createEmptyLine(width));
+      return lines.slice(0, height);
+    }
+
     const review = buildSandboxReview(this.config);
     const profiles = listSandboxProfiles(this.config);
     const presets = listSandboxPresets();
     const sessions = this.sessions.list();
-    const selectable = [
-      ...profiles.map((profile) => ({ kind: 'profile' as const, id: profile.id })),
-      ...sessions.map((session) => ({ kind: 'session' as const, id: session.id })),
-    ];
+    const selectable = this._selectable();
     this.selectedIndex = Math.min(this.selectedIndex, Math.max(0, selectable.length - 1));
-    const selected = selectable[this.selectedIndex] ?? null;
+    const selected = this.selectedSelectable() ?? null;
     const selectedProfile = selected?.kind === 'profile'
       ? profiles.find((profile) => profile.id === selected.id) ?? null
       : null;
@@ -118,19 +262,9 @@ export class SandboxPanel extends BasePanel {
       buildKeyValueLine(width, [
         { label: 'guest workspace', value: review.config.qemuWorkspacePath || '(not configured)', valueColor: review.config.qemuWorkspacePath ? C.value : C.warn },
       ], C),
-      buildGuidanceLine(width, '/sandbox review', 'inspect local vs QEMU posture, host readiness, and isolation defaults', C),
-      buildGuidanceLine(width, '/sandbox set-qemu-image <path>', 'set the guest image path before enabling QEMU-backed session execution', C),
-      buildGuidanceLine(width, '/sandbox scaffold-qemu-wrapper <path>', 'generate a host-side wrapper scaffold with a bring-up bridge mode and a real guest handoff contract', C),
-      buildGuidanceLine(width, '/sandbox set-qemu-wrapper <path>', 'configure the host bridge that actually executes commands inside the QEMU guest', C),
-      buildGuidanceLine(width, '/sandbox set-qemu-guest-host <host>', 'switch wrapper-backed execution from host bridge mode to real guest SSH transport', C),
-      buildGuidanceLine(width, '/sandbox guest-test <profile>', 'verify SSH guest transport plus workspace projection against the configured QEMU guest host', C),
-      buildGuidanceLine(width, '/sandbox wrapper-test <profile>', 'validate the wrapper bridge contract before wiring a real guest transport', C),
-      buildGuidanceLine(width, '/sandbox session run <id> <command> [args...]', 'execute through a tracked sandbox session and capture runtime metadata on the session record', C),
-      buildGuidanceLine(width, 'GV_SANDBOX_WRAPPER_MODE=host-exec', 'validate the wrapper contract on the host before wiring a real guest transport', C),
-      buildKeyboardHints(width, [
-        { keys: '↑/↓', label: 'select profile/session' },
-        { keys: 'Home/End', label: 'jump to first profile / first session' },
-      ], C),
+      // Single contextual next-step line (replaces the former nine-line
+      // guidance wall) — the only buildGuidanceLine call in this panel.
+      buildContextualGuidance(width, review, sessions.length, C),
     ];
 
     const selectionLines: Line[] = [];
@@ -184,8 +318,8 @@ export class SandboxPanel extends BasePanel {
       sessionLines.push(...buildEmptyState(
         width,
         ' No active sandbox sessions.',
-        'Start a sandbox session from a profile to make the running VM/session posture visible here.',
-        [{ command: '/sandbox session start <profile>', summary: 'start a sandbox session and capture its VM/session record' }],
+        'Select a profile above and press s to start a sandbox session.',
+        [],
         C,
       ));
     } else {
@@ -261,10 +395,7 @@ export class SandboxPanel extends BasePanel {
     const presetsSection: PanelWorkspaceSection = { title: 'Presets', lines: presetLines };
     const [sessionsSection, profilesSection] = resolveStackedScrollableSections(width, height, {
       intro,
-      footerLines: [
-        buildGuidanceLine(width, '/sandbox presets', 'compare secure, balanced, and shared sandbox operating modes', C),
-        buildGuidanceLine(width, '/sandbox apply-preset <id>', 'change local vs QEMU isolation policy without editing config by hand', C),
-      ],
+      footerLines: [buildKeyboardHints(width, SANDBOX_HINTS, C)],
       palette: C,
       beforeSections: [
         postureSection,
@@ -275,7 +406,7 @@ export class SandboxPanel extends BasePanel {
           title: 'Sessions',
           scrollableLines: sessionLines,
           selectedIndex: selectedSession ? Math.max(0, sessions.findIndex((session) => session.id === selectedSession.id)) : undefined,
-          scrollOffset: this.scrollOffset,
+          scrollOffset: this.sessionsScrollOffset,
           minRows: 2,
           weight: 1,
           appendWindowSummary: sessions.length > 0 ? {
@@ -287,7 +418,7 @@ export class SandboxPanel extends BasePanel {
           title: 'Profiles',
           scrollableLines: profileLines,
           selectedIndex: selectedProfile ? Math.max(0, profiles.findIndex((profile) => profile.id === selectedProfile.id)) : undefined,
-          scrollOffset: this.scrollOffset,
+          scrollOffset: this.profilesScrollOffset,
           minRows: 2,
           weight: 1,
           appendWindowSummary: profiles.length > 0 ? {
@@ -298,7 +429,8 @@ export class SandboxPanel extends BasePanel {
       ],
       afterSections: [presetsSection],
     });
-    this.scrollOffset = sessionsSection?.scrollOffset ?? this.scrollOffset;
+    this.sessionsScrollOffset = sessionsSection?.scrollOffset ?? this.sessionsScrollOffset;
+    this.profilesScrollOffset = profilesSection?.scrollOffset ?? this.profilesScrollOffset;
 
     const sections: PanelWorkspaceSection[] = [
       postureSection,
@@ -308,14 +440,14 @@ export class SandboxPanel extends BasePanel {
       profilesSection?.section ?? { title: 'Profiles', lines: profileLines },
     ];
 
+    const errorLine = this.renderErrorLine(width);
+    if (errorLine) sections.push({ title: 'Error', lines: [errorLine] });
+
     const lines = buildPanelWorkspace(width, height, {
       title: 'Sandbox Control Room',
       intro,
       sections,
-      footerLines: [
-        buildGuidanceLine(width, '/sandbox presets', 'compare secure, balanced, and shared sandbox operating modes', C),
-        buildGuidanceLine(width, '/sandbox apply-preset <id>', 'change local vs QEMU isolation policy without editing config by hand', C),
-      ],
+      footerLines: [buildKeyboardHints(width, SANDBOX_HINTS, C)],
       palette: C,
     });
     while (lines.length < height) lines.push(createEmptyLine(width));

@@ -1,12 +1,13 @@
 import type { Line } from '../types/grid.ts';
 import { createEmptyLine } from '../types/grid.ts';
 import { ScrollableListPanel } from './scrollable-list-panel.ts';
+import type { PanelIntegrationContext } from './types.ts';
+import { SessionBrowserPanel } from './session-browser-panel.ts';
 import type { UiReadModel, UiRoutesSnapshot } from '../runtime/ui-read-models.ts';
 import { truncateDisplay } from '../utils/terminal-width.ts';
 import {
   buildDetailBlock,
   buildEmptyState,
-  buildGuidanceLine,
   buildKeyValueLine,
   buildKeyboardHints,
   buildPanelLine,
@@ -16,16 +17,9 @@ import {
   type PanelPalette,
 } from './polish.ts';
 
-const C = {
-  ...DEFAULT_PANEL_PALETTE,
-  header: '#94a3b8',
-  headerBg: '#1e293b',
-  ok: '#22c55e',
-  warn: '#eab308',
-  error: '#ef4444',
-  info: '#38bdf8',
-  selectBg: '#0f172a',
-} as const;
+// Base chrome only — title band, state colors, and text tokens all come
+// straight from DEFAULT_PANEL_PALETTE (WO-002).
+const C = DEFAULT_PANEL_PALETTE;
 
 function formatTime(value?: number): string {
   if (!value) return 'n/a';
@@ -34,17 +28,61 @@ function formatTime(value?: number): string {
 
 type RouteBinding = UiRoutesSnapshot['bindings'][number];
 
+// Set by handleInput (enter/c) and consumed on the very next
+// handlePanelIntegrationAction dispatch of that same key — handleInput has
+// no access to the panelManager.
+type PendingRouteAction =
+  | { readonly kind: 'open-session'; readonly sessionId: string }
+  | { readonly kind: 'open-communication' };
+
 export class RoutesPanel extends ScrollableListPanel<RouteBinding> {
   private readonly readModel?: UiReadModel<UiRoutesSnapshot>;
   private readonly unsub: (() => void) | null;
+  private pendingAction: PendingRouteAction | null = null;
 
   public constructor(readModel?: UiReadModel<UiRoutesSnapshot>) {
-    super('routes', 'Routes', 'R', 'monitoring');
+    super('routes', 'Routes', 'R', 'runtime-ops');
     this.showSelectionGutter = true; // I5: non-color selection affordance
     this.filterEnabled = true;
     this.filterLabel = 'Filter routes';
     this.readModel = readModel;
     this.unsub = readModel ? readModel.subscribe(() => this.markDirty()) : null;
+  }
+
+  public override handleInput(key: string): boolean {
+    if (!this.filterActive) {
+      // Enter jumps to the session browser focused on this binding's session
+      // — a direct panel jump instead of a printed slash-command signpost.
+      if (key === 'enter' || key === 'return') {
+        const selected = this.getSelectedItem();
+        if (selected?.sessionId) {
+          this.pendingAction = { kind: 'open-session', sessionId: selected.sessionId };
+          return true;
+        }
+        return false;
+      }
+      // c opens the communication panel to inspect routed message flow.
+      if (key === 'c') {
+        this.pendingAction = { kind: 'open-communication' };
+        return true;
+      }
+    }
+    return super.handleInput(key);
+  }
+
+  public handlePanelIntegrationAction(_key: string, ctx: PanelIntegrationContext): boolean {
+    if (!this.pendingAction) return false;
+    const action = this.pendingAction;
+    this.pendingAction = null;
+    if (action.kind === 'open-communication') {
+      ctx.panelManager.open('communication');
+      return true;
+    }
+    const panel = ctx.panelManager.open('sessions');
+    if (panel instanceof SessionBrowserPanel) {
+      panel.focusSession(action.sessionId);
+    }
+    return true;
   }
 
   protected override filterMatches(binding: RouteBinding, q: string): boolean {
@@ -121,11 +159,10 @@ export class RoutesPanel extends ScrollableListPanel<RouteBinding> {
     const headerLines: Line[] = [
       buildKeyValueLine(width, [
         { label: 'bindings', value: String(snapshot.totalBindings), valueColor: snapshot.totalBindings > 0 ? C.info : C.dim },
-        { label: 'active', value: String(snapshot.activeBindingIds.length), valueColor: snapshot.activeBindingIds.length > 0 ? C.ok : C.dim },
-        { label: 'resolved', value: String(snapshot.totalResolved), valueColor: snapshot.totalResolved > 0 ? C.ok : C.dim },
-        { label: 'failures', value: String(snapshot.totalFailures), valueColor: snapshot.totalFailures > 0 ? C.error : C.dim },
+        { label: 'active', value: String(snapshot.activeBindingIds.length), valueColor: snapshot.activeBindingIds.length > 0 ? C.good : C.dim },
+        { label: 'resolved', value: String(snapshot.totalResolved), valueColor: snapshot.totalResolved > 0 ? C.good : C.dim },
+        { label: 'failures', value: String(snapshot.totalFailures), valueColor: snapshot.totalFailures > 0 ? C.bad : C.dim },
       ], C),
-      buildGuidanceLine(width, '/communication', 'inspect routed message flow and delivery behavior across bound surfaces', C),
     ];
 
     if (bindings.length === 0) {
@@ -137,9 +174,12 @@ export class RoutesPanel extends ScrollableListPanel<RouteBinding> {
     }
 
     this.clampSelection();
-    const selected = bindings[this.selectedIndex]!;
+    // Detail must describe the row the (possibly filtered) list highlights —
+    // getItems() would desync under an applied filter, and a filter that
+    // matches nothing leaves no selection at all.
+    const selected = this.getSelectedItem();
 
-    const detailRows: Line[] = [
+    const detailRows: Line[] = selected ? [
       buildPanelLine(width, [
         ['  Binding: ', C.label],
         [selected.id, C.value],
@@ -168,9 +208,9 @@ export class RoutesPanel extends ScrollableListPanel<RouteBinding> {
         ['  Last seen: ', C.label],
         [formatTime(selected.lastSeenAt), C.dim],
       ]),
-    ];
+    ] : [];
 
-    if (surfaceEntries.length > 0) {
+    if (selected && surfaceEntries.length > 0) {
       detailRows.push(
         ...surfaceEntries.slice(0, 4).map(([surface, ids]) => buildPanelLine(width, [
           [' ', C.label],
@@ -184,7 +224,8 @@ export class RoutesPanel extends ScrollableListPanel<RouteBinding> {
       ? [{ keys: 'type', label: 'filter' }, { keys: 'Enter', label: 'apply' }, { keys: 'Esc', label: 'clear' }]
       : [
           { keys: 'Up/Down', label: 'move' },
-          { keys: '/communication', label: 'inspect flow' },
+          ...(selected?.sessionId ? [{ keys: 'Enter', label: 'open session' }] : []),
+          { keys: 'c', label: 'communication' },
           { keys: '/', label: 'filter' },
         ];
 
@@ -192,7 +233,7 @@ export class RoutesPanel extends ScrollableListPanel<RouteBinding> {
       title: 'Route Bindings',
       header: headerLines,
       footer: [
-        ...buildDetailBlock(width, `Binding · ${selected.surfaceKind}`, detailRows, C),
+        ...(selected ? buildDetailBlock(width, `Binding · ${selected.surfaceKind}`, detailRows, C) : []),
         buildKeyboardHints(width, hints, C),
       ],
     });
