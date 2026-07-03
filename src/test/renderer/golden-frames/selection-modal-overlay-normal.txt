@@ -10,7 +10,7 @@
 |    │ ▸ Bravo                                 second workspace             │                        |
 |    │   Other                                                              │                        |
 |    │   Gamma                                 third workspace              │                        |
-|    │ [Up/Down] Navigate  [Enter] Select  [Esc] Close  [/] Search          │                        |
+|    │ [Up/Down] Navigate  [Enter] Select  [/] Search  [Esc] Close          │                        |
 |    └──────────────────────────────────────────────────────────────────────┘                        |
 @STYLES
 0 4 fg=#cbd5e1

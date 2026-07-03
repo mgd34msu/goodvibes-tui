@@ -10,7 +10,7 @@ import type { ModelPickerModal } from '../input/model-picker.ts';
 import type { ModelPickerTargetInfo } from '../input/model-picker.ts';
 import type { Line } from '../types/grid.ts';
 import { createEmptyLine, createStyledCell } from '../types/grid.ts';
-import { getDisplayWidth, wrapText } from '../utils/terminal-width.ts';
+import { fitDisplay, getDisplayWidth, wrapText } from '../utils/terminal-width.ts';
 import { abbreviateCount } from '../utils/format-number.ts';
 import { GLYPHS, UI_TONES } from './ui-primitives.ts';
 
@@ -100,23 +100,8 @@ function drawVertical(line: Line, x: number, bg = ''): void {
   line[x] = createStyledCell(GLYPHS.frame.vertical, { fg: PALETTE.border, bg });
 }
 
-function clipDisplay(text: string, width: number): string {
-  if (width <= 0) return '';
-  let used = 0;
-  let output = '';
-  for (const ch of text) {
-    const chWidth = getDisplayWidth(ch);
-    if (chWidth <= 0) continue;
-    if (used + chWidth > width) break;
-    output += ch;
-    used += chWidth;
-  }
-  return output;
-}
-
 function padDisplay(text: string, width: number): string {
-  const clipped = clipDisplay(text, width);
-  return clipped + ' '.repeat(Math.max(0, width - getDisplayWidth(clipped)));
+  return fitDisplay(text, width, '');
 }
 
 function stableWindow(total: number, selected: number, visible: number): { start: number; end: number } {
