@@ -348,6 +348,10 @@ async function main() {
     allowTerminalWrite(() => stdout.write(CLEAR_SCREEN));
     render();
   };
+  commandContext.requestFullRepaint = () => {
+    compositor.resetDiff();
+    render();
+  };
   permissionPromptRef.requestPermission = (request) =>
     new Promise((resolve) => {
       pendingPermission = {

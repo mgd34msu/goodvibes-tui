@@ -172,6 +172,10 @@ export class InputHandler implements InputHandlerLike {
   public pasteRegistry = new Map<string, string>();
   public nextPasteId = 1;
   public lastCtrlCTime = 0;
+  /** Pending "hide the exit notice" timer from the last empty-prompt Ctrl+C
+   * press, if any — cleared before every subsequent press decides its own
+   * outcome (see handleCtrlC in handler-content-actions.ts). */
+  public lastCtrlCTimeoutId: ReturnType<typeof setTimeout> | null = null;
   /** Long-lived feed context — reused across every feed() call to avoid per-keystroke allocation. */
   public feedContext!: import('./handler-feed.ts').InputFeedContext;
   public commandRegistry: CommandRegistry | null = null;

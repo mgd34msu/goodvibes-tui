@@ -5,6 +5,7 @@
 import type { Line } from '../types/grid.ts';
 import { createStyledCell, createEmptyLine } from '../types/grid.ts';
 import { truncateDisplay, getDisplayWidth } from '../utils/terminal-width.ts';
+import { GitService } from '@pellux/goodvibes-sdk/platform/git';
 import { BasePanel } from './base-panel.ts';
 import { UI_TONES, DIFF_TONES } from '../renderer/ui-primitives.ts';
 import { FilePreviewPanel } from './file-preview-panel.ts';
@@ -166,20 +167,49 @@ function parseDiff(raw: string): ParsedLine[] {
 // Split a full `git diff` output into per-file entries
 // ---------------------------------------------------------------------------
 
+/**
+ * Synthetic placeholder entries ('(error)', '(no changes)', '(no staged
+ * changes)', '(not a git repo)') are not real diffs — parenthesized so they
+ * can be styled distinctly in the tab/status bar instead of reading as a fake
+ * diff of a real file.
+ */
+function isPlaceholderPath(filePath: string): boolean {
+  return filePath.startsWith('(') && filePath.endsWith(')');
+}
+
+/**
+ * Extract the file path from one `diff --git`-delimited chunk. Tries, in
+ * order: the standard two-sided header (`diff --git a/x b/y`, bare or
+ * quoted), the combined/merge-conflict header (`diff --cc <path>` /
+ * `diff --combined <path>`, which carries no a/b prefixes), then falls back
+ * to the `+++`/`---` file lines (present across every variant, uniformly) —
+ * skipping a `/dev/null` side (deleted/new file). 'unknown' is reserved for
+ * genuinely unparseable input.
+ */
+function extractDiffFilePath(trimmed: string): string {
+  const quotedGit = trimmed.match(/^diff --git "a\/(.+)" "b\/(.+)"$/m);
+  if (quotedGit) return quotedGit[2]!;
+  const plainGit = trimmed.match(/^diff --git a\/.+? b\/(.+)$/m);
+  if (plainGit) return plainGit[1]!;
+  const combined = trimmed.match(/^diff --(?:cc|combined) "?([^"\n]+?)"?$/m);
+  if (combined) return combined[1]!;
+  const plus = trimmed.match(/^\+\+\+ (?:b\/)?"?([^"\n]+?)"?\s*$/m);
+  if (plus && plus[1] !== '/dev/null') return plus[1]!;
+  const minus = trimmed.match(/^--- (?:a\/)?"?([^"\n]+?)"?\s*$/m);
+  if (minus && minus[1] !== '/dev/null') return minus[1]!;
+  return 'unknown';
+}
+
 function splitIntoDiffEntries(raw: string): DiffEntry[] {
   const entries: DiffEntry[] = [];
-  // Split on "diff --git" lines
-  const chunks = raw.split(/(?=^diff --git )/m);
+  // Split on "diff --git" / "diff --cc" / "diff --combined" lines
+  const chunks = raw.split(/(?=^diff --git |^diff --cc |^diff --combined )/m);
   for (const chunk of chunks) {
     const trimmed = chunk.trim();
     if (!trimmed) continue;
 
-    // Extract file path from "diff --git a/foo b/foo"
-    const match = trimmed.match(/^diff --git a\/.+? b\/(.+)$/m);
-    const filePath = match ? match[1]! : 'unknown';
-
     entries.push({
-      filePath,
+      filePath: extractDiffFilePath(trimmed),
       raw: chunk,
       lines: parseDiff(chunk),
     });
@@ -235,7 +265,15 @@ export class DiffPanel extends BasePanel {
   /** Set by the 'o' key; consumed by handlePanelIntegrationAction on the next dispatch. */
   private pendingOpenPreview = false;
 
-  constructor(workingDirectory: string) {
+  /** One-line confirmation for the 'w'/'h'/'s' self-load hotkeys — otherwise a
+   * reload that produces identical content is visually indistinguishable
+   * from the keypress doing nothing at all. */
+  private hotkeyStatus: string | null = null;
+
+  constructor(
+    workingDirectory: string,
+    private readonly requestRender: () => void = () => {},
+  ) {
     super('diff', 'Diff', 'D', 'development');
     this.workingDirectory = workingDirectory;
   }
@@ -271,12 +309,33 @@ export class DiffPanel extends BasePanel {
     this.markDirty();
   }
 
+  /**
+   * Defensive gate mirroring GitPanel's own notGitRepo messaging — short-
+   * circuits before any of this panel's self-load git spawns run, instead of
+   * letting git fail per-subcommand with an inconsistent error shape.
+   */
+  private showNotGitRepo(): void {
+    this.showDiff('(not a git repo)', '@@ -0,0 +0,0 @@\n Not a git repository here.');
+  }
+
   /** Run `git diff` against specific files and populate entries. */
   async showFileDiffs(files: string[], ref?: string): Promise<void> {
+    if (!GitService.isGitRepo(this.workingDirectory)) {
+      this.showNotGitRepo();
+      return;
+    }
     const args = ['diff', ...(ref ? [ref] : []), '--', ...files];
-    const proc = Bun.spawn(['git', ...args], { stdout: 'pipe', cwd: this.workingDirectory });
-    const raw = await new Response(proc.stdout).text();
-    await proc.exited;
+    const proc = Bun.spawn(['git', ...args], { stdout: 'pipe', stderr: 'pipe', cwd: this.workingDirectory });
+    const [raw, errText] = await Promise.all([
+      new Response(proc.stdout).text(),
+      new Response(proc.stderr).text(),
+    ]);
+    const exitCode = await proc.exited;
+    if (exitCode !== 0) {
+      const errorText = errText.trim() || 'git diff failed';
+      this.showDiff('(error)', `--- error\n+++ error\n@@ -0,0 +1,1 @@\n+${errorText}`);
+      return;
+    }
     this.loadRawDiff(raw);
     this.enrichSemanticDiffs(files, ref ?? 'HEAD').catch((err) => { logger.debug('DiffPanel: semantic diff enrichment failed', { err }); });
   }
@@ -287,6 +346,10 @@ export class DiffPanel extends BasePanel {
    * enriches every loaded file with a semantic-diff summary in the background.
    */
   async showGitDiff(ref?: string): Promise<void> {
+    if (!GitService.isGitRepo(this.workingDirectory)) {
+      this.showNotGitRepo();
+      return;
+    }
     const args = ['diff', ...(ref ? [ref] : [])];
     const proc = Bun.spawn(['git', ...args], { stdout: 'pipe', stderr: 'pipe', cwd: this.workingDirectory });
     const [raw, errText] = await Promise.all([
@@ -325,6 +388,10 @@ export class DiffPanel extends BasePanel {
    * `/diff staged` command handler.
    */
   async showStagedDiff(): Promise<void> {
+    if (!GitService.isGitRepo(this.workingDirectory)) {
+      this.showNotGitRepo();
+      return;
+    }
     const proc = Bun.spawn(['/bin/sh', '-c', 'git diff --cached'], { stdout: 'pipe', stderr: 'pipe', cwd: this.workingDirectory });
     const [raw, errText] = await Promise.all([
       new Response(proc.stdout).text(),
@@ -353,7 +420,7 @@ export class DiffPanel extends BasePanel {
     if (files.length === 0) return;
     const { computeSemanticDiff, formatSemanticDiffSummary } = await import('../renderer/semantic-diff.ts');
     const { join, relative: pathRelative } = await import('path');
-    const repoRootProc = Bun.spawn(['git', 'rev-parse', '--show-toplevel'], { stdout: 'pipe', cwd: this.workingDirectory });
+    const repoRootProc = Bun.spawn(['git', 'rev-parse', '--show-toplevel'], { stdout: 'pipe', stderr: 'pipe', cwd: this.workingDirectory });
     await repoRootProc.exited;
     const repoRoot = (await new Response(repoRootProc.stdout).text()).trim() || this.workingDirectory;
     await Promise.allSettled(
@@ -418,6 +485,22 @@ export class DiffPanel extends BasePanel {
   // Input
   // -------------------------------------------------------------------------
 
+  /**
+   * Wraps a self-load hotkey ('w'/'h'/'s') with visible before/after status
+   * text in the status bar — otherwise a reload whose content is unchanged
+   * from what's already shown is indistinguishable from the keypress having
+   * done nothing at all (contrast with `/diff working`'s ctx.print() calls).
+   */
+  private runHotkeyReload(label: string, load: () => Promise<void>): void {
+    this.hotkeyStatus = `Loading ${label} diff…`;
+    this.markDirty();
+    void load().then(() => {
+      this.hotkeyStatus = `Reloaded ${label} diff.`;
+      this.markDirty();
+      this.requestRender();
+    });
+  }
+
   handleInput(key: string): boolean {
     switch (key) {
       case 'up':    this.scrollUp();   return true;
@@ -433,9 +516,9 @@ export class DiffPanel extends BasePanel {
       case 'backtab': this.prevFile(); return true;
       case 'pageup':   this.scrollPageUp();   return true;
       case 'pagedown': this.scrollPageDown(); return true;
-      case 'w': void this.showGitDiff();       return true;
-      case 'h': void this.showGitDiff('HEAD'); return true;
-      case 's': void this.showStagedDiff();    return true;
+      case 'w': this.runHotkeyReload('working tree', () => this.showGitDiff());       return true;
+      case 'h': this.runHotkeyReload('HEAD',         () => this.showGitDiff('HEAD')); return true;
+      case 's': this.runHotkeyReload('staged',       () => this.showStagedDiff());    return true;
       case 'o': {
         if (!this.currentEntry()) return false;
         this.pendingOpenPreview = true;
@@ -623,11 +706,15 @@ export class DiffPanel extends BasePanel {
     for (let i = 0; i < this.entries.length; i++) {
       const entry = this.entries[i]!;
       const active = i === this.selectedFile;
+      const placeholder = isPlaceholderPath(entry.filePath);
       const stat = diffStat(entry);
-      const fg = active ? COLOR.tabActive : COLOR.tabInactive;
+      // Placeholder entries ('(error)', '(no changes)', ...) get a distinct
+      // warn color regardless of active/inactive — they are not a real diff
+      // of a real file and must not read as one.
+      const fg = placeholder ? COLOR.warn : (active ? COLOR.tabActive : COLOR.tabInactive);
       const bg = active ? COLOR.tabActiveBg : COLOR.tabBg;
       // Active file gets a leading marker; every tab shows +adds/-dels at a glance.
-      const marker = active ? '▸ ' : '  ';
+      const marker = active ? '▸ ' : (placeholder ? '⚠ ' : '  ');
       const label = `${marker}${basename(entry.filePath)} `;
       for (const ch of label) push(ch, fg, bg, active);
       if (stat.added > 0) for (const ch of `+${stat.added}`) push(ch, COLOR.addition, bg, active);
@@ -650,11 +737,15 @@ export class DiffPanel extends BasePanel {
       return buildStyledPanelLine(width, [{ text: ' No file', fg: COLOR.tabInactive, bg: COLOR.statusBar }], { fillBg: COLOR.statusBar });
     }
     const stat = diffStat(entry);
+    const placeholder = isPlaceholderPath(entry.filePath);
     // Keep the file path display-width-aware so a long/wide path can't overflow.
     const pathBudget = Math.max(8, Math.floor(width / 2));
     const fileInfo = truncateDisplay(entry.filePath, pathBudget);
     const segments: Array<{ text: string; fg: string; bg?: string; bold?: boolean }> = [
-      { text: ` ${fileInfo} `, fg: COLOR.filename, bg: COLOR.statusBar, bold: true },
+      // Placeholder states ('(error)', '(no changes)', ...) are not a real
+      // diff of a real file — a distinct warn color keeps them from being
+      // mistaken for one.
+      { text: ` ${fileInfo} `, fg: placeholder ? COLOR.warn : COLOR.filename, bg: COLOR.statusBar, bold: true },
       { text: `[${this.selectedFile + 1}/${this.entries.length}]`, fg: COLOR.tabInactive, bg: COLOR.statusBar },
       { text: '  +', fg: COLOR.tabInactive, bg: COLOR.statusBar },
       { text: String(stat.added), fg: COLOR.addition, bg: COLOR.statusBar },
@@ -665,6 +756,9 @@ export class DiffPanel extends BasePanel {
     ];
     if (entry.semanticSummary) {
       segments.push({ text: `  ◈ ${entry.semanticSummary}`, fg: COLOR.hunk, bg: COLOR.statusBar });
+    }
+    if (this.hotkeyStatus) {
+      segments.push({ text: `  ${this.hotkeyStatus}`, fg: COLOR.info, bg: COLOR.statusBar, bold: true });
     }
     return buildStyledPanelLine(width, segments, { fillBg: COLOR.statusBar });
   }
