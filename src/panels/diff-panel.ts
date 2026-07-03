@@ -539,7 +539,12 @@ export class DiffPanel extends BasePanel {
             width,
             ' No diff to display.',
             'Load a git diff or select a changed file to populate the workspace. w=working h=HEAD s=staged self-load right here.',
-            [{ command: '/diff', summary: 'load the current working-tree diff into the diff workspace' }],
+            // WO-160: corrected — bare /diff loads files changed *this
+            // session* (falling back to the full HEAD diff when none are
+            // tracked yet), not the working-tree diff the w key already
+            // loads in-panel; the old summary text described the wrong
+            // command.
+            [{ command: '/diff', summary: 'load files changed this session into the diff workspace (falls back to the HEAD diff if none yet)' }],
             COLOR,
           ),
         }],

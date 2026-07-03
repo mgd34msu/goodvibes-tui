@@ -3,7 +3,6 @@ import { truncateDisplay } from '../utils/terminal-width.ts';
 import { ScrollableListPanel } from './scrollable-list-panel.ts';
 import {
   buildDetailBlock,
-  buildGuidanceLine,
   buildKeyboardHints,
   buildKeyValueLine,
   buildMeterLine,
@@ -338,8 +337,10 @@ export class WorkPlanPanel extends ScrollableListPanel<WorkPlanItem> {
   }
 
   protected getEmptyStateActions(): Array<{ command: string; summary: string }> {
+    // WO-160: '/work-plan add <title>' dropped — 'a' already opens an
+    // in-panel add-item draft even from this empty state (see
+    // beginAddDraft), so the printed command was a pure action substitute.
     return [
-      { command: '/work-plan add <title>', summary: 'add a persistent item that survives across sessions' },
       { command: '/work-plan list', summary: 'print the current plan to the shell' },
     ];
   }
@@ -406,7 +407,10 @@ export class WorkPlanPanel extends ScrollableListPanel<WorkPlanItem> {
         { label: 'blocked', value: String(counts.get('blocked') ?? 0), valueColor: (counts.get('blocked') ?? 0) > 0 ? C.blocked : C.dim },
         { label: 'done', value: String(counts.get('done') ?? 0), valueColor: (counts.get('done') ?? 0) > 0 ? C.done : C.dim },
       ], C),
-      buildGuidanceLine(width, '/work-plan add <title>', 'append a persistent item to the active plan', C),
+      // WO-160: dropped the printed '/work-plan add <title>' guidance line —
+      // 'a' already opens an in-panel add-item draft (see beginAddDraft /
+      // handleDraftInput) and is advertised in the footer's 'a: add' hint,
+      // so the printed command was a pure action substitute.
     ];
 
     const header: Line[] = buildSummaryBlock(width, 'Persistent Work Plan', postureLines, C);
