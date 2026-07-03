@@ -390,6 +390,24 @@ describe('TokenBudgetPanel', () => {
       expect(text).toContain('CRITICAL');
     });
 
+    test('WO-160: maintenance guidance advertises the C key, not a printed /compact, once C is armed', () => {
+      // 92% fill both crosses the default 80% auto-compact threshold (so
+      // evaluateSessionMaintenance's nextSteps[0] is '/compact') and the
+      // panel's own 70% WARN_YELLOW elevation gate that arms the C key —
+      // so the two are never actually out of sync here.
+      const orch = makeOrchMock({ lastInputTokens: 92000 });
+      panel.wire(asOrchestratorMock(orch), () => 100000);
+      panel.onActivate();
+      const lines = panel.render(80, 34);
+      const text = linesText(lines);
+      // No printed '/compact' signpost anywhere while C is already armed.
+      expect(text).not.toContain('/compact');
+      expect(text).toContain('compact context now');
+      expect(text).toContain('compact now');
+      // The C key really does dispatch compact-now from this state.
+      expect(panel.handleInput('C')).toBe(true);
+    });
+
     test('context bar not shown when contextWindow is 0', () => {
       const orch = makeOrchMock({ lastInputTokens: 50000 });
       panel.wire(asOrchestratorMock(orch), () => 0); // unknown window size

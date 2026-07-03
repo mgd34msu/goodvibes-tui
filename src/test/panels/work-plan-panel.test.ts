@@ -75,7 +75,20 @@ describe('WorkPlanPanel', () => {
     const rendered = text(panel.render(120, 28));
 
     expect(rendered).toContain('No work plan items yet');
-    expect(rendered).toContain('/work-plan add');
+    // WO-160: '/work-plan add <title>' is no longer printed here — 'a'
+    // already opens an in-panel add-item draft from this empty state and is
+    // advertised via the footer's 'a: add' hint instead.
+    expect(rendered).not.toContain('/work-plan add');
+    expect(rendered).toContain('/work-plan list');
+  });
+
+  test('a opens an in-panel add-item draft from the empty state (no printed command needed)', () => {
+    const store = makeStore();
+    const panel = new WorkPlanPanel(store);
+    panel.onActivate();
+    expect(panel.handleInput('a')).toBe(true);
+    const rendered = text(panel.render(120, 28));
+    expect(rendered).toContain('Title');
   });
 
   test('keyboard status changes persist through the store', () => {

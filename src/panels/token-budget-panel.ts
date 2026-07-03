@@ -459,7 +459,17 @@ export class TokenBudgetPanel extends BasePanel {
     }
 
     if (status.guidanceMode !== 'off' && status.nextSteps.length > 0) {
-      lines.push(buildGuidanceLine(width, status.nextSteps[0]!, 'open the next maintenance action directly', DEFAULT_PANEL_PALETTE));
+      const nextStep = status.nextSteps[0]!;
+      // WO-160: when the recommended next step is /compact and C is armed
+      // (see handleInput's elevated-only C branch and the footer hint),
+      // advertise the key instead of the command — pressing C already
+      // dispatches it for real, so printing '/compact' here was a redundant
+      // action substitute.
+      if (nextStep === '/compact' && this._pressureElevated()) {
+        lines.push(buildGuidanceLine(width, 'C', 'compact context now — the recommended next maintenance action', DEFAULT_PANEL_PALETTE));
+      } else {
+        lines.push(buildGuidanceLine(width, nextStep, 'open the next maintenance action directly', DEFAULT_PANEL_PALETTE));
+      }
     }
 
     return lines;

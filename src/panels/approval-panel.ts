@@ -204,7 +204,10 @@ export class ApprovalPanel extends ScrollableListPanel<PermissionAuditEntry> {
         ...(selected.reasons[0]
           ? buildBodyText(width, `why prompted: ${selected.reasons[0]}`, C, C.dim)
           : buildBodyText(width, `why prompted: ${review.why}`, C, C.dim)),
-        buildGuidanceLine(width, review.command, `review and decide the ${laneOf(selected)} request`, C),
+        // WO-160: dropped the printed `review.command` guidance line here —
+        // Enter is already wired by the shell to dispatch that exact command
+        // (see onSelect below and the "Enter: review (<command>)" footer
+        // hint), so restating it as a signpost was a pure action substitute.
       ], C));
     }
 

@@ -120,7 +120,10 @@ describe('SecurityPanel', () => {
     expect(text).toContain('Security Control Room');
     expect(text).toContain('Token audit');
     expect(text).toContain('No API tokens are registered');
-    expect(text).toContain('/policy preflight');
+    // WO-160: no printed '/policy preflight' signpost — 'f' is bound and
+    // advertised as a real key hint instead (action substitute cleanup).
+    expect(text).not.toContain('/policy preflight');
+    expect(text).toContain('preflight');
   });
 
   test('renders token audit posture and details', () => {

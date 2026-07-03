@@ -203,9 +203,18 @@ describe('operator surfaces gate', () => {
     // retired id survives only as a PanelManager alias, so it must resolve
     // to the same instance instead of appearing as a standalone type.
     expect(manager.open('forensics')).toBe(manager.open('incident'));
-    // WO-112: the 'providers' stats panel merged into the provider-health
-    // console; the retired id survives only as a PanelManager alias.
+    // WO-112: the 'providers' stats panel and 'accounts' panel merged into
+    // the provider-health console; both retired ids survive only as
+    // PanelManager aliases, so they must resolve to the same instance.
     expect(ids).toContain('provider-health');
+    expect(manager.open('providers')).toBe(manager.open('provider-health'));
+    expect(manager.open('accounts')).toBe(manager.open('provider-health'));
+    // WO-110: the 'agent-logs' console merged into inspector; the retired id
+    // survives only as a PanelManager alias.
+    expect(manager.open('agent-logs')).toBe(manager.open('inspector'));
+    // WO-113: the 'context' visualizer merged into the tokens console; the
+    // retired id survives only as a PanelManager alias.
+    expect(manager.open('context')).toBe(manager.open('tokens'));
     expect(ids).toContain('sessions');
     expect(ids).toContain('ops');
   });

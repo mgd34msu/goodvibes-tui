@@ -6,7 +6,7 @@ import type { UiReadModel, UiSecuritySnapshot } from '../runtime/ui-read-models.
 import {
   buildAlignedRow,
   buildEmptyState,
-  buildGuidanceLine,
+  buildKeyboardHints,
   buildPanelLine,
   buildPanelWorkspace,
   buildStatusPill,
@@ -106,9 +106,13 @@ export class SecurityPanel extends ScrollableListPanel<TokenAuditResult> {
   protected override getPalette() { return C; }
   protected override getEmptyStateMessage() { return ' No API tokens are registered with the security auditor yet.'; }
   protected override getEmptyStateActions() {
+    // WO-160: '/policy preflight' dropped — 'f' already dispatches it for
+    // real (see handleInput/handlePanelIntegrationAction) and is advertised
+    // as a live key hint in the footer even in this empty state, so listing
+    // it here too was a redundant action substitute. '/storage review' and
+    // '/mcp trust' stay: neither has an in-panel key equivalent.
     return [
       { command: '/storage review', summary: 'inspect secure secret storage and environment overrides' },
-      { command: '/policy preflight', summary: 'run a live preflight posture review' },
       { command: '/mcp trust', summary: 'inspect active MCP trust and quarantine posture' },
     ];
   }
@@ -211,7 +215,10 @@ export class SecurityPanel extends ScrollableListPanel<TokenAuditResult> {
     const untrustedPlugins = snapshot.untrustedPlugins;
     const attackPathReview = snapshot.attackPathReview;
     const intro = 'Token audit, policy posture, MCP attack-path review, plugin trust, and incident pressure.';
-    const footerLine = buildGuidanceLine(width, '/policy preflight', 'run a proactive policy review before risky work starts', C);
+    // WO-160: dropped the printed '/policy preflight' guidance line — 'f' is
+    // already bound to dispatch it for real (see handleInput/
+    // handlePanelIntegrationAction below) and is advertised in the keyboard
+    // hints footer, so the printed command was a pure action substitute.
 
     const governanceLines: Line[] = [
       buildPanelLine(width, [
@@ -287,7 +294,7 @@ export class SecurityPanel extends ScrollableListPanel<TokenAuditResult> {
           { title: 'Governance', lines: emptyStateLines },
           { title: 'Attack Paths', lines: attackPathLines },
         ],
-        footerLines: [footerLine],
+        footerLines: [buildKeyboardHints(width, [{ keys: 'f', label: 'preflight' }], C)],
         palette: C,
       });
       while (workspace.length < height) workspace.push(createEmptyLine(width));
@@ -433,7 +440,6 @@ export class SecurityPanel extends ScrollableListPanel<TokenAuditResult> {
       footer: [
         ...detailLines,
         ...attackPathLines,
-        footerLine,
       ],
       hints,
     });
