@@ -1,13 +1,38 @@
 // ---------------------------------------------------------------------------
 // cost-utils — canonical pricing source for token cost calculations (consumed by CostTrackerPanel and share-runtime)
+//
+// Pricing resolution order (resolvePricing):
+//   1. `:free` suffix (OpenRouter free-tier convention) — always priced at $0.
+//   2. The live SDK model catalog, when a source has been wired via
+//      setPricingSource() (bootstrap-core.ts wires ProviderRegistry.getRawCatalogModels()
+//      once catalog init completes) — exact id match, then prefix/substring.
+//   3. STATIC_FALLBACK_PRICING — a small hand-maintained safety net for common
+//      frontier models, used when the catalog has no source wired (e.g. tests)
+//      or hasn't matched (catalog not yet loaded, or a model this net covers
+//      that the catalog happens to miss).
+//   4. Unpriced: the model is genuinely unknown to every source above. This is
+//      reported explicitly via `priced: false` so consumers can render an
+//      honest "unpriced" state instead of a silent $0.
 // ---------------------------------------------------------------------------
+
+import type { CatalogModel } from '@pellux/goodvibes-sdk/platform/providers';
 
 export interface ModelPricing {
   input: number;
   output: number;
 }
 
-const MODEL_PRICING: Record<string, ModelPricing> = {
+/** Result of a pricing lookup: the resolved (possibly zero) price, and whether it's real. */
+export interface PricingResult {
+  pricing: ModelPricing;
+  /** False when no source (catalog or static fallback) recognized the model — the zero pricing is a placeholder, not a real price. */
+  priced: boolean;
+}
+
+// Hand-maintained safety net, used only when the live catalog has no source
+// wired or does not recognize the model. NOT the primary pricing source —
+// see resolvePricing() below.
+const STATIC_FALLBACK_PRICING: Record<string, ModelPricing> = {
   // Free tier
   'openrouter/free': { input: 0, output: 0 },
 
@@ -34,17 +59,71 @@ const MODEL_PRICING: Record<string, ModelPricing> = {
   'gemini-2.5-pro':        { input: 1.25,  output: 5 },
 };
 
-/**
- * getPricing — resolve USD-per-1M-token pricing for a model ID.
- * Exact match first; then prefix/substring; falls back to zero.
- */
-export function getPricing(modelId: string): ModelPricing {
-  if (MODEL_PRICING[modelId]) return MODEL_PRICING[modelId]!;
-  if (modelId.endsWith(':free')) return { input: 0, output: 0 };
-  for (const [key, pricing] of Object.entries(MODEL_PRICING)) {
+// Module-level injection point. Kept as a bare singleton (not threaded through
+// call sites) because the 9 existing consumers are pure functions with no
+// ProviderRegistry in scope; see WO-315 brief for the tradeoff. Tests that
+// never call setPricingSource() fall through to the static-fallback path,
+// which keeps them isolated from catalog state by default.
+let pricingSource: (() => readonly CatalogModel[]) | null = null;
+
+/** Wire (or clear, with null) the live catalog as the primary pricing source. */
+export function setPricingSource(source: (() => readonly CatalogModel[]) | null): void {
+  pricingSource = source;
+}
+
+function findInCatalog(modelId: string, models: readonly CatalogModel[]): ModelPricing | null {
+  const exact = models.find((m) => m.id === modelId);
+  if (exact) return exact.tier === 'free' ? { input: 0, output: 0 } : exact.pricing;
+  for (const m of models) {
+    if (modelId.startsWith(m.id) || modelId.includes(m.id)) {
+      return m.tier === 'free' ? { input: 0, output: 0 } : m.pricing;
+    }
+  }
+  return null;
+}
+
+function findInStaticFallback(modelId: string): ModelPricing | null {
+  const exact = STATIC_FALLBACK_PRICING[modelId];
+  if (exact) return exact;
+  for (const [key, pricing] of Object.entries(STATIC_FALLBACK_PRICING)) {
     if (modelId.startsWith(key) || modelId.includes(key)) return pricing;
   }
-  return { input: 0, output: 0 };
+  return null;
+}
+
+/**
+ * resolvePricing — resolve USD-per-1M-token pricing for a model ID, and
+ * whether that pricing is real (vs. an unpriced placeholder). See the module
+ * header for the full resolution order.
+ */
+export function resolvePricing(modelId: string): PricingResult {
+  if (modelId.endsWith(':free')) return { pricing: { input: 0, output: 0 }, priced: true };
+
+  const models = pricingSource?.() ?? [];
+  const catalogHit = findInCatalog(modelId, models);
+  if (catalogHit) return { pricing: catalogHit, priced: true };
+
+  const fallbackHit = findInStaticFallback(modelId);
+  if (fallbackHit) return { pricing: fallbackHit, priced: true };
+
+  // Genuinely unknown — no source recognizes this model. Report honestly
+  // rather than collapsing into the same zero a free model would return.
+  return { pricing: { input: 0, output: 0 }, priced: false };
+}
+
+/**
+ * getPricing — resolve USD-per-1M-token pricing for a model ID.
+ * Back-compat wrapper over resolvePricing(); returns zero for both genuinely
+ * free and genuinely unknown models (use resolvePricing/isModelPriced to
+ * distinguish the two).
+ */
+export function getPricing(modelId: string): ModelPricing {
+  return resolvePricing(modelId).pricing;
+}
+
+/** True when `modelId` resolves to a real price (free or paid), false when it's an unpriced placeholder. */
+export function isModelPriced(modelId: string): boolean {
+  return resolvePricing(modelId).priced;
 }
 
 /**
@@ -56,6 +135,9 @@ export function getPricing(modelId: string): ModelPricing {
  * cacheRead      — cumulative cache-read tokens
  * cacheWrite     — cumulative cache-write tokens
  * modelId        — registry model identifier
+ *
+ * Unpriced models contribute 0 to the total (same as before this WO) — only
+ * the display layer distinguishes "genuinely free/priced" from "unpriced".
  */
 export function calcSessionCost(
   inputTokens: number,

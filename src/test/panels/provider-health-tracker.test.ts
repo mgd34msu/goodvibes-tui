@@ -118,6 +118,18 @@ describe('ProviderHealthTracker — WO-112 console merge extensions', () => {
     expect(health.totalTokens).toBe(460);
     expect(health.lastModelId).toBe('gpt-5.4');
     expect(health.totalCostUsd).toBeGreaterThan(0);
+    expect(health.hasUnpricedModel).toBe(false);
+  });
+
+  test('hasUnpricedModel is set when the model resolves to no real price (WO-315)', () => {
+    const tracker = new ProviderHealthTracker();
+    tracker.onLlmResponse('openai', { model: 'totally-unknown-model-xyz', inputTokens: 100, outputTokens: 50 });
+
+    const health = tracker.get('openai')!;
+    // totalCostUsd is still 0 (unpriced models contribute 0 to the sum) but
+    // the honest-unpriced flag distinguishes it from a genuinely free model.
+    expect(health.totalCostUsd).toBe(0);
+    expect(health.hasUnpricedModel).toBe(true);
   });
 
   test('buildHealthDomainState projects records into the SDK domain shape', () => {

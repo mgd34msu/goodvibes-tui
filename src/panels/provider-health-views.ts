@@ -357,7 +357,14 @@ export function buildProviderRow(width: number, tones: ProviderConsoleTones, inp
       { text: errPct, fg: hasCalls && (entry?.errorRate ?? 0) > 0 ? tones.bad : tones.dim },
       { text: buildSparkline(entry?.timeline.points ?? []), fg: hasCalls ? latencyColor(tones, avgMs) : tones.dim },
       { text: health && health.totalTokens > 0 ? fmtTokens(health.totalTokens) : '-', fg: tones.dim },
-      { text: health && health.totalCostUsd > 0 ? fmtUsd(health.totalCostUsd) : '-', fg: tones.value },
+      {
+        // Tokens flowed but the model never resolved to a real price — say so
+        // instead of collapsing into the same '-' shown for "no calls yet".
+        text: health && health.totalTokens > 0
+          ? (health.hasUnpricedModel ? 'unpriced' : fmtUsd(health.totalCostUsd))
+          : '-',
+        fg: health?.hasUnpricedModel ? tones.dim : tones.value,
+      },
       { text: account ? account.authFreshness : '-', fg: account ? freshnessColor(tones, account.authFreshness) : tones.dim },
     ],
     PROVIDER_TABLE_COLUMNS,

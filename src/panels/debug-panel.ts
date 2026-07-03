@@ -22,7 +22,7 @@ import {
 import { type ConfirmState, handleConfirmInput, renderConfirmLines } from './confirm-state.ts';
 import { abbreviateCount } from '../utils/format-number.ts';
 import { formatLatencyMs } from '../utils/format-duration.ts';
-import { calcSessionCost } from '../export/cost-utils.ts';
+import { calcSessionCost, isModelPriced } from '../export/cost-utils.ts';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -97,7 +97,9 @@ function fmtAgo(ts: number): string {
   return `${Math.floor(sec / 3600)}h ago`;
 }
 
-function fmtUsd(value: number): string {
+/** unpriced=true renders an honest "unpriced" marker instead of a $0 that could be mistaken for a real zero cost. */
+function fmtUsd(value: number, unpriced = false): string {
+  if (unpriced) return 'unpriced';
   if (value <= 0) return '$0';
   return value >= 1 ? `$${value.toFixed(2)}` : `$${value.toFixed(4)}`;
 }
@@ -394,7 +396,7 @@ export class DebugPanel extends ScrollableListPanel<ApiCallEntry> {
         { text: fmtTok(entry.inputTokens), fg: C.input },
         { text: fmtTok(entry.outputTokens), fg: C.output },
         { text: fmtMs(entry.latencyMs), fg: latColor(entry.latencyMs) },
-        { text: fmtUsd(callCost(entry)), fg: C.value },
+        { text: fmtUsd(callCost(entry), !isModelPriced(entry.model)), fg: C.value },
       ],
       CALL_COLUMNS,
       { selected, selectedBg: C.selectBg },
@@ -498,7 +500,7 @@ export class DebugPanel extends ScrollableListPanel<ApiCallEntry> {
               { label: 'in', value: String(selected.inputTokens), valueColor: C.input },
               { label: 'out', value: String(selected.outputTokens), valueColor: C.output },
               { label: 'latency', value: fmtMs(selected.latencyMs), valueColor: latColor(selected.latencyMs) },
-              { label: 'cost', value: fmtUsd(callCost(selected)), valueColor: C.value },
+              { label: 'cost', value: fmtUsd(callCost(selected), !isModelPriced(selected.model)), valueColor: C.value },
             ], C),
             ...(selected.errorMessage
               ? buildBodyText(width, selected.errorMessage, C, C.bad)
@@ -573,6 +575,10 @@ export class DebugPanel extends ScrollableListPanel<ApiCallEntry> {
       : 0;
     const sessionTokens = this._calls.reduce((s, c) => s + c.inputTokens + c.outputTokens, 0);
     const sessionCost = this._calls.reduce((s, c) => s + callCost(c), 0);
+    // Only flag the aggregate as unpriced when every call is — a partial mix
+    // still sums the priced calls honestly; only the fully-unpriced case
+    // would otherwise render as a misleading $0.
+    const sessionAllUnpriced = this._calls.length > 0 && this._calls.every((c) => !isModelPriced(c.model));
 
     const lines: Line[] = [
       buildStyledPanelLine(width, [
@@ -587,7 +593,7 @@ export class DebugPanel extends ScrollableListPanel<ApiCallEntry> {
         { text: '   Tokens ', fg: C.label },
         { text: fmtTok(sessionTokens), fg: C.value },
         { text: '   Cost ', fg: C.label },
-        { text: fmtUsd(sessionCost), fg: C.value },
+        { text: fmtUsd(sessionCost, sessionAllUnpriced), fg: C.value },
       ]),
     ];
     // Live status: most recent call (latency / age) or wiring hint.

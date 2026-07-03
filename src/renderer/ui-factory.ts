@@ -8,7 +8,7 @@ import { GLYPHS, UI_TONES } from './ui-primitives.ts';
 import { formatElapsed } from '../utils/format-elapsed.ts';
 import { abbreviateCount } from '../utils/format-number.ts';
 import { computeContextUsage } from '../core/context-usage.ts';
-import { calcSessionCost } from '../export/cost-utils.ts';
+import { calcSessionCost, isModelPriced } from '../export/cost-utils.ts';
 import { buildFooterTip, isAgentActive } from './footer-tips.ts';
 
 /** Number of frames before the animated gradient completes one full cycle. */
@@ -335,7 +335,15 @@ export class UIFactory {
     const cw = u.cacheWrite ?? 0;
     const total = inp + out + cr + cw;
     const tokenSep = ` ${GLYPHS.navigation.pipeSeparator} `;
-    const costSegment = model ? `${tokenSep}~$${fmtCost(calcSessionCost(inp, out, cr, cw, model))}` : '';
+    // 'n/a' (not 'unpriced') to stay compact in the single-line footer and
+    // match the existing "no priceable data" convention used elsewhere
+    // (cockpit-panel formatCost, agent-inspector-shared) — the footer has no
+    // room for a longer marker before truncation kicks in.
+    const costSegment = model
+      ? isModelPriced(model)
+        ? `${tokenSep}~$${fmtCost(calcSessionCost(inp, out, cr, cw, model))}`
+        : `${tokenSep}~n/a`
+      : '';
     const tokenLine = ` Token Usage [ Input: ${fmtNum(inp)}${tokenSep}Output: ${fmtNum(out)}${tokenSep}Cache Read: ${fmtNum(cr)}${tokenSep}Cache Write: ${fmtNum(cw)}${tokenSep}Total: ${fmtNum(total)}${costSegment} ]`;
     const copiedNotice = isRecentlyCopied ? ` [COPIED] ` : '';
     const statsLine = '  ' + tokenLine + ' '.repeat(Math.max(0, width - 4 - getDisplayWidth(tokenLine) - getDisplayWidth(copiedNotice))) + copiedNotice;

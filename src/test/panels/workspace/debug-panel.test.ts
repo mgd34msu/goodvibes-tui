@@ -148,6 +148,18 @@ describe('DebugPanel — WO-137', () => {
     expect(text).toContain('$90');
   });
 
+  test('cost column shows "unpriced" (not $0) for a model no pricing source recognizes (WO-315)', async () => {
+    emitTurn(runtimeBus, 'LLM_RESPONSE_RECEIVED', {
+      turnId: 'turn-1', provider: 'anthropic', model: 'totally-unknown-model-xyz',
+      contentSummary: 'a', toolCallCount: 0, inputTokens: 1_000_000, outputTokens: 1_000_000,
+    });
+    await flushMicrotasks();
+
+    const text = linesText(panel.render(120, 24));
+    expect(text).toContain('unpriced');
+    expect(text).not.toContain('$0');
+  });
+
   test('render() returns exactly H lines of exactly W cells, populated and filtered', async () => {
     for (let i = 0; i < 3; i++) {
       emitTurn(runtimeBus, 'LLM_RESPONSE_RECEIVED', {
