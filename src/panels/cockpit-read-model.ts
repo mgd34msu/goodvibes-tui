@@ -20,7 +20,7 @@
 
 import type { AgentRecord } from '@pellux/goodvibes-sdk/platform/tools';
 import { truncateDisplay } from '../utils/terminal-width.ts';
-import { calcSessionCost } from '../export/cost-utils.ts';
+import { calcSessionCost, isModelPriced } from '../export/cost-utils.ts';
 import {
   AGENT_TERMINAL_STATUSES,
   AGENT_STALL_THRESHOLD_MS,
@@ -131,7 +131,10 @@ export function buildCockpitRosterSnapshot(
 
       inputTokens = inp;
       outputTokens = out;
-      cost = agentCost;
+      // Usage exists but the model never resolved to a real price — reuse the
+      // existing "usage absent" null/n-a convention rather than showing a
+      // fabricated $0.00 (WO-315).
+      cost = isModelPriced(rec.model ?? 'unknown') ? agentCost : null;
 
       totalInputTokens += inp;
       totalOutputTokens += out;
