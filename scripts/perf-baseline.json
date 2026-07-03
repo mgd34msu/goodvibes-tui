@@ -1,5 +1,5 @@
 {
-  "_comment": "Perf baseline. startup + frame sections generated 2026-06-12 on linux-x64 and PRESERVED (their budgets carry deliberate CI-runner headroom; WO-210 owns any ratcheting of them). line section added 2026-07-03 (WO-202) on a quiet linux-x64 dev box. Ratchet rule: startup budget = ceil(measured_max × 2); frame p95 = stated 16ms SLO; line budgets set just above measured with 2-4× CI headroom. Regenerate with: bun run perf:baseline (note: a regen on a fast quiet box will ratchet startup/frame down — restore those two sections unless WO-210 intends the tightening).",
+  "_comment": "Perf baseline. startup + frame sections generated 2026-06-12 on linux-x64 and PRESERVED (their budgets carry deliberate CI-runner headroom; WO-210 owns any ratcheting of them). line section added 2026-07-03 (WO-202) on a quiet linux-x64 dev box; transcript.append_one + transcript.resize_1k added 2026-07-03 (WO-209). Ratchet rule: startup budget = ceil(measured_max × 2); frame p95 = stated 16ms SLO; line budgets set just above measured with 2-4× CI headroom. Regenerate with: bun run perf:baseline (note: a regen on a fast quiet box will ratchet startup/frame down — restore those two sections unless WO-210 intends the tightening).",
   "startup": {
     "renderer_load_ms": {
       "measured_max_ms": 148,
@@ -28,7 +28,27 @@
       "heap_bytes_per_op": 74899339,
       "objects_per_op": 695325,
       "lines": 6800,
-      "note": "transcript Line[] build (1000 mixed msgs). Gated on p50. Budget carries CI headroom (runners run 2-4× slower). Ratchet (WO-210): tighten when measured p50 drops below budget/2."
+      "note": "transcript Line[] build (1000 mixed msgs), COLD (no per-message cache). Gated on p50. Budget carries CI headroom (runners run 2-4× slower). Ratchet (WO-210): tighten when measured p50 drops below budget/2."
+    },
+    "transcript.append_one_ms": {
+      "measured_p50_ms": 0.891,
+      "measured_p95_ms": 1.134,
+      "budget_ms": 20,
+      "gate_stat": "p50",
+      "heap_bytes_per_op": 96256,
+      "objects_per_op": 403,
+      "lines": 6804,
+      "note": "WO-209: append ONE message to a warm 1000-message transcript. The per-message Line[] cache reuses the unchanged 1000 and renders only the new one — the same rebuild that costs ~45ms cold (transcript.build_1k) collapses to <1ms and 96KB/403 objects (vs 71MB/695k). Gated on p50. Ratchet (WO-210): tighten when measured p50 drops below budget/2."
+    },
+    "transcript.resize_1k_ms": {
+      "measured_p50_ms": 64.22,
+      "measured_p95_ms": 77.0,
+      "budget_ms": 400,
+      "gate_stat": "p50",
+      "heap_bytes_per_op": 37128192,
+      "objects_per_op": 344330,
+      "lines": 6800,
+      "note": "WO-209: a resize changes render width, which keys every message's cache entry, so it invalidates all 1000 and pays a near-full re-render (expected; a resize legitimately re-wraps every line). Gated on p50 at the same ceiling as build_1k. Ratchet (WO-210): tighten when measured p50 drops below budget/2."
     },
     "panel.two_pane_build_ms": {
       "measured_p50_ms": 0.214,
