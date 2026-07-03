@@ -6,27 +6,31 @@ All notable changes to GoodVibes TUI.
 
 ## [1.1.0] — 2026-07-03
 
-### Changes
-- e3d20840 chore(artifacts): regenerate foundation artifacts against SDK 0.36.0
-- 2dab222b integrate wave0: trust repairs (v1.1.0 scope)
-- d3116e0a chore(deps): bump @pellux/goodvibes-sdk to 0.36.0 (Wave-0 trust repairs)
-- 08caa3a3 test(tools): pin the SDK 0.36 tail-preserving truncation contract
-- e1e124b7 chore: trim stall-gate comment to keep main.ts under the 800-line cap
-- 57a9c5bd fix(stream): suppress stall indicator false-positive during tool execution
-- 96225275 fix(test-runner): fence git discovery at the per-file temp root
-- efbfc8de chore(wave0): trim main.ts/git-panel.ts back to the 800-line cap after wave merges
-- e7d166e4 integrate WO-315 (W0.10 cost-truth unpriced markers) into wave0
-- 83d77e50 integrate WO-314 (W0.9 per-agent stats + footer usage hydration) into wave0
-- 5801ced8 integrate WO-313 (W0.7 stream stall honesty, TUI half) into wave0
-- 5abfed54 integrate WO-312 (W0.4/5/6/11/12 diff+slash+ctrlc cluster) into wave0
-- 40fdee43 integrate WO-311 (W0.8 panel focus/burst/indicator) into wave0
-- 8e61b248 fix(wo312): Wave 0 TUI trust-repair cluster (W0.4/W0.5/W0.6/W0.11/W0.12)
-- 210b4b80 fix(W0.9): honest per-agent usage display + footer token hydration after resume
-- b791dbd2 fix(cost): catalog-backed pricing with honest unpriced state (WO-315/W0.10)
-- 1af7105e fix(input,renderer): panel entry points reachable + burst guard + focus indicator (W0.8)
-- 000250a1 fix(streaming): honest stall indicator + mid-stream watchdog re-arm (W0.7)
-- 74141d53 feat(dev): local SDK overlay for rapid iteration, with release-blocking gates
-- 69c282a1 docs: reconcile documentation with the shipped 0.29.0 and 1.0.0 releases
+Wave 0 of the post-1.0 evolution effort: trust repairs. Every change closes a defect found by live dogfooding v1.0.0 where the product reported something other than the truth. Ships against @pellux/goodvibes-sdk 0.36.0 (same effort, SDK side).
+
+### Fixed
+- Failing commands are visible again: the SDK masked every command-level failure as "Error: Unknown error", so a red test suite was literally invisible to the model — it would honestly conclude "no failure observed" while your tests were failing. Exit code, stdout, and stderr now reach the model byte-faithfully, and long-output truncation keeps the tail (where test runners print failures) instead of the head. Verified live: the model reads a sabotaged test's actual assertion diff and fixes the right side.
+- Agent auto-commits are scoped: a WRFC chain used to `git add --all`, sweeping your unrelated dirty files into its commit with a truncated message. Commits now include only chain-touched files, with full accurate messages, under a new policy config (`off | scoped | all`, default scoped). Verified live with bait files.
+- Agent chains can no longer die silently: transport failures surface a reasoned failure state in the transcript and status strip, with one bounded automatic retry.
+- Panels work during turns: Ctrl+P / F2 / the status-strip Enter were dead exactly while agents ran — the Inspector was unreachable whenever there was something to inspect. Verified live mid-chain.
+- Panels no longer eat typed text: multi-character input routes to the composer instead of being silently consumed as single-letter panel hotkeys, and a visible focus indicator shows where keys go.
+- Streaming honesty: a stalled provider stream now shows a real stall/reconnect indicator (with attempt counts via the SDK's new STREAM_RETRY event) instead of cycling whimsical labels over dead air — and the indicator correctly stays quiet while a tool is executing.
+- Slash routing is deterministic: `/command` in an empty composer is always a command, never sent to the model as chat (previously state-dependent after overlay use, burning tokens on junk turns).
+- Per-agent stats are real: the Inspector showed Tools 0 / Tokens 0 / Cost $0.00 for agents that wrote hundreds of lines; agents (including WRFC owners, which aggregate their whole chain) now report true token/tool counts, and footer counters survive session resume.
+- Cost is honest: models missing from the old hardcoded ~16-model price table silently showed $0.00 everywhere; pricing now resolves through the SDK catalog with an explicit "unpriced" marker when unknown.
+- Indicator truth: the footer no longer shows `hitl:balanced` alongside DANGER MODE; the effective permission posture wins.
+- Renderer truth: subprocess stderr can no longer leak raw into the transcript and garble cells (`/diff` in a non-git dir now prints one honest sentence, not a fake diff); git repos are re-detected live after `git init` without a restart; cancelled-turn echo no longer mangles its first character.
+
+### Added
+- Auto-resume offer at startup when a previous session exists.
+- `/sessions` groups subagent sessions instead of burying your real session under them.
+- `.goodvibes/` transient state is auto-gitignored in project directories.
+- Wider, persistent Ctrl+C exit-confirmation notice.
+
+### Internal
+- SDK dependency 0.35.0 → 0.36.0; foundation artifacts regenerated (new event contract entries).
+- Local-SDK overlay dev tooling (`scripts/sdk-dev.ts link|status|restore`) with release-blocking gates in release.ts and publish-check so a local SDK can never ship.
+- Wave verified three ways: full gate block, a 3-lens adversarial code review, and a live tmux scenario replay of the five previously-failing dogfood scenarios (all PASS).
 
 ## [1.0.0] — 2026-07-03
 
