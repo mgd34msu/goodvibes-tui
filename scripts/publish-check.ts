@@ -20,6 +20,16 @@ if (!pkg.bin || typeof pkg.bin.goodvibes !== 'string' || typeof pkg.bin['goodvib
   throw new Error('package.json must expose goodvibes and goodvibes-daemon bin entries');
 }
 
+// The local-SDK overlay (scripts/sdk-dev.ts link) and non-exact SDK pins are
+// development-only states; both are publish-blocking.
+if (existsSync(join(root, 'node_modules/@pellux/goodvibes-sdk/.local-sdk-overlay.json'))) {
+  throw new Error('local SDK overlay is active — run `bun scripts/sdk-dev.ts restore` before publishing');
+}
+const sdkPin = (pkg.dependencies ?? {})['@pellux/goodvibes-sdk'];
+if (typeof sdkPin !== 'string' || !/^\d+\.\d+\.\d+$/.test(sdkPin)) {
+  throw new Error(`@pellux/goodvibes-sdk dependency must be an exact semver to publish (found: ${String(sdkPin)})`);
+}
+
 for (const binTarget of [pkg.bin.goodvibes, pkg.bin['goodvibes-daemon']]) {
   const binPath = join(root, binTarget);
   if (!existsSync(binPath)) {

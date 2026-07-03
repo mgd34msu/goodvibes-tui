@@ -1,4 +1,4 @@
-import { readFileSync, writeFileSync } from 'fs';
+import { existsSync, readFileSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { execSync } from 'child_process';
 
@@ -73,6 +73,23 @@ function runSilent(cmd: string): string {
 }
 
 // --- Pre-flight checks ---
+
+// Never release while the local-SDK overlay (scripts/sdk-dev.ts link) is
+// active, and never with a non-exact-semver SDK dependency (file:/link:/git
+// refs). The fast local-dev path must be impossible to ship.
+{
+  const overlayMarker = join(root, 'node_modules/@pellux/goodvibes-sdk/.local-sdk-overlay.json');
+  if (existsSync(overlayMarker)) {
+    console.error('Error: local SDK overlay is active (node_modules/@pellux/goodvibes-sdk/.local-sdk-overlay.json).');
+    console.error('Run `bun scripts/sdk-dev.ts restore` before releasing.');
+    process.exit(1);
+  }
+  const sdkPin = (JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).dependencies ?? {})['@pellux/goodvibes-sdk'];
+  if (typeof sdkPin !== 'string' || !/^\d+\.\d+\.\d+$/.test(sdkPin)) {
+    console.error(`Error: @pellux/goodvibes-sdk dependency must be an exact semver for release (found: ${String(sdkPin)}).`);
+    process.exit(1);
+  }
+}
 
 // Ensure we are on a clean working tree (no uncommitted changes)
 const gitStatus = runSilent('git status --porcelain');
