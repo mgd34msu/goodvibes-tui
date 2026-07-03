@@ -1,7 +1,7 @@
 import { type Line } from '../types/grid.ts';
 import { UIFactory } from './ui-factory.ts';
 import { getDisplayWidth } from '../utils/terminal-width.ts';
-import { GLYPHS } from './ui-primitives.ts';
+import { GLYPHS, UI_TONES } from './ui-primitives.ts';
 
 /** Truncate a string to fit within maxWidth display columns. */
 function truncateToWidth(text: string, maxWidth: number): string {
@@ -38,7 +38,7 @@ export function renderProcessIndicator(
   const renderFocusedStatus = (text: string): Line[] => {
     const bg = '#31506f';
     const fg = '#eefaff';
-    const markerFg = '#7dd3fc';
+    const markerFg = UI_TONES.accent.browser;
     const line = UIFactory.stringToLine(' '.repeat(width), width, { fg: '238' });
     const prefix = `${GLYPHS.navigation.selected} `;
     const body = truncateToWidth(text, Math.max(0, width - 8));
@@ -94,5 +94,5 @@ export function renderProcessIndicator(
     : '';
   const label = `${parts.join(` ${GLYPHS.navigation.pipeSeparator} `)}${progressSuffix}`;
   const hint = `  ${GLYPHS.status.pending}  Enter to view`;
-  return renderPlainStatus(`${label}${hint}`, { fg: '#00ffff', bold: true });
+  return renderPlainStatus(`${label}${hint}`, { fg: UI_TONES.accent.brand, bold: true });
 }

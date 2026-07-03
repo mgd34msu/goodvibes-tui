@@ -4,6 +4,7 @@ import { getDisplayWidth, truncateDisplay } from '../utils/terminal-width.ts';
 import type { ToolCall } from '@pellux/goodvibes-sdk/platform/types';
 import { stripDangerousAnsi } from './ansi-sanitize.ts';
 import { formatElapsed } from '../utils/format-elapsed.ts';
+import { UI_TONES } from './ui-primitives.ts';
 
 const TOOL_NAME_MIN_WIDTH = 8;
 const TOOL_NAME_MAX_WIDTH = 20;
@@ -73,14 +74,14 @@ function buildLeftSegments(
     segments.push({ text: toolNameDisplay, fg: '#00ffcc', bold: true });
   }
   if (keyArgDisplay) {
-    segments.push({ text: '  ', fg: '#e2e8f0' });
+    segments.push({ text: '  ', fg: UI_TONES.fg.primary });
     segments.push({ text: keyArgDisplay, fg: '252' });
   }
   if (suffixDisplay) {
-    segments.push({ text: '  ', fg: '#e2e8f0' });
+    segments.push({ text: '  ', fg: UI_TONES.fg.primary });
     segments.push({
       text: suffixDisplay,
-      fg: suffixText.startsWith('- ') ? '#ef4444' : '244',
+      fg: suffixText.startsWith('- ') ? UI_TONES.state.bad : '244',
       dim: true,
     });
   }
@@ -171,8 +172,8 @@ export function renderToolCallBlock(
   const icon = status === 'done' ? TOOL_STATUS.SUCCESS_ICON
     : status === 'error' ? TOOL_STATUS.FAIL_ICON
     : TOOL_STATUS.SPINNER_FRAMES[(frameIndex ?? 0) % TOOL_STATUS.SPINNER_FRAMES.length];
-  const iconColor = status === 'done' ? '#22c55e'
-    : status === 'error' ? '#ef4444'
+  const iconColor = status === 'done' ? UI_TONES.state.good
+    : status === 'error' ? UI_TONES.state.bad
     : '244';
   const rightText = (() => {
     if (durationMs !== undefined && status === 'done') {

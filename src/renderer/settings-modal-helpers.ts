@@ -7,6 +7,13 @@
 import type { SettingEntry, McpEntry, SubscriptionEntry } from '../input/settings-modal-types.ts';
 import { SETTINGS_CATEGORIES } from '../input/settings-modal-types.ts';
 import { isSecretConfigKey, isSecretReferenceValue } from '../config/secret-config.ts';
+import { UI_TONES } from './ui-primitives.ts';
+
+/**
+ * "Modified / active" accent for settings rows — cyan-green, no UI_TONES
+ * role matches it (WO-207b: preserved byte-exact as a named constant).
+ */
+const SETTINGS_ACCENT = '#00ffcc';
 
 function maskSecretValue(value: string): string {
   if (value.length === 0) return '(empty)';
@@ -25,24 +32,24 @@ export function formatValue(entry: SettingEntry): string {
 }
 
 export function valueColor(entry: SettingEntry): string {
-  if (!entry.isDefault) return '#00ffcc'; // cyan-green = modified
-  return '244';                            // dim = default
+  if (!entry.isDefault) return SETTINGS_ACCENT; // cyan-green = modified
+  return '244';                                  // dim = default
 }
 
 export function flagStateColor(state: string, killed: boolean): string {
-  if (killed) return '#ef4444'; // red
-  if (state === 'enabled') return '#00ffcc'; // cyan-green
+  if (killed) return UI_TONES.state.bad; // red
+  if (state === 'enabled') return SETTINGS_ACCENT; // cyan-green
   return '244'; // dim
 }
 
 export function mcpTrustColor(mode: McpEntry['trustMode']): string {
   switch (mode) {
     case 'allow-all':
-      return '#ef4444';
+      return UI_TONES.state.bad;
     case 'ask-on-risk':
-      return '#eab308';
+      return UI_TONES.state.warn;
     case 'constrained':
-      return '#00ffcc';
+      return SETTINGS_ACCENT;
     case 'blocked':
       return '244';
     default:
@@ -53,11 +60,11 @@ export function mcpTrustColor(mode: McpEntry['trustMode']): string {
 export function subscriptionStateColor(state: SubscriptionEntry['state']): string {
   switch (state) {
     case 'active':
-      return '#00ffcc';
+      return SETTINGS_ACCENT;
     case 'pending':
-      return '#eab308';
+      return UI_TONES.state.warn;
     case 'available':
-      return '#38bdf8';
+      return UI_TONES.state.info;
     default:
       return '244';
   }
