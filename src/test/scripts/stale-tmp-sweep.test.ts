@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { sweepStaleTestTmp, DEFAULT_STALE_MS } from '../../../scripts/stale-tmp-sweep.ts';
 
-// Exercises the .test-tmp stale sweep (scripts/test-tmp-sweep.ts). This is the
+// Exercises the .test-tmp stale sweep (scripts/stale-tmp-sweep.ts). This is the
 // backstop that closes the /tmp inode leak: makeProjectTempDir leftovers
 // (<prefix>-<random>) whose owning test process was signal-killed — so its
 // process.on('exit') cleanup never fired — and orphaned run-<pid> subtrees are
