@@ -69,6 +69,13 @@ Representative slash-command families include:
 - `/eval`
 - `/session`
 - `/work-plan`
+- `/search`
+- `/imagine`
+- `/codebase`
+- `/workstream`
+- `/checkpoint`
+
+`/search <query> [--limit <n>]` runs a provider-backed web search directly (bypassing the agent-tool JSON wrapper) and renders ranked results, an instant answer, and the source label into the transcript; it degrades honestly using the web-search service's own status note. `/imagine <prompt>` is the first production caller of the media-provider registry's image generation — on success it persists the artifact (inline bytes stored directly; a remote-URL-only result is stored as a small JSON pointer record rather than eagerly fetched), and prints the registry's own per-provider status (naming the exact env var) when no image-capable provider is configured. (`/image` is a different, pre-existing command — it attaches a local image file to the next message for multimodal analysis.)
 
 `/session` is the single front-door for all session work. Two domains:
 - Lifecycle: `list`, `rename`, `resume`, `fork`, `save`, `info`, `export <id|.> [format]`, `search <query>`, `delete <id>`, `events [kind]`, `groups [kind]`, `hotspots`
@@ -84,7 +91,24 @@ Alias: `/sess`. Run `/session` with no arguments to see current session info.
 
 `/mcp` opens the fullscreen MCP workspace. `/mcp add <name> <command> [args...] [--scope project|global]` writes a project server to `.goodvibes/mcp.json` or a global server to `~/.config/mcp/mcp.json`, then reloads the live MCP runtime without restarting. Use `/mcp remove <server> [--scope project|global]`, `/mcp reload`, `/mcp config`, and `/mcp tools [server]` for the same operations from the command line.
 
+## Navigation and keyboard chords
+
+- **F2** opens **and focuses the Fleet panel** (the live unified process tree). It previously opened a standalone process monitor; that modal was retired in W6.1 and Fleet subsumes it.
+- **Ctrl+O** also opens and focuses **Fleet** (the retired Ops Control panel now aliases to it).
+- **Ctrl+PageUp** / **Ctrl+PageDown** move to the previous / next panel tab. (Ctrl+] remains a second binding for next; the old Ctrl+[ binding was removed because it collided with Escape.)
+- **Ctrl+C twice** quits — a single Ctrl+C on an empty composer only arms a ~1s "press again to exit" confirm; the footer advertises this as `Ctrl+C x2 quit`.
+- **Alt+1..9** jump directly to the first nine panel tabs (shown as `⌥N` on the tab bar).
+
 ## Operator surfaces
+
+> **W6.1 note.** Most operator read/navigate surfaces are now reached as
+> **config-modal surfaces** via `ctx.openModal` (or their panel-id modal
+> redirect), not standalone panels: providers/health, services, subscription,
+> remote, sandbox, settings-sync (WO-A) and marketplace, plugins, skills, hooks,
+> policy, security, knowledge, memory, docs→keybindings, qr-code→pairing,
+> work-plan, project-planning→planning (WO-B). The runtime-ops consoles
+> (cockpit, orchestration, tasks, worktrees, approvals, communication, …)
+> redirect to the **Fleet** panel. The command front-doors below are unchanged.
 
 Many commands also have matching panels and control rooms. High-signal examples:
 
