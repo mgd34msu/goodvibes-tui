@@ -1183,7 +1183,7 @@ function buildFleetGoldenNodes(): ProcessNode[] {
       costUsd: 0.87,
       costState: 'priced',
       currentActivity: { kind: 'tool', text: 'Read src/panels/fleet-panel.ts', toolName: 'Read', at: FIXED_FLEET_NOW - 1_000 },
-      capabilities: { interruptible: true, killable: true, pausable: false },
+      capabilities: { interruptible: true, killable: true, pausable: false, steerable: false },
     },
     {
       id: 'wrfc-engineer-01',
@@ -1200,7 +1200,7 @@ function buildFleetGoldenNodes(): ProcessNode[] {
       costUsd: 0.045,
       costState: 'priced',
       currentActivity: { kind: 'output-line', text: 'Writing fleet-panel.ts', at: FIXED_FLEET_NOW - 500 },
-      capabilities: { interruptible: true, killable: true, pausable: false },
+      capabilities: { interruptible: true, killable: true, pausable: false, steerable: false },
     },
     {
       id: 'wrfc-reviewer-01',
@@ -1216,7 +1216,7 @@ function buildFleetGoldenNodes(): ProcessNode[] {
       costUsd: null,
       costState: 'unpriced',
       currentActivity: { kind: 'phase', text: 'Awaiting operator approval', at: FIXED_FLEET_NOW - 2_000 },
-      capabilities: { interruptible: true, killable: true, pausable: true },
+      capabilities: { interruptible: true, killable: true, pausable: true, steerable: false },
     },
     {
       id: 'exec-golden-01',
@@ -1228,7 +1228,7 @@ function buildFleetGoldenNodes(): ProcessNode[] {
       costUsd: null,
       costState: 'unpriced',
       currentActivity: { kind: 'output-line', text: '42 pass 0 fail', at: FIXED_FLEET_NOW - 1_000 },
-      capabilities: { interruptible: false, killable: true, pausable: false },
+      capabilities: { interruptible: false, killable: true, pausable: false, steerable: false },
     },
     {
       id: 'agent-done-01',
@@ -1244,7 +1244,28 @@ function buildFleetGoldenNodes(): ProcessNode[] {
       provider: 'anthropic',
       costUsd: 0.012,
       costState: 'priced',
-      capabilities: { interruptible: false, killable: false, pausable: false },
+      capabilities: { interruptible: false, killable: false, pausable: false, steerable: false },
+    },
+    // Wave-3 verb formalization: 'interrupted' fixture row so the new
+    // glyph/tone gets golden coverage (distinct from 'killed'/⊘ above).
+    // startedAt is deliberately the MOST RECENT of all roots so this row
+    // sorts last and simply appends — it must not reorder or disturb any
+    // existing row (in particular the `j`-selected wrfc-owner-01 below).
+    {
+      id: 'agent-interrupted-01',
+      kind: 'agent',
+      label: '[Agent] Stopped by operator',
+      task: 'Stopped by operator',
+      state: 'interrupted',
+      startedAt: FIXED_FLEET_NOW - 5_000,
+      completedAt: FIXED_FLEET_NOW - 3_000,
+      elapsedMs: 2_000,
+      usage: { inputTokens: 2_000, outputTokens: 300, cacheReadTokens: 0, cacheWriteTokens: 0, llmCallCount: 1, turnCount: 1, toolCallCount: 0 },
+      model: 'claude-haiku-4-5',
+      provider: 'anthropic',
+      costUsd: 0.004,
+      costState: 'priced',
+      capabilities: { interruptible: false, killable: false, pausable: false, steerable: false },
     },
   ];
 }
@@ -1258,6 +1279,29 @@ function renderFleetSurface(width: number, height: number): Line[] {
 }
 
 describeOverlayGolden('fleet-panel', renderFleetSurface);
+
+// Wave-3 (W3.1 Part C) — one attached agent session tab, deterministic
+// transcript content via a stub getConversationSnapshot. Separate golden
+// surface (not folded into 'fleet-panel' above) so the root-tab-only
+// fixture's bytes stay stable independent of tab-view layout changes.
+function renderFleetTabSurface(width: number, height: number): Line[] {
+  const snapshot = buildFleetSnapshot(buildFleetGoldenNodes(), FIXED_FLEET_NOW);
+  const readModel = createStaticFleetReadModel(snapshot);
+  const panel = new FleetPanel(readModel, {
+    getConversationSnapshot: (agentId: string) =>
+      agentId === 'wrfc-owner-01'
+        ? [
+          { role: 'user', content: 'Fix the golden fixture' },
+          { role: 'assistant', content: 'On it — reading fleet-panel.ts first.' },
+        ]
+        : [],
+  });
+  panel.handleInput('j'); // select row 1: wrfc-owner-01 (a running agent; row 0 is the terminal agent-done-01)
+  panel.handleInput('enter'); // attach it
+  return panel.render(width, height);
+}
+
+describeOverlayGolden('fleet-panel-tab', renderFleetTabSurface);
 
 // context inspector — ConversationManager with fixed message content, no
 // timestamps rendered by this surface.

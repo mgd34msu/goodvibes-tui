@@ -361,6 +361,10 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
     executor: agentOrchestrator,
     configManager,
   });
+  agentOrchestrator.setConversationSink({ // Wave-3 Part C6 bridge (mirrors the SDK's own createRuntimeServices)
+    register: (agentId, source) => agentManager.registerConversationSource(agentId, source),
+    release: (agentId) => agentManager.releaseConversationSource(agentId),
+  });
   agentManager.setRuntimeBus(options.runtimeBus);
   const wrfcController = new WrfcController(options.runtimeBus, agentMessageBus, {
     agentManager,
@@ -625,6 +629,7 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
     workflow,
     approvalBroker,
     sessionBroker,
+    messageBus: agentMessageBus, // Wave-3: backs steer()/`steerable` (wo612 builds the composer UI on top)
     runtimeBus: options.runtimeBus,
     // Honest pricing: never fabricate a cost for an unrecognized model.
     priceUsage: (model, usage) => {
