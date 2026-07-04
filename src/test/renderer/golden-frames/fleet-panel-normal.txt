@@ -9,7 +9,7 @@
 | ● agent  id wrfc-owner-01  state executing-tool  elapsed 5m00s                                     |
 | model claude-opus-4-6  tokens 15.4k  cost $0.870                                                   |
 | activity tool: Read src/panels/fleet-panel.ts                                                      |
-| approvals (Wave 3)                                                                                 |
+| approvals —                                                                                        |
 | j/k navigate   Enter attach   i interrupt   K kill   f follow                                      |
 |                                                                                                    |
 |                                                                                                    |
@@ -913,13 +913,6 @@
 10 9 fg=#94a3b8
 10 10 fg=#94a3b8
 10 11 fg=#475569
-10 12 fg=#475569
-10 13 fg=#475569
-10 14 fg=#475569
-10 15 fg=#475569
-10 16 fg=#475569
-10 17 fg=#475569
-10 18 fg=#475569
 11 0 fg=#475569
 11 1 fg=#38bdf8
 11 2 fg=#38bdf8
