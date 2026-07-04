@@ -40,7 +40,14 @@ export type TuiTerminalOutputGuardOptions = {
   readonly stdout: WritableStreamLike;
   readonly stderr?: WritableStreamLike;
   readonly active?: boolean;
-  readonly notify: (message: string) => void;
+  /**
+   * Called (rate-limited) after intercepts with the cumulative count of direct
+   * writes captured this session, so an honest quiet counter (e.g. /debug) can
+   * refresh. The per-write detail is already recorded to the activity log via
+   * logger.warn — this callback intentionally does NOT push transcript lines.
+   * (UX-B item 1a.)
+   */
+  readonly onCapture?: (total: number) => void;
 };
 
 const MAX_LOG_TEXT = 4_000;
@@ -208,21 +215,21 @@ export function installTerminalOutputGuard(options: TerminalOutputGuardOptions):
 }
 
 export function installTuiTerminalOutputGuard(options: TuiTerminalOutputGuardOptions): TerminalOutputGuard {
-  let capturedWriteCount = 0;
+  let totalInterceptedWrites = 0;
   let lastNoticeAt = 0;
   return installTerminalOutputGuard({
     stdout: options.stdout,
     stderr: options.stderr,
     active: options.active,
-    onIntercept: (event) => {
-      capturedWriteCount++;
+    onIntercept: () => {
+      // Each intercept is already logged (logger.warn in record()). Here we only
+      // maintain a cumulative counter and, rate-limited, refresh a quiet counter
+      // surface — no repeated transcript lines. (UX-B item 1a.)
+      totalInterceptedWrites++;
       const now = Date.now();
       if (now - lastNoticeAt < 5_000) return;
-      const count = capturedWriteCount;
-      capturedWriteCount = 0;
       lastNoticeAt = now;
-      const plural = count === 1 ? '' : 's';
-      options.notify(`[Terminal] Captured ${count} direct ${event.source} write${plural} that would have corrupted the TUI: ${event.preview}`);
+      options.onCapture?.(totalInterceptedWrites);
     },
   });
 }
