@@ -12,21 +12,27 @@ describe('wireShellUiOpeners', () => {
 
   beforeEach(() => {
     testManagers = createTestManagers();
-    commandContext = {};
+    commandContext = { print: mock(() => {}) };
     input = {
       indicatorFocused: false,
       modelPicker: {},
       modalOpened: mock(() => {}),
+      openSelection: mock(() => {}),
     };
     panelManager = {
       isVisible: mock(() => false),
       getAllOpen: mock(() => []),
       getFocusTarget: mock(() => 'prompt'),
+      getRegisteredTypes: mock(() => [
+        { id: 'fleet', name: 'Fleet', icon: '⊟', category: 'runtime-ops', description: 'fleet' },
+        { id: 'git', name: 'Git', icon: 'G', category: 'development', description: 'git' },
+      ]),
       open: mock(() => ({})),
       show: mock(() => {}),
       hide: mock(() => {}),
       focusPanels: mock(() => {}),
       focusPrompt: mock(() => {}),
+      setOpenModalCallback: mock(() => {}),
     };
     conversation = {
       setSplashSuppressed: mock(() => {}),
@@ -52,18 +58,42 @@ describe('wireShellUiOpeners', () => {
     });
   });
 
-  test('openPanelPicker focuses panels when opening the workspace', () => {
+  // W6.1 (the purge): 'panel-list' (a picker PANEL) was DELETE-disposition.
+  // openPanelPicker now opens a selection MODAL built from the live
+  // registry instead of force-opening a specific panel — see
+  // shell/ui-openers.ts.
+  test('openPanelPicker opens a selection modal built from the live registry when nothing is open', () => {
     (commandContext.openPanelPicker as () => void)();
-    expect(panelManager.open).toHaveBeenCalledWith('panel-list');
+    expect(input.openSelection).toHaveBeenCalledTimes(1);
+    const [title, items] = (input.openSelection as ReturnType<typeof mock>).mock.calls[0] as [string, Array<{ id: string }>, unknown, unknown];
+    expect(title).toBe('Open Panel');
+    expect(items.map((i) => i.id)).toEqual(['fleet', 'git']);
+    // No panel is opened until the user actually picks one.
+    expect(panelManager.open).not.toHaveBeenCalled();
+  });
+
+  test('openPanelPicker opens the selected panel once the selection modal resolves', () => {
+    (commandContext.openPanelPicker as () => void)();
+    const callback = (input.openSelection as ReturnType<typeof mock>).mock.calls[0]![3] as (result: unknown) => void;
+    callback({ item: { id: 'git' }, action: 'select' });
+    expect(panelManager.open).toHaveBeenCalledWith('git');
     expect(panelManager.show).toHaveBeenCalled();
     expect(panelManager.focusPanels).toHaveBeenCalled();
     expect(panelManager.hide).not.toHaveBeenCalled();
     expect(conversation.setSplashSuppressed).toHaveBeenCalledWith(true);
   });
 
+  test('openPanelPicker does nothing when the selection modal is cancelled', () => {
+    (commandContext.openPanelPicker as () => void)();
+    const callback = (input.openSelection as ReturnType<typeof mock>).mock.calls[0]![3] as (result: unknown) => void;
+    callback(null);
+    expect(panelManager.open).not.toHaveBeenCalled();
+    expect(panelManager.show).not.toHaveBeenCalled();
+  });
+
   test('openPanelPicker focuses an already-visible-but-unfocused workspace instead of hiding it', () => {
     (panelManager.isVisible as ReturnType<typeof mock>).mockReturnValue(true);
-    (panelManager.getAllOpen as ReturnType<typeof mock>).mockReturnValue([{ id: 'system-messages' }]);
+    (panelManager.getAllOpen as ReturnType<typeof mock>).mockReturnValue([{ id: 'git' }]);
     (panelManager.getFocusTarget as ReturnType<typeof mock>).mockReturnValue('prompt');
     (commandContext.openPanelPicker as () => void)();
     expect(panelManager.hide).not.toHaveBeenCalled();
@@ -94,5 +124,16 @@ describe('wireShellUiOpeners', () => {
     (commandContext.openOnboardingWizard as (mode?: 'new' | 'edit') => void)('new');
     expect(input.openOnboardingWizard).toHaveBeenCalledWith('new');
     expect(render).not.toHaveBeenCalled();
+  });
+
+  // W6.1 (the purge) skeleton: no MIGRATE-TO-MODAL surface is registered yet
+  // (WO-A/B add real modal dispatch here). openModal must still be a safe,
+  // honest no-op rather than throwing or silently doing nothing.
+  test('openModal is wired onto both CommandContext and PanelManager, and is safe with no real modal registered', () => {
+    expect(panelManager.setOpenModalCallback).toHaveBeenCalledWith(commandContext.openModal);
+    (commandContext.openModal as (name: string) => void)('providers-modal');
+    expect(input.modalOpened).toHaveBeenCalledWith('providers-modal');
+    expect(commandContext.print).toHaveBeenCalledWith("'providers-modal' is not available yet in this build.");
+    expect(render).toHaveBeenCalled();
   });
 });

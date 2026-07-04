@@ -295,3 +295,137 @@ describe('PanelManager', () => {
     expect(focusedTab.pane).toBe('bottom');
   });
 });
+
+// ---------------------------------------------------------------------------
+// W6.1 (the purge) — modal-redirect mechanism (WO-C builds the mechanism;
+// WO-A/B register the actual MIGRATE-TO-MODAL ids against it) and the
+// default-panel retarget away from the now-deleted 'panel-list'.
+// ---------------------------------------------------------------------------
+
+describe('PanelManager — modal redirect mechanism (W6.1)', () => {
+  test('open() on a modal-redirected id invokes the callback and returns a sentinel without constructing the real panel', () => {
+    const manager = new PanelManager();
+    const factory = mock(() => makePanel('providers-modal-victim', 'Should never be built'));
+    manager.registerType({ id: 'providers', name: 'Providers', icon: 'V', category: 'providers', description: '', factory });
+    manager.registerModalRedirect('providers', 'providers-modal');
+
+    const seen: string[] = [];
+    manager.setOpenModalCallback((name) => seen.push(name));
+
+    const result = manager.open('providers');
+
+    expect(seen).toEqual(['providers-modal']);
+    expect(factory).not.toHaveBeenCalled();
+    // The sentinel is never added to a pane — the workspace stays empty.
+    expect(manager.getAllOpen()).toHaveLength(0);
+    expect(manager.getPanel('providers')).toBeNull();
+    // The sentinel still satisfies the non-null Panel contract callers expect.
+    expect(result.id).toBe('providers');
+  });
+
+  test('getModalRedirect() lets a caller (e.g. the /panel command) look up the target before calling open()', () => {
+    const manager = new PanelManager();
+    manager.registerModalRedirect('settings-sync', 'settings-sync-modal');
+    expect(manager.getModalRedirect('settings-sync')).toBe('settings-sync-modal');
+    expect(manager.getModalRedirect('git')).toBeUndefined();
+  });
+
+  test('a modal redirect is checked before alias resolution and does not require setOpenModalCallback to be wired', () => {
+    const manager = new PanelManager();
+    manager.registerModalRedirect('sandbox', 'sandbox-modal');
+    // No setOpenModalCallback call at all — must not throw.
+    expect(() => manager.open('sandbox')).not.toThrow();
+  });
+
+  test('a plain panel->panel alias (RETIRE-INTO-FLEET) is unaffected by the modal-redirect map', () => {
+    const manager = new PanelManager();
+    const fleetPanel = makePanel('fleet', 'Fleet');
+    manager.registerType({ id: 'fleet', name: 'Fleet', icon: '⊟', category: 'runtime-ops', description: '', factory: () => fleetPanel });
+    manager.registerAlias('tasks', 'fleet');
+
+    const opened = manager.open('tasks');
+    expect(opened).toBe(fleetPanel);
+    expect(manager.getPanel('tasks')).toBe(fleetPanel);
+  });
+});
+
+describe('PanelManager — default panel retargets to fleet, not registry[0] (W6.1)', () => {
+  test('toggle() with nothing open falls back to fleet when present, not the first-registered type', () => {
+    const manager = new PanelManager();
+    // Register 'git' first (mirrors real registration order — development.ts
+    // registers before operations.ts) to prove the retarget is explicit, not
+    // an accident of registry[0].
+    manager.registerType({ id: 'git', name: 'Git', icon: 'G', category: 'development', description: '', factory: () => makePanel('git', 'Git') });
+    manager.registerType({ id: 'fleet', name: 'Fleet', icon: '⊟', category: 'runtime-ops', description: '', factory: () => makePanel('fleet', 'Fleet') });
+
+    manager.toggle();
+
+    expect(manager.getPanel('fleet')).not.toBeNull();
+    expect(manager.getPanel('git')).toBeNull();
+  });
+
+  test('toggleBottomPane() with an empty bottom pane and only one top panel falls back to fleet', () => {
+    const manager = new PanelManager();
+    manager.registerType({ id: 'git', name: 'Git', icon: 'G', category: 'development', description: '', factory: () => makePanel('git', 'Git') });
+    manager.registerType({ id: 'fleet', name: 'Fleet', icon: '⊟', category: 'runtime-ops', description: '', factory: () => makePanel('fleet', 'Fleet') });
+    manager.open('git', 'top');
+
+    manager.toggleBottomPane();
+
+    expect(manager.getPaneOf('fleet')).toBe('bottom');
+  });
+
+  test('falls back to registry[0] only when fleet itself is not registered (defensive, should not happen in production)', () => {
+    const manager = new PanelManager();
+    manager.registerType({ id: 'git', name: 'Git', icon: 'G', category: 'development', description: '', factory: () => makePanel('git', 'Git') });
+    manager.toggle();
+    expect(manager.getPanel('git')).not.toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// W6.1 — saved-layout tolerance contract. session-workflow.ts's
+// reopenPanelsFromReturnContext wraps `panelManager.open(id)` in a
+// try/catch per id so a saved layout containing a DELETE-disposition id
+// (no alias, e.g. the old 'panel-list'/'thinking'/'tools') resolves-or-skips
+// instead of throwing; a RETIRE-INTO-FLEET id (has an alias) opens normally.
+// This proves the underlying PanelManager contract that tolerance depends
+// on, without re-implementing the full /session resume command flow.
+// ---------------------------------------------------------------------------
+
+describe('PanelManager — open() contract backing saved-layout tolerance (W6.1)', () => {
+  test('open() throws for an id with no registration and no alias (the DELETE-disposition case)', () => {
+    const manager = new PanelManager();
+    manager.registerType({ id: 'git', name: 'Git', icon: 'G', category: 'development', description: '', factory: () => makePanel('git', 'Git') });
+    expect(() => manager.open('panel-list')).toThrow();
+  });
+
+  test('open() resolves normally for an id with an alias (the RETIRE-INTO-FLEET case)', () => {
+    const manager = new PanelManager();
+    const fleetPanel = makePanel('fleet', 'Fleet');
+    manager.registerType({ id: 'fleet', name: 'Fleet', icon: '⊟', category: 'runtime-ops', description: '', factory: () => fleetPanel });
+    manager.registerAlias('tasks', 'fleet');
+    expect(() => manager.open('tasks')).not.toThrow();
+  });
+
+  test('a try/catch reopen loop over a mixed saved layout skips the deleted id and reopens the retired (aliased) one', () => {
+    const manager = new PanelManager();
+    manager.registerType({ id: 'fleet', name: 'Fleet', icon: '⊟', category: 'runtime-ops', description: '', factory: () => makePanel('fleet', 'Fleet') });
+    manager.registerAlias('tasks', 'fleet');
+
+    const savedLayout = ['panel-list', 'tasks']; // one DELETE id, one RETIRE (aliased) id
+    const reopened: string[] = [];
+    for (const id of savedLayout) {
+      try {
+        manager.open(id);
+        reopened.push(id);
+      } catch {
+        // Ignore unknown or currently unavailable panel ids during resume —
+        // mirrors session-workflow.ts's reopenPanelsFromReturnContext.
+      }
+    }
+
+    expect(reopened).toEqual(['tasks']);
+    expect(manager.getAllOpen()).toHaveLength(1);
+  });
+});
