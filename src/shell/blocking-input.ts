@@ -4,9 +4,12 @@ import type { SessionSnapshot } from '@/runtime/index.ts';
 import type { SystemMessageRouter } from '../core/system-message-router.ts';
 import type { ConversationMessageSnapshot } from '@pellux/goodvibes-sdk/platform/core';
 import { replayJournalForSession } from '../core/session-recovery.ts';
+import { applyHunkKey, buildModifiedEditArgs, type HunkSelectionState } from '../permissions/hunk-selection.ts';
 
 export type PendingPermissionState = PermissionRequest & {
-  resolve: (approved: boolean, remember?: boolean) => void;
+  resolve: (approved: boolean, remember?: boolean, modifiedArgs?: Record<string, unknown>) => void;
+  /** Present only when isHunkSelectable(request) was true when the prompt was opened. */
+  hunkState?: HunkSelectionState;
 };
 
 export type BlockingInputHandlerOptions = {
@@ -73,6 +76,24 @@ export function handleBlockingShellInput(
 
   if (pendingPermission) {
     const req = pendingPermission;
+
+    if (req.hunkState) {
+      const { state, commit } = applyHunkKey(req.hunkState, data);
+      if (commit === 'apply') {
+        req.resolve(true, false, buildModifiedEditArgs(req, state));
+        render();
+        return { handled: true, pendingPermission: null, recoveryPending };
+      }
+      if (commit === 'cancel') {
+        req.resolve(false, false);
+        abortTurn();
+        render();
+        return { handled: true, pendingPermission: null, recoveryPending };
+      }
+      render();
+      return { handled: true, pendingPermission: { ...req, hunkState: state }, recoveryPending };
+    }
+
     const key = data.toLowerCase().trim();
 
     if (key === 'y') {

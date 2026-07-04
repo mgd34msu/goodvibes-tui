@@ -2,9 +2,28 @@ import { type Line } from '../types/grid.ts';
 import { UIFactory } from '../renderer/ui-factory.ts';
 import type { PermissionCategory, PermissionRequestAnalysis } from '@pellux/goodvibes-sdk/platform/permissions';
 import { buildPermissionApprovalBrief, getDisplayArg } from '@pellux/goodvibes-sdk/platform/permissions';
+import { DIFF_TONES, UI_TONES } from '../renderer/ui-primitives.ts';
+import type { HunkSelectionState } from './hunk-selection.ts';
+export { buildPendingPermissionExtras } from './hunk-selection.ts';
 
 import type { PermissionPromptRequest, PermissionPromptDecision, PermissionRequestHandler, PermissionRequest } from '@pellux/goodvibes-sdk/platform/permissions';
 export type { PermissionPromptRequest, PermissionPromptDecision, PermissionRequestHandler, PermissionRequest };
+
+/** Visible hunk rows before a "+N more" trailer kicks in (Risk 3). */
+const MAX_VISIBLE_HUNKS = 8;
+
+/**
+ * Single source of truth for how many Line rows the hunk-list section
+ * occupies: 1 header row + up to MAX_VISIBLE_HUNKS checkbox rows + 1 trailer
+ * row (rendered as "+N more" when truncated, blank otherwise — always
+ * present so the row count never depends on which branch fires). Both
+ * getPromptHeight and createPromptLines call this SAME function, so they
+ * cannot drift apart (Risk 2 — main.ts's render loop reserves viewport
+ * space from getPromptHeight *before* the real render happens).
+ */
+function hunkListRowCount(hunkState: HunkSelectionState): number {
+  return Math.min(hunkState.hunks.length, MAX_VISIBLE_HUNKS) + 2;
+}
 
 /**
  * PermissionPromptUI - Renders a permission prompt as Line[] fragments.
@@ -30,11 +49,12 @@ export class PermissionPromptUI {
     };
   }
 
-  static getPromptHeight(request: PermissionPromptRequest): number {
+  static getPromptHeight(request: PermissionPromptRequest, hunkState?: HunkSelectionState): number {
     const analysis = this.fallbackAnalysis(request);
     const reasonLines = Math.min(2, Math.max(1, analysis.reasons.length));
     const extraLines = (analysis.host ? 1 : 0) + (analysis.surface ? 1 : 0) + (analysis.sideEffects && analysis.sideEffects.length > 0 ? 1 : 0);
-    return 12 + reasonLines + extraLines;
+    const hunkLines = hunkState ? hunkListRowCount(hunkState) : 0;
+    return 12 + reasonLines + extraLines + hunkLines;
   }
 
   /** Returns the key argument to display for a given tool invocation. */
@@ -64,7 +84,7 @@ export class PermissionPromptUI {
    * createPromptLines - Renders the permission prompt as an array of Lines.
    * Injected into the viewport by the render function when a request is pending.
    */
-  static createPromptLines(width: number, request: PermissionRequest): Line[] {
+  static createPromptLines(width: number, request: PermissionRequest, hunkState?: HunkSelectionState): Line[] {
     const lines: Line[] = [];
     const { tool, args, category } = request;
     const analysis = this.fallbackAnalysis(request);
@@ -153,8 +173,44 @@ export class PermissionPromptUI {
     // Blank spacer
     lines.push(UIFactory.stringToLine(' '.repeat(width), width));
 
+    if (hunkState) {
+      // Hunk list — see hunkListRowCount() for the row-count contract this
+      // block must match exactly (Risk 2: getPromptHeight/createPromptLines
+      // parity is what keeps main.ts's render loop from clipping the
+      // viewport).
+      const { hunks, cursor, selected } = hunkState;
+      const headerLine = `   Hunks (${selected.size}/${hunks.length} selected):`;
+      lines.push(UIFactory.stringToLine(headerLine.padEnd(width), width, { fg: TEXT, bold: true }));
+
+      const visible = hunks.slice(0, MAX_VISIBLE_HUNKS);
+      const maxPreviewLen = Math.max(6, Math.floor((width - 20) / 2));
+      for (let i = 0; i < visible.length; i++) {
+        const hunk = visible[i]!;
+        const box = selected.has(i) ? '[x]' : '[ ]';
+        const findPreview = hunk.find.replace(/\n/g, '⏎').slice(0, maxPreviewLen);
+        const replacePreview = hunk.replace.replace(/\n/g, '⏎').slice(0, maxPreviewLen);
+        const rowText = `   ${box} ${i + 1}. ${hunk.path} — "${findPreview}" -> "${replacePreview}"`;
+        const isCursor = i === cursor;
+        lines.push(UIFactory.stringToLine(
+          rowText.padEnd(width),
+          width,
+          {
+            fg: selected.has(i) ? DIFF_TONES.add : DIFF_TONES.del,
+            bg: isCursor ? UI_TONES.bg.selected : undefined,
+            bold: isCursor,
+          },
+        ));
+      }
+
+      const hiddenCount = hunks.length - visible.length;
+      const trailerLine = hiddenCount > 0 ? `   +${hiddenCount} more` : '';
+      lines.push(UIFactory.stringToLine(trailerLine.padEnd(width), width, { fg: DIM }));
+    }
+
     // Choices row
-    const choicesLine = `   [Y] Allow once    [A] Allow always (session)    [N] Deny`;
+    const choicesLine = hunkState
+      ? `   [j/k] Navigate  [Space] Toggle  [A] All  [Enter] Apply selected  [N] Deny`
+      : `   [Y] Allow once    [A] Allow always (session)    [N] Deny`;
     lines.push(UIFactory.stringToLine(choicesLine.padEnd(width), width, { fg: ACCENT, bold: true }));
 
     // Bottom separator
