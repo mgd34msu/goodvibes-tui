@@ -261,6 +261,21 @@ describe('(f) unrecognized output fallback', () => {
   test('parseTestOutput returns null when neither pattern matches', () => {
     expect(parseTestOutput('some other output\n')).toBeNull();
   });
+
+  test('parseTestOutput parses plain bun test output (green)', () => {
+    const out = 'bun test v1.3.14\n\n 5 pass\n 0 fail\n 12 expect() calls\nRan 5 tests across 2 files. [42.00ms]\n';
+    expect(parseTestOutput(out)).toEqual({
+      totalFiles: 2, passed: 5, failed: 0, failingFiles: [], unit: 'tests',
+    });
+  });
+
+  test('parseTestOutput parses plain bun test output (red, with failing test names)', () => {
+    const out = 'bun test v1.3.14\n(fail) todo CLI > done marks a todo complete [1.00ms]\n\n 4 pass\n 1 fail\n 10 expect() calls\nRan 5 tests across 2 files. [40.00ms]\n';
+    expect(parseTestOutput(out)).toEqual({
+      totalFiles: 2, passed: 4, failed: 1,
+      failingFiles: ['todo CLI > done marks a todo complete [1.00ms]'], unit: 'tests',
+    });
+  });
 });
 
 // ---------------------------------------------------------------------------
