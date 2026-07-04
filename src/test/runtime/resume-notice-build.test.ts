@@ -67,6 +67,28 @@ describe('describeChainOutcome', () => {
   test('a failed chain with no owner decisions at all reports failed (never throws)', () => {
     expect(describeChainOutcome(makeChain({ state: 'failed', ownerDecisions: [] }))).toBe('failed');
   });
+
+  // ── first-class failureKind (current SDK) ──
+  test('failureKind cancelled reports cancelled even with no chain_cancelled decision logged', () => {
+    const chain = makeChain({ state: 'failed', failureKind: 'cancelled', ownerDecisions: [] });
+    expect(describeChainOutcome(chain)).toBe('cancelled');
+  });
+
+  test('failureKind other/transport reports failed', () => {
+    expect(describeChainOutcome(makeChain({ state: 'failed', failureKind: 'other', ownerDecisions: [] }))).toBe('failed');
+    expect(describeChainOutcome(makeChain({ state: 'failed', failureKind: 'transport', ownerDecisions: [] }))).toBe('failed');
+  });
+
+  test('failureKind takes precedence over the owner-decision log (a genuine failure is not misread as cancelled)', () => {
+    const chain = makeChain({
+      state: 'failed',
+      failureKind: 'other',
+      ownerDecisions: [
+        { id: '1', ts: new Date().toISOString(), action: 'chain_cancelled', state: 'failed', reason: 'stale decision from an earlier attempt' },
+      ],
+    });
+    expect(describeChainOutcome(chain)).toBe('failed');
+  });
 });
 
 // ─── mostRecentChain ─────────────────────────────────────────────────────────
