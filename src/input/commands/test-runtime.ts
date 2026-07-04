@@ -28,12 +28,20 @@ const RAW_TAIL_LINES = 30;
 
 const FAIL_LINE_RE = /^==> (.+?)\s+\[FAIL\]$/gm;
 const SUMMARY_LINE_RE = /^Test files: (\d+), passed: (\d+), failed: (\d+)$/m;
+// Plain `bun test` output: " N pass" / " N fail" counters (tests, not files),
+// "Ran N tests across M files.", and "(fail) suite > name" per failing test.
+const BUN_PASS_RE = /^\s*(\d+) pass\s*$/m;
+const BUN_FAIL_RE = /^\s*(\d+) fail\s*$/m;
+const BUN_FILES_RE = /across (\d+) files?\./;
+const BUN_FAIL_TEST_RE = /^\(fail\) (.+)$/gm;
 
 interface ParsedTestResults {
   totalFiles: number;
   passed: number;
   failed: number;
   failingFiles: string[];
+  /** Whether passed/failed count files (goodvibes runner) or tests (bun test). */
+  unit: 'files' | 'tests';
 }
 
 /**
@@ -46,19 +54,40 @@ interface ParsedTestResults {
  */
 export function parseTestOutput(output: string): ParsedTestResults | null {
   const summaryMatch = SUMMARY_LINE_RE.exec(output);
-  if (!summaryMatch) return null;
-  const failingFiles: string[] = [];
-  FAIL_LINE_RE.lastIndex = 0;
-  let match: RegExpExecArray | null;
-  while ((match = FAIL_LINE_RE.exec(output)) !== null) {
-    failingFiles.push(match[1]!);
+  if (summaryMatch) {
+    const failingFiles: string[] = [];
+    FAIL_LINE_RE.lastIndex = 0;
+    let match: RegExpExecArray | null;
+    while ((match = FAIL_LINE_RE.exec(output)) !== null) {
+      failingFiles.push(match[1]!);
+    }
+    return {
+      totalFiles: Number(summaryMatch[1]),
+      passed: Number(summaryMatch[2]),
+      failed: Number(summaryMatch[3]),
+      failingFiles,
+      unit: 'files',
+    };
   }
-  return {
-    totalFiles: Number(summaryMatch[1]),
-    passed: Number(summaryMatch[2]),
-    failed: Number(summaryMatch[3]),
-    failingFiles,
-  };
+  // Plain `bun test`: counts are per-test, failing entries are test names.
+  const bunPass = BUN_PASS_RE.exec(output);
+  const bunFail = BUN_FAIL_RE.exec(output);
+  if (bunPass && bunFail) {
+    const failingTests: string[] = [];
+    BUN_FAIL_TEST_RE.lastIndex = 0;
+    let match: RegExpExecArray | null;
+    while ((match = BUN_FAIL_TEST_RE.exec(output)) !== null) {
+      failingTests.push(match[1]!);
+    }
+    return {
+      totalFiles: Number(BUN_FILES_RE.exec(output)?.[1] ?? 0),
+      passed: Number(bunPass[1]),
+      failed: Number(bunFail[1]),
+      failingFiles: failingTests,
+      unit: 'tests',
+    };
+  }
+  return null;
 }
 
 /**
@@ -206,13 +235,17 @@ export async function runTestCommand(
   const parsed = parseTestOutput(combinedOutput);
 
   if (parsed) {
-    const summary = `${parsed.passed}/${parsed.totalFiles} files passed`;
-    const errorMsg = ok ? undefined : `${parsed.failed} file${parsed.failed === 1 ? '' : 's'} failed`;
+    const summary = parsed.unit === 'files'
+      ? `${parsed.passed}/${parsed.totalFiles} files passed`
+      : `${parsed.passed} passed, ${parsed.failed} failed${parsed.totalFiles ? ` across ${parsed.totalFiles} file${parsed.totalFiles === 1 ? '' : 's'}` : ''}`;
+    const failedNoun = parsed.unit === 'files' ? 'file' : 'test';
+    const errorMsg = ok ? undefined : `${parsed.failed} ${failedNoun}${parsed.failed === 1 ? '' : 's'} failed`;
     ctx.session.conversationManager.logToolResultBlock(toolCall, ok ? 'done' : 'error', summary, durationMs, errorMsg);
     const durableLines = [`[Test] ${summary}${errorMsg ? ` — ${errorMsg}` : ''}`];
     if (parsed.failingFiles.length > 0) {
       const shown = parsed.failingFiles.slice(0, MAX_FAILING_NAMES_SHOWN);
-      const lines = ['Failing test files:', ...shown.map((f) => `  - ${f}`)];
+      const failListHeader = parsed.unit === 'files' ? 'Failing test files:' : 'Failing tests:';
+      const lines = [failListHeader, ...shown.map((f) => `  - ${f}`)];
       const remaining = parsed.failingFiles.length - shown.length;
       if (remaining > 0) lines.push(`  ...and ${remaining} more`);
       ctx.print(lines.join('\n'));
