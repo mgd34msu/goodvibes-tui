@@ -24,6 +24,7 @@ export class GitStatusProvider {
   private lastFetch = 0;
   private readonly ttlMs = 2000;
   private fetching = false;
+  private pollTimer: ReturnType<typeof setInterval> | null = null;
 
   constructor(private readonly workingDirectory: string) {}
 
@@ -51,6 +52,45 @@ export class GitStatusProvider {
   async refresh(): Promise<GitHeaderInfo> {
     await this._fetch();
     return this.cache;
+  }
+
+  /**
+   * Start a lightweight live-repo-state poll. Mirrors DiffPanel's principle of
+   * never trusting a cached "is this a repo" flag (see diff-panel.ts
+   * showGitDiff/showFileDiffs/showStagedDiff, all gated on a fresh
+   * GitService.isGitRepo() check) but amortizes the cost for the header: the
+   * cheap synchronous isGitRepo() spawn runs every tick; the heavier async
+   * status()+branch() fetch (this.refresh()) only runs when that boolean
+   * actually flips — e.g. an external `git init`, or `.git` removed.
+   */
+  startPolling(intervalMs: number, onChange: (info: GitHeaderInfo) => void): void {
+    if (this.pollTimer !== null) return;
+    const checkIsRepo = (): boolean | null => {
+      try {
+        return GitService.isGitRepo(this.workingDirectory);
+      } catch (err) {
+        logger.debug('GitStatusProvider: isGitRepo poll check failed', { error: summarizeError(err) });
+        return null;
+      }
+    };
+    let lastKnownIsRepo = checkIsRepo();
+    this.pollTimer = setInterval(() => {
+      const isRepoNow = checkIsRepo();
+      if (isRepoNow !== null && isRepoNow !== lastKnownIsRepo) {
+        lastKnownIsRepo = isRepoNow;
+        this.refresh().then(onChange).catch((err) => {
+          logger.debug('GitStatusProvider: poll-triggered refresh failed', { error: summarizeError(err) });
+        });
+      }
+    }, intervalMs);
+  }
+
+  /** Stop the live-repo-state poll started by startPolling(). No-op if not polling. */
+  stopPolling(): void {
+    if (this.pollTimer !== null) {
+      clearInterval(this.pollTimer);
+      this.pollTimer = null;
+    }
   }
 
   private async _fetch(): Promise<void> {

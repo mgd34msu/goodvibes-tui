@@ -331,6 +331,8 @@ export function feedInputTokens(context: InputFeedContext, tokens: readonly Inpu
       keybindingsManager: context.keybindingsManager,
       onPanelInputConsumed: context.onPanelInputConsumed,
       isPrintableBurst,
+      isTurnActive: () => context.commandContext?.isGenerating?.() ?? false,
+      cancelGeneration: () => context.commandContext?.cancelGeneration?.(),
     }, token);
     context.panelFocused = panelRoute.panelFocused;
     if (panelRoute.handled) {
