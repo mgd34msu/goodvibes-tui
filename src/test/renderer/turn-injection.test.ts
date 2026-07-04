@@ -39,6 +39,20 @@ describe('formatTurnInjectionEntry', () => {
     expect(line).toContain('340');
     expect(line).toContain('800');
     expect(line).not.toContain('nothing injected');
+    // The retrieval query must be traceable on injected lines (Wave-5 replay
+    // flagged its omission).
+    expect(line).toContain('"fix the flaky retry test"');
+  });
+
+  test('populated: long queries are truncated but still present', () => {
+    const entry = makeEntry({
+      injectedIds: ['mem-1'],
+      tokenCost: 120,
+      query: 'x'.repeat(80),
+    });
+    const line = formatTurnInjectionEntry(entry);
+    expect(line).toContain('x'.repeat(47) + '…');
+    expect(line).not.toContain('x'.repeat(48));
   });
 
   test('populated: lists ids dropped for budget alongside the ones that were kept', () => {

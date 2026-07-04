@@ -42,6 +42,7 @@ import type { UiRuntimeServices } from './ui-services.ts';
 import { createDeferredStartupCoordinator } from '@/runtime/index.ts';
 import { initializeBootstrapCore } from './bootstrap-core.ts';
 import { createBootstrapShell } from './bootstrap-shell.ts';
+import { buildSharedOrchestratorCoreServices } from './orchestrator-core-services.ts';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 import { DaemonServer } from '@pellux/goodvibes-sdk/platform/daemon';
 import { HttpListener } from '@pellux/goodvibes-sdk/platform/daemon';
@@ -231,15 +232,11 @@ export async function bootstrapRuntime(
       logger.debug('companion handleUserInput safety catch', { error: String(err) });
     });
   };
+  // Shared payload (single source of truth, includes wo805's memoryRegistry —
+  // see orchestrator-core-services.ts) plus this site's cacheHitTracker.
   orchestrator.setCoreServices({
-    configManager,
-    providerRegistry,
+    ...buildSharedOrchestratorCoreServices({ services, configManager, providerRegistry }),
     cacheHitTracker: services.cacheHitTracker,
-    planManager: services.planManager,
-    adaptivePlanner: services.adaptivePlanner,
-    sessionMemoryStore: services.sessionMemoryStore,
-    sessionLineageTracker: services.sessionLineageTracker,
-    idempotencyStore: services.idempotencyStore,
   });
   conversation.setSessionLineageTracker(services.sessionLineageTracker);
 

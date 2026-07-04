@@ -47,10 +47,19 @@ export function formatTurnInjectionEntry(entry: TurnInjectionEntry): string {
   const droppedStr = entry.droppedForBudget.length > 0
     ? `, dropped for budget: ${entry.droppedForBudget.join(', ')}`
     : '';
+  // The retrieval query is part of the record's honesty contract — without it
+  // an injected line can't be traced back to WHY those ids were retrieved
+  // (Wave-5 replay flagged the omission). Truncated to keep the line scannable.
+  const queryStr = entry.query ? ` for ${JSON.stringify(truncateQuery(entry.query))}` : '';
   return (
-    `  turn ${entry.turn}: injected ${entry.injectedIds.join(', ')} ` +
+    `  turn ${entry.turn}: injected ${entry.injectedIds.join(', ')}${queryStr} ` +
     `(~${fmtN(entry.tokenCost)}/${fmtN(entry.budgetTokens)} tok, floor ${entry.relevanceFloor})${droppedStr}${backendTag}`
   );
+}
+
+function truncateQuery(query: string): string {
+  const flat = query.replace(/\s+/g, ' ').trim();
+  return flat.length > 48 ? `${flat.slice(0, 47)}…` : flat;
 }
 
 /**

@@ -59,6 +59,7 @@ export const CODE_INDEX_ENABLED_CONFIG_KEY = 'storage.codeIndexEnabled';
  */
 export const CODE_INDEX_MAX_FILES = 5000;
 export const CODE_INDEX_MAX_FILE_BYTES = 512 * 1024;
+export const CODE_INDEX_MAX_TOTAL_BYTES = 256 * 1024 * 1024;
 
 export interface CodeIndexServicesDeps {
   readonly workingDirectory: string;
@@ -101,7 +102,7 @@ export function createCodeIndexServices(deps: CodeIndexServicesDeps): CodeIndexS
     deps.workingDirectory,
     codeIndexDbPath(deps.workingDirectory),
     deps.memoryEmbeddingRegistry,
-    { maxFiles: CODE_INDEX_MAX_FILES, maxFileBytes: CODE_INDEX_MAX_FILE_BYTES },
+    { maxFiles: CODE_INDEX_MAX_FILES, maxFileBytes: CODE_INDEX_MAX_FILE_BYTES, maxTotalBytes: CODE_INDEX_MAX_TOTAL_BYTES },
   );
   codeIndexStore.init();
   if (isCodeIndexAutoStartEnabled(deps.configManager)) {
