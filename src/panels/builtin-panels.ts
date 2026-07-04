@@ -5,6 +5,7 @@ import { registerOperationsPanels } from './builtin/operations.ts';
 import { registerAgentPanels } from './builtin/agent.ts';
 import { registerSessionPanels } from './builtin/session.ts';
 import { registerKnowledgePanels } from './builtin/knowledge.ts';
+import { registerBuiltinModals } from './builtin-modals.ts';
 
 /**
  * Register all built-in panel types with the given PanelManager.
@@ -18,6 +19,10 @@ export function registerBuiltinPanels(manager: PanelManager, deps: BuiltinPanelD
   registerAgentPanels(manager, resolved);
   registerSessionPanels(manager, resolved);
   registerKnowledgePanels(manager, resolved);
+  // W6.1 (the purge): register MIGRATE-TO-MODAL surfaces + their panel-id
+  // redirects. Must run after the panel registrations so a redirected id wins
+  // over any lingering panel registration in open().
+  registerBuiltinModals(manager, resolved);
 }
 
 export type { BuiltinPanelDeps } from './builtin/shared.ts';

@@ -282,16 +282,23 @@ export function wireShellUiOpeners(options: WireShellUiOpenersOptions): void {
     render();
   };
 
-  // W6.1 (the purge) skeleton: no MIGRATE-TO-MODAL surface exists yet (WO-A/B
-  // add real modal state + dispatch here as they convert a panel). Wired now
-  // so PanelManager.setOpenModalCallback and CommandContext.openModal both
-  // have a real, safe implementation to call — a no-op-with-honest-message
-  // rather than silently swallowing the request or throwing. Also wired as
-  // PanelManager's injected callback so open() on a future modal-redirected
-  // id (registerModalRedirect) reaches the same place.
+  // W6.1 (the purge): open a MIGRATE-TO-MODAL surface by name. Fed from both
+  // ctx.openModal(name) (migrated command front-doors) and PanelManager's
+  // open()-time modal-redirect callback (a legacy panel id resolving to a modal
+  // name). Surfaces are registered in builtin-modals.ts; a name with no
+  // registered surface degrades honestly to a print rather than a blank modal.
+  // The stack name is the stable 'config' slot (one config modal at a time —
+  // opening another swaps the surface), so Esc close/return and the modal-stack
+  // machinery need only the single 'config' case (handler-ui-state.ts).
   commandContext.openModal = (name: string) => {
-    input.modalOpened(name);
-    commandContext.print(`'${name}' is not available yet in this build.`);
+    const surface = panelManager.getModalSurface(name);
+    if (!surface) {
+      commandContext.print(`'${name}' is not available yet in this build.`);
+      render();
+      return;
+    }
+    input.modalOpened('config');
+    input.configModal.open(surface, render);
     render();
   };
   panelManager.setOpenModalCallback(commandContext.openModal);

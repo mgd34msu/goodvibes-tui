@@ -3,20 +3,11 @@ import { FleetPanel } from '../fleet-panel.ts';
 import { createFleetReadModel } from '../fleet-read-model.ts';
 import { PluginsPanel } from '../plugins-panel.ts';
 import { SkillsPanel } from '../skills-panel.ts';
-import { ServicesPanel } from '../services-panel.ts';
-import { SubscriptionPanel } from '../subscription-panel.ts';
 import { LocalAuthPanel } from '../local-auth-panel.ts';
-import { SettingsSyncPanel } from '../settings-sync-panel.ts';
 import { HooksPanel } from '../hooks-panel.ts';
 import { SecurityPanel } from '../security-panel.ts';
 import { MarketplacePanel } from '../marketplace-panel.ts';
-import { SandboxPanel } from '../sandbox-panel.ts';
-import { RemotePanel } from '../remote-panel.ts';
-import { ProviderHealthPanel } from '../provider-health-panel.ts';
 import { PolicyPanel } from '../policy-panel.ts';
-import { createProviderRuntimeInspectionQuery } from '../../runtime/ui-service-queries.ts';
-import { createRuntimeProviderApi } from '@/runtime/index.ts';
-import { selectModel } from '../../runtime/store/selectors/index.ts';
 import type { ResolvedBuiltinPanelDeps } from './shared.ts';
 import { requireHookPanelDeps, requirePluginManager, requireUiServices } from './shared.ts';
 
@@ -42,12 +33,6 @@ import { requireHookPanelDeps, requirePluginManager, requireUiServices } from '.
 // read-model.
 export function registerOperationsPanels(manager: PanelManager, deps: ResolvedBuiltinPanelDeps): void {
   const ui = requireUiServices(deps);
-  const providerRuntime = createProviderRuntimeInspectionQuery(createRuntimeProviderApi({
-    benchmarkStore: ui.providers.benchmarkStore,
-    favoritesStore: ui.providers.favoritesStore,
-    providerRegistry: ui.providers.providerRegistry,
-  }));
-  const runtimeStore = deps.runtimeStore;
 
   // W2.2: Fleet — the live unified process tree, read from the single
   // process registry constructed once in runtime/services.ts (shared with
@@ -128,44 +113,26 @@ export function registerOperationsPanels(manager: PanelManager, deps: ResolvedBu
     }),
   });
 
-  manager.registerType({
-    id: 'services',
-    name: 'Services',
-    icon: 'V',
-    category: 'providers',
-    description: 'Configured external services, credential presence, and connection health tests',
-    factory: () => new ServicesPanel(deps.serviceRegistry, deps.subscriptionManager),
-  });
-
-  manager.registerType({
-    id: 'subscription',
-    name: 'Subscriptions',
-    icon: 'B',
-    category: 'providers',
-    description: 'OAuth-backed provider subscriptions and supported provider override posture',
-    factory: () => new SubscriptionPanel(deps.serviceRegistry, deps.subscriptionManager),
-  });
-
+  // W6.1 (the purge): services, subscription, settings-sync are MIGRATE-TO-MODAL
+  // — their views moved to config-modal surfaces in builtin-modals.ts
+  // (services-modal / subscription-modal / settings-sync-modal), reached via
+  // those panel ids' modal redirects.
+  //
+  // local-auth is a DELIBERATE EXCEPTION: it stays a registered panel because it
+  // is the host for the masked password-entry sub-mode (LocalAuthPanel.
+  // openMaskedEntry, driven by ctx.openLocalAuthMaskedEntry — the only path that
+  // keeps a plaintext password out of argv/history/scrollback). Its browse view
+  // is mirrored by local-auth-modal (reached via the /local-auth front-door), but
+  // the panel itself cannot be retired without regressing that secure input, and
+  // no 'local-auth' modal redirect is registered (so openLocalAuthMaskedEntry's
+  // showPanel('local-auth') + getPanel('local-auth') still resolve to it).
   manager.registerType({
     id: 'local-auth',
     name: 'Local Auth',
     icon: 'U',
     category: 'security-policy',
-    description: 'Local daemon/listener auth users, bootstrap posture, and active sessions',
+    description: 'Local daemon/listener auth users, bootstrap posture, and active sessions (also the masked password-entry host)',
     factory: () => new LocalAuthPanel(deps.localUserAuthManager),
-  });
-
-  manager.registerType({
-    id: 'settings-sync',
-    name: 'Settings Sync',
-    // WO-152: registry previously said 'Y' while the live panel's own
-    // super() call used 'S' — a pre-existing registry/instance mismatch as
-    // well as a collision ('Y' with communication/eval, 'S' with symbols).
-    // Unified to a single unique glyph in both places.
-    icon: '▱',
-    category: 'security-policy',
-    description: 'Local, synced, and managed settings posture with recent sync events and active locks',
-    factory: () => new SettingsSyncPanel(deps.configManager),
   });
 
   manager.registerType({
@@ -208,69 +175,11 @@ export function registerOperationsPanels(manager: PanelManager, deps: ResolvedBu
     },
   });
 
-  manager.registerType({
-    id: 'sandbox',
-    name: 'Sandbox',
-    // WO-152: was 'X' (collided with tools).
-    icon: '▪',
-    category: 'security-policy',
-    description: 'VM isolation posture for MCP servers and evaluation runtimes',
-    factory: () => new SandboxPanel(deps.configManager, deps.sandboxSessionRegistry, deps.requestRender),
-  });
-
-  manager.registerType({
-    id: 'remote',
-    name: 'Remote',
-    // WO-152: was 'R' (collided with routes).
-    icon: '▰',
-    category: 'providers',
-    description: 'Self-hosted daemon and ACP transport state with active remote connections',
-    factory: () => new RemotePanel(ui.readModels.remote),
-  });
-
-  manager.registerType({
-    id: 'provider-health',
-    name: 'Health',
-    icon: 'N',
-    category: 'providers',
-    description: 'Provider console: status, latency timelines, error attribution, auth routes, fallback chain, and repair actions',
-    // W6.1: preload dropped — provider-health is MIGRATE-TO-MODAL (not yet
-    // converted; WO-A). Only 'tokens' remains preloaded post-purge.
-    retainOnClose: true,
-    factory: () => new ProviderHealthPanel(
-      providerRuntime,
-      {
-        configManager: deps.configManager,
-        turnEvents: ui.events.turns,
-        providerEvents: ui.events.providers,
-        providers: ui.readModels.providers,
-        session: ui.readModels.session,
-        security: ui.readModels.security,
-        localAuth: ui.readModels.localAuth,
-        settings: ui.readModels.settings,
-        remote: ui.readModels.remote,
-        intelligence: ui.readModels.intelligence,
-        continuity: ui.readModels.continuity,
-        worktrees: ui.readModels.worktrees,
-        ...(runtimeStore
-          ? {
-            modelState: {
-              get: () => selectModel(runtimeStore.getState()),
-              subscribe: (listener: () => void) => runtimeStore.subscribe(listener),
-            },
-          }
-          : {}),
-      },
-      deps.requestRender,
-    ),
-  });
-
-  // WO-112 compat (wired at integration): the retired 'providers' and
-  // 'accounts' panel ids still resolve — redirected to the merged
-  // provider-health console. '/accounts panel|open' depends on the
-  // 'accounts' alias.
-  manager.registerAlias('providers', 'provider-health');
-  manager.registerAlias('accounts', 'provider-health');
+  // W6.1 (the purge): sandbox, remote, and provider-health are
+  // MIGRATE-TO-MODAL — sandbox-modal / remote-modal / providers-modal in
+  // builtin-modals.ts. provider-health is the charter's live-modal exemplar;
+  // the 'providers' and 'accounts' ids (formerly panel aliases to it) now
+  // redirect to providers-modal (registered in builtin-modals.ts).
 
   manager.registerType({
     id: 'policy',

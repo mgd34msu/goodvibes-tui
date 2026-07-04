@@ -45,7 +45,7 @@ export function registerHealthRuntimeCommands(registry: CommandRegistry): void {
       const readModels = requireReadModels(ctx);
 
       if (sub === 'open' || sub === 'panel' || sub === 'provider') {
-        openCommandPanel(ctx, 'provider-health');
+        ctx.openModal?.('providers-modal'); // W6.1: provider-health panel -> config modal
         return;
       }
 

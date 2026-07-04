@@ -76,6 +76,10 @@ import type { BackgroundProcess } from '@pellux/goodvibes-sdk/platform/tools';
 import type { ProcessNode } from '@pellux/goodvibes-sdk/platform/runtime/fleet';
 import { FleetPanel } from '../../panels/fleet-panel.ts';
 import { buildFleetSnapshot, createStaticFleetReadModel } from '../../panels/fleet-read-model.ts';
+import { ConfigModal } from '../../input/config-modal.ts';
+import { renderConfigModal } from '../../renderer/config-modal.ts';
+import type { ConfigModalView } from '../../input/config-modal-types.ts';
+import { statusGlyph, toneStyle, pad, postureLine, kv } from '../../panels/modals/modal-surface-helpers.ts';
 import type { Cell, Line } from '../../types/grid.ts';
 
 // ---------------------------------------------------------------------------
@@ -1480,3 +1484,181 @@ describe('golden-frames — shell-footer (compact)', () => {
     expect(a).toBe(b);
   });
 });
+
+// ─── 9. W6.1 config-modal surfaces (WO-A) ──────────────────────────────────
+//
+// One normal+hostile golden pair per new MIGRATE-TO-MODAL surface. Each renders
+// a fixed, representative ConfigModalView through the REAL config-modal host
+// (ConfigModal + renderConfigModal + ModalFactory) — the same render path
+// production uses — with row labels built from the same shared helpers the live
+// surfaces use (statusGlyph/toneStyle/pad/postureLine/kv), so the pinned bytes
+// are the surface's actual on-screen layout. Views are hand-built with frozen
+// sample data (no wall-clock, no host/platform reads, no async) so the goldens
+// are deterministic across machines; each surface's live buildView() derivation
+// is covered by its own unit suite (config-modal-surfaces-*.test.ts). Justified
+// per pair below as "new modal surface, migrated from panel <id>".
+
+/** Open a fixed view on the real host (no onOpen → no live timers) and render. */
+function renderConfigSurfaceGolden(view: ConfigModalView, width: number, height: number): Line[] {
+  const modal = new ConfigModal();
+  modal.open({ name: 'golden', title: view.title, buildView: () => view });
+  return renderConfigModal(modal, width, height);
+}
+
+// services-modal — new modal surface, migrated from panel `services`.
+const SERVICES_VIEW: ConfigModalView = {
+  title: 'Services',
+  tabs: [{
+    id: 'services', label: 'Services',
+    header: [postureLine([kv('services', 3), kv('healthy', 1), kv('errors', 1), kv('unconfigured', 1)])],
+    rows: [
+      { id: 'svc:github', label: `${statusGlyph('good')} ${pad('github', 16)} ${pad('HEALTHY', 13)} ${pad('bearer', 18)} https://api.github.com`, style: toneStyle('good') },
+      { id: 'svc:linear', label: `${statusGlyph('dim')} ${pad('linear', 16)} ${pad('CONFIGURED', 13)} ${pad('api-key', 18)} https://api.linear.app`, style: toneStyle('warn') },
+      { id: 'svc:stripe', label: `${statusGlyph('bad')} ${pad('stripe', 16)} ${pad('ERROR', 13)} ${pad('bearer', 18)} https://api.stripe.com`, style: toneStyle('bad') },
+    ],
+    emptyText: 'No services configured.',
+  }],
+};
+describeOverlayGolden('services-modal', (w, h) => renderConfigSurfaceGolden(SERVICES_VIEW, w, h));
+
+// subscription-modal — new modal surface, migrated from panel `subscription`.
+const SUBSCRIPTION_VIEW: ConfigModalView = {
+  title: 'Subscriptions',
+  tabs: [{
+    id: 'subscriptions', label: 'Subscriptions',
+    header: [postureLine([kv('configured', 2), kv('active', 1), kv('pending', 0), kv('providers', 3)])],
+    rows: [
+      { id: 'sub:anthropic', label: `${statusGlyph('good')} ${pad('anthropic', 16)} ${pad('ACTIVE', 12)} oauth=yes  override=active`, style: toneStyle('good') },
+      { id: 'sub:openai', label: `${statusGlyph('warn')} ${pad('openai', 16)} ${pad('AVAILABLE', 12)} oauth=yes  override=off`, style: toneStyle('info') },
+      { id: 'sub:mistral', label: `${statusGlyph('dim')} ${pad('mistral', 16)} ${pad('UNCONFIGURED', 12)} oauth=no  override=off`, style: toneStyle('dim') },
+    ],
+    emptyText: 'No provider subscriptions yet.',
+    hints: ['Enter sign in/out', 'r refresh'],
+  }],
+};
+describeOverlayGolden('subscription-modal', (w, h) => renderConfigSurfaceGolden(SUBSCRIPTION_VIEW, w, h));
+
+// remote-modal — new modal surface, migrated from panel `remote`.
+const REMOTE_VIEW: ConfigModalView = {
+  title: 'Remote',
+  tabs: [
+    {
+      id: 'connections', label: 'Connections',
+      header: [
+        postureLine(['daemon CONNECTED', kv('running', 'yes'), kv('reconnects', 0), kv('jobs', 1)]),
+        postureLine(['acp CONNECTED', kv('conns', 1), kv('contracts', 1), kv('artifacts', 0), kv('sessions', 0), kv('peers', '0/0')]),
+      ],
+      rows: [
+        { id: 'conn:agent-1', label: `${statusGlyph('warn')} ${pad('agent-1', 20)} ${pad('DEGRADED', 14)} msgs=2 errs=1  worker`, style: toneStyle('warn') },
+      ],
+      emptyText: 'No active ACP or remote subagent connections.',
+      hints: ['r recover'],
+    },
+    {
+      id: 'contracts', label: 'Contracts',
+      rows: [
+        { id: 'contract:runner-1', label: `${statusGlyph('good')} ${pad('runner-1', 20)} ${pad('CONNECTED', 14)} default`, style: toneStyle('good') },
+      ],
+      emptyText: 'No registered remote runner contracts.',
+      hints: ['r recover'],
+    },
+  ],
+};
+describeOverlayGolden('remote-modal', (w, h) => renderConfigSurfaceGolden(REMOTE_VIEW, w, h));
+
+// providers-modal — new modal surface, migrated from panel `provider-health`
+// (also the target of the providers/accounts redirects).
+const PROVIDERS_VIEW: ConfigModalView = {
+  title: 'Providers',
+  tabs: [
+    {
+      id: 'health', label: 'Health',
+      header: [postureLine([kv('providers', 2), kv('active', 1), kv('inspected', 2)])],
+      rows: [
+        { id: 'provider:anthropic', label: `${statusGlyph('good')} ${pad('anthropic', 18)} ${pad('ACTIVE', 8)} models=6`, style: toneStyle('good') },
+        { id: 'provider:openai', label: `${statusGlyph('dim')} ${pad('openai', 18)} ${pad('idle', 8)} models=4`, style: toneStyle('dim') },
+      ],
+      hints: ['r refresh posture', '/health for latency & routes'],
+    },
+    {
+      id: 'accounts', label: 'Accounts',
+      rows: [
+        { id: 'provider:anthropic', label: `${statusGlyph('good')} ${pad('anthropic', 18)} ${pad('ACTIVE', 8)} models=6`, style: toneStyle('good') },
+        { id: 'provider:openai', label: `${statusGlyph('dim')} ${pad('openai', 18)} ${pad('idle', 8)} models=4`, style: toneStyle('dim') },
+      ],
+      hints: ['Enter repair', '/accounts routes <p> for detail'],
+    },
+  ],
+};
+describeOverlayGolden('providers-modal', (w, h) => renderConfigSurfaceGolden(PROVIDERS_VIEW, w, h));
+
+// settings-sync-modal — new modal surface, migrated from panel `settings-sync`.
+const SETTINGS_SYNC_VIEW: ConfigModalView = {
+  title: 'Settings Sync',
+  hints: ['←/→ tab'],
+  tabs: [
+    {
+      id: 'keys', label: 'Keys',
+      header: [
+        postureLine([kv('resolved', 3), kv('conflicts', 1), kv('failures', 0), kv('locks', 1)]),
+        postureLine([kv('local', 2), kv('synced', 1), kv('managed', 1), kv('last-sync', 'settings-sync/push'), kv('staged', 'none')]),
+      ],
+      rows: [
+        { id: 'key:provider.model', label: `${pad('provider.model', 32)} ${pad('synced', 10)} claude-opus-4`, style: toneStyle('good') },
+        { id: 'key:ui.theme', label: `${pad('ui.theme', 32)} ${pad('local', 10)} dark`, style: toneStyle('info') },
+        { id: 'key:sandbox.vmBackend', label: `${pad('sandbox.vmBackend', 32)} ${pad('managed', 10)} qemu`, style: toneStyle('warn') },
+      ],
+      emptyText: 'No resolved settings entries.',
+      hints: ['Enter resolve conflict', 'm managed review'],
+    },
+    { id: 'events', label: 'Events', rows: [], emptyText: 'No sync or managed-setting events recorded yet.' },
+    { id: 'locks', label: 'Locks', rows: [], emptyText: 'No managed locks are currently active.' },
+    { id: 'failures', label: 'Failures', rows: [], emptyText: 'No recent sync or managed-setting failures.' },
+    { id: 'conflicts', label: 'Conflicts', rows: [], emptyText: 'No settings conflicts detected.' },
+    { id: 'rollback', label: 'Rollback', rows: [], emptyText: 'No managed rollback records yet.' },
+  ],
+};
+describeOverlayGolden('settings-sync-modal', (w, h) => renderConfigSurfaceGolden(SETTINGS_SYNC_VIEW, w, h));
+
+// local-auth-modal — new modal surface, migrated from panel `local-auth`
+// (browse view; the panel itself is kept as the masked password-entry host).
+const LOCAL_AUTH_VIEW: ConfigModalView = {
+  title: 'Local Auth',
+  tabs: [{
+    id: 'users', label: 'Users',
+    header: [postureLine([kv('users', 2), kv('sessions', 1), kv('bootstrap', 'present')])],
+    rows: [
+      { id: 'user:admin', label: 'admin  admin' },
+      { id: 'user:operator', label: 'operator  operator, viewer' },
+    ],
+    emptyText: 'No local auth users configured.',
+    hints: ['a add user'],
+  }],
+};
+describeOverlayGolden('local-auth-modal', (w, h) => renderConfigSurfaceGolden(LOCAL_AUTH_VIEW, w, h));
+
+// sandbox-modal — new modal surface, migrated from panel `sandbox`.
+const SANDBOX_VIEW: ConfigModalView = {
+  title: 'Sandbox',
+  tabs: [
+    {
+      id: 'profiles', label: 'Profiles',
+      header: [postureLine([kv('platform', 'linux'), kv('backend', 'qemu'), kv('sessions', 1), kv('ready', 'yes')])],
+      rows: [
+        { id: 'profile:eval-py', label: `${pad('eval-py', 14)} ${pad('eval', 6)} ${pad('shared-vm', 10)} vm=yes` },
+        { id: 'profile:mcp-node', label: `${pad('mcp-node', 14)} ${pad('mcp', 6)} ${pad('dedicated', 10)} vm=yes` },
+      ],
+      emptyText: 'No sandbox profiles available.',
+      hints: ['s start'],
+    },
+    {
+      id: 'sessions', label: 'Sessions',
+      rows: [
+        { id: 'session:sbx-01', label: `${statusGlyph('good')} ${pad('sbx-01', 20)} ${pad('RUNNING', 9)} backend=${pad('qemu', 6)} runs=3`, style: toneStyle('good') },
+      ],
+      emptyText: 'No active sandbox sessions.',
+      hints: ['x stop', 'e execute probe'],
+    },
+  ],
+};
+describeOverlayGolden('sandbox-modal', (w, h) => renderConfigSurfaceGolden(SANDBOX_VIEW, w, h));

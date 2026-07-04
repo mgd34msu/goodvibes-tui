@@ -79,8 +79,8 @@ export function registerSubscriptionRuntimeCommands(registry: CommandRegistry): 
     usage: '[review|list|providers|inspect <provider>|login <provider> start [--no-browser] [--manual]|finish <code-or-url>|logout <provider>|bundle export <path>|bundle inspect <path>]',
     async handler(args, ctx) {
       const shellPaths = requireShellPaths(ctx);
-      if (args.length === 0 && ctx.openSubscriptionPanel) {
-        ctx.openSubscriptionPanel();
+      if (args.length === 0 && ctx.openModal) {
+        ctx.openModal('subscription-modal'); // W6.1: subscription panel -> config modal
         return;
       }
       const sub = (args[0] ?? 'review').toLowerCase();
