@@ -478,14 +478,20 @@ export class UIFactory {
       : undefined;
   }
 
-  public static createThinkingFragment(width: number, spinner: string, frame: number = 0, tokenSpeed?: number, toolPreview?: string, inputTokens?: number, outputTokens?: number, elapsedMs?: number, ttftMs?: number, stallInfo?: ThinkingStallInfo): Line[] {
+  public static createThinkingFragment(width: number, spinner: string, frame: number = 0, tokenSpeed?: number, toolPreview?: string, inputTokens?: number, outputTokens?: number, elapsedMs?: number, ttftMs?: number, stallInfo?: ThinkingStallInfo, approvalPending?: boolean): Line[] {
     // Freeze the whimsical phrase rotation once real silence has gone on
     // long enough to be misleading (THINKING_STALL_FREEZE_MS), and show an
     // honest label instead: the SDK's reconnect attempt/maxAttempts once
     // STREAM_RETRY is available, else a plain elapsed-silence readout.
     const isStalled = stallInfo !== undefined && stallInfo.msSinceLastDelta >= THINKING_STALL_FREEZE_MS;
     let phrase: string;
-    if (stallInfo?.reconnect) {
+    if (approvalPending) {
+      // An approval card is waiting on the USER — the turn is not stalled and the provider is not at
+      // fault. The stream is legitimately silent because we asked the user a question, so show an
+      // honest, blame-free label instead of "Stalled Ns..." / a provider name. This takes precedence
+      // over stall/reconnect framing: waiting on the user is the true state.
+      phrase = 'Waiting for your approval';
+    } else if (stallInfo?.reconnect) {
       phrase = `Reconnecting (attempt ${stallInfo.reconnect.attempt}/${stallInfo.reconnect.maxAttempts})...`;
     } else if (isStalled) {
       phrase = `Stalled ${Math.floor(stallInfo.msSinceLastDelta / 1000)}s...`;
@@ -494,9 +500,12 @@ export class UIFactory {
       const phraseIndex = Math.floor(frame / PHRASE_ROTATION_FRAMES) % this.THINKING_PHRASES.length;
       phrase = this.THINKING_PHRASES[phraseIndex];
     }
-    const speedSuffix = (tokenSpeed !== undefined && tokenSpeed > 0) ? ` (${Math.round(tokenSpeed)} tok/s)` : '';
+    // Token-rate and time-to-first-token readouts are meaningless while waiting on the user, and a
+    // "tok/s" figure next to an approval prompt reads as if the model were still working — suppress
+    // them; keep the elapsed timer since "how long the approval has waited" is honest.
+    const speedSuffix = (!approvalPending && tokenSpeed !== undefined && tokenSpeed > 0) ? ` (${Math.round(tokenSpeed)} tok/s)` : '';
     const elapsedSuffix = elapsedMs !== undefined ? ` (${formatElapsed(elapsedMs)})` : '';
-    const ttftSuffix = (ttftMs !== undefined && ttftMs > 0) ? ` ttft:${ttftMs}ms` : '';
+    const ttftSuffix = (!approvalPending && ttftMs !== undefined && ttftMs > 0) ? ` ttft:${ttftMs}ms` : '';
     const text = `  ${spinner} ${phrase}${speedSuffix}${elapsedSuffix}${ttftSuffix} `;
 
     const textWidth = Math.max(1, getDisplayWidth(text) - 1);

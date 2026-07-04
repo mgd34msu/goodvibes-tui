@@ -275,4 +275,44 @@ describe('tool preview truncation', () => {
     const text = lines[1].map(c => c.char).join('');
     expect(text).toContain('Reconnecting (attempt 1/3)');
   });
+
+  it('shows "Waiting for your approval" (no stall/provider framing) when an approval is pending', () => {
+    // An approval card is waiting on the USER: the stream is silent because we asked a question,
+    // not because the model stalled. Even with a stall clock long past the freeze threshold, the
+    // honest label wins — never "Stalled Ns...".
+    const width = 80;
+    const lines = UIFactory.createThinkingFragment(
+      width, '-', 1000, undefined, undefined, undefined, undefined, undefined, 280,
+      { msSinceLastDelta: 45_000 }, true,
+    );
+    const text = lines[1].map(c => c.char).join('');
+    expect(text).toContain('Waiting for your approval');
+    expect(text).not.toContain('Stalled');
+    // No token-rate / ttft readouts that would imply the model is still working.
+    expect(text).not.toContain('tok/s');
+    expect(text).not.toContain('ttft');
+  });
+
+  it('approval label takes precedence over a reconnect label', () => {
+    const width = 80;
+    const lines = UIFactory.createThinkingFragment(
+      width, '-', 0, undefined, undefined, undefined, undefined, undefined, undefined,
+      { msSinceLastDelta: 5_000, reconnect: { attempt: 2, maxAttempts: 4 } }, true,
+    );
+    const text = lines[1].map(c => c.char).join('');
+    expect(text).toContain('Waiting for your approval');
+    expect(text).not.toContain('Reconnecting');
+  });
+
+  it('a genuine stall is unchanged when no approval is pending', () => {
+    // Regression guard: the honest stall label must still appear for a real provider silence.
+    const width = 80;
+    const lines = UIFactory.createThinkingFragment(
+      width, '-', 1000, undefined, undefined, undefined, undefined, undefined, undefined,
+      { msSinceLastDelta: 12_000 }, false,
+    );
+    const text = lines[1].map(c => c.char).join('');
+    expect(text).toContain('Stalled 12s');
+    expect(text).not.toContain('Waiting for your approval');
+  });
 });

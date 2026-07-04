@@ -155,6 +155,20 @@ export interface WireStreamEventMetricsOptions {
    * unavailable for either model, the notice honestly states "cost data unavailable".
    */
   readonly costLookup?: FailoverCostLookup;
+  /**
+   * Optional accessor for whether an approval card is currently waiting on the USER. When it
+   * returns true, the stall watchdog does NOT emit its "Still waiting on <provider>… Ctrl+C to
+   * cancel" hint: the stream is legitimately silent because we asked the user a question, so
+   * blaming the provider (or framing it as a stall) would be dishonest. The approval surface owns
+   * the honest "Waiting for your approval" label instead.
+   */
+  readonly isApprovalPending?: (() => boolean) | undefined;
+  /**
+   * Stall watchdog threshold in ms. Defaults to the watchdog's own default (STALL_THRESHOLD_MS,
+   * 30 000). Exposed only so unit tests can drive the stall path without waiting 30s — production
+   * callers omit it.
+   */
+  readonly stallThresholdMs?: number | undefined;
 }
 
 /** Result of wireStreamEventMetrics. */
@@ -237,6 +251,7 @@ export function wireStreamEventMetrics(
   const {
     events, metrics, orchestrator, providerRegistry,
     systemMessageRouter, render, providerOptimizer, retryTurn, costLookup,
+    isApprovalPending, stallThresholdMs,
   } = options;
 
   const unsubs: Array<() => void> = [];
@@ -364,12 +379,16 @@ export function wireStreamEventMetrics(
   const stallWatchdog = createStreamStallWatchdog({
     events: events.turns,
     onStall: (providerName, episode) => {
+      // Suppress the provider-blaming stall hint while an approval card is waiting on the user: the
+      // stream is silent because WE asked the user a question, not because the provider stalled.
+      if (isApprovalPending?.()) return;
       metrics.stallEpisode = episode;
       systemMessageRouter.low(`Still waiting on ${providerName}… Ctrl+C to cancel`);
       render();
     },
     getProviderName: () => providerRegistry.getCurrentModel().provider,
-    // thresholdMs uses the default 30 000
+    // thresholdMs defaults to 30 000 in the watchdog; only unit tests override it.
+    ...(stallThresholdMs !== undefined ? { thresholdMs: stallThresholdMs } : {}),
   });
   unsubs.push(() => stallWatchdog.dispose());
 
