@@ -106,8 +106,9 @@ describe('UI roadmap gate', () => {
     expect(visible).toBe(true);
 
     // The escape hatch: a caller that explicitly asks for focus still gets it.
-    (commandContext as { showPanel?: (panelId: string, pane?: 'top' | 'bottom', opts?: { focus?: boolean }) => void })
-      .showPanel?.('docs', undefined, { focus: true });
+    // Reconciled signature (panelId, pane, target, opts) — focus opt-in is arg 4.
+    (commandContext as { showPanel?: (panelId: string, pane?: 'top' | 'bottom', target?: unknown, opts?: { focus?: boolean }) => void })
+      .showPanel?.('docs', undefined, undefined, { focus: true });
     expect(panelManager.getFocusTarget()).toBe('panel');
   });
 
