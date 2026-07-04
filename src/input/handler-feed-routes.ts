@@ -177,7 +177,8 @@ export function handlePanelFocusToken(state: PanelFocusRouteState, token: InputT
 export type IndicatorFocusRouteState = {
   indicatorFocused: boolean;
   modalOpened: (name: string) => void;
-  processModal: { open: () => void };
+  /** W2.2: the footer process indicator's [Enter] opens the Fleet panel instead of the process modal (still reachable via F2). */
+  openFleetPanel: () => void;
   requestRender: () => void;
 };
 
@@ -198,8 +199,9 @@ export function handleIndicatorFocusToken(state: IndicatorFocusRouteState, token
     }
     if (token.logicalName === 'enter') {
       indicatorFocused = false;
-      state.modalOpened('process');
-      state.processModal.open();
+      // W2.2: repointed from the process modal to the Fleet panel (the modal
+      // stays reachable via F2 — see handlePromptKeyToken's f2 branch below).
+      state.openFleetPanel();
       state.requestRender();
       return { handled: true, indicatorFocused };
     }
