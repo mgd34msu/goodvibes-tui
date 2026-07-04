@@ -232,9 +232,17 @@ export function wireTurnEventHandlers(
     }));
     unsubs.push(events.workflows.on('WORKFLOW_CHAIN_FAILED', (payload) => {
       if (!shouldFireAlert(focusTracker, configGet, 'behavior.notifyOnChainFailure')) return;
-      const kindLabel = payload.failureKind === 'transport' ? 'transient transport error' : payload.reason;
       try {
-        notifyCompletion('GoodVibes — WRFC chain failed', `chain ${payload.chainId.slice(0, 12)} failed: ${kindLabel}`, FORCE_NOTIFY_DURATION_MS);
+        // An operator cancellation is an intended stop, not a failure — narrate it
+        // as cancelled (the reason already carries the landed-work count from the
+        // chain's edit ledger), so the notification never contradicts the cancelled
+        // chain/owner/cohort surfaces.
+        if (payload.failureKind === 'cancelled') {
+          notifyCompletion('GoodVibes — WRFC chain cancelled', `chain ${payload.chainId.slice(0, 12)} cancelled: ${payload.reason}`, FORCE_NOTIFY_DURATION_MS);
+        } else {
+          const kindLabel = payload.failureKind === 'transport' ? 'transient transport error' : payload.reason;
+          notifyCompletion('GoodVibes — WRFC chain failed', `chain ${payload.chainId.slice(0, 12)} failed: ${kindLabel}`, FORCE_NOTIFY_DURATION_MS);
+        }
       } catch (err) {
         logger.debug('turn-event-wiring: chain-failure notify error', { error: String(err) });
       }
