@@ -61,7 +61,16 @@ export class SpokenTurnController {
     return true;
   }
 
-  stop(message?: string): void {
+  /**
+   * Returns whether speech was actually ACTIVE when stopped. The notice only
+   * prints in that case — stop() on an idle controller used to notify anyway,
+   * spamming "[TTS] Spoken output stopped." on every Ctrl+C (batch replay
+   * D5/N-noise); callers use the return to decide whether the press "did a
+   * job" (see handleCtrlC's consume-on-speech-stop).
+   */
+  stop(message?: string): boolean {
+    const wasActive = this.pendingPrompt !== null || this.activeTurnId !== null
+      || this.chunker !== null || this.abortControllers.size > 0;
     this.pendingPrompt = null;
     this.activeTurnId = null;
     this.chunker?.reset();
@@ -72,7 +81,8 @@ export class SpokenTurnController {
     this.player.stop();
     this.playbackChain = Promise.resolve();
     this.errorReportedForTurn = false;
-    if (message) this.notify?.(`[TTS] ${message}`);
+    if (message && wasActive) this.notify?.(`[TTS] ${message}`);
+    return wasActive;
   }
 
   handleTurnEvent(event: TurnEvent): void {

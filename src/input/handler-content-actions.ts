@@ -421,7 +421,7 @@ export function handleCtrlC(
   saveUndoState: () => void,
   setPrompt: (value: string) => void,
   setCursorPos: (value: number) => void,
-  cancelGeneration: (() => void) | undefined,
+  cancelGeneration: (() => boolean | void) | undefined,
   exitApp: () => void,
   requestRender: () => void,
   lastCtrlCTime: number,
@@ -441,11 +441,17 @@ export function handleCtrlC(
   // (e.g. killing the audio subprocess) would otherwise swallow this press and
   // strand the user unable to quit while TTS is speaking. Decouple the two: the
   // press below is recorded no matter how speech-stop fares. (UX-B item 6b.)
+  let stoppedSpeech = false;
   try {
-    cancelGeneration?.();
+    stoppedSpeech = cancelGeneration?.() === true;
   } catch {
     // Non-fatal to the exit chord; the quit-window bookkeeping still runs.
   }
+  // A press that silenced LIVE speech is consumed by that job (batch replay
+  // D5) — symmetric with the prompt-clearing press above. The quit chord
+  // ("Ctrl+C x2") starts from a quiet state; turn-aborts still count toward
+  // the double-press.
+  if (stoppedSpeech) return;
   const now = Date.now();
   // Clear any hide-timer pending from a prior press before deciding this
   // one's outcome, whichever branch below runs. Without this, a hide-timer

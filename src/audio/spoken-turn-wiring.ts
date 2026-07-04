@@ -8,7 +8,8 @@ import { SpokenTurnController } from './spoken-turn-controller.ts';
 export interface SpokenTurnRuntime {
   readonly unsubs: readonly (() => void)[];
   submitNextTurn(prompt: string): boolean;
-  stop(message?: string): void;
+  /** Returns whether speech was actually active (see controller.stop). */
+  stop(message?: string): boolean;
 }
 
 export interface WireSpokenTurnRuntimeOptions {
