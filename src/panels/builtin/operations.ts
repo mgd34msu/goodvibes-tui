@@ -1,5 +1,7 @@
 import type { PanelManager } from '../panel-manager.ts';
 import { CockpitPanel } from '../cockpit-panel.ts';
+import { FleetPanel } from '../fleet-panel.ts';
+import { createFleetReadModel } from '../fleet-read-model.ts';
 import { AgentInspectorPanel } from '../agent-inspector-panel.ts';
 import { ApprovalPanel } from '../approval-panel.ts';
 import { PluginsPanel } from '../plugins-panel.ts';
@@ -69,6 +71,25 @@ export function registerOperationsPanels(manager: PanelManager, deps: ResolvedBu
   ui.events.agents.on('AGENT_COMPLETED', () => rosterReadModel.markDirty());
   ui.events.agents.on('AGENT_FAILED', () => rosterReadModel.markDirty());
   ui.events.agents.on('AGENT_CANCELLED', () => rosterReadModel.markDirty());
+
+  // W2.2: Fleet — the live unified process tree, read from the single
+  // process registry constructed once in runtime/services.ts (shared with
+  // every other consumer rather than duplicated here; the registry owns its
+  // own coalesced tick, so no manual lifecycle-event wiring is needed).
+  const fleetReadModel = createFleetReadModel(ui.runtime.processRegistry);
+
+  manager.registerType({
+    id: 'fleet',
+    name: 'Fleet',
+    // W2.2: '⊟' verified free against the full icon registry at wiring time.
+    icon: '⊟',
+    category: 'runtime-ops',
+    description: 'Live unified process tree: agents, WRFC chains, workflows, watchers, and background processes, with interrupt/kill controls',
+    factory: () => new FleetPanel(fleetReadModel, {
+      interrupt: (id: string) => fleetReadModel.interrupt(id),
+      kill: (id: string, opts: { cascade: boolean }) => fleetReadModel.kill(id, opts),
+    }),
+  });
 
   manager.registerType({
     id: 'cockpit',

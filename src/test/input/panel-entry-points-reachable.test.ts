@@ -4,8 +4,9 @@
  * global-shortcuts.test.ts) must stay reachable while a turn is active.
  *
  * Root cause finding (see the W0.8 audit brief): no busy/turn guard exists
- * anywhere in the input pipeline. handlePromptKeyToken's F2 branch and
- * handleIndicatorFocusToken's Enter branch both call processModal.open()
+ * anywhere in the input pipeline. handlePromptKeyToken's F2 branch calls
+ * processModal.open() and handleIndicatorFocusToken's Enter branch calls
+ * openFleetPanel() (W2.2 repoint — previously processModal.open() too)
  * unconditionally — neither KeyRouteState nor IndicatorFocusRouteState
  * carries an orchestrator/isThinking field, so there is nothing here that
  * *could* gate on turn state. These tests lock in that reachability so a
@@ -68,12 +69,12 @@ describe('panel/process-modal entry points stay reachable during an active turn'
     expect(opened).toEqual(['process']);
   });
 
-  test('Enter on the focused status/process indicator opens the process modal (handleIndicatorFocusToken carries no turn-state field to gate on)', () => {
+  test('Enter on the focused status/process indicator opens the Fleet panel (W2.2 repoint; handleIndicatorFocusToken carries no turn-state field to gate on)', () => {
     const opened: string[] = [];
     const state: IndicatorFocusRouteState = {
       indicatorFocused: true,
       modalOpened: mock(() => {}),
-      processModal: { open: () => { opened.push('process'); } },
+      openFleetPanel: () => { opened.push('fleet'); },
       requestRender: mock(() => {}),
     };
     const result = handleIndicatorFocusToken(state, {
@@ -81,7 +82,7 @@ describe('panel/process-modal entry points stay reachable during an active turn'
     });
 
     expect(result.handled).toBe(true);
-    expect(opened).toEqual(['process']);
+    expect(opened).toEqual(['fleet']);
     expect(result.indicatorFocused).toBe(false);
   });
 });
