@@ -207,6 +207,15 @@ export function createBootstrapShell(options: BootstrapShellOptions): BootstrapS
       if (kind === 'operational') return ui.operationalMessages;
       return ui.systemMessages;
     },
+    {
+      // Suppress stale WRFC replay re-notifications for chains that can no
+      // longer act — gone (killed/removed → getChain null) or terminal
+      // (passed/failed). (UX-B item 1c.)
+      isChainTerminal: (chainId) => {
+        const chain = services.wrfcController.getChain(chainId);
+        return chain === null || chain.state === 'passed' || chain.state === 'failed';
+      },
+    },
   );
   orchestrator.setSystemMessageRouter(systemMessageRouter);
 

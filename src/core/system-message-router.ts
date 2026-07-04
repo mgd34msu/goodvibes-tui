@@ -48,6 +48,11 @@ import {
   type SystemMessageKind,
   type SystemMessageTarget,
 } from '@/runtime/index.ts';
+import {
+  classifyNoise,
+  foldProviderReplayLines,
+  type NoiseGateDeps,
+} from './system-message-noise.ts';
 
 export type {
   SystemMessageKind,
@@ -84,9 +89,15 @@ function mustReachConversation(message: string): boolean {
  * configured target. See file doc for the W6.1 panel removal.
  */
 export class SystemMessageRouter {
+  /** Buffered provider "from last session" replay lines, folded on a microtask. */
+  private providerReplayBuffer: string[] = [];
+  private providerReplayScheduled = false;
+
   constructor(
     private readonly conversation: ConversationManager,
     private readonly getTargetForKind: (kind: SystemMessageKind) => SystemMessageTarget = defaultSystemMessageTarget,
+    /** Noise-gate dependencies (WRFC terminal-chain lookup). See system-message-noise.ts. */
+    private readonly noiseDeps: NoiseGateDeps = {},
   ) {}
 
   // ── Public API ────────────────────────────────────────────────────────────
@@ -109,6 +120,20 @@ export class SystemMessageRouter {
     _priority: SystemMessagePriority,
     kind: SystemMessageKind,
   ): void {
+    // Noise gate — keep first-run plumbing out of the transcript while the
+    // information stays reachable via other live surfaces. (UX-B item 1.)
+    const verdict = classifyNoise(message, this.noiseDeps);
+    if (verdict.action === 'drop') return;
+    if (verdict.action === 'foldProviderReplay') {
+      this.bufferProviderReplay(message);
+      return;
+    }
+
+    this.deliver(message, kind);
+  }
+
+  /** Post-noise-gate delivery: resolve target and append to the conversation. */
+  private deliver(message: string, kind: SystemMessageKind): void {
     const target = this.getTargetForKind(kind);
     // hasPanel is always false post-W6.1 — resolveSystemMessageDelivery's own
     // contract means every target ('panel' | 'conversation' | 'both')
@@ -120,6 +145,30 @@ export class SystemMessageRouter {
       // renderer can use kind-based navigability instead of substring matching.
       this.conversation.addTypedSystemMessage(message, kind);
     }
+  }
+
+  /**
+   * Buffer a provider "from last session" replay line and schedule a microtask
+   * flush. The SDK emits the whole persisted-provider burst synchronously, so a
+   * single microtask captures the full burst and folds it to one quiet line.
+   * (UX-B item 1b.)
+   */
+  private bufferProviderReplay(message: string): void {
+    this.providerReplayBuffer.push(message);
+    if (this.providerReplayScheduled) return;
+    this.providerReplayScheduled = true;
+    queueMicrotask(() => this.flushProviderReplay());
+  }
+
+  /** Emit the single folded provider-replay summary and reset the buffer. */
+  flushProviderReplay(): void {
+    this.providerReplayScheduled = false;
+    if (this.providerReplayBuffer.length === 0) return;
+    const summary = foldProviderReplayLines(this.providerReplayBuffer);
+    this.providerReplayBuffer = [];
+    // Deliver directly (the summary is not itself a replay line, so it does not
+    // re-enter the fold path).
+    this.deliver(summary, classifySystemMessageKind(summary));
   }
 
   routeSystemMessage(message: string, priority: SystemMessagePriority): void {
@@ -172,6 +221,7 @@ export class SystemMessageRouter {
 export function createSystemMessageRouter(
   conversation: ConversationManager,
   getTargetForKind: (kind: SystemMessageKind) => SystemMessageTarget = defaultSystemMessageTarget,
+  noiseDeps: NoiseGateDeps = {},
 ): SystemMessageRouter {
-  return new SystemMessageRouter(conversation, getTargetForKind);
+  return new SystemMessageRouter(conversation, getTargetForKind, noiseDeps);
 }
