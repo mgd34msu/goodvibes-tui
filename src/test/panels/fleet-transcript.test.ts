@@ -142,14 +142,23 @@ describe('renderFleetChainSummary', () => {
 
   test('renders one line per member row with its label and state', () => {
     const rows = [makeMemberRow('m1', 'Engineer', 'streaming'), makeMemberRow('m2', 'Reviewer', 'awaiting-approval')];
-    const lines = linesToText(renderFleetChainSummary(rows, 80));
+    const lines = linesToText(renderFleetChainSummary(rows, 80, false));
     expect(lines.some((l) => l.includes('Engineer') && l.includes('streaming'))).toBe(true);
     expect(lines.some((l) => l.includes('Reviewer') && l.includes('awaiting-approval'))).toBe(true);
   });
 
-  test('an empty member list renders an honest placeholder instead of a blank tab', () => {
-    const lines = linesToText(renderFleetChainSummary([], 80));
+  test('d3: an empty member list on a LIVE chain reads "not started yet"', () => {
+    const lines = linesToText(renderFleetChainSummary([], 80, false));
     expect(lines.some((l) => l.includes('no member agents yet'))).toBe(true);
+    expect(lines.some((l) => l.includes('chain completed'))).toBe(false);
+  });
+
+  test('d3: an empty member list on a completed/pruned chain reads "chain completed", not "yet"', () => {
+    // A completed chain prunes its wrapper node, so zero members means finished,
+    // not not-started — the honest wording must not say "yet".
+    const lines = linesToText(renderFleetChainSummary([], 80, true));
+    expect(lines.some((l) => l.includes('chain completed — members no longer tracked'))).toBe(true);
+    expect(lines.some((l) => l.includes('yet'))).toBe(false);
   });
 });
 

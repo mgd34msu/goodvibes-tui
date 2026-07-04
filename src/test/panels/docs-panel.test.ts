@@ -71,8 +71,12 @@ describe('DocsPanel', () => {
     panel.onActivate();
     panel.handleInput('k');
     const text = linesText(panel.render(80, 18));
-    expect(text).toContain('Ctrl+Q');
-    expect(text).not.toContain('Ctrl+P');
+    // Assert on the panel-picker's OWN row rather than the whole panel: the
+    // W6.2 b keymap introduced Ctrl+PageUp/Ctrl+PageDn (panel-tab-prev/next),
+    // which legitimately contain the substring "Ctrl+P" on other rows.
+    const pickerRow = text.split('\n').find((l) => l.includes('Open, focus, or hide the panel workspace'));
+    expect(pickerRow).toContain('Ctrl+Q');
+    expect(pickerRow).not.toContain('Ctrl+P');
   });
 
   test('empty state when no keybindings manager is wired', () => {
