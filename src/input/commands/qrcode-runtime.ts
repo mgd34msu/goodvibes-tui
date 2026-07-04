@@ -13,7 +13,7 @@ export function registerQrcodeRuntimeCommands(registry: CommandRegistry): void {
     aliases: ['qr', 'pair'],
     description: 'Open the companion-app pairing modal (QR code)',
     handler(_args, ctx) {
-      openModalCommand(ctx, 'pairing');
+      openModalCommand(ctx, 'pairing-modal');
     },
   });
 }

@@ -22,7 +22,7 @@ export function registerSkillsRuntimeCommands(registry: CommandRegistry): void {
     async handler(args, ctx) {
       const sub = args[0] ?? 'open';
       if (sub === 'open' || sub === 'panel') {
-        openModalCommand(ctx, 'skills');
+        openModalCommand(ctx, 'skills-modal');
         return;
       }
       const skills = await discoverSkills(requireShellPaths(ctx));

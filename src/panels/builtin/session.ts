@@ -14,13 +14,13 @@ import { requireUiServices } from './shared.ts';
 // conversation.addTypedSystemMessage for every kind/target combination — see
 // bootstrap-shell.ts and core/system-message-router.ts.
 //
-// W6.1 (the purge) — group B: 'qr-code', 'sessions', and 'docs' also migrated.
-// 'qr-code' → the 'pairing' modal; 'docs' → the 'keybindings' modal (merged
-// with the shortcuts-overlay content); 'sessions' folds into the existing
-// session-picker modal ('sessions' redirects to 'sessionPicker'). Their
-// panel→modal redirects are registered centrally via
-// registerEcosystemModalRedirects (see registerOperationsPanels). Only 'tokens'
-// (KEEP) is still registered here.
+// W6.1 (the purge) — group B (WO-P): 'qr-code', 'sessions', and 'docs' also
+// migrated. 'qr-code' → the 'pairing-modal' surface; 'docs' → the
+// 'keybindings-modal' surface (merged with the shortcuts-overlay content);
+// 'sessions' folds into the existing session-picker modal ('sessions' redirects
+// to 'sessionPicker'). Their surfaces AND panel→modal redirects are registered
+// centrally in registerBuiltinModals (builtin-modals.ts). Only 'tokens' (KEEP)
+// is still registered here.
 export function registerSessionPanels(manager: PanelManager, deps: ResolvedBuiltinPanelDeps): void {
   manager.registerType({
     id: 'tokens',

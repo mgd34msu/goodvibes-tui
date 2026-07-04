@@ -45,7 +45,7 @@ export function registerMarketplaceRuntimeCommands(registry: CommandRegistry): v
       const ecosystemPaths = requireEcosystemCatalogPaths(ctx);
       const sub = args[0] ?? 'open';
       if (sub === 'open' || sub === 'panel') {
-        openModalCommand(ctx, 'marketplace');
+        openModalCommand(ctx, 'marketplace-modal');
         return;
       }
       if (sub === 'overview') {

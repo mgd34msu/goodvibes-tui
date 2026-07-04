@@ -19,9 +19,9 @@ export function registerAgentPanels(manager: PanelManager, deps: ResolvedBuiltin
   manager.registerAlias('inspector', 'fleet');
   manager.registerAlias('wrfc', 'fleet');
 
-  // W6.1 (the purge) — group B: 'work-plan' and 'project-planning' migrated to
-  // the 'work-plan' / 'planning' config-modals. Their panel→modal redirects are
-  // registered centrally via registerEcosystemModalRedirects (see
-  // registerOperationsPanels). Panel registrations retired here.
+  // W6.1 (the purge) — group B (WO-P): 'work-plan' and 'project-planning'
+  // migrated to the 'work-plan-modal' / 'planning-modal' config-modal surfaces.
+  // Their surfaces AND panel→modal redirects are registered centrally in
+  // registerBuiltinModals (builtin-modals.ts). Panel registrations retired here.
   void deps;
 }
