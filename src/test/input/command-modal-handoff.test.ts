@@ -87,7 +87,7 @@ function makeCommandContext(overrides: Partial<CommandContext> = {}): CommandCon
 function makePanelManager(overrides: Record<string, unknown> = {}) {
   return {
     isVisible: () => true,
-    getAllOpen: () => [{ id: 'panel-list' }],
+    getAllOpen: () => [{ id: 'git' }],
     ...overrides,
   } as never;
 }
@@ -312,7 +312,7 @@ describe('command modal handoff', () => {
       name: 'panel',
       description: 'Open panel',
       handler: (_args, ctx) => {
-        ctx.showPanel?.('panel-list');
+        ctx.showPanel?.('git');
       },
     });
     const state = {

@@ -229,6 +229,35 @@ describe('operator surfaces gate', () => {
     expect(ids).not.toContain('panel-list');
   });
 
+  test('W6.1: prewarmRegistered() only constructs tokens post-purge (thinking/tools/inspector/wrfc/communication/provider-health/system-messages no longer preload)', () => {
+    const manager = new PanelManager();
+    const uiServices = createUiRuntimeServices(runtimeServices);
+    const factoryCalls: string[] = [];
+    registerBuiltinPanels(manager, {
+      providerRegistry: runtimeServices.providerRegistry,
+      uiServices,
+      forensicsRegistry: new ForensicsRegistry(),
+      policyRuntimeState,
+      memoryRegistry: new MemoryRegistry(new MemoryStore(':memory:', {
+        embeddingRegistry: new MemoryEmbeddingProviderRegistry({ configManager }),
+      })),
+      tokenAuditor: runtimeServices.tokenAuditor,
+      componentHealthMonitor: runtimeServices.componentHealthMonitor,
+      worktreeRegistry: runtimeServices.worktreeRegistry,
+      sandboxSessionRegistry: runtimeServices.sandboxSessionRegistry,
+    });
+    // Wrap every registered factory to record which ids actually get built by
+    // prewarmRegistered(), without changing what they return.
+    for (const reg of manager.getRegisteredTypes()) {
+      const originalFactory = reg.factory;
+      manager.registerType({ ...reg, factory: () => { factoryCalls.push(reg.id); return originalFactory(); } });
+    }
+
+    manager.prewarmRegistered();
+
+    expect(factoryCalls).toEqual(['tokens']);
+  });
+
   test('WO-152: cost/memory are always registered and open to a "not configured" state without their optional dependency', () => {
     const manager = new PanelManager();
     const uiServices = createUiRuntimeServices(runtimeServices);

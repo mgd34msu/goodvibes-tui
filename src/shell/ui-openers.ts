@@ -12,6 +12,7 @@ import type { SubscriptionManager } from '@pellux/goodvibes-sdk/platform/config'
 import type { SecretsManager } from '@pellux/goodvibes-sdk/platform/config';
 import type { ServiceInspectionQuery } from '../runtime/ui-service-queries.ts';
 import type { ModelPickerTargetInfo } from '../input/model-picker.ts';
+import type { SelectionItem } from '../input/selection-modal.ts';
 import { syncServiceSettingToPlatform } from './service-settings-sync.ts';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 
@@ -281,6 +282,20 @@ export function wireShellUiOpeners(options: WireShellUiOpenersOptions): void {
     render();
   };
 
+  // W6.1 (the purge) skeleton: no MIGRATE-TO-MODAL surface exists yet (WO-A/B
+  // add real modal state + dispatch here as they convert a panel). Wired now
+  // so PanelManager.setOpenModalCallback and CommandContext.openModal both
+  // have a real, safe implementation to call — a no-op-with-honest-message
+  // rather than silently swallowing the request or throwing. Also wired as
+  // PanelManager's injected callback so open() on a future modal-redirected
+  // id (registerModalRedirect) reaches the same place.
+  commandContext.openModal = (name: string) => {
+    input.modalOpened(name);
+    commandContext.print(`'${name}' is not available yet in this build.`);
+    render();
+  };
+  panelManager.setOpenModalCallback(commandContext.openModal);
+
   commandContext.openMcpWorkspace = () => {
     input.openMcpWorkspace(commandContext);
     render();
@@ -296,25 +311,43 @@ export function wireShellUiOpeners(options: WireShellUiOpenersOptions): void {
     // Focus ownership lives in PanelManager (focusTarget); read it there rather
     // than tracking a parallel input.panelFocused flag. Toggle semantics: if the
     // workspace is visible AND already focused, hide it; otherwise reveal and
-    // focus it (opening the panel list when nothing is open yet).
+    // focus it (opening a picker when nothing is open yet).
     if (panelManager.isVisible() && panelManager.getFocusTarget() === 'panel') {
       panelManager.hide();
       panelManager.focusPrompt();
       conversation.setSplashSuppressed(false);
       conversation.rebuildHistory();
-    } else {
-      if (panelManager.getAllOpen().length === 0) {
-        try {
-          panelManager.open('panel-list');
-        } catch {
-          // non-fatal
-        }
-      }
-      panelManager.show();
-      panelManager.focusPanels();
-      conversation.setSplashSuppressed(true);
-      conversation.rebuildHistory();
+      render();
+      return;
     }
+    if (panelManager.getAllOpen().length === 0) {
+      // W6.1 (the purge): 'panel-list' (a browse-all-panels picker PANEL)
+      // was DELETE-disposition — a picker over a handful of panels is dead
+      // weight now. Its replacement is this selection MODAL, built from the
+      // live registry (PanelManager.getRegisteredTypes()) rather than a
+      // hardcoded list, so it can never list a retired/deleted id.
+      const items: SelectionItem[] = panelManager.getRegisteredTypes().map((entry) => ({
+        id: entry.id,
+        label: `${entry.icon} ${entry.name}`,
+        detail: entry.description,
+        category: entry.category,
+        primaryAction: 'select',
+      }));
+      commandContext.openSelection?.('Open Panel', items, { allowSearch: true }, (result) => {
+        if (!result) return;
+        panelManager.open(result.item.id);
+        panelManager.show();
+        panelManager.focusPanels();
+        conversation.setSplashSuppressed(true);
+        conversation.rebuildHistory();
+        render();
+      });
+      return;
+    }
+    panelManager.show();
+    panelManager.focusPanels();
+    conversation.setSplashSuppressed(true);
+    conversation.rebuildHistory();
     render();
   };
 

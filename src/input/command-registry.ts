@@ -111,6 +111,13 @@ export interface CommandShellUiOpeners {
     callback: (result: SelectionResult | null) => void,
   ) => void;
   openSettingsModal?: (target?: string) => void;
+  /**
+   * Open a MIGRATE-TO-MODAL surface by name (W6.1 purge skeleton — WO-A/B
+   * command runtimes call this instead of openCommandPanel once their panel
+   * is converted to a ModalFactory config). Threaded from ui-openers.ts the
+   * same way openSettingsModal is.
+   */
+  openModal?: (name: string) => void;
   openSessionPicker?: () => void;
   openProfilePicker?: () => void;
   openShortcutsOverlay?: () => void;
