@@ -151,3 +151,39 @@ export function calcSessionCost(
   const billableInput = inputTokens + cacheRead + cacheWrite;
   return (billableInput * pricing.input + outputTokens * pricing.output) / 1_000_000;
 }
+
+/**
+ * computeBudgetBreach — pure predicate shared by CostTrackerPanel's render-time
+ * "OVER BUDGET" flag and the background budget-breach notifier
+ * (core/budget-breach-notifier.ts), so both agree on exactly one definition
+ * of "over budget". `budgetThreshold <= 0` means no budget is configured
+ * (disabled), which can never be breached.
+ */
+export function computeBudgetBreach(sessionCost: number, budgetThreshold: number): boolean {
+  return budgetThreshold > 0 && sessionCost > budgetThreshold;
+}
+
+/** Read/write access to the `behavior.budgetAlertUsd` TUI-local config key. Plain
+ * callbacks (rather than a ConfigManager reference) so callers can pass a
+ * generic-key-cast wrapper without this module depending on the SDK config types. */
+export interface BudgetAlertConfigAccess {
+  readonly get: (key: string) => unknown;
+  readonly set: (key: string, value: unknown) => void;
+}
+
+/** Default for the `behavior.budgetAlertUsd` synthetic setting: 0 = no budget configured. */
+export const BUDGET_ALERT_USD_DEFAULT = 0;
+
+/**
+ * readBudgetAlertUsd — read the session cost-budget alert threshold (USD) from
+ * config. This is the single source of truth CostTrackerPanel and the
+ * background budget-breach notifier (core/budget-breach-notifier.ts) both
+ * read, so a threshold set via the panel's 'b' key is immediately visible to
+ * the notifier and vice versa. Falls back to BUDGET_ALERT_USD_DEFAULT (off)
+ * when the key is absent or invalid.
+ */
+export function readBudgetAlertUsd(configGet: (key: string) => unknown): number {
+  const raw = configGet('behavior.budgetAlertUsd');
+  const parsed = typeof raw === 'number' ? raw : Number(raw);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : BUDGET_ALERT_USD_DEFAULT;
+}

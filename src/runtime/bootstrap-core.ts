@@ -7,7 +7,6 @@ import { ToolRegistry } from '@pellux/goodvibes-sdk/platform/tools';
 import { registerAllTools } from '@pellux/goodvibes-sdk/platform/tools';
 import { PermissionManager, createPermissionConfigReader } from '@pellux/goodvibes-sdk/platform/permissions';
 import { Notifier } from '@pellux/goodvibes-sdk/platform/integrations';
-import { WebhookNotifier } from '@pellux/goodvibes-sdk/platform/integrations';
 import { Compositor } from '../renderer/compositor.ts';
 import type { PermissionRequestHandler } from '@pellux/goodvibes-sdk/platform/permissions';
 import type { SystemMessageRouter } from '../core/system-message-router.ts';
@@ -637,10 +636,20 @@ export async function initializeBootstrapCore(
 
   providerRegistry.startWatching(runtimeBus);
 
+  // W2.3: attach the SAME WebhookNotifier instance that `/notify add|remove|clear`
+  // (notify-runtime.ts) keeps live via ctx.services.webhookNotifier, rather than
+  // constructing a second, boot-time-only instance here. Before this fix, a
+  // webhook URL added mid-session reached long-task notifications (which read
+  // ctx.services.webhookNotifier directly) but never reached this instance's
+  // AGENT_FAILED/WORKFLOW_CHAIN_FAILED/WORKFLOW_CHAIN_PASSED runtime-bus
+  // listeners until restart — and if the session started with zero URLs
+  // configured, attachToRuntimeBus was never even called, so those listeners
+  // never existed at all for the rest of the session. Always attaching
+  // (regardless of initial URL count) and seeding the shared instance fixes
+  // both: `send()` is already a safe no-op with zero URLs configured.
   const webhookUrls = (configManager.getCategory('notifications') as { webhookUrls?: string[] }).webhookUrls ?? [];
   if (webhookUrls.length > 0) {
-    const webhookNotifier = WebhookNotifier.fromConfig(webhookUrls);
-    webhookNotifier.attachToRuntimeBus(runtimeBus);
+    services.webhookNotifier.setUrls(webhookUrls);
     domainDispatch.syncIntegration({
       id: 'webhooks',
       displayName: 'Webhooks',
@@ -652,6 +661,7 @@ export async function initializeBootstrapCore(
       meta: { urlCount: webhookUrls.length },
     }, 'bootstrap.webhooks');
   }
+  services.webhookNotifier.attachToRuntimeBus(runtimeBus);
 
   const notifier = await Notifier.fromConfig(services.serviceRegistry);
   const queueStatuses = notifier.getQueueStatus();

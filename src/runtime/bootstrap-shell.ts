@@ -1,4 +1,5 @@
 import { join } from 'node:path';
+import { readBudgetAlertUsd, BUDGET_ALERT_USD_DEFAULT } from '../export/cost-utils.ts';
 import { sumConversationUsage, type ConversationManager } from '../core/conversation';
 import type { Orchestrator } from '../core/orchestrator';
 import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
@@ -143,11 +144,19 @@ export function createBootstrapShell(options: BootstrapShellOptions): BootstrapS
   // WO-139: initial cost-budget alert threshold (USD; 0/unset = disabled).
   // Once the session starts, the real control surface is the CostTrackerPanel
   // itself — the in-panel 'b' key and /cost budget <usd> both call
-  // CostTrackerPanel.setBudgetThreshold() directly on the live panel instance.
+  // CostTrackerPanel.setBudgetThreshold() directly on the live panel instance,
+  // which (W2.3) now writes through to the behavior.budgetAlertUsd config key
+  // so the background budget-breach notifier reads the same value. The env
+  // var remains a first-run convenience only: it seeds the config key when
+  // that key has never been set, so it doesn't silently override a value the
+  // user has already configured in a prior session.
   const parsedBudgetThreshold = Number(process.env.GOODVIBES_COST_BUDGET_USD);
   const initialCostBudgetThreshold = Number.isFinite(parsedBudgetThreshold) && parsedBudgetThreshold > 0
     ? parsedBudgetThreshold
     : 0;
+  if (initialCostBudgetThreshold > 0 && readBudgetAlertUsd((k) => configManager.get(k as Parameters<typeof configManager.get>[0])) === BUDGET_ALERT_USD_DEFAULT) {
+    configManager.set('behavior.budgetAlertUsd' as Parameters<typeof configManager.set>[0], initialCostBudgetThreshold as never);
+  }
 
   let commandContextRef: CommandContext | null = null;
   registerBuiltinPanels(services.panelManager, {

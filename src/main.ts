@@ -63,12 +63,14 @@ import { wireTurnEventHandlers } from './core/turn-event-wiring.ts';
 import { buildContextStatusHint } from './renderer/context-status-hint.ts';
 import { evaluateSessionMaintenance } from '@/runtime/index.ts';
 import { createCancelGeneration } from './core/turn-cancellation.ts';
+import { wrapRequestPermissionWithAlert } from './core/approval-alert.ts';
 
 const ALT_SCREEN_ENTER = '\x1b[?1049h'; const ALT_SCREEN_EXIT  = '\x1b[?1049l';
 const MOUSE_ENABLE     = '\x1b[?1000h\x1b[?1002h\x1b[?1006h'; const MOUSE_DISABLE    = '\x1b[?1006l\x1b[?1002l\x1b[?1000l';
 const CURSOR_HIDE      = '\x1b[?25l'; const CURSOR_SHOW = '\x1b[?25h'; const CLEAR_SCREEN = '\x1b[2J\x1b[3J\x1b[H';
 const KEYBOARD_EXT_ENABLE  = '\x1b[>4;2m' + '\x1b[?1u'; const KEYBOARD_EXT_DISABLE = '\x1b[>4;0m' + '\x1b[?1l';
 const PASTE_ENABLE = '\x1b[?2004h'; const PASTE_DISABLE = '\x1b[?2004l';
+const FOCUS_ENABLE     = '\x1b[?1004h'; const FOCUS_DISABLE    = '\x1b[?1004l';
 
 async function main() {
   const stdout = process.stdout;
@@ -220,7 +222,7 @@ async function main() {
     stdout,
     ctx,
     noAltScreen: cli.flags.noAltScreen,
-    ansi: { CLEAR_SCREEN, ALT_SCREEN_EXIT, PASTE_DISABLE, KEYBOARD_EXT_DISABLE, MOUSE_DISABLE, CURSOR_SHOW },
+    ansi: { CLEAR_SCREEN, ALT_SCREEN_EXIT, PASTE_DISABLE, KEYBOARD_EXT_DISABLE, MOUSE_DISABLE, CURSOR_SHOW, FOCUS_DISABLE },
     getInput: () => input,
     render: () => renderScheduler.flushNow(), // resize: synchronous immediate path
     getPromptContentWidth,
@@ -342,14 +344,14 @@ async function main() {
     render();
   };
   commandContext.requestFullRepaint = () => { compositor.resetDiff(); render(); };
-  permissionPromptRef.requestPermission = (request) =>
+  permissionPromptRef.requestPermission = wrapRequestPermissionWithAlert((request) =>
     new Promise((resolve) => {
       pendingPermission = {
         ...request,
         ...buildPendingPermissionExtras(request, resolve),
       };
       render();
-    });
+    }), { focusTracker: ctx.services.focusTracker, configGet: (k: string) => configManager.get(k as Parameters<typeof configManager.get>[0]), webhookNotifier: ctx.services.webhookNotifier });
 
   const input: InputHandler = new InputHandler(
     () => render(),
@@ -382,7 +384,7 @@ async function main() {
         replayEngine: ctx.services.replayEngine,
         webhookNotifier: ctx.services.webhookNotifier,
         policyRuntimeState: ctx.services.policyRuntimeState,
-        externalServices: uiServices.platform.externalServices,
+        externalServices: uiServices.platform.externalServices, focusTracker: ctx.services.focusTracker,
       },
       shell: {
         bookmarkManager: ctx.services.bookmarkManager,
@@ -691,7 +693,7 @@ async function main() {
     gitStatusProvider,
     lastGitInfoRef,
     buildSessionContinuityHints,
-    render, webhookNotifier: ctx.services.webhookNotifier,
+    render, webhookNotifier: ctx.services.webhookNotifier, focusTracker: ctx.services.focusTracker,
   });
   unsubs.push(...turnUnsubs);
 
@@ -733,7 +735,7 @@ async function main() {
   stdin.setRawMode(true);
   stdin.resume();
   stdin.setEncoding('utf8');
-  allowTerminalWrite(() => stdout.write((cli.flags.noAltScreen ? '' : ALT_SCREEN_ENTER) + CLEAR_SCREEN + CURSOR_HIDE + MOUSE_ENABLE + KEYBOARD_EXT_ENABLE + PASTE_ENABLE));
+  allowTerminalWrite(() => stdout.write((cli.flags.noAltScreen ? '' : ALT_SCREEN_ENTER) + CLEAR_SCREEN + CURSOR_HIDE + MOUSE_ENABLE + KEYBOARD_EXT_ENABLE + PASTE_ENABLE + FOCUS_ENABLE));
 
   applyInitialTuiCliState({ cli, input, commandRegistry, commandContext, shellPaths: ctx.services.shellPaths, render });
 

@@ -22,7 +22,7 @@ import {
   DEFAULT_PANEL_PALETTE,
   type PanelWorkspaceSection,
 } from './polish.ts';
-import { calcSessionCost, isModelPriced } from '../export/cost-utils.ts';
+import { calcSessionCost, isModelPriced, computeBudgetBreach, readBudgetAlertUsd, type BudgetAlertConfigAccess } from '../export/cost-utils.ts';
 import { abbreviateCount } from '../utils/format-number.ts';
 import { isTextBackspace } from '../input/delete-key-policy.ts';
 
@@ -108,8 +108,19 @@ export class CostTrackerPanel extends BasePanel {
 
   // Budget alert threshold in USD (0 = disabled). Mutable at runtime via the
   // in-panel 'b' numeric entry or the /cost budget <usd> command — both call
-  // setBudgetThreshold() below.
+  // setBudgetThreshold() below. When configAccess is wired (production path),
+  // this field is a cache only — currentBudgetThreshold() re-reads
+  // behavior.budgetAlertUsd from config on every use so the panel and the
+  // background budget-breach notifier (core/budget-breach-notifier.ts) never
+  // disagree about the threshold. Tests that omit configAccess fall back to
+  // this field as the sole source of truth, unchanged from prior behavior.
   private budgetThreshold: number;
+
+  // Optional config-backed source of truth for the budget threshold. Absent
+  // in most existing unit tests (which construct the panel directly) and in
+  // any build that doesn't wire a config manager; present in production via
+  // builtin/development.ts.
+  private readonly configAccess: BudgetAlertConfigAccess | undefined;
 
   // Draft buffer for the in-panel budget-entry mode ('b' key). Non-null while
   // entry is active; unlike LocalAuthPanel's masked entry, the value is not
@@ -138,13 +149,25 @@ export class CostTrackerPanel extends BasePanel {
     turnEvents: UiEventFeed<TurnEvent>,
     agentEvents: UiEventFeed<AgentEvent>,
     getOrchestratorUsage: () => UsageSnapshot & { model?: string },
-    opts: { budgetThreshold?: number; getAgentStatus?: (agentId: string) => AgentRecord | null } = {},
+    opts: {
+      budgetThreshold?: number;
+      getAgentStatus?: (agentId: string) => AgentRecord | null;
+      configAccess?: BudgetAlertConfigAccess;
+    } = {},
   ) {
     super('cost', 'Cost', '$', 'providers');
     this.getOrchestratorUsage = getOrchestratorUsage;
     this.getAgentStatus = opts.getAgentStatus;
-    this.budgetThreshold = opts.budgetThreshold ?? 0;
+    this.configAccess = opts.configAccess;
+    this.budgetThreshold = this.configAccess ? readBudgetAlertUsd(this.configAccess.get) : (opts.budgetThreshold ?? 0);
     this.attachEvents(turnEvents, agentEvents);
+  }
+
+  /** The live budget threshold: re-read from config when configAccess is wired
+   * (single source of truth shared with the background notifier), otherwise
+   * the locally-cached field (test/no-config-manager fallback). */
+  private currentBudgetThreshold(): number {
+    return this.configAccess ? readBudgetAlertUsd(this.configAccess.get) : this.budgetThreshold;
   }
 
   // -------------------------------------------------------------------------
@@ -309,6 +332,7 @@ export class CostTrackerPanel extends BasePanel {
   public setBudgetThreshold(usd: number): void {
     if (!Number.isFinite(usd) || usd < 0) return;
     this.budgetThreshold = usd;
+    this.configAccess?.set('behavior.budgetAlertUsd', usd);
     this.markDirty();
   }
 
@@ -330,7 +354,8 @@ export class CostTrackerPanel extends BasePanel {
     if (this.budgetEntry !== null) return this.handleBudgetEntryInput(key);
 
     if (key === 'b') {
-      this.budgetEntry = this.budgetThreshold > 0 ? String(this.budgetThreshold) : '';
+      const threshold = this.currentBudgetThreshold();
+      this.budgetEntry = threshold > 0 ? String(threshold) : '';
       this.markDirty();
       return true;
     }
@@ -405,12 +430,13 @@ export class CostTrackerPanel extends BasePanel {
 
     const totalInputTokens = this.sessionUsage.input + this.sessionUsage.cacheRead + this.sessionUsage.cacheWrite;
     const sessionCost = calcSessionCost(this.sessionUsage.input, this.sessionUsage.output, this.sessionUsage.cacheRead, this.sessionUsage.cacheWrite, this.sessionModel);
-    const overBudget = this.budgetThreshold > 0 && sessionCost > this.budgetThreshold;
+    const budgetThreshold = this.currentBudgetThreshold();
+    const overBudget = computeBudgetBreach(sessionCost, budgetThreshold);
     const sparkline = buildSparkline(this.costHistory);
     const costStr = formatCost(sessionCost, !isModelPriced(this.sessionModel));
     const costFg = overBudget ? C.bad : C.cost;
-    const budgetStr = this.budgetThreshold > 0
-      ? ` / ${formatCost(this.budgetThreshold)}`
+    const budgetStr = budgetThreshold > 0
+      ? ` / ${formatCost(budgetThreshold)}`
       : '';
     const alertStr = overBudget ? ' ! OVER BUDGET' : '';
     const sessionLines: Line[] = [
@@ -419,8 +445,8 @@ export class CostTrackerPanel extends BasePanel {
     // Budget meter — the single most important glance for this panel: how much
     // of the configured budget the session has consumed. Only shown when a
     // budget is set (otherwise the bar would be meaningless).
-    if (this.budgetThreshold > 0) {
-      const ratio = sessionCost / this.budgetThreshold;
+    if (budgetThreshold > 0) {
+      const ratio = sessionCost / budgetThreshold;
       const BAR_W = 24;
       const filled = Math.max(0, Math.min(BAR_W, Math.round(ratio * BAR_W)));
       const meterFg = overBudget ? C.bad : ratio >= 0.8 ? C.warn : C.good;
