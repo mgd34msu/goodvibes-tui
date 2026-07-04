@@ -154,4 +154,38 @@ describe('Ctrl+C confirm-window race (W0.4 f): stale hide-timer bookkeeping', ()
       clearTimeoutSpy.mockRestore();
     }
   });
+
+  // W6.2 f: pins the exact user-observed contract. Live replay saw two
+  // empty-composer Ctrl+C presses "seconds apart" do nothing while the footer
+  // advertised "Ctrl+C quit". That is the intended accidental-exit guard: only
+  // a SECOND press WITHIN ~1s of the first exits; presses more than 1s apart
+  // each merely re-arm the confirm window. The behavior is correct; the fix
+  // (footer-tips.ts) is to advertise it honestly as "Ctrl+C x2 quit".
+  test('empty-composer presses SECONDS apart never exit; only a rapid second press within ~1s exits', () => {
+    const state = { lastCtrlCTime: 0, lastCtrlCTimeoutId: null as ReturnType<typeof setTimeout> | null, showExitNotice: false };
+    let exited = false;
+    const nowSpy = spyOn(Date, 'now');
+    try {
+      // Press 1 at t=1_000 (first ever): arms the confirm notice, does not exit.
+      nowSpy.mockReturnValue(1_000);
+      callHandleCtrlC(state, () => { exited = true; });
+      expect(state.showExitNotice).toBe(true);
+      expect(exited).toBe(false);
+
+      // Press 2 at t=4_000 (3s later — "seconds apart", outside the 1s window):
+      // re-arms the notice, STILL does not exit.
+      nowSpy.mockReturnValue(4_000);
+      callHandleCtrlC(state, () => { exited = true; });
+      expect(state.showExitNotice).toBe(true);
+      expect(exited).toBe(false);
+
+      // Press 3 at t=4_500 (within 1s of press 2): NOW it exits.
+      nowSpy.mockReturnValue(4_500);
+      callHandleCtrlC(state, () => { exited = true; });
+      expect(exited).toBe(true);
+    } finally {
+      if (state.lastCtrlCTimeoutId !== null) clearTimeout(state.lastCtrlCTimeoutId);
+      nowSpy.mockRestore();
+    }
+  });
 });

@@ -289,7 +289,7 @@ export function renderShortcutsOverlay(
     row(kb('block-copy'), 'Copy block to clipboard'),
     row(kb('block-save'), 'Save block to file'),
     row(kb('copy-selection'), 'Copy selection'),
-    row('F2', 'Process monitor'),
+    row('F2', 'Open the Fleet panel'),
     row('?', 'Help overlay'),
     row(`${kb('clear-cancel')} x2`, 'Exit'),
     '',
