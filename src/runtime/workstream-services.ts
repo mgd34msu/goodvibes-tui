@@ -33,6 +33,7 @@ import {
   fromChainSpec,
   type CreateWorkstreamInput,
   type OrchestrationEngine,
+  type WorkstreamIsolation,
 } from '@pellux/goodvibes-sdk/platform/orchestration';
 export type { OrchestrationEngine } from '@pellux/goodvibes-sdk/platform/orchestration';
 import {
@@ -90,12 +91,12 @@ export interface WorkstreamDraft {
 /** `ctx.session.workstreamEngine`'s real shape: the live engine plus the draft-proposal bookkeeping the engine itself has no concept of. */
 export interface WorkstreamCommandService {
   readonly engine: OrchestrationEngine;
-  /** Spawn a bounded read-only planning agent to decompose the goal (with automatic heuristic fallback), then hold the draft. Async because the planning agent is real. */
-  proposeDraft(task: string): Promise<WorkstreamDraft>;
+  /** Spawn a bounded read-only planning agent to decompose the goal (with automatic heuristic fallback), then hold the draft. Async because the planning agent is real. `isolation` omitted ⇒ the engine's own default ('shared'); see CreateWorkstreamInput.isolation (SDK). */
+  proposeDraft(task: string, isolation?: WorkstreamIsolation): Promise<WorkstreamDraft>;
   getDraft(id: string): WorkstreamDraft | undefined;
   listDrafts(): WorkstreamDraft[];
-  /** Re-derive a held draft's spec + decomposition from a new task string. Clears any prior approval — an edit must be re-approved. */
-  editDraft(id: string, task: string): Promise<WorkstreamDraft | undefined>;
+  /** Re-derive a held draft's spec + decomposition from a new task string. Clears any prior approval — an edit must be re-approved. `isolation` omitted ⇒ keeps the draft's current choice (an edit that only changes the task text must not silently reset isolation back to shared). */
+  editDraft(id: string, task: string, isolation?: WorkstreamIsolation): Promise<WorkstreamDraft | undefined>;
   approveDraft(id: string): WorkstreamDraft | undefined;
   removeDraft(id: string): boolean;
   /** Materialize an approved draft into a real, running Workstream (engine.createWorkstream + start), then drop the draft. Null when the draft is missing or not approved. */
@@ -226,12 +227,13 @@ function createWorkstreamCommandService(
 
   return {
     engine,
-    async proposeDraft(task: string): Promise<WorkstreamDraft> {
+    async proposeDraft(task: string, isolation?: WorkstreamIsolation): Promise<WorkstreamDraft> {
       const result = await decompose(task);
+      const spec = buildSpec(task);
       const draft: WorkstreamDraft = {
         id: `wsd_${crypto.randomUUID().slice(0, 8)}`,
         task,
-        spec: buildSpec(task),
+        spec: isolation ? { ...spec, isolation } : spec,
         gate: result.gate,
         proposal: result.proposal,
         provenance: toProvenance(result),
@@ -243,12 +245,13 @@ function createWorkstreamCommandService(
     },
     getDraft: (id) => drafts.get(id),
     listDrafts: () => Array.from(drafts.values()).sort((a, b) => a.createdAt - b.createdAt),
-    async editDraft(id, task) {
+    async editDraft(id, task, isolation) {
       const draft = drafts.get(id);
       if (!draft) return undefined;
       const result = await decompose(task);
+      const nextIsolation = isolation ?? draft.spec.isolation;
       draft.task = task;
-      draft.spec = buildSpec(task);
+      draft.spec = { ...buildSpec(task), isolation: nextIsolation };
       draft.proposal = result.proposal;
       draft.provenance = toProvenance(result);
       draft.approved = false;
@@ -277,9 +280,11 @@ function createWorkstreamCommandService(
  * facade. `persist` and `createWorktree` are left at the engine's own
  * defaults: journal-backed snapshots under .goodvibes/orchestration/ (so
  * resumeAllFromDisk below has something to resume) and a plain
- * AgentWorktree(projectRoot) — the same "shared working directory, no real
- * per-item isolation" behavior WrfcController itself uses today (see
- * phase-runner.ts's own REALITY-WINS divergence doc in the SDK).
+ * AgentWorktree(projectRoot) for the (default) `shared`-isolation path.
+ * A draft's `isolation: 'worktree'` (see /workstream create --isolation
+ * worktree, input/commands/workstream-runtime.ts) opts a single workstream
+ * into the SDK's per-item git-worktree isolation (WorktreeIsolationManager,
+ * engine-side) instead — the engine, not this facade, owns that lifecycle.
  */
 export function createWorkstreamServices(deps: WorkstreamServicesDeps): WorkstreamServices {
   const orchestrationEngine = createOrchestrationEngine({
