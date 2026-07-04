@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, mock, test } from 'bun:test';
 import { wireShellUiOpeners } from '../../shell/ui-openers.ts';
 import { createTestManagers } from '../helpers/test-managers.ts';
+import { PanelManager } from '../../panels/panel-manager.ts';
 
 interface FakeEmbeddingStatus {
   readonly id: string;
@@ -177,6 +178,44 @@ describe('wireShellUiOpeners', () => {
     expect(panelManager.getModalSurface).toHaveBeenCalledWith('providers-modal');
     expect(commandContext.print).toHaveBeenCalledWith("'providers-modal' is not available yet in this build.");
     expect(render).toHaveBeenCalled();
+  });
+
+  // W6 review (finding 3): the retired 'sessions' front door redirects to the
+  // NATIVE session-picker modal ('sessionPicker'), which is NOT a
+  // ConfigModalSurface — getModalSurface can never find it, so before the fix
+  // the openModal callback printed "'sessionPicker' is not available yet in
+  // this build." A small native-modal dispatch, consulted before
+  // getModalSurface, now routes it to the real opener.
+  test("openModal routes the native 'sessionPicker' target to the session-picker modal, not the honest-print fallback", () => {
+    const open = mock(() => {});
+    (input as Record<string, unknown>).sessionPickerModal = { open };
+    (commandContext.openModal as (name: string) => void)('sessionPicker');
+    expect(open).toHaveBeenCalledTimes(1);
+    expect(input.modalOpened).toHaveBeenCalledWith('sessionPicker');
+    // The native dispatch is consulted BEFORE getModalSurface — which never
+    // sees 'sessionPicker' — and the old "not available yet" lie is gone.
+    expect(panelManager.getModalSurface).not.toHaveBeenCalledWith('sessionPicker');
+    expect(commandContext.print).not.toHaveBeenCalledWith("'sessionPicker' is not available yet in this build.");
+  });
+
+  test("PanelManager.open('sessions') redirect opens the session picker end to end (no lie); the restore skip hook resolves honestly", () => {
+    const open = mock(() => {});
+    (input as Record<string, unknown>).sessionPickerModal = { open };
+    const realPm = new PanelManager();
+    realPm.registerModalRedirect('sessions', 'sessionPicker');
+    // Inject the SAME production openModal callback the shell wires onto
+    // PanelManager, then drive open('sessions') exactly as a front door or a
+    // saved-layout restore would.
+    realPm.setOpenModalCallback(commandContext.openModal as (name: string) => void);
+
+    realPm.open('sessions');
+
+    expect(open).toHaveBeenCalledTimes(1);
+    expect(commandContext.print).not.toHaveBeenCalledWith("'sessionPicker' is not available yet in this build.");
+    // reopenPanelsFromReturnContext skips redirects via getModalRedirect and
+    // notes them honestly instead of opening a phantom panel — assert that hook
+    // still resolves 'sessions' -> the picker modal name.
+    expect(realPm.getModalRedirect('sessions')).toBe('sessionPicker');
   });
 
   describe('embeddings target (B29)', () => {

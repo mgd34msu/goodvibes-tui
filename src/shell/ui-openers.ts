@@ -342,7 +342,27 @@ export function wireShellUiOpeners(options: WireShellUiOpenersOptions): void {
   // The stack name is the stable 'config' slot (one config modal at a time —
   // opening another swaps the surface), so Esc close/return and the modal-stack
   // machinery need only the single 'config' case (handler-ui-state.ts).
+  // Some panel-id redirects (and migrated front-doors) resolve to a NATIVE
+  // modal that is not a ConfigModalSurface — e.g. `sessions` -> `sessionPicker`,
+  // where 'sessionPicker' is the real session-picker modal opened by
+  // commandContext.openSessionPicker below, NOT a registered config surface.
+  // getModalSurface can never find these, so consult this small name->opener
+  // dispatch FIRST. Each entry reuses the same opener the front-door command
+  // uses (no duplicated open logic); resolved lazily so wiring order does not
+  // matter. Any name that is neither a native modal nor a registered surface
+  // still falls through to the honest "not available" print below.
+  const nativeModalOpeners: Record<string, () => void> = {
+    // openSessionPicker is wired below in this same function; call it lazily
+    // (optional-chained for the type, always present at invoke time).
+    sessionPicker: () => commandContext.openSessionPicker?.(),
+  };
+
   commandContext.openModal = (name: string) => {
+    const openNative = nativeModalOpeners[name];
+    if (openNative) {
+      openNative();
+      return;
+    }
     const surface = panelManager.getModalSurface(name);
     if (!surface) {
       commandContext.print(`'${name}' is not available yet in this build.`);

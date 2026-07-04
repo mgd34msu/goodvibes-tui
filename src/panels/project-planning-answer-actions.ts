@@ -125,8 +125,10 @@ export function buildAnswerActions(question: ProjectPlanningQuestion, draftAnswe
   });
   actions.push({
     id: 'dismiss-planning',
-    label: 'Close planning and continue without it',
-    detail: 'Pause project planning for this workspace. Normal chat continues; /plan can reopen it later.',
+    // Honest label: there is no /plan subcommand that pauses planning, so this
+    // row only closes the panel — it does NOT change any planning state.
+    label: 'Close (planning unchanged)',
+    detail: 'Close this panel. Pausing project planning is not available as a command yet, so planning state is left unchanged; /plan reopens it later.',
     answer: 'Pause project planning for this workspace and continue without the planning panel.',
     kind: 'dismiss',
   });

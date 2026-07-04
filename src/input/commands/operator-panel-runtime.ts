@@ -45,6 +45,11 @@ export function registerOperatorPanelCommand(registry: CommandRegistry): void {
           return;
         }
         try {
+          // A MIGRATE-TO-MODAL id (e.g. 'sessions' -> the session-picker modal)
+          // resolves to a modal, not a panel: opening it fires the redirect and
+          // no panel lands in the workspace. Report that honestly rather than
+          // claiming "Panel opened: <id>".
+          const redirectTarget = pm.getModalRedirect(id);
           if (ctx.showPanel) ctx.showPanel(id, pane as 'top' | 'bottom' | undefined);
           else {
             pm.open(id, pane as 'top' | 'bottom' | undefined);
@@ -52,9 +57,22 @@ export function registerOperatorPanelCommand(registry: CommandRegistry): void {
             ctx.focusPanels?.();
             ctx.renderRequest();
           }
-          ctx.print(`Panel opened: ${id}${pane ? ` (${pane} pane)` : ''}`);
+          if (redirectTarget) {
+            ctx.print(`"${id}" moved to the ${redirectTarget} modal — opening it.`);
+          } else {
+            ctx.print(`Panel opened: ${id}${pane ? ` (${pane} pane)` : ''}`);
+          }
         } catch (e) {
-          ctx.print(`Error: ${summarizeError(e)}`);
+          // A deleted/unknown panel id throws "No panel type registered with
+          // id: <id>" from PanelManager.open — surface the same friendly line
+          // the bare-/panel path uses instead of leaking the raw error. Any
+          // genuinely unexpected failure still shows its real message.
+          const message = summarizeError(e);
+          if (message.includes('No panel type registered with id')) {
+            ctx.print(`Unknown panel "${id}". Use /panel list to see available panels.`);
+          } else {
+            ctx.print(`Error: ${message}`);
+          }
         }
       } else if (sub === 'close') {
         const id = args[1];

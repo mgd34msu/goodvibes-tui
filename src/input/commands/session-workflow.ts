@@ -79,7 +79,10 @@ function buildTranscriptReviewLines(
   ];
 }
 
-function reopenPanelsFromReturnContext(ctx: CommandContext, summary: SessionReturnContextSummary | undefined): string[] {
+// Exported (test-only concern) so the MIGRATE-TO-MODAL redirect-skip honesty
+// (W6 review, finding 3: saved-layout restore with 'sessions' must not lie)
+// can be unit-tested directly instead of through a full /resume harness.
+export function reopenPanelsFromReturnContext(ctx: CommandContext, summary: SessionReturnContextSummary | undefined): string[] {
   if (!summary?.openPanels || summary.openPanels.length === 0) return [];
   const panelManager = requirePanelManager(ctx);
   const reopened: string[] = [];
