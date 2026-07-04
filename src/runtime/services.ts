@@ -5,8 +5,7 @@ import { SecretsManager } from '../config/secrets.ts';
 import { ServiceRegistry } from '@pellux/goodvibes-sdk/platform/config';
 import { SubscriptionManager } from '@pellux/goodvibes-sdk/platform/config';
 import { AutomationDeliveryManager, AutomationManager, AutomationRouteStore } from '@pellux/goodvibes-sdk/platform/automation';
-import { ChannelPluginRegistry, ChannelPolicyManager, RouteBindingManager, SurfaceRegistry } from '@pellux/goodvibes-sdk/platform/channels';
-import { ChannelDeliveryRouter } from '@pellux/goodvibes-sdk/platform/channels';
+import { ChannelDeliveryRouter, ChannelPluginRegistry, ChannelPolicyManager, RouteBindingManager, SurfaceRegistry } from '@pellux/goodvibes-sdk/platform/channels';
 import { ApprovalBroker, GatewayMethodCatalog, SharedSessionBroker } from '@pellux/goodvibes-sdk/platform/control-plane';
 import { WatcherRegistry } from '@pellux/goodvibes-sdk/platform/watchers';
 import { ArtifactStore } from '@pellux/goodvibes-sdk/platform/artifacts';
@@ -25,16 +24,10 @@ import {
 import { MediaProviderRegistry, ensureBuiltinMediaProviders } from '@pellux/goodvibes-sdk/platform/media';
 import { MultimodalService } from '@pellux/goodvibes-sdk/platform/multimodal';
 import { AgentManager } from '@pellux/goodvibes-sdk/platform/tools';
-import { AgentMessageBus } from '@pellux/goodvibes-sdk/platform/agents';
-import { WrfcController } from '@pellux/goodvibes-sdk/platform/agents';
-import { AgentOrchestrator } from '@pellux/goodvibes-sdk/platform/agents';
-import { ArchetypeLoader } from '@pellux/goodvibes-sdk/platform/agents';
+import { AgentMessageBus, AgentOrchestrator, ArchetypeLoader, WrfcController } from '@pellux/goodvibes-sdk/platform/agents';
 import { ProcessManager } from '@pellux/goodvibes-sdk/platform/tools';
-import { ModeManager } from '@pellux/goodvibes-sdk/platform/state';
-import { FileUndoManager } from '@pellux/goodvibes-sdk/platform/state';
+import { FileUndoManager, MemoryRegistry, MemoryStore, ModeManager } from '@pellux/goodvibes-sdk/platform/state';
 import { WorkspaceCheckpointManager } from '@pellux/goodvibes-sdk/platform/workspace';
-import { MemoryRegistry } from '@pellux/goodvibes-sdk/platform/state';
-import { MemoryStore } from '@pellux/goodvibes-sdk/platform/state';
 import type { RuntimeEventBus } from '@/runtime/index.ts';
 import { createDomainDispatch } from './store/index.ts';
 import type { DomainDispatch, RuntimeStore } from './store/index.ts';
@@ -52,20 +45,11 @@ import { BookmarkManager } from '@pellux/goodvibes-sdk/platform/bookmarks';
 import { ProfileManager } from '@pellux/goodvibes-sdk/platform/profiles';
 import { SessionManager } from '@pellux/goodvibes-sdk/platform/sessions';
 import { CrossSessionTaskRegistry } from '@pellux/goodvibes-sdk/platform/sessions';
-import { ApiTokenAuditor } from '@pellux/goodvibes-sdk/platform/security';
-import { UserAuthManager } from '@pellux/goodvibes-sdk/platform/security';
+import { ApiTokenAuditor, UserAuthManager } from '@pellux/goodvibes-sdk/platform/security';
 import { WebhookNotifier } from '@pellux/goodvibes-sdk/platform/integrations';
 import { McpRegistry } from '@pellux/goodvibes-sdk/platform/mcp';
 import { DeterministicReplayEngine } from '@pellux/goodvibes-sdk/platform/core';
-import { ProviderOptimizer } from '@pellux/goodvibes-sdk/platform/providers';
-import { ProviderRegistry } from '@pellux/goodvibes-sdk/platform/providers';
-import type { ModelDefinition } from '@pellux/goodvibes-sdk/platform/providers';
-import { ProviderCapabilityRegistry } from '@pellux/goodvibes-sdk/platform/providers';
-import { CacheHitTracker } from '@pellux/goodvibes-sdk/platform/providers';
-import { FavoritesStore } from '@pellux/goodvibes-sdk/platform/providers';
-import { BenchmarkStore } from '@pellux/goodvibes-sdk/platform/providers';
-import { ModelLimitsService } from '@pellux/goodvibes-sdk/platform/providers';
-import { inferFallbackContextWindow } from '@pellux/goodvibes-sdk/platform/providers';
+import { BenchmarkStore, CacheHitTracker, FavoritesStore, inferFallbackContextWindow, type ModelDefinition, ModelLimitsService, ProviderCapabilityRegistry, ProviderOptimizer, ProviderRegistry } from '@pellux/goodvibes-sdk/platform/providers';
 import { KeybindingsManager } from '../input/keybindings.ts';
 import { SessionMemoryStore } from '@pellux/goodvibes-sdk/platform/core';
 import { SessionLineageTracker } from '@pellux/goodvibes-sdk/platform/core';
@@ -91,6 +75,7 @@ import {
 } from '@pellux/goodvibes-sdk/platform/tools';
 import { createProcessRegistry, type ProcessRegistry } from '@pellux/goodvibes-sdk/platform/runtime/fleet';
 import { calcSessionCost, isModelPriced } from '../export/cost-utils.ts';
+import { createWorkstreamServices, type OrchestrationEngine, type WorkstreamCommandService } from './workstream-services.ts';
 import { WorkPlanStore } from '../work-plans/work-plan-store.ts';
 import {
   registerDaemonHandlers,
@@ -254,6 +239,9 @@ export interface RuntimeServices {
   readonly agentOrchestrator: AgentOrchestrator;
   readonly wrfcController: WrfcController;
   readonly processManager: ProcessManager;
+  /** Wave 4 (wo703): the phase/work-item orchestration engine — see runtime/workstream-services.ts. */
+  readonly orchestrationEngine: OrchestrationEngine;
+  readonly workstreamCommands: WorkstreamCommandService;
   /** W2.1/W2.2: unified live process registry (agents, WRFC chains, workflows, watchers, background processes) backing the Fleet panel. */
   readonly processRegistry: ProcessRegistry;
   readonly modeManager: ModeManager;
@@ -617,6 +605,13 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
     artifactStore,
   });
   const processManager = new ProcessManager();
+  // Wave 4 (wo703): the phase/work-item orchestration engine, constructed
+  // before the process registry so its fleet nodes (workstream/phase/
+  // work-item) can be folded in below via the registry's optional
+  // orchestrationEngine dep.
+  const { orchestrationEngine, workstreamCommands } = createWorkstreamServices({
+    agentManager, configManager, adaptivePlanner, runtimeBus: options.runtimeBus, projectRoot: workingDirectory,
+  });
   // W2.1/W2.2: one shared process registry aggregating the managers above —
   // the Fleet panel (panels/fleet-read-model.ts) is its first consumer.
   // Constructed once here (not per-consumer) so the coalesced tick and the
@@ -624,6 +619,7 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
   const processRegistry = createProcessRegistry({
     agentManager,
     wrfcController,
+    orchestrationEngine, // Wave 4 (wo703): folds workstream/phase/work-item nodes into the fleet
     processManager,
     watcherRegistry,
     workflow,
@@ -786,6 +782,8 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
     agentOrchestrator,
     wrfcController,
     processManager,
+    orchestrationEngine,
+    workstreamCommands,
     processRegistry,
     modeManager,
     fileUndoManager,

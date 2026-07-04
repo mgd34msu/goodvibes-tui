@@ -28,23 +28,8 @@ import { PanelConfirmOverlay } from './panel-confirm-overlay.ts';
 import { formatAgentCost } from './agent-inspector-shared.ts';
 import { formatElapsed } from '../utils/format-elapsed.ts';
 import { truncateDisplay } from '../utils/terminal-width.ts';
-import {
-  isPanelSearchBackspace,
-  isPanelSearchCancel,
-  isPanelSearchCommit,
-  isPanelSearchPrintable,
-} from './search-focus.ts';
-import {
-  buildAlignedRow,
-  buildKeyboardHints,
-  buildPanelLine,
-  buildPanelWorkspace,
-  buildSearchInputLine,
-  DEFAULT_PANEL_PALETTE,
-  getPanelWorkspaceContentBudget,
-  type ColumnSpec,
-  type PanelPalette,
-} from './polish.ts';
+import { isPanelSearchBackspace, isPanelSearchCancel, isPanelSearchCommit, isPanelSearchPrintable } from './search-focus.ts';
+import { buildAlignedRow, buildKeyboardHints, buildPanelLine, buildPanelWorkspace, buildSearchInputLine, DEFAULT_PANEL_PALETTE, getPanelWorkspaceContentBudget, type ColumnSpec, type PanelPalette } from './polish.ts';
 import {
   fleetKindTag,
   fleetStateGlyph,
@@ -70,13 +55,7 @@ import {
   type SteerBadge,
 } from './fleet-tabs.ts';
 import { reconcileSteerBadges as reconcileSteerBadgesPure, steerBadgeGlyph, steerBadgeTone } from './fleet-steer.ts';
-import {
-  parseAgentLedger,
-  renderFleetAgentTranscript,
-  renderFleetChainSummary,
-  renderFleetLedgerFallback,
-  renderFleetTranscriptLoading,
-} from './fleet-transcript.ts';
+import { parseAgentLedger, renderFleetAgentTranscript, renderFleetChainSummary, renderFleetLedgerFallback, renderFleetTranscriptLoading } from './fleet-transcript.ts';
 import { renderFleetTabStrip } from '../renderer/fleet-tab-strip.ts';
 
 const C = DEFAULT_PANEL_PALETTE;
@@ -505,6 +484,21 @@ export class FleetPanel extends ScrollableListPanel<FleetTreeRow> {
       return true;
     }
 
+    // B4 pause (wo703): reuses actions.interrupt verbatim — the registry's
+    // interrupt() already disables trigger/schedule nodes, just previously
+    // unreachable behind the interruptible gate (always false for them).
+    // pausable is the honest gate; no new action/registry plumbing needed.
+    if (key === 'p') {
+      if (!selected || isTerminalProcessState(selected.node.state)) return false;
+      if (!selected.node.capabilities.pausable) {
+        this.setError(`${selected.node.kind} does not support pause.`);
+        return true;
+      }
+      this.actions.interrupt(selected.node.id);
+      this.markDirty();
+      return true;
+    }
+
     if (key === 'f') {
       this.follow = !this.follow;
       if (this.follow) this.applyFollow();
@@ -767,6 +761,9 @@ export class FleetPanel extends ScrollableListPanel<FleetTreeRow> {
     const canKill = selected !== undefined
       && !isTerminalProcessState(selected.node.state)
       && selected.node.capabilities.killable;
+    const canPause = selected !== undefined
+      && !isTerminalProcessState(selected.node.state)
+      && selected.node.capabilities.pausable;
 
     const hints: Array<{ keys: string; label: string }> = [
       { keys: 'j/k', label: 'navigate' },
@@ -774,6 +771,7 @@ export class FleetPanel extends ScrollableListPanel<FleetTreeRow> {
     ];
     if (canInterrupt) hints.push({ keys: 'i', label: 'interrupt' });
     if (canKill) hints.push({ keys: 'K', label: 'kill' });
+    if (canPause) hints.push({ keys: 'p', label: 'pause' });
     hints.push({ keys: 'f', label: this.follow ? 'follow:on' : 'follow' });
     if (this.tabsState.tabs.length > 0) hints.push({ keys: '[ ]', label: 'tabs' });
 

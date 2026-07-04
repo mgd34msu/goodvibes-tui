@@ -161,6 +161,8 @@ export interface CommandSessionServices {
    * fresh Orchestrator's zeroed default (W0.9).
    */
   readonly hydrateSessionUsage?: () => void;
+  /** Wave 4 (wo703): the orchestration engine's command-facing facade — see runtime/workstream-services.ts. */
+  readonly workstreamEngine?: import('../runtime/workstream-services.ts').WorkstreamCommandService;
 }
 
 export interface CommandProviderServices {
