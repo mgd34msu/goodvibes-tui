@@ -145,6 +145,7 @@ describe('ConfigModal host', () => {
         { id: 'a', label: 'A', rows: Array.from({ length: rowCount }, (_, i) => ({ id: `r${i}`, label: `Row ${i}` })) },
       ] }),
     }));
+    modal.noteInteraction(); // deferral is a post-first-interaction contract (refutation finding 3)
     expect(modal.getRenderModel().scroll.total).toBe(2);
     // A new row appears in the read-model...
     rowCount = 3;
@@ -159,6 +160,7 @@ describe('ConfigModal host', () => {
     let rows = [{ id: 'a', label: 'A' }, { id: 'b', label: 'B' }];
     const modal = new ConfigModal();
     modal.open(makeSurface({ view: () => ({ title: 'T', tabs: [{ id: 't', label: 'T', rows }] }) }));
+    modal.noteInteraction(); // deferral is a post-first-interaction contract (refutation finding 3)
     rows = [{ id: 'a', label: 'A' }]; // 'b' disappears
     const model = modal.getRenderModel();
     expect(model.scroll.total).toBe(2); // still shows both
@@ -389,6 +391,7 @@ describe('ConfigModal host — type-to-filter (DEBT-5 item 1)', () => {
     let rows = [{ id: 'r1', label: 'alpha one' }, { id: 'r2', label: 'beta two' }];
     const modal = new ConfigModal();
     modal.open(makeSurface({ view: () => ({ title: 'T', tabs: [{ id: 'a', label: 'A', rows }] }) }));
+    modal.noteInteraction(); // deferral is a post-first-interaction contract (refutation finding 3)
     modal.activateFilter();
     modal.appendFilterText('alpha');
     expect(modal.getRenderModel().scroll.total).toBe(1);
@@ -449,6 +452,7 @@ describe('ConfigModal host — wrap-clamp overlay (DEBT-5 item 2)', () => {
     modal.open(makeSurface({
       view: () => ({ title: 'T', tabs: [{ id: 'a', label: 'A', rows: [{ id: 'r1', label }] }] }),
     }));
+    modal.noteInteraction(); // deferral is a post-first-interaction contract (refutation finding 3)
     const width = 20;
     const before = modal.getRenderModel(width);
     const beforeLineCount = before.rows[0]!.label.split('\n').length;
@@ -485,6 +489,7 @@ describe('ConfigModal host — wrap-clamp overlay (DEBT-5 item 2)', () => {
     modal.open(makeSurface({
       view: () => ({ title: 'T', tabs: [{ id: 'a', label: 'A', rows: [{ id: 'r1', label }] }] }),
     }));
+    modal.noteInteraction(); // deferral is a post-first-interaction contract (refutation finding 3)
     const frameA = renderConfigModal(modal, 90, 24);
     label = 'x'.repeat(300); // guaranteed to wrap into many lines at any real terminal width
     const frameB = renderConfigModal(modal, 90, 24);
