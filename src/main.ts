@@ -12,7 +12,7 @@ import { registerAllTools } from '@pellux/goodvibes-sdk/platform/tools';
 import { FileUndoManager } from '@pellux/goodvibes-sdk/platform/state';
 import { PermissionManager } from '@pellux/goodvibes-sdk/platform/permissions';
 import { AcpManager } from '@pellux/goodvibes-sdk/platform/acp';
-import { PermissionPromptUI } from './permissions/prompt.ts';
+import { PermissionPromptUI, buildPendingPermissionExtras } from './permissions/prompt.ts';
 import { CommandRegistry } from './input/command-registry.ts';
 import type { CommandContext } from './input/command-registry.ts';
 import { renderProcessIndicator } from './renderer/process-indicator.ts';
@@ -349,7 +349,7 @@ async function main() {
     new Promise((resolve) => {
       pendingPermission = {
         ...request,
-        resolve: (approved: boolean, remember = false) => resolve({ approved, remember }),
+        ...buildPendingPermissionExtras(request, resolve),
       };
       render();
     });
@@ -557,7 +557,7 @@ async function main() {
     // Calculate how many rows are consumed by overlays (thinking, permissions, queue, file picker)
     let overlayRows = 0;
     if (orchestrator.isThinking) overlayRows += 2; // spinner + blank
-    if (pendingPermission) overlayRows += PermissionPromptUI.getPromptHeight(pendingPermission);
+    if (pendingPermission) overlayRows += PermissionPromptUI.getPromptHeight(pendingPermission, pendingPermission.hunkState);
     overlayRows += orchestrator.messageQueue.length * 3; // queued messages
     // File picker and model picker overlay rows computed from actual rendered line count below
     // Selection modal overlay rows are computed from actual rendered line count below
@@ -606,7 +606,7 @@ async function main() {
     }
 
     if (pendingPermission) {
-      viewport.push(...PermissionPromptUI.createPromptLines(conversationWidth, pendingPermission));
+      viewport.push(...PermissionPromptUI.createPromptLines(conversationWidth, pendingPermission, pendingPermission.hunkState));
     }
 
     orchestrator.messageQueue.forEach(msg => {
