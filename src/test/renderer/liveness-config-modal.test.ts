@@ -7,17 +7,17 @@
  * unmoved, exactly one row differs, no structural glyph touched.
  *
  * Covered: providers-modal (the charter's live-modal exemplar — REQUIRED; its
- * async inspect cache is driven deterministically) and remote-modal (a second
- * group-A surface, read-model backed). The group-B ported surface the brief also
- * calls for is not covered here: the group-B → ConfigModalSurface port is
- * deferred (see the WO-D report), so those surfaces do not yet render through
- * this host path.
+ * async inspect cache is driven deterministically), remote-modal (a second
+ * group-A surface, read-model backed), AND memory-modal (a group-B ported
+ * surface — WO-P): a values-only mutation of a non-selected record's live label
+ * repaints in place through the real host path.
  */
 import { describe, test, expect } from 'bun:test';
 import { ConfigModal } from '../../input/config-modal.ts';
 import { renderConfigModal } from '../../renderer/config-modal.ts';
 import { createProviderHealthModalSurface, type ProviderRuntimeInspect } from '../../panels/modals/provider-health-modal.ts';
 import { createRemoteModalSurface } from '../../panels/modals/remote-modal.ts';
+import { createMemoryModalSurface } from '../../panels/modals/memory-modal.ts';
 import {
   assertFrameLiveness,
   differingCells,
@@ -125,6 +125,43 @@ describe('liveness contract — remote-modal (values-only update, real host path
 
       // Values-only: bump the NON-selected first connection's message count (same width).
       snapshot.acp.activeConnections[0]!.messageCount = 5;
+      const frameB = renderConfigModal(modal, W, H);
+
+      assertFrameLiveness(frameA, frameB);
+      expect(selectionRow(frameB)).toBe(cursorA);
+
+      const diffs = differingCells(frameA, frameB);
+      expect(diffs.length).toBeGreaterThan(0);
+      expect(new Set(diffs.map((d) => d.row)).size).toBe(1);
+      expect(diffs.some((d) => DEFAULT_STRUCTURAL_GLYPHS.has(d.from) || DEFAULT_STRUCTURAL_GLYPHS.has(d.to))).toBe(false);
+    } finally {
+      modal.close();
+    }
+  });
+});
+
+describe('liveness contract — memory-modal (group-B ported surface, values-only update, real host path)', () => {
+  test('a summary value update on a NON-selected record row repaints in place: no reflow, cursor unchanged, one row differs', () => {
+    // Two records; only the first (non-selected) record's summary changes, at
+    // the SAME display width, so the id set is stable (values-only tick).
+    const records: Array<{ id: string; scope: string; cls: string; summary: string; tags: readonly string[]; reviewState: string; confidence: number; createdAt: number; provenance: readonly { kind: string; ref: string }[] }> = [
+      { id: 'mem-live-1', scope: 'project', cls: 'decision', summary: 'liveness record row alpha', tags: [], reviewState: 'reviewed', confidence: 90, createdAt: 1735689600000, provenance: [] },
+      { id: 'mem-live-2', scope: 'session', cls: 'risk', summary: 'liveness record row bravo', tags: [], reviewState: 'reviewed', confidence: 80, createdAt: 1735689600000, provenance: [] },
+    ];
+    const surface = createMemoryModalSurface({ memoryRegistry: { search: () => records, reviewQueue: () => [] } });
+    const modal = new ConfigModal();
+    try {
+      modal.open(surface, () => {});
+      modal.moveDown(); // interaction boundary: select the second record, freeze structure
+
+      const frameA = renderConfigModal(modal, W, H);
+      const cursorA = selectionRow(frameA);
+      expect(cursorA).toBeGreaterThanOrEqual(0);
+
+      // Values-only live tick: mutate the NON-selected first record's summary to
+      // a same-width string. buildView reads the cached record object refs, so
+      // the next render reflects it with no interaction and no structural change.
+      records[0]!.summary = 'liveness record row DELTA';
       const frameB = renderConfigModal(modal, W, H);
 
       assertFrameLiveness(frameA, frameB);
