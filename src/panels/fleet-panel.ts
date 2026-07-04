@@ -21,6 +21,7 @@
 import { readFile } from 'node:fs/promises';
 import type { Line } from '../types/grid.ts';
 import type { ProcessCostState, ProcessUsage, SteerResult } from '@pellux/goodvibes-sdk/platform/runtime/fleet';
+import { formatWorkItemIsolationDetailFromRaw } from './fleet-panel-worktree-detail.ts';
 import type { ConversationMessageSnapshot } from '@pellux/goodvibes-sdk/platform/core';
 import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import { ScrollableListPanel } from './scrollable-list-panel.ts';
@@ -663,11 +664,9 @@ export class FleetPanel extends ScrollableListPanel<FleetTreeRow> {
       [truncateDisplay(activityText, Math.max(0, width - 11)), C.dim],
     ]);
     // Wave 3 hook: approval history attaches here once session tabs land.
-    const line4 = buildPanelLine(width, [
-      [' approvals ', C.label],
-      ['(Wave 3)', C.dim],
-    ]);
-    return [line1, line2, line3, line4];
+    const line4 = buildPanelLine(width, [[' approvals ', C.label], ['(Wave 3)', C.dim]]);
+    const isolationDetail = node.kind === 'work-item' ? formatWorkItemIsolationDetailFromRaw(node.raw) : null;
+    return [line1, line2, line3, line4, ...(isolationDetail ? [buildPanelLine(width, [[' isolation ', C.label], [isolationDetail, C.dim]])] : [])];
   }
 
   /** Renders the active session tab's content (transcript / chain summary / ledger fallback) in place of the tree. */

@@ -119,7 +119,7 @@ function makeFakeService(seed: Workstream[] = []): WorkstreamCommandService & { 
   let counter = 0;
   return {
     engine,
-    proposeDraft(task: string): WorkstreamDraft {
+    proposeDraft(task: string, isolation?: CreateWorkstreamInput['isolation']): WorkstreamDraft {
       const draft: WorkstreamDraft = {
         id: `wsd_${++counter}`,
         task,
@@ -130,6 +130,7 @@ function makeFakeService(seed: Workstream[] = []): WorkstreamCommandService & { 
             { role: 'reviewer', capacity: 1, kind: 'review', gate: { scope: 'scoped', gates: [] } },
           ],
           items: [{ id: 'seed-item', title: task, task }],
+          isolation,
         },
         gate: { decompose: false, strategy: 'single', reasonCode: 'AUTO_FALLBACK_SINGLE' },
         approved: false,
@@ -140,11 +141,16 @@ function makeFakeService(seed: Workstream[] = []): WorkstreamCommandService & { 
     },
     getDraft: (id) => drafts.get(id),
     listDrafts: () => Array.from(drafts.values()),
-    editDraft(id, task) {
+    editDraft(id, task, isolation) {
       const draft = drafts.get(id);
       if (!draft) return undefined;
       draft.task = task;
-      draft.spec = { ...draft.spec, title: task, items: [{ id: 'seed-item', title: task, task }] };
+      draft.spec = {
+        ...draft.spec,
+        title: task,
+        items: [{ id: 'seed-item', title: task, task }],
+        isolation: isolation ?? draft.spec.isolation,
+      };
       draft.approved = false;
       return draft;
     },
@@ -240,8 +246,50 @@ describe('workstream-runtime — create', () => {
 
     await registry.execute('workstream', ['create'], ctx);
 
-    expect(printed).toEqual(['Usage: /workstream create <task...>']);
+    expect(printed).toEqual(['Usage: /workstream create [--isolation shared|worktree] <task...>']);
     expect(service.listDrafts()).toHaveLength(0);
+  });
+
+  test('--isolation worktree is stripped from the task text and threaded to proposeDraft', async () => {
+    const registry = new CommandRegistry();
+    registerWorkstreamRuntimeCommands(registry);
+    const service = makeFakeService();
+    const { ctx, printed } = makeCtx(service);
+
+    await registry.execute('workstream', ['create', '--isolation', 'worktree', 'ship', 'the', 'thing'], ctx);
+
+    expect(printed[0]).toContain('ship the thing');
+    expect(printed[0]).not.toContain('--isolation');
+    const draft = service.listDrafts()[0]!;
+    expect(draft.task).toBe('ship the thing');
+    expect(draft.spec.isolation).toBe('worktree');
+    expect(printed[0]).toContain('Isolation: worktree');
+  });
+
+  test('an unrecognized --isolation value is a hard error, not a silent default', async () => {
+    const registry = new CommandRegistry();
+    registerWorkstreamRuntimeCommands(registry);
+    const service = makeFakeService();
+    const { ctx, printed } = makeCtx(service);
+
+    await registry.execute('workstream', ['create', '--isolation', 'bogus', 'ship', 'it'], ctx);
+
+    expect(printed).toHaveLength(1);
+    expect(printed[0]).toContain('--isolation must be "shared" or "worktree"');
+    expect(service.listDrafts()).toHaveLength(0);
+  });
+
+  test('a draft with no --isolation flag defaults to shared (unlabeled in the spec, shown as "shared (default)")', async () => {
+    const registry = new CommandRegistry();
+    registerWorkstreamRuntimeCommands(registry);
+    const service = makeFakeService();
+    const { ctx, printed } = makeCtx(service);
+
+    await registry.execute('workstream', ['create', 'ship', 'the', 'thing'], ctx);
+
+    const draft = service.listDrafts()[0]!;
+    expect(draft.spec.isolation).toBeUndefined();
+    expect(printed[0]).toContain('Isolation: shared (default)');
   });
 
   test('create carries an honest note that the proposal is not saved and is lost on restart', async () => {
@@ -400,6 +448,59 @@ describe('workstream-runtime — list / status / insert-phase / cancel', () => {
     expect(output).toContain('status target');
     expect(output).toContain('in-phase');
     expect(output).toContain('do the work');
+  });
+
+  test('status <id> on a worktree-isolation workstream surfaces per-item merge state + an honest unmerged-items summary', async () => {
+    const registry = new CommandRegistry();
+    registerWorkstreamRuntimeCommands(registry);
+    const usage = { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, llmCallCount: 0, turnCount: 0, toolCallCount: 0, costUsd: null as number | null, costState: 'unpriced' as const };
+    const live = makeWorkstream({
+      id: 'ws-isolated',
+      title: 'isolated run',
+      isolation: 'worktree',
+      phases: [makePhase({ id: 'p1', ordinal: 0, role: 'engineer' })],
+      items: [
+        {
+          id: 'item-merged', title: 'merged one', task: 't', currentPhaseId: null, state: 'passed',
+          allAgentIds: [], visits: new Map(), touchedPaths: [], usage, transportRetryCount: 0, createdAt: Date.now(),
+          mergeState: 'merged', mergeHash: 'abcdef1234567890',
+        },
+        {
+          id: 'item-conflict', title: 'conflicted one', task: 't', currentPhaseId: null, state: 'passed',
+          allAgentIds: [], visits: new Map(), touchedPaths: [], usage, transportRetryCount: 0, createdAt: Date.now(),
+          mergeState: 'conflict', worktreeKept: true, blockedReason: 'merge-conflict: shared.txt',
+        },
+      ],
+    });
+    const { ctx, printed } = makeCtx(makeFakeService([live]));
+
+    await registry.execute('workstream', ['status', 'ws-isolated'], ctx);
+
+    const output = printed.at(-1)!;
+    expect(output).toContain('Isolation: worktree');
+    expect(output).toContain('merged abcdef123456'); // shortId truncates the hash for display
+    expect(output).toContain('merge-conflict');
+    expect(output).toContain('Unmerged items: 1');
+    expect(output).toContain('item-conflict'.slice(0, 12));
+  });
+
+  test('status <id> on a shared-isolation workstream never mentions merge state', async () => {
+    const registry = new CommandRegistry();
+    registerWorkstreamRuntimeCommands(registry);
+    const live = makeWorkstream({
+      id: 'ws-shared-status',
+      title: 'shared run',
+      phases: [makePhase({ id: 'p1', ordinal: 0, role: 'engineer' })],
+      items: [{ id: 'item-1', title: 'do the work', task: 'do the work', currentPhaseId: null, state: 'passed', allAgentIds: [], visits: new Map(), touchedPaths: [], usage: { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, llmCallCount: 0, turnCount: 0, toolCallCount: 0, costUsd: null, costState: 'unpriced' }, transportRetryCount: 0, createdAt: Date.now() }],
+    });
+    const { ctx, printed } = makeCtx(makeFakeService([live]));
+
+    await registry.execute('workstream', ['status', 'ws-shared-status'], ctx);
+
+    const output = printed.at(-1)!;
+    expect(output).toContain('Isolation: shared');
+    expect(output).not.toContain('Unmerged items');
+    expect(output).not.toContain('merge');
   });
 
   test('status with an unknown id refuses honestly', async () => {
