@@ -75,7 +75,7 @@ export function registerWorkPlanRuntimeCommands(registry: CommandRegistry): void
     name: 'work-plan',
     aliases: ['wp', 'todo', 'workplan'],
     description: 'Track a persistent workspace-scoped work plan',
-    usage: '[panel|list|show|add <title> [--owner name] [--source label] [--notes text]|done <id>|start <id>|block <id>|fail <id>|cancel <id>|pending <id>|remove <id>|clear-done]',
+    usage: '[panel|list|show|export|add <title> [--owner name] [--source label] [--notes text]|edit <id> [<new title>] [--owner name] [--notes text]|done <id>|start <id>|block <id>|fail <id>|cancel <id>|pending <id>|remove <id>|clear-done]',
     argsHint: '[panel|add|list|done]',
     handler(args, ctx) {
       const store = getStore(ctx);
@@ -98,6 +98,14 @@ export function registerWorkPlanRuntimeCommands(registry: CommandRegistry): void
           ctx.print(store.toMarkdown());
           return;
         }
+        if (subcommand === 'export') {
+          // Thin wrapper over WorkPlanStore.exportMarkdown() — writes the plan's
+          // markdown alongside the JSON and reports the path. (W6 command-path
+          // parity: the work-plan modal's export action routes here.)
+          const { path } = store.exportMarkdown();
+          ctx.print(`Exported work plan markdown to ${path}`);
+          return;
+        }
         if (subcommand === 'add') {
           const parsed = parseAddArgs(args.slice(1));
           if (!parsed.title) {
@@ -112,6 +120,30 @@ export function registerWorkPlanRuntimeCommands(registry: CommandRegistry): void
           const item = store.addItem(parsed.title, addOptions);
           openPanel(ctx);
           ctx.print(`Added work plan item ${item.id}.`);
+          return;
+        }
+        if (subcommand === 'edit' || subcommand === 'update') {
+          // Thin wrapper over WorkPlanStore.updateItem(idOrPrefix, patch).
+          // (W6 command-path parity: the work-plan modal's edit action routes
+          // here.) Only the flags the caller supplies are patched.
+          const id = args[1];
+          if (!id) {
+            ctx.print(`Usage: /work-plan ${subcommand} <id> [<new title>] [--owner name] [--source label] [--notes text]`);
+            return;
+          }
+          const parsed = parseAddArgs(args.slice(2));
+          const patch = {
+            ...(parsed.title ? { title: parsed.title } : {}),
+            ...(parsed.owner !== undefined ? { owner: parsed.owner } : {}),
+            ...(parsed.source !== undefined ? { source: parsed.source } : {}),
+            ...(parsed.notes !== undefined ? { notes: parsed.notes } : {}),
+          };
+          if (Object.keys(patch).length === 0) {
+            ctx.print(`Usage: /work-plan ${subcommand} <id> [<new title>] [--owner name] [--source label] [--notes text]`);
+            return;
+          }
+          const item = store.updateItem(id, patch);
+          ctx.print(`Updated work plan item ${item.id}: ${item.title}`);
           return;
         }
         if (subcommand === 'remove' || subcommand === 'delete' || subcommand === 'rm') {

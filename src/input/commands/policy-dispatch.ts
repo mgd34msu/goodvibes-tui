@@ -301,6 +301,23 @@ export function renderPolicyUsage(): string {
   ].join('\n');
 }
 
+// W6 command-path parity: the policy modal dropped its 'r' (record a
+// divergence-dashboard trend sample) action because the panel used to call
+// this._state.recordTrendEntry() directly and /policy had no equivalent verb.
+// This exposes it as a thin wrapper: recordTrendEntry() forwards to the attached
+// DivergencePanel, so it only captures a sample while a simulation dashboard is
+// active — reported honestly here rather than silently no-op'ing.
+function handleRecordTrend(_args: string[], context: CommandContext): void {
+  const policyState = getPolicyState(context);
+  if (!policyState.getDashboard()) {
+    context.print('[policy] No active simulation dashboard — nothing to sample. Run `/policy simulate` first, then `/policy record-trend`.');
+    return;
+  }
+  policyState.recordTrendEntry();
+  const snap = policyState.getSnapshot();
+  context.print(`[policy] Recorded a divergence trend sample (${snap.divergence?.trend.length ?? 0} point(s) total).`);
+}
+
 export async function dispatchPolicyCommand(args: string[], context: CommandContext): Promise<void> {
   const [sub, ...rest] = args;
   switch (sub) {
@@ -331,6 +348,10 @@ export async function dispatchPolicyCommand(args: string[], context: CommandCont
     case 'status':
     case 'st':
       await handleStatus(rest, context);
+      break;
+    case 'record-trend':
+    case 'trend':
+      handleRecordTrend(rest, context);
       break;
     default:
       context.print(renderPolicyUsage());
