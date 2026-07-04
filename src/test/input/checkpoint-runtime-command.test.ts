@@ -357,3 +357,90 @@ describe('/rewind — confirm flow', () => {
     expect(systemMessages[0]).toContain('conversation history is unchanged');
   });
 });
+
+// ---------------------------------------------------------------------------
+// (h) /rewind — manager.list() rejects: resolveCheckpointTarget must guard it
+// ---------------------------------------------------------------------------
+//
+// Regression coverage for the unguarded-await finding: resolveCheckpointTarget
+// used to `await mgr.list()` with no try/catch, and the /rewind handler
+// awaited it directly with no catch either — a rejected list() was a silent
+// unhandled rejection (dead command, no message to the user). Both spots are
+// exercised here with a `process.on('unhandledRejection', ...)` guard so a
+// regression fails the test even if the honest-error text still happens to
+// look right.
+
+describe('/rewind — manager.list() rejects', () => {
+  test('prints an honest error and never produces an unhandled rejection', async () => {
+    const dir = makeScratchWorkspace();
+    const rejectingMgr = {
+      list: () => Promise.reject(new Error('list boom')),
+      create: () => Promise.reject(new Error('create boom')),
+      diff: () => Promise.reject(new Error('diff boom')),
+      restore: () => Promise.reject(new Error('restore boom')),
+    } as unknown as WorkspaceCheckpointManager;
+
+    const registry = new CommandRegistry();
+    registerCheckpointRuntimeCommands(registry);
+    const { ctx, printed } = makeCtx(dir, rejectingMgr);
+
+    const unhandled: unknown[] = [];
+    const onUnhandled = (reason: unknown) => unhandled.push(reason);
+    process.on('unhandledRejection', onUnhandled);
+    try {
+      await registry.execute('rewind', ['last'], ctx);
+      // Give any stray unhandled rejection a tick to surface before asserting.
+      await new Promise((r) => setTimeout(r, 10));
+    } finally {
+      process.off('unhandledRejection', onUnhandled);
+    }
+
+    expect(unhandled).toEqual([]);
+    expect(printed.some((l) => l.includes('Failed to list checkpoints') && l.includes('list boom'))).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// (i) all three commands — manager present but its init() has already failed
+// ---------------------------------------------------------------------------
+//
+// Reproduces the services.ts scenario the misleading comment used to
+// describe as "degrades to manual-only": WorkspaceCheckpointManager caches an
+// init() rejection on `initPromise` and never clears it, so create/list/diff/
+// restore (each of which awaits init() first) reject FOREVER, not just once.
+// Forced here via a `checkpointDir` whose parent path component is a regular
+// file, which makes the side git repo's `mkdir` fail with ENOTDIR — a real
+// failure inside the real SDK class, not a hand-rolled mock.
+
+describe('checkpoint-runtime commands — manager present but init() failed', () => {
+  test('all three commands report the failure instead of throwing or hanging', async () => {
+    const dir = makeScratchWorkspace();
+    const blockerFile = join(dir, 'blocker-file');
+    writeFileSync(blockerFile, 'not a directory');
+    const mgr = new WorkspaceCheckpointManager({
+      workspaceRoot: dir,
+      checkpointDir: join(blockerFile, 'checkpoints'),
+    });
+
+    const registry = new CommandRegistry();
+    registerCheckpointRuntimeCommands(registry);
+    const { ctx, printed } = makeCtx(dir, mgr);
+
+    const unhandled: unknown[] = [];
+    const onUnhandled = (reason: unknown) => unhandled.push(reason);
+    process.on('unhandledRejection', onUnhandled);
+    try {
+      await registry.execute('checkpoints', [], ctx);
+      await registry.execute('checkpoint', ['label'], ctx);
+      await registry.execute('rewind', ['last'], ctx);
+      await new Promise((r) => setTimeout(r, 10));
+    } finally {
+      process.off('unhandledRejection', onUnhandled);
+    }
+
+    expect(unhandled).toEqual([]);
+    expect(printed.filter((l) => /fail/i.test(l)).length).toBe(3);
+    expect(printed.some((l) => l.startsWith('Failed to list checkpoints:'))).toBe(true);
+    expect(printed.some((l) => l.startsWith('Checkpoint failed:'))).toBe(true);
+  });
+});

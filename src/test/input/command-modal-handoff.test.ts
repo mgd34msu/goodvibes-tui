@@ -587,6 +587,54 @@ describe('command modal handoff', () => {
     expect(executeCalls).toEqual([{ name: 'shortcuts', args: [] }]);
   });
 
+  // Regression coverage: the commandPromise chain in handleCommandModeToken
+  // used to be a bare `.then(...)` with no `.catch()` — any handler that
+  // threw or awaited a rejected promise became a silent unhandled rejection
+  // (dead command, nothing rendered). This is defense in depth for EVERY
+  // command, so a generic throwing handler is enough to exercise it.
+  test('a handler that throws is caught by the generic command-route .catch(), rendering a visible error instead of an unhandled rejection', async () => {
+    const modalStack = ['command'];
+    const registry = new CommandRegistry();
+    registry.register({
+      name: 'boom',
+      description: 'Always throws',
+      handler: async () => {
+        throw new Error('kaboom');
+      },
+    });
+    const logged: Array<{ text: string; opts?: unknown }> = [];
+    const state = {
+      commandMode: true,
+      prompt: '/boom',
+      cursorPos: '/boom'.length,
+      autocomplete: null,
+      modalStack,
+      commandRegistry: registry,
+      commandContext: makeCommandContext(),
+      panelFocused: false,
+      panelManager: makePanelManager(),
+      conversationManager: { log: (text: string, opts?: unknown) => { logged.push({ text, opts }); } } as never,
+      requestRender: () => {},
+      handleEscape: () => {},
+    };
+
+    const unhandled: unknown[] = [];
+    const onUnhandled = (reason: unknown) => unhandled.push(reason);
+    process.on('unhandledRejection', onUnhandled);
+    let handled: boolean;
+    try {
+      handled = handleCommandModeToken(state, key('enter'));
+      // Let the rejected commandPromise's .then/.catch chain settle.
+      await new Promise((r) => setTimeout(r, 10));
+    } finally {
+      process.off('unhandledRejection', onUnhandled);
+    }
+
+    expect(unhandled).toEqual([]);
+    expect(handled).toBe(true);
+    expect(logged.some((l) => l.text.includes('Command /boom failed') && l.text.includes('kaboom'))).toBe(true);
+  });
+
   // WO-160 smoke defect: the feed pipeline snapshots the help/shortcuts
   // overlay flags and wrote the stale snapshot back after token processing,
   // silently reverting an overlay a command handler had just opened. The

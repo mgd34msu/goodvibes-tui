@@ -611,8 +611,15 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
     workspaceRoot: workingDirectory,
     runtimeBus: options.runtimeBus,
   });
-  // Fire-and-forget: subscriptions go live immediately; failure is non-fatal
-  // (checkpointing degrades to manual-only) and logged by the manager itself.
+  // Fire-and-forget: subscriptions go live immediately if init() succeeds.
+  // If it rejects, WorkspaceCheckpointManager caches that rejection on
+  // `initPromise` and never clears it, so every later call (create/list/
+  // diff/restore — each awaits init() first) re-throws the same error
+  // forever: checkpointing becomes entirely unavailable for the rest of the
+  // session, not "degraded to manual-only". The `.catch(() => {})` here only
+  // exists to prevent an unhandled rejection at startup; the checkpoint
+  // commands (checkpoint-runtime.ts) are what actually catch and report the
+  // failure to the user, on first use.
   void workspaceCheckpointManager.init().catch(() => {});
   const integrationHelpers = new IntegrationHelperService({
     workingDirectory,

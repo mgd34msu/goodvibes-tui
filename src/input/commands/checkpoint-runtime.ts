@@ -68,12 +68,24 @@ type ResolveResult =
  * happens entirely against list() results — never against
  * WorkspaceCheckpointManager's own requireCheckpoint() — so an unknown ref is
  * caught here, before anything touches the diff panel or arms a confirm.
+ *
+ * mgr.list() is guarded here (not left to the caller) so every caller gets a
+ * plain ResolveResult and can never be handed a rejected promise: if the
+ * manager's list() call fails (including a cached init() failure — see
+ * services.ts — which makes every WorkspaceCheckpointManager method reject
+ * forever), that surfaces as an honest `{ error }` instead of an unhandled
+ * rejection.
  */
 async function resolveCheckpointTarget(
   mgr: WorkspaceCheckpointManager,
   ref: string,
 ): Promise<ResolveResult> {
-  const all = await mgr.list();
+  let all: WorkspaceCheckpoint[];
+  try {
+    all = await mgr.list();
+  } catch (err) {
+    return { error: `Failed to list checkpoints: ${summarizeError(err)}` };
+  }
   if (ref === 'last') {
     const checkpoint = all[0];
     if (!checkpoint) {
