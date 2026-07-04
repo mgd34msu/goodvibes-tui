@@ -270,13 +270,12 @@ export async function compactConversation(context: CommandContext): Promise<Comp
   const compactionCtx: CompactionContext = {
     messages: conversationManager.getMessagesForLLM(),
     sessionMemories,
-    // Mirror buildAutoCompactionContext: pass the running/pending agents, the
-    // active execution plan, and the session-lineage log so the handoff summary
-    // and lineage section are populated correctly (not "compaction #0").
-    agents:
-      agentManager
-        ?.exportState()
-        .filter((agent) => agent.status === 'running' || agent.status === 'pending') ?? [],
+    // Mirror buildAutoCompactionContext: pass ALL agent records (not just
+    // running/pending) so completed/failed subagent work reaches the
+    // "Completed Agent Work" / "Currently Running" compaction sections, plus
+    // the active execution plan and the session-lineage log so the handoff
+    // summary and lineage section are populated correctly (not "compaction #0").
+    agents: agentManager?.exportState() ?? [],
     // Mirror buildAutoCompactionContext: include the live WRFC chains (wired
     // through context.session.wrfcController) so the handoff summary's
     // orchestration section matches the SDK auto-compaction path.
@@ -284,6 +283,11 @@ export async function compactConversation(context: CommandContext): Promise<Comp
     activePlan: planManager?.getActive(context.session.runtime.sessionId) ?? null,
     lineageEntries: lineageTracker?.getEntries() ?? [],
     compactionCount: lineageTracker?.getCompactionCount() ?? 0,
+    // Mirror buildAutoCompactionContext: pass the recorded original task so
+    // the "Original task" lineage line reflects the session's actual first
+    // task instead of falling back to the current message on every manual
+    // compaction after the first.
+    originalTask: lineageTracker?.getOriginalTask() ?? undefined,
     contextWindow,
     trigger: 'manual',
     extractionModelId: context.session.runtime.model,
