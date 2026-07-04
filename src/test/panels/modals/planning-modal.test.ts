@@ -46,21 +46,59 @@ describe('planning modal surface', () => {
     expect(text).toContain('No project planning state has been saved for this workspace.');
   });
 
-  test('an open question renders answer actions + the honest submit note; approve routes to /plan approve', async () => {
+  test('an open question renders answer actions; approve row routes to /plan approve', async () => {
     const state: ProjectPlanningState = { ...noQuestionState(), readiness: 'needs-user-input', openQuestions: [{ id: 'q1', prompt: 'Is execution approved?', status: 'open' }] };
     const surface = await warm(serviceWithState(state));
     const view = surface.buildView();
     const text = tabText(view, 'planning');
     expect(text).toContain('Is execution approved?');
     expect(text).toContain('Approve execution');
-    // Honest in-modal note about the /plan <text> submit approximation.
-    expect(text).toContain('submit reseeds the plan goal via /plan <text>');
+    // DEBT-3: no more reseed approximation note; the answer paths are real now.
+    expect(text).not.toContain('reseeds the plan goal');
     expect(view.tabs[0]!.rows.some((r) => r.id === 'approve-execution')).toBe(true);
 
     expect(findAction(surface, 'submit')?.enabledFor?.(null, 'planning')).toBe(true);
     const cap = captureCommands();
     surface.onAction?.('submit', actionCtx({ id: 'approve-execution', label: '' }, cap.extra));
     expect(cap.calls).toEqual([['plan', ['approve']]]);
+  });
+
+  // DEBT-3: a canned answer to a REAL open question records via /plan answer <id> <text>.
+  test('a canned answer to a real open question dispatches /plan answer <id> <text>', async () => {
+    const state: ProjectPlanningState = { ...noQuestionState(), readiness: 'needs-user-input', openQuestions: [{ id: 'q1', prompt: 'What is the scope?', status: 'open' }] };
+    const surface = await warm(serviceWithState(state));
+    const cap = captureCommands();
+    surface.onAction?.('submit', actionCtx({ id: 'scope-focused-first-pass', label: '' }, cap.extra));
+    expect(cap.calls.length).toBe(1);
+    const [name, args] = cap.calls[0]!;
+    expect(name).toBe('plan');
+    expect(args[0]).toBe('answer');
+    expect(args[1]).toBe('q1');
+    expect(args.slice(2).join(' ')).toBe('Use a focused first-pass scope for this goal.');
+  });
+
+  // DEBT-3: an answer to a SYNTHETIC readiness question (no open-question record
+  // to target) is submitted to chat via submitInput, and the modal CLOSES BEFORE
+  // the turn starts (modal-liveness ordering guard). No /plan command is dispatched.
+  test('an answer to a synthetic question uses submitInput and closes the modal first', async () => {
+    const state: ProjectPlanningState = { ...noQuestionState(), readiness: 'needs-user-input', openQuestions: [] };
+    const syntheticQuestion = { id: 'missing-scope', prompt: 'What is in scope for this pass?', status: undefined };
+    const service: PlanningModalService = {
+      ...serviceWithState(state),
+      evaluate: async () => ({ ok: true, projectId: 'proj-1', knowledgeSpaceId: 'project:proj-1', readiness: 'needs-user-input', gaps: [], nextQuestion: syntheticQuestion, state }),
+    };
+    const surface = await warm(service);
+    const cap = captureCommands();
+    const order: string[] = [];
+    let submitted: string | null = null;
+    surface.onAction?.('submit', actionCtx({ id: 'scope-focused-first-pass', label: '' }, {
+      ...cap.extra,
+      close: () => order.push('close'),
+      submitInput: (t) => { order.push('submit'); submitted = t; },
+    }));
+    expect(cap.calls).toEqual([]); // no /plan command — this is a real chat turn
+    expect(submitted).toBe('Use a focused first-pass scope for this goal.');
+    expect(order).toEqual(['close', 'submit']); // close BEFORE the turn starts
   });
 
   test('submitting a disabled (empty custom) option prints a correction instead of routing a command', async () => {
@@ -70,7 +108,7 @@ describe('planning modal surface', () => {
     const cap = captureCommands();
     surface.onAction?.('submit', actionCtx({ id: 'custom', label: '' }, { ...cap.extra, print: (m) => printed.push(m) }));
     expect(cap.calls).toEqual([]);
-    expect(printed).toEqual(['Choose a non-empty answer option.']);
+    expect(printed).toEqual(['Choose an answer option.']);
   });
 
   test('top-level approve action (no open question) routes to /plan approve', async () => {
@@ -80,26 +118,23 @@ describe('planning modal surface', () => {
     expect(cap.calls).toEqual([['plan', ['approve']]]);
   });
 
-  // W6 review (finding 4): the dismiss row used to dispatch `/plan dismiss`,
-  // which has no subcommand and fell through to the free-form goal-seed branch,
-  // OVERWRITING the project goal with the literal string "dismiss". It must now
-  // mutate nothing: no command dispatched, an honest note, and it closes.
-  test('the dismiss row mutates nothing — no /plan dispatch, honest note, and it closes the panel', async () => {
-    const state: ProjectPlanningState = { ...noQuestionState(), readiness: 'needs-user-input', openQuestions: [{ id: 'q1', prompt: 'What is the scope?', status: 'open' }] };
-    const surface = await warm(serviceWithState(state));
+  // DEBT-3: dismiss is now a first-class CONFIRMED action ('d') that dispatches
+  // the real /plan dismiss and closes the panel — not a pseudo answer-row.
+  test('the dismiss action dispatches /plan dismiss and closes the panel', async () => {
+    const surface = await warm(serviceWithState(noQuestionState()));
     const cap = captureCommands();
-    const printed: string[] = [];
     let closed = 0;
-    surface.onAction?.('submit', actionCtx({ id: 'dismiss-planning', label: '' }, { ...cap.extra, print: (m) => printed.push(m), close: () => { closed += 1; } }));
-    expect(cap.calls).toEqual([]); // no /plan dismiss (or any command) dispatched
-    expect(printed.join('\n')).toContain("Pausing project planning isn't available as a command yet");
+    surface.onAction?.('dismiss', actionCtx(null, { ...cap.extra, close: () => { closed += 1; } }));
+    expect(cap.calls).toEqual([['plan', ['dismiss']]]);
     expect(closed).toBe(1);
+    // It is declared as a confirmed action (host two-press guard).
+    expect(findAction(surface, 'dismiss')?.confirm).toBe(true);
   });
 
-  test('the dismiss row is relabeled to match what it does (closes; leaves planning unchanged)', async () => {
+  test('there is no pseudo dismiss/close answer-row anymore', async () => {
     const state: ProjectPlanningState = { ...noQuestionState(), readiness: 'needs-user-input', openQuestions: [{ id: 'q1', prompt: 'What is the scope?', status: 'open' }] };
-    const text = tabText((await warm(serviceWithState(state))).buildView(), 'planning');
-    expect(text).toContain('Close (planning unchanged)');
-    expect(text).not.toContain('Close planning and continue without it');
+    const view = (await warm(serviceWithState(state))).buildView();
+    expect(view.tabs[0]!.rows.some((r) => r.id === 'dismiss-planning')).toBe(false);
+    expect(tabText(view, 'planning')).not.toContain('Close (planning unchanged)');
   });
 });

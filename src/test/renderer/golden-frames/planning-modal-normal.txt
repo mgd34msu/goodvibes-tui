@@ -18,7 +18,7 @@
 |    │   needed to make this work, but avoid unrelated cleanup.                 │                    |
 |    │   TUI-first scope - Fix TUI behavior here; report SDK blockers instead   │                    |
 |    │   of patching around SDK-owned bugs.                                     │                    |
-|    └─enter submit · a approve execution · enter submit · a approve execution…─┘                    |
+|    └─enter submit · a approve execution · d dismiss planning · r refresh · E…─┘                    |
 @STYLES
 0 4 fg=#475569
 0 5 fg=#475569
