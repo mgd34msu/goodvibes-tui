@@ -45,6 +45,7 @@ import type { PanelManager } from '../panels/panel-manager.ts';
 import type { KeybindingsManager } from './keybindings.ts';
 import type { ModelPickerTarget } from './model-picker.ts';
 import type { KillRing } from './kill-ring.ts';
+import type { FocusTracker } from '../core/focus-tracker.ts';
 
 /**
  * InputFeedContext — The single long-lived context object passed to feedInputTokens
@@ -131,6 +132,8 @@ export interface InputFeedContext {
   inputHistory: InputHistory | null;
   conversationManager: ConversationManager | null;
   readonly killRing: KillRing;
+  /** Terminal focus tracker (W2.3) — updated here from 'focus' tokens, read by the unfocused-alert notifiers in core/. */
+  readonly focusTracker: FocusTracker;
   readonly getHistory: () => InfiniteBuffer;
   readonly getViewportHeight: () => number;
   readonly getScrollTop: () => number;
@@ -191,6 +194,13 @@ export function feedInputTokens(context: InputFeedContext, tokens: readonly Inpu
   const isPrintableBurst = totalPrintableChars > 1;
 
   for (const token of tokens) {
+    // Focus-reporting tokens (CSI ?1004h, W2.3) never reach the composer or any
+    // modal route — consumed here, first, unconditionally. No render needed.
+    if (token.type === 'focus') {
+      context.focusTracker.setFocused(token.action === 'in');
+      continue;
+    }
+
     if (token.type === 'key' && context.keybindingsManager.matches('clear-cancel', token)) {
       context.handleCtrlC();
       continue;

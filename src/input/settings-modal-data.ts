@@ -130,6 +130,16 @@ export function buildSettingGroups(
     behaviorEntries.push(buildNotifyAfterSecondsSyntheticEntry(configManager));
   }
 
+  // Inject the W2.3 alert-class toggles + master focus gate. TUI-local
+  // synthetic settings, same rationale as notifyAfterSeconds above.
+  if (behaviorEntries) {
+    for (const entry of buildNotifyAlertSyntheticEntries(configManager)) {
+      if (!behaviorEntries.some((e) => e.setting.key === entry.setting.key)) {
+        behaviorEntries.push(entry);
+      }
+    }
+  }
+
   return groups;
 }
 
@@ -222,6 +232,60 @@ export function buildNotifyAfterSecondsSyntheticEntry(configManager: Pick<Config
     currentValue,
     isDefault: currentValue === NOTIFY_AFTER_SECONDS_DEFAULT_SETTING,
   };
+}
+
+// ---------------------------------------------------------------------------
+// W2.3 alert-class synthetic settings — behavior.notifyOn* + notifyOnlyWhenUnfocused
+// ---------------------------------------------------------------------------
+
+/**
+ * The five W2.3 alert-gating booleans, all TUI-local (not yet in the SDK
+ * ConfigKey union), all defaulting to on. Read/written generically by
+ * core/alert-gating.ts (readBooleanConfig) and the per-alert-class modules
+ * (budget-breach-notifier.ts, approval-alert.ts, turn-event-wiring.ts,
+ * long-task-notifier.ts) — this is only the settings-modal-visible surface.
+ */
+const NOTIFY_ALERT_SYNTHETIC_SETTINGS: ReadonlyArray<{ readonly key: string; readonly description: string }> = [
+  {
+    key: 'behavior.notifyOnBudgetBreach',
+    description: 'Alert when session cost crosses the configured budget (set via the Cost panel\'s "b" key).',
+  },
+  {
+    key: 'behavior.notifyOnAgentFailure',
+    description: 'Alert when a delegated or background agent fails.',
+  },
+  {
+    key: 'behavior.notifyOnChainFailure',
+    description: 'Alert when a WRFC review chain fails.',
+  },
+  {
+    key: 'behavior.notifyOnApprovalPending',
+    description: 'Alert when a tool call is waiting on your approval.',
+  },
+  {
+    key: 'behavior.notifyOnlyWhenUnfocused',
+    description: 'Master gate for the four alerts above: fire only when the terminal window is unfocused, or when focus state was never observed (terminal does not report focus). Turn off to always fire regardless of focus.',
+  },
+];
+
+function buildBooleanSyntheticEntry(
+  configManager: Pick<ConfigManager, 'get'>,
+  key: string,
+  description: string,
+  defaultValue: boolean,
+): SettingEntry {
+  const raw = configManager.get(key as ConfigKey);
+  const currentValue = typeof raw === 'boolean' ? raw : defaultValue;
+  return {
+    setting: { key: key as ConfigKey, type: 'boolean', default: defaultValue, description },
+    currentValue,
+    isDefault: currentValue === defaultValue,
+  };
+}
+
+/** Build the five synthetic SettingEntry rows for the behavior category. */
+export function buildNotifyAlertSyntheticEntries(configManager: Pick<ConfigManager, 'get'>): SettingEntry[] {
+  return NOTIFY_ALERT_SYNTHETIC_SETTINGS.map((spec) => buildBooleanSyntheticEntry(configManager, spec.key, spec.description, true));
 }
 
 // ---------------------------------------------------------------------------

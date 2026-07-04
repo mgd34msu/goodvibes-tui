@@ -1,4 +1,5 @@
 import { join } from 'node:path';
+import { FocusTracker } from '../core/focus-tracker.ts';
 import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import { SecretsManager } from '../config/secrets.ts';
 import { ServiceRegistry } from '@pellux/goodvibes-sdk/platform/config';
@@ -222,6 +223,8 @@ export interface RuntimeServices {
   readonly worktreeRegistry: WorktreeRegistry;
   readonly sandboxSessionRegistry: SandboxSessionRegistry;
   readonly webhookNotifier: WebhookNotifier;
+  /** Terminal focus tracker (W2.3) — fed by input/handler-feed.ts, read by the alert notifiers in core/. */
+  readonly focusTracker: FocusTracker;
   readonly replayEngine: DeterministicReplayEngine;
   readonly providerOptimizer: ProviderOptimizer;
   readonly providerCapabilityRegistry: ProviderCapabilityRegistry;
@@ -582,6 +585,7 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
   const componentHealthMonitor = new ComponentHealthMonitor();
   const worktreeRegistry = new WorktreeRegistry(workingDirectory);
   const webhookNotifier = new WebhookNotifier();
+  const focusTracker = new FocusTracker();
   const replayEngine = new DeterministicReplayEngine(workingDirectory);
   const providerOptimizer = new ProviderOptimizer(
     providerRegistry,
@@ -725,6 +729,7 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
     worktreeRegistry,
     sandboxSessionRegistry,
     webhookNotifier,
+    focusTracker,
     replayEngine,
     providerOptimizer,
     providerCapabilityRegistry,
