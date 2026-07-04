@@ -20,7 +20,7 @@
 // ---------------------------------------------------------------------------
 
 import { AdaptivePlanner } from '@pellux/goodvibes-sdk/platform/core';
-import type { PhaseKind, PhaseRole, WorkItemState, Workstream } from '@pellux/goodvibes-sdk/platform/orchestration';
+import type { PhaseKind, PhaseRole, WorkItem, WorkItemState, Workstream, WorkstreamIsolation } from '@pellux/goodvibes-sdk/platform/orchestration';
 import type { WorkstreamCommandService, WorkstreamDraft, WorkstreamDraftProvenance } from '../../runtime/workstream-services.ts';
 import type { CommandContext, CommandRegistry } from '../command-registry.ts';
 
@@ -70,6 +70,53 @@ function formatPhaseLabel(phase: { readonly kind: PhaseKind; readonly role: Phas
   return `${phase.kind} — ${phase.role}`;
 }
 
+/**
+ * Extracts an optional `--isolation shared|worktree` flag from anywhere in
+ * `args` (create/edit both accept it ahead of, or interleaved with, the task
+ * text). Returns the flag stripped out so the remaining tokens are the task
+ * text exactly as before this flag existed. An unrecognized value is a hard
+ * error (never silently ignored or defaulted) — a typo'd isolation mode
+ * must never quietly launch in the wrong one.
+ */
+function extractIsolationFlag(args: readonly string[]): { isolation?: WorkstreamIsolation; rest: string[]; error?: string } {
+  const rest: string[] = [];
+  let isolation: WorkstreamIsolation | undefined;
+  for (let i = 0; i < args.length; i++) {
+    if (args[i] === '--isolation') {
+      const value = args[i + 1];
+      if (value !== 'shared' && value !== 'worktree') {
+        return { rest, error: `--isolation must be "shared" or "worktree" (got: ${value ?? '<nothing>'})` };
+      }
+      isolation = value;
+      i += 1; // consume the value token too
+      continue;
+    }
+    rest.push(args[i]!);
+  }
+  return { isolation, rest };
+}
+
+/**
+ * Per-item merge-state text for `/workstream status` (worktree isolation
+ * only — see formatItemMergeState's caller). Distinct from `item.state` (the
+ * pipeline verdict): an item can be terminally 'passed' while its branch is
+ * still 'merge pending' in the integration lane, or stuck at
+ * 'merge-conflict' with its worktree deliberately kept for inspection.
+ */
+function formatItemMergeState(item: WorkItem): string {
+  switch (item.mergeState) {
+    case 'merged':
+      return item.mergeHash ? `merged ${shortId(item.mergeHash)}` : 'merged (nothing to merge)';
+    case 'conflict':
+      return 'merge-conflict (worktree kept for inspection)';
+    case 'pending':
+      return 'merge pending';
+    case 'n-a':
+    default:
+      return item.worktreeKept ? 'worktree kept' : 'not yet integrated';
+  }
+}
+
 function summarizeItemStates(ws: Workstream): string {
   const counts = new Map<string, number>();
   for (const item of ws.items) counts.set(item.state, (counts.get(item.state) ?? 0) + 1);
@@ -104,6 +151,7 @@ function formatProvenance(p: WorkstreamDraftProvenance): string {
 function renderDraftProposal(draft: WorkstreamDraft): string {
   const lines: string[] = [];
   lines.push(`Workstream proposal ${draft.id} — "${draft.task}"`);
+  lines.push(`Isolation: ${draft.spec.isolation ?? 'shared (default)'}`);
   lines.push(
     `Planner: strategy=${draft.gate.strategy} (${draft.gate.reasonCode}) — ${AdaptivePlanner.explainReasonCode(draft.gate.reasonCode)}`,
   );
@@ -132,15 +180,31 @@ function renderDraftProposal(draft: WorkstreamDraft): string {
 }
 
 function renderWorkstreamStatus(ws: Workstream): string {
+  const isolated = ws.isolation === 'worktree';
   const lines: string[] = [];
   lines.push(`Workstream ${ws.id} — "${ws.title}"`);
+  lines.push(`Isolation: ${ws.isolation ?? 'shared'}`);
   lines.push('Phases:');
   for (const phase of ws.phases) {
     lines.push(`  [${phase.ordinal}] ${formatPhaseLabel(phase)} (capacity ${phase.capacity})`);
   }
   lines.push('Items:');
   for (const item of ws.items) {
-    lines.push(`  ${shortId(item.id)}  [${item.state}]  ${item.title}  — phase: ${item.currentPhaseId ?? '—'}`);
+    const mergeNote = isolated ? `  — ${formatItemMergeState(item)}` : '';
+    lines.push(`  ${shortId(item.id)}  [${item.state}]  ${item.title}  — phase: ${item.currentPhaseId ?? '—'}${mergeNote}`);
+  }
+  if (isolated) {
+    // Honest terminal-summary truth (never inferred from item.state alone —
+    // an item can be terminally 'passed' with its branch still unmerged):
+    // an item counts as unmerged the instant it enters the integration lane
+    // (mergeState 'pending') and stays counted through a conflict or any
+    // KEPT worktree, until a clean merge clears it.
+    const unmerged = ws.items.filter((item) => item.mergeState === 'pending' || item.mergeState === 'conflict' || item.worktreeKept);
+    lines.push(
+      unmerged.length > 0
+        ? `Unmerged items: ${unmerged.length} (${unmerged.map((item) => shortId(item.id)).join(', ')}) — this run is NOT fully integrated yet.`
+        : 'Unmerged items: none — every terminated item is merged (or had nothing to merge).',
+    );
   }
   return lines.join('\n');
 }
@@ -192,8 +256,8 @@ export function registerWorkstreamRuntimeCommands(registry: CommandRegistry): vo
   registry.register({
     name: 'workstream',
     description: 'Author and oversee multi-phase agent workstreams (orchestration engine)',
-    usage: 'create <task...> | list | status [id] | insert-phase <id> <description...> | approve <id> | edit <id> <task...> | launch <id> | cancel <id>',
-    argsHint: 'create <task> | list | status [id] | approve | edit | launch | cancel',
+    usage: 'create [--isolation shared|worktree] <task...> | list | status [id] | insert-phase <id> <description...> | approve <id> | edit <id> [--isolation shared|worktree] <task...> | launch <id> | cancel <id>',
+    argsHint: 'create [--isolation worktree] <task> | list | status [id] | approve | edit | launch | cancel',
     handler: async (args, ctx: CommandContext) => {
       const service = ctx.session.workstreamEngine;
       if (!service) {
@@ -209,12 +273,17 @@ export function registerWorkstreamRuntimeCommands(registry: CommandRegistry): vo
       }
 
       if (sub === 'create') {
-        const task = args.slice(1).join(' ').trim();
-        if (!task) {
-          ctx.print('Usage: /workstream create <task...>');
+        const { isolation, rest, error } = extractIsolationFlag(args.slice(1));
+        if (error) {
+          ctx.print(`Usage: /workstream create [--isolation shared|worktree] <task...>\n${error}`);
           return;
         }
-        const draft = await service.proposeDraft(task);
+        const task = rest.join(' ').trim();
+        if (!task) {
+          ctx.print('Usage: /workstream create [--isolation shared|worktree] <task...>');
+          return;
+        }
+        const draft = await service.proposeDraft(task, isolation);
         ctx.print(renderDraftProposal(draft));
         return;
       }
@@ -280,12 +349,17 @@ export function registerWorkstreamRuntimeCommands(registry: CommandRegistry): vo
 
       if (sub === 'edit') {
         const id = args[1];
-        const task = args.slice(2).join(' ').trim();
-        if (!id || !task) {
-          ctx.print('Usage: /workstream edit <id> <new task...>');
+        const { isolation, rest, error } = extractIsolationFlag(args.slice(2));
+        if (error) {
+          ctx.print(`Usage: /workstream edit <id> [--isolation shared|worktree] <new task...>\n${error}`);
           return;
         }
-        const draft = await service.editDraft(id, task);
+        const task = rest.join(' ').trim();
+        if (!id || !task) {
+          ctx.print('Usage: /workstream edit <id> [--isolation shared|worktree] <new task...>');
+          return;
+        }
+        const draft = await service.editDraft(id, task, isolation);
         if (!draft) {
           ctx.print(draftNotFoundMessage(service, id));
           return;
@@ -349,12 +423,12 @@ export function registerWorkstreamRuntimeCommands(registry: CommandRegistry): vo
 
       ctx.print(
         'Usage:\n'
-        + '  /workstream create <task...>\n'
+        + '  /workstream create [--isolation shared|worktree] <task...>\n'
         + '  /workstream list\n'
         + '  /workstream status [id]\n'
         + '  /workstream insert-phase <id> <description...>\n'
         + '  /workstream approve <id>\n'
-        + '  /workstream edit <id> <new task...>\n'
+        + '  /workstream edit <id> [--isolation shared|worktree] <new task...>\n'
         + '  /workstream launch <id>\n'
         + '  /workstream cancel <id>',
       );
