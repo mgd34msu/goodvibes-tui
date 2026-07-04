@@ -341,6 +341,7 @@ export class InputHandler implements InputHandlerLike {
         panelManager: this.uiServices.shell.panelManager,
         keybindingsManager: this.uiServices.shell.keybindingsManager,
         killRing: this.killRing,
+        focusTracker: this.uiServices.platform.focusTracker,
         getHistory: this.getHistory,
         getViewportHeight: this.getViewportHeight,
         getScrollTop: this.getScrollTop,

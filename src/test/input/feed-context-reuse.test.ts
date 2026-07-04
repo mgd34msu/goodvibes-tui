@@ -7,6 +7,7 @@
 import { describe, test, expect, mock, spyOn } from 'bun:test';
 import type { InputFeedContext } from '../../input/handler-feed.ts';
 import * as handlerFeedModule from '../../input/handler-feed.ts';
+import { FocusTracker } from '../../core/focus-tracker.ts';
 
 describe('InputFeedContext reuse (α1)', () => {
   test('feedInputTokens receives the same context object on every feed() call', () => {
@@ -66,6 +67,7 @@ describe('InputFeedContext reuse (α1)', () => {
           lookup: () => null,
         } as unknown,
       },
+      platform: { focusTracker: new FocusTracker() },
     };
 
     const selection = new SelectionManager();
@@ -140,6 +142,7 @@ describe('InputFeedContext reuse (α1)', () => {
         panelManager: { isVisible: () => false, getAllOpen: () => [] } as unknown,
         keybindingsManager: { matches: () => false, lookup: () => null } as unknown,
       },
+      platform: { focusTracker: new FocusTracker() },
     };
 
     const selection = new SelectionManager();
