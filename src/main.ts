@@ -68,12 +68,8 @@ import { createCancelGeneration } from './core/turn-cancellation.ts';
 import { wrapRequestPermissionWithAlert } from './core/approval-alert.ts';
 import { setPanelFrameRequester } from './panels/base-panel.ts';
 
-const ALT_SCREEN_ENTER = '\x1b[?1049h'; const ALT_SCREEN_EXIT  = '\x1b[?1049l';
-const MOUSE_ENABLE     = '\x1b[?1000h\x1b[?1002h\x1b[?1006h'; const MOUSE_DISABLE    = '\x1b[?1006l\x1b[?1002l\x1b[?1000l';
-const CURSOR_HIDE      = '\x1b[?25l'; const CURSOR_SHOW = '\x1b[?25h'; const CLEAR_SCREEN = '\x1b[2J\x1b[3J\x1b[H';
-const KEYBOARD_EXT_ENABLE  = '\x1b[>4;2m' + '\x1b[?1u'; const KEYBOARD_EXT_DISABLE = '\x1b[>4;0m' + '\x1b[?1l';
-const PASTE_ENABLE = '\x1b[?2004h'; const PASTE_DISABLE = '\x1b[?2004l';
-const FOCUS_ENABLE     = '\x1b[?1004h'; const FOCUS_DISABLE    = '\x1b[?1004l';
+import { ALT_SCREEN_ENTER, ALT_SCREEN_EXIT, MOUSE_ENABLE, MOUSE_DISABLE, CURSOR_HIDE, CURSOR_SHOW, CLEAR_SCREEN, KEYBOARD_EXT_ENABLE, KEYBOARD_EXT_DISABLE, PASTE_ENABLE, PASTE_DISABLE, FOCUS_ENABLE, FOCUS_DISABLE } from './renderer/terminal-escapes.ts';
+import { installBackgroundThemeProbe } from './renderer/terminal-bg-probe.ts';
 
 async function main() {
   const stdout = process.stdout;
@@ -737,10 +733,14 @@ async function main() {
   stdin.resume();
   stdin.setEncoding('utf8');
   allowTerminalWrite(() => stdout.write((cli.flags.noAltScreen ? '' : ALT_SCREEN_ENTER) + CLEAR_SCREEN + CURSOR_HIDE + MOUSE_ENABLE + KEYBOARD_EXT_ENABLE + PASTE_ENABLE + FOCUS_ENABLE));
+  // DEBT-2: forced dark/light applies before first paint; auto (TTY only) fires the
+  // OSC 11 probe and repaints once if light wins. filterInput strips the reply from stdin.
+  const themeProbe = installBackgroundThemeProbe({ configManager, isTTY: Boolean(stdout.isTTY), env: process.env, writeQuery: (b) => allowTerminalWrite(() => stdout.write(b)), requestRepaint: () => { compositor.resetDiff(); render(); } });
 
   applyInitialTuiCliState({ cli, input, commandRegistry, commandContext, shellPaths: ctx.services.shellPaths, render });
 
-  stdin.on('data', (data: string) => {
+  stdin.on('data', (raw: string) => {
+    const data = themeProbe.filterInput(raw); if (data.length === 0) return;
     const blocking = handleBlockingShellInput({
       data, pendingPermission, recoveryPending, conversation, systemMessageRouter, render,
       abortTurn: () => orchestrator.abort(),

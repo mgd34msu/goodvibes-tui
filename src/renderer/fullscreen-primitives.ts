@@ -2,30 +2,40 @@ import type { Line } from '../types/grid.ts';
 import { createEmptyLine, createStyledCell } from '../types/grid.ts';
 import { getDisplayWidth } from '../utils/terminal-width.ts';
 import { GLYPHS } from './ui-primitives.ts';
-import { resolveUiTones } from './theme.ts';
+import { activeUiTones, registerThemeRefresh } from './theme.ts';
 
-// FULLSCREEN_PALETTE is built from the mode-resolved chrome tones
-// (resolveUiTones) rather than the static UI_TONES constant — WO-001 single
-// read path. Mode is fixed to 'dark' until the terminal-bg-probe lands.
-const TONES = resolveUiTones('dark');
+// Built from the mode-resolved chrome tones (activeUiTones) and rebuilt IN PLACE
+// on a mode flip via the registered refresher (read by reference across the
+// fullscreen workspace surfaces — see theme.ts's active-mode runtime note).
+function buildFullscreenPalette(): Record<string, string> {
+  const t = activeUiTones();
+  return {
+    border: t.border,
+    title: t.accent.browser,
+    subtitle: t.accent.conversation,
+    text: t.fg.primary,
+    muted: t.fg.muted,
+    dim: t.border,
+    selectedBg: t.bg.selected,
+    categoryBg: t.bg.section,
+    contextBg: t.bg.surface,
+    controlsBg: t.bg.base,
+    footerBg: t.bg.footer,
+    good: t.state.good,
+    warn: t.state.warn,
+    bad: t.state.bad,
+    info: t.state.info,
+  };
+}
 
-export const FULLSCREEN_PALETTE = {
-  border: TONES.border,
-  title: TONES.accent.browser,
-  subtitle: TONES.accent.conversation,
-  text: TONES.fg.primary,
-  muted: TONES.fg.muted,
-  dim: TONES.border,
-  selectedBg: TONES.bg.selected,
-  categoryBg: TONES.bg.section,
-  contextBg: TONES.bg.surface,
-  controlsBg: TONES.bg.base,
-  footerBg: TONES.bg.footer,
-  good: TONES.state.good,
-  warn: TONES.state.warn,
-  bad: TONES.state.bad,
-  info: TONES.state.info,
-} as const;
+export const FULLSCREEN_PALETTE = buildFullscreenPalette() as {
+  readonly border: string; readonly title: string; readonly subtitle: string;
+  readonly text: string; readonly muted: string; readonly dim: string;
+  readonly selectedBg: string; readonly categoryBg: string; readonly contextBg: string;
+  readonly controlsBg: string; readonly footerBg: string; readonly good: string;
+  readonly warn: string; readonly bad: string; readonly info: string;
+};
+registerThemeRefresh(() => Object.assign(FULLSCREEN_PALETTE as Record<string, string>, buildFullscreenPalette()));
 
 export type FullscreenTextStyle = Partial<Omit<Line[number], 'char'>>;
 
