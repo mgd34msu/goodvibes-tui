@@ -10,6 +10,7 @@ import { normalizeWrfcAgentToolInvocation, wrapWrfcAgentTool } from '../../tools
 
 const EXPECTED_AGENT_TEMPLATES = [
   'orchestrator',
+  'planner',
   'engineer',
   'reviewer',
   'tester',

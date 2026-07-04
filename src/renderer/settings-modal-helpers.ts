@@ -59,6 +59,7 @@ export const CATEGORY_LABELS: Record<(typeof SETTINGS_CATEGORIES)[number], strin
   storage: 'Storage',
   permissions: 'Permissions',
   orchestration: 'Orchestration',
+  planner: 'Planner',
   wrfc: 'WRFC',
   helper: 'Helper',
   tts: 'TTS',
