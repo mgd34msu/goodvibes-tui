@@ -32,7 +32,7 @@ function makeNode(overrides: Partial<ProcessNode> & { id: string }): ProcessNode
     state: 'executing-tool',
     elapsedMs: 0,
     costState: 'unpriced',
-    capabilities: { interruptible: true, killable: true, pausable: false },
+    capabilities: { interruptible: true, killable: true, pausable: false, steerable: false },
     ...overrides,
   };
 }
@@ -344,7 +344,7 @@ describe('fleetStateGlyph / fleetStateTone / isTerminalProcessState / isRunningP
   test('every ProcessState maps to a distinct, non-empty glyph', () => {
     const states: ProcessState[] = [
       'thinking', 'executing-tool', 'awaiting-approval', 'streaming', 'stalled',
-      'retrying', 'done', 'failed', 'killed', 'idle', 'queued',
+      'retrying', 'done', 'failed', 'killed', 'interrupted', 'idle', 'queued',
     ];
     const glyphs = states.map(fleetStateGlyph);
     expect(glyphs.every((g) => g.length > 0)).toBe(true);
@@ -355,6 +355,7 @@ describe('fleetStateGlyph / fleetStateTone / isTerminalProcessState / isRunningP
     expect(isTerminalProcessState('done')).toBe(true);
     expect(isTerminalProcessState('failed')).toBe(true);
     expect(isTerminalProcessState('killed')).toBe(true);
+    expect(isTerminalProcessState('interrupted')).toBe(true);
     expect(isTerminalProcessState('executing-tool')).toBe(false);
     expect(isTerminalProcessState('idle')).toBe(false);
     expect(isTerminalProcessState('queued')).toBe(false);
@@ -364,7 +365,7 @@ describe('fleetStateGlyph / fleetStateTone / isTerminalProcessState / isRunningP
     for (const s of ['thinking', 'executing-tool', 'awaiting-approval', 'streaming', 'stalled', 'retrying'] as ProcessState[]) {
       expect(isRunningProcessState(s)).toBe(true);
     }
-    for (const s of ['done', 'failed', 'killed', 'idle', 'queued'] as ProcessState[]) {
+    for (const s of ['done', 'failed', 'killed', 'interrupted', 'idle', 'queued'] as ProcessState[]) {
       expect(isRunningProcessState(s)).toBe(false);
     }
   });
@@ -376,6 +377,18 @@ describe('fleetStateGlyph / fleetStateTone / isTerminalProcessState / isRunningP
     expect(fleetStateTone('idle')).toBe('muted');
     expect(fleetStateTone('queued')).toBe('muted');
     expect(['active', 'warn']).toContain(fleetStateTone('executing-tool'));
+  });
+
+  // Wave-3 verb formalization: 'interrupted' is a distinct terminal outcome
+  // from 'killed' — both come from AgentManager.cancel(), but a graceful
+  // interrupt is display-distinguishable from a hard kill (the replay-found
+  // defect this item fixes: before this, both landed on 'killed'/⊘).
+  test("'interrupted' has a glyph and tone distinct from 'killed' and 'failed'", () => {
+    expect(fleetStateGlyph('interrupted')).not.toBe(fleetStateGlyph('killed'));
+    expect(fleetStateGlyph('interrupted')).not.toBe(fleetStateGlyph('failed'));
+    expect(fleetStateTone('interrupted')).toBe('warn');
+    expect(fleetStateTone('interrupted')).not.toBe(fleetStateTone('killed'));
+    expect(fleetStateTone('interrupted')).not.toBe(fleetStateTone('failed'));
   });
 
   test('fleetKindTag returns a short tag for every ProcessKind', () => {
@@ -391,9 +404,14 @@ describe('fleetStateGlyph / fleetStateTone / isTerminalProcessState / isRunningP
 // ---------------------------------------------------------------------------
 
 describe('createFleetReadModel', () => {
-  function makeRegistry(nodes: ProcessNode[]): FleetRegistryLike & { interruptCalls: string[]; killCalls: Array<{ id: string; opts: unknown }> } {
+  function makeRegistry(nodes: ProcessNode[]): FleetRegistryLike & {
+    interruptCalls: string[];
+    killCalls: Array<{ id: string; opts: unknown }>;
+    steerCalls: Array<{ id: string; text: string }>;
+  } {
     const interruptCalls: string[] = [];
     const killCalls: Array<{ id: string; opts: unknown }> = [];
+    const steerCalls: Array<{ id: string; text: string }> = [];
     const listeners = new Set<(snap: { capturedAt: number; nodes: readonly ProcessNode[] }) => void>();
     return {
       query: () => ({ capturedAt: NOW, nodes }),
@@ -403,8 +421,10 @@ describe('createFleetReadModel', () => {
       },
       interrupt: (id: string) => { interruptCalls.push(id); return true; },
       kill: (id: string, opts?: { cascade?: boolean }) => { killCalls.push({ id, opts }); return [id]; },
+      steer: (id: string, text: string) => { steerCalls.push({ id, text }); return { queued: true, messageId: 'msg-1' }; },
       interruptCalls,
       killCalls,
+      steerCalls,
     };
   }
 
@@ -434,6 +454,46 @@ describe('createFleetReadModel', () => {
     expect(model.kill('agent-x', { cascade: true })).toEqual(['agent-x']);
     expect(registry.killCalls).toEqual([{ id: 'agent-x', opts: { cascade: true } }]);
   });
+
+  test('steer delegates to the underlying registry', () => {
+    const registry = makeRegistry([]);
+    const model = createFleetReadModel(registry);
+    expect(model.steer('agent-x', 'hello')).toEqual({ queued: true, messageId: 'msg-1' });
+    expect(registry.steerCalls).toEqual([{ id: 'agent-x', text: 'hello' }]);
+  });
+
+  test('subscribeConsumed without a runtimeBus dep is a graceful no-op (never invokes the listener)', () => {
+    const registry = makeRegistry([]);
+    const model = createFleetReadModel(registry);
+    const unsub = model.subscribeConsumed(() => { throw new Error('must not be called'); });
+    expect(typeof unsub).toBe('function');
+    expect(() => unsub()).not.toThrow();
+  });
+
+  test('subscribeConsumed forwards COMMUNICATION_CONSUMED envelopes from the communication domain, filtering out other event types', () => {
+    const registry = makeRegistry([]);
+    type Listener = (envelope: { payload: { type: string; messageId?: string; agentId?: string; turn?: number } }) => void;
+    const domainListeners = new Set<Listener>();
+    const runtimeBus = {
+      onDomain: (domain: string, cb: Listener) => {
+        expect(domain).toBe('communication');
+        domainListeners.add(cb);
+        return () => domainListeners.delete(cb);
+      },
+    };
+    const model = createFleetReadModel(registry, runtimeBus as never);
+    const received: Array<{ messageId: string; agentId: string; turn: number }> = [];
+    model.subscribeConsumed((event) => received.push(event));
+
+    // A non-consumed communication event (e.g. COMMUNICATION_SENT) must be filtered out.
+    for (const cb of domainListeners) cb({ payload: { type: 'COMMUNICATION_SENT' } });
+    expect(received).toHaveLength(0);
+
+    for (const cb of domainListeners) {
+      cb({ payload: { type: 'COMMUNICATION_CONSUMED', messageId: 'm1', agentId: 'agent-x', turn: 3 } });
+    }
+    expect(received).toEqual([{ messageId: 'm1', agentId: 'agent-x', turn: 3 }]);
+  });
 });
 
 describe('createStaticFleetReadModel', () => {
@@ -444,12 +504,15 @@ describe('createStaticFleetReadModel', () => {
     expect(model.getSnapshot()).toBe(snapshot); // stable across calls
   });
 
-  test('subscribe/interrupt/kill are no-ops that never throw', () => {
+  test('subscribe/interrupt/kill/steer/subscribeConsumed are no-ops that never throw', () => {
     const snapshot = buildFleetSnapshot([], NOW);
     const model = createStaticFleetReadModel(snapshot);
     const unsub = model.subscribe(() => { throw new Error('must not be called'); });
     expect(() => unsub()).not.toThrow();
     expect(model.interrupt('x')).toBe(false);
     expect(model.kill('x', { cascade: true })).toEqual([]);
+    expect(model.steer('x', 'hello')).toEqual({ queued: false, reason: 'no live registry' });
+    const unsubConsumed = model.subscribeConsumed(() => { throw new Error('must not be called'); });
+    expect(() => unsubConsumed()).not.toThrow();
   });
 });

@@ -35,7 +35,9 @@ import type {
   ProcessRegistry,
   ProcessState,
   ProcessUsage,
+  SteerResult,
 } from '@pellux/goodvibes-sdk/platform/runtime/fleet';
+import type { RuntimeEventBus } from '@/runtime/index.ts';
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -79,6 +81,11 @@ const STATE_GLYPHS: Record<ProcessState, string> = {
   done: '✓',
   failed: '✗',
   killed: '⊘',
+  // Wave-3 verb formalization: a distinct TERMINAL outcome from 'killed' —
+  // both come from AgentManager.cancel(), but a graceful interrupt request
+  // ('the operator asked nicely') is display-distinguishable from a hard
+  // kill. '◌' verified free against every other glyph in this table.
+  interrupted: '◌',
   idle: '·',
   queued: '…',
 };
@@ -93,12 +100,15 @@ const STATE_TONES: Record<ProcessState, FleetStateTone> = {
   done: 'success',
   failed: 'failure',
   killed: 'muted',
+  // 'warn' (amber), not 'muted' like killed — an interrupt is a deliberate
+  // operator action worth noticing, not a passive/neutral outcome.
+  interrupted: 'warn',
   idle: 'muted',
   queued: 'muted',
 };
 
 /** Terminal states — interrupt/kill are not offered; not counted as running. */
-const TERMINAL_STATES = new Set<ProcessState>(['done', 'failed', 'killed']);
+const TERMINAL_STATES = new Set<ProcessState>(['done', 'failed', 'killed', 'interrupted']);
 
 /** States representing actively-working nodes (drives runningCount + follow target). */
 const RUNNING_STATES = new Set<ProcessState>([
@@ -324,6 +334,13 @@ export function buildFleetSnapshot(nodes: readonly ProcessNode[], capturedAt: nu
 // Read-model — two-factory shape (live / static), mirrors cockpit-read-model.ts
 // ---------------------------------------------------------------------------
 
+/** Payload of a `COMMUNICATION_CONSUMED` runtime-bus event, narrowed for FleetReadModel consumers. */
+export interface SteerConsumedEvent {
+  readonly messageId: string;
+  readonly agentId: string;
+  readonly turn: number;
+}
+
 export interface FleetReadModel {
   getSnapshot(): FleetSnapshot;
   /** Subscribe to fleet changes. Returns an unsubscribe function. */
@@ -332,13 +349,37 @@ export interface FleetReadModel {
   interrupt(id: string): boolean;
   /** Hard stop, optionally cascading to descendants. Returns the node ids acted on. */
   kill(id: string, opts?: { readonly cascade?: boolean }): readonly string[];
+  /**
+   * Wave-3 (W3.2): queue a human message for a live in-process agent (or a
+   * wrfc-subtask's current live member), delivered at its next turn
+   * boundary. Honest refusal (`{queued:false,reason}`) for anything that
+   * cannot take mid-run input — see ProcessRegistry.steer's doc comment.
+   */
+  steer(id: string, text: string): SteerResult;
+  /**
+   * Wave-3 (W3.2): subscribe to the honest "the agent actually consumed this
+   * steer at its turn boundary" signal (COMMUNICATION_CONSUMED on the
+   * runtime bus's 'communication' domain). Returns an unsubscribe function.
+   * A read-model constructed without a runtimeBus (e.g. the static factory,
+   * or a test double) never invokes the listener — graceful no-op, matching
+   * the steer()/steerable degrade-without-a-dep convention.
+   */
+  subscribeConsumed(listener: (event: SteerConsumedEvent) => void): () => void;
 }
 
 /** Narrow surface of ProcessRegistry this read-model depends on. */
-export type FleetRegistryLike = Pick<ProcessRegistry, 'query' | 'subscribe' | 'interrupt' | 'kill'>;
+export type FleetRegistryLike = Pick<ProcessRegistry, 'query' | 'subscribe' | 'interrupt' | 'kill' | 'steer'>;
 
-/** Create a live FleetReadModel backed by the SDK's ProcessRegistry. */
-export function createFleetReadModel(registry: FleetRegistryLike): FleetReadModel {
+/**
+ * Create a live FleetReadModel backed by the SDK's ProcessRegistry.
+ * `runtimeBus` is optional (narrowed to just `onDomain`) — without it,
+ * `subscribeConsumed` degrades to a no-op, same shape as the registry's own
+ * messageBus-optional degrade for steer()/steerable.
+ */
+export function createFleetReadModel(
+  registry: FleetRegistryLike,
+  runtimeBus?: Pick<RuntimeEventBus, 'onDomain'>,
+): FleetReadModel {
   return {
     getSnapshot(): FleetSnapshot {
       const snapshot = registry.query();
@@ -353,6 +394,18 @@ export function createFleetReadModel(registry: FleetRegistryLike): FleetReadMode
     kill(id: string, opts?: { readonly cascade?: boolean }): readonly string[] {
       return registry.kill(id, opts);
     },
+    steer(id: string, text: string): SteerResult {
+      return registry.steer(id, text);
+    },
+    subscribeConsumed(listener: (event: SteerConsumedEvent) => void): () => void {
+      if (!runtimeBus) return () => {};
+      return runtimeBus.onDomain('communication', (envelope) => {
+        const event = envelope.payload;
+        if (event.type === 'COMMUNICATION_CONSUMED') {
+          listener({ messageId: event.messageId, agentId: event.agentId, turn: event.turn });
+        }
+      });
+    },
   };
 }
 
@@ -363,5 +416,7 @@ export function createStaticFleetReadModel(snapshot: FleetSnapshot): FleetReadMo
     subscribe: () => () => {},
     interrupt: () => false,
     kill: () => [],
+    steer: () => ({ queued: false, reason: 'no live registry' }),
+    subscribeConsumed: () => () => {},
   };
 }

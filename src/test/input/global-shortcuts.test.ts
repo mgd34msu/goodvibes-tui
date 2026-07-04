@@ -144,6 +144,62 @@ describe('handleGlobalShortcutToken', () => {
     expect(closed).toEqual(['system-messages']);
   });
 
+  test("Wave-3: panel-close (Ctrl+X) gives the active panel's interceptPanelClose() a chance to consume it BEFORE closing (FleetPanel session-tab detach)", () => {
+    const closed: string[] = [];
+    let intercepted = false;
+    const state = buildState({
+      panelFocused: true,
+      panelManager: {
+        getAllOpen: () => [{ id: 'fleet' }],
+        close: (id: string) => { closed.push(id); },
+        hide: () => {},
+        getActivePanel: () => ({ id: 'fleet', interceptPanelClose: () => { intercepted = true; return true; } }),
+        isVisible: () => true,
+      } as unknown as GlobalShortcutRouteState['panelManager'],
+      keybindingsManager: {
+        matches: () => false,
+        lookup: () => 'panel-close',
+      } as unknown as GlobalShortcutRouteState['keybindingsManager'],
+    });
+
+    const handled = handleGlobalShortcutToken(
+      state,
+      { type: 'key', name: '\x18', logicalName: 'x', ctrl: true, shift: false, meta: false },
+      24,
+    );
+
+    expect(handled).toBe(true);
+    expect(intercepted).toBe(true);
+    expect(closed).toHaveLength(0); // the panel stayed open — Ctrl+X was consumed for the in-panel detach instead
+  });
+
+  test('Wave-3: when interceptPanelClose() returns false (e.g. the root tree tab), Ctrl+X falls through to the ordinary close', () => {
+    const closed: string[] = [];
+    const state = buildState({
+      panelFocused: true,
+      panelManager: {
+        getAllOpen: () => [{ id: 'fleet' }],
+        close: (id: string) => { closed.push(id); },
+        hide: () => {},
+        getActivePanel: () => ({ id: 'fleet', interceptPanelClose: () => false }),
+        isVisible: () => true,
+      } as unknown as GlobalShortcutRouteState['panelManager'],
+      keybindingsManager: {
+        matches: () => false,
+        lookup: () => 'panel-close',
+      } as unknown as GlobalShortcutRouteState['keybindingsManager'],
+    });
+
+    const handled = handleGlobalShortcutToken(
+      state,
+      { type: 'key', name: '\x18', logicalName: 'x', ctrl: true, shift: false, meta: false },
+      24,
+    );
+
+    expect(handled).toBe(true);
+    expect(closed).toEqual(['fleet']);
+  });
+
   test('panel-focus-toggle (Ctrl+G) grabs workspace focus from the prompt', () => {
     const state = buildState({
       panelFocused: false,
