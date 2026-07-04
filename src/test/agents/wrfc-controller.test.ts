@@ -516,13 +516,16 @@ describe('WrfcController', () => {
       expect(workflowCalls('WORKFLOW_AUTO_COMMITTED')).toHaveLength(1);
     });
 
-    test('auto-commit merge failure fails the owner chain with the merge error', async () => {
+    test('auto-commit merge failure is a non-fatal warning — the reviewed chain still passes', async () => {
+      // The full-scope review passed (10/10), so the chain SUCCEEDED. A commit/merge that could not
+      // complete is a warning on a passing chain, never a flip to FAILED — the terminal status
+      // derives from review + gates, not from the auto-commit result.
       mockConfigState['wrfc.autoCommit'] = true;
       mockConfigGetCategoryState.autoCommit = true;
       mkdirSync(join(projectRoot, '.git'));
       mockMerge.mockImplementation(async () => { throw new Error('merge conflict'); });
       const controller = initTestWrfcController();
-      const { chain, engineer } = createStartedChain(controller);
+      const { owner, chain, engineer } = createStartedChain(controller);
       await emitAgentCompleted(runtimeBus, engineer.id);
       const reviewer = agentStore.get(chain.reviewerAgentId ?? '')!;
       reviewer.fullOutput = makeReviewerOutput(10, true);
@@ -530,9 +533,14 @@ describe('WrfcController', () => {
       await emitAgentCompleted(runtimeBus, reviewer.id);
       await new Promise((r) => setTimeout(r, 100));
 
-      expect(chain.state).toBe('failed');
-      expect(chain.error).toContain('merge conflict');
-      expect(workflowCalls('WORKFLOW_CHAIN_FAILED')).toHaveLength(1);
+      expect(chain.state).toBe('passed');
+      expect(owner.status).toBe('completed');
+      // The completion message states the review outcome and the (non-fatal) commit outcome separately.
+      expect(owner.fullOutput).toContain('review 10/10');
+      expect(owner.fullOutput).toContain('commit failed (non-fatal)');
+      expect(owner.fullOutput).toContain('merge conflict');
+      expect(workflowCalls('WORKFLOW_CHAIN_FAILED')).toHaveLength(0);
+      expect(workflowCalls('WORKFLOW_CHAIN_PASSED')).toHaveLength(1);
     });
   });
 
