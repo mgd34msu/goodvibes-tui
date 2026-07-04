@@ -557,8 +557,15 @@ export class FleetPanel extends ScrollableListPanel<FleetTreeRow> {
     }
     if (isPanelSearchCommit(key)) {
       const text = (tab.steerDraft ?? '').trim();
-      tab.steerDraft = null;
-      if (text.length > 0) this.submitSteer(tab, text);
+      if (text.length === 0) {
+        tab.steerDraft = null;
+        this.markDirty();
+        return true;
+      }
+      // Clear the draft ONLY on a confirmed queue. A refusal keeps the composer
+      // open with the text intact (submitSteer explains why + suggests live targets)
+      // so the operator never loses what they typed to a just-idle agent.
+      if (this.submitSteer(tab, text)) tab.steerDraft = null;
       this.markDirty();
       return true;
     }
@@ -580,16 +587,39 @@ export class FleetPanel extends ScrollableListPanel<FleetTreeRow> {
     return true; // absorb every other key while composing
   }
 
-  /** Submit a composed steer message: queued -> badge; refused -> honest inline error (setError), same convention as the i/K "not supported" messages. */
-  private submitSteer(tab: FleetTab, text: string): void {
+  /**
+   * Submit a composed steer message. Returns whether it was queued so the caller
+   * clears the draft only on a confirmed send (WO UX-A item 4): a refusal (target
+   * went idle while composing) PRESERVES the typed text and suggests which agents
+   * ARE steerable, instead of silently discarding the draft. On a successful queue
+   * the ⧗ badge line is the immediate honest acknowledgment.
+   */
+  private submitSteer(tab: FleetTab, text: string): boolean {
     const result = this.actions.steer(tab.nodeId, text);
     if (result.queued) {
       // queuedAt drives reconcileSteerBadges' TTL-expiry fallback (fleet-steer.ts).
       tab.steerBadge = { messageId: result.messageId, status: 'queued', queuedAt: Date.now() };
-    } else {
-      this.setError(result.reason);
+      this.markDirty();
+      return true;
     }
+    const siblings = this.steerableSiblingLabels(tab.nodeId);
+    const suggestion = siblings.length > 0
+      ? ` Draft kept — steerable now: ${siblings.slice(0, 3).join(', ')}${siblings.length > 3 ? '…' : ''}.`
+      : ' Draft kept — no other agents are currently steerable.';
+    this.setError(`${result.reason}.${suggestion}`);
     this.markDirty();
+    return false;
+  }
+
+  /** Labels of the currently live, steerable agent nodes other than `excludeNodeId` — offered when a steer target has gone inactive. */
+  private steerableSiblingLabels(excludeNodeId: string): string[] {
+    return this.readModel.getSnapshot().rows
+      .map((row) => row.node)
+      .filter((node) => node.id !== excludeNodeId
+        && node.kind === 'agent'
+        && node.capabilities.steerable
+        && !isTerminalProcessState(node.state))
+      .map((node) => node.label);
   }
 
   protected renderItem(row: FleetTreeRow, _index: number, _selected: boolean, width: number): Line {
@@ -707,7 +737,7 @@ export class FleetPanel extends ScrollableListPanel<FleetTreeRow> {
         { active: true, bg: palette.inputBg, valueColor: palette.info },
       ));
     } else if (tab.steerBadge) {
-      composerLines.push(this.renderSteerBadgeLine(tab.steerBadge, width, palette));
+      composerLines.push(this.renderSteerBadgeLine(tab.steerBadge, width, palette, liveNode?.label));
     }
 
     const footerLines = [
@@ -750,11 +780,14 @@ export class FleetPanel extends ScrollableListPanel<FleetTreeRow> {
   }
 
   /** One-line honest status for the active tab's steer badge (queued/consumed/dropped) — see fleet-tabs.ts's SteerBadgeStatus doc. */
-  private renderSteerBadgeLine(badge: SteerBadge, width: number, palette: PanelPalette): Line {
+  private renderSteerBadgeLine(badge: SteerBadge, width: number, palette: PanelPalette, targetLabel?: string): Line {
     const glyph = steerBadgeGlyph(badge.status);
     const tone = steerBadgeTone(badge.status, palette);
+    // The queued line is the immediate honest acknowledgment of a send: it names
+    // the target and points at the ⧗ badge that tracks delivery (WO UX-A item 4).
+    const forTarget = targetLabel ? ` for ${targetLabel}` : '';
     const label = badge.status === 'queued'
-      ? 'steer queued — awaiting the agent\'s next turn'
+      ? `steer queued${forTarget} — delivers on its next turn (watch the ${glyph} badge)`
       : badge.status === 'consumed'
         ? 'steer consumed'
         : `steer dropped — ${badge.note ?? 'the target ended before delivery'}`;

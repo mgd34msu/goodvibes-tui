@@ -6,7 +6,7 @@
 |    │   https://api.github.com                                                 │                    |
 |    │   ○ linear           CONFIGURED    api-key                               │                    |
 |    │   https://api.linear.app                                                 │                    |
-|    │   ✕  stripe           ERROR         bearer                               │                    |
+|    │   ✕ stripe           ERROR         bearer                                │                    |
 |    │   https://api.stripe.com                                                 │                    |
 |    │                                                                          │                    |
 |    │                                                                          │                    |
