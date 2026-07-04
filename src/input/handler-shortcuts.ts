@@ -75,6 +75,23 @@ export function handleGlobalShortcutToken(
     return true;
   }
 
+  // Bare F2 is also not in the keybinding table (hardcoded, like pageup/
+  // pagedown/escape above) — it must be handled here, GLOBALLY, rather than
+  // in handlePromptKeyToken (handler-feed-routes.ts) where it used to live.
+  // That location only ever runs when the panel workspace does NOT already
+  // own focus (handlePanelFocusToken, which runs before it, swallows every
+  // unclaimed key once panelFocused is true and reports it handled). The
+  // practical effect was that F2 could OPEN+focus the Fleet panel exactly
+  // once; every subsequent press while already focused vanished silently —
+  // "F2 pressed 4x never closed the panel" (UX-C evaluator finding). Routing
+  // it here, before handlePanelFocusToken ever sees the token, gives F2 the
+  // same toggle semantics as Ctrl+O below, matching how Ctrl+P/panel-picker
+  // was already reachable regardless of panelFocused.
+  if (token.logicalName === 'f2' && !token.ctrl && !token.meta) {
+    toggleFleetPanel(state);
+    return true;
+  }
+
   // O(1) lookup via inverted map.
   const kb = state.keybindingsManager;
   const action = kb.lookup(token);
@@ -108,6 +125,13 @@ export function handleGlobalShortcutToken(
       // in-panel action (FleetPanel session-tab detach) before it closes the
       // panel outright — see Panel.interceptPanelClose's doc comment.
       if (active?.interceptPanelClose?.()) {
+        // UX-C fix: a consumed Ctrl+X (the Fleet panel's session-tab detach)
+        // used to leave panelFocused untouched, so focus stayed on the panel
+        // — the evaluator's "Ctrl+X detach landed focus in the panel and a
+        // typed question became nav keys". Detach is a leave-taking action:
+        // like the ordinary close below, it hands control back to the
+        // composer rather than leaving the user stranded on the fleet tree.
+        state.panelFocused = false;
         state.requestRender();
         return true;
       }
@@ -160,27 +184,27 @@ export function handleGlobalShortcutToken(
       // Alt+1..9: jump directly to the Nth workspace tab. Routed globally (like
       // panel-tab-next/prev) so the jump works whether focus is on the prompt or
       // the workspace; gated on visibility, matching cyclePanelTab semantics.
+      // UX-C: a chord jump is "I'm going panel-driving" (focus rule 1a) — the
+      // jump now also grabs keyboard focus, matching F2/Ctrl+O/Ctrl+P, so j/k
+      // land in the newly-active tab immediately instead of the composer.
       const pm = state.panelManager;
       if (pm.isVisible()) {
         const index = Number(action.slice('panel-tab-'.length)) - 1;
         pm.activateWorkspaceIndex(index);
+        pm.focusPanels();
+        state.panelFocused = true;
         state.requestRender();
       }
       return true;
     }
 
     case 'panel-ops': {
-      // Ctrl+O: open AND focus the Fleet panel. The former Ops Control panel was
+      // Ctrl+O: TOGGLE the Fleet panel (UX-C — same semantics as F2 above; see
+      // toggleFleetPanel's doc comment). The former Ops Control panel was
       // retired to an 'ops-control' -> 'fleet' alias (W6.1); rather than route
       // through the now-aliased openOpsPanel callback (which opens without
-      // transferring focus), open 'fleet' directly and grab focus — mirroring
-      // the footer indicator's [Enter] -> openFleetPanel path so j/k/i/K land in
-      // the panel immediately instead of the composer.
-      const pm = state.panelManager;
-      pm.open('fleet');
-      pm.focusPanels();
-      state.panelFocused = true;
-      state.requestRender();
+      // transferring focus), this operates on 'fleet' directly.
+      toggleFleetPanel(state);
       return true;
     }
 
@@ -357,4 +381,30 @@ export function handleGlobalShortcutToken(
     default:
       return false;
   }
+}
+
+/**
+ * toggleFleetPanel — the shared F2 / Ctrl+O TOGGLE (UX-C item 2): if the
+ * Fleet panel is open AND the panel workspace currently owns keyboard focus
+ * with Fleet as the active tab, the chord CLOSES it and returns focus to the
+ * composer; if Fleet is open but not the focused/active tab, the chord brings
+ * it to front and focuses it; if Fleet isn't open at all, the chord opens and
+ * focuses it. Uses `state.panelFocused` (not a panelManager query) for the
+ * focus check, consistent with every other case in this file and with what
+ * the mocked PanelManager test doubles in global-shortcuts.test.ts actually
+ * implement.
+ */
+function toggleFleetPanel(state: GlobalShortcutRouteState): void {
+  const pm = state.panelManager;
+  const fleetOpen = pm.getAllOpen().some((p) => p.id === 'fleet');
+  const fleetIsFocusedActive = fleetOpen && state.panelFocused && pm.getActivePanel()?.id === 'fleet';
+  if (fleetIsFocusedActive) {
+    pm.close('fleet');
+    state.panelFocused = false;
+  } else {
+    pm.open('fleet');
+    pm.focusPanels();
+    state.panelFocused = true;
+  }
+  state.requestRender();
 }

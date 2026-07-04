@@ -245,6 +245,21 @@ export class UIFactory {
         }
       }
 
+      // UX-C focus visibility (item 1c): when the panel workspace owns focus
+      // and the composer is empty, name the state and the way back — the
+      // dimmed prompt alone (TEXT_COLOR/BG_COLOR above) told you nothing was
+      // wrong, but not why keystrokes weren't landing here.
+      if (!promptFocused && text === '' && i === 0) {
+        const hintText = 'panel focused — Esc returns';
+        const hintStartX = boxStartX + 2 + prefix.length;
+        let hx = hintStartX;
+        for (const ch of hintText) {
+          if (hx >= boxStartX + boxWidth - 2) break;
+          contentLine[hx] = { char: ch, fg: '244', bg: BG_COLOR, bold: false, dim: true, underline: false, italic: false, strikethrough: false };
+          hx++;
+        }
+      }
+
       // Overlay args hint: dim grey text after cursor on the last prompt line.
       // Only shown when a commandArgsHint is provided and cursor is at the end of input.
       if (commandArgsHint && i === promptLines.length - 1) {
