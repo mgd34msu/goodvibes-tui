@@ -133,6 +133,15 @@ export class ConfigModal {
   private scrollOffset = 0;
   private visibleRows = DEFAULT_VISIBLE_ROWS;
 
+  /**
+   * False until the first token reaches the open modal. While false, renders
+   * may re-sync structure so an async onOpen load replaces the "Loading…"
+   * placeholder WITHOUT requiring a keypress; the freeze-to-interaction-
+   * boundary rule protects a cursor the user has engaged, and before the
+   * first interaction there is nothing to protect (refutation finding 3).
+   */
+  private interactedSinceOpen = false;
+
   // ── Lifecycle ──────────────────────────────────────────────────────────────
 
   open(surface: ConfigModalSurface, requestRender: () => void = () => {}): void {
@@ -146,6 +155,7 @@ export class ConfigModal {
     this.scrollOffset = 0;
     this.filterActive = false;
     this.filterQuery = '';
+    this.interactedSinceOpen = false;
     const view = surface.buildView();
     this.frozenView = view;
     this.activeTabId = view.tabs[0]?.id ?? '';
@@ -184,11 +194,18 @@ export class ConfigModal {
 
   // ── Interaction boundary ────────────────────────────────────────────────────
 
+  /** Token router calls this for every token the open modal receives. */
+  noteInteraction(): void {
+    this.interactedSinceOpen = true;
+  }
+
   /**
    * Re-capture the structure from the current live view. Called on every key
-   * press (never during a pure render tick) — this is what makes structural
-   * changes appear only at an interaction boundary. Selection + active tab are
-   * preserved by id and clamped if their target vanished.
+   * press (never during a pure render tick — with one exception: before the
+   * FIRST interaction, getRenderModel syncs so async loads paint) — this is
+   * what makes structural changes appear only at an interaction boundary.
+   * Selection + active tab are preserved by id and clamped if their target
+   * vanished.
    */
   syncStructure(): void {
     if (!this.surface) return;
@@ -385,6 +402,10 @@ export class ConfigModal {
    * ever reaches the renderer.
    */
   getRenderModel(labelWrapWidth: number = DEFAULT_LABEL_WRAP_WIDTH): ConfigModalRenderModel {
+    // Pre-first-interaction: async onOpen loads may restructure freely (the
+    // user hasn't engaged a cursor yet) — sync so "Loading…" is replaced by
+    // real content on the load's own requestRender, not the next keypress.
+    if (this.active && !this.interactedSinceOpen) this.syncStructure();
     const live = this.surface?.buildView() ?? null;
     const frozen = this.frozenView;
     if (!frozen) {

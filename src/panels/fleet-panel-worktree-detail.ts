@@ -1,10 +1,10 @@
 // ---------------------------------------------------------------------------
 // fleet-panel-worktree-detail.ts
 //
-// Extracted from fleet-panel.ts (which sits at the architecture check's
-// 800-line cap, scripts/check-architecture.ts) — a single pure helper for
-// the Fleet panel's per-work-item detail view, so a new panel feature
-// doesn't have to fight that cap inline.
+// NET-NEW helper (not moved code — it was authored here because fleet-panel.ts
+// sits at the architecture check's 800-line cap, scripts/check-architecture.ts):
+// a single pure helper for the Fleet panel's per-work-item detail view, so a
+// new panel feature doesn't have to fight that cap inline.
 // ---------------------------------------------------------------------------
 
 import type { WorkItem } from '@pellux/goodvibes-sdk/platform/orchestration';

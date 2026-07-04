@@ -356,6 +356,11 @@ export class FleetPanel extends ScrollableListPanel<FleetTreeRow> {
   public receiveDeepLink(target: { readonly id: string; readonly kind?: string }): void {
     const idx = resolveFleetDeepLinkIndex(this.getItems(), target);
     if (idx < 0) { this.setError('node no longer present.'); return; }
+    // A successful reveal must be VISIBLE: with a session tab active, render()
+    // routes to the tab view and the selection change would be silently
+    // swallowed (batch refutation finding 1) — return to the tree first
+    // (tabs kept; only the active view switches).
+    this.tabsState = { tabs: this.tabsState.tabs, activeTabIndex: 0 };
     this.clearError(); this.selectedIndex = idx; this.selectedNodeId = target.id; this.markDirty();
   }
 
@@ -693,7 +698,11 @@ export class FleetPanel extends ScrollableListPanel<FleetTreeRow> {
         palette,
         { active: true, bg: palette.inputBg, valueColor: palette.info },
       ));
-    } else if (tab.steerBadge) {
+    } else if (tab.steerBadge && !this.stopTracker.isStopping(tab.nodeId)) {
+      // A queued-steer promise ("delivers on its next turn") must not render
+      // while a stop is in flight for this node — there may be no next turn
+      // (refutation finding 4). The badge reconciles to dropped/consumed once
+      // the node's terminal state lands.
       composerLines.push(renderSteerBadgeLine(tab.steerBadge, width, palette, liveNode?.label));
     }
 
