@@ -187,8 +187,15 @@ export function createBootstrapCommandActions(
   } = options;
 
   const showPanel = (panelId: string, pane?: 'top' | 'bottom') => {
+    // W6.1 (the purge): a MIGRATE-TO-MODAL id resolves to a modal, not a panel.
+    // panelManager.open() fires the injected openModal callback and returns a
+    // no-op sentinel — so skip panelManager.show() (which would reveal an empty
+    // panel workspace behind the modal) when this id redirects. Keeps every
+    // showPanel-based front-door (openHooksPanel/openSecurityPanel/… and the
+    // migrated command runtimes) opening the modal cleanly.
+    const redirected = panelManager.getModalRedirect(panelId) !== undefined;
     panelManager.open(panelId, pane);
-    panelManager.show();
+    if (!redirected) panelManager.show();
     requestRender();
   };
 

@@ -1,24 +1,19 @@
 import type { PanelManager } from '../panel-manager.ts';
 import { FleetPanel } from '../fleet-panel.ts';
 import { createFleetReadModel } from '../fleet-read-model.ts';
-import { PluginsPanel } from '../plugins-panel.ts';
-import { SkillsPanel } from '../skills-panel.ts';
 import { ServicesPanel } from '../services-panel.ts';
 import { SubscriptionPanel } from '../subscription-panel.ts';
 import { LocalAuthPanel } from '../local-auth-panel.ts';
 import { SettingsSyncPanel } from '../settings-sync-panel.ts';
-import { HooksPanel } from '../hooks-panel.ts';
-import { SecurityPanel } from '../security-panel.ts';
-import { MarketplacePanel } from '../marketplace-panel.ts';
 import { SandboxPanel } from '../sandbox-panel.ts';
 import { RemotePanel } from '../remote-panel.ts';
 import { ProviderHealthPanel } from '../provider-health-panel.ts';
-import { PolicyPanel } from '../policy-panel.ts';
 import { createProviderRuntimeInspectionQuery } from '../../runtime/ui-service-queries.ts';
 import { createRuntimeProviderApi } from '@/runtime/index.ts';
 import { selectModel } from '../../runtime/store/selectors/index.ts';
 import type { ResolvedBuiltinPanelDeps } from './shared.ts';
-import { requireHookPanelDeps, requirePluginManager, requireUiServices } from './shared.ts';
+import { requireUiServices } from './shared.ts';
+import { registerEcosystemModalRedirects } from '../modals/modal-surface.ts';
 
 // WO-152: the former single 'monitoring' category (33 panels pre-merge) is
 // split into five operator domains, applied per-registration below. Kept in
@@ -99,34 +94,10 @@ export function registerOperationsPanels(manager: PanelManager, deps: ResolvedBu
   // resolution is a single hop, so this cannot chain through 'incident'.
   manager.registerAlias('forensics', 'fleet');
 
-  manager.registerType({
-    id: 'plugins',
-    name: 'Plugins',
-    // WO-152: was 'P' (collided with project-planning and preview).
-    icon: '◐',
-    category: 'automation-control',
-    description: 'Plugin trust, quarantine, capability, and activation status',
-    factory: () => new PluginsPanel(requirePluginManager(deps)),
-  });
-
-  manager.registerType({
-    id: 'skills',
-    name: 'Skills',
-    // WO-152: was 'K' (collided with knowledge and tokens).
-    icon: '▩',
-    category: 'automation-control',
-    description: 'Project-local and global skill discovery with origin and dependency details',
-    factory: () => new SkillsPanel({
-      componentHealthMonitor: deps.componentHealthMonitor,
-      shellPaths: ui.environment.shellPaths,
-      ecosystemPaths: {
-        cwd: ui.environment.shellPaths.workingDirectory,
-        homeDir: ui.environment.shellPaths.homeDirectory,
-        projectCatalogRoot: ui.environment.shellPaths.resolveProjectPath('tui', 'ecosystem'),
-        userCatalogRoot: ui.environment.shellPaths.resolveUserPath('tui', 'ecosystem'),
-      },
-    }),
-  });
+  // W6.1 (the purge) — group B: 'plugins' and 'skills' migrated to the
+  // 'plugins' / 'skills' config-modals (see registerEcosystemModalRedirects at
+  // the end of this function and src/panels/modals/). Their panel
+  // registrations are retired here.
 
   manager.registerType({
     id: 'services',
@@ -168,45 +139,9 @@ export function registerOperationsPanels(manager: PanelManager, deps: ResolvedBu
     factory: () => new SettingsSyncPanel(deps.configManager),
   });
 
-  manager.registerType({
-    id: 'hooks',
-    name: 'Hooks',
-    // WO-152: was 'H' (collided with sessions).
-    icon: '▨',
-    category: 'automation-control',
-    description: 'Registered hooks, chains, contracts, and execution policy details',
-    factory: () => {
-      const hookDeps = requireHookPanelDeps(deps);
-      return new HooksPanel(hookDeps.hookDispatcher, hookDeps.hookWorkbench, hookDeps.hookActivityTracker);
-    },
-  });
-
-  manager.registerType({
-    id: 'security',
-    name: 'Security',
-    // WO-152: was 'U' (collided with local-auth and policy).
-    icon: '▬',
-    category: 'security-policy',
-    description: 'Security review workspace for token audit, policy posture, MCP quarantine, and incident pressure',
-    factory: () => new SecurityPanel(ui.readModels.security),
-  });
-
-  manager.registerType({
-    id: 'marketplace',
-    name: 'Marketplace',
-    // WO-152: was 'M' (collided with memory and automation).
-    icon: '◩',
-    category: 'automation-control',
-    description: 'Curated plugin and skill marketplace with provenance, compatibility, and install posture',
-    factory: () => {
-      return new MarketplacePanel(ui.readModels.marketplace, {
-        cwd: ui.environment.shellPaths.workingDirectory,
-        homeDir: ui.environment.shellPaths.homeDirectory,
-        projectCatalogRoot: ui.environment.shellPaths.resolveProjectPath('tui', 'ecosystem'),
-        userCatalogRoot: ui.environment.shellPaths.resolveUserPath('tui', 'ecosystem'),
-      });
-    },
-  });
+  // W6.1 (the purge) — group B: 'hooks', 'security', and 'marketplace'
+  // migrated to config-modals (see registerEcosystemModalRedirects below).
+  // Their panel registrations are retired here.
 
   manager.registerType({
     id: 'sandbox',
@@ -272,13 +207,13 @@ export function registerOperationsPanels(manager: PanelManager, deps: ResolvedBu
   manager.registerAlias('providers', 'provider-health');
   manager.registerAlias('accounts', 'provider-health');
 
-  manager.registerType({
-    id: 'policy',
-    name: 'Policy',
-    // WO-152: was 'U' (collided with local-auth and security).
-    icon: '▭',
-    category: 'security-policy',
-    description: 'Policy governance: active/candidate bundles, divergence gate, rollout history, and simulation evidence',
-    factory: () => new PolicyPanel(deps.policyRuntimeState),
-  });
+  // W6.1 (the purge) — group B: 'policy' migrated to the 'policy' config-modal.
+  // Its panel registration is retired here.
+
+  // W6.1 (the purge) — group B: register the ecosystem/governance panel→modal
+  // redirects so `/panel open <id>` and saved layouts resolve to the modal
+  // (via the injected openModal callback) instead of a retired panel. Config +
+  // dispatch registration with the WO-A host is a separate one-call step
+  // (registerEcosystemModals) wired by the integrator.
+  registerEcosystemModalRedirects(manager);
 }

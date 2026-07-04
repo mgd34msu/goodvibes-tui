@@ -81,7 +81,11 @@ describe('SkillsPanel', () => {
       worktreeRegistry: services.worktreeRegistry,
       sandboxSessionRegistry: services.sandboxSessionRegistry,
     });
-    expect(manager.getRegisteredTypes().some((entry) => entry.id === 'skills')).toBe(true);
+    // W6.1 (the purge) — group B: skills migrated to the 'skills' config-modal.
+    // The panel is no longer a registered type; the id redirects to the modal
+    // (registered by registerEcosystemModalRedirects in registerOperationsPanels).
+    expect(manager.getRegisteredTypes().some((entry) => entry.id === 'skills')).toBe(false);
+    expect(manager.getModalRedirect('skills')).toBe('skills');
   });
 
   test('discovers project-local skills before global skills and renders origin path', async () => {
@@ -248,34 +252,14 @@ describe('SkillsPanel', () => {
       '.goodvibes/tui/skills/alpha/SKILL.md',
       ['---', 'name: alpha', 'description: Alpha skill', '---', ''].join('\n'),
     );
-    const manager = new PanelManager();
-    const services = createRuntimeServices({
-      configManager: new ConfigManager({ surfaceRoot: 'tui',
-        workingDir: cwd,
-        homeDir,
-        configDir: join(homeDir, '.goodvibes', 'test-skills-preview'),
-      }),
-      runtimeBus: new RuntimeEventBus(),
-      runtimeStore: createRuntimeStore(),
-      workingDir: cwd,
-      homeDirectory: homeDir,
-    });
-    const uiServices = createUiRuntimeServices(services);
-    registerBuiltinPanels(manager, {
-      providerRegistry: services.providerRegistry,
-      uiServices,
-      tokenAuditor: services.tokenAuditor,
-      componentHealthMonitor: services.componentHealthMonitor,
-      worktreeRegistry: services.worktreeRegistry,
-      sandboxSessionRegistry: services.sandboxSessionRegistry,
-    });
-
-    const skillsPanel = manager.open('skills') as SkillsPanel;
+    // W6.1 (the purge): skills is register-retired (redirects to the modal), so
+    // construct the retained panel class directly — the same pattern the other
+    // tests in this file use — to exercise its Enter/no-preview behavior.
+    const skillsPanel = new SkillsPanel({ shellPaths: makeShellPaths(cwd, homeDir) });
     skillsPanel.onActivate();
     await skillsPanel.awaitReady();
     expect(skillsPanel.handleInput('enter')).toBe(true);
     expect(skillsPanel.handlePanelIntegrationAction).toBeUndefined();
-    expect(manager.getRegisteredTypes().some((entry) => entry.id === 'preview')).toBe(false);
   });
 
   test('tags marketplace-installed skills with provenance from the install receipt', async () => {

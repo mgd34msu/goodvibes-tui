@@ -11,7 +11,7 @@ import {
   updateInstalledEcosystemEntry,
   upsertEcosystemCatalogEntry,
 } from '@/runtime/index.ts';
-import { requireEcosystemCatalogPaths, requirePanelManager, requireShellPaths } from './runtime-services.ts';
+import { openModalCommand, requireEcosystemCatalogPaths, requireShellPaths } from './runtime-services.ts';
 
 export function registerSkillsRuntimeCommands(registry: CommandRegistry): void {
   registry.register({
@@ -22,13 +22,7 @@ export function registerSkillsRuntimeCommands(registry: CommandRegistry): void {
     async handler(args, ctx) {
       const sub = args[0] ?? 'open';
       if (sub === 'open' || sub === 'panel') {
-        if (ctx.showPanel) ctx.showPanel('skills');
-        else {
-          const panelManager = requirePanelManager(ctx);
-          panelManager.open('skills');
-          panelManager.show();
-          ctx.renderRequest();
-        }
+        openModalCommand(ctx, 'skills');
         return;
       }
       const skills = await discoverSkills(requireShellPaths(ctx));

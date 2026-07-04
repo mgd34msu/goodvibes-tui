@@ -103,6 +103,21 @@ export function openCommandPanel(
   showPanel(panelId, pane);
 }
 
+/**
+ * W6.1 (group-B migration): open a config-modal surface by name via the
+ * ctx.openModal seam (ui-openers wires it; the WO-A host replaces the interim
+ * "not available yet" implementation with real dispatch). Front-doors for
+ * panels that migrated to modals call this instead of openCommandPanel — the
+ * modal is the surface's new home. Stubbed in tests by setting ctx.openModal.
+ */
+export function openModalCommand(
+  context: Pick<CommandContext, 'openModal'>,
+  modalName: string,
+): void {
+  const openModal = requireContextValue(context.openModal, 'openModal');
+  openModal(modalName);
+}
+
 export function openOnboardingWizard(
   context: Pick<CommandContext, 'openOnboardingWizard'>,
   modeOrOptions?: import('../onboarding/onboarding-wizard.ts').OnboardingWizardMode

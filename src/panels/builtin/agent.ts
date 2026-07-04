@@ -1,6 +1,4 @@
 import type { PanelManager } from '../panel-manager.ts';
-import { ProjectPlanningPanel } from '../project-planning-panel.ts';
-import { WorkPlanPanel } from '../work-plan-panel.ts';
 import type { ResolvedBuiltinPanelDeps } from './shared.ts';
 
 // W6.1 (the purge): thinking, tools, inspector, and wrfc were registered here
@@ -21,33 +19,9 @@ export function registerAgentPanels(manager: PanelManager, deps: ResolvedBuiltin
   manager.registerAlias('inspector', 'fleet');
   manager.registerAlias('wrfc', 'fleet');
 
-  manager.registerType({
-    id: 'work-plan',
-    name: 'Work Plan',
-    // WO-152: was 'L' (collided with panel-list).
-    icon: '◧',
-    category: 'agent',
-    description: 'Persistent workspace checklist for multi-step work and cross-session task tracking',
-    // W6.1: preload dropped — work-plan is MIGRATE-TO-MODAL (not yet
-    // converted; WO-A/B). Only 'tokens' remains preloaded post-purge.
-    retainOnClose: true,
-    factory: () => new WorkPlanPanel(deps.workPlanStore),
-  });
-
-  manager.registerType({
-    id: 'project-planning',
-    name: 'Planning',
-    icon: 'P',
-    category: 'agent',
-    description: 'Passive project planning artifacts: readiness, questions, decisions, language, task graph, and agent handoff metadata',
-    // W6.1: preload dropped (MIGRATE-TO-MODAL, not yet converted).
-    retainOnClose: true,
-    factory: () => new ProjectPlanningPanel({
-      service: deps.projectPlanningService,
-      projectId: deps.projectPlanningProjectId,
-      requestRender: deps.requestRender,
-      submitAnswer: deps.submitPlanningAnswer,
-      dismissPlanning: deps.dismissPlanning,
-    }),
-  });
+  // W6.1 (the purge) — group B: 'work-plan' and 'project-planning' migrated to
+  // the 'work-plan' / 'planning' config-modals. Their panel→modal redirects are
+  // registered centrally via registerEcosystemModalRedirects (see
+  // registerOperationsPanels). Panel registrations retired here.
+  void deps;
 }

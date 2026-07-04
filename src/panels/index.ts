@@ -8,11 +8,12 @@ export { ProviderHealthPanel } from './provider-health-panel.ts';
 export { ProviderHealthTracker } from './provider-health-tracker.ts';
 export type { ProviderHealth, ProviderStatus } from './provider-health-tracker.ts';
 export { GitPanel } from './git-panel.ts';
-export { SessionBrowserPanel } from './session-browser-panel.ts';
-export { DocsPanel } from './docs-panel.ts';
 export { registerBuiltinPanels } from './builtin-panels.ts';
 export type { BuiltinPanelDeps } from './builtin-panels.ts';
-export { PolicyPanel } from './policy-panel.ts';
+// W6.1 (the purge) — group B: plugins/skills panels are register-retired but
+// their modules are retained for shared non-class exports (PluginManagerControls;
+// discoverSkills + SkillRecord/SkillOrigin, consumed by command runtimes and the
+// skills modal). The other group-B panel classes are deleted outright.
 export { PluginsPanel } from './plugins-panel.ts';
 export { SkillsPanel } from './skills-panel.ts';
 export { FleetPanel } from './fleet-panel.ts';
@@ -20,8 +21,4 @@ export type { FleetActionCallbacks } from './fleet-panel.ts';
 export { RemotePanel } from './remote-panel.ts';
 export { ServicesPanel } from './services-panel.ts';
 export { SubscriptionPanel } from './subscription-panel.ts';
-export { HooksPanel } from './hooks-panel.ts';
-export { SecurityPanel } from './security-panel.ts';
-export { MarketplacePanel } from './marketplace-panel.ts';
 export { SandboxPanel } from './sandbox-panel.ts';
-export { KnowledgeGraphPanel } from './knowledge-graph-panel.ts';
