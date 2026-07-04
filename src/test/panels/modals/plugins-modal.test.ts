@@ -1,133 +1,61 @@
 import { describe, test, expect } from 'bun:test';
-import { bindPluginsModal, pluginsModalGoldenSurface, type PluginsModalManager } from '../../../panels/modals/plugins-modal.ts';
-import { EMPTY_VIEW } from '../../../panels/modals/modal-surface.ts';
-import type { ModalConfig } from '../../../renderer/modal-factory.ts';
+import { createPluginsModalSurface, type PluginsModalManager } from '../../../panels/modals/plugins-modal.ts';
 import type { PluginStatus } from '@pellux/goodvibes-sdk/platform/plugins';
+import { actionCtx, captureCommands, findAction, open, tabText } from './modal-surface-test-helpers.ts';
 
-/** Flatten a ModalConfig's text/list/title content into one searchable string. */
-function configText(config: ModalConfig): string {
-  const parts: string[] = [config.title];
-  if (config.search !== undefined) parts.push(config.search);
-  for (const section of config.sections) {
-    if (section.content) parts.push(section.content);
-    for (const item of section.items ?? []) parts.push(item.label);
-  }
-  for (const hint of config.hints ?? []) parts.push(hint);
-  if (config.footer) parts.push(config.footer);
-  return parts.join('\n');
-}
-
-function makePlugin(overrides: Partial<PluginStatus> & { name: string }): PluginStatus {
-  return {
-    version: '1.0.0',
-    description: `${overrides.name} description`,
-    enabled: true,
-    active: true,
-    trustTier: 'trusted',
-    quarantined: false,
-    ...overrides,
-  };
-}
-
-function fixedManager(plugins: PluginStatus[], overrides: Partial<PluginsModalManager> = {}): PluginsModalManager {
+function manager(plugins: PluginStatus[], overrides: Partial<PluginsModalManager> = {}): PluginsModalManager {
   return {
     list: () => plugins,
     capabilities: () => null,
     getTrustRecord: () => undefined,
-    getQuarantineRecord: () => undefined,
-    verify: () => ({ ok: true, valid: true, fingerprint: 'fp-test' }),
+    getQuarantineRecord: (n) => (plugins.find((p) => p.name === n)?.quarantined ? { pluginName: n, quarantinedAt: 0, reason: 'bad sig', revokedCapabilities: [], lifted: false } : undefined),
+    verify: () => ({ ok: true, valid: true, fingerprint: 'fp-1' }),
     ...overrides,
   };
 }
+const trusted: PluginStatus = { name: 'formatter', version: '1.0.0', description: 'fmt', enabled: true, active: true, trustTier: 'trusted', quarantined: false };
+const quarantined: PluginStatus = { name: 'risky', version: '0.2.0', description: 'risky', enabled: false, active: false, trustTier: 'untrusted', quarantined: true };
 
-describe('plugins modal builder', () => {
-  test('empty roster renders next-step guidance and no rows', () => {
-    const surface = bindPluginsModal({ pluginManager: fixedManager([]) });
-    surface.refresh();
-    const text = configText(surface.buildConfig(EMPTY_VIEW));
+describe('plugins modal surface', () => {
+  test('surface identity', () => { expect(createPluginsModalSurface({ pluginManager: manager([]) }).name).toBe('plugins-modal'); });
+
+  test('empty roster shows honest next-steps copy', () => {
+    const text = tabText(open(createPluginsModalSurface({ pluginManager: manager([]) })), 'plugins');
     expect(text).toContain('No plugins discovered.');
     expect(text).toContain('/plugin list');
     expect(text).toContain('/marketplace');
-    expect(surface.rowIds(EMPTY_VIEW)).toHaveLength(0);
   });
 
-  test('populated roster lists plugins with posture summary and selected detail', () => {
-    const plugins = [
-      makePlugin({ name: 'formatter', trustTier: 'trusted', active: true }),
-      makePlugin({ name: 'risky-tool', trustTier: 'untrusted', active: false, enabled: false, quarantined: true }),
-    ];
-    const surface = bindPluginsModal({ pluginManager: fixedManager(plugins) });
-    surface.refresh();
-    const config = surface.buildConfig(EMPTY_VIEW);
-    const text = configText(config);
+  test('populated roster: posture header + folded quarantine detail', () => {
+    const text = tabText(open(createPluginsModalSurface({ pluginManager: manager([trusted, quarantined]) })), 'plugins');
+    expect(text).toContain('plugins 2  active 1  untrusted 1  quarantined 1');
     expect(text).toContain('formatter');
-    expect(text).toContain('risky-tool');
-    expect(text).toContain('plugins 2');
-    expect(text).toContain('quarantined 1');
-    expect(surface.rowIds(EMPTY_VIEW)).toEqual(['formatter', 'risky-tool']);
+    expect(text).toContain('quarantine: bad sig'); // folded selection-detail
   });
 
-  test('quarantine-only hints (lift quarantine, capture to memory) appear only when selection is quarantined', () => {
-    const plugins = [makePlugin({ name: 'risky-tool', quarantined: true, active: false, enabled: false })];
-    const surface = bindPluginsModal({ pluginManager: fixedManager(plugins) });
-    surface.refresh();
-    const text = configText(surface.buildConfig(EMPTY_VIEW));
-    expect(text).toContain('q lift quarantine');
-    expect(text).toContain('m capture to memory');
+  test('enable routes to /plugin, gated by enabledFor; lift-quarantine only for quarantined rows', () => {
+    const surface = createPluginsModalSurface({ pluginManager: manager([trusted, quarantined]) });
+    open(surface);
+    expect(findAction(surface, 'enable')?.enabledFor?.({ id: 'formatter', label: '' }, 'plugins')).toBe(false); // already active
+    expect(findAction(surface, 'enable')?.enabledFor?.({ id: 'risky', label: '' }, 'plugins')).toBe(true);
+    const cap = captureCommands();
+    surface.onAction?.('enable', actionCtx({ id: 'risky', label: '' }, cap.extra));
+    expect(cap.calls).toEqual([['plugin', ['enable', 'risky']]]);
+    expect(findAction(surface, 'liftQuarantine')?.enabledFor?.({ id: 'formatter', label: '' }, 'plugins')).toBe(false);
+    expect(findAction(surface, 'captureToMemory')?.enabledFor?.({ id: 'risky', label: '' }, 'plugins')).toBe(true);
+    const cap2 = captureCommands();
+    surface.onAction?.('liftQuarantine', actionCtx({ id: 'risky', label: '' }, cap2.extra));
+    expect(cap2.calls).toEqual([['plugin', ['quarantine', 'risky', 'lift']]]);
   });
 
-  test('enable/disable/lift-quarantine route to the /plugin command path (no modal-ized confirm)', () => {
-    const plugins = [
-      makePlugin({ name: 'formatter', active: false, enabled: false }),
-      makePlugin({ name: 'risky-tool', quarantined: true, active: false, enabled: false }),
-    ];
-    const surface = bindPluginsModal({ pluginManager: fixedManager(plugins) });
-    surface.refresh();
-
-    // formatter is selectedIndex 0 by default.
-    expect(surface.actions.enable!(EMPTY_VIEW)).toEqual({ kind: 'runCommand', command: '/plugin enable formatter' });
-    // disable is a no-op on an already-disabled plugin.
-    expect(surface.actions.disable!(EMPTY_VIEW)).toEqual({ kind: 'none' });
-
-    const secondRow = { ...EMPTY_VIEW, selectedIndex: 1 };
-    expect(surface.actions.liftQuarantine!(secondRow)).toEqual({ kind: 'runCommand', command: '/plugin quarantine risky-tool lift' });
-    expect(surface.actions.captureToMemory!(secondRow)).toEqual({ kind: 'runCommand', command: '/recall capture plugin risky-tool' });
-    // Not quarantined: lift-quarantine/capture are no-ops on row 0.
-    expect(surface.actions.liftQuarantine!(EMPTY_VIEW)).toEqual({ kind: 'none' });
-    expect(surface.actions.captureToMemory!(EMPTY_VIEW)).toEqual({ kind: 'none' });
-  });
-
-  test('verify is a read-only in-modal action (never routes to a command)', () => {
-    let verifyCalls = 0;
-    const plugins = [makePlugin({ name: 'formatter' })];
-    const surface = bindPluginsModal({
-      pluginManager: fixedManager(plugins, {
-        verify: (name) => {
-          verifyCalls += 1;
-          return { ok: true, valid: false, reason: `${name} signature mismatch` };
-        },
-      }),
-    });
-    surface.refresh();
-    const outcome = surface.actions.verify!(EMPTY_VIEW);
-    expect(outcome).toEqual({ kind: 'none' });
-    expect(verifyCalls).toBe(1);
-    const text = configText(surface.buildConfig(EMPTY_VIEW));
-    expect(text).toContain('INVALID');
+  test('verify is an in-modal read (no command dispatch) and its result folds into the row', () => {
+    const surface = createPluginsModalSurface({ pluginManager: manager([trusted], { verify: (n) => ({ ok: true, valid: false, reason: `${n} signature mismatch` }) }) });
+    open(surface);
+    const cap = captureCommands();
+    surface.onAction?.('verify', actionCtx({ id: 'formatter', label: '' }, cap.extra));
+    expect(cap.calls).toEqual([]);
+    const text = tabText(surface.buildView(), 'plugins');
+    expect(text).toContain('verify INVALID');
     expect(text).toContain('formatter signature mismatch');
-  });
-
-  test('refresh action requests a re-render (refresh() itself is a no-op over live reads)', () => {
-    const surface = bindPluginsModal({ pluginManager: fixedManager([makePlugin({ name: 'formatter' })]) });
-    surface.refresh();
-    expect(surface.actions.refresh!(EMPTY_VIEW)).toEqual({ kind: 'refresh' });
-  });
-
-  test('golden surface renders deterministically with quarantine hints present', () => {
-    const surface = pluginsModalGoldenSurface();
-    const text = configText(surface.buildConfig(EMPTY_VIEW));
-    expect(text).toContain('formatter');
-    expect(text).toContain('risky-tool');
-    expect(surface.rowIds(EMPTY_VIEW)).toEqual(['formatter', 'risky-tool']);
   });
 });

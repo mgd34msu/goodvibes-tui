@@ -206,7 +206,7 @@ describe('/plan project planning runtime command', () => {
 
     await registry.execute('plan', ['replace', 'the', 'planning', 'panel'], makeContext(fake.service, out, opened));
 
-    expect(opened).toContain('planning');
+    expect(opened).toContain('planning-modal');
     expect(out.join('\n')).toContain('Answer in the prompt, or open the Planning modal');
     expect(fake.state()?.metadata?.['active']).toBe(true);
     expect(fake.state()?.openQuestions.length).toBeGreaterThan(0);

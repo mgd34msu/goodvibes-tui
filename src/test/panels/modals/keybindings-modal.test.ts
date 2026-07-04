@@ -1,27 +1,7 @@
 import { describe, test, expect } from 'bun:test';
-import {
-  bindKeybindingsModal,
-  keybindingsModalGoldenSurface,
-  type KeybindingsModalProviderRegistry,
-  type KeybindingsModalToolRegistry,
-} from '../../../panels/modals/keybindings-modal.ts';
-import { EMPTY_VIEW, type ModalViewState } from '../../../panels/modals/modal-surface.ts';
-import type { ModalConfig } from '../../../renderer/modal-factory.ts';
+import { createKeybindingsModalSurface, type KeybindingsModalProviderRegistry, type KeybindingsModalToolRegistry } from '../../../panels/modals/keybindings-modal.ts';
 import { KeybindingsManager } from '../../../input/keybindings.ts';
-
-/** Flatten a ModalConfig's text/list/title content into one searchable string. */
-function configText(config: ModalConfig): string {
-  const parts: string[] = [config.title];
-  if (config.search !== undefined) parts.push(config.search);
-  for (const tab of config.tabs ?? []) parts.push(`${tab.active ? '*' : ''}${tab.label}`);
-  for (const section of config.sections) {
-    if (section.content) parts.push(section.content);
-    for (const item of section.items ?? []) parts.push(item.label);
-  }
-  for (const hint of config.hints ?? []) parts.push(hint);
-  if (config.footer) parts.push(config.footer);
-  return parts.join('\n');
-}
+import { actionCtx, captureCommands, open, tabText } from './modal-surface-test-helpers.ts';
 
 const FIXED_TOOLS: KeybindingsModalToolRegistry = {
   list: () => [
@@ -29,7 +9,6 @@ const FIXED_TOOLS: KeybindingsModalToolRegistry = {
     { definition: { name: 'run_shell', description: 'Execute a shell command.', sideEffects: ['exec'], concurrency: 'serial', supportsProgress: true, supportsStreamingOutput: true } },
   ],
 };
-
 const FIXED_MODELS: KeybindingsModalProviderRegistry = {
   listModels: () => [
     { id: 'a', provider: 'acme', registryKey: 'acme:a', displayName: 'Acme A', contextWindow: 128000, selectable: true },
@@ -37,90 +16,55 @@ const FIXED_MODELS: KeybindingsModalProviderRegistry = {
   ],
   getCurrentModel: () => ({ registryKey: 'acme:a' }),
 };
+function keybindings(): KeybindingsManager { return new KeybindingsManager({ configPath: '/nonexistent/keybindings-modal-test.json' }); }
 
-function keybindings(): KeybindingsManager {
-  return new KeybindingsManager({ configPath: '/nonexistent/keybindings-modal-test.json' });
-}
-
-describe('keybindings modal builder', () => {
-  test('surface identity: name matches the docs -> keybindings redirect target', () => {
-    const surface = bindKeybindingsModal({});
-    expect(surface.name).toBe('keybindings');
+describe('keybindings modal surface', () => {
+  test('surface identity matches the docs -> keybindings-modal redirect target', () => {
+    expect(createKeybindingsModalSurface({}).name).toBe('keybindings-modal');
   });
 
-  test('tools tab: lists tools and shows selected-tool metadata', () => {
-    const surface = bindKeybindingsModal({ toolRegistry: FIXED_TOOLS });
-    const config = surface.buildConfig(EMPTY_VIEW);
-    const text = configText(config);
-    expect(text).toContain('*Tools');
-    expect(text).toContain('read_file');
-    expect(text).toContain('run_shell');
-    expect(text).toContain('Read a file from disk.');
-    expect(text).toContain('effects: read_fs');
-    expect(surface.rowIds(EMPTY_VIEW)).toEqual(['tool:read_file', 'tool:run_shell']);
+  test('three tabs; Tools folds metadata into rows; Models marks the active one', () => {
+    const view = open(createKeybindingsModalSurface({ toolRegistry: FIXED_TOOLS, providerRegistry: FIXED_MODELS, keybindingsManager: keybindings() }));
+    expect(view.tabs.map((t) => t.id)).toEqual(['tools', 'models', 'shortcuts']);
+    const tools = tabText(view, 'tools');
+    expect(tools).toContain('read_file');
+    expect(tools).toContain('Read a file from disk.');
+    expect(tools).toContain('effects: read_fs');
+    expect(view.tabs[0]!.rows.map((r) => r.id)).toEqual(['tool:read_file', 'tool:run_shell']);
+    const models = tabText(view, 'models');
+    expect(models).toContain('Acme A');
+    expect(models).toContain('ACTIVE');
+    expect(view.tabs[1]!.rows.map((r) => r.id)).toEqual(['model:acme:a', 'model:acme:b']);
   });
 
-  test('tools tab degrades honestly when the tool registry is not wired', () => {
-    const surface = bindKeybindingsModal({});
-    const text = configText(surface.buildConfig(EMPTY_VIEW));
-    expect(text.toLowerCase()).toContain('tool registry not wired');
+  test('tools/shortcuts tabs degrade honestly when their dependency is not wired', () => {
+    const view = open(createKeybindingsModalSurface({}));
+    expect(tabText(view, 'tools').toLowerCase()).toContain('tool registry not wired');
+    expect(tabText(view, 'shortcuts').toLowerCase()).toContain('keybindings manager not wired');
   });
 
-  test('models tab: lists models sorted by provider/name and marks the active one', () => {
-    const surface = bindKeybindingsModal({ providerRegistry: FIXED_MODELS });
-    surface.actions.models!(EMPTY_VIEW);
-    const config = surface.buildConfig(EMPTY_VIEW);
-    const text = configText(config);
-    expect(text).toContain('*Models');
-    expect(text).toContain('Acme A');
-    expect(text).toContain('ACTIVE');
-    expect(text).toContain('Acme B');
-    expect(surface.rowIds(EMPTY_VIEW)).toEqual(['model:acme:a', 'model:acme:b']);
+  test('activate: Tools tab -> /panel open fleet; Models tab -> /model <key>; unselectable model is a no-op', () => {
+    const surface = createKeybindingsModalSurface({ toolRegistry: FIXED_TOOLS, providerRegistry: FIXED_MODELS });
+    open(surface);
+    const fleet = captureCommands();
+    surface.onAction?.('activate', actionCtx({ id: 'tool:read_file', label: '' }, { ...fleet.extra, tabId: 'tools' }));
+    expect(fleet.calls).toEqual([['panel', ['open', 'fleet']]]);
+
+    const model = captureCommands();
+    surface.onAction?.('activate', actionCtx({ id: 'model:acme:a', label: '' }, { ...model.extra, tabId: 'models' }));
+    expect(model.calls).toEqual([['model', ['acme:a']]]);
+
+    const unsel = captureCommands();
+    surface.onAction?.('activate', actionCtx({ id: 'model:acme:b', label: '' }, { ...unsel.extra, tabId: 'models' }));
+    expect(unsel.calls).toEqual([]);
   });
 
-  test('activate on a tools row routes to the fleet panel via command (no cross-modal openModal)', () => {
-    const surface = bindKeybindingsModal({ toolRegistry: FIXED_TOOLS });
-    const outcome = surface.actions.activate!(EMPTY_VIEW);
-    expect(outcome).toEqual({ kind: 'runCommand', command: '/panel open fleet' });
-  });
-
-  test('activate on a selectable models row routes to /model <registryKey>; unselectable rows are a no-op', () => {
-    const surface = bindKeybindingsModal({ providerRegistry: FIXED_MODELS });
-    surface.actions.models!(EMPTY_VIEW);
-    const first = surface.actions.activate!(EMPTY_VIEW);
-    expect(first).toEqual({ kind: 'runCommand', command: '/model acme:a' });
-    const second = surface.actions.activate!({ ...EMPTY_VIEW, selectedIndex: 1 } as ModalViewState);
-    expect(second).toEqual({ kind: 'none' });
-  });
-
-  test('shortcuts tab folds in the shortcuts-overlay categories AND the exhaustive live binding table', () => {
-    const surface = bindKeybindingsModal({ keybindingsManager: keybindings() });
-    surface.actions.shortcuts!(EMPTY_VIEW);
-    const text = configText(surface.buildConfig(EMPTY_VIEW));
-    expect(text).toContain('*Shortcuts');
-    // Categorized reference (from renderShortcutsOverlay).
+  test('Shortcuts tab folds the categorized overlay reference AND the exhaustive live binding table', () => {
+    const text = tabText(open(createKeybindingsModalSurface({ keybindingsManager: keybindings() })), 'shortcuts');
     expect(text).toContain('Navigation');
     expect(text).toContain('In-Panel Controls');
-    expect(text).toContain('Ctrl+F'); // 'search' combo label used by both the overlay and this modal
-    // Exhaustive live table (from DocsPanel's original flat enumeration) —
-    // includes an action the curated categories never mention.
+    expect(text).toContain('Ctrl+F'); // 'search' combo label
     expect(text).toContain('All Bindings (live)');
     expect(text).toContain('Reverse input history search');
-  });
-
-  test('shortcuts tab degrades honestly when the keybindings manager is not wired', () => {
-    const surface = bindKeybindingsModal({});
-    surface.actions.shortcuts!(EMPTY_VIEW);
-    const text = configText(surface.buildConfig(EMPTY_VIEW));
-    expect(text.toLowerCase()).toContain('keybindings manager not wired');
-  });
-
-  test('golden surface renders deterministically across two independent builds', () => {
-    const a = keybindingsModalGoldenSurface();
-    const b = keybindingsModalGoldenSurface();
-    expect(configText(a.buildConfig(EMPTY_VIEW))).toBe(configText(b.buildConfig(EMPTY_VIEW)));
-    a.actions.shortcuts!(EMPTY_VIEW);
-    b.actions.shortcuts!(EMPTY_VIEW);
-    expect(configText(a.buildConfig(EMPTY_VIEW))).toBe(configText(b.buildConfig(EMPTY_VIEW)));
   });
 });

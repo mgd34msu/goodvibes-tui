@@ -1,98 +1,76 @@
 import { describe, test, expect } from 'bun:test';
-import {
-  ECOSYSTEM_MODAL_REDIRECTS,
-  registerEcosystemModalRedirects,
-  type BoundModalSurface,
-  type EcosystemModalRegistrar,
-} from '../../../panels/modals/modal-surface.ts';
-import {
-  buildEcosystemModalSurfaces,
-  registerEcosystemModals,
-  type EcosystemModalDeps,
-} from '../../../panels/modals/ecosystem-modals.ts';
-import type { PanelManager } from '../../../panels/panel-manager.ts';
+import type { ConfigModalSurface } from '../../../input/config-modal-types.ts';
+import { marketplaceModalGoldenSurface } from '../../../panels/modals/marketplace-modal.ts';
+import { pluginsModalGoldenSurface } from '../../../panels/modals/plugins-modal.ts';
+import { skillsModalGoldenSurface } from '../../../panels/modals/skills-modal.ts';
+import { hooksModalGoldenSurface } from '../../../panels/modals/hooks-modal.ts';
+import { securityModalGoldenSurface } from '../../../panels/modals/security-modal.ts';
+import { policyModalGoldenSurface } from '../../../panels/modals/policy-modal.ts';
+import { knowledgeModalGoldenSurface } from '../../../panels/modals/knowledge-modal.ts';
+import { memoryModalGoldenSurface } from '../../../panels/modals/memory-modal.ts';
+import { workPlanModalGoldenSurface } from '../../../panels/modals/work-plan-modal.ts';
+import { keybindingsModalGoldenSurface } from '../../../panels/modals/keybindings-modal.ts';
+import { pairingModalGoldenSurface } from '../../../panels/modals/pairing-modal.ts';
+import { planningModalGoldenSurface } from '../../../panels/modals/planning-modal.ts';
 
-// The 13 group-B surfaces this WO owns (12 new modals + the sessions fold).
-const EXPECTED_REDIRECTS: ReadonlyArray<readonly [string, string]> = [
-  ['marketplace', 'marketplace'],
-  ['plugins', 'plugins'],
-  ['skills', 'skills'],
-  ['hooks', 'hooks'],
-  ['policy', 'policy'],
-  ['security', 'security'],
-  ['knowledge', 'knowledge'],
-  ['memory', 'memory'],
-  ['docs', 'keybindings'],
-  ['qr-code', 'pairing'],
-  ['work-plan', 'work-plan'],
-  ['project-planning', 'planning'],
-  ['sessions', 'sessionPicker'],
+// ---------------------------------------------------------------------------
+// Group-B config-modal-surface registration completeness (W6.1 WO-P port).
+// The 12 ported ConfigModalSurfaces must all exist under their '-modal' names
+// with the required host contract. The panel→modal redirects (including the
+// 'sessions' -> 'sessionPicker' fold) are asserted end-to-end against a live
+// PanelManager in src/test/release-gates/operator-surfaces-gate.test.ts.
+// ---------------------------------------------------------------------------
+
+/** The 12 group-B surfaces this WO owns, by their canonical registered name. */
+const EXPECTED_SURFACE_NAMES = [
+  'marketplace-modal', 'plugins-modal', 'skills-modal', 'hooks-modal',
+  'security-modal', 'policy-modal', 'knowledge-modal', 'memory-modal',
+  'work-plan-modal', 'keybindings-modal', 'pairing-modal', 'planning-modal',
 ];
 
-// The 12 modal-config surfaces (sessions folds into the existing session
-// picker, so it has no builder here).
-const EXPECTED_MODAL_NAMES = [
-  'marketplace', 'plugins', 'skills', 'hooks', 'security', 'policy',
-  'knowledge', 'memory', 'work-plan', 'keybindings', 'pairing', 'planning',
-];
-
-/** Structurally-minimal deps — bind() only captures, never invokes, so stubs suffice. */
-function stubDeps(): EcosystemModalDeps {
-  const emptyReadModel = { getSnapshot: () => ({} as never), subscribe: () => () => {} };
-  const listNone = { list: () => [] };
-  return {
-    marketplace: {},
-    plugins: { pluginManager: { list: () => [], capabilities: () => [], getTrustRecord: () => undefined, getQuarantineRecord: () => undefined, verify: () => ({}) } as never },
-    skills: { shellPaths: { workingDirectory: '/tmp/x', homeDirectory: '/tmp/x' } },
-    hooks: {
-      hookDispatcher: { listHooks: () => [], getChains: () => [] } as never,
-      hookWorkbench: { getHooksFilePath: () => '', listManagedHooks: () => [], listManagedChains: () => [], listRecentActions: () => [], getLastSimulation: () => undefined } as never,
-      hookActivityTracker: { listRecent: () => [] } as never,
-    },
-    security: { readModel: emptyReadModel as never },
-    policy: { policyRuntimeState: { getSnapshot: () => ({} as never) } },
-    knowledge: { knowledgeApi: { graph: { nodes: listNone, issues: listNone }, sources: listNone, jobs: { schedules: listNone } } as never },
-    memory: {},
-    workPlan: { workPlanStore: { getActivePlan: () => ({} as never) } },
-    keybindings: {},
-    pairing: { connectionInfo: { url: 'http://x', token: 't', username: 'u' } },
-    planning: { service: { status: () => Promise.resolve({}), getState: () => Promise.resolve({}), listDecisions: () => Promise.resolve([]), getLanguage: () => Promise.resolve({}), evaluate: () => Promise.resolve({}) } as never, projectId: 'p' },
-  };
+async function allSurfaces(): Promise<ConfigModalSurface[]> {
+  return [
+    marketplaceModalGoldenSurface(),
+    pluginsModalGoldenSurface(),
+    skillsModalGoldenSurface(),
+    hooksModalGoldenSurface(),
+    securityModalGoldenSurface(),
+    policyModalGoldenSurface(),
+    knowledgeModalGoldenSurface(),
+    memoryModalGoldenSurface(),
+    workPlanModalGoldenSurface(),
+    keybindingsModalGoldenSurface(),
+    pairingModalGoldenSurface(),
+    await planningModalGoldenSurface(),
+  ];
 }
 
-describe('ecosystem modal registration', () => {
-  test('redirect list is complete and correct vs the 13 group-B surfaces', () => {
-    expect([...ECOSYSTEM_MODAL_REDIRECTS]).toEqual([...EXPECTED_REDIRECTS] as never);
+describe('group-B config-modal surface registration', () => {
+  test('all 12 surfaces exist under their canonical -modal names', async () => {
+    const surfaces = await allSurfaces();
+    expect(surfaces.map((s) => s.name)).toEqual(EXPECTED_SURFACE_NAMES);
   });
 
-  test('registerEcosystemModalRedirects registers every group-B panel id on the manager', () => {
-    const registered: Array<[string, string]> = [];
-    const manager = { registerModalRedirect: (id: string, name: string) => { registered.push([id, name]); } } as unknown as PanelManager;
-    registerEcosystemModalRedirects(manager);
-    expect(registered).toEqual([...EXPECTED_REDIRECTS] as never);
-  });
-
-  test('buildEcosystemModalSurfaces builds all 12 modal surfaces with the expected names', () => {
-    const surfaces = buildEcosystemModalSurfaces(stubDeps());
-    expect(surfaces.map((s: BoundModalSurface) => s.name)).toEqual(EXPECTED_MODAL_NAMES);
-    // Every surface exposes the required contract.
-    for (const s of surfaces) {
-      expect(typeof s.buildConfig).toBe('function');
-      expect(typeof s.refresh).toBe('function');
-      expect(typeof s.rowIds).toBe('function');
-      expect(s.actions).toBeDefined();
+  test('every surface satisfies the ConfigModalSurface host contract', async () => {
+    for (const surface of await allSurfaces()) {
+      expect(typeof surface.buildView).toBe('function');
+      const view = surface.buildView();
+      expect(typeof view.title).toBe('string');
+      expect(view.tabs.length).toBeGreaterThan(0);
+      // Each tab has a stable id + label; every row carries a stable id.
+      for (const tab of view.tabs) {
+        expect(typeof tab.id).toBe('string');
+        for (const row of tab.rows) expect(typeof row.id).toBe('string');
+      }
     }
   });
 
-  test('registerEcosystemModals registers 12 modals + all 13 redirects via the host registrar', () => {
-    const modals: string[] = [];
-    const redirects: Array<[string, string]> = [];
-    const registrar: EcosystemModalRegistrar = {
-      registerModal: (s) => { modals.push(s.name); },
-      registerModalRedirect: (id, name) => { redirects.push([id, name]); },
-    };
-    registerEcosystemModals(registrar, stubDeps());
-    expect(modals).toEqual(EXPECTED_MODAL_NAMES);
-    expect(redirects).toEqual([...EXPECTED_REDIRECTS] as never);
+  test('row ids are unique within each tab (the host keys its live overlay off them)', async () => {
+    for (const surface of await allSurfaces()) {
+      for (const tab of surface.buildView().tabs) {
+        const ids = tab.rows.map((r) => r.id);
+        expect(new Set(ids).size).toBe(ids.length);
+      }
+    }
   });
 });
