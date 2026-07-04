@@ -112,6 +112,17 @@ describe('FleetPanel — navigation', () => {
     const text = linesText(panel.render(100, 24));
     expect(text).toContain('No processes tracked yet');
   });
+
+  // W3.3 (cross-restart honesty) — no daemon bridge exists, so a TUI restart
+  // never resurrects a prior session's processes into this tree; documented
+  // in the empty state rather than silently doing nothing (design point 5).
+  test('the empty state documents that a previous session\'s processes are not tracked here', () => {
+    const readModel = createStaticFleetReadModel(buildFleetSnapshot([], NOW));
+    const panel = new FleetPanel(readModel);
+    const text = linesText(panel.render(100, 24));
+    expect(text).toContain('previous sessions');
+    expect(text).toContain('resets on TUI restart');
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -276,6 +287,51 @@ describe('FleetPanel — tab transcript rendering', () => {
     panel.handleInput('enter');
     const text = linesText(panel.render(100, 24));
     expect(text).toContain('frozen content');
+  });
+
+  // W3.3 — done/dead process browsability. Every terminal state (not just
+  // 'done') must attach a READ-ONLY tab: no i/K while a tab is focused
+  // (handleInput's activeTabIndex>0 branch returns false for tree-only keys
+  // regardless of tab kind), and the content itself is honestly labeled as a
+  // static, non-live view rather than looking indistinguishable from a
+  // running agent's tab.
+  describe('terminal-state (done/failed/killed/interrupted) agent nodes attach read-only tabs', () => {
+    for (const state of ['done', 'failed', 'killed', 'interrupted'] as const) {
+      test(`Enter on a '${state}' agent node attaches a tab (wo611's Enter path already permits terminal-node attach)`, () => {
+        const readModel = createStaticFleetReadModel(buildFleetSnapshot([makeNode({ id: 'a', state })], NOW));
+        const actions = makeActions({
+          getConversationSnapshot: (id) => (id === 'a' ? [{ role: 'user', content: `content for ${state}` }] : []),
+        });
+        const panel = new FleetPanel(readModel, actions);
+        expect(panel.handleInput('enter')).toBe(true);
+        expect(panel.isTabActive()).toBe(true);
+        const text = linesText(panel.render(100, 24));
+        expect(text).toContain(`content for ${state}`);
+        expect(text).toContain('Read-only'); // honest static-transcript notice (design point 4)
+      });
+    }
+
+    test('i and K are never consumed while a terminal agent\'s tab is focused (no interrupt/kill surface on a read-only view)', () => {
+      const readModel = createStaticFleetReadModel(buildFleetSnapshot([makeNode({ id: 'a', state: 'done' })], NOW));
+      const actions = makeActions({ getConversationSnapshot: () => [{ role: 'user', content: 'x' }] });
+      const panel = new FleetPanel(readModel, actions);
+      panel.handleInput('enter');
+      expect(panel.isTabActive()).toBe(true);
+      expect(panel.handleInput('i')).toBe(false);
+      expect(panel.handleInput('K')).toBe(false);
+      expect(actions.interruptCalls).toHaveLength(0);
+      expect(actions.killCalls).toHaveLength(0);
+    });
+
+    test('a live (non-terminal) agent\'s tab does NOT carry the read-only notice', () => {
+      const readModel = createStaticFleetReadModel(buildFleetSnapshot([makeNode({ id: 'a', state: 'streaming' })], NOW));
+      const actions = makeActions({ getConversationSnapshot: () => [{ role: 'user', content: 'still going' }] });
+      const panel = new FleetPanel(readModel, actions);
+      panel.handleInput('enter');
+      const text = linesText(panel.render(100, 24));
+      expect(text).toContain('still going');
+      expect(text).not.toContain('Read-only');
+    });
   });
 
   test('a completed agent with an empty (evicted) snapshot falls back to the ledger view', async () => {

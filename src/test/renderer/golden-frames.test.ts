@@ -1303,6 +1303,33 @@ function renderFleetTabSurface(width: number, height: number): Line[] {
 
 describeOverlayGolden('fleet-panel-tab', renderFleetTabSurface);
 
+// W3.3 — a terminal agent's tab whose full-fidelity snapshot is unavailable
+// (evicted from the SDK's retention ring, or never registered), degraded to
+// the on-disk ledger fallback. Attaches 'agent-done-01' (row 0 — the same
+// terminal fixture node the base fleet-panel golden already uses) with
+// getConversationSnapshot always empty, then populates the tab's
+// ledgerEntries directly (bypassing the async fs read, same technique as
+// fleet-panel.test.ts) so the golden is fully synchronous and deterministic.
+function renderFleetLedgerTabSurface(width: number, height: number): Line[] {
+  const snapshot = buildFleetSnapshot(buildFleetGoldenNodes(), FIXED_FLEET_NOW);
+  const readModel = createStaticFleetReadModel(snapshot);
+  const panel = new FleetPanel(readModel, {
+    getConversationSnapshot: () => [], // evicted/never-registered — forces the ledger fallback
+  });
+  panel.handleInput('enter'); // row 0 is 'agent-done-01' (terminal) by default selection
+  const tab = panel.getTabsState().tabs[0]!;
+  tab.ledgerEntries = [
+    { type: 'meta', agentId: 'agent-done-01', model: 'claude-haiku-4-5', provider: 'anthropic', title: '', timestamp: FIXED_FLEET_NOW - 500_000 },
+    { type: 'session_config', task: 'Regenerate splash goldens', timestamp: FIXED_FLEET_NOW - 499_000 },
+    { type: 'tool_execution', turn: 1, toolName: 'Bash', success: true, resultPreview: 'goldens regenerated: 12 files', timestamp: FIXED_FLEET_NOW - 450_000 },
+    { type: 'session_end', status: 'completed', toolCallCount: 1, durationMs: 100_000, timestamp: FIXED_FLEET_NOW - 400_000 },
+  ];
+  tab.ledgerLoadStarted = true;
+  return panel.render(width, height);
+}
+
+describeOverlayGolden('fleet-panel-ledger-tab', renderFleetLedgerTabSurface);
+
 // context inspector — ConversationManager with fixed message content, no
 // timestamps rendered by this surface.
 function renderContextInspectorSurface(width: number, height: number): Line[] {

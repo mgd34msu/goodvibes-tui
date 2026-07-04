@@ -247,6 +247,26 @@ export class FleetPanel extends ScrollableListPanel<FleetTreeRow> {
     return ' No processes tracked yet.';
   }
 
+  /**
+   * W3.3 (cross-restart honesty) — investigation confirmed there is no
+   * bridge from a prior TUI process's in-memory registry (or the daemon's
+   * separate one) into this one: a restart always starts from an empty
+   * `AgentManager` Map, so a completed process from a previous session can
+   * never reappear as a tree row here, no matter how recently it ran. That
+   * is a real, permanent limitation (not a bug to fix in this item — see the
+   * W3.3 brief's design point 5), so it is documented plainly here rather
+   * than silently leaving the empty tree looking like "nothing has ever run"
+   * or, worse, implying a restart would bring prior processes back.
+   */
+  protected override getEmptyStateActions(): Array<{ command: string; summary: string }> {
+    return [
+      {
+        command: 'previous sessions',
+        summary: "not shown here — this list resets on TUI restart; each agent's .goodvibes/tui/sessions/<id>.jsonl event log still persists on disk",
+      },
+    ];
+  }
+
   private applyFollow(): void {
     if (!this.follow) return;
     const rows = this.getItems();
