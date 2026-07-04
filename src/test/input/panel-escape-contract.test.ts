@@ -70,6 +70,9 @@ function buildFocusedState(
     handlePathCompletion: mock(() => false),
     cyclePanelTab: mock(() => {}),
     onPanelInputConsumed: undefined,
+    isPrintableBurst: false,
+    isTurnActive: () => false,
+    cancelGeneration: mock(() => {}),
     ...overrides,
   };
 }
@@ -212,6 +215,108 @@ describe('panel-escape-contract: two-stage escape routing', () => {
       expect(result.handled).toBe(false);
       expect(result.panelFocused).toBe(false);
       expect(panel.handleInput).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('Stage 0 — turn active (cancel-first precedence, I6.1)', () => {
+    // W1.6 FIX 1: while a turn is actively streaming, Escape's first job is
+    // always cancel-turn — a focused panel must never be able to swallow the
+    // only way to cancel it (Wave-0 replay R5: panel open + streaming + Esc).
+    test('turn active + panel focused + escape: handled true, panelFocused UNCHANGED (stays true)', () => {
+      const panel = makePanel(true); // even a panel that WOULD consume escape...
+      const cancelGeneration = mock(() => {});
+      const state = buildFocusedState(panel, { isTurnActive: () => true, cancelGeneration });
+
+      const result = handlePanelFocusToken(state, ESCAPE_TOKEN);
+
+      expect(result.handled).toBe(true);
+      expect(result.panelFocused).toBe(true);
+    });
+
+    test('turn active + panel focused + escape: cancelGeneration is called', () => {
+      const panel = makePanel(true);
+      const cancelGeneration = mock(() => {});
+      const state = buildFocusedState(panel, { isTurnActive: () => true, cancelGeneration });
+
+      handlePanelFocusToken(state, ESCAPE_TOKEN);
+
+      expect(cancelGeneration).toHaveBeenCalledTimes(1);
+    });
+
+    test('turn active + panel focused + escape: panel.handleInput is NOT called (cancel wins before panel ever sees the key)', () => {
+      const panel = makePanel(true);
+      const state = buildFocusedState(panel, { isTurnActive: () => true, cancelGeneration: mock(() => {}) });
+
+      handlePanelFocusToken(state, ESCAPE_TOKEN);
+
+      expect(panel.handleInput).not.toHaveBeenCalled();
+    });
+
+    test('turn active + panel focused + escape: requestRender is called', () => {
+      const panel = makePanel(true);
+      const state = buildFocusedState(panel, { isTurnActive: () => true, cancelGeneration: mock(() => {}) });
+
+      handlePanelFocusToken(state, ESCAPE_TOKEN);
+
+      expect(state.requestRender).toHaveBeenCalled();
+    });
+
+    test('turn NOT active (isTurnActive returns false) falls through to existing Stage 1 behavior unchanged', () => {
+      const panel = makePanel(true);
+      const cancelGeneration = mock(() => {});
+      const state = buildFocusedState(panel, { isTurnActive: () => false, cancelGeneration });
+
+      const result = handlePanelFocusToken(state, ESCAPE_TOKEN);
+
+      expect(panel.handleInput).toHaveBeenCalledWith('escape');
+      expect(cancelGeneration).not.toHaveBeenCalled();
+      expect(result.handled).toBe(true);
+      expect(result.panelFocused).toBe(true);
+    });
+
+    test('turn NOT active falls through to existing Stage 2 behavior unchanged (panel does not consume escape)', () => {
+      const panel = makePanel(false);
+      const cancelGeneration = mock(() => {});
+      const state = buildFocusedState(panel, { isTurnActive: () => false, cancelGeneration });
+
+      const result = handlePanelFocusToken(state, ESCAPE_TOKEN);
+
+      expect(cancelGeneration).not.toHaveBeenCalled();
+      expect(result.handled).toBe(true);
+      expect(result.panelFocused).toBe(false);
+    });
+
+    test('second Escape after a first cancel: first call cancels (panel stays focused), second call proceeds to panel consume-or-unfocus contract', () => {
+      // Simulates the real sequence: turn is cancelled by the first Escape,
+      // then orchestrator.isThinking flips false, then a second Escape from
+      // the user (panel is still focused) now reaches the panel's own
+      // two-stage contract instead of being swallowed by cancel-first again.
+      const panel = makePanel(false); // panel does not consume escape
+      const cancelGeneration = mock(() => {});
+      let turnActive = true;
+      const state = buildFocusedState(panel, {
+        isTurnActive: () => turnActive,
+        cancelGeneration,
+      });
+
+      const first = handlePanelFocusToken(state, ESCAPE_TOKEN);
+      expect(first.handled).toBe(true);
+      expect(first.panelFocused).toBe(true);
+      expect(cancelGeneration).toHaveBeenCalledTimes(1);
+      expect(panel.handleInput).not.toHaveBeenCalled();
+
+      // Turn has now been cancelled.
+      turnActive = false;
+      const state2 = buildFocusedState(panel, {
+        panelFocused: first.panelFocused,
+        isTurnActive: () => turnActive,
+        cancelGeneration,
+      });
+      const second = handlePanelFocusToken(state2, ESCAPE_TOKEN);
+      expect(cancelGeneration).toHaveBeenCalledTimes(1); // not called again
+      expect(panel.handleInput).toHaveBeenCalledWith('escape');
+      expect(second.handled).toBe(true);
+      expect(second.panelFocused).toBe(false); // panel didn't consume -> unfocus
     });
   });
 });

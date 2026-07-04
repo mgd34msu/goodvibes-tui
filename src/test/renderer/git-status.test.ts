@@ -1,4 +1,8 @@
-import { describe, test, expect } from 'bun:test';
+import { describe, test, expect, afterEach } from 'bun:test';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { GitService } from '@pellux/goodvibes-sdk/platform/git';
 import { GitStatusProvider } from '../../renderer/git-status.ts';
 
 // ---------------------------------------------------------------------------
@@ -181,6 +185,103 @@ describe('GitStatusProvider', () => {
       const provider = providerWithFakeFetch(makeStatus({ conflicted: ['conflict.ts'] }), 'main');
       const info = await provider.getStatus();
       expect(info.dirty).toBe(true);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // W1.6 FIX 2: startPolling / stopPolling
+  // -------------------------------------------------------------------------
+  describe('startPolling / stopPolling', () => {
+    const POLL_MS = 20;
+    let tmpDir: string | null = null;
+    const originalIsGitRepo = GitService.isGitRepo;
+    const providers: GitStatusProvider[] = [];
+
+    afterEach(() => {
+      // Always restore the real static method and stop any timers we started,
+      // even if an assertion above threw mid-test.
+      GitService.isGitRepo = originalIsGitRepo;
+      for (const p of providers.splice(0)) p.stopPolling();
+      if (tmpDir) {
+        rmSync(tmpDir, { recursive: true, force: true });
+        tmpDir = null;
+      }
+    });
+
+    function wait(ms: number): Promise<void> {
+      return new Promise((resolve) => setTimeout(resolve, ms));
+    }
+
+    test('a live not-a-repo -> is-a-repo flip (external `git init`) triggers exactly one refresh-driven onChange call', async () => {
+      tmpDir = mkdtempSync(join(tmpdir(), 'gv-git-status-poll-'));
+      const provider = new GitStatusProvider(tmpDir);
+      providers.push(provider);
+
+      const seen: Array<{ branch: string }> = [];
+      provider.startPolling(POLL_MS, (info) => { seen.push(info); });
+
+      // Confirm we start in the not-a-repo state before mutating anything.
+      expect(GitService.isGitRepo(tmpDir)).toBe(false);
+
+      await wait(POLL_MS * 2);
+      expect(seen).toEqual([]); // no flip yet -> no refresh
+
+      await Bun.$`git init -q ${tmpDir}`.quiet();
+      await Bun.$`git -C ${tmpDir} config user.email test@example.com`.quiet();
+      await Bun.$`git -C ${tmpDir} config user.name test`.quiet();
+
+      // Give the poll several ticks to observe the flip and fire onChange.
+      await wait(POLL_MS * 10);
+
+      expect(seen.length).toBe(1);
+      expect(typeof seen[0]?.branch).toBe('string');
+    });
+
+    test('no-op if the repo state does not change between ticks', async () => {
+      tmpDir = mkdtempSync(join(tmpdir(), 'gv-git-status-poll-nochange-'));
+      const provider = new GitStatusProvider(tmpDir);
+      providers.push(provider);
+
+      const seen: Array<{ branch: string }> = [];
+      provider.startPolling(POLL_MS, (info) => { seen.push(info); });
+
+      await wait(POLL_MS * 8);
+      // tmpDir was never turned into a repo, so isGitRepo() stays false the
+      // whole time — the call count must not increment every tick.
+      expect(seen).toEqual([]);
+    });
+
+    test('stopPolling() clears the interval — no further onChange after it is called', async () => {
+      tmpDir = mkdtempSync(join(tmpdir(), 'gv-git-status-poll-stop-'));
+      const provider = new GitStatusProvider(tmpDir);
+      providers.push(provider);
+
+      const seen: Array<{ branch: string }> = [];
+      provider.startPolling(POLL_MS, (info) => { seen.push(info); });
+      provider.stopPolling();
+
+      await Bun.$`git init -q ${tmpDir}`.quiet();
+      await wait(POLL_MS * 10);
+
+      // Even though the directory became a repo, polling was stopped before
+      // that happened, so no onChange should ever fire.
+      expect(seen).toEqual([]);
+    });
+
+    test('never throws even if GitService.isGitRepo itself throws', async () => {
+      tmpDir = mkdtempSync(join(tmpdir(), 'gv-git-status-poll-throws-'));
+      const provider = new GitStatusProvider(tmpDir);
+      providers.push(provider);
+
+      GitService.isGitRepo = () => { throw new Error('boom'); };
+
+      expect(() => {
+        provider.startPolling(POLL_MS, () => {});
+      }).not.toThrow();
+
+      // Let a few ticks elapse with the throwing isGitRepo — must not crash
+      // the process or reject unhandled.
+      await wait(POLL_MS * 5);
     });
   });
 });

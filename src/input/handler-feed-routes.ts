@@ -39,6 +39,14 @@ export type PanelFocusRouteState = {
    * below.
    */
   isPrintableBurst: boolean;
+  /**
+   * True while a turn is actively streaming; gates Escape's cancel-first
+   * precedence (I6.1) ahead of the panel's own two-stage escape contract
+   * below.
+   */
+  isTurnActive: () => boolean;
+  /** Cancel the active turn. Wired to commandContext.cancelGeneration. */
+  cancelGeneration: () => void;
 };
 
 export function handlePanelFocusToken(state: PanelFocusRouteState, token: InputToken): {
@@ -75,6 +83,25 @@ export function handlePanelFocusToken(state: PanelFocusRouteState, token: InputT
     // (e.g. dismiss a confirm dialog or clear search). Only unfocus if the
     // panel returns false (unconsumed) or there is no active panel.
     if (token.logicalName === 'escape') {
+      // I6.1: while a turn is streaming, a focused panel must not be able to
+      // swallow the only way to cancel it (replay R5) — Escape's first job is
+      // always cancel-turn. The panel's own two-stage consume-or-unfocus
+      // contract below only runs once no turn is active, so a *second*
+      // Escape (now with the turn already cancelled) falls through to it
+      // normally. panelFocused is left unchanged here (panel stays open and
+      // focused) — the panel close moves to that second Escape, or to
+      // Ctrl+X (panel-close, keybindings.ts), which is handled earlier in
+      // handleGlobalShortcutToken and is unaffected by this branch. This
+      // deliberately calls cancelGeneration() directly instead of routing
+      // through the shared handleEscape() (handler-modal-stack.ts) — that
+      // function's fallthrough order (modal-pop -> active-modal-close ->
+      // clear-nonempty-prompt -> cancelGeneration) is not guaranteed to reach
+      // cancelGeneration first in every state combination.
+      if (state.isTurnActive()) {
+        state.cancelGeneration();
+        state.requestRender();
+        return { handled: true, panelFocused };
+      }
       const activePanel = state.panelManager.getActive();
       const panelConsumedEscape = activePanel?.handleInput?.('escape') ?? false;
       if (panelConsumedEscape) {
