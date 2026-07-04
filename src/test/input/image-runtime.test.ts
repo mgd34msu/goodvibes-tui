@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// image-runtime.test.ts — /image
+// image-runtime.test.ts — /imagine
 //
 // Pure command-layer test: fake MediaProviderRegistry + ArtifactStore on
 // ctx.platform (no real network calls, no real filesystem writes),
@@ -90,21 +90,21 @@ function makeCtx(mediaProviders?: ReturnType<typeof makeFakeMediaProviders>, art
   return { ctx, printed };
 }
 
-describe('/image command registration', () => {
-  test('registers /image', () => {
+describe('/imagine command registration', () => {
+  test('registers /imagine', () => {
     const registry = new CommandRegistry();
     registerImageRuntimeCommands(registry);
-    expect(registry.get('image')).toBeDefined();
+    expect(registry.get('imagine')).toBeDefined();
   });
 });
 
-describe('/image — honest degradation', () => {
+describe('/imagine — honest degradation', () => {
   test('prints an honest message when mediaProviders/artifactStore are not available', async () => {
     const registry = new CommandRegistry();
     registerImageRuntimeCommands(registry);
     const { ctx, printed } = makeCtx(undefined, undefined);
 
-    await registry.execute('image', ['a', 'cat'], ctx);
+    await registry.execute('imagine', ['a', 'cat'], ctx);
 
     expect(printed).toEqual(['Image generation is not available in this session.']);
   });
@@ -116,9 +116,9 @@ describe('/image — honest degradation', () => {
     const artifactStore = makeFakeArtifactStore();
     const { ctx, printed } = makeCtx(mediaProviders, artifactStore);
 
-    await registry.execute('image', [], ctx);
+    await registry.execute('imagine', [], ctx);
 
-    expect(printed).toEqual(['Usage: /image <prompt>']);
+    expect(printed).toEqual(['Usage: /imagine <prompt>']);
   });
 
   test('prints the registry\'s own per-provider status when no generate-capable provider is found', async () => {
@@ -131,7 +131,7 @@ describe('/image — honest degradation', () => {
     const artifactStore = makeFakeArtifactStore();
     const { ctx, printed } = makeCtx(mediaProviders, artifactStore);
 
-    await registry.execute('image', ['a', 'cat'], ctx);
+    await registry.execute('imagine', ['a', 'cat'], ctx);
 
     const text = printed.join('\n');
     expect(text).toContain('No image-generation provider is configured.');
@@ -148,7 +148,7 @@ describe('/image — honest degradation', () => {
     const artifactStore = makeFakeArtifactStore();
     const { ctx, printed } = makeCtx(mediaProviders, artifactStore);
 
-    await registry.execute('image', ['a', 'cat'], ctx);
+    await registry.execute('imagine', ['a', 'cat'], ctx);
 
     expect(printed.join('\n')).toContain('No media-generation providers are registered in this build.');
   });
@@ -161,7 +161,7 @@ describe('/image — honest degradation', () => {
     const artifactStore = makeFakeArtifactStore();
     const { ctx, printed } = makeCtx(mediaProviders, artifactStore);
 
-    await registry.execute('image', ['a', 'cat'], ctx);
+    await registry.execute('imagine', ['a', 'cat'], ctx);
 
     expect(printed).toHaveLength(1);
     expect(printed[0]).toContain('Image generation failed:');
@@ -169,7 +169,7 @@ describe('/image — honest degradation', () => {
   });
 });
 
-describe('/image — success paths', () => {
+describe('/imagine — success paths', () => {
   test('persists an inline-bytes artifact and renders its id', async () => {
     const registry = new CommandRegistry();
     registerImageRuntimeCommands(registry);
@@ -178,7 +178,7 @@ describe('/image — success paths', () => {
     const artifactStore = makeFakeArtifactStore();
     const { ctx, printed } = makeCtx(mediaProviders, artifactStore);
 
-    await registry.execute('image', ['a', 'cat', 'wearing', 'a', 'hat'], ctx);
+    await registry.execute('imagine', ['a', 'cat', 'wearing', 'a', 'hat'], ctx);
 
     expect(provider.calls).toHaveLength(1);
     expect((provider.calls[0] as { prompt: string }).prompt).toBe('a cat wearing a hat');
@@ -203,7 +203,7 @@ describe('/image — success paths', () => {
     const artifactStore = makeFakeArtifactStore();
     const { ctx, printed } = makeCtx(mediaProviders, artifactStore);
 
-    await registry.execute('image', ['a', 'cat'], ctx);
+    await registry.execute('imagine', ['a', 'cat'], ctx);
 
     expect(artifactStore.created).toHaveLength(1);
     const stored = artifactStore.created[0]!;
@@ -234,7 +234,7 @@ describe('/image — success paths', () => {
     const artifactStore = makeFakeArtifactStore();
     const { ctx, printed } = makeCtx(mediaProviders, artifactStore);
 
-    await registry.execute('image', ['a', 'cat'], ctx);
+    await registry.execute('imagine', ['a', 'cat'], ctx);
 
     const text = printed.join('\n');
     expect(text).toContain('BytePlus produced video/mp4, not an image');
