@@ -207,18 +207,24 @@ export function registerShellCoreCommands(registry: CommandRegistry): void {
     description: 'Summarize conversation to free context window',
     async handler(_args, ctx) {
       const messages = ctx.session.conversationManager.getMessagesForLLM();
-      // contextWindow is not on CommandContext; preview shows message/token counts
-      // without the capacity-% clause (still honest; no fabricated value).
-      const contextWindow = 0;
+      // W5.4 (wo803): contextWindow IS reachable from CommandContext — the same
+      // call compactConversation() (runtime-services.ts) already makes to scale
+      // its own behaviour by window size. Previously hardcoded to 0 here, which
+      // silently suppressed buildCompactionPreview()'s capacity-% clause even
+      // though the builder has always supported it.
+      const contextWindow = ctx.provider.providerRegistry.getContextWindowForModel(
+        ctx.provider.providerRegistry.getCurrentModel(),
+      );
       const memStore = ctx.session.sessionMemoryStore;
       const pinnedMemoryCount = memStore ? memStore.list().length : 0;
       // Pre-compact preview: honest estimate, clearly labelled.
       const preview = buildCompactionPreview({ messages, contextWindow, pinnedMemoryCount, trigger: 'manual' });
       ctx.print(preview);
-      const event = await compactConversation(ctx);
-      if (event) {
-        // Post-compact notice: uses real CompactionEvent figures.
-        ctx.print(buildCompactionAfterNotice({ event, pinnedMemoryCount }));
+      const result = await compactConversation(ctx);
+      if (result) {
+        // Post-compact notice: uses real CompactionEvent figures, plus an
+        // out-of-band quality-score grade line when one was computed (W5.4/B28).
+        ctx.print(buildCompactionAfterNotice({ event: result.event, pinnedMemoryCount, qualityScore: result.qualityScore }));
       } else {
         ctx.print('[Context] Compact complete.');
       }

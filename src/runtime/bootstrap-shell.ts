@@ -279,6 +279,10 @@ export function createBootstrapShell(options: BootstrapShellOptions): BootstrapS
     sessionLineageTracker: services.sessionLineageTracker,
     wrfcController: services.wrfcController,
     workstreamEngine: services.workstreamCommands,
+    codeIndexStore: services.codeIndexStore,
+    // Wave 5 (wo805): expose the MAIN session's per-turn passive-injection ring
+    // so `/recall injections` (no agent id) renders it — see recall-review.ts.
+    getMainSessionTurnInjections: () => orchestrator.getTurnInjections(),
     changeTracker: services.sessionChangeTracker,
     planManager: services.planManager,
     adaptivePlanner: services.adaptivePlanner,

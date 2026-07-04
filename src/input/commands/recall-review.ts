@@ -1,6 +1,7 @@
 import type { CommandContext } from '../command-registry.ts';
 import { VALID_REVIEW_STATES, VALID_SCOPES, isValidReviewState, isValidScope } from './recall-shared.ts';
 import { getMemoryApi } from './recall-query.ts';
+import { buildMainSessionTurnInjectionsText, buildTurnInjectionsText } from '../../renderer/turn-injection.ts';
 
 export function handleRecallQueue(args: string[], context: CommandContext): void {
   const memory = getMemoryApi(context);
@@ -100,6 +101,40 @@ export function handleRecallExplain(args: string[], context: CommandContext): vo
     return;
   }
   context.print(explanation.prompt ?? '[recall] No explainable project knowledge was selected.');
+}
+
+/**
+ * W5.2 (wo803) — per-turn passive knowledge injection inspectability.
+ *
+ * With an explicit agent id, reads `AgentRecord.turnInjections` (Wave-5 wo801)
+ * via `context.ops.agentManager.exportState()` — the CommandContext-exposed
+ * `ShellAgentManagerService` doesn't have a `getStatus`/`list` pair, but
+ * `exportState()` returns the same full `AgentRecord[]` (it's what
+ * compactConversation() already uses for the same reason).
+ *
+ * With NO agent id (wo805 wiring), renders the MAIN interactive session's own
+ * per-turn injection ring — `Orchestrator.getTurnInjections()`, threaded onto
+ * the command context as `session.getMainSessionTurnInjections`. As of wo805 the
+ * main session DOES route through the passive-injection engine, so this is the
+ * honest main-session default (previously there was no record source, so the
+ * no-id path could only print a usage hint). When the accessor isn't wired
+ * (headless/test contexts built without an orchestrator), the main-session
+ * renderer's honest empty state stands in.
+ */
+export function handleRecallInjections(args: string[], context: CommandContext): void {
+  const agentId = args[0];
+  if (!agentId) {
+    const mainSessionInjections = context.session.getMainSessionTurnInjections?.() ?? [];
+    context.print(buildMainSessionTurnInjectionsText(mainSessionInjections));
+    return;
+  }
+  const records = context.ops.agentManager?.exportState() ?? [];
+  const record = records.find((candidate) => candidate.id === agentId);
+  if (!record) {
+    context.print(`[recall] Agent not found: ${agentId}`);
+    return;
+  }
+  context.print(buildTurnInjectionsText(agentId, record.turnInjections ?? []));
 }
 
 export function handleRecallPromote(args: string[], context: CommandContext): void {

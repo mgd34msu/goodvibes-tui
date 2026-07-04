@@ -396,14 +396,59 @@ describe('fleetStateGlyph / fleetStateTone / isTerminalProcessState / isRunningP
       'agent', 'wrfc-chain', 'wrfc-subtask', 'workflow', 'trigger', 'schedule', 'watcher', 'background-process',
       // Wave 4 (wo703): orchestration-engine kinds.
       'workstream', 'phase', 'work-item',
+      // Wave 5 (wo804): the repo source-tree code index.
+      'code-index',
     ] as const;
     for (const k of kinds) {
       expect(fleetKindTag(k).length).toBeGreaterThan(0);
     }
     // Compile-forced exhaustiveness lives in KIND_TAGS' Record<ProcessKind, string>
-    // itself; this just double-checks every one of those 11 kinds actually
+    // itself; this just double-checks every one of those 12 kinds actually
     // resolves to a real tag (not the '?? kind' fallback) at runtime too.
     expect(new Set(kinds.map(fleetKindTag)).size).toBe(kinds.length);
+  });
+
+  test("fleetKindTag('code-index') is a distinct, short tag (Wave-5 wo804)", () => {
+    expect(fleetKindTag('code-index')).toBe('index');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Wave 5 (wo804) — 'code-index' is a leaf node, not a rollup: it has no
+// children in the flat list, reports no usage/cost (an index build has no
+// LLM turn), but DOES count toward runningCount while building — it is a
+// real, distinct unit of work, not an arithmetic sum of other rows.
+// ---------------------------------------------------------------------------
+
+describe("buildFleetSnapshot — 'code-index' leaf node (wo804)", () => {
+  test('a building code-index node counts toward runningCount and contributes no cost/tokens (it reports none)', () => {
+    const node = makeNode({
+      id: 'code-index:main',
+      kind: 'code-index',
+      state: 'executing-tool',
+      costState: 'unpriced',
+      costUsd: null,
+      usage: undefined,
+      capabilities: { interruptible: false, killable: false, pausable: false, steerable: false },
+    });
+    const snapshot = buildFleetSnapshot([node]);
+    expect(snapshot.runningCount).toBe(1);
+    expect(snapshot.totalCost).toBeNull();
+    expect(snapshot.totalTokens).toBeNull();
+  });
+
+  test('an idle/done code-index node does not count toward runningCount', () => {
+    const node = makeNode({ id: 'code-index:main', kind: 'code-index', state: 'idle' });
+    const snapshot = buildFleetSnapshot([node]);
+    expect(snapshot.runningCount).toBe(0);
+  });
+
+  test('renders as a standalone root row with no children (no tree-nesting code needed)', () => {
+    const node = makeNode({ id: 'code-index:main', kind: 'code-index', state: 'done' });
+    const rows = buildFleetRows([node]);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.depth).toBe(0);
+    expect(rows[0]!.hasChildren).toBe(false);
   });
 });
 

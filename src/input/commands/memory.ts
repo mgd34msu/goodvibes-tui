@@ -17,7 +17,7 @@ import type { SlashCommand, CommandContext } from '../command-registry.ts';
 import { handleRecallAdd, handleRecallCapture } from './recall-capture.ts';
 import { handleRecallExport, handleRecallHandoffExport, handleRecallHandoffImport, handleRecallHandoffInspect, handleRecallImport } from './recall-bundle.ts';
 import { handleRecallGet, handleRecallLink, handleRecallList, handleRecallRemove, handleRecallSearch, handleRecallVector } from './recall-query.ts';
-import { handleRecallExplain, handleRecallPromote, handleRecallQueue, handleRecallReview } from './recall-review.ts';
+import { handleRecallExplain, handleRecallInjections, handleRecallPromote, handleRecallQueue, handleRecallReview } from './recall-review.ts';
 import { VALID_CLASSES, VALID_REVIEW_STATES, VALID_SCOPES } from './recall-shared.ts';
 
 // ── Top-level command ─────────────────────────────────────────────────────────
@@ -74,6 +74,10 @@ export const recallCommand: SlashCommand = {
 
       case 'explain':
         handleRecallExplain(rest, context);
+        break;
+
+      case 'injections':
+        handleRecallInjections(rest, context);
         break;
 
       case 'promote':
@@ -134,6 +138,7 @@ export const recallCommand: SlashCommand = {
           '  stale <id> [reason...]                          — Mark a record stale with an operator reason',
           '  contradict <id> [reason...]                     — Mark a record contradicted with an operator reason',
           '  explain <task...> [--scope <path> ...]         — Show the knowledge records that would be injected for a task',
+          '  injections [agentId]                           — Show per-turn passive knowledge injection records (Wave-5); no id shows the main session, an id shows that spawned agent',
           '  promote <id> <scope>                           — Promote a memory record into session|project|team scope',
           '  export <path> [--scope <scope>] [--cls <class>] — Export a durable knowledge bundle',
           '  import <path>                                  — Import a durable knowledge bundle',

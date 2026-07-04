@@ -269,6 +269,29 @@ function renderLedgerEntry(width: number, entry: Record<string, unknown>, palett
         { text: `${status}${formatLedgerDuration(entry['durationMs'])}`, fg: tone },
       ]);
     }
+    // W5.2 (wo803) — Wave-5 wo801 per-turn passive knowledge injection
+    // records, appended to this same JSONL ledger as
+    // `{type:'knowledge_injection', turn, ...record}` (orchestrator-runner.ts).
+    // Without this case these fell through to the generic 'event' default
+    // below (just the bare type name) — this renders the honest outcome
+    // (what was injected, or why nothing was) instead.
+    case 'knowledge_injection': {
+      const turn = typeof entry['turn'] === 'number' ? entry['turn'] : '?';
+      const injectedIds = Array.isArray(entry['injectedIds']) ? entry['injectedIds'] : [];
+      const tokenCost = typeof entry['tokenCost'] === 'number' ? entry['tokenCost'] : 0;
+      const backendTag = entry['embeddingBackend'] === 'fallback-lexical' ? ' [lexical fallback]' : '';
+      if (injectedIds.length === 0) {
+        const reason = typeof entry['reason'] === 'string'
+          ? entry['reason']
+          : 'nothing cleared the relevance floor';
+        return renderConversationEventLine(width, { marker: '◇', markerFg: palette.dim, label: 'knowledge', labelFg: palette.dim }, [
+          { text: `turn ${turn} · nothing injected — ${reason}${backendTag}`, fg: palette.dim },
+        ]);
+      }
+      return renderConversationEventLine(width, { marker: '◇', markerFg: palette.info, label: 'knowledge', labelFg: palette.info }, [
+        { text: `turn ${turn} · injected ${injectedIds.length} (~${tokenCost} tok)${backendTag}`, fg: palette.value },
+      ]);
+    }
     default:
       return renderConversationEventLine(width, { marker: '·', markerFg: palette.dim, label: 'event', labelFg: palette.dim }, [
         { text: type, fg: palette.dim },
