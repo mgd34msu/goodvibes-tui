@@ -192,7 +192,7 @@ describe('wrfc-persistence', () => {
     expect(persistence.interruptedChains[0]!.id).toBe(chain1.id);
   });
 
-  test('rehydrate prunes terminal chains from snapshot on disk', () => {
+  test('rehydrate RETAINS terminal chains on disk as history instead of pruning them', () => {
     const activeChain = makeChain({ state: 'engineering' });
     const terminalChain = makeChain({ state: 'passed' });
 
@@ -209,8 +209,14 @@ describe('wrfc-persistence', () => {
     persistence.rehydrate();
 
     const snap = readSnapshotFile(snapshotPath);
-    expect(snap.chains).toHaveLength(1);
-    expect(snap.chains[0]!.id).toBe(activeChain.id);
+    const ids = snap.chains.map((c) => c.id);
+    expect(ids).toContain(activeChain.id);
+    expect(ids).toContain(terminalChain.id);
+    // knownChains exposes both the (re-imported) interrupted chain and the
+    // retained terminal history, for consumers like the boot resume notice.
+    const knownIds = persistence.knownChains.map((c) => c.id);
+    expect(knownIds).toContain(activeChain.id);
+    expect(knownIds).toContain(terminalChain.id);
   });
 
   test('rehydrate with no snapshot file is a no-op', () => {
@@ -272,9 +278,9 @@ describe('wrfc-persistence', () => {
     expect(existsSync(`${snapshotPath}.unrecognized`)).toBe(true);
   });
 
-  // ── terminal chain pruning ──────────────────────────────────────────
+  // ── terminal chain history retention ─────────────────────────────────
 
-  test('all-terminal snapshot results in empty chains after rehydrate', () => {
+  test('all-terminal snapshot: no interrupted-chain messages, but both chains are retained as history', () => {
     const failed = makeChain({ state: 'failed' });
     const passed = makeChain({ state: 'passed' });
 
@@ -290,9 +296,125 @@ describe('wrfc-persistence', () => {
     });
     persistence.rehydrate();
 
-    // No messages for terminal chains
+    // No "interrupted by a restart" messages for terminal chains.
     expect(routerMessages).toHaveLength(0);
     expect(persistence.interruptedChains).toHaveLength(0);
+    // But they are not erased — both survive as retained history.
+    const knownIds = persistence.knownChains.map((c) => c.id);
+    expect(knownIds).toContain(failed.id);
+    expect(knownIds).toContain(passed.id);
+  });
+
+  test('killing a chain (mid-session, no restart) retains it as terminal even after it ages out of listChains()', async () => {
+    const chain = makeChain({ state: 'engineering' });
+    chains = [chain];
+
+    const persistence = createWrfcPersistence({
+      snapshotPath,
+      getSystemMessageRouter: () => null,
+      controller: { listChains: () => chains },
+    });
+    const unsubs = persistence.attach(runtimeBus);
+
+    // The chain is "killed" — WrfcController transitions it to a terminal
+    // state and emits WORKFLOW_CHAIN_FAILED (cancelChain's actual signal).
+    chain.state = 'failed';
+    chain.completedAt = Date.now();
+    emitWorkflowEvent(runtimeBus, 'WORKFLOW_CHAIN_FAILED', chain.id);
+    await flushTimers();
+
+    let snap = readSnapshotFile(snapshotPath);
+    expect(snap.chains.map((c) => c.id)).toContain(chain.id);
+
+    // Simulate WrfcController's own 60s in-memory cleanup (scheduleChainCleanup)
+    // dropping the now-terminal chain from listChains() entirely — this is the
+    // exact mechanism that used to make the on-disk file forget a killed chain.
+    chains = [];
+    emitWorkflowEvent(runtimeBus, 'WORKFLOW_STATE_CHANGED', 'unrelated-chain-id');
+    await flushTimers();
+
+    snap = readSnapshotFile(snapshotPath);
+    expect(snap.chains.map((c) => c.id)).toContain(chain.id);
+    expect(snap.chains.find((c) => c.id === chain.id)?.state).toBe('failed');
+
+    for (const unsub of unsubs) unsub();
+  });
+
+  test('a reaped zombie chain is not re-imported on the NEXT restart (already terminal, never re-enters candidateInterrupted)', () => {
+    const interruptedChain = makeChain({ state: 'engineering' });
+    writeFileSync(
+      snapshotPath,
+      JSON.stringify({ version: 1, writtenAt: Date.now(), chains: [interruptedChain] }),
+    );
+
+    let importCalls = 0;
+    const persistence = createWrfcPersistence({
+      snapshotPath,
+      getSystemMessageRouter: () => null,
+      controller: {
+        listChains: () => [],
+        // Simulate WrfcController's zombie-reap: mutate the chain to terminal
+        // in place, exactly like reapZombieChain does.
+        importChain: (chain) => {
+          importCalls++;
+          chain.state = 'failed';
+          chain.completedAt = Date.now();
+          chain.error = 'zombie chain reaped at rehydrate: no member agent survived the restart';
+          return true;
+        },
+      },
+    });
+    persistence.rehydrate();
+
+    expect(importCalls).toBe(1);
+    expect(persistence.interruptedChains).toHaveLength(0);
+    expect(persistence.knownChains.map((c) => c.id)).toContain(interruptedChain.id);
+
+    // Second process start: read back what was actually written to disk.
+    const importCallsAfterFirstRestart = importCalls;
+    const persistence2 = createWrfcPersistence({
+      snapshotPath,
+      getSystemMessageRouter: () => null,
+      controller: {
+        listChains: () => [],
+        importChain: () => { importCalls++; return true; },
+      },
+    });
+    persistence2.rehydrate();
+
+    // The reaped chain is already terminal on disk — it must never be handed
+    // to importChain again (it is history, not a resurrection candidate).
+    expect(importCalls).toBe(importCallsAfterFirstRestart);
+    expect(persistence2.interruptedChains).toHaveLength(0);
+    expect(persistence2.knownChains.map((c) => c.id)).toContain(interruptedChain.id);
+  });
+
+  test('terminal history is bounded to the most recent K=20, oldest pruned first', () => {
+    const now = Date.now();
+    const terminalChains = Array.from({ length: 25 }, (_, i) =>
+      makeChain({ state: 'passed', completedAt: now - i * 1000 }), // i=0 is newest
+    );
+
+    writeFileSync(
+      snapshotPath,
+      JSON.stringify({ version: 1, writtenAt: now, chains: terminalChains }),
+    );
+
+    const persistence = createWrfcPersistence({
+      snapshotPath,
+      getSystemMessageRouter: () => null,
+      controller: { listChains: () => [] },
+    });
+    persistence.rehydrate();
+
+    expect(persistence.knownChains).toHaveLength(20);
+    const keptIds = new Set(persistence.knownChains.map((c) => c.id));
+    // The 20 most recent (i=0..19) are kept; the 5 oldest (i=20..24) are pruned.
+    for (let i = 0; i < 20; i++) expect(keptIds.has(terminalChains[i]!.id)).toBe(true);
+    for (let i = 20; i < 25; i++) expect(keptIds.has(terminalChains[i]!.id)).toBe(false);
+
+    const snap = readSnapshotFile(snapshotPath);
+    expect(snap.chains).toHaveLength(20);
   });
 
   test('snapshot not rewritten when no pruning is needed (all non-terminal)', () => {

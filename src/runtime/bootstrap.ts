@@ -42,6 +42,7 @@ import type { UiRuntimeServices } from './ui-services.ts';
 import { createDeferredStartupCoordinator } from '@/runtime/index.ts';
 import { initializeBootstrapCore } from './bootstrap-core.ts';
 import { createBootstrapShell } from './bootstrap-shell.ts';
+import { announceResumeState } from './resume-notice.ts';
 import { buildSharedOrchestratorCoreServices } from './orchestrator-core-services.ts';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 import { DaemonServer } from '@pellux/goodvibes-sdk/platform/daemon';
@@ -287,6 +288,25 @@ export async function bootstrapRuntime(
   wrfcPersistence.rehydrate();
   const commandRegistry = shell.commandRegistry;
   const commandContext = shell.commandContext;
+  // Boot resume notice (UX-D item 1): after rehydrate() so chain history is
+  // ready, before the operator can type anything. Fire-and-forget — the
+  // checkpoint-count lookup is async (WorkspaceCheckpointManager.list() awaits
+  // its own init()), and this must not block the rest of bootstrap the way
+  // main.ts's `void workspaceCheckpointManager.init().catch(() => {})`
+  // deliberately doesn't either. Local file I/O only; resolves well before a
+  // human can react to the first rendered frame.
+  void announceResumeState({
+    workingDirectory: services.workingDirectory,
+    homeDirectory: services.homeDirectory,
+    surfaceRoot: 'tui',
+    sessionManager: services.sessionManager,
+    checkpointManager: services.workspaceCheckpointManager,
+    chainHistory: wrfcPersistence.knownChains,
+    memoryAvailable: Boolean(commandContext.clients?.knowledgeApi?.memory),
+    router: systemMessageRouter,
+  }).catch(() => {
+    // Best-effort — never let the resume notice block or crash boot.
+  });
   const gitStatusProvider = shell.gitStatusProvider;
   const inputHistory = shell.inputHistory;
   const lastGitInfoRef = shell.lastGitInfoRef;
