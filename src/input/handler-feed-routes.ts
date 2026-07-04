@@ -31,14 +31,21 @@ export type PanelFocusRouteState = {
   cyclePanelTab: (direction: 'next' | 'prev') => void;
   onPanelInputConsumed?: (activePanel: import('../panels/types.ts').Panel | null, key: string) => void;
   /**
-   * True when the tokens produced by the current feed() call carry more than
-   * one printable character total (a bracketed paste, or several 1-char text
-   * tokens from a fast-typed burst in one stdin chunk). A burst can never be
-   * a deliberate single-key panel hotkey, so it must not be exploded into
-   * per-char activePanel.handleInput(ch) calls — see the text-token branch
-   * below.
+   * True when THIS token is a paste: a single 'text' token whose value holds
+   * more than one character. The SDK tokenizer emits a bracketed paste
+   * (\x1b[?2004h, enabled in main.ts terminal init) as exactly one such token,
+   * while discrete keystrokes — even several batched into one feed() by render-
+   * tick latency — arrive as separate 1-char tokens. A paste is never a
+   * deliberate single-key panel hotkey, so it is forwarded to the panel's text
+   * capture if it has one, else dropped with a hint — never a silent focus
+   * flip. See the text-token branch below.
    */
-  isPrintableBurst: boolean;
+  isPasteToken: boolean;
+  /**
+   * One-shot hint emitted when a paste is dropped because the focused panel has
+   * no text capture (Invariant A: focus must not silently flip to the composer).
+   */
+  onPasteDropped?: (panelName: string) => void;
   /**
    * True while a turn is actively streaming; gates Escape's cancel-first
    * precedence (I6.1) ahead of the panel's own two-stage escape contract
@@ -149,18 +156,22 @@ export function handlePanelFocusToken(state: PanelFocusRouteState, token: InputT
 
   if (token.type === 'text' && token.value) {
     const activePanel = state.panelManager.getActive();
-    // A burst (paste or several fast-typed chars in one stdin chunk) is never
-    // a deliberate single-key panel hotkey. Eating it silently as per-char
-    // hotkeys leaves the user with no echo and no error, looking exactly
-    // like dead keystrokes. Unless the active panel has its own text-capture
-    // buffer open (a `/`-search or draft-answer field that deliberately
-    // wants every character, burst or not — see isCapturingTextBurst), unfocus
-    // the panel and let the token fall through to the prompt route instead,
-    // same as it would from an unfocused panel.
-    if (state.isPrintableBurst && !activePanel?.isCapturingTextBurst?.()) {
-      panelFocused = false;
+    // Invariant A/B (W6.2). A paste (isPasteToken: one multi-char text token)
+    // into a focused panel that owns a text capture — a `/`-search or steer-
+    // draft field that deliberately wants every character (isCapturingTextBurst)
+    // — is forwarded verbatim below. A paste into any other focused panel is
+    // DROPPED with a one-shot hint; it is never exploded into per-char hotkeys
+    // (silent dead keystrokes) and, crucially, never silently flips focus to
+    // the composer (the old per-feed char-sum burst guard did exactly that, and
+    // also misfired on two quick nav keystrokes batched into one feed). Focus
+    // moves only on an explicit transfer verb — Tab, Ctrl+G, Esc, panel
+    // open/close, indicator Enter — so panelFocused is left unchanged here.
+    // Discrete 1-char keystroke tokens are not pastes and fall straight through
+    // to the per-char dispatch below, one at a time.
+    if (state.isPasteToken && !activePanel?.isCapturingTextBurst?.()) {
+      state.onPasteDropped?.(activePanel?.name ?? 'the panel');
       state.requestRender();
-      return { handled: false, panelFocused };
+      return { handled: true, panelFocused };
     }
     if (activePanel?.handleInput) {
       for (const ch of token.value) {
