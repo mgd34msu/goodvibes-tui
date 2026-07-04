@@ -133,7 +133,7 @@ const USAGE = 'Usage:\n'
 export function registerCodebaseRuntimeCommands(registry: CommandRegistry): void {
   registry.register({
     name: 'codebase',
-    description: 'Repo source-tree code index — build, inspect, and search (Wave-5 W5.3 Stage A)',
+    description: 'Repo source-tree code index — build, inspect, and search',
     usage: 'build | status | search <query...> [--limit n]',
     argsHint: 'build | status | search <query>',
     handler(args: string[], ctx: CommandContext) {

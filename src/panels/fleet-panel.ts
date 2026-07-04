@@ -662,10 +662,10 @@ export class FleetPanel extends ScrollableListPanel<FleetTreeRow> {
       [' activity ', C.label],
       [truncateDisplay(activityText, Math.max(0, width - 11)), C.dim],
     ]);
-    // Wave 3 hook: approval history attaches here once session tabs land.
+    // Approval history attaches here once session tabs land.
     const line4 = buildPanelLine(width, [
       [' approvals ', C.label],
-      ['(Wave 3)', C.dim],
+      ['—', C.dim],
     ]);
     return [line1, line2, line3, line4];
   }
