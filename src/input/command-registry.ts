@@ -122,7 +122,7 @@ export interface CommandShellUiOpeners {
   openSelection?: (
     title: string,
     items: SelectionItem[],
-    opts: { preSelectId?: string; allowSearch?: boolean; customActions?: Map<string, SelectionAction> } | undefined,
+    opts: { preSelectId?: string; allowSearch?: boolean; customActions?: Map<string, SelectionAction>; primaryVerbLabel?: string } | undefined,
     callback: (result: SelectionResult | null) => void,
   ) => void;
   openSettingsModal?: (target?: string) => void;
@@ -138,7 +138,15 @@ export interface CommandShellUiOpeners {
   openShortcutsOverlay?: () => void;
   getScrollTop?: () => number;
   openPanelPicker?: () => void;
-  showPanel?: (panelId: string, pane?: 'top' | 'bottom') => void;
+  /**
+   * Open (and optionally focus) a panel. UX-C focus rule: the command path is
+   * "the user is mid-command-flow" — opening a panel this way leaves keyboard
+   * focus in the composer by default. Pass `{ focus: true }` for a caller that
+   * genuinely wants to grab focus (chords use panelManager.focusPanels()
+   * directly instead of this method, so no current call site needs it — but
+   * the intent is explicit rather than implicit here).
+   */
+  showPanel?: (panelId: string, pane?: 'top' | 'bottom', opts?: { focus?: boolean }) => void;
   focusPanels?: () => void;
   focusPrompt?: () => void;
   openOpsPanel?: () => void;
@@ -280,6 +288,23 @@ export interface CommandContext
 }
 
 /**
+ * UX-C palette curation (item 4): the "common" first tier the slash-command
+ * autocomplete dropdown shows before the alphabetical rest when it opens with
+ * no filter typed yet (bare '/') — the "132-command palette unranked"
+ * evaluator finding. Typed filtering (any non-empty query) is completely
+ * unaffected — fuzzyMatch still searches every registered command exactly as
+ * before; this only reorders the empty-query case. Curated for breadth across
+ * the product's main workflows rather than raw usage frequency: help/config
+ * (orientation), panel/model (workspace + provider), recall/codebase/search
+ * (knowledge), workstream/checkpoint (control-plane), imagine (generation),
+ * sessions (continuity), quit (exit).
+ */
+export const COMMON_COMMAND_NAMES: ReadonlySet<string> = new Set([
+  'help', 'config', 'panel', 'model', 'recall', 'codebase',
+  'workstream', 'checkpoint', 'search', 'imagine', 'sessions', 'quit',
+]);
+
+/**
  * SlashCommand - A single slash command definition.
  */
 export interface SlashCommand {
@@ -381,7 +406,12 @@ export class CommandRegistry {
       }
 
       if (bestScore > 0 || q === '') {
-        results.push({ command: cmd, score: q === '' ? 1 : bestScore });
+        // UX-C: with no query yet, rank the curated common tier (score 2)
+        // ahead of everything else (score 1) — the tie-break below then sorts
+        // each tier alphabetically, so the result is "common tier, then the
+        // alphabetical rest" rather than one flat alphabetical list.
+        const score = q === '' ? (COMMON_COMMAND_NAMES.has(cmd.name) ? 2 : 1) : bestScore;
+        results.push({ command: cmd, score });
       }
     }
 

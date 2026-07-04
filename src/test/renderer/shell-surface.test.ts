@@ -270,6 +270,70 @@ describe('shell surface', () => {
     expect(result.lines[1]![4]!.bg).toBe('#2a2a2a');
   });
 
+  // UX-C item 1c: an unfocused, EMPTY composer names the state and the way
+  // back — the dimmed fill alone told you nothing was wrong, but not why
+  // keystrokes weren't landing there.
+  test('an unfocused, empty composer shows the "panel focused — Esc returns" hint', () => {
+    const unfocusedEmpty = buildShellFooter({
+      width: 80,
+      promptText: '',
+      promptLineCount: 1,
+      usage: { up: 0, down: 0 },
+      showExitNotice: false,
+      lastCopyTime: 0,
+      model: 'gpt-test',
+      toolCount: 3,
+      workingDir: '/tmp/demo',
+      provider: 'openai',
+      contextWindow: 0,
+      runningAgentCount: 1,
+      runningProcessCount: 0,
+      indicatorFocused: false,
+      panelFocused: true,
+    });
+    expect(lineToString(unfocusedEmpty.lines[1])).toContain('panel focused — Esc returns');
+  });
+
+  test('the hint never appears when the composer is focused, or when it holds real (non-empty) text', () => {
+    const focusedEmpty = buildShellFooter({
+      width: 80,
+      promptText: '',
+      promptLineCount: 1,
+      usage: { up: 0, down: 0 },
+      showExitNotice: false,
+      lastCopyTime: 0,
+      model: 'gpt-test',
+      toolCount: 3,
+      workingDir: '/tmp/demo',
+      provider: 'openai',
+      contextWindow: 0,
+      runningAgentCount: 0,
+      runningProcessCount: 0,
+      indicatorFocused: false,
+      panelFocused: false,
+    });
+    expect(lineToString(focusedEmpty.lines[1])).not.toContain('panel focused');
+
+    const unfocusedWithLeftoverText = buildShellFooter({
+      width: 80,
+      promptText: 'hello',
+      promptLineCount: 1,
+      usage: { up: 0, down: 0 },
+      showExitNotice: false,
+      lastCopyTime: 0,
+      model: 'gpt-test',
+      toolCount: 3,
+      workingDir: '/tmp/demo',
+      provider: 'openai',
+      contextWindow: 0,
+      runningAgentCount: 0,
+      runningProcessCount: 0,
+      indicatorFocused: false,
+      panelFocused: true,
+    });
+    expect(lineToString(unfocusedWithLeftoverText.lines[1])).not.toContain('panel focused');
+  });
+
   test('prompt box borders match the inactive prompt fill when the indicator is focused', () => {
     const result = buildShellFooter({
       width: 80,

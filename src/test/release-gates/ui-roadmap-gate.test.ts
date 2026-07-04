@@ -41,7 +41,12 @@ describe('UI roadmap gate', () => {
     expect(conversation.prevTranscriptEventLine(999, 'tool_result')).toBe(toolLine);
   });
 
-  test('opens and focuses panels through the shared shell opener path', () => {
+  // UX-C item 1a: showPanel is the command path (every registered caller is a
+  // slash command) — it now opens/shows the panel but leaves keyboard focus
+  // in the composer by default ("the user is mid-command-flow"). A chord
+  // (F2/Ctrl+O/Ctrl+P/Alt+N) still grabs focus via panelManager.focusPanels()
+  // directly, unaffected by this test.
+  test('opens and shows panels through the shared shell opener path, leaving composer focus untouched by default', () => {
     const testManagers = createTestManagers();
     const input = {
       panelFocused: false,
@@ -95,10 +100,15 @@ describe('UI roadmap gate', () => {
     });
 
     (commandContext as { showPanel?: (panelId: string, pane?: 'top' | 'bottom') => void }).showPanel?.('docs');
-    // Focus ownership lives in PanelManager now: showPanel drives focusPanels()
-    // rather than mutating a parallel input.panelFocused flag.
-    expect(panelManager.getFocusTarget()).toBe('panel');
+    // UX-C: the command path no longer auto-focuses (focus stays wherever it
+    // already was — the composer, since you can only type a command there).
+    expect(panelManager.getFocusTarget()).toBe('prompt');
     expect(visible).toBe(true);
+
+    // The escape hatch: a caller that explicitly asks for focus still gets it.
+    (commandContext as { showPanel?: (panelId: string, pane?: 'top' | 'bottom', opts?: { focus?: boolean }) => void })
+      .showPanel?.('docs', undefined, { focus: true });
+    expect(panelManager.getFocusTarget()).toBe('panel');
   });
 
   test('keeps overlays on shared width bands for narrow, medium, and wide terminals', () => {

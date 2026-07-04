@@ -399,6 +399,7 @@ export class InputHandler implements InputHandlerLike {
       preSelectId?: string;
       allowSearch?: boolean;
       customActions?: Map<string, SelectionAction>;
+      primaryVerbLabel?: string;
     } | undefined,
     callback: SelectionModalCallback,
   ): void {

@@ -88,7 +88,7 @@ export const ACTION_DESCRIPTIONS: Record<KeyAction, string> = {
   'panel-tab-7':           'Jump to workspace panel tab 7',
   'panel-tab-8':           'Jump to workspace panel tab 8',
   'panel-tab-9':           'Jump to workspace panel tab 9',
-  'panel-ops':             'Open and focus the Fleet panel',
+  'panel-ops':             'Open, focus, or close the Fleet panel (toggle)',
   'panel-focus-toggle':    'Switch keyboard focus between top and bottom pane',
   'history-search':        'Reverse input history search',
   'search':                'Toggle conversation search',
@@ -140,10 +140,11 @@ export const DEFAULT_KEYBINDINGS: Record<KeyAction, KeyCombo[]> = {
   'panel-tab-7':           [{ key: '7', alt: true }],
   'panel-tab-8':           [{ key: '8', alt: true }],
   'panel-tab-9':           [{ key: '9', alt: true }],
-  // Ctrl+O: open and focus the Fleet panel. The former Ops Control panel was
-  // retired to an 'ops-control' -> 'fleet' alias (W6.1); the binding is KEPT
-  // (repointed, not removed) so the Ctrl+O muscle memory still lands somewhere
-  // useful. Routed globally in handleGlobalShortcutToken.
+  // Ctrl+O: TOGGLE the Fleet panel (open+focus / bring-to-front+focus / close
+  // — see toggleFleetPanel in handler-shortcuts.ts, UX-C). The former Ops
+  // Control panel was retired to an 'ops-control' -> 'fleet' alias (W6.1); the
+  // binding is KEPT (repointed, not removed) so the Ctrl+O muscle memory still
+  // lands somewhere useful. Routed globally in handleGlobalShortcutToken.
   'panel-ops':             [{ key: 'o', ctrl: true }],
   // Ctrl+G: toggle keyboard focus between the top and bottom panes. Ctrl+G is
   // otherwise unbound in the default table.

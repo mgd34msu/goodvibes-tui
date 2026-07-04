@@ -53,7 +53,7 @@ import {
   type SteerBadge,
 } from './fleet-tabs.ts';
 import { liveSteerableLabels, reconcileSteerBadges as reconcileSteerBadgesPure, renderSteerBadgeLine, steerBadgeGlyph, steerBadgeTone, steerRefusalMessage } from './fleet-steer.ts';
-import { FleetStopTracker, fleetStateDisplay, toggleFleetPause, buildFleetTreeHints } from './fleet-stop.ts';
+import { FleetStopTracker, fleetStateDisplay, toggleFleetPause, buildFleetTreeHints, countDescendantStats } from './fleet-stop.ts';
 import { parseAgentLedger, renderFleetAgentTranscript, renderFleetChainSummary, renderFleetLedgerFallback, renderFleetTranscriptLoading } from './fleet-transcript.ts';
 import { renderFleetTabStrip } from '../renderer/fleet-tab-strip.ts';
 
@@ -373,31 +373,6 @@ export class FleetPanel extends ScrollableListPanel<FleetTreeRow> {
     if (changed) this.markDirty();
   }
 
-  /** Count of descendants of `nodeId` (in the current snapshot) that report `capabilities.killable` — the Wave-3 K-confirm child count (Part C7). */
-  private countKillableDescendants(nodeId: string): number {
-    const rows = this.getItems();
-    const byParent = new Map<string, string[]>();
-    for (const row of rows) {
-      if (!row.node.parentId) continue;
-      const siblings = byParent.get(row.node.parentId) ?? [];
-      siblings.push(row.node.id);
-      byParent.set(row.node.parentId, siblings);
-    }
-    const byId = new Map(rows.map((row) => [row.node.id, row] as const));
-    let count = 0;
-    const stack = [...(byParent.get(nodeId) ?? [])];
-    const seen = new Set<string>();
-    while (stack.length > 0) {
-      const id = stack.pop()!;
-      if (seen.has(id)) continue;
-      seen.add(id);
-      const row = byId.get(id);
-      if (row?.node.capabilities.killable) count++;
-      for (const child of byParent.get(id) ?? []) stack.push(child);
-    }
-    return count;
-  }
-
   /** Kick off (once) the async ledger-fallback load for a tab whose conversation snapshot is unavailable. */
   private ensureLedgerLoaded(tab: FleetTab): void {
     if (tab.ledgerLoadStarted) return;
@@ -479,8 +454,8 @@ export class FleetPanel extends ScrollableListPanel<FleetTreeRow> {
       }
       const node = selected.node;
       const shortId = node.id.length > 8 ? node.id.slice(-8) : node.id;
-      const childCount = this.countKillableDescendants(node.id);
-      const suffix = childCount > 0 ? ` (+${childCount} child${childCount === 1 ? '' : 'ren'})` : '';
+      const stats = countDescendantStats(this.getItems(), node.id);
+      const suffix = stats.total > 0 ? ` (+${stats.total} descendant${stats.total === 1 ? '' : 's'}, ${stats.active} active)` : '';
       this.confirmOverlay.arm({
         id: node.id,
         label: `${node.kind} ${shortId}${suffix}`,
