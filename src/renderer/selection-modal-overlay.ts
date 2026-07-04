@@ -189,7 +189,12 @@ export function renderSelectionModalOverlay(
 
   const footerLine = createOverlayContentLine(width, layout, BORDER_FG, DEFAULT_OVERLAY_PALETTE.sectionBg);
   const selectedItem = modal.getSelected();
-  const primaryVerb = selectedItem?.primaryAction === 'toggle'
+  // UX-C vocab unification: a caller-supplied primaryVerbLabel (e.g. /help's
+  // "Run", matching the slash-command palette) wins over the generic
+  // per-primaryAction default.
+  const primaryVerb = modal.primaryVerbLabel
+    ? `[Enter] ${modal.primaryVerbLabel}`
+    : selectedItem?.primaryAction === 'toggle'
     ? '[Enter] Toggle'
     : selectedItem?.primaryAction === 'edit'
     ? '[Enter] Edit'
