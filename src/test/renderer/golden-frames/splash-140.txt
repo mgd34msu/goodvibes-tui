@@ -14,7 +14,7 @@
 |                                                          /workspace/goodvibes-tui                                                          |
 |                                        ↩ resume last session — /sessions resume gv-20260612-a1b2c3                                         |
 |                                                                                                                                            |
-|                                                 Ctrl+P panels  /  ? help  /  F2 processes                                                  |
+|                                                   Ctrl+P panels  /  ? help  /  F2 fleet                                                    |
 |                                                                                                                                            |
 |                                                                                                                                            |
 |                                                                                                                                            |
@@ -2749,8 +2749,6 @@
 13 117 bold=1
 13 118 fg=206;3;255
 13 118 bold=1
-15 25 fg=244
-15 25 dim=1
 15 26 fg=244
 15 26 dim=1
 15 27 fg=244
@@ -2927,5 +2925,3 @@
 15 112 dim=1
 15 113 fg=244
 15 113 dim=1
-15 114 fg=244
-15 114 dim=1
