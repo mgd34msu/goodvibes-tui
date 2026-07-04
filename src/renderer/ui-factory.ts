@@ -162,7 +162,7 @@ export class UIFactory {
   public static createFooter(
     width: number,
     prompt: string,
-    usage: { up: number; down: number; max?: number },
+    usage: { up: number; down: number; max?: number; fleetCostUsd?: number | null },
     showExitNotice: boolean,
     lastCopyTime: number,
     model?: string,
@@ -329,7 +329,7 @@ export class UIFactory {
     const isRecentlyCopied = Date.now() - lastCopyTime < 2000;
     // Token usage line + running ~$ cost estimate (derived from the usage
     // object and the active model via cost-utils).
-    const u = usage as { input?: number; output?: number; cacheRead?: number; cacheWrite?: number; up?: number; down?: number };
+    const u = usage as { input?: number; output?: number; cacheRead?: number; cacheWrite?: number; up?: number; down?: number; fleetCostUsd?: number | null };
     const inp = u.input ?? u.up ?? 0;
     const out = u.output ?? u.down ?? 0;
     const cr = u.cacheRead ?? 0;
@@ -340,11 +340,25 @@ export class UIFactory {
     // match the existing "no priceable data" convention used elsewhere
     // (cockpit-panel formatCost, agent-inspector-shared) — the footer has no
     // room for a longer marker before truncation kicks in.
-    const costSegment = model
+    const mainCostStr = model
       ? isModelPriced(model)
-        ? `${tokenSep}~$${fmtCost(calcSessionCost(inp, out, cr, cw, model))}`
-        : `${tokenSep}~n/a`
-      : '';
+        ? `~$${fmtCost(calcSessionCost(inp, out, cr, cw, model))}`
+        : '~n/a'
+      : null;
+    // Honest total = your main session + the delegated fleet. We show a SPLIT
+    // ("you ~$X · fleet ~$Y") rather than one summed figure: the two costs are
+    // tracked and attributed to different actors, and the split directly answers
+    // "where did the money go" — the exact confusion in the eval where the footer
+    // showed only the main session (~$0.046) while the fleet cost ~10x more
+    // ($0.446). The fleet segment appears only when there is a real fleet cost, so
+    // the idle single-session footer is unchanged.
+    const fleetCost = u.fleetCostUsd;
+    const hasFleetCost = typeof fleetCost === 'number' && fleetCost > 0;
+    const costSegment = hasFleetCost
+      ? `${tokenSep}you ${mainCostStr ?? '~n/a'} · fleet ~$${fmtCost(fleetCost)}`
+      : mainCostStr
+        ? `${tokenSep}${mainCostStr}`
+        : '';
     const tokenLine = ` Token Usage [ Input: ${fmtNum(inp)}${tokenSep}Output: ${fmtNum(out)}${tokenSep}Cache Read: ${fmtNum(cr)}${tokenSep}Cache Write: ${fmtNum(cw)}${tokenSep}Total: ${fmtNum(total)}${costSegment} ]`;
     const copiedNotice = isRecentlyCopied ? ` [COPIED] ` : '';
     const statsLine = '  ' + tokenLine + ' '.repeat(Math.max(0, width - 4 - getDisplayWidth(tokenLine) - getDisplayWidth(copiedNotice))) + copiedNotice;
