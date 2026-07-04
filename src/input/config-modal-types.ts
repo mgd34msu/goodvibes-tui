@@ -85,6 +85,10 @@ export interface ConfigModalActionContext {
    * command (e.g. `/settings-sync resolve`, `/local-auth delete-user`).
    */
   readonly executeCommand?: (name: string, args: string[]) => Promise<unknown>;
+  /** Open another named modal surface (cross-surface navigation, e.g. the
+   *  services surface jumping to the subscription surface). Swaps the active
+   *  surface in place — the same seam ctx.openModal uses. */
+  readonly openModal?: (name: string) => void;
   /** Request a re-render. */
   readonly requestRender: () => void;
   /** Set the modal's transient status line (e.g. a result or error message). */

@@ -34,7 +34,6 @@ import { IntegrationHelperService } from '@/runtime/index.ts';
 import { VoiceProviderRegistry, VoiceService, ensureBuiltinVoiceProviders } from '@pellux/goodvibes-sdk/platform/voice';
 import { WebSearchProviderRegistry, WebSearchService } from '@pellux/goodvibes-sdk/platform/web-search';
 import { PanelManager } from '../panels/panel-manager.ts';
-import { registerBuiltinModals } from '../panels/builtin-modals.ts';
 import { HookActivityTracker } from '@pellux/goodvibes-sdk/platform/hooks';
 import { HookDispatcher, createHookWorkbench, type HookWorkbench } from '@pellux/goodvibes-sdk/platform/hooks';
 import { PluginManager } from '@pellux/goodvibes-sdk/platform/plugins';
@@ -255,7 +254,9 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
   const runtimeDispatch = createDomainDispatch(options.runtimeStore);
   const gatewayMethods = new GatewayMethodCatalog();
   const panelManager = new PanelManager();
-  registerBuiltinModals(panelManager); // W6.1: MIGRATE-TO-MODAL redirects (empty until WO-A/B populate builtin-modals.ts)
+  // W6.1 (the purge): MIGRATE-TO-MODAL surface + redirect registration moved to
+  // registerBuiltinPanels (builtin-panels.ts), where the panels' resolved deps
+  // are available for the surfaces to close over.
   const keybindingsManager = new KeybindingsManager({
     configPath: shellPaths.resolveUserPath('tui', 'keybindings.json'),
   });

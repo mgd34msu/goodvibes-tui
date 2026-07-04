@@ -585,6 +585,7 @@ export function handleConfigModalToken(state: ConfigModalRouteState, token: Inpu
   const fired = actionKey.length > 0 && state.configModal.fireAction(actionKey, {
     print: (message: string) => state.commandContext?.print(message),
     executeCommand: state.commandContext?.executeCommand,
+    openModal: state.commandContext?.openModal,
   });
   if (fired) {
     state.requestRender();
