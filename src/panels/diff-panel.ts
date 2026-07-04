@@ -11,6 +11,7 @@ import { UI_TONES, DIFF_TONES } from '../renderer/ui-primitives.ts';
 import { FilePreviewPanel } from './file-preview-panel.ts';
 import type { PanelIntegrationContext } from './types.ts';
 import { logger } from '@pellux/goodvibes-sdk/platform/utils';
+import { PanelConfirmOverlay } from './panel-confirm-overlay.ts';
 import {
   buildBodyText,
   buildEmptyState,
@@ -270,6 +271,7 @@ export class DiffPanel extends BasePanel {
    * from the keypress doing nothing at all. */
   private hotkeyStatus: string | null = null;
 
+  public readonly confirmOverlay = new PanelConfirmOverlay(() => this.markDirty()); // armed by a command handler (e.g. /rewind); see panel-confirm-overlay.ts
   constructor(
     workingDirectory: string,
     private readonly requestRender: () => void = () => {},
@@ -502,6 +504,7 @@ export class DiffPanel extends BasePanel {
   }
 
   handleInput(key: string): boolean {
+    if (this.confirmOverlay.handleInput(key)) return true; // confirm takes priority (git-panel.ts:284-303 precedent)
     switch (key) {
       case 'up':    this.scrollUp();   return true;
       case 'down':  this.scrollDown(); return true;
@@ -618,6 +621,8 @@ export class DiffPanel extends BasePanel {
     return this.trackedRender(() => {
     if (height <= 0 || width <= 0) return [];
 
+    const confirmLines = this.confirmOverlay.renderLines(width);
+    if (confirmLines) return buildPanelWorkspace(width, height, { title: 'Diff Workspace', palette: COLOR, sections: [{ title: 'Confirmation', lines: confirmLines }] });
     if (this.entries.length === 0) {
       return buildPanelWorkspace(width, height, {
         title: 'Diff Workspace',
