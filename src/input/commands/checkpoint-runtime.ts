@@ -228,7 +228,14 @@ export function registerCheckpointRuntimeCommands(registry: CommandRegistry): vo
 
       diffPanel.confirmOverlay.arm({
         id: checkpoint.id,
-        label: `Restore "${checkpoint.label}" (${plural(diff.files.length, 'file')} differ) — files only, conversation history is unchanged`,
+        // renderConfirmLines (panels/confirm-state.ts) builds the on-screen
+        // prompt as `${verb} "${label}"?` itself — it supplies both the verb
+        // and the surrounding quotes. A label that already contained "Restore
+        // "..."" duplicated both, rendering as `Restore "Restore
+        // "baseline-pin"…`. label here must be just the descriptive subject,
+        // with no verb and no quotes of its own (same convention GitPanel
+        // already follows for its own confirms — see git-panel.ts:352,370).
+        label: `${checkpoint.label} (${plural(diff.files.length, 'file')} differ) — files only, conversation history is unchanged`,
         verb: 'Restore',
         onConfirm: async () => {
           try {
@@ -245,6 +252,13 @@ export function registerCheckpointRuntimeCommands(registry: CommandRegistry): vo
               `[Rewind] Restored checkpoint "${checkpoint.label}" (${plural(result.restoredFiles.length, 'file')} restored, ${plural(result.removedFiles.length, 'file')} removed). ` +
               'Files were rewound — conversation history is unchanged. Use /undo to remove turns separately.',
             );
+            // Auto-close the preview: once the restore has actually happened,
+            // the diff panel showing the (now-stale) pre-restore preview has
+            // nothing left to confirm and no obvious way to dismiss it
+            // otherwise (same pm.close(id) + focusPrompt() pattern as
+            // /panel close — see operator-panel-runtime.ts).
+            pm.close('diff');
+            ctx.focusPrompt?.();
             ctx.renderRequest();
           } catch (err) {
             ctx.print(`Rewind failed: ${summarizeError(err)}`);
@@ -252,6 +266,11 @@ export function registerCheckpointRuntimeCommands(registry: CommandRegistry): vo
         },
         onCancel: () => {
           ctx.print('Rewind cancelled — no files changed.');
+          // Same auto-close as the confirm path above — a denied restore also
+          // leaves nothing actionable in the preview panel.
+          pm.close('diff');
+          ctx.focusPrompt?.();
+          ctx.renderRequest();
         },
       });
       ctx.print(`Previewing checkpoint ${shortId(checkpoint.id)} "${checkpoint.label}". Confirm in the diff panel: Enter/y to restore, n/Esc to cancel.`);

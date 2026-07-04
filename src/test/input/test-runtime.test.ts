@@ -13,6 +13,14 @@
 //       both as a direct unit test of the quoting helper and as an
 //       integration test that a malicious pattern never executes as a
 //       second shell command.
+//
+// (b)-(f) each also assert that the command's final state (pass/fail summary,
+// failing-file detail, timeout notice, or fallback exit code) is recorded via
+// conversationManager.addSystemMessage — the durable path. logToolResultBlock
+// and ctx.print only ever write into the display-only history buffer, which a
+// later full rebuildHistory() (rebuilt strictly from getMessageSnapshot())
+// wipes clean; without addSystemMessage the /test outcome would be visible
+// only briefly during the run, then vanish with no scrollback record.
 // ---------------------------------------------------------------------------
 
 import { describe, expect, test } from 'bun:test';
@@ -77,9 +85,12 @@ interface ToolResultCall {
   errorMsg?: string;
 }
 
-function makeCtx(dir: string): { ctx: CommandContext; printed: string[]; toolResults: ToolResultCall[] } {
+function makeCtx(
+  dir: string,
+): { ctx: CommandContext; printed: string[]; toolResults: ToolResultCall[]; systemMessages: string[] } {
   const printed: string[] = [];
   const toolResults: ToolResultCall[] = [];
+  const systemMessages: string[] = [];
   const ctx = {
     print: (text: string) => { printed.push(text); },
     renderRequest: () => {},
@@ -95,6 +106,11 @@ function makeCtx(dir: string): { ctx: CommandContext; printed: string[]; toolRes
         ) => {
           toolResults.push({ toolCall, status, resultSummary, durationMs, errorMsg });
         },
+        // addSystemMessage is the durable path (a real message in the
+        // conversation model, unlike logToolResultBlock/ctx.print which only
+        // ever write into the display-only history buffer). Tracked here so
+        // tests can assert the /test end state actually persists.
+        addSystemMessage: (text: string) => { systemMessages.push(text); },
       },
     },
     workspace: {
@@ -105,7 +121,7 @@ function makeCtx(dir: string): { ctx: CommandContext; printed: string[]; toolRes
     ops: {},
     extensions: {},
   } as unknown as CommandContext;
-  return { ctx, printed, toolResults };
+  return { ctx, printed, toolResults, systemMessages };
 }
 
 function writePackageJson(dir: string, testScript: string | undefined): void {
@@ -132,12 +148,14 @@ function withTmpDir(fn: (dir: string) => Promise<void>): () => Promise<void> {
 describe('(b) no test script in package.json', () => {
   test('prints exactly the skip reason and runs nothing', withTmpDir(async (dir) => {
     writePackageJson(dir, undefined);
-    const { ctx, printed, toolResults } = makeCtx(dir);
+    const { ctx, printed, toolResults, systemMessages } = makeCtx(dir);
 
     await runTestCommand([], ctx);
 
     expect(printed).toEqual(['Skipped: no test script in package.json']);
     expect(toolResults).toEqual([]);
+    // A skip is not a run outcome — nothing durable should be recorded.
+    expect(systemMessages).toEqual([]);
   }));
 });
 
@@ -148,7 +166,7 @@ describe('(b) no test script in package.json', () => {
 describe('(c) happy path', () => {
   test('parses passed/failed counts and renders a done status', withTmpDir(async (dir) => {
     writePackageJson(dir, 'printf "==> src/test/a.test.ts\\nTest files: 1, passed: 1, failed: 0\\n"');
-    const { ctx, printed, toolResults } = makeCtx(dir);
+    const { ctx, printed, toolResults, systemMessages } = makeCtx(dir);
 
     await runTestCommand([], ctx);
 
@@ -156,6 +174,14 @@ describe('(c) happy path', () => {
     expect(toolResults[0]!.status).toBe('done');
     expect(toolResults[0]!.resultSummary).toBe('1/1 files passed');
     expect(printed.some((line) => /Failing test files/.test(line))).toBe(false);
+
+    // Persistence: the pass/fail summary must be recorded via addSystemMessage
+    // (a real conversation message — see ConversationManager.addSystemMessage
+    // in src/core/conversation.ts), not just printed to the display-only
+    // history buffer, so it survives the next full history rebuild instead of
+    // vanishing like the display-only logToolResultBlock render does.
+    expect(systemMessages).toHaveLength(1);
+    expect(systemMessages[0]).toContain('1/1 files passed');
   }));
 });
 
@@ -169,7 +195,7 @@ describe('(d) failure path', () => {
       dir,
       'printf "==> src/test/b.test.ts  [FAIL]\\nTest files: 1, passed: 0, failed: 1\\n"; exit 1',
     );
-    const { ctx, printed, toolResults } = makeCtx(dir);
+    const { ctx, printed, toolResults, systemMessages } = makeCtx(dir);
 
     await runTestCommand([], ctx);
 
@@ -177,6 +203,13 @@ describe('(d) failure path', () => {
     expect(toolResults[0]!.status).toBe('error');
     expect(toolResults[0]!.errorMsg).toBe('1 file failed');
     expect(printed.some((line) => line.includes('src/test/b.test.ts'))).toBe(true);
+
+    // Persistence: both the pass/fail summary AND the failing-file detail
+    // must be in the durable message, not just the transient printed lines.
+    expect(systemMessages).toHaveLength(1);
+    expect(systemMessages[0]).toContain('0/1 files passed');
+    expect(systemMessages[0]).toContain('1 file failed');
+    expect(systemMessages[0]).toContain('src/test/b.test.ts');
   }));
 });
 
@@ -187,7 +220,7 @@ describe('(d) failure path', () => {
 describe('(e) timeout path', () => {
   test('kills the process and prints a timeout message instead of hanging', withTmpDir(async (dir) => {
     writePackageJson(dir, 'sleep 5');
-    const { ctx, printed, toolResults } = makeCtx(dir);
+    const { ctx, printed, toolResults, systemMessages } = makeCtx(dir);
 
     await runTestCommand([], ctx, 50);
 
@@ -195,6 +228,11 @@ describe('(e) timeout path', () => {
     expect(toolResults).toHaveLength(1);
     expect(toolResults[0]!.status).toBe('error');
     expect(toolResults[0]!.errorMsg).toMatch(/timed out/);
+
+    // The timeout outcome is also a final state, not streaming — it must
+    // persist the same way the pass/fail summary does.
+    expect(systemMessages).toHaveLength(1);
+    expect(systemMessages[0]).toMatch(/timed out/i);
   }), 10_000);
 });
 
@@ -205,7 +243,7 @@ describe('(e) timeout path', () => {
 describe('(f) unrecognized output fallback', () => {
   test('does not fabricate counts; shows exit code + raw tail instead', withTmpDir(async (dir) => {
     writePackageJson(dir, 'echo "some other output"; exit 1');
-    const { ctx, printed, toolResults } = makeCtx(dir);
+    const { ctx, printed, toolResults, systemMessages } = makeCtx(dir);
 
     await runTestCommand([], ctx);
 
@@ -213,6 +251,11 @@ describe('(f) unrecognized output fallback', () => {
     expect(toolResults[0]!.resultSummary).toBe('exit code 1');
     expect(printed.some((line) => line.includes('could not parse structured test results'))).toBe(true);
     expect(printed.some((line) => line.includes('some other output'))).toBe(true);
+
+    // Fallback path's compact summary must persist too, not just the raw
+    // tail (which is allowed to stay transient — no fabricated counts here).
+    expect(systemMessages).toHaveLength(1);
+    expect(systemMessages[0]).toContain('exit code 1');
   }));
 
   test('parseTestOutput returns null when neither pattern matches', () => {
