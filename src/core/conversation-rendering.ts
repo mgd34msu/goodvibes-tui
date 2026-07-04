@@ -1,7 +1,7 @@
 import { UIFactory } from '../renderer/ui-factory.ts';
 import { renderMarkdownTracked } from '../renderer/markdown.ts';
 import { renderDiffView } from '../renderer/diff-view.ts';
-import { DARK_THEME } from '../renderer/theme.ts';
+import { activeTheme } from '../renderer/theme.ts';
 import { renderToolCallBlock } from '../renderer/tool-call.ts';
 import type { ToolCall } from '@pellux/goodvibes-sdk/platform/types';
 import { renderThinkingBlock } from '../renderer/thinking.ts';
@@ -21,7 +21,9 @@ import { extractUserDisplayText } from '@pellux/goodvibes-sdk/platform/core';
 //   conversation-rendering.ts → system-message-router.ts → conversation.ts → conversation-rendering.ts
 import type { SystemMessageKind } from '@/runtime/index.ts';
 
-const T = DARK_THEME;
+// Transcript tokens are read live per render (const T = activeTheme() at the top
+// of each render function that styles content) so a dark→light repaint
+// re-resolves with no module reload. See theme.ts's active-mode runtime note.
 
 /**
  * Navigable system message kinds for error-navigation (nextErrorLine/prevErrorLine).
@@ -63,6 +65,7 @@ export function renderConversationUserMessage(
   message: Extract<Message, { role: 'user' }>,
   width: number,
 ): void {
+  const T = activeTheme();
   const displayText = extractUserDisplayText(message.content);
   if (message.cancelled) {
     context.history.addLines(UIFactory.createMessageBar(width, displayText, T.errorBarBg, '196', ' x ', true));
@@ -79,6 +82,7 @@ export function renderConversationAssistantMessage(
   collapseThreshold: number,
   msgIdx: number,
 ): void {
+  const T = activeTheme();
   const assistantHeaderDetails = [];
   if (message.model) {
     assistantHeaderDetails.push({ text: ` ${message.model}${message.provider ? ` (${message.provider})` : ''} `, fg: T.modelNameDim, dim: true });
@@ -224,6 +228,7 @@ export function renderConversationToolMessage(
   width: number,
   msgIdx: number,
 ): void {
+  const T = activeTheme();
   const collapseKey = `msg_${msgIdx}`;
   const blockIdx = context.blockRegistry.length;
   const startLine = context.history.getLineCount();

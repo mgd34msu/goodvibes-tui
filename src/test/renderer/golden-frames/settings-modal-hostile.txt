@@ -1,6 +1,6 @@
 # GV_GOLDEN surface=settings-modal-hostile width=28 height=20
 |┌─ Configuration Workspace─┐|
-|│ Categories   │ Display (8)|
+|│ Categories   │ Display (9)|
 |│──────────────────────────│|
 |│ INTERFACE    │ Display   │|
 |│   ▸ Display  │ configurati|
@@ -16,7 +16,7 @@
 |│ SERVICE & N  │   Setting  |
 |│     Service  │ • stream   |
 |│     Network  │   lineNumbe|
-|│     Control  │ ▼ 6 more se|
+|│     Control  │ ▼ 7 more se|
 |│ Focus categories · [Up/D │|
 |└──────────────────────────┘|
 @STYLES

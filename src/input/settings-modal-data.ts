@@ -16,6 +16,13 @@ import type { SubscriptionManager } from '@pellux/goodvibes-sdk/platform/config'
 import type { ServiceInspectionQuery } from '../runtime/ui-service-queries.ts';
 import { CODE_INDEX_ENABLED_CONFIG_KEY } from '../runtime/code-index-services.ts';
 import {
+  THEME_MODE_CONFIG_KEY,
+  THEME_MODE_VALUES,
+  THEME_MODE_DEFAULT,
+  THEME_MODE_DESCRIPTION,
+  coerceThemeModeSetting,
+} from '../renderer/theme-mode-config.ts';
+import {
   SETTINGS_CATEGORIES,
   type FlagEntry,
   type McpEntry,
@@ -92,6 +99,14 @@ export function buildSettingGroups(
     if ((rawCat === 'controlPlane' || rawCat === 'httpListener' || rawCat === 'web') && groups.has('network')) {
       groups.get('network')!.push(entry);
     }
+  }
+
+  // DEBT-2: inject the synthetic display.themeMode enum (auto|dark|light). TUI-local
+  // key stored under the existing `display` section (see theme-mode-config.ts for why
+  // not `appearance`), same rationale as the other synthetic settings below.
+  const displayEntries = groups.get('display');
+  if (displayEntries && !displayEntries.some((e) => e.setting.key === (THEME_MODE_CONFIG_KEY as ConfigKey))) {
+    displayEntries.push(buildThemeModeSyntheticEntry(configManager));
   }
 
   const uiEntries = groups.get('ui');
@@ -196,6 +211,34 @@ export function buildTtsSpeedSyntheticEntry(configManager: Pick<ConfigManager, '
     setting: TTS_SPEED_SYNTHETIC_SETTING,
     currentValue,
     isDefault: deepEqual(currentValue, TTS_SPEED_DEFAULT),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// display.themeMode synthetic setting (DEBT-2 light theme)
+// ---------------------------------------------------------------------------
+
+/**
+ * The synthetic ConfigSetting descriptor for display.themeMode. TUI-local (not
+ * in the SDK ConfigKey union); the key is cast to ConfigKey as the other
+ * synthetic settings do. Stored under the existing `display` section so
+ * ConfigManager.setDynamic/get round-trip it with no SDK change.
+ */
+export const THEME_MODE_SYNTHETIC_SETTING: ConfigSetting = {
+  key: THEME_MODE_CONFIG_KEY as ConfigKey,
+  type: 'enum',
+  default: THEME_MODE_DEFAULT,
+  enumValues: [...THEME_MODE_VALUES],
+  description: THEME_MODE_DESCRIPTION,
+};
+
+/** Build the synthetic SettingEntry for display.themeMode. */
+export function buildThemeModeSyntheticEntry(configManager: Pick<ConfigManager, 'get'>): SettingEntry {
+  const currentValue = coerceThemeModeSetting(configManager.get(THEME_MODE_CONFIG_KEY as ConfigKey));
+  return {
+    setting: THEME_MODE_SYNTHETIC_SETTING,
+    currentValue,
+    isDefault: currentValue === THEME_MODE_DEFAULT,
   };
 }
 
@@ -401,6 +444,8 @@ export function refreshEntryValues(
       // construction time so isDefault stays accurate.
       if (entry.setting.key === ('tts.speed' as ConfigKey)) {
         entry.currentValue = normalizeTtsSpeedValue(raw);
+      } else if (entry.setting.key === (THEME_MODE_CONFIG_KEY as ConfigKey)) {
+        entry.currentValue = coerceThemeModeSetting(raw);
       } else {
         entry.currentValue = raw;
       }
@@ -422,8 +467,12 @@ export function updateEntryForKey(
     const entry = entries.find((candidate) => candidate.setting.key === key);
     if (entry) {
       const raw = configManager.get(key);
-      // Synthetic tts.speed entry: normalize using the same fallback logic.
-      entry.currentValue = key === ('tts.speed' as ConfigKey) ? normalizeTtsSpeedValue(raw) : raw;
+      // Synthetic entries: normalize using the same fallback logic as construction.
+      entry.currentValue = key === ('tts.speed' as ConfigKey)
+        ? normalizeTtsSpeedValue(raw)
+        : key === (THEME_MODE_CONFIG_KEY as ConfigKey)
+          ? coerceThemeModeSetting(raw)
+          : raw;
       entry.isDefault = deepEqual(entry.currentValue, entry.setting.default);
     }
   }

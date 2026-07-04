@@ -1,13 +1,8 @@
 import { createStyledCell, type Line } from '../types/grid.ts';
 import { getOverlayMaxWidth } from './overlay-viewport.ts';
 import { GLYPHS } from './ui-primitives.ts';
-import { resolveUiTones } from './theme.ts';
+import { activeUiTones, registerThemeRefresh } from './theme.ts';
 import { fillWidth, makeLine, writeText } from './fullscreen-primitives.ts';
-
-// DEFAULT_OVERLAY_PALETTE is built from the mode-resolved chrome tones
-// (resolveUiTones) rather than the static UI_TONES constant — WO-001 single
-// read path. Mode is fixed to 'dark' until the terminal-bg-probe lands.
-const TONES = resolveUiTones('dark');
 
 export interface OverlayBoxPalette {
   readonly borderFg: string;
@@ -21,17 +16,26 @@ export interface OverlayBoxPalette {
   readonly bodyBg: string;
 }
 
-export const DEFAULT_OVERLAY_PALETTE: Readonly<OverlayBoxPalette> = {
-  borderFg: TONES.fg.secondary,
-  titleFg: TONES.fg.primary,
-  bodyFg: TONES.fg.primary,
-  mutedFg: TONES.fg.dim,
-  selectedBg: TONES.bg.selected,
-  titleBg: TONES.bg.title,
-  sectionBg: TONES.bg.section,
-  inputBg: TONES.bg.input,
-  bodyBg: TONES.bg.surface,
-} as const;
+// Built from the mode-resolved chrome tones (activeUiTones) and rebuilt IN PLACE
+// on a mode flip via the registered refresher (60+ call sites read it by
+// reference — see theme.ts's active-mode runtime note).
+function buildOverlayPalette(): OverlayBoxPalette {
+  const t = activeUiTones();
+  return {
+    borderFg: t.fg.secondary,
+    titleFg: t.fg.primary,
+    bodyFg: t.fg.primary,
+    mutedFg: t.fg.dim,
+    selectedBg: t.bg.selected,
+    titleBg: t.bg.title,
+    sectionBg: t.bg.section,
+    inputBg: t.bg.input,
+    bodyBg: t.bg.surface,
+  };
+}
+
+export const DEFAULT_OVERLAY_PALETTE: Readonly<OverlayBoxPalette> = buildOverlayPalette();
+registerThemeRefresh(() => Object.assign(DEFAULT_OVERLAY_PALETTE as OverlayBoxPalette, buildOverlayPalette()));
 
 export interface OverlayBoxLayout {
   readonly margin: number;

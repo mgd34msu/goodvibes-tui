@@ -9,7 +9,7 @@ import {
 } from './overlay-box.ts';
 import { getOverlayMaxWidth } from './overlay-viewport.ts';
 import { GLYPHS } from './ui-primitives.ts';
-import { resolveUiTones } from './theme.ts';
+import { activeUiTones, registerThemeRefresh } from './theme.ts';
 import { HINT_SEPARATOR } from './hint-grammar.ts';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -92,25 +92,30 @@ export interface ModalConfig {
 
 // ── Defaults ─────────────────────────────────────────────────────────────────
 
-// DEFAULT_STYLE is built from the mode-resolved chrome tones (resolveUiTones)
-// rather than the static UI_TONES constant — WO-001 single read path. Mode is
-// fixed to 'dark' until the terminal-bg-probe lands.
-const TONES = resolveUiTones('dark');
+// DEFAULT_STYLE is built from the mode-resolved chrome tones (activeUiTones) and
+// rebuilt IN PLACE on a mode flip via the registered refresher. createModal reads
+// it per call via `{ ...DEFAULT_STYLE, ...config.style }`, so the in-place rebuild
+// reaches every modal — see theme.ts's active-mode runtime note.
+function buildDefaultModalStyle(): Required<ModalStyle> {
+  const t = activeUiTones();
+  return {
+    titleFg: t.fg.primary,
+    borderFg: t.fg.dim,
+    hintFg: t.fg.muted,
+    selectedFg: t.fg.primary,
+    selectedBg: t.bg.selected,
+    textFg: t.fg.primary,
+    accentFg: t.state.info,
+    titleRowFg: t.fg.secondary,
+    titleBg: t.bg.title,
+    sectionBg: t.bg.section,
+    inputBg: t.bg.input,
+    surfaceBg: t.bg.surface,
+  };
+}
 
-const DEFAULT_STYLE: Required<ModalStyle> = {
-  titleFg: TONES.fg.primary,
-  borderFg: TONES.fg.dim,
-  hintFg: TONES.fg.muted,
-  selectedFg: TONES.fg.primary,
-  selectedBg: TONES.bg.selected,
-  textFg: TONES.fg.primary,
-  accentFg: TONES.state.info,
-  titleRowFg: TONES.fg.secondary,
-  titleBg: TONES.bg.title,
-  sectionBg: TONES.bg.section,
-  inputBg: TONES.bg.input,
-  surfaceBg: TONES.bg.surface,
-};
+const DEFAULT_STYLE: Required<ModalStyle> = buildDefaultModalStyle();
+registerThemeRefresh(() => Object.assign(DEFAULT_STYLE, buildDefaultModalStyle()));
 
 // ── ModalFactory ─────────────────────────────────────────────────────────────
 

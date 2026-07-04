@@ -3,10 +3,11 @@ import { UIFactory } from './ui-factory.ts';
 import { renderCodeBlock } from './code-block.ts';
 import { getDisplayWidth } from '../utils/terminal-width.ts';
 import { LAYOUT } from './layout.ts';
-import { DARK_THEME } from './theme.ts';
+import { activeTheme } from './theme.ts';
 
-/** Module-level resolved token set (dark default; replace with resolveTheme(mode) when mode detection lands). */
-const T = DARK_THEME;
+// Transcript tokens are read live per render (const T = activeTheme() at the top
+// of each render function below) so a dark→light repaint re-resolves with no
+// module reload. See theme.ts's active-mode runtime note.
 
 export interface MarkdownRenderOptions {
   codeBlockLineNumbers?: boolean;
@@ -62,6 +63,7 @@ export function renderMarkdownTracked(
   width: number,
   options: MarkdownRenderOptions = {},
 ): { lines: ReturnType<typeof renderMarkdown>; codeBlocks: CodeBlockSpan[] } {
+  const T = activeTheme();
   const lines: ReturnType<typeof renderMarkdown> = [];
   const codeBlocks: CodeBlockSpan[] = [];
   const rawLines = text.split('\n');
@@ -236,6 +238,7 @@ function stripMarkdown(text: string): string {
  * truncates long content, and renders with proper styling.
  */
 function renderTable(rows: string[], width: number, indent: number): Line[] {
+  const T = activeTheme();
   const lines: Line[] = [];
 
   // Parse rows into cells, skip separator
@@ -542,6 +545,7 @@ function compositeInlineLine(
   prefixStyle: Partial<Cell>,
   textStartX: number
 ): Line[] {
+  const T = activeTheme();
   const lines: Line[] = [];
 
   // Flatten tokens to [char, style] pairs

@@ -1,12 +1,7 @@
 import type { Line } from '../types/grid.ts';
 import { createEmptyLine, createStyledCell } from '../types/grid.ts';
 import { getDisplayWidth } from '../utils/terminal-width.ts';
-import { resolveUiTones } from '../renderer/theme.ts';
-
-// DEFAULT_PANEL_PALETTE is built from the mode-resolved chrome tones
-// (resolveUiTones) rather than the static UI_TONES constant — WO-001 single
-// read path. Mode is fixed to 'dark' until the terminal-bg-probe lands.
-const UI_TONES = resolveUiTones('dark');
+import { activeUiTones, registerThemeRefresh } from '../renderer/theme.ts';
 
 // ---------------------------------------------------------------------------
 // Panel palette + core line primitives.
@@ -36,24 +31,36 @@ export interface PanelPalette {
   readonly selectBg?: string;
 }
 
-export const DEFAULT_PANEL_PALETTE: Readonly<Required<PanelPalette>> = {
-  header: UI_TONES.fg.primary,
-  headerBg: UI_TONES.bg.title,
-  label: UI_TONES.fg.muted,
-  value: UI_TONES.fg.primary,
-  dim: UI_TONES.fg.dim,
-  info: UI_TONES.state.info,
-  good: UI_TONES.state.good,
-  warn: UI_TONES.state.warn,
-  bad: UI_TONES.state.bad,
-  empty: UI_TONES.fg.empty,
-  surfaceBg: UI_TONES.bg.surface,
-  sectionBg: UI_TONES.bg.section,
-  summaryBg: UI_TONES.bg.summary,
-  inputBg: UI_TONES.bg.input,
-  accent: UI_TONES.fg.secondary,
-  selectBg: UI_TONES.bg.selected,
-} as const;
+// Built from the mode-resolved chrome tones (activeUiTones). Because 100+ call
+// sites read this object by reference, mode changes rebuild it IN PLACE via the
+// registered refresher below rather than re-resolving per call — see theme.ts's
+// active-mode runtime note. This refresher is registered before any panel's
+// extendPalette() runs (panels import polish → polish-core first), so on a mode
+// flip the base is rebuilt before the extended palettes re-merge from it.
+function buildPanelPalette(): Required<PanelPalette> {
+  const t = activeUiTones();
+  return {
+    header: t.fg.primary,
+    headerBg: t.bg.title,
+    label: t.fg.muted,
+    value: t.fg.primary,
+    dim: t.fg.dim,
+    info: t.state.info,
+    good: t.state.good,
+    warn: t.state.warn,
+    bad: t.state.bad,
+    empty: t.fg.empty,
+    surfaceBg: t.bg.surface,
+    sectionBg: t.bg.section,
+    summaryBg: t.bg.summary,
+    inputBg: t.bg.input,
+    accent: t.fg.secondary,
+    selectBg: t.bg.selected,
+  };
+}
+
+export const DEFAULT_PANEL_PALETTE: Readonly<Required<PanelPalette>> = buildPanelPalette();
+registerThemeRefresh(() => Object.assign(DEFAULT_PANEL_PALETTE as Required<PanelPalette>, buildPanelPalette()));
 
 /**
  * Extend the base panel palette with domain-specific colors.
@@ -73,7 +80,13 @@ export function extendPalette<T extends Record<string, string>>(
   base: typeof DEFAULT_PANEL_PALETTE,
   extras: T,
 ): typeof DEFAULT_PANEL_PALETTE & T {
-  return { ...base, ...extras };
+  const merged = { ...base, ...extras } as typeof DEFAULT_PANEL_PALETTE & T;
+  // Self-register an in-place rebuild so every extendPalette-derived panel
+  // palette (cost/token/git/skills/diff/wrfc) tracks the active mode with zero
+  // per-panel churn. Runs AFTER the base refresher (registered at module eval,
+  // before any panel calls this), so `base` already carries the new-mode values.
+  registerThemeRefresh(() => Object.assign(merged as Record<string, string>, base, extras));
+  return merged;
 }
 
 export function buildPanelLine(

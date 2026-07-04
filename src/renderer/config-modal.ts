@@ -1,9 +1,7 @@
 import type { Line } from '../types/grid.ts';
 import { ModalFactory, type ModalSection, type ModalTab } from './modal-factory.ts';
-import { resolveUiTones } from './theme.ts';
+import { activeUiTones } from './theme.ts';
 import type { ConfigModal, ConfigModalRenderModel } from '../input/config-modal.ts';
-
-const TONES = resolveUiTones('dark');
 
 /**
  * renderConfigModal — the single render path for every ConfigModalSurface.
@@ -23,6 +21,9 @@ export function renderConfigModal(modal: ConfigModal, width: number, height: num
 
 /** Pure model→Line[] mapping — the shared inner step of renderConfigModal. */
 function renderConfigModalModel(model: ConfigModalRenderModel, width: number): Line[] {
+  // Read the active-mode chrome tones per call (this render path is not on a
+  // hot loop; the modal renders once per keystroke).
+  const TONES = activeUiTones();
   const sections: ModalSection[] = [];
 
   if (model.degraded) {

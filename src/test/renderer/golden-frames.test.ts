@@ -76,6 +76,8 @@ import { ConfigModal } from '../../input/config-modal.ts';
 import { renderConfigModal } from '../../renderer/config-modal.ts';
 import type { ConfigModalView } from '../../input/config-modal-types.ts';
 import { statusGlyph, toneStyle, pad, postureLine, kv } from '../../panels/modals/modal-surface-helpers.ts';
+import { setActiveThemeMode } from '../../renderer/theme.ts';
+import { ModalFactory } from '../../renderer/modal-factory.ts';
 import type { Cell, Line } from '../../types/grid.ts';
 
 // ---------------------------------------------------------------------------
@@ -1568,3 +1570,61 @@ const SANDBOX_VIEW: ConfigModalView = {
   ],
 };
 describeOverlayGolden('sandbox-modal', (w, h) => renderConfigSurfaceGolden(SANDBOX_VIEW, w, h));
+
+// ─── DEBT-2 light-theme goldens (one transcript + one modal) ───────────────
+//
+// The existing goldens above are all dark (headless auto → dark). These two pin
+// the LIGHT rendering of the two surfaces that actually swap tokens: the
+// transcript (fully-designed light ThemeTokens — heading/code/link/etc.) and a
+// ModalFactory modal (DEFAULT_STYLE.accentFg = state.info flips to the light
+// chrome tone; the accent helper row exercises it). Both reuse render paths
+// already proven deterministic in dark; underLight() flips the active mode for
+// the render and ALWAYS restores dark so the surrounding dark goldens and sibling
+// test files are untouched.
+function renderModalFactoryLightSurface(): Line[] {
+  return ModalFactory.createModal({
+    title: 'Appearance',
+    width: 60,
+    sections: [{ type: 'text', content: 'Light theme rendered via ModalFactory.' }],
+    helpers: [{ content: 'accent row (uses accentFg = state.info)', accent: true }],
+    hints: ['Esc close'],
+  }, NORMAL_W);
+}
+function underLight<T>(fn: () => T): T {
+  setActiveThemeMode('light');
+  try {
+    return fn();
+  } finally {
+    setActiveThemeMode('dark');
+  }
+}
+
+describe('golden-frames — light theme (DEBT-2)', () => {
+  test('markdown transcript (light) matches committed golden snapshot', () => {
+    const lines = underLight(() => renderMarkdownTranscriptSurface());
+    expect(lines.length).toBeGreaterThan(0);
+    assertGolden('markdown-transcript-light', lines);
+  });
+
+  test('markdown transcript (light) is deterministic and differs from dark', () => {
+    const a = snapshotEncode('markdown-transcript-light', underLight(() => renderMarkdownTranscriptSurface()));
+    const b = snapshotEncode('markdown-transcript-light', underLight(() => renderMarkdownTranscriptSurface()));
+    expect(a).toBe(b);
+    const dark = snapshotEncode('markdown-transcript', renderMarkdownTranscriptSurface());
+    expect(a).not.toBe(dark); // light tokens actually changed the styles
+  });
+
+  test('modal-factory modal (light) matches committed golden snapshot', () => {
+    const lines = underLight(() => renderModalFactoryLightSurface());
+    expect(lines.length).toBeGreaterThan(0);
+    assertGolden('modal-factory-light', lines);
+  });
+
+  test('modal-factory modal (light) is deterministic and differs from dark (accent flip)', () => {
+    const a = snapshotEncode('modal-factory-light', underLight(() => renderModalFactoryLightSurface()));
+    const b = snapshotEncode('modal-factory-light', underLight(() => renderModalFactoryLightSurface()));
+    expect(a).toBe(b);
+    const dark = snapshotEncode('modal-factory-light', renderModalFactoryLightSurface());
+    expect(a).not.toBe(dark);
+  });
+});

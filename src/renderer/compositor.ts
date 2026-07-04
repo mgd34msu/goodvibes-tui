@@ -5,10 +5,8 @@ import { getDisplayWidth } from '../utils/terminal-width.ts';
 import type { SearchManager } from '../input/search.ts';
 import { allowTerminalWrite } from '../runtime/terminal-output-guard.ts';
 import { probeTermCaps, type TermColorCaps } from './term-caps.ts';
-import { DARK_THEME } from './theme.ts';
+import { activeTheme } from './theme.ts';
 import { UI_TONES } from './ui-primitives.ts';
-
-const T = DARK_THEME;
 
 // Accent / dim colors for the panel focus border. The focused pane's left
 // border column is drawn in the accent tone; the unfocused pane stays dim.
@@ -252,6 +250,7 @@ export class Compositor {
 
       // Apply Search Match Highlighting Overlay (left side only)
       if (search && search.manager.active && search.manager.query.length > 0 && i >= offset) {
+        const T = activeTheme();
         const absoluteRow = search.scrollTop + (i - offset);
         const lineMatches = search.manager.getMatchesOnLine(absoluteRow);
         for (const match of lineMatches) {
