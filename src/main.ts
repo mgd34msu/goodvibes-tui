@@ -58,7 +58,7 @@ import { installProcessLifecycle } from './runtime/process-lifecycle.ts';
 import { createRenderScheduler } from './runtime/render-scheduler.ts';
 import { buildCommandArgsHint } from './input/command-args-hint.ts';
 import { summarizeRunningAgents } from './renderer/process-summary.ts';
-import { fleetLeafCostTotal } from './panels/fleet-read-model.ts';
+import { footerFleetCost } from './panels/fleet-read-model.ts';
 import { formatUserFacingErrorLine } from './core/format-user-error.ts';
 import { wireStreamEventMetrics, type StreamMetrics, type WireStreamEventMetricsResult } from './core/stream-event-wiring.ts';
 import { wireTurnEventHandlers } from './core/turn-event-wiring.ts';
@@ -447,18 +447,6 @@ async function main() {
     const runningAgentSummary = summarizeRunningAgents(managerAgents, runtimeAgents, ctx.services.wrfcController.listChains());
     const runningAgentCount = runningAgentSummary.count;
     const runningProcessCount = processManager.list().filter((p) => !p.status.startsWith('done')).length;
-    // Fleet cost for the always-visible footer's true total (main session + fleet).
-    // Computed only while a fleet is live (query() is an aggregate-on-read scan — no
-    // need to pay it on the idle single-session path), using the same leaf-sum the
-    // fleet read model uses (excludes owner rollups + chain aggregates: no double-count).
-    let fleetCostUsd: number | null = null;
-    if (runningAgentCount > 0) {
-      try {
-        fleetCostUsd = fleetLeafCostTotal(ctx.services.processRegistry.query().nodes);
-      } catch {
-        fleetCostUsd = null;
-      }
-    }
     const cw = getPromptContentWidth();
     const promptInfo = input.getWrappedPromptInfo(cw);
     const commandArgsHint = buildCommandArgsHint(input.prompt, commandRegistry);
@@ -490,7 +478,7 @@ async function main() {
           .slice(0, promptInfo.visibleCursorLine)
           .reduce((sum: number, line: string) => sum + line.length + 1, 0) + promptInfo.visibleCursorCol
         : undefined,
-      usage: { up: orchestrator.usage.input, down: orchestrator.usage.output, fleetCostUsd },
+      usage: { up: orchestrator.usage.input, down: orchestrator.usage.output, fleetCostUsd: footerFleetCost(() => ctx.services.processRegistry.query().nodes, runningAgentCount > 0) },
       showExitNotice: input.showExitNotice,
       lastCopyTime: input.lastCopyTime,
       model: runtime.model,
