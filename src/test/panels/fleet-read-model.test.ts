@@ -404,9 +404,14 @@ describe('fleetStateGlyph / fleetStateTone / isTerminalProcessState / isRunningP
 // ---------------------------------------------------------------------------
 
 describe('createFleetReadModel', () => {
-  function makeRegistry(nodes: ProcessNode[]): FleetRegistryLike & { interruptCalls: string[]; killCalls: Array<{ id: string; opts: unknown }> } {
+  function makeRegistry(nodes: ProcessNode[]): FleetRegistryLike & {
+    interruptCalls: string[];
+    killCalls: Array<{ id: string; opts: unknown }>;
+    steerCalls: Array<{ id: string; text: string }>;
+  } {
     const interruptCalls: string[] = [];
     const killCalls: Array<{ id: string; opts: unknown }> = [];
+    const steerCalls: Array<{ id: string; text: string }> = [];
     const listeners = new Set<(snap: { capturedAt: number; nodes: readonly ProcessNode[] }) => void>();
     return {
       query: () => ({ capturedAt: NOW, nodes }),
@@ -416,8 +421,10 @@ describe('createFleetReadModel', () => {
       },
       interrupt: (id: string) => { interruptCalls.push(id); return true; },
       kill: (id: string, opts?: { cascade?: boolean }) => { killCalls.push({ id, opts }); return [id]; },
+      steer: (id: string, text: string) => { steerCalls.push({ id, text }); return { queued: true, messageId: 'msg-1' }; },
       interruptCalls,
       killCalls,
+      steerCalls,
     };
   }
 
@@ -447,6 +454,46 @@ describe('createFleetReadModel', () => {
     expect(model.kill('agent-x', { cascade: true })).toEqual(['agent-x']);
     expect(registry.killCalls).toEqual([{ id: 'agent-x', opts: { cascade: true } }]);
   });
+
+  test('steer delegates to the underlying registry', () => {
+    const registry = makeRegistry([]);
+    const model = createFleetReadModel(registry);
+    expect(model.steer('agent-x', 'hello')).toEqual({ queued: true, messageId: 'msg-1' });
+    expect(registry.steerCalls).toEqual([{ id: 'agent-x', text: 'hello' }]);
+  });
+
+  test('subscribeConsumed without a runtimeBus dep is a graceful no-op (never invokes the listener)', () => {
+    const registry = makeRegistry([]);
+    const model = createFleetReadModel(registry);
+    const unsub = model.subscribeConsumed(() => { throw new Error('must not be called'); });
+    expect(typeof unsub).toBe('function');
+    expect(() => unsub()).not.toThrow();
+  });
+
+  test('subscribeConsumed forwards COMMUNICATION_CONSUMED envelopes from the communication domain, filtering out other event types', () => {
+    const registry = makeRegistry([]);
+    type Listener = (envelope: { payload: { type: string; messageId?: string; agentId?: string; turn?: number } }) => void;
+    const domainListeners = new Set<Listener>();
+    const runtimeBus = {
+      onDomain: (domain: string, cb: Listener) => {
+        expect(domain).toBe('communication');
+        domainListeners.add(cb);
+        return () => domainListeners.delete(cb);
+      },
+    };
+    const model = createFleetReadModel(registry, runtimeBus as never);
+    const received: Array<{ messageId: string; agentId: string; turn: number }> = [];
+    model.subscribeConsumed((event) => received.push(event));
+
+    // A non-consumed communication event (e.g. COMMUNICATION_SENT) must be filtered out.
+    for (const cb of domainListeners) cb({ payload: { type: 'COMMUNICATION_SENT' } });
+    expect(received).toHaveLength(0);
+
+    for (const cb of domainListeners) {
+      cb({ payload: { type: 'COMMUNICATION_CONSUMED', messageId: 'm1', agentId: 'agent-x', turn: 3 } });
+    }
+    expect(received).toEqual([{ messageId: 'm1', agentId: 'agent-x', turn: 3 }]);
+  });
 });
 
 describe('createStaticFleetReadModel', () => {
@@ -457,12 +504,15 @@ describe('createStaticFleetReadModel', () => {
     expect(model.getSnapshot()).toBe(snapshot); // stable across calls
   });
 
-  test('subscribe/interrupt/kill are no-ops that never throw', () => {
+  test('subscribe/interrupt/kill/steer/subscribeConsumed are no-ops that never throw', () => {
     const snapshot = buildFleetSnapshot([], NOW);
     const model = createStaticFleetReadModel(snapshot);
     const unsub = model.subscribe(() => { throw new Error('must not be called'); });
     expect(() => unsub()).not.toThrow();
     expect(model.interrupt('x')).toBe(false);
     expect(model.kill('x', { cascade: true })).toEqual([]);
+    expect(model.steer('x', 'hello')).toEqual({ queued: false, reason: 'no live registry' });
+    const unsubConsumed = model.subscribeConsumed(() => { throw new Error('must not be called'); });
+    expect(() => unsubConsumed()).not.toThrow();
   });
 });
