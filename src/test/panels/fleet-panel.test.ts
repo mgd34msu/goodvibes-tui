@@ -50,6 +50,7 @@ function makeMutableReadModel(initial: FleetSnapshot): {
       getSnapshot: () => snapshot,
       subscribe: (cb: () => void) => { listeners.add(cb); return () => listeners.delete(cb); },
       interrupt: () => false,
+      resume: () => false,
       kill: () => [],
       steer: () => ({ queued: false, reason: 'not wired in this test' }),
       subscribeConsumed: (cb) => { consumedListeners.add(cb); return () => consumedListeners.delete(cb); },
@@ -62,19 +63,23 @@ function makeMutableReadModel(initial: FleetSnapshot): {
 
 function makeActions(overrides: Partial<FleetActionCallbacks> = {}): FleetActionCallbacks & {
   interruptCalls: string[];
+  resumeCalls: string[];
   killCalls: Array<{ id: string; opts: { cascade: boolean } }>;
   steerCalls: Array<{ id: string; text: string }>;
 } {
   const interruptCalls: string[] = [];
+  const resumeCalls: string[] = [];
   const killCalls: Array<{ id: string; opts: { cascade: boolean } }> = [];
   const steerCalls: Array<{ id: string; text: string }> = [];
   return {
     interrupt: overrides.interrupt ?? ((id: string) => { interruptCalls.push(id); return true; }),
+    resume: overrides.resume ?? ((id: string) => { resumeCalls.push(id); return true; }),
     kill: overrides.kill ?? ((id: string, opts: { cascade: boolean }) => { killCalls.push({ id, opts }); return [id]; }),
     getConversationSnapshot: overrides.getConversationSnapshot ?? ((_id: string): readonly ConversationMessageSnapshot[] => []),
     resolveSessionLogPath: overrides.resolveSessionLogPath ?? ((id: string) => id),
     steer: overrides.steer ?? ((id: string, text: string) => { steerCalls.push({ id, text }); return { queued: true, messageId: `msg-${steerCalls.length}` }; }),
     interruptCalls,
+    resumeCalls,
     killCalls,
     steerCalls,
   };
@@ -1269,5 +1274,57 @@ describe('FleetPanel — registration', () => {
       description: 'Live fleet tree',
       factory: () => new FleetPanel(createStaticFleetReadModel(buildFleetSnapshot([], NOW))),
     })).toThrow(/collides/);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// W6.2 d1/d2 — pause/resume toggle wiring + the 'stopping…' write-window overlay
+// through the real FleetPanel.handleInput/render (the logic itself is unit-
+// tested in fleet-stop.test.ts; these prove the panel wires it end-to-end).
+// ---------------------------------------------------------------------------
+
+describe('FleetPanel — pause/resume + stopping (W6.2 d)', () => {
+  function pausableSchedule(state: ProcessNode['state']) {
+    return makeNode({
+      id: 'sched-1',
+      kind: 'schedule',
+      state,
+      capabilities: { interruptible: false, killable: true, pausable: state !== 'paused', resumable: state === 'paused', steerable: false } as ProcessNode['capabilities'],
+    });
+  }
+
+  test('p on a live pausable schedule pauses it (interrupt) and the row shows the display-only "stopping…"', () => {
+    const actions = makeActions();
+    const readModel = createStaticFleetReadModel(buildFleetSnapshot([pausableSchedule('idle')], NOW));
+    const panel = new FleetPanel(readModel, actions);
+    expect(panel.handleInput('p')).toBe(true);
+    expect(actions.interruptCalls).toEqual(['sched-1']);
+    expect(actions.resumeCalls).toEqual([]);
+    expect(linesText(panel.render(100, 24))).toContain('stopping…');
+  });
+
+  test('p on a paused resumable schedule resumes it (no stopping overlay)', () => {
+    const actions = makeActions();
+    const readModel = createStaticFleetReadModel(buildFleetSnapshot([pausableSchedule('paused')], NOW));
+    const panel = new FleetPanel(readModel, actions);
+    expect(panel.handleInput('p')).toBe(true);
+    expect(actions.resumeCalls).toEqual(['sched-1']);
+    expect(actions.interruptCalls).toEqual([]);
+    expect(linesText(panel.render(100, 24))).not.toContain('stopping…');
+  });
+
+  test('p on a paused NON-resumable node is an honest refusal (no resume dispatched)', () => {
+    const actions = makeActions();
+    const node = makeNode({
+      id: 'trig-1',
+      kind: 'trigger',
+      state: 'paused',
+      capabilities: { interruptible: false, killable: true, pausable: false, resumable: false, steerable: false } as ProcessNode['capabilities'],
+    });
+    const readModel = createStaticFleetReadModel(buildFleetSnapshot([node], NOW));
+    const panel = new FleetPanel(readModel, actions);
+    expect(panel.handleInput('p')).toBe(true); // consumed (with an inline error), not silently ignored
+    expect(actions.resumeCalls).toEqual([]);
+    expect(actions.interruptCalls).toEqual([]);
   });
 });
