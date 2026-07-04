@@ -10,8 +10,9 @@ import type { FeatureFlagManager } from '@/runtime/index.ts';
 import type { McpRegistry } from '@pellux/goodvibes-sdk/platform/mcp';
 import type { SubscriptionManager } from '@pellux/goodvibes-sdk/platform/config';
 import type { SecretsManager } from '@pellux/goodvibes-sdk/platform/config';
+import type { MemoryEmbeddingProviderRegistry } from '@pellux/goodvibes-sdk/platform/state';
 import type { ServiceInspectionQuery } from '../runtime/ui-service-queries.ts';
-import type { ModelPickerTargetInfo } from '../input/model-picker.ts';
+import type { EmbeddingProviderPickerEntry, ModelPickerTargetInfo } from '../input/model-picker.ts';
 import { syncServiceSettingToPlatform } from './service-settings-sync.ts';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 
@@ -28,6 +29,8 @@ type WireShellUiOpenersOptions = {
   subscriptionManager: SubscriptionManager;
   secretsManager?: Pick<SecretsManager, 'delete' | 'get' | 'set'>;
   serviceRegistry: Pick<ServiceInspectionQuery, 'getAll'>;
+  /** B29: backs the model picker's 'embeddings' target and its own item-list mode. */
+  memoryEmbeddingRegistry: Pick<MemoryEmbeddingProviderRegistry, 'getDefaultProviderId' | 'setDefaultProvider' | 'status'>;
   workingDirectory: string;
   homeDirectory: string;
   getConfiguredProviderIds: () => string[];
@@ -93,6 +96,7 @@ export function wireShellUiOpeners(options: WireShellUiOpenersOptions): void {
     subscriptionManager,
     secretsManager,
     serviceRegistry,
+    memoryEmbeddingRegistry,
     workingDirectory,
     homeDirectory,
     getConfiguredProviderIds,
@@ -125,6 +129,7 @@ export function wireShellUiOpeners(options: WireShellUiOpenersOptions): void {
     if (target === 'helper') return String(configManager.get('helper.globalModel') || runtime.model);
     if (target === 'tool') return String(configManager.get('tools.llmModel') || runtime.model);
     if (target === 'tts') return String(configManager.get('tts.llmModel') || runtime.model);
+    if (target === 'embeddings') return memoryEmbeddingRegistry.getDefaultProviderId();
     return runtime.model;
   };
 
@@ -134,10 +139,29 @@ export function wireShellUiOpeners(options: WireShellUiOpenersOptions): void {
     if (target === 'helper') return String(configManager.get('helper.globalProvider') || runtime.provider);
     if (target === 'tool') return String(configManager.get('tools.llmProvider') || runtime.provider);
     if (target === 'tts') return String(configManager.get('tts.llmProvider') || runtime.provider);
+    if (target === 'embeddings') return memoryEmbeddingRegistry.getDefaultProviderId();
     return runtime.provider;
   };
 
-  const buildModelPickerTargets = (): ModelPickerTargetInfo[] => {
+  /**
+   * Fetch the embedding-provider status list once per picker-open and shape
+   * it into the picker's own tiny item type. Uses the registry's async
+   * `.status()` (not the sync `.list()`) specifically because `.list()` does
+   * not carry `configured` — and unconfigured providers must be shown
+   * honestly, not hidden.
+   */
+  async function resolveEmbeddingProviderEntries(): Promise<EmbeddingProviderPickerEntry[]> {
+    const statuses = await memoryEmbeddingRegistry.status();
+    return statuses.map((status) => ({
+      id: status.id,
+      label: status.label,
+      dimensions: status.dimensions,
+      configured: status.configured,
+      ...(status.detail ? { detail: status.detail } : {}),
+    }));
+  }
+
+  const buildModelPickerTargets = (embeddingEntries: EmbeddingProviderPickerEntry[]): ModelPickerTargetInfo[] => {
     const mainProvider = getProviderIdFromModel(configManager.get('provider.model') || runtime.provider).trim();
     const mainModel = String(configManager.get('provider.model') || runtime.model || '').trim();
     const helperProvider = String(configManager.get('helper.globalProvider') ?? '').trim();
@@ -146,6 +170,11 @@ export function wireShellUiOpeners(options: WireShellUiOpenersOptions): void {
     const toolModel = String(configManager.get('tools.llmModel') ?? '').trim();
     const ttsProvider = String(configManager.get('tts.llmProvider') ?? '').trim();
     const ttsModel = String(configManager.get('tts.llmModel') ?? '').trim();
+    const embeddingProviderId = memoryEmbeddingRegistry.getDefaultProviderId();
+    const embeddingEntry = embeddingEntries.find((entry) => entry.id === embeddingProviderId);
+    const embeddingNote = embeddingEntry
+      ? `${embeddingEntry.id} · ${embeddingEntry.dimensions}d${embeddingEntry.configured ? '' : ' · unconfigured'}`
+      : `${embeddingProviderId} · unregistered`;
 
     return [
       {
@@ -184,6 +213,16 @@ export function wireShellUiOpeners(options: WireShellUiOpenersOptions): void {
         enabled: true,
         inherited: ttsProvider.length === 0 && ttsModel.length === 0,
       },
+      {
+        target: 'embeddings',
+        label: 'Embeddings',
+        description: 'Embedding provider used for memory search and the code index. Not an LLM route — no model concept.',
+        provider: embeddingProviderId,
+        model: '',
+        enabled: true,
+        inherited: false,
+        configuredNote: embeddingNote,
+      },
     ];
   };
 
@@ -199,8 +238,10 @@ export function wireShellUiOpeners(options: WireShellUiOpenersOptions): void {
         input.modelPicker.pinnedIds = new Set(pinned);
       });
       void input.modelPicker.loadRecentModels().catch(() => {}); // best-effort: prefetch for UI, failure is non-visible
+      const embeddingEntries = await resolveEmbeddingProviderEntries();
+      input.modelPicker.embeddingProviders = embeddingEntries;
       input.modalOpened('modelPicker');
-      input.modelPicker.setTargetInfos(buildModelPickerTargets());
+      input.modelPicker.setTargetInfos(buildModelPickerTargets(embeddingEntries));
       input.modelPicker.openAllModels(models, getCurrentModelForPickerTarget());
       render();
     })().catch((error: unknown) => {
@@ -219,14 +260,25 @@ export function wireShellUiOpeners(options: WireShellUiOpenersOptions): void {
       input.modelPicker.configuredProviders = configuredIds;
       const secretProviderIds = await resolveSecretProviderIds();
       input.modelPicker.configuredViaMap = buildConfiguredViaMap(providers, configuredIds, subscriptionManager, secretProviderIds);
+      const embeddingEntries = await resolveEmbeddingProviderEntries();
+      input.modelPicker.embeddingProviders = embeddingEntries;
       input.modalOpened('modelPicker');
-      input.modelPicker.setTargetInfos(buildModelPickerTargets());
+      input.modelPicker.setTargetInfos(buildModelPickerTargets(embeddingEntries));
       input.modelPicker.openProviders(providers, getCurrentProviderForPickerTarget());
       render();
     })().catch((error: unknown) => {
       commandContext.print?.(`Provider picker failed to open: ${summarizeError(error)}`);
       render();
     });
+  };
+
+  commandContext.completeEmbeddingProviderSelection = (providerId: string) => {
+    try {
+      memoryEmbeddingRegistry.setDefaultProvider(providerId);
+    } catch (error: unknown) {
+      commandContext.print?.(`Failed to set embedding provider: ${summarizeError(error)}`);
+    }
+    render();
   };
 
   commandContext.openSelection = (title, items, opts, callback) => {

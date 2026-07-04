@@ -121,6 +121,50 @@ describe('renderModelWorkspace', () => {
     expect(text).toContain('env');
   });
 
+  test('embeddingProvider mode renders the provider list honestly, including unconfigured entries', () => {
+    const picker = makePicker();
+    picker.embeddingProviders = [
+      { id: 'hashed-local', label: 'Hashed Local Embeddings', dimensions: 384, configured: true },
+      { id: 'openai', label: 'OpenAI Embeddings', dimensions: 1536, configured: false, detail: 'Set OPENAI_API_KEY to enable.' },
+    ];
+    picker.mode = 'embeddingProvider';
+    picker.selectedIndex = 0;
+
+    const text = linesToText(renderModelWorkspace(picker, W, H)).join('\n');
+
+    expect(text).toContain('Embedding providers');
+    expect(text).toContain('Embedding provider');
+    expect(text).toContain('Hashed Local Embeddings');
+    expect(text).toContain('OpenAI Embeddings');
+    expect(text).toContain('configured');
+    expect(text).toContain('unconfigured');
+    // No phantom "model:" concept for this mode.
+    expect(text).not.toContain('Model key');
+  });
+
+  test('the embeddings target shows provider id + dimensions + configured state, never a model route', () => {
+    const picker = makePicker();
+    picker.setTargetInfos([
+      ...picker.targetInfos,
+      {
+        target: 'embeddings',
+        label: 'Embeddings',
+        description: 'Embedding provider used for memory search and the code index.',
+        provider: 'hashed-local',
+        model: '',
+        enabled: true,
+        inherited: false,
+        configuredNote: 'hashed-local · 384d',
+      },
+    ]);
+    picker.setTarget('embeddings');
+
+    const text = linesToText(renderModelWorkspace(picker, W, H)).join('\n');
+
+    expect(text).toContain('Embeddings');
+    expect(text).toContain('hashed-local · 384d');
+  });
+
   test('target pane focus changes only the target marker', () => {
     const picker = makePicker();
     picker.focusTargets();
