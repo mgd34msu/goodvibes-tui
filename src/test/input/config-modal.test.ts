@@ -6,7 +6,7 @@ import type {
   ConfigModalSurface,
   ConfigModalView,
 } from '../../input/config-modal-types.ts';
-import { renderConfigModalModel } from '../../renderer/config-modal.ts';
+import { renderConfigModal } from '../../renderer/config-modal.ts';
 import { PanelManager } from '../../panels/panel-manager.ts';
 
 // A mutable fake surface so tests can drive live-value and structural changes.
@@ -121,10 +121,10 @@ describe('ConfigModal host', () => {
         ] },
       ] }),
     }));
-    const frameA = renderConfigModalModel(modal.getRenderModel(), 90);
+    const frameA = renderConfigModal(modal, 90, 24);
     // Mutate ONLY live values — same structure, no key press.
     tick = 999;
-    const frameB = renderConfigModalModel(modal.getRenderModel(), 90);
+    const frameB = renderConfigModal(modal, 90, 24);
 
     expect(frameB.length).toBe(frameA.length); // identical line count
     expect(skeleton(frameB)).toBe(skeleton(frameA)); // no structural reflow
@@ -175,7 +175,7 @@ describe('ConfigModal host', () => {
     const model = modal.getRenderModel();
     expect(model.degraded).toBe('runtime not wired');
     expect(model.emptyText).toBe('nothing here');
-    expect(text(renderConfigModalModel(model, 90))).toContain('runtime not wired');
+    expect(text(renderConfigModal(modal, 90, 24))).toContain('runtime not wired');
   });
 
   test('non-destructive action fires immediately; destructive action needs a confirm', () => {
