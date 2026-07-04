@@ -32,7 +32,7 @@ import { createUiRuntimeServices, type UiRuntimeServices } from './ui-services.t
 import { join } from 'node:path';
 import { installWrfcAgentToolGuard } from '../tools/wrfc-agent-guard.ts';
 import { createWrfcPersistence, type WrfcPersistence } from './wrfc-persistence.ts';
-import type { SystemMessagePriority } from '../panels/system-messages-panel.ts';
+import type { SystemMessagePriority } from '../core/system-message-router.ts';
 
 // ---------------------------------------------------------------------------
 // Pre-router buffer

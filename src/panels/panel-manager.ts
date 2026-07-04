@@ -31,6 +31,21 @@ export class PanelManager {
   private retainedPanels = new Map<string, Panel>();
   /** Old/absorbed panel id -> merged target id (WO-1xx console merges). */
   private aliases = new Map<string, string>();
+  /**
+   * Retired panel id -> modal name (W6.1 purge, MIGRATE-TO-MODAL surfaces).
+   * Unlike `aliases` (panel -> panel), a hit here means no panel is ever
+   * constructed for this id — `open()` invokes `openModalCallback` instead
+   * and returns a sentinel. Registrations are added by WO-A/B; this map and
+   * the open()-time check are WO-C's mechanism only.
+   */
+  private modalRedirects = new Map<string, string>();
+  /**
+   * Late-bound: the modal stack is constructed after PanelManager (same
+   * ordering constraint as the openAgentDetail callback in
+   * builtin/shared.ts), so this is injected via a setter rather than the
+   * constructor.
+   */
+  private openModalCallback?: (modalName: string) => void;
   private _visible: boolean = false;
   private _splitRatio: number = 0.6;
 
@@ -99,8 +114,61 @@ export class PanelManager {
     this.aliases.set(aliasId, targetId);
   }
 
+  /**
+   * Register a redirect so `open(panelId)` opens the named modal instead of
+   * constructing a panel (MIGRATE-TO-MODAL surfaces). Checked in open()
+   * before alias/registry resolution.
+   */
+  registerModalRedirect(panelId: string, modalName: string): void {
+    this.modalRedirects.set(panelId, modalName);
+  }
+
+  /**
+   * Inject the callback `open()` invokes when it hits a modal redirect.
+   * Late-bound via setter because the modal stack is constructed after
+   * PanelManager (mirrors the openAgentDetail callback pattern).
+   */
+  setOpenModalCallback(callback: (modalName: string) => void): void {
+    this.openModalCallback = callback;
+  }
+
+  /**
+   * The modal name `panelIdOrAlias` redirects to, if any — lets callers
+   * (e.g. the `/panel` command) print "moved to the <name> modal" before or
+   * instead of calling open().
+   */
+  getModalRedirect(panelIdOrAlias: string): string | undefined {
+    return this.modalRedirects.get(panelIdOrAlias);
+  }
+
   private _resolveId(panelId: string): string {
     return this.aliases.get(panelId) ?? panelId;
+  }
+
+  /**
+   * Placeholder returned by open() for a modal-redirected id. Never pushed
+   * into a pane, never retained, never rendered — it exists only so open()
+   * can keep its non-null `Panel` return type without constructing the real
+   * (deleted) panel view. `name` carries the modal name so a caller that
+   * inspects the returned panel's `name` (rather than calling
+   * getModalRedirect() beforehand) still gets an honest answer.
+   */
+  private _modalRedirectSentinel(panelId: string, modalName: string): Panel {
+    return {
+      id: panelId,
+      name: modalName,
+      icon: '·',
+      category: 'session',
+      onActivate: () => {},
+      onDeactivate: () => {},
+      onDestroy: () => {},
+      render: () => [],
+      isTransient: true,
+      isPinned: false,
+      needsRender: false,
+      invalidate: () => {},
+      markRendered: () => {},
+    };
   }
 
   getRegisteredTypes(): PanelRegistration[] {
@@ -136,6 +204,11 @@ export class PanelManager {
   }
 
   open(panelIdOrAlias: string, pane?: 'top' | 'bottom'): Panel {
+    const modalName = this.modalRedirects.get(panelIdOrAlias);
+    if (modalName !== undefined) {
+      this.openModalCallback?.(modalName);
+      return this._modalRedirectSentinel(panelIdOrAlias, modalName);
+    }
     const panelId = this._resolveId(panelIdOrAlias);
     this._recordRecent(panelId);
     const existingPane = this._findPaneOf(panelId);
@@ -387,9 +460,12 @@ export class PanelManager {
           this.bottomPane.panels.push(panel);
           this.bottomPane.activeIndex = 0;
         } else {
-          // Open a predictable default panel in the bottom pane (the panel list),
-          // rather than an arbitrary registration-order-dependent panel.
-          const defaultPanel = this._getRegistration('panel-list') ?? this.registry[0];
+          // Open a predictable default panel in the bottom pane. W6.1 purge:
+          // 'panel-list' was deleted (dead weight over a 5-panel registry —
+          // see the DELETE disposition), so the default is explicitly
+          // 'fleet' rather than falling back to registry[0] (whatever
+          // registers first, currently 'git' — see risk 5 in the brief).
+          const defaultPanel = this._getRegistration('fleet') ?? this.registry[0];
           if (defaultPanel) {
             this.open(defaultPanel.id, 'bottom');
           }
@@ -493,9 +569,11 @@ export class PanelManager {
 
   toggle(): void {
     this._visible = !this._visible;
-    // Auto-open a default panel if toggling visible with nothing open
+    // Auto-open a default panel if toggling visible with nothing open.
+    // W6.1 purge: explicitly 'fleet' rather than registry[0] — see the
+    // matching comment in toggleBottomPane() above.
     if (this._visible && this.topPane.panels.length === 0 && this.bottomPane.panels.length === 0) {
-      const defaultPanel = this._getRegistration('panel-list') ?? this.registry[0];
+      const defaultPanel = this._getRegistration('fleet') ?? this.registry[0];
       if (defaultPanel) this.open(defaultPanel.id);
     }
   }

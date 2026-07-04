@@ -4,11 +4,9 @@ import { join } from 'node:path';
 import { describe, expect, test } from 'bun:test';
 import { WorkPlanPanel } from '../../panels/work-plan-panel.ts';
 import { WorkPlanStore } from '../../work-plans/work-plan-store.ts';
-import { AgentInspectorPanel } from '../../panels/agent-inspector-panel.ts';
-import { WrfcPanel } from '../../panels/wrfc-panel.ts';
 import { PanelManager } from '../../panels/panel-manager.ts';
 import { handlePanelIntegrationAction } from '../../input/handler.ts';
-import type { UiEventFeed } from '../../runtime/ui-events.ts';
+import type { Panel } from '../../panels/types.ts';
 
 function text(lines: ReturnType<WorkPlanPanel['render']>): string {
   return lines.map((line) => line.map((cell) => cell.char).join('')).join('\n');
@@ -213,33 +211,37 @@ describe('WorkPlanPanel export', () => {
 // ---------------------------------------------------------------------------
 
 describe('WorkPlanPanel linked ids and jump keys', () => {
-  function makeInspectorPanelManager() {
+  // W6.1 (the purge): Inspector and WRFC were RETIRE-INTO-FLEET — both ids
+  // now resolve to Fleet via PanelManager.registerAlias (builtin/agent.ts),
+  // and Fleet has no per-agent/per-chain deep-link API yet, so 'i'/'w' just
+  // open Fleet (see work-plan-panel.ts's handlePanelIntegrationAction doc).
+  function makeFleetPanelManager() {
     const panelManager = new PanelManager();
+    const fleetPanel: Panel = {
+      id: 'fleet',
+      name: 'Fleet',
+      icon: '⊟',
+      category: 'runtime-ops',
+      isTransient: false,
+      isPinned: false,
+      needsRender: true,
+      onActivate: () => {},
+      onDeactivate: () => {},
+      onDestroy: () => {},
+      render: () => [],
+      invalidate() { this.needsRender = true; },
+      markRendered() { this.needsRender = false; },
+    };
     panelManager.registerType({
-      id: 'inspector',
-      name: 'Inspector',
-      icon: 'I',
-      category: 'agent',
-      description: 'inspector',
-      factory: () => new AgentInspectorPanel({
-        agentManager: { list: () => [], getStatus: () => null, cancel: () => true },
-        agentMessageBus: { getMessages: () => [] },
-        workingDirectory: '/tmp/test',
-        cancelAgent: () => true,
-        agentEvents: { on: () => () => {}, onEnvelope: () => () => {}, emit: () => {} } as unknown as UiEventFeed<never>,
-      }),
+      id: 'fleet',
+      name: 'Fleet',
+      icon: '⊟',
+      category: 'runtime-ops',
+      description: 'fleet',
+      factory: () => fleetPanel,
     });
-    panelManager.registerType({
-      id: 'wrfc',
-      name: 'WRFC',
-      icon: 'W',
-      category: 'agent',
-      description: 'wrfc',
-      factory: () => new WrfcPanel(
-        { on: () => () => {} } as unknown as UiEventFeed<never>,
-        { controller: { listChains: () => [{ id: 'chain-1', state: 'passed', task: 'Linked chain', ownerAgentId: 'agent-1', allAgentIds: ['agent-1'], reviewCycles: 0, fixAttempts: 0, reviewScores: [], constraints: [], gateResults: [], syntheticIssues: [], createdAt: Date.now() }], resumeChain: () => false }, cancelChain: () => true },
-      ),
-    });
+    panelManager.registerAlias('inspector', 'fleet');
+    panelManager.registerAlias('wrfc', 'fleet');
     return panelManager;
   }
 
@@ -254,36 +256,28 @@ describe('WorkPlanPanel linked ids and jump keys', () => {
     expect(rendered).toContain('wrfc:chain-9');
   });
 
-  test('i jumps to the linked agent in the Inspector', () => {
+  test('i on a linked agent opens Fleet (Inspector retired into Fleet)', () => {
     const store = makeStore();
     store.addItem('Linked item', { linked: { agentId: 'agent-9' } });
     const panel = new WorkPlanPanel(store);
     panel.onActivate();
     panel.render(120, 24);
 
-    const panelManager = makeInspectorPanelManager();
+    const panelManager = makeFleetPanelManager();
     expect(handlePanelIntegrationAction(panelManager, panel, 'i')).toBe(true);
-
-    const inspector = panelManager.getPanel('inspector') as AgentInspectorPanel;
-    expect(inspector).toBeInstanceOf(AgentInspectorPanel);
-    const inspectorText = inspector.render(100, 24).map((line) => line.map((cell) => cell.char).join('')).join('\n');
-    expect(inspectorText).toContain('agent-9');
+    expect(panelManager.getPanel('inspector')?.id).toBe('fleet');
   });
 
-  test('w jumps to the linked chain in the WRFC panel', () => {
+  test('w on a linked chain opens Fleet (WRFC retired into Fleet)', () => {
     const store = makeStore();
     store.addItem('Linked item', { linked: { wrfcId: 'chain-1' } });
     const panel = new WorkPlanPanel(store);
     panel.onActivate();
     panel.render(120, 24);
 
-    const panelManager = makeInspectorPanelManager();
+    const panelManager = makeFleetPanelManager();
     expect(handlePanelIntegrationAction(panelManager, panel, 'w')).toBe(true);
-
-    const wrfc = panelManager.getPanel('wrfc') as WrfcPanel;
-    expect(wrfc).toBeInstanceOf(WrfcPanel);
-    const wrfcText = wrfc.render(100, 24).map((line) => line.map((cell) => cell.char).join('')).join('\n');
-    expect(wrfcText).toContain('Linked chain');
+    expect(panelManager.getPanel('wrfc')?.id).toBe('fleet');
   });
 
   test('i/w without a linked target do not consume the key', () => {

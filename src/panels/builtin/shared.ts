@@ -70,8 +70,14 @@ export interface BuiltinPanelDeps {
   dismissPlanning?: () => void;
   /** ForensicsRegistry for the Forensics panel. */
   forensicsRegistry?: import('@/runtime/index.ts').ForensicsRegistry;
-  /** EvalRegistry for the Eval panel. */
-  evalRegistry?: import('../eval-panel.ts').EvalRegistry;
+  /**
+   * EvalRegistry for the `/eval` command surface. W6.1: 'eval' the panel was
+   * deleted (DELETE-disposition), but this field is left in place — no
+   * builtin panel factory reads it anymore, and it was never wired at
+   * bootstrap in production either way (the eval CLI command reads its own
+   * copy via CommandContext.extensions.evalRegistry).
+   */
+  evalRegistry?: import('../eval-registry.ts').EvalRegistry;
   /** MemoryRegistry for the Memory panel. */
   memoryRegistry?: MemoryRegistry;
   /** Shared policy runtime state for governance/policy diagnostics. */
@@ -109,8 +115,6 @@ export interface BuiltinPanelDeps {
   projectPlanningProjectId?: string;
   /** TUI-owned persistent work plan store. */
   workPlanStore?: import('../../work-plans/work-plan-store.ts').WorkPlanStore;
-  /** Shared system-messages panel instance attached from boot so low-priority chatter stays out of conversation. */
-  systemMessagesPanel?: import('../system-messages-panel.ts').SystemMessagesPanel;
   /** Explicit UI-facing runtime services for agent/process/WRFC/remote panels and modals. */
   uiServices?: UiRuntimeServices;
   /** Shared plugin manager for plugin and security panels (widened past the read-only observer surface — WO-134 — so PluginsPanel can drive enable/disable/verify/lift-quarantine). */
@@ -137,17 +141,9 @@ export interface BuiltinPanelDeps {
   sessionChangeTracker?: Pick<SessionChangeTracker, 'getChangedFiles'>;
   /**
    * Open (or focus) a panel by id, wrapping `PanelManager.open`. Use for direct
-   * cross-panel navigation instead of printing a "/panel open …" signpost
-   * (mirrors the openAgentDetail callback below).
+   * cross-panel navigation instead of printing a "/panel open …" signpost.
    */
   openPanel?: (panelId: string) => void;
-  /**
-   * Open the agent detail modal for the given agent id.  Wired from
-   * InputHandler.agentDetailModal.open() at bootstrap — passed to the
-   * CockpitPanel factory so the agents workspace inspect key (i) works
-   * without the panel depending on the modal directly.
-   */
-  openAgentDetail?: (agentId: string) => void;
 }
 
 export type ResolvedBuiltinPanelDeps = Omit<
@@ -164,7 +160,6 @@ export type ResolvedBuiltinPanelDeps = Omit<
   | 'projectPlanningProjectId'
   | 'workPlanStore'
   | 'policyRuntimeState'
-  | 'systemMessagesPanel'
 > & {
   readonly configManager: ConfigManager;
   readonly localUserAuthManager: UserAuthManager;
@@ -178,14 +173,7 @@ export type ResolvedBuiltinPanelDeps = Omit<
   readonly projectPlanningProjectId: string;
   readonly workPlanStore: import('../../work-plans/work-plan-store.ts').WorkPlanStore;
   readonly policyRuntimeState: PolicyRuntimeState;
-  readonly systemMessagesPanel: import('../system-messages-panel.ts').SystemMessagesPanel;
 };
-
-export interface ControlPlanePanelFactoryDeps {
-  readonly approvalBroker: ApprovalBroker;
-  readonly sessionBroker: SharedSessionBroker;
-  readonly getControlPlaneRecentEvents: (limit: number) => readonly ControlPlaneRecentEvent[];
-}
 
 function requireBuiltinPanelDep<TValue>(value: TValue | undefined, message: string): TValue {
   if (value === undefined) {
@@ -246,29 +234,7 @@ export function resolveBuiltinPanelDeps(deps: BuiltinPanelDeps): ResolvedBuiltin
       uiServices.platform.policyRuntimeState,
       'Policy runtime state must be wired at bootstrap for builtin panels.',
     ),
-    systemMessagesPanel: requireBuiltinPanelDep(
-      deps.systemMessagesPanel,
-      'System messages panel must be wired at bootstrap for builtin panels.',
-    ),
   };
-}
-
-export function requireControlPlanePanelDeps(deps: BuiltinPanelDeps): ControlPlanePanelFactoryDeps {
-  if (!deps.approvalBroker || !deps.sessionBroker || !deps.getControlPlaneRecentEvents) {
-    throw new Error('ControlPlanePanel requires approval/session brokers and recent-event access to be wired at bootstrap.');
-  }
-  return {
-    approvalBroker: deps.approvalBroker,
-    sessionBroker: deps.sessionBroker,
-    getControlPlaneRecentEvents: deps.getControlPlaneRecentEvents,
-  };
-}
-
-export function requireAutomationManager(deps: BuiltinPanelDeps): AutomationManager {
-  if (!deps.automationManager) {
-    throw new Error('AutomationControlPanel requires an automation manager to be wired at bootstrap.');
-  }
-  return deps.automationManager;
 }
 
 export function requireUiServices(deps: BuiltinPanelDeps): UiRuntimeServices {

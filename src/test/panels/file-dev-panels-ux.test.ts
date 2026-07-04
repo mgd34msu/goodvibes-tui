@@ -1,6 +1,11 @@
 // ---------------------------------------------------------------------------
 // file-dev-panels-ux.test.ts — UX behavior tests for the development-surface
-// panels (git / diff / file-explorer / file-preview / symbol-outline / worktree).
+// panels (git / diff).
+//
+// W6.1 (the purge): this file used to also cover file-explorer, file-preview,
+// symbol-outline (all DELETE-disposition) and worktree (RETIRE-INTO-FLEET).
+// Their describe blocks were removed along with the panels — see
+// .goodvibes/audit/2026-07-04-wave6-briefs.json (W6.1).
 //
 // These assert the *user-facing* improvements: at-a-glance counts, status
 // glyphs, context-aware footer hints, and tree icons — not just geometry.
@@ -14,11 +19,6 @@ import { tmpdir } from 'node:os';
 import type { Line } from '../../types/grid.ts';
 import { DiffPanel } from '../../panels/diff-panel.ts';
 import { GitPanel } from '../../panels/git-panel.ts';
-import { FilePreviewPanel } from '../../panels/file-preview-panel.ts';
-import { SymbolOutlinePanel } from '../../panels/symbol-outline-panel.ts';
-import { WorktreePanel } from '../../panels/worktree-panel.ts';
-import { createTestManagers } from '../helpers/test-managers.ts';
-import type { PanelIntegrationContext } from '../../panels/types.ts';
 
 function linesText(lines: Line[]): string {
   return lines.map((l) => l.map((c) => c.char ?? ' ').join('')).join('\n');
@@ -115,34 +115,11 @@ describe('DiffPanel — at-a-glance change counts', () => {
   });
 });
 
-describe('DiffPanel — o opens the current file in preview via the bridge', () => {
-  let pm: ReturnType<typeof createTestManagers>['panelManager'] | undefined;
-  afterEach(() => { pm?.destroyAll(); });
-
-  test('handlePanelIntegrationAction opens/focuses preview with the selected file', () => {
-    const { panelManager } = createTestManagers();
-    pm = panelManager;
-    panelManager.registerType({
-      id: 'preview',
-      name: 'Preview',
-      icon: 'P',
-      category: 'development',
-      description: 'preview',
-      factory: () => new FilePreviewPanel(),
-    });
-
-    const panel = new DiffPanel('/tmp');
-    panel.showDiff('src/foo.ts', '@@ -1,1 +1,1 @@\n-a\n+b');
-
-    expect(panel.handleInput('o')).toBe(true);
-    const ctx = { panelManager } as unknown as PanelIntegrationContext;
-    expect(panel.handlePanelIntegrationAction?.('o', ctx)).toBe(true);
-
-    const preview = panelManager.getPanel('preview');
-    expect(preview).toBeInstanceOf(FilePreviewPanel);
-    expect((preview as FilePreviewPanel).getCurrentFilePath()).toBe('src/foo.ts');
-  });
-});
+// W6.1 (the purge): 'DiffPanel — o opens the current file in preview via the
+// bridge' removed here — 'preview' is DELETE-disposition with no successor
+// surface, and diff-panel.ts no longer has an 'o' key or a
+// handlePanelIntegrationAction hook (see diff-panel.ts's comment at the old
+// hook's former location).
 
 describe('DiffPanel — self-load via its own diff plumbing (w/h/s)', () => {
   test('w loads the working-tree diff (unstaged only)', async () => {
@@ -270,25 +247,6 @@ describe('GitPanel — loading + geometry', () => {
   });
 });
 
-// ── SymbolOutlinePanel — tree-sitter outline ─────────────────────────────────
-//
-// loadFile() parses via a real tree-sitter query (background WASM parse), so
-// tests that need parsed symbols poll render() output until it settles
-// rather than asserting synchronously right after loadFile().
-
-async function waitForSymbolText(
-  panel: SymbolOutlinePanel,
-  needle: string,
-  timeoutMs = 2000,
-): Promise<string> {
-  const start = Date.now();
-  let text = linesText(panel.render(80, H));
-  while (!text.includes(needle) && Date.now() - start < timeoutMs) {
-    await new Promise((r) => setTimeout(r, 10));
-    text = linesText(panel.render(80, H));
-  }
-  return text;
-}
 
 describe('GitPanel — selection skips header/section/empty filler rows', () => {
   test('initial selection and down both land on file/commit rows, never filler', async () => {
@@ -458,207 +416,3 @@ describe('GitPanel — no more auto `git init`; explicit i confirm instead', () 
   });
 });
 
-// ── SymbolOutlinePanel — tree icons ──────────────────────────────────────────
-
-describe('SymbolOutlinePanel — tree icons and footer', () => {
-  const src = 'export class Foo {\n  bar() {}\n}\nexport function baz() {}\n';
-
-  test('renders a per-kind type icon for classes and functions', async () => {
-    const panel = new SymbolOutlinePanel();
-    panel.loadFile('a.ts', src);
-    const text = await waitForSymbolText(panel, 'baz');
-    expect(text).toContain('Foo');
-    expect(text).toContain('baz');
-    // Container icon (class) and function icon are present.
-    expect(text).toContain('C');
-    expect(text).toContain('ƒ');
-  });
-
-  test('footer hints reference jump-to-source', async () => {
-    const panel = new SymbolOutlinePanel();
-    panel.loadFile('a.ts', src);
-    await waitForSymbolText(panel, 'baz');
-    const text = linesText(panel.render(80, H));
-    expect(text).toContain('jump to source');
-  });
-
-  test('empty (no file) state offers a concrete next-step command', () => {
-    const panel = new SymbolOutlinePanel();
-    const text = linesText(panel.render(80, H));
-    expect(text).toContain('No file loaded');
-    expect(text).toContain('/panel open explorer');
-  });
-
-  test('arrow-function class fields, getters, and decorated members appear in the outline', async () => {
-    const tsSrc = [
-      'export class Widget {',
-      '  @observable',
-      '  onClick = () => {',
-      '    return 1;',
-      '  };',
-      '',
-      '  get label() {',
-      '    return this._label;',
-      '  }',
-      '',
-      '  @bound()',
-      '  render() {',
-      '    return null;',
-      '  }',
-      '}',
-      '',
-    ].join('\n');
-
-    const panel = new SymbolOutlinePanel();
-    panel.loadFile('widget.ts', tsSrc);
-    const text = await waitForSymbolText(panel, 'onClick');
-    // Arrow-function class field.
-    expect(text).toContain('onClick');
-    // Getter.
-    expect(text).toContain('label');
-    // Decorated method.
-    expect(text).toContain('render');
-    // All three are nested under the class header.
-    expect(text).toContain('Widget');
-  });
-
-  test('Enter returns false when there is no selected location to jump to', () => {
-    const panel = new SymbolOutlinePanel();
-    // No file loaded — nothing to select — Enter must not swallow the key.
-    expect(panel.handleInput('enter')).toBe(false);
-    expect(panel.getSelectedLocation()).toBeNull();
-  });
-});
-
-// ── WorktreePanel — active glyph + aligned columns ───────────────────────────
-
-describe('WorktreePanel — status glyph and column header', () => {
-  function makeRegistry() {
-    return {
-      list: async () => [
-        { path: '/repo/wt-a', kind: 'agent', state: 'active', branch: 'feature/x', head: 'abc123def456', updatedAt: Date.now(), sessionId: 's1', taskId: 't1' },
-        { path: '/repo/wt-b', kind: 'orchestrator', state: 'paused', branch: 'main', head: '0000', updatedAt: Date.now() },
-      ],
-      subscribe: () => () => {},
-    } as unknown as ConstructorParameters<typeof WorktreePanel>[0];
-  }
-
-  test('renders an active status glyph and a column header', async () => {
-    const panel = new WorktreePanel(makeRegistry());
-    await new Promise((r) => setTimeout(r, 30));
-    const text = linesText(panel.render(100, H));
-    expect(text).toContain('KIND');
-    expect(text).toContain('feature/x');
-    expect(text).toContain('●'); // active state glyph
-  });
-
-  test('empty state offers a concrete /worktree command', async () => {
-    const empty = { list: async () => [], subscribe: () => () => {} } as unknown as ConstructorParameters<typeof WorktreePanel>[0];
-    const panel = new WorktreePanel(empty);
-    await new Promise((r) => setTimeout(r, 30)); // let the initial async refresh settle
-    const text = linesText(panel.render(100, H));
-    expect(text).toContain('/worktree attach');
-  });
-
-  test('the Next Actions section and per-row Next: strings are gone', async () => {
-    const panel = new WorktreePanel(makeRegistry());
-    await new Promise((r) => setTimeout(r, 30));
-    const text = linesText(panel.render(100, H));
-    expect(text).not.toContain('Next Actions');
-    expect(text).not.toContain('Next:');
-  });
-
-  test('footer hints show the real bound keys, not slash-command signposts', async () => {
-    const panel = new WorktreePanel(makeRegistry());
-    await new Promise((r) => setTimeout(r, 30));
-    const text = linesText(panel.render(100, H));
-    expect(text).toContain('pause/resume/keep');
-    expect(text).toContain('discard/cleanup');
-    expect(text).toContain('jump to session/task');
-    expect(text).not.toContain('/worktree inspect');
-  });
-
-  function makeMutableRegistry() {
-    const rows: Array<{ path: string; kind: string; state: string; branch: string; head: string; updatedAt: number; sessionId?: string; taskId?: string }> = [
-      { path: '/repo/wt-a', kind: 'agent', state: 'active', branch: 'feature/x', head: 'abc123def456', updatedAt: Date.now(), sessionId: 's1' },
-    ];
-    const setStateCalls: Array<[string, string]> = [];
-    const cleanupCalls: string[] = [];
-    const registry = {
-      list: async () => rows.map((r) => ({ ...r })),
-      attach: () => {},
-      setState: (path: string, state: string) => {
-        setStateCalls.push([path, state]);
-        const row = rows.find((r) => r.path === path);
-        if (row) row.state = state;
-      },
-      cleanup: async (path: string) => {
-        cleanupCalls.push(path);
-      },
-      subscribe: () => () => {},
-    } as unknown as ConstructorParameters<typeof WorktreePanel>[0];
-    return { registry, setStateCalls, cleanupCalls };
-  }
-
-  test('p/u/k dispatch setState on the same registry the /worktree command mutates', async () => {
-    const { registry, setStateCalls } = makeMutableRegistry();
-    const panel = new WorktreePanel(registry);
-    await new Promise((r) => setTimeout(r, 30));
-
-    expect(panel.handleInput('p')).toBe(true);
-    await new Promise((r) => setTimeout(r, 10));
-    expect(setStateCalls).toContainEqual(['/repo/wt-a', 'paused']);
-
-    expect(panel.handleInput('u')).toBe(true);
-    await new Promise((r) => setTimeout(r, 10));
-    expect(setStateCalls).toContainEqual(['/repo/wt-a', 'active']);
-
-    expect(panel.handleInput('k')).toBe(true);
-    await new Promise((r) => setTimeout(r, 10));
-    expect(setStateCalls).toContainEqual(['/repo/wt-a', 'kept']);
-  });
-
-  test('d opens a ConfirmState before discarding; y confirms, n cancels', async () => {
-    const { registry, setStateCalls } = makeMutableRegistry();
-    const panel = new WorktreePanel(registry);
-    await new Promise((r) => setTimeout(r, 30));
-
-    expect(panel.handleInput('d')).toBe(true);
-    const confirmText = linesText(panel.render(100, H));
-    expect(confirmText).toContain('Discard');
-    expect(setStateCalls.some(([, state]) => state === 'discard')).toBe(false);
-
-    expect(panel.handleInput('n')).toBe(true); // cancel
-    expect(setStateCalls.some(([, state]) => state === 'discard')).toBe(false);
-
-    expect(panel.handleInput('d')).toBe(true);
-    expect(panel.handleInput('y')).toBe(true); // confirm
-    await new Promise((r) => setTimeout(r, 10));
-    expect(setStateCalls).toContainEqual(['/repo/wt-a', 'discard']);
-  });
-
-  test('c opens a ConfirmState before cleanup; confirming calls registry.cleanup', async () => {
-    const { registry, cleanupCalls } = makeMutableRegistry();
-    const panel = new WorktreePanel(registry);
-    await new Promise((r) => setTimeout(r, 30));
-
-    expect(panel.handleInput('c')).toBe(true);
-    const confirmText = linesText(panel.render(100, H));
-    expect(confirmText).toContain('Clean up');
-    expect(panel.handleInput('enter')).toBe(true); // confirm via Enter
-    await new Promise((r) => setTimeout(r, 10));
-    expect(cleanupCalls).toContain('/repo/wt-a');
-  });
-
-  test('Enter on an attached row stages a jump to the session panel via handlePanelIntegrationAction', async () => {
-    const { registry } = makeMutableRegistry();
-    const panel = new WorktreePanel(registry);
-    await new Promise((r) => setTimeout(r, 30));
-
-    expect(panel.handleInput('enter')).toBe(true);
-    const opened: string[] = [];
-    const ctx = { panelManager: { open: (id: string) => opened.push(id) } } as unknown as import('../../panels/types.ts').PanelIntegrationContext;
-    expect(panel.handlePanelIntegrationAction?.('enter', ctx)).toBe(true);
-    expect(opened).toEqual(['sessions']);
-  });
-});
