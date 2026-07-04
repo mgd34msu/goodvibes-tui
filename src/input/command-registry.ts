@@ -163,6 +163,8 @@ export interface CommandSessionServices {
   readonly hydrateSessionUsage?: () => void;
   /** Wave 4 (wo703): the orchestration engine's command-facing facade — see runtime/workstream-services.ts. */
   readonly workstreamEngine?: import('../runtime/workstream-services.ts').WorkstreamCommandService;
+  /** Wave 5 (wo804): the repo source-tree code index — see runtime/code-index-services.ts. */
+  readonly codeIndexStore?: import('@pellux/goodvibes-sdk/platform/state').CodeIndexStore;
 }
 
 export interface CommandProviderServices {
