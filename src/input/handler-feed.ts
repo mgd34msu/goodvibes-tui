@@ -18,6 +18,7 @@ import { BookmarkModal } from './bookmark-modal.ts';
 import { SettingsModal } from './settings-modal.ts';
 import type { McpWorkspace } from './mcp-workspace.ts';
 import { SessionPickerModal } from './session-picker-modal.ts';
+import type { ConfigModal } from './config-modal.ts';
 import { ProfilePickerModal } from './profile-picker-modal.ts';
 import type { OnboardingWizardController } from './onboarding/onboarding-wizard.ts';
 import type { OnboardingWizardAction } from './onboarding/onboarding-wizard.ts';
@@ -112,6 +113,7 @@ export interface InputFeedContext {
   readonly mcpWorkspace: McpWorkspace;
   readonly sessionPickerModal: SessionPickerModal;
   readonly profilePickerModal: ProfilePickerModal;
+  readonly configModal: ConfigModal;
   readonly historySearch: HistorySearch;
   commandRegistry: CommandRegistry | null;
   commandContext: CommandContext | undefined;
@@ -220,6 +222,7 @@ export function feedInputTokens(context: InputFeedContext, tokens: readonly Inpu
       mcpWorkspace: context.mcpWorkspace,
       sessionPickerModal: context.sessionPickerModal,
       profilePickerModal: context.profilePickerModal,
+      configModal: context.configModal,
       onboardingWizard: context.onboardingWizard,
       helpOverlayActive: context.helpOverlayActive,
       helpScrollOffset: context.helpScrollOffset,

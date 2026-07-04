@@ -61,6 +61,7 @@ export type ActiveModalState = {
   mcpWorkspace?: { active: boolean; close: () => void; reopen: () => void };
   sessionPickerModal: { active: boolean; close: () => void };
   profilePickerModal: { active: boolean; close: () => void };
+  configModal: { active: boolean; close: () => void };
   contextInspectorModal: { active: boolean; close: () => void };
   processModal: { active: boolean; close: () => void };
   modelPicker: { active: boolean; close: () => void };
@@ -81,6 +82,7 @@ export function getActiveModalName(state: ActiveModalState): string | null {
   if (state.mcpWorkspace?.active) return 'mcpWorkspace';
   if (state.sessionPickerModal.active) return 'sessionPicker';
   if (state.profilePickerModal.active) return 'profilePicker';
+  if (state.configModal.active) return 'config';
   if (state.contextInspectorModal.active) return 'contextInspector';
   if (state.processModal.active) return 'process';
   if (state.modelPicker.active) return 'modelPicker';
@@ -102,6 +104,7 @@ export type ModalCloseOps = {
   closeMcpWorkspace: () => void;
   closeSessionPicker: () => void;
   closeProfilePicker: () => void;
+  closeConfigModal: () => void;
   closeContextInspector: () => void;
   closeProcess: () => void;
   closeModelPicker: () => void;
@@ -141,6 +144,9 @@ export function closeModalByName(name: string, ops: ModalCloseOps): void {
     case 'profilePicker':
       ops.closeProfilePicker();
       break;
+    case 'config':
+      ops.closeConfigModal();
+      break;
     case 'contextInspector':
       ops.closeContextInspector();
       break;
@@ -176,6 +182,7 @@ export type ModalOpenOps = {
   openContextInspector: () => void;
   openMcpWorkspace?: () => void;
   openOnboarding?: () => void;
+  openConfigModal?: () => void;
   openCommandMode: () => void;
 };
 
@@ -198,6 +205,9 @@ export function reopenModalByName(name: string, ops: ModalOpenOps): void {
       break;
     case 'mcpWorkspace':
       ops.openMcpWorkspace?.();
+      break;
+    case 'config':
+      ops.openConfigModal?.();
       break;
     case 'onboarding':
       ops.openOnboarding?.();

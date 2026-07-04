@@ -5,6 +5,7 @@ import type { BookmarkModal } from './bookmark-modal.ts';
 import type { SettingsModal } from './settings-modal.ts';
 import type { SessionPickerModal } from './session-picker-modal.ts';
 import type { ProfilePickerModal } from './profile-picker-modal.ts';
+import type { ConfigModal } from './config-modal.ts';
 import type { HistorySearch } from './input-history.ts';
 import type { ModelPickerModal } from './model-picker.ts';
 import { handleMcpWorkspaceToken, type McpWorkspace } from './mcp-workspace.ts';
@@ -21,6 +22,7 @@ import { handleHistorySearchToken, handleOverlayToken, handleSearchModeToken } f
 import { handleOnboardingWizardToken } from './onboarding/handler-onboarding-routes.ts';
 import {
   handleBookmarkModalToken,
+  handleConfigModalToken,
   handleProfilePickerToken,
   handleSelectionModalToken,
   handleSessionPickerToken,
@@ -47,6 +49,7 @@ export type ModalTokenRouteState = {
   mcpWorkspace: McpWorkspace;
   sessionPickerModal: SessionPickerModal;
   profilePickerModal: ProfilePickerModal;
+  configModal: ConfigModal;
   onboardingWizard: OnboardingWizardController;
   helpOverlayActive: boolean;
   helpScrollOffset: number;
@@ -170,6 +173,15 @@ export function handleModalTokenRoutes(state: ModalTokenRouteState, token: Input
 
   if (handleProfilePickerToken({
     profilePickerModal: state.profilePickerModal,
+    commandContext: state.commandContext,
+    requestRender: state.requestRender,
+    handleEscape: state.handleEscape,
+  }, token)) {
+    return withState(state, true);
+  }
+
+  if (handleConfigModalToken({
+    configModal: state.configModal,
     commandContext: state.commandContext,
     requestRender: state.requestRender,
     handleEscape: state.handleEscape,
