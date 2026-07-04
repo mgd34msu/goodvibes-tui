@@ -413,6 +413,21 @@ describe('wireTurnEventHandlers — agent/chain-failure alerts (W2.3)', () => {
     spy.mockRestore();
   });
 
+  test('WORKFLOW_CHAIN_FAILED with failureKind=cancelled still alerts (operator-cancel branch, WO UX-A item 2)', () => {
+    // The cancelled branch narrates a cancellation rather than a failure but must
+    // still ring the bell when unfocused — the operator asked to stop and wants to
+    // know it stopped. (The distinct title is asserted at the SDK narration level;
+    // process-global module mocking to read the title is disallowed here.)
+    const spy = spyOnStdoutWrite();
+    const tracker = new FocusTracker();
+    tracker.setFocused(false);
+    const opts = makeMinimalOptions({ focusTracker: tracker, configManager: { get: () => undefined } });
+    wireTurnEventHandlers(opts);
+    opts.emitWorkflow('WORKFLOW_CHAIN_FAILED', { type: 'WORKFLOW_CHAIN_FAILED', chainId: 'chain-abcdef123456', reason: 'operator cancellation — 2 files already modified on disk', failureKind: 'cancelled' });
+    expect(spy).toHaveBeenCalledWith('\x07');
+    spy.mockRestore();
+  });
+
   test('WORKFLOW_CHAIN_FAILED never fires when notifyOnChainFailure is off', () => {
     const spy = spyOnStdoutWrite();
     const tracker = new FocusTracker();
