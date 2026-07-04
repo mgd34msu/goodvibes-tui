@@ -31,6 +31,7 @@ import { ArchetypeLoader } from '@pellux/goodvibes-sdk/platform/agents';
 import { ProcessManager } from '@pellux/goodvibes-sdk/platform/tools';
 import { ModeManager } from '@pellux/goodvibes-sdk/platform/state';
 import { FileUndoManager } from '@pellux/goodvibes-sdk/platform/state';
+import { WorkspaceCheckpointManager } from '@pellux/goodvibes-sdk/platform/workspace';
 import { MemoryRegistry } from '@pellux/goodvibes-sdk/platform/state';
 import { MemoryStore } from '@pellux/goodvibes-sdk/platform/state';
 import type { RuntimeEventBus } from '@/runtime/index.ts';
@@ -250,6 +251,7 @@ export interface RuntimeServices {
   readonly processManager: ProcessManager;
   readonly modeManager: ModeManager;
   readonly fileUndoManager: FileUndoManager;
+  readonly workspaceCheckpointManager: WorkspaceCheckpointManager;
   readonly integrationHelpers: IntegrationHelperService;
   /**
    * Re-root path-bound stores (MemoryStore, ProjectIndex) to a new working directory.
@@ -605,6 +607,13 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
   const processManager = new ProcessManager();
   const modeManager = new ModeManager();
   const fileUndoManager = new FileUndoManager();
+  const workspaceCheckpointManager = new WorkspaceCheckpointManager({
+    workspaceRoot: workingDirectory,
+    runtimeBus: options.runtimeBus,
+  });
+  // Fire-and-forget: subscriptions go live immediately; failure is non-fatal
+  // (checkpointing degrades to manual-only) and logged by the manager itself.
+  void workspaceCheckpointManager.init().catch(() => {});
   const integrationHelpers = new IntegrationHelperService({
     workingDirectory,
     homeDirectory,
@@ -738,6 +747,7 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
     processManager,
     modeManager,
     fileUndoManager,
+    workspaceCheckpointManager,
     integrationHelpers,
     async rerootStores(newWorkingDir: string): Promise<void> {
       const newMemoryDbPath = join(newWorkingDir, '.goodvibes', 'tui', 'memory.sqlite');
