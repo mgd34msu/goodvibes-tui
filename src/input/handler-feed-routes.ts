@@ -18,6 +18,7 @@ import type { TabHitRegion } from '../renderer/tab-strip.ts';
 import type { KeybindingsManager } from './keybindings.ts';
 import type { KillRing } from './kill-ring.ts';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
+import { trackPanelPasteFloodGuard, type PanelBurstGuardState } from './panel-paste-flood-guard.ts';
 
 export type PanelFocusRouteState = {
   panelManager: PanelManager;
@@ -43,6 +44,9 @@ export type PanelFocusRouteState = {
    * no text capture (Invariant A: focus must not silently flip to the composer).
    */
   onPasteDropped?: (panelName: string) => void;
+  /** Wall-clock time (ms) for this token; `burstGuard` is DEBT-5 item 5's flood-guard state, mutated in place across tokens (see panel-paste-flood-guard.ts). */
+  now: number;
+  burstGuard: PanelBurstGuardState;
   /**
    * True while a turn is actively streaming; gates Escape's cancel-first
    * precedence (I6.1) ahead of the panel's own two-stage escape contract
@@ -87,20 +91,13 @@ export function handlePanelFocusToken(state: PanelFocusRouteState, token: InputT
     // (e.g. dismiss a confirm dialog or clear search). Only unfocus if the
     // panel returns false (unconsumed) or there is no active panel.
     if (token.logicalName === 'escape') {
-      // I6.1: while a turn is streaming, a focused panel must not be able to
-      // swallow the only way to cancel it (replay R5) — Escape's first job is
-      // always cancel-turn. The panel's own two-stage consume-or-unfocus
-      // contract below only runs once no turn is active, so a *second*
-      // Escape (now with the turn already cancelled) falls through to it
-      // normally. panelFocused is left unchanged here (panel stays open and
-      // focused) — the panel close moves to that second Escape, or to
-      // Ctrl+X (panel-close, keybindings.ts), which is handled earlier in
-      // handleGlobalShortcutToken and is unaffected by this branch. This
-      // deliberately calls cancelGeneration() directly instead of routing
-      // through the shared handleEscape() (handler-modal-stack.ts) — that
-      // function's fallthrough order (modal-pop -> active-modal-close ->
-      // clear-nonempty-prompt -> cancelGeneration) is not guaranteed to reach
-      // cancelGeneration first in every state combination.
+      // I6.1/replay R5: while streaming, a focused panel must not swallow the
+      // only way to cancel — Escape's first job is always cancel-turn; the
+      // panel's own two-stage consume-or-unfocus contract only runs once no
+      // turn is active, so a *second* Escape falls through to it normally
+      // (panelFocused stays unchanged here). Calls cancelGeneration()
+      // directly rather than the shared handleEscape() (handler-modal-stack.ts),
+      // whose fallthrough order doesn't guarantee reaching it first.
       if (state.isTurnActive()) {
         state.cancelGeneration();
         state.requestRender();
@@ -119,13 +116,10 @@ export function handlePanelFocusToken(state: PanelFocusRouteState, token: InputT
     }
     const kb = state.keybindingsManager;
     // NOTE: panel-tab-next/prev, panel-close, and panel-close-all are handled
-    // globally in handleGlobalShortcutToken, which runs earlier in the feed
-    // loop and consumes those tokens before they ever reach this focused-panel
-    // route. Their old copies lived here too and had drifted (this route never
-    // called pm.hide() on close-all); they were unreachable, so they are gone
-    // and close/close-all semantics now live in exactly one place. Only
-    // panel-focus-toggle stays here, because it is meaningful only while the
-    // panel workspace already owns focus (it swaps between the two panes).
+    // globally in handleGlobalShortcutToken (runs earlier in the feed loop) —
+    // their old, drifted copies here were unreachable and are gone. Only
+    // panel-focus-toggle stays, since it's meaningful only once the panel
+    // workspace already owns focus (it swaps between the two panes).
     if (kb.matches('panel-focus-toggle', token)) {
       // Switch keyboard focus between the top and bottom panes (no-op when
       // there is no visible, non-empty bottom pane).
@@ -154,19 +148,28 @@ export function handlePanelFocusToken(state: PanelFocusRouteState, token: InputT
   if (token.type === 'text' && token.value) {
     const activePanel = state.panelManager.getActive();
     // Invariant A/B (W6.2). A paste (isPasteToken: one multi-char text token)
-    // into a focused text-capturing panel (a `/`-search or steer-draft field —
-    // isCapturingTextBurst) is forwarded verbatim below; into any other focused
-    // panel it is DROPPED with a one-shot hint — never exploded into per-char
-    // hotkeys, and never a silent focus flip to the composer (what the old
-    // per-feed char-sum burst guard did, which also misfired on two quick nav
-    // keys in one feed). Focus moves only on an explicit transfer verb, so
-    // panelFocused is left unchanged. Discrete 1-char keystrokes are not pastes
-    // and fall through to the per-char dispatch below, one at a time.
+    // into a focused text-capturing panel (isCapturingTextBurst — a `/`-search
+    // or steer-draft field) is forwarded verbatim below; into any other
+    // focused panel it is DROPPED with a one-shot hint — never exploded into
+    // per-char hotkeys, never a silent focus flip to the composer. Focus
+    // moves only on an explicit transfer verb. Discrete 1-char keystrokes are
+    // not pastes and fall through to the per-char dispatch below.
     if (state.isPasteToken && !activePanel?.isCapturingTextBurst?.()) {
       state.onPasteDropped?.(activePanel?.name ?? 'the panel');
       state.requestRender();
       return { handled: true, panelFocused };
     }
+
+    // DEBT-5 item 5 — paste flood guard (rate-based; see panel-paste-flood-guard.ts).
+    if (!state.isPasteToken && !activePanel?.isCapturingTextBurst?.()) {
+      const guard = trackPanelPasteFloodGuard(state.burstGuard, state.now);
+      if (!guard.dispatch) {
+        if (guard.showHintNow) state.onPasteDropped?.(activePanel?.name ?? 'the panel');
+        state.requestRender();
+        return { handled: true, panelFocused };
+      }
+    }
+
     if (activePanel?.handleInput) {
       for (const ch of token.value) {
         activePanel.handleInput(ch);
@@ -204,8 +207,7 @@ export function handleIndicatorFocusToken(state: IndicatorFocusRouteState, token
     }
     if (token.logicalName === 'enter') {
       indicatorFocused = false;
-      // W2.2: repointed from the retired process modal (removed in W6.2) to the
-      // Fleet panel — F2 also opens the Fleet panel (handlePromptKeyToken f2).
+      // W2.2: opens the Fleet panel (see openFleetPanel's own doc, line ~352).
       state.openFleetPanel();
       state.requestRender();
       return { handled: true, indicatorFocused };
@@ -605,10 +607,7 @@ export function handlePromptKeyToken(state: KeyRouteState, token: InputToken): {
 
   if (token.logicalName === 'f2') {
     indicatorFocused = false;
-    // W6.2 e: F2 opens AND focuses the Fleet panel, which subsumes the deleted
-    // process modal (ProcessModal/AgentDetailModal/LiveTailModal — removed in
-    // W6.1 once this repoint made them unreachable). openFleetPanel sets
-    // panelFocused on the shared context directly, so nothing more is returned.
+    // W6.2 e (see openFleetPanel's own doc, line ~352): opens+focuses Fleet.
     state.openFleetPanel();
     return { handled: true, prompt, cursorPos, inputScrollTop, commandMode, indicatorFocused };
   }

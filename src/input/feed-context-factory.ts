@@ -39,6 +39,7 @@ import type { ModelPickerTarget } from './model-picker.ts';
 import type { KillRing } from './kill-ring.ts';
 import type { PanelMouseLayout } from './handler-feed-routes.ts';
 import type { FocusTracker } from '../core/focus-tracker.ts';
+import type { PanelBurstGuardState } from './panel-paste-flood-guard.ts';
 
 /**
  * Initial mutable scalar values for InputFeedContext.
@@ -125,6 +126,8 @@ export interface FeedContextStableRefs {
   keybindingsManager: KeybindingsManager;
   killRing: KillRing;
   focusTracker: FocusTracker;
+  /** DEBT-5 item 5 — paste-flood guard state, mutated in place (never reallocated). */
+  panelBurstGuard: PanelBurstGuardState;
   getHistory: () => InfiniteBuffer;
   getViewportHeight: () => number;
   getScrollTop: () => number;
