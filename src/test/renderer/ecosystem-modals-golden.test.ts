@@ -72,10 +72,23 @@ function assertGolden(surface: string, lines: Line[]): void {
   if (expected !== actual) throw new Error(`[${surface}] golden-frame mismatch. Run with GOODVIBES_UPDATE_GOLDENS=1 to regenerate.`);
 }
 
-/** Open a surface in the real host and render it — the production render path. */
-function renderSurface(surface: ConfigModalSurface, width: number): Line[] {
+/**
+ * Open a surface in the real host and render it — the production render path.
+ *
+ * Note (c) harness fix: ConfigModal.open() freezes the tab structure from
+ * buildView() BEFORE surface.onOpen()'s refresh() loads its rows, and
+ * getRenderModel() only overlays live values onto the FROZEN row ids — so a
+ * naive render immediately after open() locks the pre-refresh chrome (empty
+ * rows), not real content. We flush a microtask turn (settles any async
+ * onOpen; the Promise-backed surfaces also pre-await inside their factory)
+ * then syncStructure() to re-freeze from the post-refresh buildView(), so the
+ * committed golden locks content, not chrome.
+ */
+async function renderSurface(surface: ConfigModalSurface, width: number): Promise<Line[]> {
   const modal = new ConfigModal();
   modal.open(surface, () => {});
+  await Promise.resolve();
+  modal.syncStructure();
   const lines = renderConfigModal(modal, width, HEIGHT);
   modal.close();
   return lines;
@@ -113,13 +126,13 @@ for (const entry of GOLDEN_MODALS) {
     for (const size of SIZES) {
       const surfaceName = `${entry.name}-${size.label}`;
       test(`${size.label} width matches committed golden`, async () => {
-        const lines = renderSurface(await entry.factory(), size.width);
+        const lines = await renderSurface(await entry.factory(), size.width);
         expect(lines.length).toBeGreaterThan(0);
         assertGolden(surfaceName, lines);
       });
       test(`${size.label} width render is deterministic`, async () => {
-        const a = snapshotEncode(surfaceName, renderSurface(await entry.factory(), size.width));
-        const b = snapshotEncode(surfaceName, renderSurface(await entry.factory(), size.width));
+        const a = snapshotEncode(surfaceName, await renderSurface(await entry.factory(), size.width));
+        const b = snapshotEncode(surfaceName, await renderSurface(await entry.factory(), size.width));
         expect(a).toBe(b);
       });
     }
