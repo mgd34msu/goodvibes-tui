@@ -21,9 +21,8 @@ export function renderConfigModal(modal: ConfigModal, width: number, height: num
   return renderConfigModalModel(model, width);
 }
 
-/** Pure model→Line[] mapping, exported so goldens/tests can render a model
- *  without constructing a live modal + surface. */
-export function renderConfigModalModel(model: ConfigModalRenderModel, width: number): Line[] {
+/** Pure model→Line[] mapping — the shared inner step of renderConfigModal. */
+function renderConfigModalModel(model: ConfigModalRenderModel, width: number): Line[] {
   const sections: ModalSection[] = [];
 
   if (model.degraded) {
