@@ -184,19 +184,24 @@ describe('operator surfaces gate', () => {
     });
     const ids = manager.getRegisteredTypes().map((entry) => entry.id);
 
-    // W6.1 (the purge) — group B (WO-B): policy/hooks/security/marketplace/
-    // knowledge migrated to config-modals. They are no longer registered panels;
-    // each redirects to its modal via PanelManager.registerModalRedirect
-    // (registered by registerEcosystemModalRedirects in registerOperationsPanels).
-    // (sandbox/subscription/remote were group A — WO-A migrated those; asserted
-    // in the WO-A block below, not registered here as they were on the WO-B
-    // branch before the group-A migration landed.)
-    for (const [panelId, modalName] of [
-      ['policy', 'policy'], ['hooks', 'hooks'], ['security', 'security'],
-      ['marketplace', 'marketplace'], ['knowledge', 'knowledge'],
-    ] as const) {
+    // W6.1 (the purge) — group B (WO-P): the 12 ecosystem/governance panels
+    // migrated to config-modal SURFACES registered centrally in
+    // registerBuiltinModals. Each old panel id is gone and redirects to its
+    // '-modal' surface; 'sessions' folds into the existing session picker.
+    const GROUP_B_REDIRECTS: ReadonlyArray<readonly [string, string]> = [
+      ['marketplace', 'marketplace-modal'], ['plugins', 'plugins-modal'], ['skills', 'skills-modal'],
+      ['hooks', 'hooks-modal'], ['policy', 'policy-modal'], ['security', 'security-modal'],
+      ['knowledge', 'knowledge-modal'], ['memory', 'memory-modal'], ['docs', 'keybindings-modal'],
+      ['qr-code', 'pairing-modal'], ['work-plan', 'work-plan-modal'], ['project-planning', 'planning-modal'],
+      ['sessions', 'sessionPicker'],
+    ];
+    for (const [panelId, modalName] of GROUP_B_REDIRECTS) {
       expect(ids).not.toContain(panelId);
       expect(manager.getModalRedirect(panelId)).toBe(modalName);
+    }
+    // All 12 group-B surfaces resolve (registration completeness 12/12).
+    for (const name of ['marketplace-modal', 'plugins-modal', 'skills-modal', 'hooks-modal', 'security-modal', 'policy-modal', 'knowledge-modal', 'memory-modal', 'work-plan-modal', 'keybindings-modal', 'pairing-modal', 'planning-modal']) {
+      expect(manager.getModalSurface(name)?.name).toBe(name);
     }
     expect(ids).toContain('fleet');
     // W6.1 (WO-A): local-auth stays a registered panel — it is the host for the
@@ -304,11 +309,11 @@ describe('operator surfaces gate', () => {
     });
     const ids = manager.getRegisteredTypes().map((entry) => entry.id);
     expect(ids).toContain('cost');
-    // W6.1 (the purge) — group B: 'memory' migrated to the 'memory' config-modal.
-    // It no longer registers as a panel (the modal owns the "not configured"
-    // empty state now — see src/panels/modals/memory-modal.ts); it redirects.
+    // W6.1 (the purge) — group B: 'memory' migrated to the 'memory-modal'
+    // config-modal surface. It no longer registers as a panel (the modal owns
+    // the "not configured" degraded state now — see memory-modal.ts); it redirects.
     expect(ids).not.toContain('memory');
-    expect(manager.getModalRedirect('memory')).toBe('memory');
+    expect(manager.getModalRedirect('memory')).toBe('memory-modal');
 
     for (const id of ['cost']) {
       // Must not throw "Unknown panel" — the registration always exists now.

@@ -1,107 +1,63 @@
 import { describe, test, expect } from 'bun:test';
-import { bindWorkPlanModal, workPlanModalGoldenSurface, type WorkPlanModalDeps } from '../../../panels/modals/work-plan-modal.ts';
-import { EMPTY_VIEW } from '../../../panels/modals/modal-surface.ts';
-import type { ModalConfig } from '../../../renderer/modal-factory.ts';
+import { createWorkPlanModalSurface, type WorkPlanModalDeps } from '../../../panels/modals/work-plan-modal.ts';
+import { actionCtx, captureCommands, open, tabText } from './modal-surface-test-helpers.ts';
 
-/** Flatten a ModalConfig's text/list/title content into one searchable string. */
-function configText(config: ModalConfig): string {
-  const parts: string[] = [config.title];
-  if (config.search !== undefined) parts.push(config.search);
-  for (const section of config.sections) {
-    if (section.content) parts.push(section.content);
-    for (const item of section.items ?? []) parts.push(item.label);
-  }
-  for (const hint of config.hints ?? []) parts.push(hint);
-  if (config.footer) parts.push(config.footer);
-  return parts.join('\n');
-}
-
-const FIXED_UPDATED_AT = 1735693200000; // 2025-01-01T01:00:00.000Z
-
+const FIXED = 1735693200000;
 function fixedDeps(): WorkPlanModalDeps {
   const items = [
-    {
-      id: 'wpi-a',
-      title: 'Ship WO-B',
-      status: 'in_progress' as const,
-      owner: 'wo-b',
-      source: 'tui-panel',
-      notes: 'Route mutations to commands.',
-      linked: { agentId: 'agent-1' },
-      updatedAt: FIXED_UPDATED_AT,
-    },
-    {
-      id: 'wpi-b',
-      title: 'Wire redirects',
-      status: 'pending' as const,
-      updatedAt: FIXED_UPDATED_AT,
-    },
-    {
-      id: 'wpi-c',
-      title: 'Archive old panel',
-      status: 'done' as const,
-      updatedAt: FIXED_UPDATED_AT,
-    },
+    { id: 'wpi-a', title: 'Ship WO-P', status: 'in_progress' as const, owner: 'wo-p', source: 'tui-panel', notes: 'Route mutations to commands.', linked: { agentId: 'agent-1' }, updatedAt: FIXED },
+    { id: 'wpi-b', title: 'Wire redirects', status: 'pending' as const, updatedAt: FIXED },
+    { id: 'wpi-c', title: 'Archive old panel', status: 'done' as const, updatedAt: FIXED },
   ];
-  return {
-    workPlanStore: {
-      getActivePlan: () => ({ projectRoot: '/proj', items }),
-    },
-  };
+  return { workPlanStore: { getActivePlan: () => ({ projectRoot: '/proj', items }) } };
 }
 
-describe('work-plan modal builder', () => {
-  test('lists items with progress summary and status counts', () => {
-    const surface = bindWorkPlanModal(fixedDeps());
-    surface.refresh();
-    const text = configText(surface.buildConfig(EMPTY_VIEW));
+describe('work-plan modal surface', () => {
+  test('surface identity', () => { expect(createWorkPlanModalSurface(fixedDeps()).name).toBe('work-plan-modal'); });
+
+  test('lists items with progress summary, counts, and folded notes/linked detail', () => {
+    const view = open(createWorkPlanModalSurface(fixedDeps()));
+    const text = tabText(view, 'items');
     expect(text).toContain('Project /proj');
-    expect(text).toContain('Ship WO-B');
-    expect(text).toContain('@wo-b');
+    expect(text).toContain('Ship WO-P');
+    expect(text).toContain('@wo-p');
     expect(text).toContain('(tui-panel)');
     expect(text).toContain('pending 1  active 1  blocked 0  done 1');
-    expect(text).toContain('33%'); // 1 done of 3
-    expect(surface.rowIds(EMPTY_VIEW)).toEqual(['wpi-a', 'wpi-b', 'wpi-c']);
-  });
-
-  test('selected item detail includes notes and linked targets', () => {
-    const surface = bindWorkPlanModal(fixedDeps());
-    surface.refresh();
-    const text = configText(surface.buildConfig(EMPTY_VIEW));
-    expect(text).toContain('notes Route mutations to commands.');
-    expect(text).toContain('linked agent:agent-1');
+    expect(text).toContain('33%');
+    expect(text).toContain('Route mutations to commands.'); // folded notes
+    expect(text).toContain('agent:agent-1'); // folded linked
+    expect(view.tabs[0]!.rows.map((r) => r.id)).toEqual(['wpi-a', 'wpi-b', 'wpi-c']);
   });
 
   test('empty plan renders an honest empty state', () => {
-    const surface = bindWorkPlanModal({ workPlanStore: { getActivePlan: () => ({ projectRoot: '/empty', items: [] }) } });
-    surface.refresh();
-    const text = configText(surface.buildConfig(EMPTY_VIEW));
-    expect(text).toContain('No work plan items yet.');
-    expect(surface.rowIds(EMPTY_VIEW)).toHaveLength(0);
+    const view = open(createWorkPlanModalSurface({ workPlanStore: { getActivePlan: () => ({ projectRoot: '/empty', items: [] }) } }));
+    expect(view.tabs[0]!.emptyText).toContain('No work plan items yet.');
+    expect(view.tabs[0]!.rows).toHaveLength(0);
   });
 
-  test('cycle/status/delete/clear/add actions route to /work-plan commands (no direct store mutation)', () => {
-    const surface = bindWorkPlanModal(fixedDeps());
-    surface.refresh();
-    expect(surface.actions.cycleStatus!(EMPTY_VIEW)).toEqual({ kind: 'runCommand', command: '/work-plan cycle wpi-a' });
-    expect(surface.actions.setDone!(EMPTY_VIEW)).toEqual({ kind: 'runCommand', command: '/work-plan done wpi-a' });
-    expect(surface.actions.setBlocked!(EMPTY_VIEW)).toEqual({ kind: 'runCommand', command: '/work-plan block wpi-a' });
-    expect(surface.actions.remove!(EMPTY_VIEW)).toEqual({ kind: 'runCommand', command: '/work-plan remove wpi-a' });
-    expect(surface.actions.clearCompleted!(EMPTY_VIEW)).toEqual({ kind: 'runCommand', command: '/work-plan clear-done' });
-    expect(surface.actions.add!(EMPTY_VIEW)).toEqual({ kind: 'runCommand', command: '/work-plan add ' });
+  test('cycle/status/delete/clear/add actions route to /work-plan commands', () => {
+    const surface = createWorkPlanModalSurface(fixedDeps());
+    open(surface);
+    const row = { id: 'wpi-a', label: '' };
+    const check = (id: string, r: typeof row | null, expected: [string, string[]][]): void => {
+      const cap = captureCommands();
+      surface.onAction?.(id, actionCtx(r, cap.extra));
+      expect(cap.calls).toEqual(expected);
+    };
+    check('cycleStatus', row, [['work-plan', ['cycle', 'wpi-a']]]);
+    check('setDone', row, [['work-plan', ['done', 'wpi-a']]]);
+    check('setBlocked', row, [['work-plan', ['block', 'wpi-a']]]);
+    check('remove', row, [['work-plan', ['remove', 'wpi-a']]]);
+    check('clearCompleted', null, [['work-plan', ['clear-done']]]);
+    check('add', null, [['work-plan', ['add']]]);
   });
 
-  test('actions against an empty plan are a no-op', () => {
-    const surface = bindWorkPlanModal({ workPlanStore: { getActivePlan: () => ({ projectRoot: '/empty', items: [] }) } });
-    surface.refresh();
-    expect(surface.actions.cycleStatus!(EMPTY_VIEW)).toEqual({ kind: 'none' });
-    expect(surface.actions.remove!(EMPTY_VIEW)).toEqual({ kind: 'none' });
-  });
-
-  test('golden surface renders a deterministic byte-stable config across two calls', () => {
-    const a = configText(workPlanModalGoldenSurface().buildConfig(EMPTY_VIEW));
-    const b = configText(workPlanModalGoldenSurface().buildConfig(EMPTY_VIEW));
-    expect(a).toBe(b);
-    expect(a).toContain('Migrate KNOWLEDGE/MEMORY/WORK-PLAN panels to modals');
+  test('row-scoped actions against an empty plan are a no-op', () => {
+    const surface = createWorkPlanModalSurface({ workPlanStore: { getActivePlan: () => ({ projectRoot: '/empty', items: [] }) } });
+    open(surface);
+    const cap = captureCommands();
+    surface.onAction?.('cycleStatus', actionCtx({ id: 'wpi-x', label: '' }, cap.extra));
+    surface.onAction?.('remove', actionCtx({ id: 'wpi-x', label: '' }, cap.extra));
+    expect(cap.calls).toEqual([]);
   });
 });

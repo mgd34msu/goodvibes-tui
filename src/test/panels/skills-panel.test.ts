@@ -81,11 +81,12 @@ describe('SkillsPanel', () => {
       worktreeRegistry: services.worktreeRegistry,
       sandboxSessionRegistry: services.sandboxSessionRegistry,
     });
-    // W6.1 (the purge) — group B: skills migrated to the 'skills' config-modal.
-    // The panel is no longer a registered type; the id redirects to the modal
-    // (registered by registerEcosystemModalRedirects in registerOperationsPanels).
+    // W6.1 (the purge) — group B: skills migrated to the 'skills-modal' config-
+    // modal surface (WO-P). The panel is no longer a registered type; the id
+    // redirects to the surface (registered in registerBuiltinModals).
     expect(manager.getRegisteredTypes().some((entry) => entry.id === 'skills')).toBe(false);
-    expect(manager.getModalRedirect('skills')).toBe('skills');
+    expect(manager.getModalRedirect('skills')).toBe('skills-modal');
+    expect(manager.getModalSurface('skills-modal')?.name).toBe('skills-modal');
   });
 
   test('discovers project-local skills before global skills and renders origin path', async () => {

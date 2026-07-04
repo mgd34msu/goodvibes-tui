@@ -59,7 +59,7 @@ describe('workplan command', () => {
     const ctx = makeContext(out, opened, store);
 
     await command!.handler(['add', 'Ship', 'persistent', 'plan', '--owner', 'tui'], ctx);
-    expect(opened).toContain('work-plan');
+    expect(opened).toContain('work-plan-modal');
     const item = store.listItems()[0]!;
     expect(item.title).toBe('Ship persistent plan');
     expect(item.owner).toBe('tui');
