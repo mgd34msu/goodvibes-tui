@@ -8,7 +8,7 @@ import type { PermissionRequestHandler } from '@pellux/goodvibes-sdk/platform/pe
 import type { SelectionItem, SelectionResult, SelectionAction } from './selection-modal.ts';
 import type { FileUndoManager } from '@pellux/goodvibes-sdk/platform/state';
 import type { WorkspaceCheckpointManager } from '@pellux/goodvibes-sdk/platform/workspace';
-import type { PanelManager } from '../panels/panel-manager.ts';
+import type { PanelManager, PanelDeepLinkTarget } from '../panels/panel-manager.ts';
 import type { KeybindingsManager } from './keybindings.ts';
 import type { OnboardingWizardMode } from './onboarding/onboarding-wizard.ts';
 import type { OpenOnboardingWizardOptions } from './handler-ui-state.ts';
@@ -131,7 +131,7 @@ export interface CommandShellUiOpeners {
   openShortcutsOverlay?: () => void;
   getScrollTop?: () => number;
   openPanelPicker?: () => void;
-  showPanel?: (panelId: string, pane?: 'top' | 'bottom') => void;
+  showPanel?: (panelId: string, pane?: 'top' | 'bottom', target?: PanelDeepLinkTarget) => void;
   focusPanels?: () => void;
   focusPrompt?: () => void;
   openOpsPanel?: () => void;

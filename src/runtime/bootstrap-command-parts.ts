@@ -5,7 +5,7 @@ import type { ConversationManager } from '../core/conversation';
 import type { KnowledgeApi } from '@pellux/goodvibes-sdk/platform/knowledge';
 import type { HookApi } from '@pellux/goodvibes-sdk/platform/hooks';
 import type { McpApi } from '@pellux/goodvibes-sdk/platform/mcp';
-import type { PanelManager } from '../panels/panel-manager.ts';
+import type { PanelManager, PanelDeepLinkTarget } from '../panels/panel-manager.ts';
 import type { ProviderApi } from '@pellux/goodvibes-sdk/platform/providers';
 import type { OpsApi } from '@/runtime/index.ts';
 import type { MutableRuntimeState } from '@/runtime/index.ts';
@@ -190,7 +190,7 @@ export function createBootstrapCommandActions(
     localUserAuthManager,
   } = options;
 
-  const showPanel = (panelId: string, pane?: 'top' | 'bottom') => {
+  const showPanel = (panelId: string, pane?: 'top' | 'bottom', target?: PanelDeepLinkTarget) => {
     // W6.1 (the purge): a MIGRATE-TO-MODAL id resolves to a modal, not a panel.
     // panelManager.open() fires the injected openModal callback and returns a
     // no-op sentinel — so skip panelManager.show() (which would reveal an empty
@@ -198,7 +198,7 @@ export function createBootstrapCommandActions(
     // showPanel-based front-door (openHooksPanel/openSecurityPanel/… and the
     // migrated command runtimes) opening the modal cleanly.
     const redirected = panelManager.getModalRedirect(panelId) !== undefined;
-    panelManager.open(panelId, pane);
+    panelManager.open(panelId, pane, target);
     if (!redirected) panelManager.show();
     requestRender();
   };

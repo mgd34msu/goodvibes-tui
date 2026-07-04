@@ -1328,3 +1328,50 @@ describe('FleetPanel — pause/resume + stopping (W6.2 d)', () => {
     expect(actions.interruptCalls).toEqual([]);
   });
 });
+
+// ---------------------------------------------------------------------------
+// receiveDeepLink — DEBT-5 item 4 (fleet deep-links)
+// ---------------------------------------------------------------------------
+
+describe('FleetPanel — receiveDeepLink (DEBT-5 item 4)', () => {
+  test('selects and reveals the target node when it exists in the current snapshot', () => {
+    const nodes = [makeNode({ id: 'agent-1' }), makeNode({ id: 'agent-2' })];
+    const readModel = createStaticFleetReadModel(buildFleetSnapshot(nodes, NOW));
+    const panel = new FleetPanel(readModel);
+    panel.receiveDeepLink({ id: 'agent-2', kind: 'agent' });
+    const text = linesText(panel.render(100, 24));
+    const selectedLine = text.split('\n').find((l) => l.includes('▸'));
+    expect(selectedLine).toContain('agent-2');
+  });
+
+  test('a kind mismatch is treated as not-found — an honest defense against an id collision across node types', () => {
+    const nodes = [makeNode({ id: 'x-1', kind: 'agent' })];
+    const readModel = createStaticFleetReadModel(buildFleetSnapshot(nodes, NOW));
+    const panel = new FleetPanel(readModel);
+    panel.receiveDeepLink({ id: 'x-1', kind: 'wrfc-chain' });
+    expect(linesText(panel.render(100, 24))).toContain('node no longer present');
+  });
+
+  test('a missing target degrades gracefully: the honest "node no longer present" line, no crash, no selection change', () => {
+    const nodes = [makeNode({ id: 'agent-1' })];
+    const readModel = createStaticFleetReadModel(buildFleetSnapshot(nodes, NOW));
+    const panel = new FleetPanel(readModel);
+    expect(() => panel.receiveDeepLink({ id: 'does-not-exist' })).not.toThrow();
+    expect(linesText(panel.render(100, 24))).toContain('node no longer present');
+  });
+
+  test("PanelManager.open('fleet', pane, target) delivers the target to an already-open FleetPanel instance", () => {
+    const manager = new PanelManager();
+    const nodes = [makeNode({ id: 'agent-1' }), makeNode({ id: 'agent-2' })];
+    const readModel = createStaticFleetReadModel(buildFleetSnapshot(nodes, NOW));
+    manager.registerType({
+      id: 'fleet', name: 'Fleet', icon: '⊟', category: 'runtime-ops',
+      description: 'Live fleet tree', factory: () => new FleetPanel(readModel),
+    });
+    const first = manager.open('fleet');
+    const again = manager.open('fleet', undefined, { id: 'agent-2', kind: 'agent' });
+    expect(again).toBe(first); // same instance — the existing-pane reuse path, not a fresh panel
+    const selectedLine = linesText((again as FleetPanel).render(100, 24)).split('\n').find((l) => l.includes('▸'));
+    expect(selectedLine).toContain('agent-2');
+  });
+});

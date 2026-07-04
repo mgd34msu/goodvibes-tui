@@ -111,7 +111,22 @@ class KeybindingsModalSurface implements ConfigModalSurface {
   onAction(id: string, ctx: ConfigModalActionContext): void {
     if (id === 'refresh') { ctx.setStatus('Docs & shortcuts are read live.'); ctx.requestRender(); return; }
     if (id !== 'activate') return;
-    if (ctx.tabId === 'tools') { void ctx.executeCommand?.('panel', ['open', 'fleet']); ctx.setStatus('Opened the tool inspector (fleet).'); return; }
+    if (ctx.tabId === 'tools') {
+      // DEBT-5 item 4: pass the tool name through as a deep-link target.
+      // Honest caveat (documented, not a bug to silently paper over): fleet's
+      // ProcessKind set has no 'tool' node — a docs Tools row names a static
+      // tool DEFINITION, not a live process, so FleetPanel.receiveDeepLink
+      // will not currently find a match and shows its honest "node no longer
+      // present" line. The plumbing is still worth wiring now (matches the
+      // work-plan agent/wrfc jumps' shape) — it starts resolving for free the
+      // day fleet grows a per-tool-call node (the retired DocsPanel's own
+      // comment already anticipated this: "no filter-by-tool equivalent
+      // there yet").
+      const toolName = ctx.row?.id.startsWith('tool:') ? ctx.row.id.slice('tool:'.length) : null;
+      void ctx.executeCommand?.('panel', toolName ? ['open', 'fleet', '--target', `${toolName}:tool`] : ['open', 'fleet']);
+      ctx.setStatus('Opened the tool inspector (fleet).');
+      return;
+    }
     if (ctx.tabId === 'models') {
       const key = ctx.row?.id.startsWith('model:') ? ctx.row.id.slice('model:'.length) : null;
       if (!key) return;
