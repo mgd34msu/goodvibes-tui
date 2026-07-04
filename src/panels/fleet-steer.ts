@@ -11,8 +11,9 @@
 
 import { STEER_TTL_MS, type ProcessNode } from '@pellux/goodvibes-sdk/platform/runtime/fleet';
 import { isTerminalProcessState } from './fleet-read-model.ts';
-import type { FleetTab, SteerBadgeStatus } from './fleet-tabs.ts';
-import { DEFAULT_PANEL_PALETTE, type PanelPalette } from './polish.ts';
+import type { FleetTab, SteerBadge, SteerBadgeStatus } from './fleet-tabs.ts';
+import { buildPanelLine, DEFAULT_PANEL_PALETTE, type PanelPalette } from './polish.ts';
+import type { Line } from '../types/grid.ts';
 
 /** Linger before an auto-resolved (consumed/dropped) steer badge is cleared from the tab. */
 export const STEER_BADGE_LINGER_MS = 4_000;
@@ -31,6 +32,38 @@ export function steerBadgeTone(status: SteerBadgeStatus, palette: PanelPalette):
     case 'consumed': return palette.good ?? DEFAULT_PANEL_PALETTE.good;
     case 'dropped': return palette.bad ?? DEFAULT_PANEL_PALETTE.bad;
   }
+}
+
+/** Labels of the currently live, steerable agent nodes other than `excludeNodeId` — offered when a steer target has gone inactive (WO UX-A item 4). */
+export function liveSteerableLabels(nodes: readonly ProcessNode[], excludeNodeId: string): string[] {
+  return nodes
+    .filter((node) => node.id !== excludeNodeId && node.kind === 'agent' && node.capabilities.steerable && !isTerminalProcessState(node.state))
+    .map((node) => node.label);
+}
+
+/** Refusal message for a steer that could not be queued: states why + preserves the draft + suggests live targets. */
+export function steerRefusalMessage(reason: string, siblingLabels: readonly string[]): string {
+  const suggestion = siblingLabels.length > 0
+    ? ` Draft kept — steerable now: ${siblingLabels.slice(0, 3).join(', ')}${siblingLabels.length > 3 ? '…' : ''}.`
+    : ' Draft kept — no other agents are currently steerable.';
+  return `${reason}.${suggestion}`;
+}
+
+/** One-line honest status for a tab's steer badge; the queued line names the target and points at the ⧗ delivery badge (WO UX-A item 4). */
+export function renderSteerBadgeLine(badge: SteerBadge, width: number, palette: PanelPalette, targetLabel?: string): Line {
+  const glyph = steerBadgeGlyph(badge.status);
+  const tone = steerBadgeTone(badge.status, palette);
+  const forTarget = targetLabel ? ` for ${targetLabel}` : '';
+  const label = badge.status === 'queued'
+    ? `steer queued${forTarget} — delivers on its next turn (watch the ${glyph} badge)`
+    : badge.status === 'consumed'
+      ? 'steer consumed'
+      : `steer dropped — ${badge.note ?? 'the target ended before delivery'}`;
+  return buildPanelLine(width, [
+    [' ', palette.dim],
+    [glyph, tone],
+    [` ${label}`, palette.dim],
+  ]);
 }
 
 /**

@@ -52,7 +52,7 @@ import {
   type FleetTabsState,
   type SteerBadge,
 } from './fleet-tabs.ts';
-import { reconcileSteerBadges as reconcileSteerBadgesPure, steerBadgeGlyph, steerBadgeTone } from './fleet-steer.ts';
+import { liveSteerableLabels, reconcileSteerBadges as reconcileSteerBadgesPure, renderSteerBadgeLine, steerBadgeGlyph, steerBadgeTone, steerRefusalMessage } from './fleet-steer.ts';
 import { FleetStopTracker, fleetStateDisplay, toggleFleetPause, buildFleetTreeHints } from './fleet-stop.ts';
 import { parseAgentLedger, renderFleetAgentTranscript, renderFleetChainSummary, renderFleetLedgerFallback, renderFleetTranscriptLoading } from './fleet-transcript.ts';
 import { renderFleetTabStrip } from '../renderer/fleet-tab-strip.ts';
@@ -602,24 +602,10 @@ export class FleetPanel extends ScrollableListPanel<FleetTreeRow> {
       this.markDirty();
       return true;
     }
-    const siblings = this.steerableSiblingLabels(tab.nodeId);
-    const suggestion = siblings.length > 0
-      ? ` Draft kept — steerable now: ${siblings.slice(0, 3).join(', ')}${siblings.length > 3 ? '…' : ''}.`
-      : ' Draft kept — no other agents are currently steerable.';
-    this.setError(`${result.reason}.${suggestion}`);
+    const siblings = liveSteerableLabels(this.readModel.getSnapshot().rows.map((row) => row.node), tab.nodeId);
+    this.setError(steerRefusalMessage(result.reason, siblings));
     this.markDirty();
     return false;
-  }
-
-  /** Labels of the currently live, steerable agent nodes other than `excludeNodeId` — offered when a steer target has gone inactive. */
-  private steerableSiblingLabels(excludeNodeId: string): string[] {
-    return this.readModel.getSnapshot().rows
-      .map((row) => row.node)
-      .filter((node) => node.id !== excludeNodeId
-        && node.kind === 'agent'
-        && node.capabilities.steerable
-        && !isTerminalProcessState(node.state))
-      .map((node) => node.label);
   }
 
   protected renderItem(row: FleetTreeRow, _index: number, _selected: boolean, width: number): Line {
@@ -737,7 +723,7 @@ export class FleetPanel extends ScrollableListPanel<FleetTreeRow> {
         { active: true, bg: palette.inputBg, valueColor: palette.info },
       ));
     } else if (tab.steerBadge) {
-      composerLines.push(this.renderSteerBadgeLine(tab.steerBadge, width, palette, liveNode?.label));
+      composerLines.push(renderSteerBadgeLine(tab.steerBadge, width, palette, liveNode?.label));
     }
 
     const footerLines = [
@@ -777,25 +763,6 @@ export class FleetPanel extends ScrollableListPanel<FleetTreeRow> {
       { lines: contentLines },
     ];
     return buildPanelWorkspace(width, height, { title: `Fleet — ${tab.label}`, sections, footerLines, palette });
-  }
-
-  /** One-line honest status for the active tab's steer badge (queued/consumed/dropped) — see fleet-tabs.ts's SteerBadgeStatus doc. */
-  private renderSteerBadgeLine(badge: SteerBadge, width: number, palette: PanelPalette, targetLabel?: string): Line {
-    const glyph = steerBadgeGlyph(badge.status);
-    const tone = steerBadgeTone(badge.status, palette);
-    // The queued line is the immediate honest acknowledgment of a send: it names
-    // the target and points at the ⧗ badge that tracks delivery (WO UX-A item 4).
-    const forTarget = targetLabel ? ` for ${targetLabel}` : '';
-    const label = badge.status === 'queued'
-      ? `steer queued${forTarget} — delivers on its next turn (watch the ${glyph} badge)`
-      : badge.status === 'consumed'
-        ? 'steer consumed'
-        : `steer dropped — ${badge.note ?? 'the target ended before delivery'}`;
-    return buildPanelLine(width, [
-      [' ', palette.dim],
-      [glyph, tone],
-      [` ${label}`, palette.dim],
-    ]);
   }
 
   private renderTreeView(width: number, height: number): Line[] {

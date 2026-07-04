@@ -393,6 +393,21 @@ export function fleetLeafCostTotal(nodes: readonly ProcessNode[]): number | null
   return total;
 }
 
+/**
+ * The fleet cost figure for the always-visible footer: fleetLeafCostTotal over a
+ * fresh registry query, but ONLY while a fleet is live — the idle single-session
+ * path must never pay the aggregate-on-read query() scan. Query failures degrade to
+ * null (honest "no fleet cost"), never a throw into the render loop.
+ */
+export function footerFleetCost(queryNodes: () => readonly ProcessNode[], hasLiveFleet: boolean): number | null {
+  if (!hasLiveFleet) return null;
+  try {
+    return fleetLeafCostTotal(queryNodes());
+  } catch {
+    return null;
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Read-model — two-factory shape (live / static), mirrors cockpit-read-model.ts
 // ---------------------------------------------------------------------------
