@@ -160,11 +160,26 @@ export function renderFleetAgentTranscript(
 // Chain summary — 'wrfc-chain' tabs have no single conversation (C2/C6)
 // ---------------------------------------------------------------------------
 
-/** Render a live one-line-per-member summary for an attached wrfc-chain tab. */
-export function renderFleetChainSummary(memberRows: readonly FleetTreeRow[], width: number): Line[] {
+/**
+ * Render a live one-line-per-member summary for an attached wrfc-chain tab.
+ *
+ * `chainDoneOrAbsent` disambiguates an empty member list (d3, W6.2): a completed
+ * chain prunes its wrapper node (Wave-3 reap), so zero members can mean the
+ * chain FINISHED, not that it has not started. When the chain node is absent
+ * (pruned) or terminal, say so honestly instead of the "(no member agents yet)"
+ * not-started wording.
+ */
+export function renderFleetChainSummary(
+  memberRows: readonly FleetTreeRow[],
+  width: number,
+  chainDoneOrAbsent: boolean,
+): Line[] {
   const C = DEFAULT_PANEL_PALETTE;
   if (memberRows.length === 0) {
-    return [buildPanelLine(width, [[' (no member agents yet)', C.dim]])];
+    const message = chainDoneOrAbsent
+      ? ' chain completed — members no longer tracked'
+      : ' (no member agents yet)';
+    return [buildPanelLine(width, [[message, C.dim]])];
   }
   return memberRows.map((row) => {
     const node = row.node;

@@ -185,16 +185,26 @@ export function feedInputTokens(context: InputFeedContext, tokens: readonly Inpu
   const lineCount = history.getLineCount();
   const keybindings = context.keybindingsManager;
 
-  // A single stdin chunk can tokenize into several 'text' tokens (fast-typed
-  // burst) or one 'text' token with a multi-char value (bracketed paste).
-  // Computed once per feed() call, not per token, so per-token cost stays
-  // the same O(1) check it always was.
-  let totalPrintableChars = 0;
-  for (const t of tokens) {
-    if (t.type === 'text') totalPrintableChars += t.value.length;
-  }
-  const isPrintableBurst = totalPrintableChars > 1;
+  // Shared opener for the Fleet panel: makes it visible AND transfers keyboard
+  // focus to it. panelManager.open() only makes the panel active — focus is a
+  // separate axis (see PanelManager.focusPanels()/getFocusTarget()); without the
+  // focusPanels() call, j/k/i/K land silently in the composer until Tab. Used by
+  // the footer indicator's [Enter] and by F2 (W6.2 e: F2 and the footer
+  // indicator both subsume the retired process modal). Mirrors the Ctrl+P
+  // panel-picker launcher (ui-openers.ts openPanelPicker).
+  const openFleetPanel = (): void => {
+    context.panelManager.open('fleet');
+    context.panelManager.focusPanels();
+    context.panelFocused = true;
+  };
 
+  // Paste-ness is a per-TOKEN property, computed at the handlePanelFocusToken
+  // call below — never a per-feed character sum. The SDK tokenizer emits a
+  // bracketed paste (\x1b[?2004h, enabled in main.ts terminal init) as ONE
+  // 'text' token holding the whole payload, while discrete keystrokes — even
+  // several batched into one feed() by render-tick latency — arrive as
+  // separate 1-char 'text' tokens. The old per-feed sum misread two quick nav
+  // keystrokes (e.g. j then k in one drain) as a "burst" and yanked focus.
   for (const token of tokens) {
     // Focus-reporting tokens (CSI ?1004h, W2.3) never reach the composer or any
     // modal route — consumed here, first, unconditionally. No render needed.
@@ -343,7 +353,15 @@ export function feedInputTokens(context: InputFeedContext, tokens: readonly Inpu
       panelManager: context.panelManager,
       keybindingsManager: context.keybindingsManager,
       onPanelInputConsumed: context.onPanelInputConsumed,
-      isPrintableBurst,
+      // Per-token paste classification (Invariant B): a paste is a single
+      // 'text' token whose value holds more than one character.
+      isPasteToken: token.type === 'text' && token.value.length > 1,
+      // One-shot honesty hint when a paste is dropped into a non-capturing
+      // focused panel (Invariant A: focus never silently flips to the composer).
+      onPasteDropped: (panelName: string) =>
+        context.commandContext?.print(
+          `paste ignored — focus is on ${panelName}; Tab returns to composer`,
+        ),
       isTurnActive: () => context.commandContext?.isGenerating?.() ?? false,
       cancelGeneration: () => context.commandContext?.cancelGeneration?.(),
     }, token);
@@ -355,18 +373,7 @@ export function feedInputTokens(context: InputFeedContext, tokens: readonly Inpu
     const indicatorRoute = handleIndicatorFocusToken({
       indicatorFocused: context.indicatorFocused,
       modalOpened: context.modalOpened,
-      openFleetPanel: () => {
-        context.panelManager.open('fleet');
-        // panelManager.open() only makes the panel visible/active — it does
-        // NOT transfer keyboard focus off the composer (that is a separate
-        // focusTarget axis; see PanelManager.focusPanels()/getFocusTarget()).
-        // Without this, j/k/i/K silently land in the composer until the user
-        // manually presses Tab. Match the Ctrl+P panel-picker launcher route
-        // (ui-openers.ts openPanelPicker), which calls focusPanels()
-        // immediately after opening.
-        context.panelManager.focusPanels();
-        context.panelFocused = true;
-      },
+      openFleetPanel,
       requestRender: context.requestRender,
     }, token);
     context.indicatorFocused = indicatorRoute.indicatorFocused;
@@ -448,7 +455,7 @@ export function feedInputTokens(context: InputFeedContext, tokens: readonly Inpu
         commandRegistry: context.commandRegistry,
         autocomplete: context.autocomplete,
         blockActionsMenu: { open: (block: BlockMeta) => context.blockActionsMenu.open(block) },
-        processModal: context.processModal,
+        openFleetPanel,
         modalOpened: context.modalOpened,
         saveUndoState: context.saveUndoState,
         breakUndoCoalesce: context.breakUndoCoalesce,

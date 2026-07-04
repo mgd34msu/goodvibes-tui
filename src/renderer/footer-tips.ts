@@ -25,9 +25,17 @@ export function isAgentActive(composerStatus: string | undefined): boolean {
 }
 
 const TIP_PANELS = 'Ctrl+P panels';
-const TIP_PROCESSES = 'F2 processes';
+// W6.2 e: F2 now opens the Fleet panel (the process modal was retired), so the
+// tip names 'fleet', not 'processes'.
+const TIP_PROCESSES = 'F2 fleet';
 const TIP_HELP = '? help';
-const TIP_QUIT = 'Ctrl+C quit';
+// W6.2 f: an empty-composer Ctrl+C does NOT quit on the first press — it arms a
+// ~1s "press again to exit" confirm, and only a SECOND Ctrl+C within that window
+// exits (an intentional accidental-exit guard). The old 'Ctrl+C quit' tip
+// implied a single press quits, so two presses seconds apart appeared to do
+// nothing. 'Ctrl+C x2 quit' matches the real double-press contract (and the
+// help overlay's "Ctrl+C x2  Exit" row).
+const TIP_QUIT = 'Ctrl+C x2 quit';
 
 /**
  * Build the footer discoverability tip. Segments join with the shared middle

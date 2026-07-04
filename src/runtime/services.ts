@@ -619,6 +619,7 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
     approvalBroker,
     sessionBroker,
     messageBus: agentMessageBus, // Wave-3: backs steer()/`steerable` (wo612 builds the composer UI on top)
+    automationManager, // Wave 6 (wo-F item d4): folds /schedule AutomationJobs into the fleet as 'schedule' nodes
     runtimeBus: options.runtimeBus,
     // Honest pricing: never fabricate a cost for an unrecognized model.
     priceUsage: (model, usage) => {
