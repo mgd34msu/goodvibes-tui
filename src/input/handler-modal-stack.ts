@@ -40,7 +40,6 @@ export type EscapeState = ModalStackState & {
   selectionCallback: ((result: SelectionResult | null) => void) | null;
   bookmarkModal: ModalStackState['bookmarkModal'] & { open: () => void };
   contextInspectorModal: ModalStackState['contextInspectorModal'] & { open: () => void };
-  processModal: ModalStackState['processModal'] & { open: () => void };
   settingsModal: ModalStackState['settingsModal'] & {
     editingMode: boolean;
     cancelEdit: () => void;
@@ -121,15 +120,12 @@ export function handleEscape(state: EscapeState): {
         shortcutsScrollOffset = 0;
       },
       closeBookmark: () => state.bookmarkModal.close(),
-      closeAgentDetail: () => state.agentDetailModal.close(),
-      closeLiveTail: () => state.liveTailModal.close(),
       closeSettings: () => state.settingsModal.close(),
       closeMcpWorkspace: () => state.mcpWorkspace?.close(),
       closeSessionPicker: () => state.sessionPickerModal.close(),
       closeProfilePicker: () => state.profilePickerModal.close(),
       closeConfigModal: () => state.configModal.close(),
       closeContextInspector: () => state.contextInspectorModal.close(),
-      closeProcess: () => state.processModal.close(),
       closeModelPicker: () => {
         state.modelPicker.close();
         state.restoreOnboardingModelPickerCancelState?.();
@@ -163,7 +159,6 @@ export function handleEscape(state: EscapeState): {
       openHelp: () => { helpOverlayActive = true; },
       openShortcuts: () => { shortcutsOverlayActive = true; },
       openBookmark: () => state.bookmarkModal.open(),
-      openProcess: () => state.processModal.open(),
       openContextInspector: () => state.contextInspectorModal.open(),
       openConfigModal: () => state.configModal.reopen(),
       openMcpWorkspace: () => state.mcpWorkspace?.reopen(),

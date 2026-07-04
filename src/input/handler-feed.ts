@@ -9,10 +9,7 @@ import type { SelectionResult } from './selection-modal.ts';
 import { SearchManager } from './search.ts';
 import type { InputHistory, HistorySearch } from './input-history.ts';
 import type { BlockMeta, ConversationManager } from '../core/conversation';
-import { ProcessModal } from '../renderer/process-modal.ts';
-import { LiveTailModal } from '../renderer/live-tail-modal.ts';
 import { BlockActionsMenu } from '../renderer/block-actions.ts';
-import { AgentDetailModal } from '../renderer/agent-detail-modal.ts';
 import { ContextInspectorModal } from '../renderer/context-inspector.ts';
 import { BookmarkModal } from './bookmark-modal.ts';
 import { SettingsModal } from './settings-modal.ts';
@@ -74,8 +71,8 @@ import type { FocusTracker } from '../core/focus-tracker.ts';
  *   - `pasteRegistry`, `imageRegistry` — owned Maps, never replaced
  *   - `selectionModal`, `bookmarkModal`, `settingsModal`, `sessionPickerModal`,
  *     `profilePickerModal` — modal objects constructed once in InputHandler constructor
- *   - `filePicker`, `modelPicker`, `onboardingWizard`, `processModal`, `liveTailModal`,
- *     `agentDetailModal`, `contextInspectorModal`, `blockActionsMenu`, `searchManager`, `historySearch` —
+ *   - `filePicker`, `modelPicker`, `onboardingWizard`,
+ *     `contextInspectorModal`, `blockActionsMenu`, `searchManager`, `historySearch` —
  *     service objects constructed once
  *   - `panelManager`, `keybindingsManager` — from uiServices, stable for app lifetime
  *   - `modalStack` — reference to the handler's shared array (mutated in place)
@@ -121,9 +118,6 @@ export interface InputFeedContext {
   readonly filePicker: FilePickerModal;
   readonly modelPicker: ModelPickerModal;
   readonly onboardingWizard: OnboardingWizardController;
-  readonly processModal: ProcessModal;
-  readonly liveTailModal: LiveTailModal;
-  readonly agentDetailModal: AgentDetailModal;
   readonly contextInspectorModal: ContextInspectorModal;
   readonly blockActionsMenu: BlockActionsMenu;
   readonly searchManager: SearchManager;
@@ -247,9 +241,6 @@ export function feedInputTokens(context: InputFeedContext, tokens: readonly Inpu
       getViewportHeight: context.getViewportHeight,
       requestRender: context.requestRender,
       handleEscape: context.handleEscape,
-      liveTailModal: context.liveTailModal,
-      processModal: context.processModal,
-      agentDetailModal: context.agentDetailModal,
       contextInspectorModal: context.contextInspectorModal,
       modalOpened: context.modalOpened,
       filePicker: context.filePicker,

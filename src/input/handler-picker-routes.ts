@@ -5,7 +5,6 @@ import type { CapabilityFilter, CategoryFilter, ModelPickerModal } from './model
 import { MODEL_PICKER_CHROME_LINES } from '../renderer/model-picker-overlay.ts';
 import { resolveAndValidatePath } from '@pellux/goodvibes-sdk/platform/utils';
 import { logger } from '@pellux/goodvibes-sdk/platform/utils';
-import type { ProcessEntry } from '../renderer/process-modal.ts';
 import type { BlockActionId } from '../renderer/block-actions.ts';
 
 type ModelPickerRouteState = {
@@ -201,99 +200,10 @@ function cycleCapabilityFilter(modelPicker: ModelPickerModal): void {
   modelPicker.setCapabilityFilter(cycle[(cur + 1) % cycle.length]!);
 }
 
-type ProcessRouteState = {
-  processModal: {
-    active: boolean;
-    moveUp: () => void;
-    moveDown: () => void;
-    getSelected: () => ProcessEntry | undefined;
-    close: () => void;
-    open: () => void;
-    killSelected: () => boolean;
-    refresh: () => void;
-  };
-  liveTailModal: {
-    open: (entry: ProcessEntry) => void;
-  };
-  agentDetailModal: {
-    open: (id: string) => void;
-  };
-  modalOpened: (name: string) => void;
-  requestRender: () => void;
-  handleEscape: () => void;
-};
-
-export function handleProcessModalToken(state: ProcessRouteState, token: InputToken): boolean {
-  if (!state.processModal.active) return false;
-
-  if (token.type === 'key') {
-    if (token.logicalName === 'escape') {
-      state.handleEscape();
-      return true;
-    }
-    if (token.logicalName === 'up') state.processModal.moveUp();
-    else if (token.logicalName === 'down') state.processModal.moveDown();
-    else if (token.logicalName === 'enter') {
-      const entry = state.processModal.getSelected();
-      if (entry) {
-        if (entry.type === 'agent') {
-          state.modalOpened('agentDetail');
-          state.processModal.close();
-          state.agentDetailModal.open(entry.id);
-        } else {
-          state.modalOpened('liveTail');
-          state.processModal.close();
-          state.liveTailModal.open(entry);
-        }
-      }
-    }
-  } else if (token.type === 'text' && token.value === 'k') {
-    const killed = state.processModal.killSelected();
-    if (killed) state.processModal.refresh();
-  }
-
-  state.requestRender();
-  return true;
-}
-
-type LiveTailRouteState = {
-  liveTailModal: {
-    active: boolean;
-    scrollUp: () => void;
-    scrollDown: () => void;
-    killProcess: () => void;
-    close: () => void;
-  };
-  processModal: {
-    open: () => void;
-  };
-  requestRender: () => void;
-  handleEscape: () => void;
-};
-
-export function handleLiveTailToken(state: LiveTailRouteState, token: InputToken): boolean {
-  if (!state.liveTailModal.active) return false;
-
-  const killAndReturn = (): void => {
-    state.liveTailModal.killProcess();
-    state.handleEscape();
-  };
-
-  if (token.type === 'key') {
-    if (token.logicalName === 'escape') {
-      state.handleEscape();
-      return true;
-    }
-    if (token.logicalName === 'up') state.liveTailModal.scrollUp();
-    else if (token.logicalName === 'down') state.liveTailModal.scrollDown();
-    else if (token.logicalName === 'k') killAndReturn();
-  } else if (token.type === 'text' && token.value === 'k') {
-    killAndReturn();
-  }
-
-  state.requestRender();
-  return true;
-}
+// W6.2 e / W6.1 retirement: the process-modal and live-tail-modal token routes
+// were removed with those modals (F2 now opens Fleet, which subsumes the live
+// process tree). ProcessModal/AgentDetailModal/LiveTailModal were structurally
+// unreachable after the F2 repoint and were deleted.
 
 type EscapeOnlyModalRouteState = {
   active: boolean;

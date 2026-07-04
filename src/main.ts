@@ -410,8 +410,8 @@ async function main() {
   input.setConversationManager(conversation);
   input.setContentWidth(getPromptContentWidth());
   input.filePicker.setOnUpdate(() => render());
-  input.agentDetailModal.setOnRefresh(() => render());
-  input.processModal.setOnRefresh(() => render());
+  // W6.1 retirement: agentDetailModal/processModal setOnRefresh wiring removed —
+  // those modals were deleted (Fleet subsumes the live process tree via F2).
 
   // Model picker callback is handled in bootstrap.ts — do not duplicate here.
   input.setHistory(inputHistory);

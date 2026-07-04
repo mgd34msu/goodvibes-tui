@@ -605,10 +605,10 @@ export function handlePromptKeyToken(state: KeyRouteState, token: InputToken): {
 
   if (token.logicalName === 'f2') {
     indicatorFocused = false;
-    // W6.2 e: F2 opens AND focuses the Fleet panel, which subsumes the retired
-    // process modal (the last remaining opener of ProcessModal — and, through
-    // it, AgentDetailModal/LiveTailModal). openFleetPanel sets panelFocused on
-    // the shared context directly, so nothing more is returned here.
+    // W6.2 e: F2 opens AND focuses the Fleet panel, which subsumes the deleted
+    // process modal (ProcessModal/AgentDetailModal/LiveTailModal — removed in
+    // W6.1 once this repoint made them unreachable). openFleetPanel sets
+    // panelFocused on the shared context directly, so nothing more is returned.
     state.openFleetPanel();
     return { handled: true, prompt, cursorPos, inputScrollTop, commandMode, indicatorFocused };
   }

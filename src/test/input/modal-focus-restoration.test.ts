@@ -19,14 +19,11 @@ function buildState() {
     cancelGeneration: undefined,
     selectionCallback: null,
     bookmarkModal: { active: false, open: function () { this.active = true; }, close: function () { this.active = false; } },
-    agentDetailModal: { active: false, open: () => {}, close: () => {} },
-    liveTailModal: { active: false, open: () => {}, close: () => {} },
     settingsModal: { active: false, editingMode: false, cancelEdit: () => {}, open: () => {}, close: () => {} },
     sessionPickerModal: { active: false, open: () => {}, close: () => {} },
     profilePickerModal: { active: false, open: () => {}, close: () => {} },
     configModal: { active: false, close: () => {}, reopen: () => {} },
     contextInspectorModal: { active: false, open: function () { this.active = true; }, close: function () { this.active = false; } },
-    processModal: { active: false, open: function () { this.active = true; }, close: function () { this.active = false; } },
     modelPicker: { active: false, open: () => {}, close: () => {} },
     filePicker: { active: false, open: () => {}, close: () => {} },
     blockActionsMenu: { active: false, open: () => {}, close: () => {} },
@@ -58,8 +55,8 @@ describe('modal focus restoration', () => {
   test('restores indicator focus when the last modal closes', () => {
     const state = buildState();
     state.indicatorFocused = true;
-    state.processModal.active = true;
-    modalOpened(state, 'process');
+    state.contextInspectorModal.active = true;
+    modalOpened(state, 'contextInspector');
     const result = handleEscape(state);
     expect(result.panelFocused).toBe(false);
     expect(result.indicatorFocused).toBe(true);
@@ -72,8 +69,8 @@ describe('modal focus restoration', () => {
     state.commandMode = true;
     modalOpened(state, 'command');
     state.commandMode = false;
-    state.processModal.active = true;
-    modalOpened(state, 'process');
+    state.contextInspectorModal.active = true;
+    modalOpened(state, 'contextInspector');
     state.autocompleteUpdate = (query: string) => {
       autocompleteQuery = query;
     };
@@ -89,17 +86,20 @@ describe('modal focus restoration', () => {
 
   test('escape closes only the top modal and reopens the previous modal', () => {
     const state = buildState();
-    state.processModal.active = true;
-    modalOpened(state, 'process');
+    // W6.1 retirement: this exercised the process modal as the "previous" entry
+    // in the stack; it now uses the bookmark modal (a surviving reopenable
+    // modal) — the escape/reopen focus-restoration logic under test is unchanged.
+    state.bookmarkModal.active = true;
+    modalOpened(state, 'bookmark');
     modalOpened(state, 'contextInspector');
-    state.processModal.active = false;
+    state.bookmarkModal.active = false;
     state.contextInspectorModal.active = true;
 
     const result = handleEscape(state);
 
-    expect(state.modalStack).toEqual(['process']);
+    expect(state.modalStack).toEqual(['bookmark']);
     expect(state.contextInspectorModal.active).toBe(false);
-    expect(state.processModal.active).toBe(true);
+    expect(state.bookmarkModal.active).toBe(true);
     expect(result.panelFocused).toBe(false);
     expect(result.indicatorFocused).toBe(false);
   });
