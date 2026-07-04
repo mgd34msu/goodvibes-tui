@@ -5,7 +5,7 @@ import type {
   ProjectPlanningState,
 } from '@pellux/goodvibes-sdk/platform/knowledge';
 import type { CommandRegistry } from '../command-registry.ts';
-import { requirePlanManager, requireSessionLineageTracker } from './runtime-services.ts';
+import { openModalCommand, requirePlanManager, requireSessionLineageTracker } from './runtime-services.ts';
 
 function recordNextQuestion(
   state: Partial<ProjectPlanningState>,
@@ -43,7 +43,7 @@ function formatNextQuestion(question: ProjectPlanningQuestion | undefined): stri
   if (!question) return 'No next question recorded.';
   const lines = [`Next question: ${question.prompt}`];
   if (question.recommendedAnswer) lines.push(`Recommended answer: ${question.recommendedAnswer}`);
-  lines.push('Answer in the prompt, or focus the Planning panel to choose/type an answer.');
+  lines.push('Answer in the prompt, or open the Planning modal to choose/type an answer.');
   return lines.join('\n');
 }
 
@@ -67,7 +67,7 @@ export function registerPlanningRuntimeCommands(registry: CommandRegistry): void
 
       const projectPlanningService = ctx.workspace.projectPlanningService;
       const projectId = ctx.workspace.projectPlanningProjectId;
-      const openProjectPlanningPanel = () => ctx.showPanel?.('project-planning');
+      const openProjectPlanningPanel = () => openModalCommand(ctx, 'planning');
 
       if (args.length === 0) {
         if (projectPlanningService && projectId) {
