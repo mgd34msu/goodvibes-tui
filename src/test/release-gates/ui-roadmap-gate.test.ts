@@ -69,6 +69,7 @@ describe('UI roadmap gate', () => {
       hide: () => { visible = false; focused = false; },
       focusPanels: () => { focused = true; },
       focusPrompt: () => { focused = false; },
+      setOpenModalCallback: () => {},
     } as never;
     const conversation = {
       setSplashSuppressed: () => {},

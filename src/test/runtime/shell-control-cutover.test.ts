@@ -119,9 +119,11 @@ describe('GC-ARCH-004: shell control cutover enforcement', () => {
 
   test('known panel-local repaint files do not emit render:request', () => {
     const violations: string[] = [];
+    // W6.1 (the purge): debug-panel.ts was DELETE-disposition and no longer
+    // exists — removed from this list (a deleted file trivially can't emit
+    // render:request).
     const restrictedFiles = [
       'src/panels/provider-health-panel.ts',
-      'src/panels/debug-panel.ts',
     ];
 
     for (const relPath of restrictedFiles) {
@@ -153,12 +155,13 @@ describe('GC-ARCH-004: shell control cutover enforcement', () => {
 
   test('typed turn-consumer panels do not subscribe to legacy turn bus events', () => {
     const violations: string[] = [];
+    // W6.1 (the purge): thinking-panel.ts and debug-panel.ts were
+    // DELETE-disposition and no longer exist — removed from this list (a
+    // deleted file trivially can't subscribe to anything).
     const restrictedFiles = [
-      'src/panels/thinking-panel.ts',
       // WO-113: context-visualizer-panel.ts merged into token-budget-panel.ts;
       // the successor inherits the legacy-turn-bus ban.
       'src/panels/token-budget-panel.ts',
-      'src/panels/debug-panel.ts',
       'src/panels/provider-health-panel.ts',
       'src/panels/cost-tracker-panel.ts',
       'src/main.ts',
@@ -193,9 +196,10 @@ describe('GC-ARCH-004: shell control cutover enforcement', () => {
 
   test('typed agent-consumer files do not subscribe to legacy subagent bus events', () => {
     const violations: string[] = [];
+    // W6.1 (the purge): agent-inspector-panel.ts ('inspector') was
+    // RETIRE-INTO-FLEET and no longer exists — removed from this list.
     const restrictedFiles = [
       'src/runtime/bootstrap.ts',
-      'src/panels/agent-inspector-panel.ts',
       'src/panels/cost-tracker-panel.ts',
     ];
 
@@ -228,9 +232,10 @@ describe('GC-ARCH-004: shell control cutover enforcement', () => {
 
   test('WRFC typed-consumer files do not subscribe to legacy wrfc bus events', () => {
     const violations: string[] = [];
+    // W6.1 (the purge): wrfc-panel.ts was RETIRE-INTO-FLEET and no longer
+    // exists — removed from this list.
     const restrictedFiles = [
       'src/runtime/bootstrap.ts',
-      'src/panels/wrfc-panel.ts',
     ];
 
     for (const relPath of restrictedFiles) {
@@ -262,10 +267,11 @@ describe('GC-ARCH-004: shell control cutover enforcement', () => {
 
   test('provider and planner typed-consumer files do not subscribe to legacy provider/planner bus events', () => {
     const violations: string[] = [];
+    // W6.1 (the purge): ops-strategy-panel.ts ('ops') was RETIRE-INTO-FLEET
+    // and no longer exists — removed from this list.
     const restrictedFiles = [
       'src/runtime/bootstrap.ts',
       'src/panels/provider-health-panel.ts',
-      'src/panels/ops-strategy-panel.ts',
     ];
     const legacyTokens = [
       "providers:changed",
@@ -304,8 +310,9 @@ describe('GC-ARCH-004: shell control cutover enforcement', () => {
 
   test('tool typed-consumer files do not subscribe to legacy tool bus events', () => {
     const violations: string[] = [];
+    // W6.1 (the purge): tool-inspector-panel.ts ('tools') was
+    // DELETE-disposition and no longer exists — removed from this list.
     const restrictedFiles = [
-      'src/panels/tool-inspector-panel.ts',
       'src/main.ts',
     ];
     const legacyTokens = [
