@@ -228,6 +228,7 @@ export class ConfigModal {
       tabId: this.activeTabId,
       print: ctx.print,
       executeCommand: ctx.executeCommand,
+      openModal: ctx.openModal,
       requestRender: this.requestRender,
       setStatus: (m: string) => { this.statusMessage = m; },
       close: () => this.close(),
