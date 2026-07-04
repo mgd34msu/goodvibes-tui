@@ -1,4 +1,5 @@
 import { MODAL_TONES } from './modal-theme.ts';
+import { infoRow } from './modal-surface-helpers.ts';
 import { listHookPointContracts } from '@pellux/goodvibes-sdk/platform/hooks';
 import type {
   HookActivityTracker,
@@ -6,29 +7,26 @@ import type {
   HookDispatcher,
   HookWorkbench,
 } from '@pellux/goodvibes-sdk/platform/hooks';
-import type { ModalConfig, ModalSection, ModalListItem } from '../../renderer/modal-factory.ts';
-import type { BoundModalSurface, ModalAction, ModalViewState } from './modal-surface.ts';
+import type {
+  ConfigModalActionContext,
+  ConfigModalRow,
+  ConfigModalSurface,
+  ConfigModalTab,
+  ConfigModalView,
+} from '../../input/config-modal-types.ts';
 
 // ---------------------------------------------------------------------------
-// Hooks → modal (W6 WO-B). Mirrors src/panels/hooks-panel.ts:
-// HooksPanel(hookDispatcher, hookWorkbench, hookActivityTracker). The panel
-// wraps those three in a HooksPanelDataSource; this modal talks to them
-// directly (per the WO brief) using the same minimal Pick<> shapes the panel
-// itself declares for the dispatcher/tracker (hooks-panel.ts:56-59) plus the
-// read-only slice of HookWorkbench it calls. `toggleManagedHook` /
-// `removeManagedEntry` / `simulate` are DROPPED from the workbench dep shape
-// on purpose — those are mutations and route to the `/hooks` command path
-// (enable|disable|remove|simulate subcommands, hooks-runtime.ts) instead of
-// being called directly from the modal (action-parity charter rule).
+// Hooks → config-modal surface (W6.1 group-B port). Two tabs: 'Hooks' (active
+// registrations + contract posture) and 'Activity' (recent runtime activity +
+// managed authoring + last simulation — the panel's expand-activity view, now a
+// dedicated tab). All sources are in-memory (dispatcher/workbench/tracker hold
+// live state), so buildView reads live and refresh() is a no-op. Toggle/remove/
+// simulate route to their `/hooks` command path. Selection-blind port: the
+// panel's selected-hook contract detail is folded into each hook row label.
 // ---------------------------------------------------------------------------
 
 export type HooksModalDispatcher = Pick<HookDispatcher, 'listHooks' | 'getChains'>;
-
-export type HooksModalWorkbench = Pick<
-  HookWorkbench,
-  'getHooksFilePath' | 'listManagedHooks' | 'listManagedChains' | 'listRecentActions' | 'getLastSimulation'
->;
-
+export type HooksModalWorkbench = Pick<HookWorkbench, 'getHooksFilePath' | 'listManagedHooks' | 'listManagedChains' | 'listRecentActions' | 'getLastSimulation'>;
 export type HooksModalActivityTracker = Pick<HookActivityTracker, 'listRecent'>;
 
 export interface HooksModalDeps {
@@ -39,227 +37,139 @@ export interface HooksModalDeps {
 
 type HookEntry = { pattern: string; hook: HookDefinition };
 
-function matchesQuery(entry: HookEntry, q: string): boolean {
-  if (q === '') return true;
-  const needle = q.toLowerCase();
-  return (entry.hook.name ?? '').toLowerCase().includes(needle)
-    || entry.pattern.toLowerCase().includes(needle)
-    || entry.hook.type.toLowerCase().includes(needle);
-}
-
 function rowId(entry: HookEntry, index: number): string {
   return `${entry.pattern}#${entry.hook.name ?? index}`;
 }
 
-/**
- * Hooks → modal. Contracts, active registrations, managed authoring, recent
- * runtime activity, and simulation matches. All sources here are already
- * in-memory (dispatcher/workbench/tracker hold live state, no disk cache to
- * reload), so buildConfig reads live and refresh() is a no-op — matching
- * plugins-modal.ts's rationale. Toggle/remove/simulate route to their
- * `/hooks` command path; the activity-window expand ('a') and refresh ('r')
- * stay in-modal since they only affect this surface's own render, not
- * managed-hook state.
- */
-export function bindHooksModal(deps: HooksModalDeps): BoundModalSurface {
-  const { hookDispatcher, hookWorkbench, hookActivityTracker } = deps;
-  let activityExpanded = false;
+class HooksModalSurface implements ConfigModalSurface {
+  readonly name = 'hooks-modal';
+  readonly title = 'Hooks';
 
-  const visibleHooks = (view: ModalViewState): HookEntry[] =>
-    hookDispatcher.listHooks().filter((entry) => matchesQuery(entry, view.query));
+  constructor(private readonly deps: HooksModalDeps) {}
 
-  const selectedEntry = (view: ModalViewState): HookEntry | undefined => {
-    const visible = visibleHooks(view);
-    if (visible.length === 0) return undefined;
-    return visible[Math.max(0, Math.min(view.selectedIndex, visible.length - 1))];
-  };
+  readonly actions = [
+    { key: 't', id: 'toggle', label: 'toggle', enabledFor: (_row: ConfigModalRow | null, tabId: string) => tabId === 'hooks' },
+    { key: 'x', id: 'remove', label: 'remove', enabledFor: (_row: ConfigModalRow | null, tabId: string) => tabId === 'hooks' },
+    { key: 's', id: 'simulate', label: 'simulate', enabledFor: (_row: ConfigModalRow | null, tabId: string) => tabId === 'hooks' },
+    { key: 'r', id: 'refresh', label: 'refresh' },
+  ];
 
-  const buildConfig = (view: ModalViewState): ModalConfig => {
-    const hooks = hookDispatcher.listHooks();
-    const chains = hookDispatcher.getChains();
+  private entryFrom(id: string): HookEntry | undefined {
+    return this.deps.hookDispatcher.listHooks().find((entry, index) => rowId(entry, index) === id);
+  }
+
+  private hooksTab(): ConfigModalTab {
+    const hooks = this.deps.hookDispatcher.listHooks();
+    const chains = this.deps.hookDispatcher.getChains();
     const contracts = listHookPointContracts();
-    const managedHooks = hookWorkbench.listManagedHooks();
-    const managedChains = hookWorkbench.listManagedChains();
-    const recentAuthoring = hookWorkbench.listRecentActions(3);
-    const lastSimulation = hookWorkbench.getLastSimulation();
-    const hooksFilePath = hookWorkbench.getHooksFilePath();
+    const managedHooks = this.deps.hookWorkbench.listManagedHooks();
+    const hooksFilePath = this.deps.hookWorkbench.getHooksFilePath();
 
     if (hooks.length === 0) {
-      const sections: ModalSection[] = [
-        { type: 'text', content: 'No hooks are currently registered.' },
-        { type: 'text', content: `contracts ${contracts.length}  chains ${chains.length}  managed ${managedHooks.length}`, style: { dim: true } },
-        { type: 'text', content: `hooks file: ${hooksFilePath}`, style: { dim: true } },
-        { type: 'separator' },
-        { type: 'title', content: 'Next steps' },
-        { type: 'text', content: '/hooks     — review hook contracts and managed authoring actions', style: { dim: true } },
-        { type: 'text', content: '/settings  — review hook/runtime behavior in the settings surface', style: { dim: true } },
+      const rows: ConfigModalRow[] = [
+        infoRow('empty:0', 'No hooks are currently registered.'),
+        infoRow('empty:1', `contracts ${contracts.length}  chains ${chains.length}  managed ${managedHooks.length}`, { dim: true }),
+        infoRow('empty:2', `hooks file: ${hooksFilePath}`, { dim: true }),
+        infoRow('empty:title', 'Next steps'),
+        infoRow('empty:hooks', '/hooks     — review hook contracts and managed authoring actions', { dim: true }),
+        infoRow('empty:settings', '/settings  — review hook/runtime behavior in the settings surface', { dim: true }),
       ];
-      return { title: 'Hooks', width: 76, sections, footer: 'no hooks registered · esc close' };
+      return { id: 'hooks', label: 'Hooks', rows, emptyText: '' };
     }
 
-    const sections: ModalSection[] = [];
-    const recentActivityForStats = hookActivityTracker.listRecent(3);
-    const denials = recentActivityForStats.filter((r) => r.ok && r.decision === 'deny').length;
-    const errors = recentActivityForStats.filter((r) => !r.ok).length;
-    sections.push({
-      type: 'text',
-      content: `hooks ${hooks.length}  chains ${chains.length}  contracts ${contracts.length}  denials ${denials}  errors ${errors}`,
-      style: { dim: true },
+    const recentForStats = this.deps.hookActivityTracker.listRecent(3);
+    const denials = recentForStats.filter((r) => r.ok && r.decision === 'deny').length;
+    const errors = recentForStats.filter((r) => !r.ok).length;
+    const header = [`hooks ${hooks.length}  chains ${chains.length}  contracts ${contracts.length}  denials ${denials}  errors ${errors}`];
+
+    const rows: ConfigModalRow[] = hooks.map((entry, index) => {
+      const contract = contracts.find((c) => c.pattern === entry.pattern);
+      const contractPart = contract
+        ? ` · ${contract.authority}/${contract.executionMode} deny=${contract.canDeny ? 'y' : 'n'} mut=${contract.canMutateInput ? 'y' : 'n'} inj=${contract.canInjectContext ? 'y' : 'n'}`
+        : ' · no exact contract';
+      return {
+        id: rowId(entry, index),
+        label: `${(entry.hook.name ?? '(unnamed)').padEnd(20)} ${entry.pattern.padEnd(28)} ${(entry.hook.enabled === false ? 'DISABLED' : 'ENABLED').padEnd(8)} ${entry.hook.type}${contractPart}`,
+        ...(contract ? {} : { style: { fg: MODAL_TONES.warn } }),
+      };
     });
-    sections.push({ type: 'separator' });
 
-    const visible = visibleHooks(view);
-    const clampedIndex = Math.max(0, Math.min(view.selectedIndex, visible.length - 1));
-    const items: ModalListItem[] = visible.map((entry, index) => ({
-      label: `${(entry.hook.name ?? '(unnamed)').padEnd(20)} ${entry.pattern.padEnd(28)} ${(entry.hook.enabled === false ? 'DISABLED' : 'ENABLED').padEnd(8)} ${entry.hook.type}`,
-      selected: index === clampedIndex,
-    }));
-    if (items.length === 0) {
-      sections.push({ type: 'text', content: `No hooks match “${view.query}”.`, style: { dim: true } });
-    } else {
-      sections.push({ type: 'list', items });
-    }
+    return { id: 'hooks', label: 'Hooks', header, rows, hints: ['t toggle', 'x remove', 's simulate'] };
+  }
 
-    const selected = visible[clampedIndex];
-    if (selected) {
-      sections.push({ type: 'separator' });
-      sections.push({
-        type: 'text',
-        content: `hook ${selected.hook.name ?? '(unnamed)'}  type ${selected.hook.type}  match ${selected.hook.matcher ?? selected.hook.match}`,
-      });
-      sections.push({ type: 'text', content: `pattern ${selected.pattern}`, style: { dim: true } });
-
-      const contract = contracts.find((c) => c.pattern === selected.pattern);
-      if (contract) {
-        sections.push({ type: 'text', content: `contract ${contract.authority} / ${contract.executionMode}  policy ${contract.failurePolicy}` });
-        sections.push({
-          type: 'text',
-          content: `capabilities: deny=${contract.canDeny ? 'yes' : 'no'} mutate=${contract.canMutateInput ? 'yes' : 'no'} inject=${contract.canInjectContext ? 'yes' : 'no'}`,
-          style: { dim: true },
-        });
-      } else {
-        sections.push({ type: 'text', content: 'No exact contract registered for this pattern.', style: { fg: MODAL_TONES.warn } });
-      }
-      sections.push({
-        type: 'text',
-        content: `summary: hooks=${hooks.length} chains=${chains.length} contracts=${contracts.length} managed=${managedHooks.length}/${managedChains.length}`,
-        style: { dim: true },
-      });
-    }
-
-    sections.push({ type: 'separator' });
-    sections.push({ type: 'title', content: `Recent Activity${activityExpanded ? ' (expanded)' : ''}` });
-    const activityLimit = activityExpanded ? 20 : 3;
-    const recentActivity = hookActivityTracker.listRecent(activityLimit);
+  private activityTab(): ConfigModalTab {
+    const rows: ConfigModalRow[] = [];
+    const recentActivity = this.deps.hookActivityTracker.listRecent(20);
     if (recentActivity.length === 0) {
-      sections.push({ type: 'text', content: 'No hook activity recorded yet.', style: { dim: true } });
+      rows.push(infoRow('act:none', 'No hook activity recorded yet.', { dim: true }));
     } else {
-      for (const record of recentActivity) {
+      recentActivity.forEach((record, i) => {
         const decisionText = record.ok ? (record.decision ?? 'ok') : 'error';
         const color = !record.ok ? MODAL_TONES.bad : record.decision === 'deny' ? MODAL_TONES.warn : MODAL_TONES.good;
-        sections.push({
-          type: 'text',
-          content: `${record.hookName.padEnd(18)} ${record.path.padEnd(26)} ${decisionText}`,
-          style: { fg: color },
-        });
-      }
-    }
-
-    sections.push({ type: 'title', content: 'Authoring' });
-    if (recentAuthoring.length === 0) {
-      sections.push({ type: 'text', content: 'No managed hook authoring actions recorded yet.', style: { dim: true } });
-    } else {
-      for (const action of recentAuthoring) {
-        sections.push({ type: 'text', content: `${action.kind.padEnd(14)} ${action.target}`, style: { dim: true } });
-      }
-    }
-    if (lastSimulation) {
-      sections.push({ type: 'text', content: `last simulation: ${lastSimulation.eventPath}` });
-      sections.push({
-        type: 'text',
-        content: `matches: hooks=${lastSimulation.matchedHooks.length} chains=${lastSimulation.matchedChains.length}`,
-        style: { dim: true },
+        rows.push(infoRow(`act:${i}`, `${record.hookName.padEnd(18)} ${record.path.padEnd(26)} ${decisionText}`, { fg: color }));
       });
     }
 
-    return {
-      title: 'Hooks',
-      width: 76,
-      search: view.query,
-      sections,
-      hints: [
-        'up/down move',
-        't toggle',
-        'x remove',
-        's simulate',
-        activityExpanded ? 'a collapse activity' : 'a expand activity',
-        'r refresh',
-        '/ filter',
-      ],
-    };
-  };
+    rows.push(infoRow('auth:title', 'Authoring'));
+    const recentAuthoring = this.deps.hookWorkbench.listRecentActions(3);
+    if (recentAuthoring.length === 0) {
+      rows.push(infoRow('auth:none', 'No managed hook authoring actions recorded yet.', { dim: true }));
+    } else {
+      recentAuthoring.forEach((action, i) => rows.push(infoRow(`auth:${i}`, `${action.kind.padEnd(14)} ${action.target}`, { dim: true })));
+    }
 
-  const toggle: ModalAction = (view) => {
-    const entry = selectedEntry(view);
-    if (!entry) return { kind: 'none' };
+    const lastSimulation = this.deps.hookWorkbench.getLastSimulation();
+    if (lastSimulation) {
+      rows.push(infoRow('sim:path', `last simulation: ${lastSimulation.eventPath}`));
+      rows.push(infoRow('sim:matches', `matches: hooks=${lastSimulation.matchedHooks.length} chains=${lastSimulation.matchedChains.length}`, { dim: true }));
+    }
+    return { id: 'activity', label: 'Activity', rows, emptyText: 'No hook activity recorded yet.' };
+  }
+
+  buildView(): ConfigModalView {
+    return { title: 'Hooks', tabs: [this.hooksTab(), this.activityTab()] };
+  }
+
+  onAction(id: string, ctx: ConfigModalActionContext): void {
+    if (id === 'refresh') { ctx.setStatus('Hooks are read live.'); ctx.requestRender(); return; }
+    const entry = ctx.row ? this.entryFrom(ctx.row.id) : undefined;
+    if (!entry) return;
     const name = entry.hook.name;
-    if (!name) return { kind: 'print', text: 'This hook has no managed name to toggle.' };
-    const nextEnabled = entry.hook.enabled === false;
-    return { kind: 'runCommand', command: `/hooks ${nextEnabled ? 'enable' : 'disable'} ${name}` };
-  };
+    switch (id) {
+      case 'toggle':
+        if (!name) { ctx.print('This hook has no managed name to toggle.'); return; }
+        void ctx.executeCommand?.('hooks', [entry.hook.enabled === false ? 'enable' : 'disable', name]);
+        ctx.setStatus(`Dispatched /hooks ${entry.hook.enabled === false ? 'enable' : 'disable'} ${name}.`);
+        break;
+      case 'remove':
+        if (!name) { ctx.print('This hook has no managed name to remove.'); return; }
+        void ctx.executeCommand?.('hooks', ['remove', name]);
+        ctx.setStatus(`Dispatched /hooks remove ${name}.`);
+        break;
+      case 'simulate':
+        void ctx.executeCommand?.('hooks', ['simulate', entry.pattern]);
+        ctx.setStatus(`Dispatched /hooks simulate ${entry.pattern}.`);
+        break;
+    }
+  }
+}
 
-  const remove: ModalAction = (view) => {
-    const entry = selectedEntry(view);
-    if (!entry) return { kind: 'none' };
-    const name = entry.hook.name;
-    if (!name) return { kind: 'print', text: 'This hook has no managed name to remove.' };
-    return { kind: 'runCommand', command: `/hooks remove ${name}` };
-  };
-
-  const simulate: ModalAction = (view) => {
-    const entry = selectedEntry(view);
-    if (!entry) return { kind: 'none' };
-    return { kind: 'runCommand', command: `/hooks simulate ${entry.pattern}` };
-  };
-
-  const toggleActivity: ModalAction = () => {
-    activityExpanded = !activityExpanded;
-    return { kind: 'none' };
-  };
-
-  return {
-    name: 'hooks',
-    title: 'Hooks',
-    refresh: () => {},
-    buildConfig,
-    rowIds: (view) => visibleHooks(view).map((entry, index) => rowId(entry, index)),
-    actions: {
-      refresh: () => ({ kind: 'refresh' }),
-      toggle,
-      remove,
-      simulate,
-      toggleActivity,
-    },
-  };
+export function createHooksModalSurface(deps: HooksModalDeps): ConfigModalSurface {
+  return new HooksModalSurface(deps);
 }
 
 /**
  * Deterministic golden fixture: fixed dispatcher/workbench/activity-tracker
- * stand-ins with two managed hooks (one enabled, one disabled) and one
- * recorded activity entry. `listHookPointContracts()` reads the SDK's static
- * contract table (no disk/wall-clock), so it's safe to call for real. All
- * timestamps below are fixed epoch numbers — never rendered directly, but
- * kept literal for determinism regardless.
+ * stand-ins with two managed hooks (one enabled, one disabled) and one recorded
+ * activity entry. listHookPointContracts() reads the SDK's static contract table
+ * (no disk/wall-clock). All timestamps are fixed epoch numbers.
  */
-export function hooksModalGoldenSurface(): BoundModalSurface {
+export function hooksModalGoldenSurface(): ConfigModalSurface {
   const hooks: HookEntry[] = [
     { pattern: 'Pre:tool:*', hook: { match: 'Pre:tool:*', type: 'command', command: 'echo pre', name: 'pre-tool-guard', enabled: true } },
     { pattern: 'Post:file:write', hook: { match: 'Post:file:write', type: 'command', command: 'echo post', name: 'post-write-log', enabled: false } },
   ];
-  const dispatcher: HooksModalDispatcher = {
-    listHooks: () => hooks,
-    getChains: () => [],
-  };
+  const dispatcher: HooksModalDispatcher = { listHooks: () => hooks, getChains: () => [] };
   const workbench: HooksModalWorkbench = {
     getHooksFilePath: () => '/golden/hooks.json',
     listManagedHooks: () => hooks,
@@ -269,19 +179,9 @@ export function hooksModalGoldenSurface(): BoundModalSurface {
   };
   const activityTracker: HooksModalActivityTracker = {
     listRecent: () => [{
-      timestamp: 0,
-      path: 'Pre:tool:*',
-      specific: '*',
-      pattern: 'Pre:tool:*',
-      hookName: 'pre-tool-guard',
-      hookType: 'command',
-      ok: true,
-      decision: 'allow',
-      durationMs: 1,
-      async: false,
+      timestamp: 0, path: 'Pre:tool:*', specific: '*', pattern: 'Pre:tool:*',
+      hookName: 'pre-tool-guard', hookType: 'command', ok: true, decision: 'allow', durationMs: 1, async: false,
     }],
   };
-  const surface = bindHooksModal({ hookDispatcher: dispatcher, hookWorkbench: workbench, hookActivityTracker: activityTracker });
-  surface.refresh();
-  return surface;
+  return createHooksModalSurface({ hookDispatcher: dispatcher, hookWorkbench: workbench, hookActivityTracker: activityTracker });
 }

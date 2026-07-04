@@ -1,5 +1,6 @@
 import { DEFAULT_PANEL_PALETTE } from '../polish.ts';
 import type { ModalSectionStyle } from '../../renderer/modal-factory.ts';
+import type { ConfigModalRow } from '../../input/config-modal-types.ts';
 
 /**
  * Shared formatting helpers for W6.1 config-modal surfaces. Row styling reuses
@@ -41,4 +42,13 @@ export function kv(label: string, value: string | number): string {
 /** Join posture cells into one header line with a consistent separator. */
 export function postureLine(cells: string[]): string {
   return cells.join('   ');
+}
+
+/**
+ * A stable non-selectable informational row (section title, empty-state copy,
+ * or a content line the surface renders but the cursor never lands on). `id`
+ * must be unique within its tab so the host's live-value overlay keys off it.
+ */
+export function infoRow(id: string, label: string, style?: ModalSectionStyle): ConfigModalRow {
+  return { id, label, selectable: false, ...(style ? { style } : {}) };
 }
