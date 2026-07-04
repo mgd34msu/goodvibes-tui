@@ -261,10 +261,17 @@ export class UIFactory {
         if (cursorColOnLine >= text.length) {
           // Hint starts one cell after the cursor block
           const hintStartX = boxStartX + 2 + prefix.length + text.length + 1;
-          const hintText = ' ' + commandArgsHint;
+          const hintLimit = boxStartX + boxWidth - 2; // exclusive right bound
+          const avail = Math.max(0, hintLimit - hintStartX);
+          // Clamp to the available width with an ellipsis so a long arg-spec
+          // (e.g. /marketplace) ends in "…" rather than a hard mid-word cut. (5b)
+          let hintText = ' ' + commandArgsHint;
+          if (hintText.length > avail) {
+            hintText = avail > 1 ? `${hintText.slice(0, avail - 1)}…` : hintText.slice(0, Math.max(0, avail));
+          }
           let hx = hintStartX;
           for (const ch of hintText) {
-            if (hx >= boxStartX + boxWidth - 2) break;
+            if (hx >= hintLimit) break;
             contentLine[hx] = { char: ch, fg: '238', bg: BG_COLOR, bold: false, dim: true, underline: false, italic: false, strikethrough: false };
             hx++;
           }
@@ -345,7 +352,10 @@ export class UIFactory {
         ? `${tokenSep}~$${fmtCost(calcSessionCost(inp, out, cr, cw, model))}`
         : `${tokenSep}~n/a`
       : '';
-    const tokenLine = ` Token Usage [ Input: ${fmtNum(inp)}${tokenSep}Output: ${fmtNum(out)}${tokenSep}Cache Read: ${fmtNum(cr)}${tokenSep}Cache Write: ${fmtNum(cw)}${tokenSep}Total: ${fmtNum(total)}${costSegment} ]`;
+    // Input tokens are unknown until the first assistant usage lands (often the
+    // first tool turn). Show "—" rather than a false 0 during that window. (5c)
+    const inpDisplay = inp > 0 ? fmtNum(inp) : '—';
+    const tokenLine = ` Token Usage [ Input: ${inpDisplay}${tokenSep}Output: ${fmtNum(out)}${tokenSep}Cache Read: ${fmtNum(cr)}${tokenSep}Cache Write: ${fmtNum(cw)}${tokenSep}Total: ${fmtNum(total)}${costSegment} ]`;
     const copiedNotice = isRecentlyCopied ? ` [COPIED] ` : '';
     const statsLine = '  ' + tokenLine + ' '.repeat(Math.max(0, width - 4 - getDisplayWidth(tokenLine) - getDisplayWidth(copiedNotice))) + copiedNotice;
     lines.push(this.stringToLine(statsLine, width, { fg: isRecentlyCopied ? '81' : '244', bold: isRecentlyCopied }));
@@ -353,7 +363,9 @@ export class UIFactory {
     if (!compact && contextWindow && contextWindow > 0) {
       const ctxTokens = lastInputTokens ?? 0;
       const label = '   Context Usage: ';
-      const suffix = ` [ ${fmtNum(ctxTokens)} / ${fmtNum(contextWindow)} ]`;
+      // "—" until the first input-token count is known, not a false 0. (5c)
+      const ctxDisplay = ctxTokens > 0 ? fmtNum(ctxTokens) : '—';
+      const suffix = ` [ ${ctxDisplay} / ${fmtNum(contextWindow)} ]`;
       const barWidth = Math.max(10, Math.min(30, width - getDisplayWidth(label) - getDisplayWidth(suffix) - 8));
       const ctxPct = computeContextUsage(ctxTokens, contextWindow).clampedRatio;
       // Clamp threshold to [0..1]; undefined/0 means no threshold marker.

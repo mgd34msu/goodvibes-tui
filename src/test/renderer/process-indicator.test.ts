@@ -37,10 +37,10 @@ describe('renderProcessIndicator', () => {
     expect(lines[0].length).toBe(W);
   });
 
-  test('active state shows agent count', () => {
+  test('active state labels the agent count as "active" so it is not misread as a fleet total (UX-B 5d)', () => {
     const lines = renderProcessIndicator(W, 2, 0);
     const text = lineToString(lines[0]);
-    expect(text).toContain('2 agents');
+    expect(text).toContain('2 agents active');
   });
 
   test('active state shows tool count', () => {
