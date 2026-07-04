@@ -34,6 +34,8 @@ export interface ProcessLifecycleAnsi {
   readonly KEYBOARD_EXT_DISABLE: string;
   readonly MOUSE_DISABLE: string;
   readonly CURSOR_SHOW: string;
+  /** Disables terminal focus-event reporting (DECSET ?1004l) — see main.ts FOCUS_ENABLE. */
+  readonly FOCUS_DISABLE: string;
 }
 
 export interface ProcessLifecycleDeps {
@@ -128,7 +130,7 @@ export function installProcessLifecycle(deps: ProcessLifecycleDeps): ProcessLife
     if (terminalRestored) return;
     terminalRestored = true;
     const exitScreen = noAltScreen ? ansi.CLEAR_SCREEN : ansi.CLEAR_SCREEN + ansi.ALT_SCREEN_EXIT;
-    allowTerminalWrite(() => stdout.write(ansi.PASTE_DISABLE + ansi.KEYBOARD_EXT_DISABLE + ansi.MOUSE_DISABLE + ansi.CURSOR_SHOW + exitScreen));
+    allowTerminalWrite(() => stdout.write(ansi.PASTE_DISABLE + ansi.KEYBOARD_EXT_DISABLE + ansi.MOUSE_DISABLE + ansi.FOCUS_DISABLE + ansi.CURSOR_SHOW + exitScreen));
     getTerminalOutputGuard().dispose();
     try { stdin.setRawMode(false); } catch { /* stdin may not be a TTY */ }
   };

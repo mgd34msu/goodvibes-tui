@@ -10,6 +10,7 @@
 import { describe, test, expect, mock } from 'bun:test';
 import { InputHandler } from '../../input/handler.ts';
 import { SelectionManager } from '../../input/selection.ts';
+import { FocusTracker } from '../../core/focus-tracker.ts';
 
 function buildHandler(activePanel: { id: string; handleInput: (key: string) => boolean; isCapturingTextBurst?: () => boolean }) {
   let focusTarget: 'panel' | 'prompt' = 'panel'; // start focused on the panel
@@ -51,6 +52,7 @@ function buildHandler(activePanel: { id: string; handleInput: (key: string) => b
       panelManager: panelManager as unknown,
       keybindingsManager: { matches: () => false, lookup: () => null } as unknown,
     },
+    platform: { focusTracker: new FocusTracker() },
   };
 
   const selection = new SelectionManager();

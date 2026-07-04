@@ -18,15 +18,21 @@
  * When neither target is available the function is an honest no-op (debug log
  * only; no user-facing error spam).
  *
- * Focus tracking: terminal focus state is not tracked anywhere in the TUI.
- * Notifications therefore fire regardless of whether the terminal window is
- * focused. A future implementation may suppress notifications when the TUI is
- * in the foreground by reading a focus-state ref. // seam: wire focus ref here.
+ * Focus tracking (W2.3): when `focusTracker` is supplied, notifications are
+ * gated the same way as the other unfocused-user alert classes (see
+ * alert-gating.ts) — they fire when the terminal is unfocused or focus state
+ * was never observed, and are suppressed when it's known to be focused,
+ * unless `behavior.notifyOnlyWhenUnfocused` is turned off. `focusTracker` is
+ * optional and defaults to "always fire" (the pre-W2.3 behavior) when
+ * omitted, so existing callers that don't have a FocusTracker in scope are
+ * unaffected.
  */
 
 import { notifyCompletion } from '@pellux/goodvibes-sdk/platform/utils';
 import { logger } from '@pellux/goodvibes-sdk/platform/utils';
 import type { WebhookNotifier } from '@pellux/goodvibes-sdk/platform/integrations';
+import type { FocusTracker } from './focus-tracker.ts';
+import { readNotifyOnlyWhenUnfocused, type ConfigGet } from './alert-gating.ts';
 
 /** Default threshold in seconds. Turns shorter than this do not notify. */
 export const NOTIFY_AFTER_SECONDS_DEFAULT = 60;
@@ -74,6 +80,18 @@ export interface MaybeNotifyLongTaskOptions {
    * skipped silently.
    */
   readonly webhookNotifier?: WebhookNotifier | null;
+
+  /**
+   * Terminal focus tracker (W2.3). When supplied together with `configGet`,
+   * the notification additionally respects behavior.notifyOnlyWhenUnfocused
+   * (default on): suppressed when the terminal is known to be focused, fires
+   * when unfocused or when focus was never observed. Omit both to preserve
+   * pre-W2.3 behavior (always fire once the threshold is met).
+   */
+  readonly focusTracker?: Pick<FocusTracker, 'shouldAlertWhenUnfocused'> | null;
+
+  /** Config reader used only for the notifyOnlyWhenUnfocused gate above. */
+  readonly configGet?: ConfigGet;
 }
 
 /**
@@ -81,13 +99,14 @@ export interface MaybeNotifyLongTaskOptions {
  * exceeds the configured threshold.
  *
  * Returns true when at least one delivery was attempted, false when the
- * call was a no-op (threshold not reached, or off-state).
+ * call was a no-op (threshold not reached, off-state, or focus-gated off —
+ * see `focusTracker`/`configGet` above).
  *
  * PRIVACY: builds message text from structural metadata only (kind, elapsed,
  * status, sessionId). Never includes conversation content.
  */
 export function maybeNotifyLongTask(opts: MaybeNotifyLongTaskOptions): boolean {
-  const { elapsedMs, status, kind, sessionId, thresholdSeconds, webhookNotifier } = opts;
+  const { elapsedMs, status, kind, sessionId, thresholdSeconds, webhookNotifier, focusTracker, configGet } = opts;
 
   // Off-state: 0 disables notifications entirely.
   if (thresholdSeconds === NOTIFY_AFTER_SECONDS_OFF) {
@@ -99,6 +118,14 @@ export function maybeNotifyLongTask(opts: MaybeNotifyLongTaskOptions): boolean {
   const elapsedSeconds = Math.floor(elapsedMs / 1000);
   if (elapsedSeconds < thresholdSeconds) {
     logger.debug('long-task-notifier: below threshold', { elapsedSeconds, thresholdSeconds });
+    return false;
+  }
+
+  // Focus gate (W2.3): only applied when both a tracker and a config reader
+  // are supplied. Absent either one, behavior is unchanged from pre-W2.3
+  // (always fire once the threshold is met).
+  if (focusTracker && configGet && readNotifyOnlyWhenUnfocused(configGet) && !focusTracker.shouldAlertWhenUnfocused()) {
+    logger.debug('long-task-notifier: suppressed — terminal focused');
     return false;
   }
 

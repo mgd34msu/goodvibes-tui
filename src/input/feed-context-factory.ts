@@ -40,6 +40,7 @@ import type { KeybindingsManager } from './keybindings.ts';
 import type { ModelPickerTarget } from './model-picker.ts';
 import type { KillRing } from './kill-ring.ts';
 import type { PanelMouseLayout } from './handler-feed-routes.ts';
+import type { FocusTracker } from '../core/focus-tracker.ts';
 
 /**
  * Initial mutable scalar values for InputFeedContext.
@@ -91,6 +92,8 @@ export interface FeedContextMutableInit {
  *   - `commandRegistry`, `commandContext`, `autocomplete`, `inputHistory`,
  *     `conversationManager` — wired after construction; synced at feed() entry only
  *     (not per-action) since no in-feed action changes them
+ *   - `focusTracker` (W2.3) — shared instance from uiServices.platform, mutated
+ *     directly by feedInputTokens() on 'focus' tokens; never reallocated
  *
  * **Rationale:** per-feed mutation on a single object avoids per-keystroke GC pressure
  * from ~80-field object allocation. Stable references are service handles that never
@@ -126,6 +129,7 @@ export interface FeedContextStableRefs {
   panelManager: PanelManager;
   keybindingsManager: KeybindingsManager;
   killRing: KillRing;
+  focusTracker: FocusTracker;
   getHistory: () => InfiniteBuffer;
   getViewportHeight: () => number;
   getScrollTop: () => number;

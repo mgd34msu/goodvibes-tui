@@ -73,6 +73,10 @@ export function registerDevelopmentPanels(manager: PanelManager, deps: ResolvedB
           return new CostTrackerPanel(ui.events.turns, ui.events.agents, getOrchestratorUsage!, {
             budgetThreshold,
             getAgentStatus: (id) => ui.agents.agentManager.getStatus(id),
+            configAccess: {
+              get: (key) => deps.configManager.get(key as Parameters<typeof deps.configManager.get>[0]),
+              set: (key, value) => deps.configManager.set(key as Parameters<typeof deps.configManager.set>[0], value as never),
+            },
           });
         },
       ),
