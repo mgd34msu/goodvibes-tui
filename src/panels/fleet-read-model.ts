@@ -88,6 +88,10 @@ const STATE_GLYPHS: Record<ProcessState, string> = {
   interrupted: '◌',
   idle: '·',
   queued: '…',
+  // Wave-6 SDK: schedules/triggers/automation jobs report 'paused' when
+  // disabled (previously mislabeled 'killed'). NOT terminal — resumable.
+  // '❚' verified free against every other glyph in this table.
+  paused: '❚',
 };
 
 const STATE_TONES: Record<ProcessState, FleetStateTone> = {
@@ -105,6 +109,8 @@ const STATE_TONES: Record<ProcessState, FleetStateTone> = {
   interrupted: 'warn',
   idle: 'muted',
   queued: 'muted',
+  // Deliberately parked by the operator: neutral, not alarming.
+  paused: 'muted',
 };
 
 /** Terminal states — interrupt/kill are not offered; not counted as running. */
@@ -128,6 +134,10 @@ const KIND_TAGS: Record<ProcessKind, string> = {
   workstream: 'stream',
   phase: 'phase',
   'work-item': 'item',
+  // Wave 5 (wo804): the repo source-tree code index (adapters/code-index.ts).
+  // A single leaf node — never a rollup of other flat-list nodes (see
+  // ROLLUP_KINDS below) — so no other list in this module needs updating.
+  'code-index': 'index',
 };
 
 export function fleetStateGlyph(state: ProcessState): string {
@@ -287,6 +297,15 @@ export function buildFleetRows(nodes: readonly ProcessNode[]): FleetTreeRow[] {
  *     every phase it has visited) — it is the leaf contributor, the
  *     'wrfc-subtask'-for-capabilities analogue but the 'agent'-for-usage
  *     analogue. Excluding it would silently zero out real cost/token totals.
+ *
+ * Wave 5 (wo804): 'code-index' is deliberately NOT in this set either —
+ * adaptCodeIndex yields exactly one standalone ProcessNode per registry
+ * (never a parent whose children ALSO appear individually in the flat
+ * list), so it is a leaf like 'agent'/'work-item', not a grouping construct.
+ * It reports no usage/cost (an index build has no LLM turn), so it never
+ * contributes to totalCost/totalTokens regardless — its running state DOES
+ * count toward runningCount while building, which is correct: it is a real,
+ * distinct unit of work, not an arithmetic sum of other rows.
  */
 const ROLLUP_KINDS = new Set<ProcessKind>(['wrfc-chain', 'wrfc-subtask', 'workstream', 'phase']);
 

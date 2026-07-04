@@ -14,6 +14,7 @@ import {
   buildCompactionPreview,
   buildCompactionAfterNotice,
 } from '../../renderer/compaction-preview.ts';
+import { scoreCompactionRun } from '../../renderer/compaction-quality.ts';
 import type { CompactionEvent } from '@pellux/goodvibes-sdk/platform/core';
 import type { ProviderMessage } from '@pellux/goodvibes-sdk/platform/providers';
 
@@ -181,5 +182,37 @@ describe('buildCompactionAfterNotice', () => {
     // Savings should be 0%, not negative
     expect(result).toContain('0%');
     expect(result).not.toMatch(/-\d+%/);
+  });
+
+  // -------------------------------------------------------------------------
+  // qualityScore (W5.4/B28) — additive, optional field
+  // -------------------------------------------------------------------------
+
+  test('omits the quality line entirely when qualityScore is not provided (unchanged existing behaviour)', () => {
+    const event = makeEvent();
+    const result = buildCompactionAfterNotice({ event, pinnedMemoryCount: 0 });
+    expect(result).not.toContain('Quality:');
+  });
+
+  test('omits the quality line when qualityScore is explicitly null', () => {
+    const event = makeEvent();
+    const result = buildCompactionAfterNotice({ event, pinnedMemoryCount: 0, qualityScore: null });
+    expect(result).not.toContain('Quality:');
+  });
+
+  test('renders a grade line when a qualityScore is provided, honestly labelled as an out-of-band rubric', () => {
+    const event = makeEvent({ tokensBeforeEstimate: 50_000, tokensAfterEstimate: 6_500 });
+    const qualityScore = scoreCompactionRun({
+      sessionId: 's',
+      contextWindow: 200_000,
+      messagesBefore: [makeMsg('user', 'a'.repeat(50_000))],
+      messagesAfter: [makeMsg('user', '[Session compacted] a condensed handoff summary of this conversation context')],
+      tokensBefore: 50_000,
+      tokensAfter: 6_500,
+    });
+    const result = buildCompactionAfterNotice({ event, pinnedMemoryCount: 0, qualityScore });
+    expect(result).toContain('Quality:');
+    expect(result).toContain(qualityScore.grade);
+    expect(result).toContain('rubric applied out-of-band');
   });
 });

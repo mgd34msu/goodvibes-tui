@@ -9,6 +9,8 @@ import type {
 } from '../command-registry.ts';
 import { compactSmallWindow, getLastCompactionEvent, SMALL_WINDOW_THRESHOLD } from '@pellux/goodvibes-sdk/platform/core';
 import type { CompactionContext, CompactionEvent } from '@pellux/goodvibes-sdk/platform/core';
+import { recordCompactionQualityScore, scoreCompactionRun } from '../../renderer/compaction-quality.ts';
+import type { CompactionQualityScore } from '../../renderer/compaction-quality.ts';
 import type { UiReadModels } from '../../runtime/ui-read-models.ts';
 import type { ShellPathService } from '@/runtime/index.ts';
 import type { EcosystemCatalogPathOptions } from '@/runtime/index.ts';
@@ -238,12 +240,19 @@ export function requireProviderApi(context: CommandContext): ProviderApi {
   return requireContextValue(context.clients?.providerApi, 'clients.providerApi');
 }
 
+/** Result of a manual /compact run: the SDK's CompactionEvent, plus an
+ * out-of-band quality score (W5.4/B28) when one could be computed. */
+export interface CompactionRunResult {
+  readonly event: CompactionEvent;
+  readonly qualityScore: CompactionQualityScore | null;
+}
+
 /**
- * Compact the conversation and return the CompactionEvent recorded by the SDK,
- * or null if no event was recorded (e.g. compaction was skipped or produced no
- * change).
+ * Compact the conversation and return the CompactionEvent recorded by the SDK
+ * (plus an out-of-band quality score), or null if no event was recorded (e.g.
+ * compaction was skipped or produced no change).
  */
-export async function compactConversation(context: CommandContext): Promise<CompactionEvent | null> {
+export async function compactConversation(context: CommandContext): Promise<CompactionRunResult | null> {
   const conversationManager = context.session.conversationManager;
   const providerRegistry = context.provider.providerRegistry;
   // Resolve the live context window for the current model so manual /compact
@@ -263,12 +272,13 @@ export async function compactConversation(context: CommandContext): Promise<Comp
   }
 
   const eventBefore = getLastCompactionEvent();
+  const messagesBefore = conversationManager.getMessagesForLLM();
   const sessionMemories = context.session.sessionMemoryStore?.list() ?? [];
   const lineageTracker = context.session.sessionLineageTracker;
   const agentManager = context.ops.agentManager;
   const planManager = context.ops.planManager;
   const compactionCtx: CompactionContext = {
-    messages: conversationManager.getMessagesForLLM(),
+    messages: messagesBefore,
     sessionMemories,
     // Mirror buildAutoCompactionContext: pass ALL agent records (not just
     // running/pending) so completed/failed subagent work reaches the
@@ -303,7 +313,19 @@ export async function compactConversation(context: CommandContext): Promise<Comp
   const eventAfter = getLastCompactionEvent();
   // Return the new event only if it differs from the one recorded before the call.
   if (eventAfter !== null && eventAfter !== eventBefore) {
-    return eventAfter;
+    // W5.4/B28: score this run out-of-band (see compaction-quality.ts for why
+    // this can't just subscribe to the SDK's own CompactionManager pipeline)
+    // and keep the score keyed by this event's timestamp for /compact-history.
+    const qualityScore = scoreCompactionRun({
+      sessionId: context.session.runtime.sessionId,
+      contextWindow,
+      messagesBefore,
+      messagesAfter: conversationManager.getMessagesForLLM(),
+      tokensBefore: eventAfter.tokensBeforeEstimate,
+      tokensAfter: eventAfter.tokensAfterEstimate,
+    });
+    recordCompactionQualityScore(eventAfter.timestamp, qualityScore);
+    return { event: eventAfter, qualityScore };
   }
   return null;
 }

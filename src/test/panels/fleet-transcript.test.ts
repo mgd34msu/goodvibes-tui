@@ -198,6 +198,44 @@ describe('renderFleetLedgerFallback', () => {
     expect(lines.some((l) => l.includes('no activity recorded'))).toBe(true);
   });
 
+  // W5.2 (wo803) — Wave-5 wo801 per-turn knowledge injection ledger entries.
+  // Before this case existed, these fell through to the generic 'event'
+  // default (just the bare type name), giving no honest signal at all.
+  describe('knowledge_injection entries', () => {
+    test('a populated injection renders the turn, injected count, and token cost', () => {
+      const lines = linesToText(renderFleetLedgerFallback([
+        { type: 'knowledge_injection', turn: 3, injectedIds: ['mem-1', 'mem-2'], tokenCost: 340, embeddingBackend: 'available' },
+      ], 80, 20));
+      expect(lines.some((l) => l.includes('turn 3'))).toBe(true);
+      expect(lines.some((l) => l.includes('injected 2'))).toBe(true);
+      expect(lines.some((l) => l.includes('340'))).toBe(true);
+    });
+
+    test('an empty injection (nothing cleared the relevance floor) renders the honest reason, not a fabricated count', () => {
+      const lines = linesToText(renderFleetLedgerFallback([
+        { type: 'knowledge_injection', turn: 4, injectedIds: [], reason: 'no records cleared relevance floor', embeddingBackend: 'available' },
+      ], 80, 20));
+      expect(lines.some((l) => l.includes('turn 4'))).toBe(true);
+      expect(lines.some((l) => l.includes('nothing injected'))).toBe(true);
+      expect(lines.some((l) => l.includes('no records cleared relevance floor'))).toBe(true);
+    });
+
+    test('fallback-lexical embedding backend is tagged on the rendered line', () => {
+      const lines = linesToText(renderFleetLedgerFallback([
+        { type: 'knowledge_injection', turn: 1, injectedIds: ['mem-1'], tokenCost: 50, embeddingBackend: 'fallback-lexical' },
+      ], 80, 20));
+      expect(lines.some((l) => l.includes('lexical fallback'))).toBe(true);
+    });
+
+    test('flag-off proxy: a ledger with no knowledge_injection entries at all renders nothing injection-related', () => {
+      const lines = linesToText(renderFleetLedgerFallback([
+        { type: 'meta', model: 'claude-x', provider: 'anthropic' },
+        { type: 'session_end', status: 'completed' },
+      ], 80, 20));
+      expect(lines.some((l) => l.toLowerCase().includes('inject'))).toBe(false);
+    });
+  });
+
   test('tail-windows to height for a long ledger', () => {
     const entries = Array.from({ length: 30 }, (_, i) => ({ type: 'llm_request', turn: i }));
     const lines = renderFleetLedgerFallback(entries, 80, 5);

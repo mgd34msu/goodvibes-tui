@@ -101,6 +101,8 @@ export const NO_UNUSED_EXPORTS_EXEMPT: ReadonlySet<string> = new Set([
   'src/renderer/agent-detail-modal.ts#formatStalledLabel', // WO-203 hardening: minute count derived from MODAL_STALL_THRESHOLD_MS; wired internally, threshold-derivation pinned by dedicated tests
   'src/renderer/term-caps.ts#nearestAnsi256', // wired via downsampleColor; exact 256-index color-math (cube vs grayscale) pinned by dedicated tests
   'src/renderer/term-caps.ts#nearestAnsi16Fg', // wired via downsampleColor; exact 16-color nearest-match pinned by dedicated tests
+  'src/renderer/turn-injection.ts#formatTurnInjectionEntry', // W5.2 (wo803): wired via buildTurnInjectionsText (called internally); per-entry edge cases (empty/relevance-floor/budget-exceeded/fallback-lexical) pinned by dedicated tests
+  'src/renderer/compaction-history-modal.ts#formatCompactionEvent', // W5.4/B28 (wo803): wired via buildCompactionHistoryText (called internally); quality-score grade-suffix present/absent/null branches pinned by dedicated tests, independent of the SDK's own module-level compaction-event singleton
   'src/renderer/term-caps.ts#SYNC_BEGIN', // wired via wrapSynced; exact DEC 2026 escape sequence pinned by dedicated tests
   'src/renderer/term-caps.ts#SYNC_END', // wired via wrapSynced; exact DEC 2026 escape sequence pinned by dedicated tests
 

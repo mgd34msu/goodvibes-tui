@@ -18,8 +18,10 @@
 
 import { estimateConversationTokens } from '@pellux/goodvibes-sdk/platform/core';
 import { computeContextUsage } from '../core/context-usage.ts';
+import { formatQualityScoreLine } from './compaction-quality.ts';
 import type { CompactionEvent } from '@pellux/goodvibes-sdk/platform/core';
 import type { ProviderMessage } from '@pellux/goodvibes-sdk/platform/providers';
+import type { CompactionQualityScore } from './compaction-quality.ts';
 
 /**
  * Default compaction totalCeiling from context-compaction DEFAULT_COMPACTION_CONFIG.
@@ -44,6 +46,12 @@ export interface CompactionAfterOptions {
   readonly event: CompactionEvent;
   /** Number of session memories that survived compaction. */
   readonly pinnedMemoryCount: number;
+  /**
+   * Out-of-band quality-score grade for this run (W5.4/B28). Omitted or null
+   * when no score was computed (e.g. the small-window compaction path, which
+   * has no CompactionEvent to key a score by) — no line is rendered then.
+   */
+  readonly qualityScore?: CompactionQualityScore | null | undefined;
 }
 
 /**
@@ -82,7 +90,7 @@ export function buildCompactionPreview(opts: CompactionPreviewOptions): string {
  * after token counts. The trigger field controls wording.
  */
 export function buildCompactionAfterNotice(opts: CompactionAfterOptions): string {
-  const { event, pinnedMemoryCount } = opts;
+  const { event, pinnedMemoryCount, qualityScore } = opts;
   const {
     messagesBeforeCompaction,
     messagesAfterCompaction,
@@ -102,11 +110,14 @@ export function buildCompactionAfterNotice(opts: CompactionAfterOptions): string
 
   const triggerStr = trigger === 'auto' ? 'Auto-compact complete' : 'Compact complete';
 
+  const qualityStr = qualityScore ? `\n  ${formatQualityScoreLine(qualityScore)}` : '';
+
   return (
     `[Context] ${triggerStr}: ${messagesBeforeCompaction} → ${messagesAfterCompaction} messages,` +
     ` ~${fmtN(tokensBeforeEstimate)} → ~${fmtN(tokensAfterEstimate)} tokens` +
     ` (saved ~${fmtN(savings)}, ${savingsPct}%).` +
-    (pinStr ? ` ${pinStr.trim()}` : '')
+    (pinStr ? ` ${pinStr.trim()}` : '') +
+    qualityStr
   );
 }
 
