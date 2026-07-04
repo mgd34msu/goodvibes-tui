@@ -84,6 +84,19 @@ describe('renderFleetAgentTranscript', () => {
     expect(text.some((l) => l.includes('message 39'))).toBe(true);
   });
 
+  test('a height so tight the notice alone fills the budget still tail-slices the body to empty, instead of returning the full untrimmed history for the caller to head-clip', () => {
+    const messages = Array.from({ length: 40 }, (_, i) => ({ role: 'user' as const, content: `message ${i}` }));
+    // The frozen notice renders as a single row at width 80 — a height of 1
+    // leaves a budgetHeight of exactly 0 for the body.
+    const result = renderFleetAgentTranscript(messages, /* isTerminal */ true, new MessageLineCache(), 80, 1, null);
+    expect(result.lines).toHaveLength(1);
+    const text = linesToText(result.lines);
+    expect(text.some((l) => l.includes('Read-only'))).toBe(true);
+    // No room for any history line — in particular NOT the oldest message,
+    // which is what a full-history-then-head-clip bug would surface instead.
+    expect(text.some((l) => l.includes('message 0'))).toBe(false);
+  });
+
   test("an empty snapshot on a TERMINAL agent reports mode 'unavailable' with no lines (caller degrades to the ledger fallback)", () => {
     const result = renderFleetAgentTranscript([], true, new MessageLineCache(), 80, 20, null);
     expect(result.mode).toBe('unavailable');
@@ -189,6 +202,16 @@ describe('renderFleetLedgerFallback', () => {
     const entries = Array.from({ length: 30 }, (_, i) => ({ type: 'llm_request', turn: i }));
     const lines = renderFleetLedgerFallback(entries, 80, 5);
     expect(lines.length).toBeLessThanOrEqual(5);
+  });
+
+  test('a long ledger that overflows a small tab height still shows the degraded-view notice as the FIRST line, not just the raw activity tail (the notice must never be the thing that scrolls off)', () => {
+    const entries = Array.from({ length: 30 }, (_, i) => ({ type: 'llm_request', turn: i }));
+    const lines = linesToText(renderFleetLedgerFallback(entries, 80, 5));
+    expect(lines.length).toBeLessThanOrEqual(5);
+    expect(lines[0]).toContain('Read-only');
+    expect(lines[0]).toContain('Full transcript unavailable');
+    // The most recent entry is still visible below the reserved notice.
+    expect(lines.some((l) => l.includes('turn 29'))).toBe(true);
   });
 
   test('shows a truncated result preview for a successful tool_execution row (W3.3: "genuinely useful", not just a name)', () => {

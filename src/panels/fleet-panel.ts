@@ -204,8 +204,12 @@ export class FleetPanel extends ScrollableListPanel<FleetTreeRow> {
     this.unsubConsumed = readModel.subscribeConsumed((event) => {
       let changed = false;
       for (const tab of this.tabsState.tabs) {
-        if (tab.steerBadge?.status === 'queued' && tab.steerBadge.messageId === event.messageId) {
-          tab.steerBadge = { ...tab.steerBadge, status: 'consumed', resolvedAt: Date.now() };
+        const badge = tab.steerBadge;
+        if (!badge || badge.messageId !== event.messageId) continue;
+        // Consumed-wins: this real signal can still upgrade an already
+        // 'dropped' (inferred) badge, as long as it hasn't linger-cleared yet.
+        if (badge.status === 'queued' || badge.status === 'dropped') {
+          tab.steerBadge = { messageId: badge.messageId, status: 'consumed', queuedAt: badge.queuedAt, resolvedAt: Date.now() };
           changed = true;
         }
       }
@@ -577,7 +581,8 @@ export class FleetPanel extends ScrollableListPanel<FleetTreeRow> {
   private submitSteer(tab: FleetTab, text: string): void {
     const result = this.actions.steer(tab.nodeId, text);
     if (result.queued) {
-      tab.steerBadge = { messageId: result.messageId, status: 'queued' };
+      // queuedAt drives reconcileSteerBadges' TTL-expiry fallback (fleet-steer.ts).
+      tab.steerBadge = { messageId: result.messageId, status: 'queued', queuedAt: Date.now() };
     } else {
       this.setError(result.reason);
     }

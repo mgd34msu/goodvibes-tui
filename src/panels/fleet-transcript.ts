@@ -144,7 +144,13 @@ export function renderFleetAgentTranscript(
   // off by a long conversation's tail-window slice.
   const notice = isTerminal ? renderFrozenTranscriptNotice(width) : [];
   const budgetHeight = Math.max(0, height - notice.length);
-  const visible = historyLines.length > budgetHeight && budgetHeight > 0
+  // No `&& budgetHeight > 0` guard: when the notice alone already consumes
+  // the whole height budget, `historyLines.slice(historyLines.length - 0)`
+  // correctly yields an empty tail (nothing fits), rather than falling
+  // through to the full, un-sliced history — which the caller would then
+  // head-clip, silently swapping in the OLDEST lines instead of the
+  // most-recent tail this view promises.
+  const visible = historyLines.length > budgetHeight
     ? historyLines.slice(historyLines.length - budgetHeight)
     : historyLines;
   return { mode: isTerminal ? 'frozen' : 'live', lines: [...notice, ...visible] };
@@ -277,6 +283,13 @@ function renderLedgerEntry(width: number, entry: Record<string, unknown>, palett
  * replay (the ledger is a truncated event record — see session.ts /
  * orchestrator-runner.ts: tool args/results are sliced to 500 chars and
  * assistant response TEXT is never written at all, only its length).
+ *
+ * Mirrors renderFleetAgentTranscript's notice-reservation above: the notice
+ * rows are reserved ABOVE the tail window and only the body is tail-sliced,
+ * so a long ledger's degraded-view cue is never the thing that scrolls off
+ * (previously this tail-sliced `[...notice, ...body]` as one array, which
+ * for any ledger longer than the tab height silently dropped the notice
+ * itself, leaving what looked like a raw, unexplained activity feed).
  */
 export function renderFleetLedgerFallback(
   entries: readonly Record<string, unknown>[],
@@ -292,9 +305,11 @@ export function renderFleetLedgerFallback(
   const body = entries.length === 0
     ? [buildPanelLine(width, [[' (no activity recorded)', palette.dim]])]
     : entries.map((entry) => renderLedgerEntry(width, entry, palette));
-  const all = [...notice, ...body];
-  if (all.length <= height) return all;
-  return all.slice(all.length - Math.max(0, height));
+  const budgetHeight = Math.max(0, height - notice.length);
+  const visible = body.length > budgetHeight
+    ? body.slice(body.length - budgetHeight)
+    : body;
+  return [...notice, ...visible];
 }
 
 /** A blank tab-content placeholder (e.g. while a ledger load is in flight). */

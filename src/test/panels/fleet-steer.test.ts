@@ -8,7 +8,7 @@
 // ---------------------------------------------------------------------------
 
 import { describe, expect, test } from 'bun:test';
-import type { ProcessNode } from '@pellux/goodvibes-sdk/platform/runtime/fleet';
+import { STEER_TTL_MS, type ProcessNode } from '@pellux/goodvibes-sdk/platform/runtime/fleet';
 import { reconcileSteerBadges, steerBadgeGlyph, steerBadgeTone } from '../../panels/fleet-steer.ts';
 import type { FleetTab, SteerBadgeStatus } from '../../panels/fleet-tabs.ts';
 import { DEFAULT_PANEL_PALETTE } from '../../panels/polish.ts';
@@ -133,5 +133,52 @@ describe('reconcileSteerBadges', () => {
     expect(changed).toBe(true);
     expect(queuedAndTerminal.steerBadge?.status).toBe('dropped');
     expect(queuedAndRunning.steerBadge?.status).toBe('queued');
+  });
+
+  // -------------------------------------------------------------------------
+  // TTL-expiry fallback (long-tool-call case): the target stays healthy and
+  // non-terminal throughout, but the underlying steer message's own TTL
+  // (the SDK's MessageBus stamps every steer with STEER_TTL_MS — see
+  // registry.js's steer()) lapses in the bus without ever producing a
+  // COMMUNICATION_CONSUMED. Without this, the badge would show 'queued'
+  // forever even though the message is provably gone.
+  // -------------------------------------------------------------------------
+  test('a queued badge whose target is still healthy/non-terminal is left untouched well within the TTL', () => {
+    const tab = makeTab({ nodeId: 'a', steerBadge: { messageId: 'm1', status: 'queued', queuedAt: NOW - 1_000 } });
+    const changed = reconcileSteerBadges([tab], () => makeNode({ id: 'a', state: 'executing-tool' }), NOW);
+    expect(changed).toBe(false);
+    expect(tab.steerBadge?.status).toBe('queued');
+  });
+
+  test('a queued badge past STEER_TTL_MS resolves to dropped as "expired undelivered", even though the target is still non-terminal (long-tool-call case)', () => {
+    const tab = makeTab({
+      nodeId: 'a',
+      steerBadge: { messageId: 'm1', status: 'queued', queuedAt: NOW - STEER_TTL_MS - 1 },
+    });
+    const changed = reconcileSteerBadges([tab], () => makeNode({ id: 'a', state: 'executing-tool' }), NOW);
+    expect(changed).toBe(true);
+    expect(tab.steerBadge?.status).toBe('dropped');
+    expect(tab.steerBadge?.messageId).toBe('m1');
+    expect(tab.steerBadge?.note).toBe('expired undelivered');
+    expect(tab.steerBadge?.resolvedAt).toBe(NOW);
+  });
+
+  test('a queued badge with no queuedAt (older/hand-built badge) never TTL-expires — absence of the field just means no inference is possible, not an error', () => {
+    const tab = makeTab({ nodeId: 'a', steerBadge: { messageId: 'm1', status: 'queued' } });
+    const changed = reconcileSteerBadges([tab], () => makeNode({ id: 'a', state: 'executing-tool' }), NOW + STEER_TTL_MS * 10);
+    expect(changed).toBe(false);
+    expect(tab.steerBadge?.status).toBe('queued');
+  });
+
+  test('a badge already dropped by the terminal-target inference (not the TTL path) is not double-processed by the TTL branch', () => {
+    const tab = makeTab({
+      nodeId: 'a',
+      steerBadge: { messageId: 'm1', status: 'queued', queuedAt: NOW - STEER_TTL_MS - 1 },
+    });
+    // Terminal-target branch takes priority when both conditions are true.
+    const changed = reconcileSteerBadges([tab], () => makeNode({ id: 'a', state: 'failed' }), NOW);
+    expect(changed).toBe(true);
+    expect(tab.steerBadge?.status).toBe('dropped');
+    expect(tab.steerBadge?.note).toContain('went failed'); // terminal-target note, not the TTL note
   });
 });
