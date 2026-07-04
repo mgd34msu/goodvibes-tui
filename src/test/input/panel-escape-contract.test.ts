@@ -70,7 +70,7 @@ function buildFocusedState(
     handlePathCompletion: mock(() => false),
     cyclePanelTab: mock(() => {}),
     onPanelInputConsumed: undefined,
-    isPrintableBurst: false,
+    isPasteToken: false,
     isTurnActive: () => false,
     cancelGeneration: mock(() => {}),
     ...overrides,
