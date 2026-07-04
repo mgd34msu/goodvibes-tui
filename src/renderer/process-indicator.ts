@@ -12,6 +12,16 @@ import { formatHints } from './hint-grammar.ts';
  * background exec processes are running. Includes an `[Enter] View` hint
  * (hint-grammar bracket form) when active.
  */
+/**
+ * Agent-count label. The footer counts only ACTIVE agents, while the fleet
+ * lists every node (running, terminal, chains, watchers). Label the count
+ * "active" so it is never misread as a grand total — the [Enter] View hint
+ * opens the fleet for the full picture. (UX-B item 5d.)
+ */
+function agentCountLabel(agentCount: number): string {
+  return `${agentCount} agent${agentCount !== 1 ? 's' : ''} active`;
+}
+
 export function renderProcessIndicator(
   width: number,
   agentCount: number,
@@ -47,7 +57,7 @@ export function renderProcessIndicator(
   // --- Focused state: always render before idle/active branches ---
   if (focused) {
     const parts: string[] = [];
-    if (agentCount > 0) parts.push(`${agentCount} agent${agentCount !== 1 ? 's' : ''}`);
+    if (agentCount > 0) parts.push(agentCountLabel(agentCount));
     if (toolCount > 0) parts.push(`${toolCount} tool${toolCount !== 1 ? 's' : ''} running`);
     const label = total === 0
       ? `No background processes  ${formatHints([{ key: 'Esc', verb: 'Back to input' }])}`
@@ -62,7 +72,7 @@ export function renderProcessIndicator(
   // Build the label: "bg: 2 agents | Turn 3 | write - src/foo.ts"
   const parts: string[] = [];
   if (agentCount > 0) {
-    parts.push(`${agentCount} agent${agentCount !== 1 ? 's' : ''}`);
+    parts.push(agentCountLabel(agentCount));
   }
   if (toolCount > 0) {
     parts.push(`${toolCount} tool${toolCount !== 1 ? 's' : ''} running`);

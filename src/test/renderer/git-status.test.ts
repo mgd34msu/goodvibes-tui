@@ -103,6 +103,20 @@ describe('GitStatusProvider', () => {
     });
   });
 
+  describe('unborn HEAD (repo with no commits) — UX-B 5a', () => {
+    test('shows "new" instead of "?" for a freshly-initialised repo', async () => {
+      const dir = mkdtempSync(join(tmpdir(), 'gv-git-new-'));
+      try {
+        Bun.spawnSync(['git', 'init'], { cwd: dir });
+        const provider = new GitStatusProvider(dir);
+        const info = await provider.getStatus();
+        expect(info.branch).toBe('new');
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+  });
+
   describe('caching behaviour', () => {
     test('second call within TTL returns cached result without refetching', async () => {
       const provider = new GitStatusProvider(process.cwd());
