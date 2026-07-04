@@ -80,6 +80,10 @@ export interface BootstrapCommandSectionOptions {
   readonly mcpRegistry: McpRegistry;
   readonly voiceProviderRegistry?: VoiceProviderRegistry;
   readonly voiceService?: VoiceService;
+  /** B31: direct-command consumers (`/search`, `/image`) of already-constructed RuntimeServices. */
+  readonly webSearchService?: import('@pellux/goodvibes-sdk/platform/web-search').WebSearchService;
+  readonly mediaProviders?: import('@pellux/goodvibes-sdk/platform/media').MediaProviderRegistry;
+  readonly artifactStore?: import('@pellux/goodvibes-sdk/platform/artifacts').ArtifactStore;
   readonly forensicsRegistry: ForensicsRegistry;
   readonly policyRuntimeState: PolicyRuntimeState;
   readonly readModels: UiReadModels;
@@ -374,7 +378,7 @@ export function createBootstrapCommandWorkspaceSection(
 export function createBootstrapCommandPlatformSection(
   options: Pick<
     BootstrapCommandSectionOptions,
-    'configManager' | 'voiceProviderRegistry' | 'voiceService'
+    'configManager' | 'voiceProviderRegistry' | 'voiceService' | 'webSearchService' | 'mediaProviders' | 'artifactStore'
   >,
   shellServices: BootstrapCommandShellServices,
 ): BootstrapCommandPlatformSection {
@@ -383,6 +387,9 @@ export function createBootstrapCommandPlatformSection(
     configManager: options.configManager,
     voiceProviderRegistry: options.voiceProviderRegistry,
     voiceService: options.voiceService,
+    webSearchService: options.webSearchService,
+    mediaProviders: options.mediaProviders,
+    artifactStore: options.artifactStore,
     ...shellServices.platform,
   };
 }

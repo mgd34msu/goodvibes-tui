@@ -2,6 +2,33 @@ import { beforeEach, describe, expect, mock, test } from 'bun:test';
 import { wireShellUiOpeners } from '../../shell/ui-openers.ts';
 import { createTestManagers } from '../helpers/test-managers.ts';
 
+interface FakeEmbeddingStatus {
+  readonly id: string;
+  readonly label: string;
+  readonly dimensions: number;
+  readonly configured: boolean;
+  readonly detail?: string;
+}
+
+function makeFakeEmbeddingRegistry(options: {
+  defaultProviderId?: string;
+  statuses?: FakeEmbeddingStatus[];
+} = {}) {
+  let defaultProviderId = options.defaultProviderId ?? 'hashed-local';
+  const statuses = options.statuses ?? [
+    { id: 'hashed-local', label: 'Hashed Local Embeddings', dimensions: 384, configured: true },
+    { id: 'openai', label: 'OpenAI Embeddings', dimensions: 1536, configured: false, detail: 'Set OPENAI_API_KEY to enable.' },
+  ];
+  return {
+    getDefaultProviderId: mock(() => defaultProviderId),
+    setDefaultProvider: mock((id: string) => {
+      if (!statuses.some((s) => s.id === id)) throw new Error(`Unknown memory embedding provider: ${id}`);
+      defaultProviderId = id;
+    }),
+    status: mock(async () => statuses),
+  };
+}
+
 describe('wireShellUiOpeners', () => {
   let commandContext: Record<string, unknown>;
   let input: Record<string, unknown>;
@@ -9,13 +36,23 @@ describe('wireShellUiOpeners', () => {
   let conversation: Record<string, unknown>;
   let render: ReturnType<typeof mock>;
   let testManagers = createTestManagers();
+  let fakeEmbeddingRegistry = makeFakeEmbeddingRegistry();
 
   beforeEach(() => {
     testManagers = createTestManagers();
+    fakeEmbeddingRegistry = makeFakeEmbeddingRegistry();
     commandContext = { print: mock(() => {}) };
     input = {
       indicatorFocused: false,
-      modelPicker: {},
+      modelPicker: {
+        embeddingProviders: [],
+        setTargetInfos: mock(() => {}),
+        openAllModels: mock(() => {}),
+        openProviders: mock(() => {}),
+        loadRecentModels: mock(async () => {}),
+        getSelectedTargetInfo: mock(() => null),
+        target: 'main',
+      },
       modalOpened: mock(() => {}),
       openSelection: mock(() => {}),
     };
@@ -49,12 +86,13 @@ describe('wireShellUiOpeners', () => {
       panelManager: panelManager as never,
       conversation: conversation as never,
       configManager: testManagers.configManager,
-      providerRegistry: {} as never,
-      runtime: {} as never,
+      providerRegistry: { getSelectableModels: () => [], listModels: () => [] } as never,
+      runtime: { model: 'm', provider: 'p' } as never,
       featureFlags: {} as never,
       mcpRegistry: {} as never,
       subscriptionManager: testManagers.subscriptionManager,
       serviceRegistry: testManagers.serviceRegistry,
+      memoryEmbeddingRegistry: fakeEmbeddingRegistry as never,
       getConfiguredProviderIds: () => [],
       getPinned: async () => [],
       render,
@@ -139,5 +177,74 @@ describe('wireShellUiOpeners', () => {
     expect(panelManager.getModalSurface).toHaveBeenCalledWith('providers-modal');
     expect(commandContext.print).toHaveBeenCalledWith("'providers-modal' is not available yet in this build.");
     expect(render).toHaveBeenCalled();
+  });
+
+  describe('embeddings target (B29)', () => {
+    async function openModelPickerAndFlush(): Promise<void> {
+      (commandContext.openModelPicker as () => void)();
+      // openModelPicker's body is a fire-and-forget async IIFE (`void (async () => ...)()`);
+      // a macrotask tick lets every microtask-based await inside it settle before assertions.
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+
+    function getModelPicker(): Record<string, unknown> {
+      return input.modelPicker as Record<string, unknown>;
+    }
+
+    test('adds a 5th "embeddings" target with an honest provider + dimensions + configured note', async () => {
+      await openModelPickerAndFlush();
+
+      const setTargetInfos = getModelPicker().setTargetInfos as ReturnType<typeof mock>;
+      expect(setTargetInfos).toHaveBeenCalledTimes(1);
+      const targets = setTargetInfos.mock.calls[0]![0] as Array<{ target: string; label: string; configuredNote?: string; model: string }>;
+      expect(targets.map((t) => t.target)).toEqual(['main', 'helper', 'tool', 'tts', 'embeddings']);
+
+      const embeddingsTarget = targets.find((t) => t.target === 'embeddings')!;
+      expect(embeddingsTarget.label).toBe('Embeddings');
+      expect(embeddingsTarget.model).toBe(''); // no phantom model value
+      expect(embeddingsTarget.configuredNote).toBe('hashed-local · 384d');
+    });
+
+    test('the four existing targets are unchanged', async () => {
+      await openModelPickerAndFlush();
+
+      const setTargetInfos = getModelPicker().setTargetInfos as ReturnType<typeof mock>;
+      const targets = setTargetInfos.mock.calls[0]![0] as Array<{ target: string; label: string }>;
+      expect(targets.find((t) => t.target === 'main')?.label).toBe('Main Chat');
+      expect(targets.find((t) => t.target === 'helper')?.label).toBe('Helper Model');
+      expect(targets.find((t) => t.target === 'tool')?.label).toBe('Tool LLM');
+      expect(targets.find((t) => t.target === 'tts')?.label).toBe('TTS LLM');
+    });
+
+    test('populates the picker\'s embedding-provider list, showing unconfigured providers honestly', async () => {
+      await openModelPickerAndFlush();
+
+      const embeddingProviders = getModelPicker().embeddingProviders as Array<{ id: string; configured: boolean }>;
+      expect(embeddingProviders).toHaveLength(2);
+      expect(embeddingProviders.find((p) => p.id === 'hashed-local')?.configured).toBe(true);
+      expect(embeddingProviders.find((p) => p.id === 'openai')?.configured).toBe(false);
+    });
+
+    test('an unregistered persisted default renders honestly instead of a fabricated note', async () => {
+      fakeEmbeddingRegistry.getDefaultProviderId.mockReturnValue('vanished-provider');
+      await openModelPickerAndFlush();
+
+      const setTargetInfos = getModelPicker().setTargetInfos as ReturnType<typeof mock>;
+      const targets = setTargetInfos.mock.calls[0]![0] as Array<{ target: string; configuredNote?: string }>;
+      expect(targets.find((t) => t.target === 'embeddings')?.configuredNote).toBe('vanished-provider · unregistered');
+    });
+
+    test('completeEmbeddingProviderSelection persists the selection via the registry', () => {
+      (commandContext.completeEmbeddingProviderSelection as (id: string) => void)('openai');
+      expect(fakeEmbeddingRegistry.setDefaultProvider).toHaveBeenCalledWith('openai');
+      expect(render).toHaveBeenCalled();
+    });
+
+    test('completeEmbeddingProviderSelection reports an honest error for an unknown provider id', () => {
+      const print = mock(() => {});
+      commandContext.print = print;
+      (commandContext.completeEmbeddingProviderSelection as (id: string) => void)('does-not-exist');
+      expect(print).toHaveBeenCalledWith(expect.stringContaining('Failed to set embedding provider'));
+    });
   });
 });

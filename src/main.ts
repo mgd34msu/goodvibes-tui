@@ -666,6 +666,7 @@ async function main() {
     subscriptionManager,
     secretsManager,
     serviceRegistry: ctx.services.serviceRegistry,
+    memoryEmbeddingRegistry: ctx.services.memoryEmbeddingRegistry,
     workingDirectory: workingDir,
     homeDirectory,
     getConfiguredProviderIds: ctx._getConfiguredProviderIds,
