@@ -10,6 +10,8 @@ export type PendingPermissionState = PermissionRequest & {
   resolve: (approved: boolean, remember?: boolean, modifiedArgs?: Record<string, unknown>) => void;
   /** Present only when isHunkSelectable(request) was true when the prompt was opened. */
   hunkState?: HunkSelectionState;
+  /** True once the user pressed `d` to expand a condensed low-risk card. (UX-B 2b.) */
+  detailsExpanded?: boolean;
 };
 
 export type BlockingInputHandlerOptions = {
@@ -113,6 +115,16 @@ export function handleBlockingShellInput(
       abortTurn();
       render();
       return { handled: true, pendingPermission: null, recoveryPending };
+    }
+
+    if (key === 'd') {
+      // Toggle the condensed↔full detail view without resolving the request.
+      render();
+      return {
+        handled: true,
+        pendingPermission: { ...req, detailsExpanded: !req.detailsExpanded },
+        recoveryPending,
+      };
     }
 
     render();

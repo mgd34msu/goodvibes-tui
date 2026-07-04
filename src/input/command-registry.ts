@@ -48,6 +48,13 @@ export interface CommandRuntimeState {
   systemPrompt: string;
   reasoningEffort: string;
   sessionId: string;
+  /**
+   * Cumulative count of direct terminal writes the output guard intercepted
+   * this session — surfaced by /debug. Optional so the SDK's MutableRuntimeState
+   * (which has no such field) stays assignable; the guard sets it lazily on the
+   * shared runtime object. (UX-B item 1a.)
+   */
+  terminalWritesIntercepted?: number;
 }
 
 /**

@@ -4,7 +4,7 @@ import { getDisplayWidth, truncateDisplay } from '../utils/terminal-width.ts';
 import type { ToolCall } from '@pellux/goodvibes-sdk/platform/types';
 import { stripDangerousAnsi } from './ansi-sanitize.ts';
 import { formatElapsed } from '../utils/format-elapsed.ts';
-import { UI_TONES } from './ui-primitives.ts';
+import { UI_TONES, GLYPHS } from './ui-primitives.ts';
 
 const TOOL_NAME_MIN_WIDTH = 8;
 const TOOL_NAME_MAX_WIDTH = 20;
@@ -155,7 +155,7 @@ function extractKeyArg(toolCall: ToolCall): string {
  */
 export function renderToolCallBlock(
   toolCall: ToolCall,
-  status: 'executing' | 'done' | 'error',
+  status: 'executing' | 'done' | 'error' | 'pending',
   resultSummary: string | undefined,
   width: number,
   durationMs?: number,
@@ -168,9 +168,12 @@ export function renderToolCallBlock(
   const rightMargin = LAYOUT.RIGHT_MARGIN;
   const contentEnd = width - rightMargin;
 
-  // Status icon
+  // Status icon. 'pending' means the tool is still awaiting a decision
+  // (e.g. an approval prompt) and has NOT run yet — it uses the hollow idle
+  // glyph so a not-yet-run tool never shows the completed green ✓ (UX-B 2c).
   const icon = status === 'done' ? TOOL_STATUS.SUCCESS_ICON
     : status === 'error' ? TOOL_STATUS.FAIL_ICON
+    : status === 'pending' ? GLYPHS.status.idle
     : TOOL_STATUS.SPINNER_FRAMES[(frameIndex ?? 0) % TOOL_STATUS.SPINNER_FRAMES.length];
   const iconColor = status === 'done' ? UI_TONES.state.good
     : status === 'error' ? UI_TONES.state.bad
@@ -198,7 +201,7 @@ export function renderToolCallBlock(
   let col: number = leftStart;
 
   if (col < leftEndExclusive) {
-    line[col] = createStyledCell(icon, { fg: iconColor, bold: status !== 'executing' });
+    line[col] = createStyledCell(icon, { fg: iconColor, bold: status === 'done' || status === 'error' });
   }
   col += 2; // icon + space
 

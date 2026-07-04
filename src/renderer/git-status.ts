@@ -110,7 +110,9 @@ export class GitStatusProvider {
         statusResult.conflicted.length > 0 ||
         statusResult.not_added.length > 0;
       this.cache = {
-        branch: branchResult.current || '?',
+        // Empty `current` means an unborn HEAD — a repo with no commits yet.
+        // Show "new" instead of an unfriendly "?" for that first-run case. (5a)
+        branch: branchResult.current || 'new',
         dirty,
         ahead: statusResult.ahead ?? 0,
         behind: statusResult.behind ?? 0,

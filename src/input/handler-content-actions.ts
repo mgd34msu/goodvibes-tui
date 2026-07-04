@@ -436,7 +436,16 @@ export function handleCtrlC(
     setCursorPos(0);
     return;
   }
-  cancelGeneration?.();
+  // Stopping in-flight speech / aborting the turn must never prevent the quit
+  // double-press window from advancing. A throw from the async TTS-stop path
+  // (e.g. killing the audio subprocess) would otherwise swallow this press and
+  // strand the user unable to quit while TTS is speaking. Decouple the two: the
+  // press below is recorded no matter how speech-stop fares. (UX-B item 6b.)
+  try {
+    cancelGeneration?.();
+  } catch {
+    // Non-fatal to the exit chord; the quit-window bookkeeping still runs.
+  }
   const now = Date.now();
   // Clear any hide-timer pending from a prior press before deciding this
   // one's outcome, whichever branch below runs. Without this, a hide-timer

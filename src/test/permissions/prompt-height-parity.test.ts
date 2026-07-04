@@ -76,4 +76,73 @@ describe('PermissionPromptUI.getPromptHeight / createPromptLines parity', () => 
     const lines = PermissionPromptUI.createPromptLines(WIDTH, request, hunkState);
     expect(lines.length).toBe(height);
   });
+
+  // UX-B item 2a/2b: condensed low-risk cards, multi-path fields, and the `d`
+  // details toggle must all keep getPromptHeight and createPromptLines in sync,
+  // or the render loop clips the viewport.
+  function makeFilesRequest(
+    tool: string,
+    category: 'read' | 'write' | 'execute',
+    paths: string[],
+  ): PermissionPromptRequest & { resolve: (approved: boolean) => void } {
+    const args = { files: paths.map((path) => ({ path })) };
+    return {
+      callId: 'files-test',
+      tool,
+      args,
+      category,
+      analysis: analyzePermissionRequest(tool, args, category),
+      resolve: () => {},
+    };
+  }
+
+  for (const tool of [
+    { name: 'read', cat: 'read' as const },
+    { name: 'write', cat: 'write' as const },
+  ]) {
+    for (const fileCount of [1, 2, 3, 5]) {
+      for (const expanded of [false, true]) {
+        test(`${tool.name} with ${fileCount} file(s), expanded=${expanded}: height matches`, () => {
+          const request = makeFilesRequest(tool.name, tool.cat, Array.from({ length: fileCount }, (_, i) => `dir/file${i}.ts`));
+          const height = PermissionPromptUI.getPromptHeight(request, undefined, expanded);
+          const lines = PermissionPromptUI.createPromptLines(WIDTH, request, undefined, expanded);
+          expect(lines.length).toBe(height);
+        });
+      }
+    }
+  }
+
+  const lineText = (line: { char: string }[]): string => line.map((c) => c.char).join('');
+
+  test('2a — a nested {files:[{path}]} arg renders the real path in the Path field, raw JSON only in Args', () => {
+    const request = makeFilesRequest('write', 'write', ['notes/haiku.txt']);
+    const rows = PermissionPromptUI.createPromptLines(WIDTH, request, undefined, true).map(lineText);
+    const pathRow = rows.find((r) => r.trimStart().startsWith('Path'));
+    expect(pathRow).toBeDefined();
+    expect(pathRow!).toContain('notes/haiku.txt');
+    expect(pathRow!).not.toContain('{"files"'); // never a JSON blob in the Path field
+    // Raw args stay reachable in the dedicated Args row (behind the details view).
+    const argsRow = rows.find((r) => r.trimStart().startsWith('Args'));
+    expect(argsRow!).toContain('{"files"');
+  });
+
+  test('2a — many files collapse to a "N files: …" summary line', () => {
+    const request = makeFilesRequest('write', 'write', Array.from({ length: 6 }, (_, i) => `f${i}.ts`));
+    const text = PermissionPromptUI.createPromptLines(WIDTH, request, undefined, true).map(lineText).join('\n');
+    expect(text).toContain('6 files:');
+  });
+
+  test('2b — a low-risk local read is condensed by default and expands with details', () => {
+    const request = makeFilesRequest('read', 'read', ['src/foo.ts']);
+    const collapsedHeight = PermissionPromptUI.getPromptHeight(request, undefined, false);
+    const expandedHeight = PermissionPromptUI.getPromptHeight(request, undefined, true);
+    // Condensed cards are much shorter; expanding reveals the full block.
+    expect(expandedHeight).toBeGreaterThan(collapsedHeight);
+    const collapsed = PermissionPromptUI.createPromptLines(WIDTH, request, undefined, false);
+    expect(collapsed.length).toBe(collapsedHeight);
+    // The condensed card still names the file and offers the details toggle.
+    const text = collapsed.map(lineText).join('\n');
+    expect(text).toContain('foo.ts');
+    expect(text).toContain('[d] details');
+  });
 });
