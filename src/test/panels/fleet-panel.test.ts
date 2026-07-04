@@ -1452,3 +1452,37 @@ describe('FleetPanel — receiveDeepLink (DEBT-5 item 4)', () => {
     expect(selectedLine).toContain('agent-2');
   });
 });
+
+// ---------------------------------------------------------------------------
+// Batch refutation fixes (findings 1 + 4): a deep-link must be VISIBLE even
+// with a session tab active, and a queued-steer promise must not render for
+// a node whose stop is in flight.
+// ---------------------------------------------------------------------------
+
+describe('FleetPanel — batch refutation fixes', () => {
+  test('receiveDeepLink returns to the tree view when a session tab is active (finding 1)', () => {
+    const { panel } = attachSteerableTab();
+    expect(panel.getTabsState().activeTabIndex).toBe(1);
+    panel.receiveDeepLink({ id: 'agent-1' });
+    expect(panel.getTabsState().activeTabIndex).toBe(0);
+    const text = linesText(panel.render(120, 24));
+    expect(text).toContain('agent-1'); // tree view with the target visible
+  });
+
+  test('queued-steer badge suppressed while a stop is in flight (finding 4)', () => {
+    const { panel } = attachSteerableTab();
+    panel.handleInput('s');
+    for (const ch of 'do the thing') panel.handleInput(ch);
+    panel.handleInput('enter');
+    expect(linesText(panel.render(120, 24))).toContain('steer queued');
+
+    // Kill from the tree view, then return to the tab: the queued promise
+    // must not render during the stopping window.
+    panel.receiveDeepLink({ id: 'agent-1' }); // back to tree (finding-1 path)
+    panel.handleInput('K');
+    panel.handleInput('y');
+    panel.handleInput('enter'); // re-attach the tab
+    const text = linesText(panel.render(120, 24));
+    expect(text).not.toContain('steer queued');
+  });
+});

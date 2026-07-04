@@ -572,6 +572,12 @@ type ConfigModalRouteState = {
 export function handleConfigModalToken(state: ConfigModalRouteState, token: InputToken): boolean {
   if (!state.configModal.active) return false;
 
+  // Every token that reaches the modal is a user interaction — after the
+  // first one, structure freezes to interaction boundaries (liveness rule).
+  // Before it, renders may sync structure so async onOpen loads appear
+  // without a keypress (batch refutation finding 3).
+  state.configModal.noteInteraction();
+
   const filtering = state.configModal.isFilterActive();
 
   if (token.type === 'key') {
