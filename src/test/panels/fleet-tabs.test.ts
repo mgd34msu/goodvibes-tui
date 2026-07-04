@@ -10,6 +10,7 @@ import { describe, expect, test } from 'bun:test';
 import type { ProcessNode } from '@pellux/goodvibes-sdk/platform/runtime/fleet';
 import {
   activeFleetTab,
+  appendSteerText,
   attachFleetTab,
   detachActiveFleetTab,
   detachFleetTab,
@@ -158,5 +159,55 @@ describe('switchFleetTab / stepFleetTab / activeFleetTab', () => {
     expect(state.activeTabIndex).toBe(0);
     state = stepFleetTab(state, -1); // clamp at the root
     expect(state.activeTabIndex).toBe(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// appendSteerText — Wave-3 (W3.2) steer-composer paste normalization. A
+// pasted multi-line block arrives as literal \r/\n characters, one at a time
+// (see fleet-panel.ts's isCapturingTextBurst contract); this must collapse
+// each line break to a single space rather than corrupting the one-line
+// field with a raw control character or jamming words together.
+// ---------------------------------------------------------------------------
+
+describe('appendSteerText', () => {
+  test('ordinary printable characters just append', () => {
+    let draft = '';
+    for (const ch of 'hello') draft = appendSteerText(draft, ch);
+    expect(draft).toBe('hello');
+  });
+
+  test('a \\r in the middle of a draft becomes a single space', () => {
+    expect(appendSteerText('first', '\r')).toBe('first ');
+  });
+
+  test('a \\n behaves identically to \\r', () => {
+    expect(appendSteerText('first', '\n')).toBe('first ');
+  });
+
+  test('a line break on an empty draft contributes nothing (no leading space)', () => {
+    expect(appendSteerText('', '\r')).toBe('');
+  });
+
+  test('a line break immediately after an existing space does not double the space', () => {
+    expect(appendSteerText('first ', '\r')).toBe('first ');
+  });
+
+  test('a full CR-separated paste normalizes to single-spaced words', () => {
+    let draft = '';
+    for (const ch of 'first\rsecond\rthird') draft = appendSteerText(draft, ch);
+    expect(draft).toBe('first second third');
+  });
+
+  test('a CRLF pair collapses to one space, not two', () => {
+    let draft = '';
+    for (const ch of 'first\r\nsecond') draft = appendSteerText(draft, ch);
+    expect(draft).toBe('first second');
+  });
+
+  test('repeated line breaks collapse to a single space', () => {
+    let draft = '';
+    for (const ch of 'first\r\r\rsecond') draft = appendSteerText(draft, ch);
+    expect(draft).toBe('first second');
   });
 });

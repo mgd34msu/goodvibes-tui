@@ -76,7 +76,9 @@ export function registerOperationsPanels(manager: PanelManager, deps: ResolvedBu
   // process registry constructed once in runtime/services.ts (shared with
   // every other consumer rather than duplicated here; the registry owns its
   // own coalesced tick, so no manual lifecycle-event wiring is needed).
-  const fleetReadModel = createFleetReadModel(ui.runtime.processRegistry);
+  // Wave-3 (W3.2): runtimeBus is also passed so the read model can subscribe
+  // to the honest COMMUNICATION_CONSUMED steer-ack signal (fleet-read-model.ts).
+  const fleetReadModel = createFleetReadModel(ui.runtime.processRegistry, ui.runtime.runtimeBus);
 
   manager.registerType({
     id: 'fleet',
@@ -84,7 +86,7 @@ export function registerOperationsPanels(manager: PanelManager, deps: ResolvedBu
     // W2.2: '⊟' verified free against the full icon registry at wiring time.
     icon: '⊟',
     category: 'runtime-ops',
-    description: 'Live unified process tree: agents, WRFC chains, workflows, watchers, and background processes, with interrupt/kill controls',
+    description: 'Live unified process tree: agents, WRFC chains, workflows, watchers, and background processes, with interrupt/kill/steer controls',
     factory: () => new FleetPanel(fleetReadModel, {
       interrupt: (id: string) => fleetReadModel.interrupt(id),
       kill: (id: string, opts: { cascade: boolean }) => fleetReadModel.kill(id, opts),
@@ -94,6 +96,8 @@ export function registerOperationsPanels(manager: PanelManager, deps: ResolvedBu
       // panel degrades to the on-disk ledger fallback in that case).
       getConversationSnapshot: (agentId: string) => ui.agents.agentManager.getConversationSnapshot(agentId),
       resolveSessionLogPath: (agentId: string) => ui.environment.shellPaths.resolveProjectPath('tui', 'sessions', `${agentId}.jsonl`),
+      // Wave-3 (W3.2): queue a message for a live in-process agent/wrfc-subtask member.
+      steer: (id: string, text: string) => fleetReadModel.steer(id, text),
     }, deps.configManager),
   });
 

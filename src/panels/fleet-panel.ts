@@ -20,7 +20,7 @@
 
 import { readFile } from 'node:fs/promises';
 import type { Line } from '../types/grid.ts';
-import type { ProcessCostState, ProcessUsage } from '@pellux/goodvibes-sdk/platform/runtime/fleet';
+import type { ProcessCostState, ProcessUsage, SteerResult } from '@pellux/goodvibes-sdk/platform/runtime/fleet';
 import type { ConversationMessageSnapshot } from '@pellux/goodvibes-sdk/platform/core';
 import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import { ScrollableListPanel } from './scrollable-list-panel.ts';
@@ -29,10 +29,17 @@ import { formatAgentCost } from './agent-inspector-shared.ts';
 import { formatElapsed } from '../utils/format-elapsed.ts';
 import { truncateDisplay } from '../utils/terminal-width.ts';
 import {
+  isPanelSearchBackspace,
+  isPanelSearchCancel,
+  isPanelSearchCommit,
+  isPanelSearchPrintable,
+} from './search-focus.ts';
+import {
   buildAlignedRow,
   buildKeyboardHints,
   buildPanelLine,
   buildPanelWorkspace,
+  buildSearchInputLine,
   DEFAULT_PANEL_PALETTE,
   getPanelWorkspaceContentBudget,
   type ColumnSpec,
@@ -52,6 +59,7 @@ import {
 } from './fleet-read-model.ts';
 import {
   activeFleetTab,
+  appendSteerText,
   attachFleetTab,
   detachActiveFleetTab,
   EMPTY_FLEET_TABS_STATE,
@@ -59,7 +67,9 @@ import {
   stepFleetTab,
   type FleetTab,
   type FleetTabsState,
+  type SteerBadge,
 } from './fleet-tabs.ts';
+import { reconcileSteerBadges as reconcileSteerBadgesPure, steerBadgeGlyph, steerBadgeTone } from './fleet-steer.ts';
 import {
   parseAgentLedger,
   renderFleetAgentTranscript,
@@ -134,6 +144,14 @@ export interface FleetActionCallbacks {
   readonly getConversationSnapshot: (agentId: string) => readonly ConversationMessageSnapshot[];
   /** Wave-3 (C6): resolve the on-disk `<agentId>.jsonl` event-ledger path for the degraded fallback view. */
   readonly resolveSessionLogPath: (agentId: string) => string;
+  /**
+   * Wave-3 (W3.2): queue a human message for a live in-process agent (or a
+   * wrfc-subtask's current live member agent), delivered at the target's
+   * next turn boundary — never mid-token. Honest refusal
+   * (`{queued:false,reason}`) for anything that cannot take mid-run input
+   * (terminal nodes, non-agent kinds, the wrfc-chain coordinator itself).
+   */
+  readonly steer: (id: string, text: string) => SteerResult;
 }
 
 const NOOP_ACTIONS: FleetActionCallbacks = {
@@ -141,10 +159,12 @@ const NOOP_ACTIONS: FleetActionCallbacks = {
   kill: (_id: string, _opts: { readonly cascade: boolean }) => [],
   getConversationSnapshot: (_agentId: string) => [],
   resolveSessionLogPath: (agentId: string) => agentId,
+  steer: (_id: string, _text: string) => ({ queued: false, reason: 'no live registry' }),
 };
 
 export class FleetPanel extends ScrollableListPanel<FleetTreeRow> {
   private readonly unsub: () => void;
+  private readonly unsubConsumed: () => void;
   private readonly actions: FleetActionCallbacks;
   private readonly confirmOverlay: PanelConfirmOverlay;
   private follow = false;
@@ -174,7 +194,22 @@ export class FleetPanel extends ScrollableListPanel<FleetTreeRow> {
     this.unsub = readModel.subscribe(() => {
       this.reanchorSelection();
       this.applyFollow();
+      this.reconcileSteerBadges();
       this.markDirty();
+    });
+    // Wave-3 (W3.2): the honest "the agent actually consumed this steer at
+    // its turn boundary" signal — see fleet-tabs.ts's SteerBadgeStatus doc.
+    // A read-model without a runtimeBus dep never invokes this (graceful
+    // no-op), same degrade as steer()/steerable without a messageBus dep.
+    this.unsubConsumed = readModel.subscribeConsumed((event) => {
+      let changed = false;
+      for (const tab of this.tabsState.tabs) {
+        if (tab.steerBadge?.status === 'queued' && tab.steerBadge.messageId === event.messageId) {
+          tab.steerBadge = { ...tab.steerBadge, status: 'consumed', resolvedAt: Date.now() };
+          changed = true;
+        }
+      }
+      if (changed) this.markDirty();
     });
   }
 
@@ -188,6 +223,7 @@ export class FleetPanel extends ScrollableListPanel<FleetTreeRow> {
       this.tickTimer = this.registerTimer(setInterval(() => {
         this.reanchorSelection();
         this.applyFollow();
+        this.reconcileSteerBadges();
         this.markDirty();
       }, 1000));
     }
@@ -204,12 +240,26 @@ export class FleetPanel extends ScrollableListPanel<FleetTreeRow> {
   public override onDestroy(): void {
     super.onDestroy();
     this.unsub();
+    this.unsubConsumed();
     for (const tab of this.tabsState.tabs) tab.lineCache.clear();
   }
 
   /** True while a session tab (not the root tree) is focused. Replaces the old Wave-2 isDetailFocused() seam. */
   public isTabActive(): boolean {
     return this.tabsState.activeTabIndex > 0;
+  }
+
+  /**
+   * Wave-3 (W3.2): true while the steer composer on the active tab is open —
+   * every character of a burst (paste, or several fast-typed chars in one
+   * stdin chunk) must land in the draft one at a time rather than being
+   * routed away as panel hotkeys or exploded to the main composer. See
+   * Panel.isCapturingTextBurst's doc comment and git-panel.ts's
+   * `commitMessage` precedent.
+   */
+  public override isCapturingTextBurst(): boolean {
+    const tab = activeFleetTab(this.tabsState);
+    return tab !== null && tab.steerDraft !== null;
   }
 
   /** Introspection for tests: the current tab-bar state (read-only). */
@@ -298,6 +348,23 @@ export class FleetPanel extends ScrollableListPanel<FleetTreeRow> {
     this.captureSelectionAnchor();
   }
 
+  /** Find a node's live ProcessNode in the current snapshot, or null (pruned/never registered). */
+  private findLiveNode(nodeId: string): FleetTreeRow['node'] | null {
+    return this.getItems().find((row) => row.node.id === nodeId)?.node ?? null;
+  }
+
+  /**
+   * Wave-3 (W3.2, risk #2 — "dropped inference"): called on every read-model
+   * snapshot update and on the panel's 1s tick. See fleet-steer.ts's
+   * reconcileSteerBadges doc for why this is needed (the SDK emits no
+   * cancelled/expired signal for a queued steer).
+   */
+  private reconcileSteerBadges(): void {
+    if (this.tabsState.tabs.length === 0) return;
+    const changed = reconcileSteerBadgesPure(this.tabsState.tabs, (id) => this.findLiveNode(id), Date.now());
+    if (changed) this.markDirty();
+  }
+
   /** Count of descendants of `nodeId` (in the current snapshot) that report `capabilities.killable` — the Wave-3 K-confirm child count (Part C7). */
   private countKillableDescendants(nodeId: string): number {
     const rows = this.getItems();
@@ -345,6 +412,16 @@ export class FleetPanel extends ScrollableListPanel<FleetTreeRow> {
     // Confirm overlay owns input first (K-armed kill confirm).
     if (this.confirmOverlay.handleInput(key)) return true;
 
+    // Wave-3 (W3.2): once the steer composer is open on the active tab, it
+    // owns EVERY key (same full-priority-while-composing contract as
+    // git-panel.ts's commitMessage entry) until Enter (submit) or Esc
+    // (cancel) — a burst/paste and single hotkeys like 'j'/'s'/'[' all land
+    // in the draft, never as tree/tab navigation (W0.8 focus rule).
+    const composingTab = activeFleetTab(this.tabsState);
+    if (composingTab && composingTab.steerDraft !== null) {
+      return this.handleSteerInput(composingTab, key);
+    }
+
     // Tab switching works from ANY view (root tree or an attached tab) once
     // at least one tab is open — [ / ] step through Tree, tab 1, tab 2, ...
     // Ctrl+X detach is handled by interceptPanelClose(), not handleInput (it
@@ -356,6 +433,9 @@ export class FleetPanel extends ScrollableListPanel<FleetTreeRow> {
     }
 
     if (this.tabsState.activeTabIndex > 0) {
+      if (key === 's') {
+        return this.tryOpenSteerDraft(activeFleetTab(this.tabsState)!);
+      }
       // A session tab is focused — the tree isn't visible, so tree-only keys
       // (navigate/i/K/f/Enter) don't apply here.
       return false;
@@ -425,12 +505,75 @@ export class FleetPanel extends ScrollableListPanel<FleetTreeRow> {
     return consumed;
   }
 
+  /**
+   * Wave-3 (W3.2): the `s` gate — mirrors the i/K capability-gating template
+   * exactly (guard on the live node existing, non-terminal, and the specific
+   * capability; consume the key and say so rather than silently no-op-ing).
+   */
+  private tryOpenSteerDraft(tab: FleetTab): boolean {
+    const node = this.findLiveNode(tab.nodeId);
+    if (!node || isTerminalProcessState(node.state) || !node.capabilities.steerable) {
+      this.setError(`${node?.kind ?? tab.kind} does not support steering.`);
+      return true;
+    }
+    tab.steerDraft = '';
+    this.markDirty();
+    return true;
+  }
+
+  /** Dispatch for the open steer composer — mirrors git-panel.ts's handleCommitMessageInput. */
+  private handleSteerInput(tab: FleetTab, key: string): boolean {
+    if (isPanelSearchCancel(key)) {
+      tab.steerDraft = null;
+      this.markDirty();
+      return true;
+    }
+    if (isPanelSearchCommit(key)) {
+      const text = (tab.steerDraft ?? '').trim();
+      tab.steerDraft = null;
+      if (text.length > 0) this.submitSteer(tab, text);
+      this.markDirty();
+      return true;
+    }
+    if (isPanelSearchBackspace(key)) {
+      tab.steerDraft = (tab.steerDraft ?? '').slice(0, -1);
+      this.markDirty();
+      return true;
+    }
+    // Ordinary typing AND a pasted multi-line block's line-break characters
+    // (delivered one at a time through the same burst pipeline — see
+    // isCapturingTextBurst) both flow through appendSteerText, which
+    // normalizes \r/\n to a collapsed space instead of corrupting the
+    // one-line field or silently dropping the content.
+    if (key.length === 1 && (isPanelSearchPrintable(key) || key === '\r' || key === '\n')) {
+      tab.steerDraft = appendSteerText(tab.steerDraft ?? '', key);
+      this.markDirty();
+      return true;
+    }
+    return true; // absorb every other key while composing
+  }
+
+  /** Submit a composed steer message: queued -> badge; refused -> honest inline error (setError), same convention as the i/K "not supported" messages. */
+  private submitSteer(tab: FleetTab, text: string): void {
+    const result = this.actions.steer(tab.nodeId, text);
+    if (result.queued) {
+      tab.steerBadge = { messageId: result.messageId, status: 'queued' };
+    } else {
+      this.setError(result.reason);
+    }
+    this.markDirty();
+  }
+
   protected renderItem(row: FleetTreeRow, _index: number, _selected: boolean, width: number): Line {
     const node = row.node;
     const tone = fleetStateTone(node.state);
     const color = toneColor(tone, C);
     const label = `${row.treePrefix}${node.label}`;
-    const activity = node.currentActivity?.text ?? '';
+    const badge = this.steerBadgeForNode(node.id);
+    const activity = badge
+      ? `${steerBadgeGlyph(badge.status)} ${node.currentActivity?.text ?? ''}`.trimEnd()
+      : (node.currentActivity?.text ?? '');
+    const activityColor = badge ? steerBadgeTone(badge.status, C) : C.dim;
 
     return buildAlignedRow(
       width,
@@ -441,10 +584,15 @@ export class FleetPanel extends ScrollableListPanel<FleetTreeRow> {
         { text: formatElapsed(node.elapsedMs), fg: C.dim },
         { text: formatFleetTokens(node.usage), fg: C.dim },
         { text: formatFleetCost(node.costUsd, node.costState), fg: C.value },
-        { text: activity, fg: C.dim },
+        { text: activity, fg: activityColor },
       ],
       planColumns(width),
     );
+  }
+
+  /** A node's steer badge, looked up via its attached tab (if any) — null when the node has no tab or no active/recent steer. */
+  private steerBadgeForNode(nodeId: string): SteerBadge | null {
+    return this.tabsState.tabs.find((t) => t.nodeId === nodeId)?.steerBadge ?? null;
   }
 
   private renderDetail(row: FleetTreeRow, width: number): Line[] {
@@ -492,22 +640,53 @@ export class FleetPanel extends ScrollableListPanel<FleetTreeRow> {
     if (!tab) return this.renderTreeView(width, height); // defensive; should be unreachable
     const stripLine = renderFleetTabStrip(this.tabsState, width);
 
-    const hints: Array<{ keys: string; label: string }> = [
-      { keys: '[ ]', label: 'switch tab' },
-      { keys: 'Ctrl+X', label: 'detach' },
+    const snapshotRows = this.readModel.getSnapshot().rows;
+    const liveNode = snapshotRows.find((row) => row.node.id === tab.nodeId)?.node ?? null;
+    // Wave-3 (W3.2): the steer composer only ever applies to 'agent' tabs
+    // (wrfc-chain has no conversation loop of its own — see
+    // fleet-tabs.ts's FleetAttachableKind doc); the live-node lookup is
+    // shared with the isTerminal computation below either way.
+    const canSteer = liveNode !== null && !isTerminalProcessState(liveNode.state) && liveNode.capabilities.steerable;
+
+    // Wave-3 (W3.2): while composing, Enter/Esc replace the tab-switch/detach
+    // hints (mirrors git-panel.ts's renderCommitCompose footer) so the
+    // footer never advertises a key the composer itself has absorbed.
+    const hints: Array<{ keys: string; label: string }> = tab.steerDraft !== null
+      ? [{ keys: 'Enter', label: 'send' }, { keys: 'Esc', label: 'cancel' }]
+      : [
+        { keys: '[ ]', label: 'switch tab' },
+        { keys: 'Ctrl+X', label: 'detach' },
+        ...(canSteer ? [{ keys: 's', label: 'steer' }] : []),
+      ];
+
+    const errorLine = this.renderErrorLine(width);
+    const composerLines: Line[] = [];
+    if (tab.steerDraft !== null) {
+      composerLines.push(buildSearchInputLine(
+        width,
+        'Steer: ',
+        `${tab.steerDraft}_`,
+        palette,
+        { active: true, bg: palette.inputBg, valueColor: palette.info },
+      ));
+    } else if (tab.steerBadge) {
+      composerLines.push(this.renderSteerBadgeLine(tab.steerBadge, width, palette));
+    }
+
+    const footerLines = [
+      ...(errorLine ? [errorLine] : []),
+      ...composerLines,
+      buildKeyboardHints(width, hints, palette),
     ];
-    const footerLines = [buildKeyboardHints(width, hints, palette)];
     const contentBudget = getPanelWorkspaceContentBudget(width, height, { footerLines, palette });
     const contentHeight = Math.max(1, contentBudget - (stripLine ? 1 : 0));
 
-    const snapshotRows = this.readModel.getSnapshot().rows;
     let contentLines: Line[];
 
     if (tab.kind === 'wrfc-chain') {
       const memberRows = snapshotRows.filter((row) => row.node.parentId === tab.nodeId);
       contentLines = renderFleetChainSummary(memberRows, width);
     } else {
-      const liveNode = snapshotRows.find((row) => row.node.id === tab.nodeId)?.node ?? null;
       const isTerminal = liveNode ? isTerminalProcessState(liveNode.state) : true;
       const snapshot = this.actions.getConversationSnapshot(tab.agentId);
       const result = renderFleetAgentTranscript(snapshot, isTerminal, tab.lineCache, width, contentHeight, this.configManager);
@@ -526,6 +705,22 @@ export class FleetPanel extends ScrollableListPanel<FleetTreeRow> {
       { lines: contentLines },
     ];
     return buildPanelWorkspace(width, height, { title: `Fleet — ${tab.label}`, sections, footerLines, palette });
+  }
+
+  /** One-line honest status for the active tab's steer badge (queued/consumed/dropped) — see fleet-tabs.ts's SteerBadgeStatus doc. */
+  private renderSteerBadgeLine(badge: SteerBadge, width: number, palette: PanelPalette): Line {
+    const glyph = steerBadgeGlyph(badge.status);
+    const tone = steerBadgeTone(badge.status, palette);
+    const label = badge.status === 'queued'
+      ? 'steer queued — awaiting the agent\'s next turn'
+      : badge.status === 'consumed'
+        ? 'steer consumed'
+        : `steer dropped — ${badge.note ?? 'the target ended before delivery'}`;
+    return buildPanelLine(width, [
+      [' ', palette.dim],
+      [glyph, tone],
+      [` ${label}`, palette.dim],
+    ]);
   }
 
   private renderTreeView(width: number, height: number): Line[] {
