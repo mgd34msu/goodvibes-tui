@@ -1303,6 +1303,63 @@ function renderFleetTabSurface(width: number, height: number): Line[] {
 
 describeOverlayGolden('fleet-panel-tab', renderFleetTabSurface);
 
+// Wave-3 (W3.2) — a steerable agent's attached tab. Two separate surfaces
+// (not folded into 'fleet-panel-tab' above) since the composer and the
+// queued badge are mutually-exclusive views (the composer input line
+// replaces the badge line while open; the badge reappears once the draft
+// closes) — one fixed frame cannot honestly show both at once, so each
+// state gets its own deterministic golden.
+function fleetSteerGoldenNode(): ProcessNode {
+  return {
+    id: 'agent-steer-01',
+    kind: 'agent',
+    label: '[Agent] Long-running build fix',
+    task: 'Long-running build fix',
+    state: 'executing-tool',
+    startedAt: FIXED_FLEET_NOW - 120_000,
+    elapsedMs: 120_000,
+    usage: { inputTokens: 4_000, outputTokens: 900, cacheReadTokens: 0, cacheWriteTokens: 0, llmCallCount: 2, turnCount: 2, toolCallCount: 3 },
+    model: 'claude-sonnet-4-6',
+    provider: 'anthropic',
+    costUsd: 0.03,
+    costState: 'priced',
+    currentActivity: { kind: 'tool', text: 'Running build', toolName: 'Bash', at: FIXED_FLEET_NOW - 2_000 },
+    capabilities: { interruptible: true, killable: true, pausable: false, steerable: true },
+  };
+}
+
+// State 1: the composer is open with in-progress typed text (pre-submit) —
+// exercises the 's' gate, the one-line input, and the Enter/Esc footer hints.
+function renderFleetSteerComposeSurface(width: number, height: number): Line[] {
+  const snapshot = buildFleetSnapshot([fleetSteerGoldenNode()], FIXED_FLEET_NOW);
+  const readModel = createStaticFleetReadModel(snapshot);
+  const panel = new FleetPanel(readModel);
+  panel.handleInput('enter'); // attach + focus the tab
+  panel.handleInput('s'); // open the steer composer
+  for (const ch of 'please add a regression test') panel.handleInput(ch);
+  return panel.render(width, height);
+}
+
+describeOverlayGolden('fleet-panel-steer-compose', renderFleetSteerComposeSurface);
+
+// State 2: post-submit — the composer has closed and a queued badge is
+// visible (both in the tab footer's status line and the tree row's
+// activity-column glyph, once switched back to the root tab).
+function renderFleetSteerQueuedSurface(width: number, height: number): Line[] {
+  const snapshot = buildFleetSnapshot([fleetSteerGoldenNode()], FIXED_FLEET_NOW);
+  const readModel = createStaticFleetReadModel(snapshot);
+  const panel = new FleetPanel(readModel, {
+    steer: (_id: string, _text: string) => ({ queued: true, messageId: 'golden-msg-1' }),
+  });
+  panel.handleInput('enter'); // attach + focus the tab
+  panel.handleInput('s');
+  for (const ch of 'please add a regression test') panel.handleInput(ch);
+  panel.handleInput('enter'); // submit -> queued badge
+  return panel.render(width, height);
+}
+
+describeOverlayGolden('fleet-panel-steer-queued', renderFleetSteerQueuedSurface);
+
 // context inspector — ConversationManager with fixed message content, no
 // timestamps rendered by this surface.
 function renderContextInspectorSurface(width: number, height: number): Line[] {

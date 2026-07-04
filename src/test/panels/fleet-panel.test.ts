@@ -36,32 +36,61 @@ function makeNode(overrides: Partial<ProcessNode> & { id: string }): ProcessNode
 }
 
 /** Mutable stub read-model: getSnapshot re-reads a swappable ref; subscribe listeners are invoked manually to simulate a registry tick. */
-function makeMutableReadModel(initial: FleetSnapshot): { model: FleetReadModel; setSnapshot: (s: FleetSnapshot) => void; fireDirty: () => void } {
+function makeMutableReadModel(initial: FleetSnapshot): {
+  model: FleetReadModel;
+  setSnapshot: (s: FleetSnapshot) => void;
+  fireDirty: () => void;
+  fireConsumed: (event: { messageId: string; agentId: string; turn: number }) => void;
+} {
   let snapshot = initial;
   const listeners = new Set<() => void>();
+  const consumedListeners = new Set<(event: { messageId: string; agentId: string; turn: number }) => void>();
   return {
     model: {
       getSnapshot: () => snapshot,
       subscribe: (cb: () => void) => { listeners.add(cb); return () => listeners.delete(cb); },
       interrupt: () => false,
       kill: () => [],
+      steer: () => ({ queued: false, reason: 'not wired in this test' }),
+      subscribeConsumed: (cb) => { consumedListeners.add(cb); return () => consumedListeners.delete(cb); },
     },
     setSnapshot: (s: FleetSnapshot) => { snapshot = s; },
     fireDirty: () => { for (const cb of listeners) cb(); },
+    fireConsumed: (event) => { for (const cb of consumedListeners) cb(event); },
   };
 }
 
-function makeActions(overrides: Partial<FleetActionCallbacks> = {}): FleetActionCallbacks & { interruptCalls: string[]; killCalls: Array<{ id: string; opts: { cascade: boolean } }> } {
+function makeActions(overrides: Partial<FleetActionCallbacks> = {}): FleetActionCallbacks & {
+  interruptCalls: string[];
+  killCalls: Array<{ id: string; opts: { cascade: boolean } }>;
+  steerCalls: Array<{ id: string; text: string }>;
+} {
   const interruptCalls: string[] = [];
   const killCalls: Array<{ id: string; opts: { cascade: boolean } }> = [];
+  const steerCalls: Array<{ id: string; text: string }> = [];
   return {
     interrupt: overrides.interrupt ?? ((id: string) => { interruptCalls.push(id); return true; }),
     kill: overrides.kill ?? ((id: string, opts: { cascade: boolean }) => { killCalls.push({ id, opts }); return [id]; }),
     getConversationSnapshot: overrides.getConversationSnapshot ?? ((_id: string): readonly ConversationMessageSnapshot[] => []),
     resolveSessionLogPath: overrides.resolveSessionLogPath ?? ((id: string) => id),
+    steer: overrides.steer ?? ((id: string, text: string) => { steerCalls.push({ id, text }); return { queued: true, messageId: `msg-${steerCalls.length}` }; }),
     interruptCalls,
     killCalls,
+    steerCalls,
   };
+}
+
+/** Attach + focus a single steerable agent tab, ready for `s` to open the composer. */
+function attachSteerableTab(actions = makeActions()) {
+  const node = makeNode({
+    id: 'agent-1',
+    state: 'streaming',
+    capabilities: { interruptible: true, killable: true, pausable: false, steerable: true },
+  });
+  const readModel = createStaticFleetReadModel(buildFleetSnapshot([node], NOW));
+  const panel = new FleetPanel(readModel, actions);
+  panel.handleInput('enter'); // attach + focus the tab
+  return { panel, actions, readModel, node };
 }
 
 // ---------------------------------------------------------------------------
@@ -500,6 +529,292 @@ describe('FleetPanel — K arms a kill confirm', () => {
     const text = linesText(panel.render(100, 24));
     expect(text).not.toContain('Kill "');
     expect(text).toContain('does not support kill');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// s — steer composer (Wave-3, W3.2): one-line input on an active attached
+// tab whose node is steerable. Capability-gated like i/K; submit calls
+// actions.steer with the node id and typed text; refusal renders inline.
+// ---------------------------------------------------------------------------
+
+describe('FleetPanel — s opens the steer composer on an active, steerable tab', () => {
+  test('s on a steerable tab opens the draft and isCapturingTextBurst() flips true', () => {
+    const { panel } = attachSteerableTab();
+    expect(panel.isCapturingTextBurst()).toBe(false);
+    expect(panel.handleInput('s')).toBe(true);
+    expect(panel.isCapturingTextBurst()).toBe(true);
+    expect(panel.getTabsState().tabs[0]!.steerDraft).toBe('');
+  });
+
+  test('s is unavailable (not even a hint) and not consumed as steer while the root tree is focused', () => {
+    // 's' has no meaning on the root tree in this wave (composer only exists
+    // on an attached tab) — it falls through to ordinary list handling.
+    const node = makeNode({ id: 'agent-1', capabilities: { interruptible: true, killable: true, pausable: false, steerable: true } });
+    const readModel = createStaticFleetReadModel(buildFleetSnapshot([node], NOW));
+    const panel = new FleetPanel(readModel);
+    const text = linesText(panel.render(100, 24));
+    expect(text).not.toContain('s steer');
+  });
+
+  test('s on a non-steerable tab sets an honest error and does not open the draft', () => {
+    const node = makeNode({
+      id: 'agent-1',
+      state: 'streaming',
+      capabilities: { interruptible: true, killable: true, pausable: false, steerable: false },
+    });
+    const readModel = createStaticFleetReadModel(buildFleetSnapshot([node], NOW));
+    const panel = new FleetPanel(readModel);
+    panel.handleInput('enter');
+    expect(panel.handleInput('s')).toBe(true);
+    expect(panel.isCapturingTextBurst()).toBe(false);
+    const text = linesText(panel.render(100, 24));
+    expect(text).toContain('does not support steering');
+  });
+
+  test('s on a terminal node\'s tab sets an honest error and does not open the draft', () => {
+    const node = makeNode({
+      id: 'agent-1',
+      state: 'done',
+      capabilities: { interruptible: false, killable: false, pausable: false, steerable: true },
+    });
+    const readModel = createStaticFleetReadModel(buildFleetSnapshot([node], NOW));
+    const panel = new FleetPanel(readModel);
+    panel.handleInput('enter');
+    expect(panel.handleInput('s')).toBe(true);
+    expect(panel.isCapturingTextBurst()).toBe(false);
+    const text = linesText(panel.render(100, 24));
+    expect(text).toContain('does not support steering');
+  });
+
+  test('the s hint appears in the tab footer only when the live node is steerable', () => {
+    const { panel } = attachSteerableTab();
+    expect(linesText(panel.render(100, 24))).toContain('s steer');
+  });
+
+  test('typing then Enter calls actions.steer(nodeId, text) and sets a queued badge', () => {
+    const { panel, actions } = attachSteerableTab();
+    panel.handleInput('s');
+    for (const ch of 'hello agent') panel.handleInput(ch);
+    expect(panel.handleInput('enter')).toBe(true);
+    expect(actions.steerCalls).toEqual([{ id: 'agent-1', text: 'hello agent' }]);
+    expect(panel.isCapturingTextBurst()).toBe(false); // draft closed after submit
+    expect(panel.getTabsState().tabs[0]!.steerDraft).toBeNull();
+    expect(panel.getTabsState().tabs[0]!.steerBadge).toEqual({ messageId: 'msg-1', status: 'queued' });
+  });
+
+  test('Esc cancels the draft without calling steer, and returns focus to the tab without detaching', () => {
+    const { panel, actions } = attachSteerableTab();
+    panel.handleInput('s');
+    panel.handleInput('h');
+    expect(panel.handleInput('escape')).toBe(true);
+    expect(actions.steerCalls).toHaveLength(0);
+    expect(panel.getTabsState().tabs[0]!.steerDraft).toBeNull();
+    expect(panel.isTabActive()).toBe(true); // still attached to the tab, not detached
+    expect(panel.getTabsState().tabs).toHaveLength(1);
+  });
+
+  test('backspace edits the draft before submit', () => {
+    const { panel, actions } = attachSteerableTab();
+    panel.handleInput('s');
+    for (const ch of 'helpp') panel.handleInput(ch);
+    panel.handleInput('backspace');
+    panel.handleInput('enter');
+    expect(actions.steerCalls).toEqual([{ id: 'agent-1', text: 'help' }]);
+  });
+
+  test('an empty (whitespace-only) submission is a no-op — does not call steer', () => {
+    const { panel, actions } = attachSteerableTab();
+    panel.handleInput('s');
+    panel.handleInput(' ');
+    panel.handleInput('enter');
+    expect(actions.steerCalls).toHaveLength(0);
+    expect(panel.getTabsState().tabs[0]!.steerBadge).toBeNull();
+  });
+
+  test('refusal (queued:false) renders the honest typed reason inline and sets no badge', () => {
+    const actions = makeActions({ steer: () => ({ queued: false, reason: 'agent is retrying, try again shortly' }) });
+    const { panel } = attachSteerableTab(actions);
+    panel.handleInput('s');
+    panel.handleInput('x');
+    panel.handleInput('enter');
+    expect(panel.getTabsState().tabs[0]!.steerBadge).toBeNull();
+    const text = linesText(panel.render(100, 24));
+    expect(text).toContain('agent is retrying, try again shortly');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Steer draft paste normalization (CR-separated paste): a pasted multi-line
+// block arrives as literal \r/\n characters through the same per-char burst
+// pipeline as ordinary typing (see Panel.isCapturingTextBurst) — they must
+// normalize to a single collapsed space, never a raw control byte and never
+// silently dropped/jammed together.
+// ---------------------------------------------------------------------------
+
+describe('FleetPanel — steer draft paste normalization', () => {
+  test('a CR-separated paste collapses each break to a single space', () => {
+    const { panel } = attachSteerableTab();
+    panel.handleInput('s');
+    for (const ch of 'first\rsecond\rthird') panel.handleInput(ch);
+    expect(panel.getTabsState().tabs[0]!.steerDraft).toBe('first second third');
+  });
+
+  test('a CRLF paste (\\r\\n) also collapses to a single space, not two', () => {
+    const { panel } = attachSteerableTab();
+    panel.handleInput('s');
+    for (const ch of 'first\r\nsecond') panel.handleInput(ch);
+    expect(panel.getTabsState().tabs[0]!.steerDraft).toBe('first second');
+  });
+
+  test('repeated line breaks collapse to one space, never multiple', () => {
+    const { panel } = attachSteerableTab();
+    panel.handleInput('s');
+    for (const ch of 'first\r\r\rsecond') panel.handleInput(ch);
+    expect(panel.getTabsState().tabs[0]!.steerDraft).toBe('first second');
+  });
+
+  test('a leading line break on an empty draft contributes nothing (no leading space)', () => {
+    const { panel } = attachSteerableTab();
+    panel.handleInput('s');
+    panel.handleInput('\r');
+    panel.handleInput('x');
+    expect(panel.getTabsState().tabs[0]!.steerDraft).toBe('x');
+  });
+
+  test('the submitted (post-normalization) text is what actions.steer receives — never a literal \\r', () => {
+    const { panel, actions } = attachSteerableTab();
+    panel.handleInput('s');
+    for (const ch of 'line one\rline two') panel.handleInput(ch);
+    panel.handleInput('enter');
+    expect(actions.steerCalls).toEqual([{ id: 'agent-1', text: 'line one line two' }]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Focus routing (W0.8): while composing, every key lands in the draft —
+// never as tree/tab navigation or hotkeys (i/K/f/[/]/enter).
+// ---------------------------------------------------------------------------
+
+describe('FleetPanel — steer draft owns input while composing (W0.8 focus rule)', () => {
+  test('j/k/i/K/s/[/] all get typed into the draft rather than acting as navigation/hotkeys', () => {
+    const { panel, actions } = attachSteerableTab();
+    panel.handleInput('s');
+    for (const ch of ['j', 'k', 'i', 'K', 's', '[', ']']) {
+      expect(panel.handleInput(ch)).toBe(true);
+    }
+    expect(panel.getTabsState().tabs[0]!.steerDraft).toBe('jkiKs[]');
+    expect(actions.interruptCalls).toHaveLength(0);
+    expect(actions.killCalls).toHaveLength(0);
+    expect(actions.steerCalls).toHaveLength(0); // not yet submitted
+    expect(panel.getTabsState().activeTabIndex).toBe(1); // no tab switch occurred
+  });
+
+  test('once the draft closes (submit or cancel), keys resume their ordinary meaning', () => {
+    const { panel } = attachSteerableTab();
+    panel.handleInput('s');
+    panel.handleInput('hi');
+    panel.handleInput('escape'); // cancel, back to ordinary tab-view input
+    expect(panel.isCapturingTextBurst()).toBe(false);
+    expect(panel.handleInput('[')).toBe(true); // tab-switch works again
+    expect(panel.getTabsState().activeTabIndex).toBe(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Steer badge lifecycle: queued -> consumed (COMMUNICATION_CONSUMED) and
+// queued -> dropped (target goes terminal before consumption — the SDK
+// emits no dropped/expired signal, so FleetPanel infers it itself).
+// ---------------------------------------------------------------------------
+
+describe('FleetPanel — steer badge lifecycle', () => {
+  test('a matching COMMUNICATION_CONSUMED event flips queued -> consumed', () => {
+    const node = makeNode({
+      id: 'agent-1',
+      state: 'streaming',
+      capabilities: { interruptible: true, killable: true, pausable: false, steerable: true },
+    });
+    const { model, fireConsumed } = makeMutableReadModel(buildFleetSnapshot([node], NOW));
+    const actions = makeActions();
+    const panel = new FleetPanel(model, actions);
+    panel.handleInput('enter');
+    panel.handleInput('s');
+    panel.handleInput('h');
+    panel.handleInput('enter');
+    expect(panel.getTabsState().tabs[0]!.steerBadge?.status).toBe('queued');
+    const messageId = panel.getTabsState().tabs[0]!.steerBadge!.messageId;
+
+    fireConsumed({ messageId, agentId: 'agent-1', turn: 2 });
+    expect(panel.getTabsState().tabs[0]!.steerBadge?.status).toBe('consumed');
+  });
+
+  test('a COMMUNICATION_CONSUMED event for a different messageId does not affect the badge', () => {
+    const node = makeNode({
+      id: 'agent-1',
+      state: 'streaming',
+      capabilities: { interruptible: true, killable: true, pausable: false, steerable: true },
+    });
+    const { model, fireConsumed } = makeMutableReadModel(buildFleetSnapshot([node], NOW));
+    const actions = makeActions();
+    const panel = new FleetPanel(model, actions);
+    panel.handleInput('enter');
+    panel.handleInput('s');
+    panel.handleInput('h');
+    panel.handleInput('enter');
+    expect(panel.getTabsState().tabs[0]!.steerBadge?.status).toBe('queued');
+
+    fireConsumed({ messageId: 'not-the-one', agentId: 'agent-1', turn: 2 });
+    expect(panel.getTabsState().tabs[0]!.steerBadge?.status).toBe('queued');
+  });
+
+  test('the target going terminal while queued resolves the badge to dropped, with a visible note', () => {
+    const running = makeNode({
+      id: 'agent-1',
+      state: 'streaming',
+      capabilities: { interruptible: true, killable: true, pausable: false, steerable: true },
+    });
+    const { model, setSnapshot, fireDirty } = makeMutableReadModel(buildFleetSnapshot([running], NOW));
+    const actions = makeActions();
+    const panel = new FleetPanel(model, actions);
+    panel.handleInput('enter');
+    panel.handleInput('s');
+    panel.handleInput('h');
+    panel.handleInput('enter');
+    expect(panel.getTabsState().tabs[0]!.steerBadge?.status).toBe('queued');
+
+    const doneNode = makeNode({
+      id: 'agent-1',
+      state: 'done',
+      capabilities: { interruptible: false, killable: false, pausable: false, steerable: false },
+    });
+    setSnapshot(buildFleetSnapshot([doneNode], NOW));
+    fireDirty(); // simulates the registry's coalesced tick notifying the read-model
+
+    const badge = panel.getTabsState().tabs[0]!.steerBadge;
+    expect(badge?.status).toBe('dropped');
+    expect(badge?.note).toContain('went done');
+    const text = linesText(panel.render(100, 24));
+    expect(text).toContain('steer dropped');
+  });
+
+  test('a queued badge whose node disappears from the snapshot entirely also resolves to dropped', () => {
+    const running = makeNode({
+      id: 'agent-1',
+      state: 'streaming',
+      capabilities: { interruptible: true, killable: true, pausable: false, steerable: true },
+    });
+    const { model, setSnapshot, fireDirty } = makeMutableReadModel(buildFleetSnapshot([running], NOW));
+    const actions = makeActions();
+    const panel = new FleetPanel(model, actions);
+    panel.handleInput('enter');
+    panel.handleInput('s');
+    panel.handleInput('h');
+    panel.handleInput('enter');
+
+    setSnapshot(buildFleetSnapshot([], NOW)); // node pruned entirely
+    fireDirty();
+
+    expect(panel.getTabsState().tabs[0]!.steerBadge?.status).toBe('dropped');
   });
 });
 
