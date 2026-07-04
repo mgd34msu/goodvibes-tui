@@ -88,7 +88,13 @@ export function registerOperationsPanels(manager: PanelManager, deps: ResolvedBu
     factory: () => new FleetPanel(fleetReadModel, {
       interrupt: (id: string) => fleetReadModel.interrupt(id),
       kill: (id: string, opts: { cascade: boolean }) => fleetReadModel.kill(id, opts),
-    }),
+      // Wave-3 (C6): full-fidelity transcript source for an attached agent
+      // tab — live while the agent runs, frozen briefly after it completes
+      // (AgentManager's bounded retention ring), empty once evicted (the
+      // panel degrades to the on-disk ledger fallback in that case).
+      getConversationSnapshot: (agentId: string) => ui.agents.agentManager.getConversationSnapshot(agentId),
+      resolveSessionLogPath: (agentId: string) => ui.environment.shellPaths.resolveProjectPath('tui', 'sessions', `${agentId}.jsonl`),
+    }, deps.configManager),
   });
 
   manager.registerType({

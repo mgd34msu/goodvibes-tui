@@ -32,7 +32,7 @@ function makeNode(overrides: Partial<ProcessNode> & { id: string }): ProcessNode
     state: 'executing-tool',
     elapsedMs: 0,
     costState: 'unpriced',
-    capabilities: { interruptible: true, killable: true, pausable: false },
+    capabilities: { interruptible: true, killable: true, pausable: false, steerable: false },
     ...overrides,
   };
 }
@@ -344,7 +344,7 @@ describe('fleetStateGlyph / fleetStateTone / isTerminalProcessState / isRunningP
   test('every ProcessState maps to a distinct, non-empty glyph', () => {
     const states: ProcessState[] = [
       'thinking', 'executing-tool', 'awaiting-approval', 'streaming', 'stalled',
-      'retrying', 'done', 'failed', 'killed', 'idle', 'queued',
+      'retrying', 'done', 'failed', 'killed', 'interrupted', 'idle', 'queued',
     ];
     const glyphs = states.map(fleetStateGlyph);
     expect(glyphs.every((g) => g.length > 0)).toBe(true);
@@ -355,6 +355,7 @@ describe('fleetStateGlyph / fleetStateTone / isTerminalProcessState / isRunningP
     expect(isTerminalProcessState('done')).toBe(true);
     expect(isTerminalProcessState('failed')).toBe(true);
     expect(isTerminalProcessState('killed')).toBe(true);
+    expect(isTerminalProcessState('interrupted')).toBe(true);
     expect(isTerminalProcessState('executing-tool')).toBe(false);
     expect(isTerminalProcessState('idle')).toBe(false);
     expect(isTerminalProcessState('queued')).toBe(false);
@@ -364,7 +365,7 @@ describe('fleetStateGlyph / fleetStateTone / isTerminalProcessState / isRunningP
     for (const s of ['thinking', 'executing-tool', 'awaiting-approval', 'streaming', 'stalled', 'retrying'] as ProcessState[]) {
       expect(isRunningProcessState(s)).toBe(true);
     }
-    for (const s of ['done', 'failed', 'killed', 'idle', 'queued'] as ProcessState[]) {
+    for (const s of ['done', 'failed', 'killed', 'interrupted', 'idle', 'queued'] as ProcessState[]) {
       expect(isRunningProcessState(s)).toBe(false);
     }
   });
@@ -376,6 +377,18 @@ describe('fleetStateGlyph / fleetStateTone / isTerminalProcessState / isRunningP
     expect(fleetStateTone('idle')).toBe('muted');
     expect(fleetStateTone('queued')).toBe('muted');
     expect(['active', 'warn']).toContain(fleetStateTone('executing-tool'));
+  });
+
+  // Wave-3 verb formalization: 'interrupted' is a distinct terminal outcome
+  // from 'killed' — both come from AgentManager.cancel(), but a graceful
+  // interrupt is display-distinguishable from a hard kill (the replay-found
+  // defect this item fixes: before this, both landed on 'killed'/⊘).
+  test("'interrupted' has a glyph and tone distinct from 'killed' and 'failed'", () => {
+    expect(fleetStateGlyph('interrupted')).not.toBe(fleetStateGlyph('killed'));
+    expect(fleetStateGlyph('interrupted')).not.toBe(fleetStateGlyph('failed'));
+    expect(fleetStateTone('interrupted')).toBe('warn');
+    expect(fleetStateTone('interrupted')).not.toBe(fleetStateTone('killed'));
+    expect(fleetStateTone('interrupted')).not.toBe(fleetStateTone('failed'));
   });
 
   test('fleetKindTag returns a short tag for every ProcessKind', () => {

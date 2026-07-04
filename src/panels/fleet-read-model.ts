@@ -79,6 +79,11 @@ const STATE_GLYPHS: Record<ProcessState, string> = {
   done: '✓',
   failed: '✗',
   killed: '⊘',
+  // Wave-3 verb formalization: a distinct TERMINAL outcome from 'killed' —
+  // both come from AgentManager.cancel(), but a graceful interrupt request
+  // ('the operator asked nicely') is display-distinguishable from a hard
+  // kill. '◌' verified free against every other glyph in this table.
+  interrupted: '◌',
   idle: '·',
   queued: '…',
 };
@@ -93,12 +98,15 @@ const STATE_TONES: Record<ProcessState, FleetStateTone> = {
   done: 'success',
   failed: 'failure',
   killed: 'muted',
+  // 'warn' (amber), not 'muted' like killed — an interrupt is a deliberate
+  // operator action worth noticing, not a passive/neutral outcome.
+  interrupted: 'warn',
   idle: 'muted',
   queued: 'muted',
 };
 
 /** Terminal states — interrupt/kill are not offered; not counted as running. */
-const TERMINAL_STATES = new Set<ProcessState>(['done', 'failed', 'killed']);
+const TERMINAL_STATES = new Set<ProcessState>(['done', 'failed', 'killed', 'interrupted']);
 
 /** States representing actively-working nodes (drives runningCount + follow target). */
 const RUNNING_STATES = new Set<ProcessState>([
