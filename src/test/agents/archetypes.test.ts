@@ -8,6 +8,7 @@ import { getTestArchetypeLoader, resetTestRuntimeServices } from '../helpers/run
 
 const EXPECTED_BUILTIN_ARCHETYPES = [
   'orchestrator',
+  'planner',
   'engineer',
   'reviewer',
   'tester',

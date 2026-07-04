@@ -103,28 +103,50 @@ function makeConfigManager(): { get: (key: string) => unknown; getCategory: (cat
     gates: [] as Array<{ name: string; command: string; enabled: boolean }>,
   };
   return {
-    get: (key: string) => (key === 'wrfc.commitScope' ? 'off' : undefined),
+    get: (key: string) => {
+      if (key === 'wrfc.commitScope') return 'off';
+      // Default the decomposition to the heuristic path for the plain engine
+      // wiring tests so they never spawn a real planning agent; the dedicated
+      // agent-path test below overrides this.
+      if (key === 'planner.decomposition') return 'heuristic';
+      return undefined;
+    },
     getCategory: (category: string) => (category === 'wrfc' ? wrfcCategory : undefined),
   };
 }
 
+const PLANNER_DECOMPOSITION_JSON = JSON.stringify({
+  items: [
+    { title: 'First item', brief: 'do the first thing', ordinal: 1 },
+    { title: 'Second item', brief: 'do the second thing', ordinal: 2, dependsOn: [1] },
+  ],
+});
+
 function makeAgentManagerHarness(bus: RuntimeEventBus): {
   agentManager: PhaseRunnerAgentManagerLike;
   completeAgent: (agentId: string, output: string) => void;
+  spawnedTemplates: string[];
 } {
   const agentStore = new Map<string, AgentRecord>();
+  const spawnedTemplates: string[] = [];
   let counter = 0;
   const agentManager: PhaseRunnerAgentManagerLike = {
     spawn: (input) => {
       const id = `agent-${++counter}`;
+      spawnedTemplates.push(input.template ?? 'engineer');
+      const isPlanner = input.template === 'planner';
       const record: AgentRecord = {
         id,
         task: input.task,
         template: input.template ?? 'engineer',
         tools: [],
-        status: 'running',
+        // A planning agent auto-completes with a valid decomposition so the
+        // AgentManager-backed runner resolves on its first poll (no real LLM).
+        status: isPlanner ? 'completed' : 'running',
         startedAt: Date.now(),
+        ...(isPlanner ? { completedAt: Date.now(), fullOutput: PLANNER_DECOMPOSITION_JSON } : {}),
         toolCallCount: 0,
+        ...(isPlanner ? { usage: { inputTokens: 300, outputTokens: 120, cacheReadTokens: 0, cacheWriteTokens: 0, llmCallCount: 1, turnCount: 1 } } : {}),
         orchestrationDepth: 0,
         executionProtocol: 'direct',
         reviewMode: 'none',
@@ -156,7 +178,7 @@ function makeAgentManagerHarness(bus: RuntimeEventBus): {
     ));
   }
 
-  return { agentManager, completeAgent };
+  return { agentManager, completeAgent, spawnedTemplates };
 }
 
 describe('createWorkstreamServices — real engine wiring', () => {
@@ -189,8 +211,9 @@ describe('createWorkstreamServices — real engine wiring', () => {
     // create — the rendered proposal IS the real launchable spec (see
     // workstream-services.ts's buildSpec doc): the canned fromChainSpec
     // engineer -> review pipeline, not a fictional decomposition.
-    const draft = workstreamCommands.proposeDraft('ship the demo feature');
+    const draft = await workstreamCommands.proposeDraft('ship the demo feature');
     expect(draft.spec.phases.map((p) => p.role)).toEqual(['engineer', 'reviewer']);
+    expect(draft.provenance.kind).toBe('heuristic-configured');
     expect(draft.approved).toBe(false);
 
     // approve — flips the draft's own boolean; nothing exists in the engine yet.
@@ -243,7 +266,7 @@ describe('createWorkstreamServices — real engine wiring', () => {
     engine!.dispose();
   });
 
-  test('a rejected draft (edit without re-approval) cannot be launched', () => {
+  test('a rejected draft (edit without re-approval) cannot be launched', async () => {
     const projectRoot = makeScratchProjectRoot();
     const bus = new RuntimeEventBus();
     const { agentManager } = makeAgentManagerHarness(bus);
@@ -255,13 +278,47 @@ describe('createWorkstreamServices — real engine wiring', () => {
       projectRoot,
     });
 
-    const draft = workstreamCommands.proposeDraft('original task');
+    const draft = await workstreamCommands.proposeDraft('original task');
     workstreamCommands.approveDraft(draft.id);
-    workstreamCommands.editDraft(draft.id, 'revised task');
+    await workstreamCommands.editDraft(draft.id, 'revised task');
     expect(workstreamCommands.getDraft(draft.id)!.approved).toBe(false);
 
     expect(workstreamCommands.launchDraft(draft.id)).toBeNull();
     expect(orchestrationEngine.listWorkstreams()).toHaveLength(0);
+    orchestrationEngine.dispose();
+  });
+
+  test('agent decomposition: create spawns a planner agent (fleet pickup) and tags provenance', async () => {
+    const projectRoot = makeScratchProjectRoot();
+    const bus = new RuntimeEventBus();
+    const { agentManager, spawnedTemplates } = makeAgentManagerHarness(bus);
+    // Force the agent path (the default config manager above uses 'heuristic').
+    const configManager = {
+      get: (key: string) => (key === 'wrfc.commitScope' ? 'off' : key === 'planner.decomposition' ? 'agent' : undefined),
+      getCategory: (category: string) => (category === 'wrfc'
+        ? { scoreThreshold: 9.9, maxFixAttempts: 3, autoCommit: false, transportRetryLimit: 0, transportRetryDelayMs: 0, commitScope: 'off' as const, gates: [] }
+        : undefined),
+    };
+    const { orchestrationEngine, workstreamCommands } = createWorkstreamServices({
+      agentManager,
+      configManager,
+      adaptivePlanner: new AdaptivePlanner(),
+      runtimeBus: bus,
+      projectRoot,
+    });
+
+    const draft = await workstreamCommands.proposeDraft('build a multi-step feature');
+
+    // The planning agent was spawned through the shared AgentManager (so it
+    // appears in the fleet like any agent). It is a 'planner'-template agent.
+    expect(spawnedTemplates).toContain('planner');
+    // Its structured output validated → agent provenance with usage + item count.
+    expect(draft.provenance.kind).toBe('agent');
+    expect(draft.provenance.itemCount).toBe(2);
+    expect(draft.provenance.agentTokens).toBe(420);
+    // Launch path is unchanged: still the fromChainSpec engineer -> review pipeline.
+    expect(draft.spec.phases.map((p) => p.role)).toEqual(['engineer', 'reviewer']);
+
     orchestrationEngine.dispose();
   });
 });
