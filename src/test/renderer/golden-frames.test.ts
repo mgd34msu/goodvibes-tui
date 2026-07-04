@@ -54,8 +54,6 @@ import { renderSessionPickerModal } from '../../renderer/session-picker-modal.ts
 import { SessionPickerModal } from '../../input/session-picker-modal.ts';
 import { renderProfilePickerModal } from '../../renderer/profile-picker-modal.ts';
 import { ProfilePickerModal } from '../../input/profile-picker-modal.ts';
-import { AgentDetailModal, renderAgentDetailModal } from '../../renderer/agent-detail-modal.ts';
-import { ProcessModal, renderProcessModal } from '../../renderer/process-modal.ts';
 import { renderContextInspector } from '../../renderer/context-inspector.ts';
 import { ConversationManager } from '../../core/conversation.ts';
 import { renderHistorySearchOverlay } from '../../renderer/history-search-overlay.ts';
@@ -71,8 +69,6 @@ import type { FeatureFlagManager } from '@/runtime/index.ts';
 import type { McpRegistry } from '@pellux/goodvibes-sdk/platform/mcp';
 import { SessionManager } from '@pellux/goodvibes-sdk/platform/sessions';
 import { ProfileManager } from '@pellux/goodvibes-sdk/platform/profiles';
-import type { AgentRecord } from '@pellux/goodvibes-sdk/platform/tools';
-import type { BackgroundProcess } from '@pellux/goodvibes-sdk/platform/tools';
 import type { ProcessNode } from '@pellux/goodvibes-sdk/platform/runtime/fleet';
 import { FleetPanel } from '../../panels/fleet-panel.ts';
 import { buildFleetSnapshot, createStaticFleetReadModel } from '../../panels/fleet-read-model.ts';
@@ -563,9 +559,6 @@ describe('golden-frames', () => {
 //     (formatTimestamp in the session/profile pickers), the affected tests
 //     pin process.env.TZ='UTC' for the duration of the render so the golden
 //     bytes don't depend on the host machine's timezone.
-//   - The AgentDetailModal/ProcessModal goldens use hand-built AgentRecord
-//     fixtures (not AgentManager.spawn(), which mints a crypto.randomUUID
-//     id) so the rendered agent id is stable across runs.
 //   - The tree-sitter code-block golden schedules a real background parse on
 //     code-block.ts's shared SyntaxHighlighter singleton and polls for cache
 //     population; if the tree-sitter WASM grammar is unavailable in the
@@ -1073,97 +1066,10 @@ function renderProfilePickerSurface(width: number, height: number): Line[] {
 
 describeOverlayGolden('profile-picker-modal', renderProfilePickerSurface);
 
-// agent detail — hand-built AgentRecord (not AgentManager.spawn(), which
-// mints a crypto.randomUUID id). Terminal status ('completed') means
-// isStalled and elapsedMs never read Date.now() at render time — both
-// startedAt and completedAt are fixed epoch values.
-const GOLDEN_AGENT_ID = 'agent-golden-fixed01';
-
-function makeGoldenAgentRecord(): AgentRecord {
-  const startedAt = 1_700_000_000_000;
-  return {
-    id: GOLDEN_AGENT_ID,
-    task: 'Refactor the panel renderer for width safety',
-    template: 'general',
-    tools: [],
-    status: 'completed',
-    startedAt,
-    completedAt: startedAt + 125_000,
-    orchestrationDepth: 0,
-    toolCallCount: 4,
-    executionProtocol: 'gather-plan-apply',
-    reviewMode: 'wrfc',
-    communicationLane: 'direct',
-    fullOutput: '',
-    model: 'claude-opus-4',
-    provider: 'anthropic',
-    usage: {
-      inputTokens: 12_000,
-      outputTokens: 3_400,
-      cacheReadTokens: 0,
-      cacheWriteTokens: 0,
-      llmCallCount: 3,
-      turnCount: 3,
-    },
-  };
-}
-
-function renderAgentDetailSurface(width: number, height: number): Line[] {
-  const rec = makeGoldenAgentRecord();
-  const modal = new AgentDetailModal({
-    agentManager: {
-      getStatus: (id: string) => (id === GOLDEN_AGENT_ID ? rec : null),
-      list: () => [rec],
-    },
-    agentMessageBus: { getMessages: () => [] },
-    sessionLogPathResolver: () => join(tmpdir(), 'gv-golden-agent-detail-nonexistent.jsonl'),
-    cancelAgent: () => true,
-  } as never);
-  modal.open(GOLDEN_AGENT_ID);
-  return renderAgentDetailModal(modal, width, height);
-}
-
-describeOverlayGolden('agent-detail-modal', renderAgentDetailSurface);
-
-// process — a running agent entry with startedAt fixed relative to fixture-
-// build time (Date.now() - 125_000ms), giving a stable formatElapsed bucket
-// regardless of calendar date (only the ~125s delta matters).
-function renderProcessSurface(width: number, height: number): Line[] {
-  const rec: AgentRecord = {
-    id: 'agent-golden-process01',
-    task: 'Build the golden fixture',
-    template: 'default',
-    tools: [],
-    status: 'running',
-    startedAt: Date.now() - 125_000,
-    orchestrationDepth: 0,
-    toolCallCount: 2,
-    executionProtocol: 'gather-plan-apply',
-    reviewMode: 'wrfc',
-    communicationLane: 'direct',
-    fullOutput: '',
-  };
-  const modal = new ProcessModal({
-    agentManager: {
-      list: () => [rec],
-      getStatus: (id: string) => (id === rec.id ? rec : null),
-      cancel: () => true,
-    },
-    processManager: {
-      list: () => [] as BackgroundProcess[],
-      getStatus: () => undefined,
-      stop: () => false,
-    },
-    wrfcController: {
-      getChain: () => null,
-      listChains: () => [],
-    },
-  } as never);
-  modal.refresh();
-  return renderProcessModal(modal, width, height);
-}
-
-describeOverlayGolden('process-modal', renderProcessSurface);
+// W6.1 retirement: the agent-detail-modal and process-modal golden surfaces
+// (and their goldens) were removed — those modals were deleted once the F2
+// repoint made them unreachable; the Fleet panel subsumes the live process
+// tree (its own golden is defined below).
 
 // fleet — a deterministic multi-level tree (WRFC owner->engineer->reviewer
 // chain, one exec node, one terminal agent) with a FIXED `now` passed into

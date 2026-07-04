@@ -10,9 +10,6 @@ import type { HistorySearch } from './input-history.ts';
 import type { ModelPickerModal } from './model-picker.ts';
 import { handleMcpWorkspaceToken, type McpWorkspace } from './mcp-workspace.ts';
 import type { CommandContext } from './command-registry.ts';
-import type { LiveTailModal } from '../renderer/live-tail-modal.ts';
-import type { ProcessModal } from '../renderer/process-modal.ts';
-import type { AgentDetailModal } from '../renderer/agent-detail-modal.ts';
 import type { ContextInspectorModal } from '../renderer/context-inspector.ts';
 import type { FilePickerModal } from './file-picker.ts';
 import type { BlockActionsMenu, BlockActionId } from '../renderer/block-actions.ts';
@@ -32,9 +29,7 @@ import {
   handleBlockActionsToken,
   handleEscapeOnlyModalToken,
   handleFilePickerToken,
-  handleLiveTailToken,
   handleModelPickerToken,
-  handleProcessModalToken,
 } from './handler-picker-routes.ts';
 
 export type ModalTokenRouteState = {
@@ -64,9 +59,6 @@ export type ModalTokenRouteState = {
   getViewportHeight: () => number;
   requestRender: () => void;
   handleEscape: () => void;
-  liveTailModal: LiveTailModal;
-  processModal: ProcessModal;
-  agentDetailModal: AgentDetailModal;
   contextInspectorModal: ContextInspectorModal;
   modalOpened: (name: string) => void;
   filePicker: FilePickerModal;
@@ -235,50 +227,13 @@ export function handleModalTokenRoutes(state: ModalTokenRouteState, token: Input
     return withState(state, true);
   }
 
-  if (handleLiveTailToken({
-    liveTailModal: state.liveTailModal,
-    processModal: state.processModal,
-    requestRender: state.requestRender,
-    handleEscape: state.handleEscape,
-  }, token)) {
-    return withState(state, true);
-  }
-
-  // Agent detail modal: route c + confirm keys before escape-close.
-  // handleKey() consumes confirm-flow keys (y, Enter, n, Esc) and the 'c'
-  // initiator; unhandled keys (including Esc when no confirm is pending)
-  // fall through to escape-close below.
-  if (state.agentDetailModal.active) {
-    const keyStr: string =
-      token.type === 'key' ? (token.logicalName ?? '') :
-      token.type === 'text' ? token.value : '';
-    if (keyStr && state.agentDetailModal.handleKey(keyStr)) {
-      state.requestRender();
-      return withState(state, true);
-    }
-    // 'c' was not consumed (non-cancellable), or any other key.
-    // Esc closes the modal; all other keys are absorbed by the active modal.
-    if (token.type === 'key' && token.logicalName === 'escape') {
-      state.handleEscape();
-      return withState(state, true);
-    }
-    state.requestRender();
-    return withState(state, true);
-  }
+  // W6.1 retirement: the live-tail, agent-detail, and process-modal token
+  // routes were removed with those modals (F2 now opens Fleet, which subsumes
+  // the live process tree; the three modals were structurally unreachable after
+  // the F2 repoint and were deleted).
 
   if (handleEscapeOnlyModalToken({
     active: state.contextInspectorModal.active,
-    requestRender: state.requestRender,
-    handleEscape: state.handleEscape,
-  }, token)) {
-    return withState(state, true);
-  }
-
-  if (handleProcessModalToken({
-    processModal: state.processModal,
-    liveTailModal: state.liveTailModal,
-    agentDetailModal: state.agentDetailModal,
-    modalOpened: state.modalOpened,
     requestRender: state.requestRender,
     handleEscape: state.handleEscape,
   }, token)) {

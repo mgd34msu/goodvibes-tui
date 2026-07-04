@@ -55,15 +55,12 @@ export type ActiveModalState = {
   helpOverlayActive: boolean;
   shortcutsOverlayActive: boolean;
   bookmarkModal: { active: boolean; close: () => void };
-  agentDetailModal: { active: boolean; close: () => void };
-  liveTailModal: { active: boolean; close: () => void };
   settingsModal: { active: boolean; close: () => void };
   mcpWorkspace?: { active: boolean; close: () => void; reopen: () => void };
   sessionPickerModal: { active: boolean; close: () => void };
   profilePickerModal: { active: boolean; close: () => void };
   configModal: { active: boolean; close: () => void };
   contextInspectorModal: { active: boolean; close: () => void };
-  processModal: { active: boolean; close: () => void };
   modelPicker: { active: boolean; close: () => void };
   filePicker: { active: boolean; close: () => void };
   blockActionsMenu: { active: boolean; close: () => void };
@@ -76,15 +73,12 @@ export function getActiveModalName(state: ActiveModalState): string | null {
   if (state.helpOverlayActive) return 'help';
   if (state.shortcutsOverlayActive) return 'shortcuts';
   if (state.bookmarkModal.active) return 'bookmark';
-  if (state.agentDetailModal.active) return 'agentDetail';
-  if (state.liveTailModal.active) return 'liveTail';
   if (state.settingsModal.active) return 'settings';
   if (state.mcpWorkspace?.active) return 'mcpWorkspace';
   if (state.sessionPickerModal.active) return 'sessionPicker';
   if (state.profilePickerModal.active) return 'profilePicker';
   if (state.configModal.active) return 'config';
   if (state.contextInspectorModal.active) return 'contextInspector';
-  if (state.processModal.active) return 'process';
   if (state.modelPicker.active) return 'modelPicker';
   if (state.filePicker.active) return 'filePicker';
   if (state.blockActionsMenu.active) return 'blockActions';
@@ -98,15 +92,12 @@ export type ModalCloseOps = {
   resetHelp: () => void;
   resetShortcuts: () => void;
   closeBookmark: () => void;
-  closeAgentDetail: () => void;
-  closeLiveTail: () => void;
   closeSettings: () => void;
   closeMcpWorkspace: () => void;
   closeSessionPicker: () => void;
   closeProfilePicker: () => void;
   closeConfigModal: () => void;
   closeContextInspector: () => void;
-  closeProcess: () => void;
   closeModelPicker: () => void;
   closeFilePicker: () => void;
   closeBlockActions: () => void;
@@ -126,12 +117,6 @@ export function closeModalByName(name: string, ops: ModalCloseOps): void {
     case 'bookmark':
       ops.closeBookmark();
       break;
-    case 'agentDetail':
-      ops.closeAgentDetail();
-      break;
-    case 'liveTail':
-      ops.closeLiveTail();
-      break;
     case 'settings':
       ops.closeSettings();
       break;
@@ -149,9 +134,6 @@ export function closeModalByName(name: string, ops: ModalCloseOps): void {
       break;
     case 'contextInspector':
       ops.closeContextInspector();
-      break;
-    case 'process':
-      ops.closeProcess();
       break;
     case 'modelPicker':
       ops.closeModelPicker();
@@ -178,7 +160,6 @@ export type ModalOpenOps = {
   openHelp: () => void;
   openShortcuts: () => void;
   openBookmark: () => void;
-  openProcess: () => void;
   openContextInspector: () => void;
   openMcpWorkspace?: () => void;
   openOnboarding?: () => void;
@@ -196,9 +177,6 @@ export function reopenModalByName(name: string, ops: ModalOpenOps): void {
       break;
     case 'bookmark':
       ops.openBookmark();
-      break;
-    case 'process':
-      ops.openProcess();
       break;
     case 'contextInspector':
       ops.openContextInspector();
