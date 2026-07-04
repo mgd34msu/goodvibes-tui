@@ -1,8 +1,15 @@
 import type { Line } from '../types/grid.ts';
 import { ModalFactory, type ModalSection, type ModalTab } from './modal-factory.ts';
+import { getOverlayMaxWidth } from './overlay-viewport.ts';
 import { activeUiTones } from './theme.ts';
 import type { ConfigModal, ConfigModalRenderModel } from '../input/config-modal.ts';
 
+// Matches ModalFactory.createModal's own box-width computation (margin 4,
+// requested max width 76 — see renderConfigModalModel below) so the
+// wrap-clamp in ConfigModal.getRenderModel() measures against the SAME width
+// the list section will actually wrap at, at the current terminal size.
+const MODAL_MARGIN = 4;
+const MODAL_MAX_WIDTH = 76;
 /**
  * renderConfigModal — the single render path for every ConfigModalSurface.
  * Reads the host's frozen-structure-plus-live-values render model and maps it
@@ -15,7 +22,13 @@ export function renderConfigModal(modal: ConfigModal, width: number, height: num
   // rather than overflowing (posture header + separator + chrome ≈ 8 rows).
   const visible = Math.max(3, Math.min(16, height - 8));
   modal.setViewportRows(visible);
-  const model = modal.getRenderModel();
+  // DEBT-5 item 2: the list section wraps a row label at (contentW - 2),
+  // where contentW = boxW - 4 (see ModalFactory._renderListSection). Compute
+  // that exact column here so getRenderModel's wrap-clamp measures against
+  // reality instead of a fixed guess.
+  const boxW = Math.max(24, getOverlayMaxWidth(width, MODAL_MARGIN, MODAL_MAX_WIDTH));
+  const labelWrapWidth = Math.max(8, boxW - 4 - 2);
+  const model = modal.getRenderModel(labelWrapWidth);
   return renderConfigModalModel(model, width);
 }
 
@@ -70,7 +83,7 @@ function renderConfigModalModel(model: ConfigModalRenderModel, width: number): L
   return ModalFactory.createModal(
     {
       title: model.title,
-      width: 76,
+      width: MODAL_MAX_WIDTH,
       tabs,
       sections,
       targetContentRows,

@@ -22,6 +22,8 @@ function buildState(overrides: Partial<PanelFocusRouteState> = {}): PanelFocusRo
     cyclePanelTab: mock(() => {}),
     onPanelInputConsumed: undefined,
     isPasteToken: false,
+    now: 0,
+    burstGuard: { timestamps: [], suspended: false, hintShown: false },
     isTurnActive: () => false,
     cancelGeneration: mock(() => {}),
     ...overrides,
@@ -330,5 +332,122 @@ describe('handlePanelFocusToken', () => {
     expect(result.handled).toBe(false);
     expect(result.panelFocused).toBe(true);
     expect(closed).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// DEBT-5 item 5 — paste flood guard (rate-based; see panel-paste-flood-guard.ts)
+// ---------------------------------------------------------------------------
+
+describe('handlePanelFocusToken — paste flood guard (DEBT-5 item 5)', () => {
+  function panelManagerWithHandler(received: string[], overrides: { isCapturingTextBurst?: () => boolean } = {}) {
+    return {
+      isVisible: () => true,
+      getAllOpen: () => [{ id: 'a' }],
+      getActive: () => ({
+        id: 'a',
+        name: 'fleet',
+        handleInput: (k: string) => { received.push(k); return true; },
+        ...overrides,
+      }),
+      getActivePanel: () => ({ id: 'a' }),
+      close: () => {},
+    } as unknown as PanelFocusRouteState['panelManager'];
+  }
+
+  test('a 20-token burst (unbracketed-paste replay) dispatches at most 8, shows the drop hint exactly once, and never flips focus', () => {
+    const received: string[] = [];
+    const hints: string[] = [];
+    const burstGuard = { timestamps: [], suspended: false, hintShown: false };
+    const state = buildState({
+      panelFocused: true,
+      isPasteToken: false,
+      burstGuard,
+      onPasteDropped: (name: string) => hints.push(name),
+      panelManager: panelManagerWithHandler(received),
+    });
+    const t0 = 1_000_000;
+    let result;
+    for (let i = 0; i < 20; i++) {
+      result = handlePanelFocusToken({ ...state, now: t0 + i }, { type: 'text', value: 'K' });
+    }
+    expect(received.length).toBeLessThanOrEqual(8);
+    expect(hints).toEqual(['fleet']); // one-shot — not shown 12 more times
+    expect(result!.panelFocused).toBe(true); // never flipped to the composer
+  });
+
+  test('6 rapid keys (under the threshold) all dispatch — human typing is unaffected', () => {
+    const received: string[] = [];
+    const hints: string[] = [];
+    const burstGuard = { timestamps: [], suspended: false, hintShown: false };
+    const state = buildState({
+      panelFocused: true,
+      isPasteToken: false,
+      burstGuard,
+      onPasteDropped: (name: string) => hints.push(name),
+      panelManager: panelManagerWithHandler(received),
+    });
+    const t0 = 2_000_000;
+    for (let i = 0; i < 6; i++) {
+      handlePanelFocusToken({ ...state, now: t0 + i }, { type: 'text', value: 'j' });
+    }
+    expect(received).toEqual(['j', 'j', 'j', 'j', 'j', 'j']);
+    expect(hints).toEqual([]);
+  });
+
+  test('a capturing panel (isCapturingTextBurst) receives the full burst untouched by the flood guard', () => {
+    const received: string[] = [];
+    const hints: string[] = [];
+    const burstGuard = { timestamps: [], suspended: false, hintShown: false };
+    const state = buildState({
+      panelFocused: true,
+      isPasteToken: false,
+      burstGuard,
+      onPasteDropped: (name: string) => hints.push(name),
+      panelManager: panelManagerWithHandler(received, { isCapturingTextBurst: () => true }),
+    });
+    const t0 = 3_000_000;
+    for (let i = 0; i < 20; i++) {
+      handlePanelFocusToken({ ...state, now: t0 + i }, { type: 'text', value: 'z' });
+    }
+    expect(received.length).toBe(20); // every character, same as before this guard existed
+    expect(hints).toEqual([]);
+  });
+
+  test('composer-focused tokens (panelFocused=false) bypass this route entirely, regardless of burst rate — the composer path is untouched', () => {
+    const burstGuard = { timestamps: [], suspended: false, hintShown: false };
+    const state = buildState({ panelFocused: false, isPasteToken: false, burstGuard });
+    const t0 = 4_000_000;
+    let result;
+    for (let i = 0; i < 20; i++) {
+      result = handlePanelFocusToken({ ...state, now: t0 + i }, { type: 'text', value: 'q' });
+    }
+    expect(result!.handled).toBe(false);
+    expect(burstGuard.timestamps).toEqual([]); // the guard never even engages off this route
+  });
+
+  test('suspension is sticky (does not flap) but lifts after a genuine quiet gap, re-arming the one-shot hint for a later burst', () => {
+    const received: string[] = [];
+    const hints: string[] = [];
+    const burstGuard = { timestamps: [], suspended: false, hintShown: false };
+    const state = buildState({
+      panelFocused: true,
+      isPasteToken: false,
+      burstGuard,
+      onPasteDropped: (name: string) => hints.push(name),
+      panelManager: panelManagerWithHandler(received),
+    });
+    const t0 = 5_000_000;
+    for (let i = 0; i < 12; i++) handlePanelFocusToken({ ...state, now: t0 + i }, { type: 'text', value: 'a' }); // first burst
+    expect(hints).toEqual(['fleet']);
+    const dispatchedFromFirstBurst = received.length;
+
+    // A quiet gap longer than the window ends the first burst.
+    const t1 = t0 + 1000;
+    handlePanelFocusToken({ ...state, now: t1 }, { type: 'text', value: 'b' }); // human keystroke after the pause
+    expect(received.length).toBe(dispatchedFromFirstBurst + 1);
+
+    for (let i = 0; i < 12; i++) handlePanelFocusToken({ ...state, now: t1 + 20 + i }, { type: 'text', value: 'c' }); // second burst
+    expect(hints).toEqual(['fleet', 'fleet']); // re-armed — a later burst gets its own one-shot hint
   });
 });

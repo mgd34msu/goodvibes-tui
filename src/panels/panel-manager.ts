@@ -2,7 +2,8 @@
 // PanelManager — central manager for panel lifecycle, navigation, and split
 // ---------------------------------------------------------------------------
 
-import type { Panel, PanelRegistration, PanelCategory } from './types.ts';
+import type { Panel, PanelRegistration, PanelCategory, PanelDeepLinkTarget } from './types.ts';
+export type { PanelDeepLinkTarget } from './types.ts';
 // Type-only, erased at runtime, routed through the `@/` alias (not a relative
 // path) so it stays out of the relative-import graph the architecture
 // cycle-checker walks — same discipline as the PanelManager import in types.ts.
@@ -228,7 +229,7 @@ export class PanelManager {
     this._cachedWorkspaceTabs = null;
   }
 
-  open(panelIdOrAlias: string, pane?: 'top' | 'bottom'): Panel {
+  open(panelIdOrAlias: string, pane?: 'top' | 'bottom', target?: PanelDeepLinkTarget): Panel {
     const modalName = this.modalRedirects.get(panelIdOrAlias);
     if (modalName !== undefined) {
       this.openModalCallback?.(modalName);
@@ -244,12 +245,12 @@ export class PanelManager {
       // pane (fixes `/panel open <id> top` and the panel-list T/B move keys).
       if (pane && pane !== existingPane) {
         this._moveBetweenPanes(existingPane, pane, panelId);
-        return this.getPanel(panelId)!;
+        return this._deliverDeepLink(this.getPanel(panelId)!, target);
       }
       this._activateByIdInPane(panelId, existingPane);
       this._focusedPane = existingPane;
       if (existingPane === 'bottom') this._bottomPaneVisible = true;
-      return this._getPane(existingPane).panels[this._getPane(existingPane).activeIndex]!;
+      return this._deliverDeepLink(this._getPane(existingPane).panels[this._getPane(existingPane).activeIndex]!, target);
     }
 
     const targetPane = pane ?? this._focusedPane;
@@ -271,6 +272,16 @@ export class PanelManager {
     }
     panel.onActivate();
     this._invalidateWorkspaceTabs();
+    return this._deliverDeepLink(panel, target);
+  }
+
+  /**
+   * Hand an optional deep-link target (DEBT-5 item 4) to a panel that just
+   * resolved from open(). Panels without a "node" concept simply don't
+   * implement `receiveDeepLink` — the call is a no-op via optional chaining.
+   */
+  private _deliverDeepLink(panel: Panel, target: PanelDeepLinkTarget | undefined): Panel {
+    if (target) panel.receiveDeepLink?.(target);
     return panel;
   }
 

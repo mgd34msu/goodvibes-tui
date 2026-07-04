@@ -27,6 +27,7 @@ import { McpWorkspace } from './mcp-workspace.ts';
 import { SessionPickerModal } from './session-picker-modal.ts';
 import { ConfigModal } from './config-modal.ts';
 import { ProfilePickerModal } from './profile-picker-modal.ts';
+import type { PanelBurstGuardState } from './panel-paste-flood-guard.ts';
 import { OnboardingWizardController, type OnboardingWizardAction, type OnboardingWizardMode } from './onboarding/onboarding-wizard.ts';
 import {
   applyOnboardingRequest,
@@ -185,6 +186,8 @@ export class InputHandler implements InputHandlerLike {
   public blockActionsMenu = new BlockActionsMenu();
   public settingsModal = new SettingsModal();
   public configModal = new ConfigModal();
+  /** DEBT-5 item 5 — paste-flood guard state, mutated in place across tokens (never reallocated). */
+  private panelBurstGuard: PanelBurstGuardState = { timestamps: [], suspended: false, hintShown: false };
   public mcpWorkspace = new McpWorkspace();
   public onboardingWizard = new OnboardingWizardController();
   public onboardingModelPickerCancelSnapshot: OnboardingWizardSnapshot | null = null;
@@ -319,6 +322,7 @@ export class InputHandler implements InputHandlerLike {
         keybindingsManager: this.uiServices.shell.keybindingsManager,
         killRing: this.killRing,
         focusTracker: this.uiServices.platform.focusTracker,
+        panelBurstGuard: this.panelBurstGuard,
         getHistory: this.getHistory,
         getViewportHeight: this.getViewportHeight,
         getScrollTop: this.getScrollTop,

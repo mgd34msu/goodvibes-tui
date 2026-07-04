@@ -43,12 +43,18 @@ describe('keybindings modal surface', () => {
     expect(tabText(view, 'shortcuts').toLowerCase()).toContain('keybindings manager not wired');
   });
 
-  test('activate: Tools tab -> /panel open fleet; Models tab -> /model <key>; unselectable model is a no-op', () => {
+  test('activate: Tools tab -> /panel open fleet --target <tool>:tool (DEBT-5 deep-link); Models tab -> /model <key>; unselectable model is a no-op', () => {
     const surface = createKeybindingsModalSurface({ toolRegistry: FIXED_TOOLS, providerRegistry: FIXED_MODELS });
     open(surface);
     const fleet = captureCommands();
     surface.onAction?.('activate', actionCtx({ id: 'tool:read_file', label: '' }, { ...fleet.extra, tabId: 'tools' }));
-    expect(fleet.calls).toEqual([['panel', ['open', 'fleet']]]);
+    expect(fleet.calls).toEqual([['panel', ['open', 'fleet', '--target', 'read_file:tool']]]);
+
+    // A row with no parseable tool name (id doesn't start with 'tool:') falls
+    // back to the plain generic jump — never crashes, never sends a garbage target.
+    const noRow = captureCommands();
+    surface.onAction?.('activate', actionCtx(null, { ...noRow.extra, tabId: 'tools' }));
+    expect(noRow.calls).toEqual([['panel', ['open', 'fleet']]]);
 
     const model = captureCommands();
     surface.onAction?.('activate', actionCtx({ id: 'model:acme:a', label: '' }, { ...model.extra, tabId: 'models' }));

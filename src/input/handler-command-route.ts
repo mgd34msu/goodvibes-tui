@@ -143,14 +143,15 @@ function withPanelFocusSync(context: CommandContext, state: CommandModeRouteStat
         }
       : undefined,
     showPanel: context.showPanel
-      ? (panelId, pane, opts) => {
-          context.showPanel?.(panelId, pane, opts);
+      ? (panelId, pane, target, opts) => {
+          context.showPanel?.(panelId, pane, target, opts);
           // UX-C: showPanel no longer transfers focus by default — the command
           // path leaves the composer focused (ui-openers.ts's showPanel only
           // calls focusPanels() when opts.focus is set). Only flip the local
           // panelFocused mirror when the caller explicitly asked for focus;
           // otherwise leave it exactly as it was (the composer, since you can
-          // only type a command from there in the first place).
+          // only type a command from there in the first place). `target` is the
+          // DEBT-5 deep-link jump target, forwarded verbatim.
           if (opts?.focus) state.panelFocused = true;
         }
       : undefined,

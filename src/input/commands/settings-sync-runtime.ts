@@ -26,14 +26,26 @@ export function registerSettingsSyncRuntimeCommands(registry: CommandRegistry): 
   registry.register({
     name: 'settings-sync',
     aliases: ['settingssync'],
-    description: 'Review sync posture, export/import settings-sync bundles, and open the settings sync workspace',
-    usage: '[review|panel|show <key>|staged|conflicts|resolve <key> <local|synced>|failures|rollback-history|export <path>|inspect <path>|pull <path>|push <path>|lock <key> <source> <reason...>|unlock <key>]',
+    description: 'Open the settings sync modal (bare); review posture, export/import bundles, or resolve conflicts by subcommand',
+    usage: '[panel|report|review|show <key>|staged|conflicts|resolve <key> <local|synced>|failures|rollback-history|export <path>|inspect <path>|pull <path>|push <path>|lock <key> <source> <reason...>|unlock <key>] — bare opens the modal',
     handler(args, ctx) {
       const shellPaths = requireShellPaths(ctx);
       const controlPlaneConfigDir = ctx.platform.configManager.getControlPlaneConfigDir();
-      const sub = (args[0] ?? 'review').toLowerCase();
+      const sub = (args[0] ?? '').toLowerCase();
+      // DEBT-5 item 3 (report-vs-modal front doors): settings-sync has a full
+      // modal surface (settings-sync-modal), so the bare command now opens it
+      // — the old bare/`review` transcript report moved to an explicit
+      // `report` subcommand (scriptability preserved: /settings-sync report).
+      if (sub === '') {
+        ctx.openModal?.('settings-sync-modal');
+        return;
+      }
       if (sub === 'panel' || sub === 'open') {
         ctx.openModal?.('settings-sync-modal'); // W6.1: settings-sync panel -> config modal
+        return;
+      }
+      if (sub === 'report' || sub === 'review') {
+        ctx.print(formatSettingsControlPlaneReview(ctx.platform.configManager).join('\n'));
         return;
       }
       if (sub === 'show') {

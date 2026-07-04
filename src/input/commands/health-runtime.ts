@@ -39,7 +39,7 @@ export function registerHealthRuntimeCommands(registry: CommandRegistry): void {
     name: 'health',
     aliases: ['doctor'],
     description: 'Health workspace for startup posture, service readiness, sandbox posture, and provider health',
-    usage: '[open|review|setup|services|sandbox|provider|accounts|auth|settings|intelligence|remote|mcp|continuity|worktrees|maintenance|term|repair [domain]]',
+    usage: '[report|review|open|setup|services|sandbox|provider|accounts|auth|settings|intelligence|remote|mcp|continuity|worktrees|maintenance|term|repair [domain]] — bare and report stay a cross-domain transcript report (see also /health provider for the providers modal)',
     async handler(args, ctx) {
       const sub = (args[0] ?? 'review').toLowerCase();
       const readModels = requireReadModels(ctx);
@@ -424,6 +424,14 @@ export function registerHealthRuntimeCommands(registry: CommandRegistry): void {
 
       ctx.print([
         'Health Review',
+        // DEBT-5 item 3: /health stays a cross-domain transcript report (it
+        // genuinely spans settings/accounts/auth/sandbox/etc — no single
+        // modal owns this data), but the providers domain DOES have one, so
+        // point at it honestly. "/provider" (no domain) is a DIFFERENT
+        // command (switch/manage custom providers) — the real front door to
+        // the providers modal is /health provider (see sub === 'provider'
+        // above), so that is what this hint names.
+        '  see also: the providers modal — /health provider',
         `  session: ${snapshot.sessionId}`,
         `  setup issues: ${snapshot.issues.length}`,
         `  service issues: ${snapshot.serviceIssues.length}`,

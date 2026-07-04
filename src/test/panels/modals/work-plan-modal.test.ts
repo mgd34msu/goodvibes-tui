@@ -60,4 +60,51 @@ describe('work-plan modal surface', () => {
     surface.onAction?.('remove', actionCtx({ id: 'wpi-x', label: '' }, cap.extra));
     expect(cap.calls).toEqual([]);
   });
+
+  // ── DEBT-5 item 4: restored 'i'/'w' agent/WRFC-chain jumps into Fleet ─────
+  describe('i/w fleet deep-links', () => {
+    test('i (jumpAgent) on an item linked to an agent dispatches /panel open fleet --target <agentId>:agent', () => {
+      const surface = createWorkPlanModalSurface(fixedDeps());
+      open(surface);
+      const cap = captureCommands();
+      surface.onAction?.('jumpAgent', actionCtx({ id: 'wpi-a', label: '' }, cap.extra));
+      expect(cap.calls).toEqual([['panel', ['open', 'fleet', '--target', 'agent-1:agent']]]);
+    });
+
+    test('w (jumpWrfc) on an item linked to a WRFC chain dispatches /panel open fleet --target <wrfcId>:wrfc-chain', () => {
+      const deps: WorkPlanModalDeps = {
+        workPlanStore: {
+          getActivePlan: () => ({
+            projectRoot: '/proj',
+            items: [{ id: 'wpi-w', title: 'Chain item', status: 'in_progress' as const, linked: { wrfcId: 'wrfc-9' }, updatedAt: FIXED }],
+          }),
+        },
+      };
+      const surface = createWorkPlanModalSurface(deps);
+      open(surface);
+      const cap = captureCommands();
+      surface.onAction?.('jumpWrfc', actionCtx({ id: 'wpi-w', label: '' }, cap.extra));
+      expect(cap.calls).toEqual([['panel', ['open', 'fleet', '--target', 'wrfc-9:wrfc-chain']]]);
+    });
+
+    test('i/w are gated to items that actually carry the matching link (enabledFor)', () => {
+      const surface = createWorkPlanModalSurface(fixedDeps()); // wpi-a: agent link only; wpi-b/wpi-c: no links
+      open(surface);
+      const jumpAgent = surface.actions?.find((a) => a.id === 'jumpAgent')!;
+      const jumpWrfc = surface.actions?.find((a) => a.id === 'jumpWrfc')!;
+      expect(jumpAgent.enabledFor?.({ id: 'wpi-a', label: '' }, 'items')).toBe(true);
+      expect(jumpAgent.enabledFor?.({ id: 'wpi-b', label: '' }, 'items')).toBe(false);
+      expect(jumpWrfc.enabledFor?.({ id: 'wpi-a', label: '' }, 'items')).toBe(false); // has agent, not wrfc
+      expect(jumpAgent.enabledFor?.(null, 'items')).toBe(false);
+    });
+
+    test('jumpAgent/jumpWrfc on a row with no linked target are a no-op (defensive — enabledFor should already have excluded them)', () => {
+      const surface = createWorkPlanModalSurface(fixedDeps());
+      open(surface);
+      const cap = captureCommands();
+      surface.onAction?.('jumpAgent', actionCtx({ id: 'wpi-b', label: '' }, cap.extra)); // no linked.agentId
+      surface.onAction?.('jumpWrfc', actionCtx({ id: 'wpi-a', label: '' }, cap.extra)); // no linked.wrfcId
+      expect(cap.calls).toEqual([]);
+    });
+  });
 });

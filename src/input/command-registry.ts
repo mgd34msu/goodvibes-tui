@@ -8,7 +8,7 @@ import type { PermissionRequestHandler } from '@pellux/goodvibes-sdk/platform/pe
 import type { SelectionItem, SelectionResult, SelectionAction } from './selection-modal.ts';
 import type { FileUndoManager } from '@pellux/goodvibes-sdk/platform/state';
 import type { WorkspaceCheckpointManager } from '@pellux/goodvibes-sdk/platform/workspace';
-import type { PanelManager } from '../panels/panel-manager.ts';
+import type { PanelManager, PanelDeepLinkTarget } from '../panels/panel-manager.ts';
 import type { KeybindingsManager } from './keybindings.ts';
 import type { OnboardingWizardMode } from './onboarding/onboarding-wizard.ts';
 import type { OpenOnboardingWizardOptions } from './handler-ui-state.ts';
@@ -144,9 +144,10 @@ export interface CommandShellUiOpeners {
    * focus in the composer by default. Pass `{ focus: true }` for a caller that
    * genuinely wants to grab focus (chords use panelManager.focusPanels()
    * directly instead of this method, so no current call site needs it — but
-   * the intent is explicit rather than implicit here).
+   * the intent is explicit rather than implicit here). `target` (DEBT-5) is a
+   * fleet deep-link jump target forwarded to PanelManager.open.
    */
-  showPanel?: (panelId: string, pane?: 'top' | 'bottom', opts?: { focus?: boolean }) => void;
+  showPanel?: (panelId: string, pane?: 'top' | 'bottom', target?: PanelDeepLinkTarget, opts?: { focus?: boolean }) => void;
   focusPanels?: () => void;
   focusPrompt?: () => void;
   openOpsPanel?: () => void;

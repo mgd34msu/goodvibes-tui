@@ -349,4 +349,40 @@ describe('recallCommand', () => {
 
     expect(printed.some((line) => line.includes('Reviewed mem-1: stale'))).toBe(true);
   });
+
+  // ── DEBT-5 item 3: report-vs-modal front door ─────────────────────────────
+  describe('front door (bare opens the memory-modal; report preserves the old usage output)', () => {
+    test('bare /recall opens the memory-modal, prints nothing', async () => {
+      const opened: string[] = [];
+      const ctx = { ...makeRecallCommandContext(printed, { memoryRegistry: makeRegistry(), forensicsRegistry }), openModal: (name: string) => opened.push(name) };
+      await recallCommand.handler([], ctx);
+      expect(opened).toEqual(['memory-modal']);
+      expect(printed).toEqual([]);
+    });
+
+    test('/recall report prints the subcommand usage text (scriptability preserved) and does not open the modal', async () => {
+      const opened: string[] = [];
+      const ctx = { ...makeRecallCommandContext(printed, { memoryRegistry: makeRegistry(), forensicsRegistry }), openModal: (name: string) => opened.push(name) };
+      await recallCommand.handler(['report'], ctx);
+      expect(opened).toEqual([]);
+      expect(printed.length).toBe(1);
+      expect(printed[0]).toContain('Usage: /recall <subcommand>');
+      expect(printed[0]).toContain('add <class> <summary>');
+    });
+
+    test('an unrecognized subcommand still shows the usage text (unchanged lenient fallback)', async () => {
+      const opened: string[] = [];
+      const ctx = { ...makeRecallCommandContext(printed, { memoryRegistry: makeRegistry(), forensicsRegistry }), openModal: (name: string) => opened.push(name) };
+      await recallCommand.handler(['not-a-real-subcommand'], ctx);
+      expect(opened).toEqual([]);
+      expect(printed[0]).toContain('Usage: /recall <subcommand>');
+    });
+
+    test('a real subcommand (list) still dispatches normally, not affected by the front-door change', async () => {
+      const opened: string[] = [];
+      const ctx = { ...makeRecallCommandContext(printed, { memoryRegistry: makeRegistry(), forensicsRegistry }), openModal: (name: string) => opened.push(name) };
+      await recallCommand.handler(['list'], ctx);
+      expect(opened).toEqual([]);
+    });
+  });
 });
