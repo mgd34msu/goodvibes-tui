@@ -284,11 +284,15 @@ export function createBootstrapCommandActions(
     openMemoryPanel: () => {
       showPanel('memory');
     },
+    // W6.1: remote/subscription migrated to config-modal surfaces. open() hits
+    // the modal redirect and invokes the openModal callback — do NOT go through
+    // showPanel here, which would additionally reveal + focus an (empty) panel
+    // workspace behind the fullscreen modal.
     openRemotePanel: () => {
-      showPanel('remote');
+      panelManager.open('remote');
     },
     openSubscriptionPanel: () => {
-      showPanel('subscription');
+      panelManager.open('subscription');
     },
     openLocalAuthMaskedEntry: (kind, username) => {
       showPanel('local-auth');

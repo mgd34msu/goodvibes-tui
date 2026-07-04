@@ -3,6 +3,10 @@
 // ---------------------------------------------------------------------------
 
 import type { Panel, PanelRegistration, PanelCategory } from './types.ts';
+// Type-only, erased at runtime, routed through the `@/` alias (not a relative
+// path) so it stays out of the relative-import graph the architecture
+// cycle-checker walks — same discipline as the PanelManager import in types.ts.
+import type { ConfigModalSurface } from '@/input/config-modal-types.ts';
 
 // ---------------------------------------------------------------------------
 // Pane
@@ -39,6 +43,14 @@ export class PanelManager {
    * the open()-time check are WO-C's mechanism only.
    */
   private modalRedirects = new Map<string, string>();
+  /**
+   * Modal name -> the surface the config-modal host renders (W6.1). Built once
+   * in builtin-modals.ts (closing over read-models) and looked up by
+   * ui-openers' openModal callback. Distinct from `modalRedirects` (panel id ->
+   * modal name): a redirect resolves a legacy panel id to a name; this map
+   * resolves that name to the actual surface data/actions.
+   */
+  private modalSurfaces = new Map<string, ConfigModalSurface>();
   /**
    * Late-bound: the modal stack is constructed after PanelManager (same
    * ordering constraint as the openAgentDetail callback in
@@ -139,6 +151,19 @@ export class PanelManager {
    */
   getModalRedirect(panelIdOrAlias: string): string | undefined {
     return this.modalRedirects.get(panelIdOrAlias);
+  }
+
+  /**
+   * Register the surface (data + actions) the config-modal host renders for a
+   * modal name. Called from builtin-modals.ts alongside registerModalRedirect.
+   */
+  registerModalSurface(surface: ConfigModalSurface): void {
+    this.modalSurfaces.set(surface.name, surface);
+  }
+
+  /** Resolve a modal name to its registered surface, if any. */
+  getModalSurface(name: string): ConfigModalSurface | undefined {
+    return this.modalSurfaces.get(name);
   }
 
   private _resolveId(panelId: string): string {

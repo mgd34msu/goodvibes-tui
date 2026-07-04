@@ -47,11 +47,11 @@ export function registerRemoteRuntimeCommands(registry: CommandRegistry): void {
     usage: '[list | show [agentId] | supervisor [runnerId] | capabilities [runnerId] | recover [runnerId] | setup [export <path>] | env [export <path>] | tunnel [review|export <path>] | bootstrap [export <path>|inspect <path>] | session <export|inspect|import> <path> | pool <list|show|create|assign|unassign> ... | dispatch [template] <description> | dispatch-pool <pool> [template] <description> | contract [agentId] | cancel <agentId> | export <agentId> [path] | artifact list | artifact show <id> | artifact export <id> [path] | review <id> | rerun-local <id> | import <path>]',
     async handler(args, ctx) {
       if (args.length === 0) {
-        if (ctx.openRemotePanel) {
-          ctx.openRemotePanel();
+        if (ctx.openModal) {
+          ctx.openModal('remote-modal'); // W6.1: remote panel -> config modal
           return;
         }
-        ctx.print('Remote panel is not available in this runtime.');
+        ctx.print('Remote surface is not available in this runtime.');
         return;
       }
 
