@@ -4,6 +4,66 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [1.7.0] — 2026-07-04
+
+The evolution release: six batched development cycles (internal 1.2.0–1.6.0, which were never published) land together as one public version. The through-line is a product that reports the truth about itself — reversible edits you can actually undo, a live fleet you can watch and steer, orchestration that runs the plan it showed you, memory that demonstrably enters the turns it claims to, and a panel surface cut down to the consoles that earn their place. Ships against @pellux/goodvibes-sdk 0.38.0.
+
+### Reversibility and checkpoints
+- Workspace checkpoints with `/checkpoints`, `/checkpoint`, and `/rewind`: snapshot the working tree, list snapshots newest-first, and preview-then-restore files from any checkpoint (files only — conversation history is left untouched). Backed by the SDK's `WorkspaceCheckpointManager` and wired through TUI services, with guards so an unguarded checkpoint call can no longer surface as a silent unhandled rejection.
+- Per-hunk accept/reject for multi-edit approval prompts: when one approval covers several hunks you accept or reject each individually, and the decision is honored end-to-end instead of being all-or-nothing.
+- `/test` runs the project test script and shows real pass/fail results, parsing both the SDK runner output and plain `bun test` output (per-test counts and the names of failing tests); the end state persists in the transcript instead of evaporating.
+- Manual `/compact` now hands the compaction subagent the real original task and the full agent roster, so the handoff summary is accurate.
+
+### Fleet observability, session tabs, and steering
+- A live Fleet panel over the real SDK process/agent registry: a process tree with per-node live states, honest cost, id-anchored selection that survives list churn, and capability-gated interrupt/kill actions. It is the fast-access surface below the prompt and the home of `F2`, `Ctrl+O`, and the footer `[Enter]`.
+- Unfocused-user alerts that actually reach you when GoodVibes is in a background terminal: budget breach, agent/chain failure, awaiting-approval, and long-task notices, gated on real terminal-focus tracking (CSI 1004) with an honest "unknown" fallback.
+- Live transcript tabs over the conversation snapshot bridge: attach to a running agent, browse its transcript read-only (with reserved-notice honesty), detach without killing it, and see interrupted vs. killed as distinct states with a frozen elapsed clock.
+- A steering composer with a `queued` / `consumed` / `dropped` badge: send an instruction to a running agent and see honestly whether it was picked up, with TTL and ordering guards, and the consumed signal deferred until the steered turn actually succeeds.
+
+### Workstream orchestration
+- `/workstream` authoring and oversight for multi-phase agent work: phases are insertable structure (float-ordinal ordering), work items flow to free capacity, and each item commits inside its own worktree through the scoped-commit machinery. The authoring view renders the real plan, so the proposal and the launched run can never disagree.
+- Resume-prefix replay with crash-artifact reconciliation: an interrupted workstream re-queues its in-phase items on resume instead of double-running or dropping them.
+- Budgets that refuse rather than kill, with a recovery path, and cooperative cancellation that reaches real child processes.
+- Fleet-tree nesting for workstreams, plus pause/resume support.
+
+### Passive memory and the code index
+- Durable memory demonstrably enters both agent turns and the main-session turn: per-turn retrieval is budgeted (800 tokens by default, floor 95), flag-gated, and inspectable — `/recall injections` shows exactly which records would be injected for a task and why, defaulting to the main-session ring.
+- A repo source-tree code index with honest bounds and labeling: `/codebase build`, `/codebase status`, and `/codebase search`.
+- Compaction quality scoring and a corrected capacity-percentage in the compaction path.
+- The model picker gained an embeddings target, so the memory index's embedding provider is selectable alongside chat models.
+
+### The panel purge and config modals
+- The panel surface was cut from roughly 50 panels to 6 surviving consoles — the Fleet hub plus git, diff, cost, tokens, and local-auth — with 19 configuration and review surfaces re-homed onto a single liveness-enforcing config-modal host. Heavy operator state that used to sprawl across dozens of panels now opens as a focused modal.
+- Every retired panel id resolves honestly: old ids become aliases, modal redirects, or friendly "this moved" notices, so `/panel open <id>` and saved layouts never silently point at nothing.
+- Live panels stay subscribed while open and now repaint while the main thread is idle, so agent, tool, and thinking updates no longer look frozen.
+
+### Keymap and focus honesty
+- The keymap advertises what it actually does: `Ctrl+PageUp` / `Ctrl+PageDown` move between panel tabs (`Ctrl+[` was removed — it is byte `0x1B` and collided with Escape, so it never fired reliably; `Ctrl+]` remains a next-tab chord), `Ctrl+O` and `F2` both open and focus the Fleet panel (the retired Ops Control and process modals fold into it), and `Ctrl+C` honestly advertises the double-press to quit.
+- Focus routing was fixed at the root: multi-character paste is detected per token instead of by a per-feed character-sum heuristic, and keyboard focus transfers only on an explicit request — so typed text no longer leaks into single-letter panel hotkeys.
+
+### Control-plane truth
+- The control plane reports real lifecycle: a `stopping…` state while a process winds down, pause↔resume (including `/schedule` jobs shown in the fleet tree), zombie reaping, and a dirty-residue commit guard so an interrupted scoped commit cannot leave stray changes behind.
+
+### New commands
+- `/search <query> [--limit <n>]` — search the web and render ranked results with source labels.
+- `/imagine <prompt>` — generate an image from a prompt (distinct from `/image`, which attaches an existing image file; the two names collided and the generator was renamed).
+- `/workstream` — author and oversee multi-phase agent workstreams.
+- `/checkpoints`, `/checkpoint`, `/rewind` — workspace checkpoint list / create / restore.
+- `/codebase` — build, inspect, and search the repo source-tree code index.
+- `/test` — run the project test script and show pass/fail.
+- `/recall injections` — inspect the memory records that would be injected for a task.
+
+### Notable fixes
+- Clearing a feature-flag override back to default now removes it from disk instead of persisting a redundant entry.
+- The `paused` process state renders with its own glyph and tone in the fleet tree.
+- Planning: dismissing a planning action no longer corrupts the project goal; the `sessions` front door opens the session picker; `/panel open` reports redirects and deleted ids honestly.
+- `Escape` cancel-first precedence and live git-init header refresh, so a directory becomes a recognized repo without a restart.
+
+### Internal
+- SDK dependency 0.36.0 → 0.38.0 (through 0.37.0 / 0.37.1 / 0.37.2); foundation artifacts regenerated against the released SDK.
+- A release-blocking gate requires the SDK pin, the lockfile resolution, and the installed package to all agree, plus a source-import sweep that fails on any non-npm SDK import — so the local-SDK development overlay can never ship.
+- Test suite at 639 files green; coverage, performance, architecture, and eval-regression gates enforced on every cycle. Each wave was verified with the full gate block, a three-lens adversarial review, and a live tmux replay of its pillar scenarios.
+
 ## [1.1.0] — 2026-07-03
 
 Wave 0 of the post-1.0 evolution effort: trust repairs. Every change closes a defect found by live dogfooding v1.0.0 where the product reported something other than the truth. Ships against @pellux/goodvibes-sdk 0.36.0 (same effort, SDK side).
