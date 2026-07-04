@@ -17,6 +17,7 @@ import type { ToolRegistry } from '@pellux/goodvibes-sdk/platform/tools';
 import type { ForensicsRegistry } from '@/runtime/index.ts';
 import type { PolicyRuntimeState } from '@/runtime/index.ts';
 import type { FileUndoManager } from '@pellux/goodvibes-sdk/platform/state';
+import type { WorkspaceCheckpointManager } from '@pellux/goodvibes-sdk/platform/workspace';
 import type { McpRegistry } from '@pellux/goodvibes-sdk/platform/mcp';
 import type { MemoryRegistry } from '@pellux/goodvibes-sdk/platform/state';
 import type { IntegrationHelperService } from '@/runtime/index.ts';
@@ -84,6 +85,7 @@ export interface BootstrapCommandSectionOptions {
   readonly readModels: UiReadModels;
   readonly shellPaths: ShellPathService;
   readonly fileUndoManager: FileUndoManager;
+  readonly workspaceCheckpointManager?: WorkspaceCheckpointManager;
   readonly memoryRegistry?: MemoryRegistry;
   readonly integrationHelpers?: IntegrationHelperService;
   readonly knowledgeService?: KnowledgeService;
@@ -333,7 +335,7 @@ export function createBootstrapCommandProviderSection(
 export function createBootstrapCommandWorkspaceSection(
   options: Pick<
     BootstrapCommandSectionOptions,
-    'keybindingsManager' | 'fileUndoManager' | 'panelManager' | 'profileManager' | 'bookmarkManager'
+    'keybindingsManager' | 'fileUndoManager' | 'workspaceCheckpointManager' | 'panelManager' | 'profileManager' | 'bookmarkManager'
     | 'projectPlanningService' | 'projectPlanningProjectId' | 'workPlanStore'
   >,
   shellServices: BootstrapCommandShellServices,
@@ -341,6 +343,7 @@ export function createBootstrapCommandWorkspaceSection(
   return {
     keybindingsManager: options.keybindingsManager,
     fileUndoManager: options.fileUndoManager,
+    workspaceCheckpointManager: options.workspaceCheckpointManager,
     panelManager: options.panelManager,
     profileManager: options.profileManager,
     bookmarkManager: options.bookmarkManager,

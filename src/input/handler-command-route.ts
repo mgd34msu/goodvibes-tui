@@ -1,4 +1,5 @@
 import { loadSkillByTrigger } from '@pellux/goodvibes-sdk/platform/tools';
+import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 import type { CommandContext, CommandRegistry } from './command-registry.ts';
 import type { AutocompleteEngine } from './autocomplete.ts';
 import type { InputToken } from '@pellux/goodvibes-sdk/platform/core';
@@ -92,25 +93,34 @@ export function handleCommandModeToken(state: CommandModeRouteState, token: Inpu
       const commandPromise = state.commandRegistry.get(name)
         ? state.commandRegistry.execute(name, args, ctx)
         : (ctx.executeCommand?.(name, args) ?? Promise.resolve(false));
-      commandPromise.then((handled) => {
-        if (handled) {
-          state.requestRender();
-        } else {
-          const shellPaths = state.commandContext?.workspace.shellPaths;
-          const skillContent = shellPaths
-            ? loadSkillByTrigger('/' + name, {
-                workingDirectory: shellPaths.workingDirectory,
-                homeDirectory: shellPaths.homeDirectory,
-              })
-            : null;
-          if (skillContent) {
-            state.commandContext?.submitInput?.(skillContent);
-          } else {
-            state.conversationManager?.log(`Unknown command: /${name}. Type /help for available commands.`, { fg: '#ef4444' });
+      commandPromise
+        .then((handled) => {
+          if (handled) {
             state.requestRender();
+          } else {
+            const shellPaths = state.commandContext?.workspace.shellPaths;
+            const skillContent = shellPaths
+              ? loadSkillByTrigger('/' + name, {
+                  workingDirectory: shellPaths.workingDirectory,
+                  homeDirectory: shellPaths.homeDirectory,
+                })
+              : null;
+            if (skillContent) {
+              state.commandContext?.submitInput?.(skillContent);
+            } else {
+              state.conversationManager?.log(`Unknown command: /${name}. Type /help for available commands.`, { fg: '#ef4444' });
+              state.requestRender();
+            }
           }
-        }
-      });
+        })
+        .catch((err: unknown) => {
+          // Defense in depth for EVERY command, not just the ones that
+          // already guard their own internals: a handler that throws or
+          // awaits a rejected promise must never become a silent unhandled
+          // rejection — it renders the same way an unknown command does.
+          state.conversationManager?.log(`Command /${name} failed: ${summarizeError(err)}`, { fg: '#ef4444' });
+          state.requestRender();
+        });
     } else {
       closeCommandMode();
     }

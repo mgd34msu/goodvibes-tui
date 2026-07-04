@@ -12,7 +12,7 @@ import { registerAllTools } from '@pellux/goodvibes-sdk/platform/tools';
 import { FileUndoManager } from '@pellux/goodvibes-sdk/platform/state';
 import { PermissionManager } from '@pellux/goodvibes-sdk/platform/permissions';
 import { AcpManager } from '@pellux/goodvibes-sdk/platform/acp';
-import { PermissionPromptUI } from './permissions/prompt.ts';
+import { PermissionPromptUI, buildPendingPermissionExtras } from './permissions/prompt.ts';
 import { CommandRegistry } from './input/command-registry.ts';
 import type { CommandContext } from './input/command-registry.ts';
 import { renderProcessIndicator } from './renderer/process-indicator.ts';
@@ -62,6 +62,7 @@ import { wireStreamEventMetrics, type StreamMetrics, type WireStreamEventMetrics
 import { wireTurnEventHandlers } from './core/turn-event-wiring.ts';
 import { buildContextStatusHint } from './renderer/context-status-hint.ts';
 import { evaluateSessionMaintenance } from '@/runtime/index.ts';
+import { createCancelGeneration } from './core/turn-cancellation.ts';
 
 const ALT_SCREEN_ENTER = '\x1b[?1049h'; const ALT_SCREEN_EXIT  = '\x1b[?1049l';
 const MOUSE_ENABLE     = '\x1b[?1000h\x1b[?1002h\x1b[?1006h'; const MOUSE_DISABLE    = '\x1b[?1006l\x1b[?1002l\x1b[?1000l';
@@ -303,12 +304,7 @@ async function main() {
     }
   };
 
-  const cancelGeneration = () => {
-    spokenTurns.stop('Spoken output stopped.');
-    if (orchestrator.isThinking) {
-      orchestrator.abort();
-    }
-  };
+  const cancelGeneration = createCancelGeneration(orchestrator, spokenTurns);
 
   const jumpToBookmark = (key: string) => {
     conversation.getDisplayBlocks();
@@ -337,6 +333,7 @@ async function main() {
   commandContext.pasteFromClipboard = () => input.handlePaste();
   commandContext.executeCommand = (name, args) => commandRegistry.execute(name, args, commandContext);
   commandContext.cancelGeneration = cancelGeneration;
+  commandContext.isGenerating = () => orchestrator.isThinking;
   commandContext.jumpToBookmark = jumpToBookmark;
   commandContext.scrollToLine = scrollToLine;
   commandContext.clearScreen = () => {
@@ -349,7 +346,7 @@ async function main() {
     new Promise((resolve) => {
       pendingPermission = {
         ...request,
-        resolve: (approved: boolean, remember = false) => resolve({ approved, remember }),
+        ...buildPendingPermissionExtras(request, resolve),
       };
       render();
     });
@@ -557,7 +554,7 @@ async function main() {
     // Calculate how many rows are consumed by overlays (thinking, permissions, queue, file picker)
     let overlayRows = 0;
     if (orchestrator.isThinking) overlayRows += 2; // spinner + blank
-    if (pendingPermission) overlayRows += PermissionPromptUI.getPromptHeight(pendingPermission);
+    if (pendingPermission) overlayRows += PermissionPromptUI.getPromptHeight(pendingPermission, pendingPermission.hunkState);
     overlayRows += orchestrator.messageQueue.length * 3; // queued messages
     // File picker and model picker overlay rows computed from actual rendered line count below
     // Selection modal overlay rows are computed from actual rendered line count below
@@ -606,7 +603,7 @@ async function main() {
     }
 
     if (pendingPermission) {
-      viewport.push(...PermissionPromptUI.createPromptLines(conversationWidth, pendingPermission));
+      viewport.push(...PermissionPromptUI.createPromptLines(conversationWidth, pendingPermission, pendingPermission.hunkState));
     }
 
     orchestrator.messageQueue.forEach(msg => {

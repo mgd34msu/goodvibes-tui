@@ -240,6 +240,7 @@ export function createBootstrapShell(options: BootstrapShellOptions): BootstrapS
     remoteRuntime,
     planRuntime,
     fileUndoManager: services.fileUndoManager,
+    workspaceCheckpointManager: services.workspaceCheckpointManager,
     memoryRegistry: services.memoryRegistry,
     integrationHelpers: services.integrationHelpers,
     automationManager: services.automationManager,
@@ -302,6 +303,16 @@ export function createBootstrapShell(options: BootstrapShellOptions): BootstrapS
     lastGitInfoRef.value = info;
     requestRender();
   }).catch(() => { /* non-fatal */ });
+  // W1.6 FIX 2: the header's git segment otherwise only refreshes on
+  // TURN_COMPLETED/TOOL_SUCCEEDED/TOOL_FAILED (see turn-event-wiring.ts's
+  // refreshGit()) — if the user runs `git init` externally and never submits
+  // another turn, the header stays stuck on the startup-time fallback
+  // indefinitely. Poll at the same 5s cadence GitPanel already uses for its
+  // own self-poll (git-panel.ts) so the two mechanisms are cadence-consistent.
+  gitStatusProvider.startPolling(5_000, (info) => {
+    lastGitInfoRef.value = info;
+    requestRender();
+  });
 
   const saveHistory = configManager.get('behavior.saveHistory') as boolean;
   const inputHistory = new InputHistory({

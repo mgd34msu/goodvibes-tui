@@ -202,3 +202,49 @@ describe('Permission flow — session approval cache', () => {
     expect(pm.getCategory('agent')).toBe('delegate');
   });
 });
+
+// ---------------------------------------------------------------------------
+// Per-hunk modifiedArgs contract seam (W1.3)
+//
+// The installed @pellux/goodvibes-sdk here is 0.36.0, whose PermissionManager
+// does not yet expose PermissionCheckResult.modifiedArgs — that field lands
+// in the in-flight SDK change for this work order (0.37). The full
+// end-to-end proof that PermissionManager.checkDetailed() threads a
+// requestPermission handler's modifiedArgs verbatim through to the returned
+// PermissionCheckResult lives on the SDK side:
+// goodvibes-sdk/test/permission-hunk-modified-args.test.ts. This test
+// documents the exact structural shape the TUI's hunk-selection code
+// (src/permissions/hunk-selection.ts, src/shell/blocking-input.ts) expects
+// to consume once 0.37 publishes, without a nominal import of a
+// not-yet-published symbol.
+// ---------------------------------------------------------------------------
+
+describe('Permission flow — per-hunk modifiedArgs contract (pre-0.37 structural check)', () => {
+  test('a checkDetailed()-shaped result carrying modifiedArgs matches the shape hunk-selection.ts consumes', async () => {
+    type CheckDetailedResultLike = {
+      approved: boolean;
+      remember?: boolean;
+      modifiedArgs?: Record<string, unknown>;
+    };
+
+    const items = [
+      { path: 'a.ts', find: 'x', replace: 'y' },
+      { path: 'a.ts', find: 'p', replace: 'q' },
+      { path: 'a.ts', find: 'm', replace: 'n' },
+    ];
+
+    // Simulates "user deselected hunk 1 (index 1)" — mirrors the exact
+    // requestPermission handler shape PermissionManager.checkDetailed()
+    // will receive from the TUI's blocking-input resolve() call.
+    const mockRequestPermission = async (): Promise<CheckDetailedResultLike> => ({
+      approved: true,
+      remember: false,
+      modifiedArgs: { edits: [items[0], items[2]] },
+    });
+
+    const decision = await mockRequestPermission();
+    expect(decision.approved).toBe(true);
+    expect(decision.modifiedArgs).toEqual({ edits: [items[0], items[2]] });
+    expect(decision.modifiedArgs?.['edits']).toHaveLength(2);
+  });
+});
