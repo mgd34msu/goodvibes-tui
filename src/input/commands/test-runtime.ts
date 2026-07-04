@@ -1,0 +1,219 @@
+import { loadPackageScripts, getSkippedGateReason } from '@pellux/goodvibes-sdk/platform/agents';
+import type { ToolCall } from '@pellux/goodvibes-sdk/platform/types';
+import type { CommandContext, CommandRegistry } from '../command-registry.ts';
+import { requireShellPaths } from './runtime-services.ts';
+
+/**
+ * Timeout for a /test run, in milliseconds. Deliberately much longer than
+ * WRFC's WRFC_GATE_TIMEOUT_MS (120s, tuned for CI gates) — this repo's own
+ * suite is 600+ test files (scripts/run-tests.ts), and /test is an
+ * interactive command with no other caller waiting on it.
+ *
+ * Exported (rather than a private const) so tests can pass a shorter override
+ * straight through to runTestCommand's optional third parameter instead of
+ * waiting out the real timeout.
+ */
+export const TEST_RUN_TIMEOUT_MS = 300_000;
+
+/** How often buffered stdout/stderr lines are flushed to the transcript during
+ * a run. Batching avoids hammering the transcript.append_one perf budget
+ * (6ms, scripts/perf-baseline.json) with one ctx.print() call per output line. */
+const STREAM_FLUSH_INTERVAL_MS = 250;
+
+/** Cap on individually-listed failing test file names before truncating. */
+const MAX_FAILING_NAMES_SHOWN = 20;
+
+/** Lines of raw output shown when structured results could not be parsed. */
+const RAW_TAIL_LINES = 30;
+
+const FAIL_LINE_RE = /^==> (.+?)\s+\[FAIL\]$/gm;
+const SUMMARY_LINE_RE = /^Test files: (\d+), passed: (\d+), failed: (\d+)$/m;
+
+interface ParsedTestResults {
+  totalFiles: number;
+  passed: number;
+  failed: number;
+  failingFiles: string[];
+}
+
+/**
+ * Parse this repo's own scripts/run-tests.ts output shape:
+ *   per-file:  `==> path/to/file.test.ts  [FAIL]` (only present on failure)
+ *   summary:   `Test files: N, passed: P, failed: F`
+ * Returns null when the summary line isn't present at all — the fallback
+ * path (raw tail, no fabricated counts) covers a different project's
+ * jest/vitest/pytest output, or any run that bypassed run-tests.ts.
+ */
+export function parseTestOutput(output: string): ParsedTestResults | null {
+  const summaryMatch = SUMMARY_LINE_RE.exec(output);
+  if (!summaryMatch) return null;
+  const failingFiles: string[] = [];
+  FAIL_LINE_RE.lastIndex = 0;
+  let match: RegExpExecArray | null;
+  while ((match = FAIL_LINE_RE.exec(output)) !== null) {
+    failingFiles.push(match[1]!);
+  }
+  return {
+    totalFiles: Number(summaryMatch[1]),
+    passed: Number(summaryMatch[2]),
+    failed: Number(summaryMatch[3]),
+    failingFiles,
+  };
+}
+
+/**
+ * Single-quote shell-escape a value for safe interpolation into a
+ * `/bin/sh -c` string: wrap in single quotes, turning any embedded single
+ * quote into `'\''` (close quote, escaped literal quote, reopen quote).
+ * Mirrors the injection-risk class already present in the SDK's
+ * wrfc-gates.ts (executeGateCommand) and this repo's git-runtime.ts /
+ * diff-runtime.ts, which build shell command strings the same way — a
+ * pattern arg is never string-concatenated into the command raw.
+ */
+export function shQuote(value: string): string {
+  return `'${value.replace(/'/g, `'\\''`)}'`;
+}
+
+/** Reads a ReadableStream<Uint8Array> incrementally, decoding and forwarding
+ * each chunk of text as it arrives (display-only accumulation happens in the
+ * caller; this just pumps the stream to completion). */
+async function pumpStream(
+  stream: ReadableStream<Uint8Array> | undefined,
+  onChunk: (text: string) => void,
+): Promise<void> {
+  if (!stream) return;
+  const decoder = new TextDecoder();
+  for await (const chunk of stream) {
+    onChunk(decoder.decode(chunk, { stream: true }));
+  }
+}
+
+export function registerTestRuntimeCommands(registry: CommandRegistry): void {
+  registry.register({
+    name: 'test',
+    aliases: [],
+    description: 'Run the project test script and show pass/fail results',
+    usage: '[pattern]',
+    argsHint: '[pattern]',
+    async handler(args, ctx) {
+      await runTestCommand(args, ctx);
+    },
+  });
+}
+
+/**
+ * Core /test implementation, factored out of the registered handler so tests
+ * can call it directly with a shortened `timeoutMs` override (the timeout
+ * path would otherwise take TEST_RUN_TIMEOUT_MS to exercise).
+ */
+export async function runTestCommand(
+  args: string[],
+  ctx: CommandContext,
+  timeoutMs: number = TEST_RUN_TIMEOUT_MS,
+): Promise<void> {
+  const cwd = requireShellPaths(ctx).workingDirectory;
+  const pkgScripts = await loadPackageScripts(cwd);
+  const skip = getSkippedGateReason('test', cwd, pkgScripts);
+  if (skip) {
+    ctx.print(skip);
+    return;
+  }
+
+  const pattern = args.length > 0 ? args.join(' ') : undefined;
+  const command = args.length > 0
+    ? `${pkgScripts.test} ${args.map(shQuote).join(' ')}`
+    : pkgScripts.test!;
+  const toolCall: ToolCall = { id: 'test-run', name: 'test', arguments: pattern ? { pattern } : {} };
+
+  ctx.print(`Running: ${command}`);
+
+  const startedAt = Date.now();
+  const proc = Bun.spawn(['/bin/sh', '-c', command], { cwd, stdout: 'pipe', stderr: 'pipe' });
+
+  let timedOut = false;
+  const timer = setTimeout(() => {
+    timedOut = true;
+    proc.kill();
+  }, timeoutMs);
+  timer.unref?.();
+
+  let combinedOutput = '';
+  let pendingDisplay = '';
+  const appendChunk = (text: string): void => {
+    combinedOutput += text;
+    pendingDisplay += text;
+  };
+  const flushDisplay = (force = false): void => {
+    if (!pendingDisplay) return;
+    if (force) {
+      ctx.print(pendingDisplay);
+      pendingDisplay = '';
+      return;
+    }
+    const lastNewline = pendingDisplay.lastIndexOf('\n');
+    if (lastNewline === -1) return; // no complete line buffered yet
+    const toPrint = pendingDisplay.slice(0, lastNewline);
+    pendingDisplay = pendingDisplay.slice(lastNewline + 1);
+    if (toPrint) ctx.print(toPrint);
+  };
+  const flushTimer = setInterval(() => flushDisplay(false), STREAM_FLUSH_INTERVAL_MS);
+
+  let exitCode: number;
+  try {
+    [exitCode] = await Promise.all([
+      proc.exited,
+      pumpStream(proc.stdout, appendChunk),
+      pumpStream(proc.stderr, appendChunk),
+    ]);
+  } finally {
+    clearTimeout(timer);
+    clearInterval(flushTimer);
+  }
+
+  const durationMs = Date.now() - startedAt;
+
+  if (timedOut) {
+    flushDisplay(true);
+    const timeoutSeconds = Math.round(timeoutMs / 1000);
+    ctx.print(`Test run timed out after ${timeoutSeconds}s and was killed.`);
+    ctx.session.conversationManager.logToolResultBlock(
+      toolCall,
+      'error',
+      'timed out',
+      durationMs,
+      `timed out after ${timeoutSeconds}s`,
+    );
+    ctx.renderRequest();
+    return;
+  }
+
+  flushDisplay(true);
+
+  const ok = exitCode === 0;
+  const parsed = parseTestOutput(combinedOutput);
+
+  if (parsed) {
+    const summary = `${parsed.passed}/${parsed.totalFiles} files passed`;
+    const errorMsg = ok ? undefined : `${parsed.failed} file${parsed.failed === 1 ? '' : 's'} failed`;
+    ctx.session.conversationManager.logToolResultBlock(toolCall, ok ? 'done' : 'error', summary, durationMs, errorMsg);
+    if (parsed.failingFiles.length > 0) {
+      const shown = parsed.failingFiles.slice(0, MAX_FAILING_NAMES_SHOWN);
+      const lines = ['Failing test files:', ...shown.map((f) => `  - ${f}`)];
+      const remaining = parsed.failingFiles.length - shown.length;
+      if (remaining > 0) lines.push(`  ...and ${remaining} more`);
+      ctx.print(lines.join('\n'));
+    }
+  } else {
+    ctx.session.conversationManager.logToolResultBlock(
+      toolCall,
+      ok ? 'done' : 'error',
+      `exit code ${exitCode}`,
+      durationMs,
+      ok ? undefined : `exit code ${exitCode}`,
+    );
+    const tail = combinedOutput.split('\n').slice(-RAW_TAIL_LINES).join('\n');
+    ctx.print(`(could not parse structured test results; showing raw tail)\n${tail}`);
+  }
+
+  ctx.renderRequest();
+}
