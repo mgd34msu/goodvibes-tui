@@ -102,7 +102,10 @@ export interface ConfigModalAction {
   /**
    * Trigger key: a single printable char ('r', 'd') or a named key ('enter').
    * Must not collide with the host-reserved nav keys (up/down/left/right/tab/
-   * j/k/escape) — those are consumed by the host before actions are consulted.
+   * j/k/escape/'/') — those are consumed by the host before actions are
+   * consulted. '/' arms the host's type-to-filter (DEBT-5 item 1); while
+   * filtering, EVERY printable key (not just j/k) is captured by the query
+   * instead of firing an action — see handleConfigModalToken.
    */
   readonly key: string;
   /** Action id passed to `onAction`. */
