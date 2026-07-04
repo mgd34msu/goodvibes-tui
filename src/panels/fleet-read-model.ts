@@ -88,6 +88,10 @@ const STATE_GLYPHS: Record<ProcessState, string> = {
   interrupted: '◌',
   idle: '·',
   queued: '…',
+  // Wave-6 SDK: schedules/triggers/automation jobs report 'paused' when
+  // disabled (previously mislabeled 'killed'). NOT terminal — resumable.
+  // '❚' verified free against every other glyph in this table.
+  paused: '❚',
 };
 
 const STATE_TONES: Record<ProcessState, FleetStateTone> = {
@@ -105,6 +109,8 @@ const STATE_TONES: Record<ProcessState, FleetStateTone> = {
   interrupted: 'warn',
   idle: 'muted',
   queued: 'muted',
+  // Deliberately parked by the operator: neutral, not alarming.
+  paused: 'muted',
 };
 
 /** Terminal states — interrupt/kill are not offered; not counted as running. */

@@ -32,6 +32,7 @@ import { logger } from '@pellux/goodvibes-sdk/platform/utils';
 import { registerBuiltinPanels } from './panels/builtin-panels.ts';
 import { bootstrapRuntime } from './runtime/bootstrap.ts';
 import type { BootstrapContext } from './runtime/bootstrap.ts';
+import { buildSharedOrchestratorCoreServices } from './runtime/orchestrator-core-services.ts';
 import type { HITLMode } from '@pellux/goodvibes-sdk/platform/state';
 import {
   checkRecoveryFile,
@@ -112,15 +113,11 @@ async function main() {
   const { approvalBroker, agentManager, modeManager, processManager, providerRegistry, secretsManager, subscriptionManager } = ctx.services;
   conversation.setSessionMemoryStore(ctx.services.sessionMemoryStore);
   conversation.setSessionLineageTracker(ctx.services.sessionLineageTracker);
+  // Shared payload (single source of truth, includes wo805's memoryRegistry —
+  // see orchestrator-core-services.ts) plus this site's favoritesStore.
   orchestrator.setCoreServices({
-    configManager,
-    providerRegistry,
+    ...buildSharedOrchestratorCoreServices({ services: ctx.services, configManager, providerRegistry }),
     favoritesStore: ctx.services.favoritesStore,
-    planManager: ctx.services.planManager,
-    adaptivePlanner: ctx.services.adaptivePlanner,
-    sessionMemoryStore: ctx.services.sessionMemoryStore,
-    sessionLineageTracker: ctx.services.sessionLineageTracker,
-    idempotencyStore: ctx.services.idempotencyStore,
   });
   ctx.services.wrfcController.setPlanManager(ctx.services.planManager);
   let activeConversationWidth = stdout.columns || 80;
