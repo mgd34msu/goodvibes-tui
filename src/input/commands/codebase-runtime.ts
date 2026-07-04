@@ -20,7 +20,7 @@
 
 import type { CodeIndexStats, CodeContextResult } from '@pellux/goodvibes-sdk/platform/state';
 import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
-import { isCodeIndexAutoStartEnabled, CODE_INDEX_MAX_FILES, CODE_INDEX_MAX_FILE_BYTES } from '../../runtime/code-index-services.ts';
+import { isCodeIndexAutoStartEnabled, CODE_INDEX_MAX_FILES, CODE_INDEX_MAX_FILE_BYTES, CODE_INDEX_MAX_TOTAL_BYTES } from '../../runtime/code-index-services.ts';
 import type { CommandContext, CommandRegistry } from '../command-registry.ts';
 
 // ---------------------------------------------------------------------------
@@ -48,7 +48,16 @@ function renderCodeIndexStatus(stats: CodeIndexStats, configManager: Pick<Config
   lines.push(
     `  auto-build on startup: ${autoStart ? 'on' : 'off'} (storage.codeIndexEnabled, default off — /config to change)`,
   );
-  lines.push(`  bounds: max ${CODE_INDEX_MAX_FILES} files, ${formatBytes(CODE_INDEX_MAX_FILE_BYTES)} per file`);
+  lines.push(
+    `  bounds: max ${CODE_INDEX_MAX_FILES} files (maxFiles), ${formatBytes(CODE_INDEX_MAX_FILE_BYTES)} per file (maxFileBytes),`
+    + ` ${formatBytes(CODE_INDEX_MAX_TOTAL_BYTES)} total per build (maxTotalBytes)`,
+  );
+  // Provider-space honesty (SDK finding): vectors embedded under a different
+  // provider than the current default disable the vector search path until a
+  // rebuild re-embeds — say so, in the store's own words.
+  if (stats.embeddingProviderMismatch) {
+    lines.push(`  provider mismatch: ${stats.embeddingProviderMismatch} (vector search disabled — lexical fallback only)`);
+  }
 
   if (stats.building) {
     lines.push('  build: in progress');
@@ -56,12 +65,13 @@ function renderCodeIndexStatus(stats: CodeIndexStats, configManager: Pick<Config
     const b = stats.lastBuild;
     lines.push(
       `  last build: ${b.filesIndexed} indexed, ${b.filesUnchanged} unchanged, ${b.filesRemoved} removed,`
-      + ` ${b.chunksIndexed} chunk(s), ${b.durationMs}ms`,
+      + ` ${b.chunksIndexed} chunk(s) embedded (${b.chunksUnchanged} unchanged), ${b.durationMs}ms`,
     );
     const skip = b.skip;
     const skipParts: string[] = [];
     if (skip.tooLarge) skipParts.push(`${skip.tooLarge} too large`);
-    if (skip.overCap) skipParts.push(`${skip.overCap} over cap`);
+    if (skip.overFileCap) skipParts.push(`${skip.overFileCap} over file cap (maxFiles)`);
+    if (skip.overTotalBytes) skipParts.push(`${skip.overTotalBytes} over total byte budget (maxTotalBytes)`);
     if (skip.binary) skipParts.push(`${skip.binary} binary`);
     if (skip.ignoredByGitignore) skipParts.push(`${skip.ignoredByGitignore} gitignored`);
     if (skip.readErrors) skipParts.push(`${skip.readErrors} read error(s)`);
