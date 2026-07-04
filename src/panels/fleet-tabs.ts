@@ -32,6 +32,49 @@ export function isAttachableFleetKind(kind: ProcessKind): kind is FleetAttachabl
 }
 
 /**
+ * Wave-3 (W3.2 steering) — lifecycle of a queued steer message, tracked
+ * per-tab. `queued` means `ProcessRegistry.steer()` accepted the message
+ * onto the target's inbox, NOT that the agent has seen it — that is the
+ * later, honest `consumed` transition (a `COMMUNICATION_CONSUMED` runtime-bus
+ * event matching this badge's `messageId`). `dropped` is a TUI-side
+ * inference: the SDK emits no "expired"/"cancelled" signal for a queued
+ * steer, so if the target node goes terminal (done/failed/killed/
+ * interrupted) while the badge is still `queued`, FleetPanel resolves it to
+ * `dropped` itself rather than leaving the badge hanging forever (see
+ * fleet-panel.ts reconcileSteerBadges — cross-WO note: the SDK engineer
+ * confirmed no dropped signal exists).
+ */
+export type SteerBadgeStatus = 'queued' | 'consumed' | 'dropped';
+
+/** A tab's steer-message badge state (null on the tab = no active/recent steer). */
+export interface SteerBadge {
+  readonly messageId: string;
+  readonly status: SteerBadgeStatus;
+  /** Present for 'dropped' — a one-line honest explanation shown in the tab. */
+  readonly note?: string;
+  /** epoch ms when status left 'queued' (consumed or dropped) — drives FleetPanel's linger-then-clear tick. */
+  readonly resolvedAt?: number;
+}
+
+/**
+ * Append one character of steer-composer input to a draft, normalizing a
+ * pasted multi-line block's line breaks (terminals transmit bracketed-paste
+ * newlines as literal `\r`/`\n` characters delivered one at a time through
+ * the same per-char burst pipeline as ordinary typing — see
+ * handler-feed-routes.ts's isCapturingTextBurst contract) to a single
+ * collapsed space instead of either corrupting the one-line field with a
+ * raw control character or silently dropping the content. Mirrors how a
+ * plain single-line text input normalizes pasted newlines to whitespace.
+ */
+export function appendSteerText(draft: string, ch: string): string {
+  if (ch === '\r' || ch === '\n') {
+    if (draft.length === 0 || draft.endsWith(' ')) return draft;
+    return `${draft} `;
+  }
+  return draft + ch;
+}
+
+/**
  * One attached session tab. `agentId` is the SDK attach handle for
  * `AgentManager.getConversationSnapshot(agentId)` — populated only for
  * 'agent' tabs (agent.ts sets ProcessNode.id = record.id, so node.id IS the
@@ -62,6 +105,16 @@ export interface FleetTab {
    */
   ledgerEntries: Record<string, unknown>[] | null;
   ledgerLoadStarted: boolean;
+  /**
+   * Wave-3 (W3.2): the one-line steer composer's in-progress text, or `null`
+   * when not composing. Mirrors git-panel.ts's `commitMessage` mutable-slot
+   * convention (FleetPanel.isCapturingTextBurst() gates on this being
+   * non-null so a burst/paste lands here char-by-char, never as tree/tab
+   * hotkeys — see FleetPanel.handleSteerInput).
+   */
+  steerDraft: string | null;
+  /** Wave-3 (W3.2): this tab's most recent steer message's lifecycle, or null. */
+  steerBadge: SteerBadge | null;
 }
 
 /** Immutable tab-bar state: the attached tabs plus which one (or the root tree) is active. */
@@ -94,6 +147,8 @@ function makeFleetTab(node: ProcessNode & { kind: FleetAttachableKind }): FleetT
     lineCache: new MessageLineCache(),
     ledgerEntries: null,
     ledgerLoadStarted: false,
+    steerDraft: null,
+    steerBadge: null,
   };
 }
 
