@@ -7,6 +7,7 @@ import type {
   BenchmarkSort,
   CapabilityFilter,
   CategoryFilter,
+  EmbeddingProviderPickerEntry,
   FilteredModelsCache,
   FilteredProvidersCache,
   GroupByMode,
@@ -40,6 +41,7 @@ export type {
   BenchmarkSort,
   CapabilityFilter,
   CategoryFilter,
+  EmbeddingProviderPickerEntry,
   GroupByMode,
   ModelFamily,
   ModelPickerFocusPane,
@@ -86,6 +88,10 @@ export class ModelPickerModal {
   public models: ModelDefinition[] = [];
   public providers: string[] = [];
   public effortLevels: string[] = [];
+  /** Entries for PickerMode 'embeddingProvider' — the 'embeddings' target's own tiny item list. */
+  public embeddingProviders: EmbeddingProviderPickerEntry[] = [];
+  /** Mode to restore when navigating the targets rail away from 'embeddings'. */
+  private nonEmbeddingMode: PickerMode = 'model';
   /** The model chosen in model-mode, awaiting effort selection. */
   public pendingModel: ModelDefinition | null = null;
   /** The model awaiting context cap input (contextCap mode). */
@@ -148,9 +154,20 @@ export class ModelPickerModal {
   }
 
   setTarget(target: ModelPickerTarget): void {
+    const previousTarget = this.target;
     this.target = target;
     const idx = this.targetInfos.findIndex((entry) => entry.target === target);
     this.targetIndex = idx >= 0 ? idx : this.targetIndex;
+    // The 'embeddings' target routes through its own tiny item-list mode
+    // (embedding providers are not ModelDefinition-shaped) rather than
+    // whatever LLM mode the picker session was already in. Remember the
+    // mode we came from so tabbing back to another target restores it.
+    if (target === 'embeddings' && this.mode !== 'embeddingProvider') {
+      this.nonEmbeddingMode = this.mode;
+      this.mode = 'embeddingProvider';
+    } else if (previousTarget === 'embeddings' && target !== 'embeddings' && this.mode === 'embeddingProvider') {
+      this.mode = this.nonEmbeddingMode;
+    }
     this.alignSelectionToTarget();
   }
 
@@ -169,6 +186,13 @@ export class ModelPickerModal {
       const models = this.getFilteredModels();
       const modelIdx = models.findIndex((model) => model.registryKey === info.model || model.id === info.model);
       this.selectedIndex = modelIdx >= 0 ? modelIdx : 0;
+      this.scrollOffset = 0;
+      this._scrollToSelection(20);
+      return;
+    }
+    if (this.mode === 'embeddingProvider') {
+      const providerIdx = this.embeddingProviders.findIndex((provider) => provider.id === info.provider);
+      this.selectedIndex = providerIdx >= 0 ? providerIdx : 0;
       this.scrollOffset = 0;
       this._scrollToSelection(20);
     }
@@ -273,6 +297,27 @@ export class ModelPickerModal {
     this.scrollOffset = 0;
   }
 
+  /**
+   * Open the embedding-provider list — entry point for the 'embeddings' target.
+   * Deliberately NOT routed through openAllModels (ModelDefinition-shaped) or
+   * openProviders (LLM-provider label resolution) — embedding providers are a
+   * flat {id, label, dimensions, configured} list with no model concept, and
+   * reusing either existing opener would mislabel or drop unrecognized ids.
+   */
+  openEmbeddingProviders(providers: EmbeddingProviderPickerEntry[], currentId: string): void {
+    this.previousMode = null;
+    this.embeddingProviders = providers;
+    this.mode = 'embeddingProvider';
+    this.active = true;
+    this.pendingModel = null;
+    this.focusPane = 'items';
+    this.searchFocused = false;
+    this.query = '';
+    const idx = providers.findIndex((provider) => provider.id === currentId);
+    this.selectedIndex = idx >= 0 ? idx : 0;
+    this.scrollOffset = 0;
+  }
+
   /** Transition to model list filtered by provider (called from provider mode Enter). */
   showModelsForProvider(models: ModelDefinition[], _provider: string): void {
     this.previousMode = 'provider';
@@ -311,6 +356,8 @@ export class ModelPickerModal {
     this.targetIndex = 0;
     this.models = [];
     this.providers = [];
+    this.embeddingProviders = [];
+    this.nonEmbeddingMode = 'model';
     this.pendingModel = null;
     this.contextCapPendingModel = null;
     this.contextCapQuery = '';
@@ -473,6 +520,16 @@ export class ModelPickerModal {
       this.providerItemsCache = cache;
       return result;
     }
+    if (this.mode === 'embeddingProvider') {
+      // Tiny list (typically 2-4 entries) — no caching infrastructure needed.
+      // Unconfigured providers are shown honestly (isConfigured: false), never hidden.
+      return this.embeddingProviders.map((provider) => ({
+        id: provider.id,
+        label: provider.label,
+        detail: `${provider.dimensions}d${provider.configured ? '' : ' · unconfigured'}`,
+        isConfigured: provider.configured,
+      }));
+    }
     // effort mode
     return buildEffortItems(this.effortLevels);
   }
@@ -481,6 +538,7 @@ export class ModelPickerModal {
   getItemCount(): number {
     if (this.mode === 'model') return this.getFilteredModels().length;
     if (this.mode === 'provider') return this.getFilteredProviders().length;
+    if (this.mode === 'embeddingProvider') return this.embeddingProviders.length;
     return this.effortLevels.length;
   }
 

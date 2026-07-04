@@ -124,6 +124,10 @@ function modelKey(model: ModelDefinition): string {
 
 function targetSummary(info: ModelPickerTargetInfo): string {
   if (!info.enabled) return 'disabled';
+  // 'embeddings' has no model concept — configuredNote carries the honest
+  // provider id + dimensions + configured-state summary instead of a
+  // computed provider:model route (which would print a phantom "model:").
+  if (info.configuredNote) return info.configuredNote;
   const route = formatRoute(info.provider, info.model);
   if (info.inherited) return `inherits ${route}`;
   return route;
@@ -145,6 +149,7 @@ function targetLabelFor(target: string): string {
   if (target === 'helper') return 'Helper Model';
   if (target === 'tool') return 'Tool LLM';
   if (target === 'tts') return 'TTS LLM';
+  if (target === 'embeddings') return 'Embeddings';
   return 'Main Chat';
 }
 
@@ -174,6 +179,13 @@ function detailLines(picker: ModelPickerModal, width: number): string[] {
     }
   } else if (picker.mode === 'effort') {
     lines.push(`Reasoning effort applies to the main chat model. Select the default effort for this model.`);
+  } else if (picker.mode === 'embeddingProvider') {
+    lines.push('Embedding provider selection: choose the provider memory search and the code index use to embed content.');
+    const selectedEmbedding = picker.embeddingProviders[picker.selectedIndex];
+    if (selectedEmbedding) {
+      const status = selectedEmbedding.configured ? 'configured' : 'unconfigured';
+      lines.push(`Selected: ${selectedEmbedding.id} | ${selectedEmbedding.dimensions} dimensions | ${status}${selectedEmbedding.detail ? ` | ${selectedEmbedding.detail}` : ''}`);
+    }
   } else {
     lines.push(`Context cap overrides the detected local-model context window for this selection.`);
   }
@@ -288,6 +300,28 @@ function renderContextCapRows(picker: ModelPickerModal, lines: Line[], rows: num
   }
 }
 
+function renderEmbeddingProviderRows(picker: ModelPickerModal, lines: Line[], rows: number, startX: number, width: number): void {
+  const providers = picker.embeddingProviders;
+  const { start, end } = stableWindow(providers.length, picker.selectedIndex, rows);
+  for (let visibleRow = 0; visibleRow < rows; visibleRow += 1) {
+    const absolute = start + visibleRow;
+    const provider = providers[absolute];
+    const line = lines[visibleRow]!;
+    if (!provider) continue;
+    const selected = absolute === picker.selectedIndex;
+    const bg = selected ? PALETTE.selectedBg : PALETTE.bodyBg;
+    fillRange(line, startX, startX + width - 1, bg);
+    const marker = selected ? (picker.focusPane === 'items' ? GLYPHS.navigation.selected : '•') : ' ';
+    const status = provider.configured ? 'configured' : 'unconfigured';
+    writeText(line, startX + 1, width, padDisplay(marker, 2), { fg: PALETTE.text, bg, bold: selected });
+    writeText(line, startX + 3, Math.max(0, width - 30), padDisplay(provider.label, Math.max(0, width - 30)), { fg: selected ? PALETTE.text : PALETTE.muted, bg, bold: selected });
+    writeText(line, startX + Math.max(4, width - 25), 12, padDisplay(`${provider.dimensions}d`, 12), { fg: PALETTE.dim, bg });
+    writeText(line, startX + Math.max(4, width - 13), 12, padDisplay(status, 12), { fg: provider.configured ? PALETTE.good : PALETTE.warn, bg });
+  }
+  if (start > 0 && lines[0]) writeText(lines[0], startX + 1, width - 2, `${GLYPHS.navigation.moreAbove} ${start} more provider(s) above`, { fg: PALETTE.dim, bg: PALETTE.bodyBg, dim: true });
+  if (end < providers.length && lines[rows - 1]) writeText(lines[rows - 1]!, startX + 1, width - 2, `${GLYPHS.navigation.moreBelow} ${providers.length - end} more provider(s) below`, { fg: PALETTE.dim, bg: PALETTE.bodyBg, dim: true });
+}
+
 function writeTableHeader(line: Line, picker: ModelPickerModal, startX: number, width: number): void {
   fillRange(line, startX, startX + width - 1, PALETTE.footerBg);
   const style = { fg: PALETTE.muted, bg: PALETTE.footerBg, bold: true };
@@ -301,6 +335,10 @@ function writeTableHeader(line: Line, picker: ModelPickerModal, startX: number, 
   }
   if (picker.mode === 'contextCap') {
     writeText(line, startX + 1, width - 2, 'Context cap input', style);
+    return;
+  }
+  if (picker.mode === 'embeddingProvider') {
+    writeText(line, startX + 1, width - 2, 'Embedding provider                Dimensions   Status', style);
     return;
   }
   const providerW = clamp(Math.floor(width * 0.14), 10, 18);
@@ -337,7 +375,7 @@ export function renderModelWorkspace(picker: ModelPickerModal, width: number, vi
   const header = contentLine(safeWidth, PALETTE.footerBg);
   writeText(header, 2, targetW - 2, 'Targets', { fg: PALETTE.subtitle, bold: true, bg: PALETTE.footerBg });
   drawVertical(header, targetW, PALETTE.footerBg);
-  const modeLabel = picker.mode === 'provider' ? 'Provider list' : picker.mode === 'model' ? 'Model list' : picker.mode === 'effort' ? 'Reasoning effort' : 'Context cap';
+  const modeLabel = picker.mode === 'provider' ? 'Provider list' : picker.mode === 'model' ? 'Model list' : picker.mode === 'effort' ? 'Reasoning effort' : picker.mode === 'embeddingProvider' ? 'Embedding providers' : 'Context cap';
   writeText(header, contentX + 1, contentW - 2, `${modeLabel}  •  ${picker.getItemCount()} item(s)`, { fg: PALETTE.subtitle, bold: true, bg: PALETTE.footerBg });
   lines.push(header);
 
@@ -380,6 +418,8 @@ export function renderModelWorkspace(picker: ModelPickerModal, width: number, vi
     renderModelRows(picker, listLines, listLines.length, contentX, contentW - 1);
   } else if (picker.mode === 'contextCap') {
     renderContextCapRows(picker, listLines, listLines.length, contentX, contentW - 1);
+  } else if (picker.mode === 'embeddingProvider') {
+    renderEmbeddingProviderRows(picker, listLines, listLines.length, contentX, contentW - 1);
   } else {
     renderEffortRows(picker, listLines, listLines.length, contentX, contentW - 1);
   }
@@ -432,6 +472,8 @@ function getRenderCacheKey(picker: ModelPickerModal, width: number, viewportHeig
     base.push(objectId(picker.effortLevels), picker.effortLevels.join('\u001f'), picker.pendingModel?.registryKey ?? picker.pendingModel?.id ?? '');
   } else if (picker.mode === 'contextCap') {
     base.push(picker.contextCapQuery, picker.contextCapPendingModel?.registryKey ?? picker.contextCapPendingModel?.id ?? '');
+  } else if (picker.mode === 'embeddingProvider') {
+    base.push(objectId(picker.embeddingProviders), picker.embeddingProviders.length);
   }
 
   return base.join('\u001e');
@@ -467,6 +509,7 @@ function keyForTargets(values: readonly ModelPickerTargetInfo[]): string {
       entry.model,
       entry.enabled ? 1 : 0,
       entry.inherited ? 1 : 0,
+      entry.configuredNote ?? '',
     ].join('\u001d'))
     .join('\u001f');
 }

@@ -93,6 +93,13 @@ export function handleModelPickerToken(state: ModelPickerRouteState, token: Inpu
         }
         state.modelPicker.close();
         if (state.modalStack[state.modalStack.length - 1] === 'modelPicker') state.modalStack.pop();
+      } else if (mode === 'embeddingProvider') {
+        const selectedProvider = state.modelPicker.embeddingProviders[idx];
+        if (selectedProvider) {
+          state.commandContext?.completeEmbeddingProviderSelection?.(selectedProvider.id);
+        }
+        state.modelPicker.close();
+        if (state.modalStack[state.modalStack.length - 1] === 'modelPicker') state.modalStack.pop();
       } else if (mode === 'contextCap') {
         const capModel = state.modelPicker.contextCapPendingModel;
         if (capModel) {
