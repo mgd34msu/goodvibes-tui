@@ -55,6 +55,7 @@ export interface UiPlatformServices {
   readonly tokenAuditor: RuntimeServices['tokenAuditor'];
   readonly replayEngine: RuntimeServices['replayEngine'];
   readonly webhookNotifier: RuntimeServices['webhookNotifier'];
+  readonly focusTracker: RuntimeServices['focusTracker'];
   readonly policyRuntimeState: RuntimeServices['policyRuntimeState'];
   readonly externalServices?: {
     inspect(): {
@@ -169,6 +170,7 @@ export function createUiRuntimeServices(
       tokenAuditor: runtimeServices.tokenAuditor,
       replayEngine: runtimeServices.replayEngine,
       webhookNotifier: runtimeServices.webhookNotifier,
+      focusTracker: runtimeServices.focusTracker,
       policyRuntimeState: runtimeServices.policyRuntimeState,
     },
     planning: {
