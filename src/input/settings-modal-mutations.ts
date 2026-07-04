@@ -113,13 +113,15 @@ export function persistFlagState(
   if (newState === 'killed') return; // never persist killed state
 
   try {
-    const current = (configManager.getCategory('featureFlags') as Record<string, PersistedFlagState>) ?? {};
     if (newState === defaultState) {
-      delete current[flagId];
+      // Back at the default: the override must be REMOVED, not merged.
+      // getCategory clones and mergeCategory only sets keys, so the old
+      // delete-then-merge approach left the stale override on disk and the
+      // flag silently reloaded in the overridden state on the next start.
+      configManager.removeCategoryKey('featureFlags', flagId);
     } else {
-      current[flagId] = newState;
+      configManager.mergeCategory('featureFlags', { [flagId]: newState } as Record<string, PersistedFlagState>);
     }
-    configManager.mergeCategory('featureFlags', current);
   } catch (e) {
     logger.error('SettingsModal: failed to persist flag state', { flagId, error: summarizeError(e) });
   }
