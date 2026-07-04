@@ -81,12 +81,35 @@ export function renderAutocompleteOverlay(
   }
   const endIdx = Math.min(startIdx + maxVisible, total);
 
+  // UX-C palette curation (item 4): on a bare '/' (query === ''), the results
+  // list is "common tier" (score 2) followed by "alphabetical rest" (score
+  // 1) — see CommandRegistry.fuzzyMatch. commonCount marks that boundary;
+  // draw a one-row separator there when it falls inside the visible window,
+  // consuming one of the maxVisible slots so the box height never changes.
+  const hasCommonSeparator = state.query === '' && state.commonCount > 0 && state.commonCount < total;
+  type DisplayRow = { type: 'item'; index: number } | { type: 'separator' };
+  const displayRows: DisplayRow[] = [];
+  for (let i = startIdx; i < endIdx && displayRows.length < maxVisible; i++) {
+    if (hasCommonSeparator && i === state.commonCount) {
+      displayRows.push({ type: 'separator' });
+      if (displayRows.length >= maxVisible) break;
+    }
+    displayRows.push({ type: 'item', index: i });
+  }
+
   const indicatorWidth = 2;
   const maxCommandWidth = Math.min(18, Math.max(10, Math.floor(layout.innerWidth * 0.28)));
   const gapWidth = 2;
   const descWidth = Math.max(0, layout.innerWidth - indicatorWidth - maxCommandWidth - gapWidth);
 
-  for (let i = startIdx; i < endIdx; i++) {
+  for (const row of displayRows) {
+    if (row.type === 'separator') {
+      const sepLine = createOverlayContentLine(width, layout);
+      putText(sepLine, layout.margin + 2, layout.innerWidth, '─'.repeat(layout.innerWidth), { fg: BORDER_FG, dim: true });
+      lines.push(sepLine);
+      continue;
+    }
+    const i = row.index;
     const { command } = results[i];
     const isSelected = i === state.selectedIndex;
     const line = createOverlayContentLine(width, layout, BORDER_FG, isSelected ? SELECTED_BG : '');
@@ -139,7 +162,10 @@ export function renderAutocompleteOverlay(
   }
 
   const footerLine = createOverlayContentLine(width, layout);
-  const hints = '[Tab] Complete  [Up/Down] Navigate  [Enter] Execute  [Esc] Cancel';
+  // UX-C vocab unification: "Run"/"Close" match the /help selection modal's
+  // hint bar (selection-modal-overlay.ts) — both surfaces execute a command
+  // on Enter, so they now say so the same way.
+  const hints = '[Tab] Complete  [Up/Down] Navigate  [Enter] Run  [Esc] Close';
   putText(
     footerLine,
     layout.margin + 2,

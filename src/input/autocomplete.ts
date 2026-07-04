@@ -1,4 +1,4 @@
-import type { SlashCommand } from './command-registry.ts';
+import { COMMON_COMMAND_NAMES, type SlashCommand } from './command-registry.ts';
 import type { CommandRegistry } from './command-registry.ts';
 
 /**
@@ -18,6 +18,14 @@ export interface AutocompleteState {
   query: string;
   results: AutocompleteResult[];
   selectedIndex: number;
+  /**
+   * UX-C (item 4): how many leading entries of `results` belong to the
+   * curated "common" tier — only meaningful when `query === ''` (0
+   * otherwise, since a typed filter searches everything and the common/rest
+   * split no longer applies). The renderer uses this to draw a separator
+   * before the alphabetical rest.
+   */
+  commonCount: number;
 }
 
 /**
@@ -35,6 +43,7 @@ export class AutocompleteEngine {
     query: '',
     results: [],
     selectedIndex: 0,
+    commonCount: 0,
   };
 
   constructor(private registry: CommandRegistry) {}
@@ -47,6 +56,22 @@ export class AutocompleteEngine {
     this.state.query = query;
     this.state.results = this.registry.fuzzyMatch(query);
     this.state.active = true;
+    // UX-C: fuzzyMatch('') sorts the curated common tier first (score 2),
+    // then the alphabetical rest (score 1) — both tiers alphabetical within
+    // themselves. Count the leading common run to tell the renderer where to
+    // draw the separator. A non-empty query means every command was scored on
+    // its actual match quality, not tier, so the common/rest split does not
+    // apply — the resulting 0 is not a real answer to "how many are common"
+    // and is unused because renderAutocompleteOverlay itself gates on the
+    // query string too, but zeroing here keeps the field internally honest.
+    let commonCount = 0;
+    if (query === '') {
+      for (const result of this.state.results) {
+        if (!COMMON_COMMAND_NAMES.has(result.command.name)) break;
+        commonCount++;
+      }
+    }
+    this.state.commonCount = commonCount;
     // Clamp selection to new result count
     if (this.state.selectedIndex >= this.state.results.length) {
       this.state.selectedIndex = Math.max(0, this.state.results.length - 1);
@@ -79,6 +104,7 @@ export class AutocompleteEngine {
       query: '',
       results: [],
       selectedIndex: 0,
+      commonCount: 0,
     };
   }
 
