@@ -15,6 +15,7 @@ import { registerOperatorRuntimeCommands } from './commands/operator-runtime.ts'
 import { registerPluginRuntimeCommands } from './commands/plugin-runtime.ts';
 import { registerDiffRuntimeCommands } from './commands/diff-runtime.ts';
 import { registerGitRuntimeCommands } from './commands/git-runtime.ts';
+import { registerTestRuntimeCommands } from './commands/test-runtime.ts';
 import { registerNotifyRuntimeCommands } from './commands/notify-runtime.ts';
 import { registerReplayRuntimeCommands } from './commands/replay-runtime.ts';
 import { registerShareRuntimeCommands } from './commands/share-runtime.ts';
@@ -69,6 +70,7 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
   registerPluginRuntimeCommands(registry);
   registerDiffRuntimeCommands(registry);
   registerGitRuntimeCommands(registry);
+  registerTestRuntimeCommands(registry);
   registerNotifyRuntimeCommands(registry);
   registerReplayRuntimeCommands(registry);
   registerShareRuntimeCommands(registry);
