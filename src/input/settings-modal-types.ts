@@ -11,6 +11,7 @@ export type SettingsCategory =
   | 'storage'
   | 'permissions'
   | 'orchestration'
+  | 'planner'
   | 'wrfc'
   | 'tools'
   | 'helper'
@@ -44,7 +45,7 @@ export const SETTINGS_CATEGORY_GROUPS: ReadonlyArray<{
   { label: 'AI Routing', categories: ['provider', 'subscriptions', 'helper', 'tools', 'tts'] },
   { label: 'Service & Network', categories: ['service', 'network', 'controlPlane', 'httpListener', 'web'] },
   { label: 'Surfaces & Cloud', categories: ['surfaces', 'mcp', 'cloudflare'] },
-  { label: 'Automation', categories: ['batch', 'automation', 'watchers', 'orchestration', 'wrfc'] },
+  { label: 'Automation', categories: ['batch', 'automation', 'watchers', 'orchestration', 'planner', 'wrfc'] },
   { label: 'Runtime & Data', categories: ['storage', 'sandbox', 'runtime', 'cache', 'telemetry'] },
   { label: 'Advanced', categories: ['flags', 'release', 'danger'] },
 ];

@@ -35,7 +35,16 @@ import {
   type OrchestrationEngine,
 } from '@pellux/goodvibes-sdk/platform/orchestration';
 export type { OrchestrationEngine } from '@pellux/goodvibes-sdk/platform/orchestration';
-import { AdaptivePlanner, type DecompositionGate, type PlannerInputs } from '@pellux/goodvibes-sdk/platform/core';
+import {
+  AdaptivePlanner,
+  decomposeGoal,
+  type DecompositionGate,
+  type DecompositionServiceConfig,
+  type DecomposeGoalResult,
+  type PlannerInputs,
+  type PlanProposal,
+} from '@pellux/goodvibes-sdk/platform/core';
+import { createAgentManagerDecompositionRunner } from '@pellux/goodvibes-sdk/platform/agents';
 import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import type { AgentManager } from '@pellux/goodvibes-sdk/platform/tools';
 import type { RuntimeEventBus } from '@/runtime/index.ts';
@@ -49,12 +58,31 @@ export interface WorkstreamServicesDeps {
   readonly projectRoot: string;
 }
 
+/**
+ * Honest provenance for how a draft's decomposition was produced. Derived from
+ * the SDK decomposition service's outcome so the draft render can state plainly
+ * whether a planning agent decomposed the goal, or the heuristic path did (and
+ * if so, why).
+ */
+export interface WorkstreamDraftProvenance {
+  readonly kind: 'agent' | 'heuristic-configured' | 'gate-declined' | 'fallback';
+  readonly itemCount: number;
+  readonly agentCostUsd?: number | undefined;
+  readonly agentTokens?: number | undefined;
+  readonly elapsedMs?: number | undefined;
+  readonly fallbackReason?: string | undefined;
+}
+
 /** A not-yet-launched /workstream proposal. See this file's header doc for why it lives here rather than on the engine. */
 export interface WorkstreamDraft {
   readonly id: string;
   task: string;
   spec: CreateWorkstreamInput;
   readonly gate: DecompositionGate;
+  /** The engine-agnostic decomposition proposal (model- or heuristic-produced). */
+  proposal: PlanProposal;
+  /** How that proposal came to be, for honest rendering. */
+  provenance: WorkstreamDraftProvenance;
   approved: boolean;
   readonly createdAt: number;
 }
@@ -62,11 +90,12 @@ export interface WorkstreamDraft {
 /** `ctx.session.workstreamEngine`'s real shape: the live engine plus the draft-proposal bookkeeping the engine itself has no concept of. */
 export interface WorkstreamCommandService {
   readonly engine: OrchestrationEngine;
-  proposeDraft(task: string): WorkstreamDraft;
+  /** Spawn a bounded read-only planning agent to decompose the goal (with automatic heuristic fallback), then hold the draft. Async because the planning agent is real. */
+  proposeDraft(task: string): Promise<WorkstreamDraft>;
   getDraft(id: string): WorkstreamDraft | undefined;
   listDrafts(): WorkstreamDraft[];
-  /** Re-derive a held draft's spec from a new task string. Clears any prior approval — an edit must be re-approved. */
-  editDraft(id: string, task: string): WorkstreamDraft | undefined;
+  /** Re-derive a held draft's spec + decomposition from a new task string. Clears any prior approval — an edit must be re-approved. */
+  editDraft(id: string, task: string): Promise<WorkstreamDraft | undefined>;
   approveDraft(id: string): WorkstreamDraft | undefined;
   removeDraft(id: string): boolean;
   /** Materialize an approved draft into a real, running Workstream (engine.createWorkstream + start), then drop the draft. Null when the draft is missing or not approved. */
@@ -95,12 +124,86 @@ function buildPlannerInputs(task: string): PlannerInputs {
   };
 }
 
+/**
+ * Read the planner decomposition config (mode + bounds) from the config
+ * manager, defensively defaulting anything missing or invalid. Real config
+ * always supplies the DEFAULT_CONFIG values; these fallbacks matter only for a
+ * partially-stubbed config manager, and guarantee finite positive bounds so a
+ * planning-agent poll can never loop forever on a NaN deadline.
+ */
+function readDecompositionConfig(configManager: Pick<ConfigManager, 'get'>): DecompositionServiceConfig {
+  const num = (value: unknown, fallback: number): number =>
+    typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : fallback;
+  return {
+    mode: configManager.get('planner.decomposition') === 'heuristic' ? 'heuristic' : 'agent',
+    bounds: {
+      maxTurns: num(configManager.get('planner.maxTurns'), 6),
+      tokenCeiling: num(configManager.get('planner.tokenCeiling'), 120_000),
+      wallTimeoutMs: num(configManager.get('planner.wallTimeoutMs'), 60_000),
+    },
+  };
+}
+
+/** Honest cost estimator: prices the planning agent's tokens only when the
+ *  session's default model is one we actually have pricing for; otherwise the
+ *  render falls back to a raw token count. Never throws. */
+function makeCostEstimator(configManager: Pick<ConfigManager, 'get'>): (usage: { inputTokens: number; outputTokens: number; cacheReadTokens?: number | undefined; cacheWriteTokens?: number | undefined }) => number | undefined {
+  return (usage) => {
+    try {
+      const model = configManager.get('provider.model') as unknown as string | undefined;
+      if (!model || !isModelPriced(model)) return undefined;
+      return calcSessionCost(usage.inputTokens, usage.outputTokens, usage.cacheReadTokens ?? 0, usage.cacheWriteTokens ?? 0, model);
+    } catch {
+      return undefined;
+    }
+  };
+}
+
+function toProvenance(result: DecomposeGoalResult): WorkstreamDraftProvenance {
+  const p = result.proposal;
+  const kind: WorkstreamDraftProvenance['kind'] =
+    result.outcome.kind === 'agent' ? 'agent'
+      : result.outcome.kind === 'heuristic-configured' ? 'heuristic-configured'
+        : result.outcome.kind === 'gate-declined' ? 'gate-declined'
+          : 'fallback';
+  return {
+    kind,
+    itemCount: p.workItems.length,
+    ...(p.agentCostUsd !== undefined ? { agentCostUsd: p.agentCostUsd } : {}),
+    ...(p.agentUsage ? { agentTokens: p.agentUsage.totalTokens } : {}),
+    ...(p.elapsedMs !== undefined ? { elapsedMs: p.elapsedMs } : {}),
+    ...(p.fallbackReason ? { fallbackReason: p.fallbackReason } : {}),
+  };
+}
+
 function createWorkstreamCommandService(
   engine: OrchestrationEngine,
   adaptivePlanner: AdaptivePlanner,
   configManager: Pick<ConfigManager, 'get' | 'getCategory'>,
+  agentManager: Pick<AgentManager, 'spawn' | 'getStatus' | 'cancel'>,
+  projectRoot: string,
 ): WorkstreamCommandService {
   const drafts = new Map<string, WorkstreamDraft>();
+
+  /**
+   * Run the SDK decomposition service: it spawns a bounded, read-only planning
+   * agent (which surfaces in the fleet like any agent — kill/steer reach it,
+   * and a kill lands as a 'cancelled' fallback) and validates its structured
+   * output, or falls back to the heuristic single-item path on any failure.
+   * The returned proposal is engine-agnostic; the launchable `spec` is still
+   * derived by `buildSpec` (see below).
+   */
+  async function decompose(task: string): Promise<DecomposeGoalResult> {
+    const runner = createAgentManagerDecompositionRunner({ agentManager });
+    return decomposeGoal(
+      { goal: task, workingDir: projectRoot, constraints: {} },
+      adaptivePlanner,
+      buildPlannerInputs(task),
+      readDecompositionConfig(configManager),
+      runner,
+      { estimateCostUsd: makeCostEstimator(configManager) },
+    );
+  }
 
   /**
    * fromChainSpec is the SDK's own bridge from "a task string" to a real,
@@ -123,13 +226,15 @@ function createWorkstreamCommandService(
 
   return {
     engine,
-    proposeDraft(task: string): WorkstreamDraft {
-      const { gate } = adaptivePlanner.proposeWorkstream(buildPlannerInputs(task));
+    async proposeDraft(task: string): Promise<WorkstreamDraft> {
+      const result = await decompose(task);
       const draft: WorkstreamDraft = {
         id: `wsd_${crypto.randomUUID().slice(0, 8)}`,
         task,
         spec: buildSpec(task),
-        gate,
+        gate: result.gate,
+        proposal: result.proposal,
+        provenance: toProvenance(result),
         approved: false,
         createdAt: Date.now(),
       };
@@ -138,11 +243,14 @@ function createWorkstreamCommandService(
     },
     getDraft: (id) => drafts.get(id),
     listDrafts: () => Array.from(drafts.values()).sort((a, b) => a.createdAt - b.createdAt),
-    editDraft(id, task) {
+    async editDraft(id, task) {
       const draft = drafts.get(id);
       if (!draft) return undefined;
+      const result = await decompose(task);
       draft.task = task;
       draft.spec = buildSpec(task);
+      draft.proposal = result.proposal;
+      draft.provenance = toProvenance(result);
       draft.approved = false;
       return draft;
     },
@@ -190,6 +298,12 @@ export function createWorkstreamServices(deps: WorkstreamServicesDeps): Workstre
   // restart. Never throws — persistence.ts guards every read/parse and
   // quarantines an unrecognized snapshot rather than propagating.
   orchestrationEngine.resumeAllFromDisk();
-  const workstreamCommands = createWorkstreamCommandService(orchestrationEngine, deps.adaptivePlanner, deps.configManager);
+  const workstreamCommands = createWorkstreamCommandService(
+    orchestrationEngine,
+    deps.adaptivePlanner,
+    deps.configManager,
+    deps.agentManager,
+    deps.projectRoot,
+  );
   return { orchestrationEngine, workstreamCommands };
 }

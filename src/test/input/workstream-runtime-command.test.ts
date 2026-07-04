@@ -20,9 +20,10 @@ import type {
   Workstream,
 } from '@pellux/goodvibes-sdk/platform/orchestration';
 import { CURRENT_WORKSTREAM_SCHEMA_VERSION } from '@pellux/goodvibes-sdk/platform/orchestration';
+import type { PlanProposal } from '@pellux/goodvibes-sdk/platform/core';
 import { CommandRegistry, type CommandContext } from '../../input/command-registry.ts';
 import { registerWorkstreamRuntimeCommands } from '../../input/commands/workstream-runtime.ts';
-import type { WorkstreamCommandService, WorkstreamDraft } from '../../runtime/workstream-services.ts';
+import type { WorkstreamCommandService, WorkstreamDraft, WorkstreamDraftProvenance } from '../../runtime/workstream-services.ts';
 
 function makePhase(overrides: Partial<Phase> & { id: string; ordinal: number }): Phase {
   return {
@@ -113,13 +114,27 @@ function makeFakeEngine(seed: Workstream[] = []): OrchestrationEngine & { create
   };
 }
 
-function makeFakeService(seed: Workstream[] = []): WorkstreamCommandService & { engine: ReturnType<typeof makeFakeEngine> } {
+const AGENT_PROVENANCE: WorkstreamDraftProvenance = {
+  kind: 'agent', itemCount: 3, agentCostUsd: 0.0123, agentTokens: 1000, elapsedMs: 42_000,
+};
+
+function fakeProposal(task: string): PlanProposal {
+  return {
+    id: 'pp-fake', task, strategy: 'cohort', rationale: 'fake', phases: [], workItems: [],
+    createdAt: Date.now(), source: 'planner-agent',
+  };
+}
+
+function makeFakeService(
+  seed: Workstream[] = [],
+  provenance: WorkstreamDraftProvenance = AGENT_PROVENANCE,
+): WorkstreamCommandService & { engine: ReturnType<typeof makeFakeEngine> } {
   const engine = makeFakeEngine(seed);
   const drafts = new Map<string, WorkstreamDraft>();
   let counter = 0;
   return {
     engine,
-    proposeDraft(task: string): WorkstreamDraft {
+    async proposeDraft(task: string): Promise<WorkstreamDraft> {
       const draft: WorkstreamDraft = {
         id: `wsd_${++counter}`,
         task,
@@ -132,6 +147,8 @@ function makeFakeService(seed: Workstream[] = []): WorkstreamCommandService & { 
           items: [{ id: 'seed-item', title: task, task }],
         },
         gate: { decompose: false, strategy: 'single', reasonCode: 'AUTO_FALLBACK_SINGLE' },
+        proposal: fakeProposal(task),
+        provenance,
         approved: false,
         createdAt: Date.now(),
       };
@@ -140,11 +157,12 @@ function makeFakeService(seed: Workstream[] = []): WorkstreamCommandService & { 
     },
     getDraft: (id) => drafts.get(id),
     listDrafts: () => Array.from(drafts.values()),
-    editDraft(id, task) {
+    async editDraft(id, task) {
       const draft = drafts.get(id);
       if (!draft) return undefined;
       draft.task = task;
       draft.spec = { ...draft.spec, title: task, items: [{ id: 'seed-item', title: task, task }] };
+      draft.proposal = fakeProposal(task);
       draft.approved = false;
       return draft;
     },
@@ -254,6 +272,44 @@ describe('workstream-runtime — create', () => {
 
     expect(printed[0]).toContain('not saved');
     expect(printed[0]).toContain('restart');
+  });
+
+  test('provenance form: planning agent (item count, cost, elapsed)', async () => {
+    const registry = new CommandRegistry();
+    registerWorkstreamRuntimeCommands(registry);
+    const { ctx, printed } = makeCtx(makeFakeService([], {
+      kind: 'agent', itemCount: 3, agentCostUsd: 0.0123, agentTokens: 1000, elapsedMs: 42_000,
+    }));
+    await registry.execute('workstream', ['create', 'ship', 'it'], ctx);
+    expect(printed[0]).toContain('Decomposition: planning agent (3 items, $0.0123, 42s)');
+  });
+
+  test('provenance form: heuristic fallback with reason', async () => {
+    const registry = new CommandRegistry();
+    registerWorkstreamRuntimeCommands(registry);
+    const { ctx, printed } = makeCtx(makeFakeService([], {
+      kind: 'fallback', itemCount: 1, fallbackReason: 'cancelled (wall-timeout 60000ms)',
+    }));
+    await registry.execute('workstream', ['create', 'ship', 'it'], ctx);
+    expect(printed[0]).toContain('Decomposition: heuristic (agent fallback: cancelled (wall-timeout 60000ms))');
+  });
+
+  test('provenance form: heuristic configured', async () => {
+    const registry = new CommandRegistry();
+    registerWorkstreamRuntimeCommands(registry);
+    const { ctx, printed } = makeCtx(makeFakeService([], { kind: 'heuristic-configured', itemCount: 1 }));
+    await registry.execute('workstream', ['create', 'ship', 'it'], ctx);
+    expect(printed[0]).toContain('Decomposition: heuristic (configured)');
+  });
+
+  test('provenance form: token count when no priced cost is available', async () => {
+    const registry = new CommandRegistry();
+    registerWorkstreamRuntimeCommands(registry);
+    const { ctx, printed } = makeCtx(makeFakeService([], {
+      kind: 'agent', itemCount: 2, agentTokens: 5000, elapsedMs: 3_000,
+    }));
+    await registry.execute('workstream', ['create', 'ship', 'it'], ctx);
+    expect(printed[0]).toContain('Decomposition: planning agent (2 items, 5000 tok, 3s)');
   });
 });
 

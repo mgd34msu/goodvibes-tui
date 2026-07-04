@@ -32,6 +32,7 @@ const CATEGORY_INFO: Record<SettingsCategory, string> = {
   storage: 'Local storage posture, including secret storage policy and maximum artifact size for knowledge/home graph/document ingestion.',
   permissions: 'Permission mode and tool-class policy. These settings decide whether the shell prompts before read/write/exec/network/agent actions.',
   orchestration: 'Agent orchestration limits and recursion controls.',
+  planner: 'How /workstream decomposes a goal into work items: agent-driven decomposition (with heuristic fallback) or the forced heuristic path, plus the planning agent\'s turn, token, and wall-clock bounds.',
   wrfc: 'Work-review-fix-cycle thresholds, retry limits, and automatic commit behavior.',
   helper: 'Helper model defaults used by helper subsystems when they do not use the main chat route.',
   tts: 'Text-to-speech provider, voice, and optional spoken-turn LLM overrides.',

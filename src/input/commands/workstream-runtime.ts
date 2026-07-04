@@ -21,7 +21,7 @@
 
 import { AdaptivePlanner } from '@pellux/goodvibes-sdk/platform/core';
 import type { PhaseKind, PhaseRole, WorkItemState, Workstream } from '@pellux/goodvibes-sdk/platform/orchestration';
-import type { WorkstreamCommandService, WorkstreamDraft } from '../../runtime/workstream-services.ts';
+import type { WorkstreamCommandService, WorkstreamDraft, WorkstreamDraftProvenance } from '../../runtime/workstream-services.ts';
 import type { CommandContext, CommandRegistry } from '../command-registry.ts';
 
 // ---------------------------------------------------------------------------
@@ -76,13 +76,38 @@ function summarizeItemStates(ws: Workstream): string {
   return Array.from(counts.entries()).map(([state, n]) => `${n} ${state}`).join(', ') || 'no items';
 }
 
-/** The engine's own PlanProposal is deliberately not rendered — see workstream-services.ts's buildSpec doc. This renders the REAL launchable spec instead, so the proposal and the launch are always the same plan. */
+/**
+ * Honest one-line provenance for how the goal was decomposed. Three shapes,
+ * mirroring the SDK decomposition service's outcomes:
+ *   - a planning agent decomposed it (with item count + cost/tokens + elapsed)
+ *   - the heuristic path ran because the agent path failed (fallback + reason)
+ *   - the heuristic path ran deliberately (configured, or the gate declined)
+ */
+function formatProvenance(p: WorkstreamDraftProvenance): string {
+  if (p.kind === 'agent') {
+    const bits: string[] = [`${p.itemCount} item${p.itemCount === 1 ? '' : 's'}`];
+    if (p.agentCostUsd !== undefined) bits.push(`$${p.agentCostUsd.toFixed(4)}`);
+    else if (p.agentTokens !== undefined) bits.push(`${p.agentTokens} tok`);
+    if (p.elapsedMs !== undefined) bits.push(`${Math.round(p.elapsedMs / 1000)}s`);
+    return `Decomposition: planning agent (${bits.join(', ')})`;
+  }
+  if (p.kind === 'fallback') {
+    return `Decomposition: heuristic (agent fallback: ${p.fallbackReason ?? 'unknown'})`;
+  }
+  if (p.kind === 'gate-declined') {
+    return 'Decomposition: heuristic (single item; planner declined to decompose)';
+  }
+  return 'Decomposition: heuristic (configured)';
+}
+
+/** The engine's own PlanProposal is deliberately not rendered as the launchable spec — see workstream-services.ts's buildSpec doc. This renders the REAL launchable spec (so the proposal and the launch are always the same plan) plus an honest provenance line describing how the goal was decomposed. */
 function renderDraftProposal(draft: WorkstreamDraft): string {
   const lines: string[] = [];
   lines.push(`Workstream proposal ${draft.id} — "${draft.task}"`);
   lines.push(
     `Planner: strategy=${draft.gate.strategy} (${draft.gate.reasonCode}) — ${AdaptivePlanner.explainReasonCode(draft.gate.reasonCode)}`,
   );
+  lines.push(formatProvenance(draft.provenance));
   lines.push('Phases:');
   draft.spec.phases.forEach((phase, i) => {
     lines.push(`  ${i + 1}. ${formatPhaseLabel(phase)} (capacity ${phase.capacity})`);
@@ -189,7 +214,7 @@ export function registerWorkstreamRuntimeCommands(registry: CommandRegistry): vo
           ctx.print('Usage: /workstream create <task...>');
           return;
         }
-        const draft = service.proposeDraft(task);
+        const draft = await service.proposeDraft(task);
         ctx.print(renderDraftProposal(draft));
         return;
       }
@@ -260,7 +285,7 @@ export function registerWorkstreamRuntimeCommands(registry: CommandRegistry): vo
           ctx.print('Usage: /workstream edit <id> <new task...>');
           return;
         }
-        const draft = service.editDraft(id, task);
+        const draft = await service.editDraft(id, task);
         if (!draft) {
           ctx.print(draftNotFoundMessage(service, id));
           return;
