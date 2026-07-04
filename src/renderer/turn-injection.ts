@@ -13,16 +13,16 @@
  * the entry type here is DERIVED from `AgentRecord` rather than imported by
  * name — this needs no SDK export change.
  *
- * Reality check (wo803): the TUI's main interactive session does not
- * currently route through this engine at all — `runAgentTask` (where the
- * per-turn injection call lives) only ever runs for agents spawned via
- * `AgentManager.spawn()` (Task-tool runs, automation-triggered runs, session
- * continuations). The main session's system prompt is built directly in
- * `runtime/bootstrap.ts` (`runtime.systemPrompt` + guardrails + tier
- * supplement) with no knowledge injection, spawn-time or per-turn. So
- * `turnInjections` will only ever be populated for spawned agents; callers
- * must not claim otherwise for the main session (see the usage text in
- * `/recall injections`, recall-review.ts).
+ * Reality check (updated wo805): as of Wave-5 wo805 the TUI's main interactive
+ * session DOES route through this engine. The SDK `Orchestrator` runs per-turn
+ * passive injection on the evolving primary conversation and records each turn
+ * on its own bounded ring, exposed via `Orchestrator.getTurnInjections()` — the
+ * main-session counterpart to `AgentRecord.turnInjections` (there is no
+ * AgentRecord for the primary conversation). `buildMainSessionTurnInjectionsText`
+ * renders that ring for `/recall injections` with no agent id. Spawned agents
+ * (Task-tool runs, automation-triggered runs, session continuations) still
+ * record onto their own `AgentRecord.turnInjections`, rendered per-agent by
+ * `buildTurnInjectionsText` when an explicit agent id is given.
  */
 import type { AgentRecord } from '@pellux/goodvibes-sdk/platform/tools';
 
@@ -71,6 +71,33 @@ export function buildTurnInjectionsText(agentId: string, entries: readonly TurnI
     );
   }
   const lines = [`[recall] Per-turn knowledge injections for agent ${agentId} (${entries.length}, most recent first):`];
+  for (const entry of [...entries].reverse()) {
+    lines.push(formatTurnInjectionEntry(entry));
+  }
+  return lines.join('\n');
+}
+
+/**
+ * Render the MAIN interactive session's per-turn injection ring
+ * (`Orchestrator.getTurnInjections()`, wo805), most-recent-turn first, with the
+ * same honest empty state as the per-agent path. The main-session counterpart
+ * to {@link buildTurnInjectionsText}: no agent id, main-session-appropriate
+ * wording, but the identical per-entry rendering (`formatTurnInjectionEntry`).
+ *
+ * As with the agent path, an empty `entries` array is deliberately ambiguous
+ * about WHY it's empty (flag disabled, no turn with new input has run yet, or
+ * every turn's token budget had no headroom) — the ring does not distinguish
+ * these, so this renders all three possibilities rather than guessing.
+ */
+export function buildMainSessionTurnInjectionsText(entries: readonly TurnInjectionEntry[]): string {
+  if (entries.length === 0) {
+    return (
+      '[recall] No per-turn injection records for the main session yet. This means one of: ' +
+      'passive knowledge injection is disabled, no turn with new input has run yet, or the ' +
+      'token budget had no headroom on every turn so far — there is no record either way.'
+    );
+  }
+  const lines = [`[recall] Per-turn knowledge injections for the main session (${entries.length}, most recent first):`];
   for (const entry of [...entries].reverse()) {
     lines.push(formatTurnInjectionEntry(entry));
   }

@@ -7,7 +7,7 @@
  * backend, and the "no records at all yet" state for buildTurnInjectionsText.
  */
 import { describe, expect, test } from 'bun:test';
-import { buildTurnInjectionsText, formatTurnInjectionEntry, type TurnInjectionEntry } from '../../renderer/turn-injection.ts';
+import { buildMainSessionTurnInjectionsText, buildTurnInjectionsText, formatTurnInjectionEntry, type TurnInjectionEntry } from '../../renderer/turn-injection.ts';
 
 function makeEntry(overrides: Partial<TurnInjectionEntry> = {}): TurnInjectionEntry {
   return {
@@ -112,5 +112,28 @@ describe('buildTurnInjectionsText', () => {
     expect(turn3Index).toBeLessThan(turn2Index);
     expect(turn2Index).toBeLessThan(turn1Index);
     expect(text).toContain('(3, most recent first)');
+  });
+});
+
+describe('buildMainSessionTurnInjectionsText (wo805)', () => {
+  test('honest empty state for the main session (no agent phrasing, same ambiguity as the agent path)', () => {
+    const text = buildMainSessionTurnInjectionsText([]);
+    expect(text).toContain('No per-turn injection records for the main session yet');
+    expect(text).toContain('disabled');
+    expect(text).not.toContain('for agent');
+    expect(text).not.toContain('turn 1');
+  });
+
+  test('renders every entry most-recent-first with main-session wording', () => {
+    const entries: TurnInjectionEntry[] = [
+      makeEntry({ turn: 1, injectedIds: ['mem-1'], tokenCost: 100 }),
+      makeEntry({ turn: 2, injectedIds: ['mem-2'], tokenCost: 200 }),
+    ];
+    const text = buildMainSessionTurnInjectionsText(entries);
+    expect(text).toContain('Per-turn knowledge injections for the main session (2, most recent first)');
+    expect(text).not.toContain('for agent');
+    expect(text.indexOf('turn 2')).toBeLessThan(text.indexOf('turn 1'));
+    expect(text).toContain('mem-1');
+    expect(text).toContain('mem-2');
   });
 });
