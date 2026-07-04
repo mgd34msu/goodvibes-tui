@@ -14,6 +14,7 @@ import type { McpRegistry } from '@pellux/goodvibes-sdk/platform/mcp';
 import { buildSubscriptionEntries } from './settings-modal-subscriptions.ts';
 import type { SubscriptionManager } from '@pellux/goodvibes-sdk/platform/config';
 import type { ServiceInspectionQuery } from '../runtime/ui-service-queries.ts';
+import { CODE_INDEX_ENABLED_CONFIG_KEY } from '../runtime/code-index-services.ts';
 import {
   SETTINGS_CATEGORIES,
   type FlagEntry,
@@ -138,6 +139,15 @@ export function buildSettingGroups(
         behaviorEntries.push(entry);
       }
     }
+  }
+
+  // Wave 5 (wo804): inject the storage.codeIndexEnabled toggle into the
+  // storage category. TUI-local synthetic setting (not in the SDK ConfigKey
+  // union — see code-index-services.ts), same rationale as
+  // notifyAfterSeconds above: opt-in, default off, states its own bounds.
+  const storageEntries = groups.get('storage');
+  if (storageEntries && !storageEntries.some((e) => e.setting.key === (CODE_INDEX_ENABLED_CONFIG_KEY as ConfigKey))) {
+    storageEntries.push(buildCodeIndexEnabledSyntheticEntry(configManager));
   }
 
   return groups;
@@ -286,6 +296,27 @@ function buildBooleanSyntheticEntry(
 /** Build the five synthetic SettingEntry rows for the behavior category. */
 export function buildNotifyAlertSyntheticEntries(configManager: Pick<ConfigManager, 'get'>): SettingEntry[] {
   return NOTIFY_ALERT_SYNTHETIC_SETTINGS.map((spec) => buildBooleanSyntheticEntry(configManager, spec.key, spec.description, true));
+}
+
+// ---------------------------------------------------------------------------
+// Wave 5 (wo804) — storage.codeIndexEnabled synthetic setting
+// ---------------------------------------------------------------------------
+
+/**
+ * The repo source-tree code index's auto-build-on-startup toggle
+ * (code-index-services.ts). TUI-local, default OFF: /codebase build is the
+ * explicit trigger unless a user opts in here. Honest bounds stated inline
+ * so enabling this isn't a surprise — see code-index-services.ts's
+ * CODE_INDEX_MAX_FILES/CODE_INDEX_MAX_FILE_BYTES for the numbers this
+ * description would otherwise duplicate as magic numbers.
+ */
+export function buildCodeIndexEnabledSyntheticEntry(configManager: Pick<ConfigManager, 'get'>): SettingEntry {
+  return buildBooleanSyntheticEntry(
+    configManager,
+    CODE_INDEX_ENABLED_CONFIG_KEY,
+    'Auto-build the repo source-tree code index on startup (bounded file/size scan; see /codebase status for bounds). Off by default — /codebase build indexes on demand.',
+    false,
+  );
 }
 
 // ---------------------------------------------------------------------------

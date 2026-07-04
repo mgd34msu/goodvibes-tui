@@ -16,7 +16,7 @@ import type { PermissionRequestHandler } from '@pellux/goodvibes-sdk/platform/pe
 import type { ToolRegistry } from '@pellux/goodvibes-sdk/platform/tools';
 import type { ForensicsRegistry } from '@/runtime/index.ts';
 import type { PolicyRuntimeState } from '@/runtime/index.ts';
-import type { FileUndoManager } from '@pellux/goodvibes-sdk/platform/state';
+import type { CodeIndexStore, FileUndoManager } from '@pellux/goodvibes-sdk/platform/state';
 import type { WorkspaceCheckpointManager } from '@pellux/goodvibes-sdk/platform/workspace';
 import type { McpRegistry } from '@pellux/goodvibes-sdk/platform/mcp';
 import type { MemoryRegistry } from '@pellux/goodvibes-sdk/platform/state';
@@ -113,6 +113,7 @@ export interface BootstrapCommandSectionOptions {
   readonly changeTracker?: import('@pellux/goodvibes-sdk/platform/sessions').SessionChangeTracker;
   readonly hydrateSessionUsage?: () => void;
   readonly workstreamEngine?: import('./workstream-services.ts').WorkstreamCommandService;
+  readonly codeIndexStore?: CodeIndexStore;
   readonly agentManager?: ShellAgentManagerService;
   readonly modeManager?: ShellModeManagerService;
   readonly automationManager?: ShellAutomationManagerRuntimeService;
@@ -304,7 +305,7 @@ export function createBootstrapCommandActions(
 export function createBootstrapCommandSessionSection(
   options: Pick<
     BootstrapCommandSectionOptions,
-    'conversation' | 'runtime' | 'sessionManager' | 'sessionMemoryStore' | 'sessionLineageTracker' | 'wrfcController' | 'changeTracker' | 'hydrateSessionUsage' | 'workstreamEngine'
+    'conversation' | 'runtime' | 'sessionManager' | 'sessionMemoryStore' | 'sessionLineageTracker' | 'wrfcController' | 'changeTracker' | 'hydrateSessionUsage' | 'workstreamEngine' | 'codeIndexStore'
   >,
 ): BootstrapCommandSessionSection {
   return {
@@ -317,6 +318,7 @@ export function createBootstrapCommandSessionSection(
     changeTracker: options.changeTracker,
     hydrateSessionUsage: options.hydrateSessionUsage,
     workstreamEngine: options.workstreamEngine,
+    codeIndexStore: options.codeIndexStore,
   };
 }
 
