@@ -591,6 +591,7 @@ async function main() {
         turnElapsedMs,
         streamMetrics.ttftMs,
         stallInfo,
+        pendingPermission !== null,
       );
       viewport.push(...thinking);
       // Live tool timer: render the currently executing tool row with ticking elapsed.
@@ -711,6 +712,7 @@ async function main() {
     events: uiServices.events, orchestrator, providerRegistry,
     systemMessageRouter, render, metrics: streamMetrics,
     providerOptimizer: ctx.services.providerOptimizer, costLookup: providerRegistry, retryTurn,
+    isApprovalPending: () => pendingPermission !== null,
   });
   unsubs.push(...streamResult.unsubs);
   // Activate one-key retry affordance when a user-visible error surfaces.
