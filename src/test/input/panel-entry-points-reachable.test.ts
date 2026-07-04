@@ -4,13 +4,14 @@
  * global-shortcuts.test.ts) must stay reachable while a turn is active.
  *
  * Root cause finding (see the W0.8 audit brief): no busy/turn guard exists
- * anywhere in the input pipeline. handlePromptKeyToken's F2 branch calls
- * processModal.open() and handleIndicatorFocusToken's Enter branch calls
- * openFleetPanel() (W2.2 repoint — previously processModal.open() too)
- * unconditionally — neither KeyRouteState nor IndicatorFocusRouteState
- * carries an orchestrator/isThinking field, so there is nothing here that
- * *could* gate on turn state. These tests lock in that reachability so a
- * future change can't accidentally introduce a busy guard that blocks them.
+ * anywhere in the input pipeline. handlePromptKeyToken's F2 branch and
+ * handleIndicatorFocusToken's Enter branch both call openFleetPanel()
+ * unconditionally (W6.2 e: F2 was repointed off the retired process modal onto
+ * the Fleet panel, joining the footer indicator's W2.2 repoint) — neither
+ * KeyRouteState nor IndicatorFocusRouteState carries an orchestrator/isThinking
+ * field, so there is nothing here that *could* gate on turn state. These tests
+ * lock in that reachability so a future change can't accidentally introduce a
+ * busy guard that blocks them.
  */
 import { describe, expect, mock, test } from 'bun:test';
 import {
@@ -33,7 +34,7 @@ function wrappedPromptInfo() {
 }
 
 describe('panel/process-modal entry points stay reachable during an active turn', () => {
-  test('F2 opens the process modal (handlePromptKeyToken carries no turn-state field to gate on)', () => {
+  test('F2 opens AND focuses the Fleet panel (W6.2 e: fleet subsumes the retired process modal)', () => {
     const opened: string[] = [];
     const result = handlePromptKeyToken({
       prompt: '',
@@ -48,7 +49,7 @@ describe('panel/process-modal entry points stay reachable during an active turn'
       commandContext: undefined,
       autocomplete: null,
       blockActionsMenu: { open: () => {} },
-      processModal: { open: () => { opened.push('process'); } },
+      openFleetPanel: () => { opened.push('fleet'); },
       modalOpened: mock(() => {}),
       saveUndoState: () => {},
       breakUndoCoalesce: () => {},
@@ -66,7 +67,7 @@ describe('panel/process-modal entry points stay reachable during an active turn'
     } as unknown as KeyRouteState, { type: 'key', name: '\x1bOQ', logicalName: 'f2', ctrl: false, shift: false, meta: false });
 
     expect(result.handled).toBe(true);
-    expect(opened).toEqual(['process']);
+    expect(opened).toEqual(['fleet']);
   });
 
   test('Enter on the focused status/process indicator opens the Fleet panel (W2.2 repoint; handleIndicatorFocusToken carries no turn-state field to gate on)', () => {

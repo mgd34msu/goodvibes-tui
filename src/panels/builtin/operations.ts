@@ -52,6 +52,8 @@ export function registerOperationsPanels(manager: PanelManager, deps: ResolvedBu
     description: 'Live unified process tree: agents, WRFC chains, workflows, watchers, and background processes, with interrupt/kill/steer controls',
     factory: () => new FleetPanel(fleetReadModel, {
       interrupt: (id: string) => fleetReadModel.interrupt(id),
+      // Wave-6 (wo-F item d2): re-arm a paused trigger/schedule/automation job.
+      resume: (id: string) => fleetReadModel.resume(id),
       kill: (id: string, opts: { cascade: boolean }) => fleetReadModel.kill(id, opts),
       // Wave-3 (C6): full-fidelity transcript source for an attached agent
       // tab — live while the agent runs, frozen briefly after it completes

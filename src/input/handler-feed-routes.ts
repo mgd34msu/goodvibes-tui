@@ -31,14 +31,18 @@ export type PanelFocusRouteState = {
   cyclePanelTab: (direction: 'next' | 'prev') => void;
   onPanelInputConsumed?: (activePanel: import('../panels/types.ts').Panel | null, key: string) => void;
   /**
-   * True when the tokens produced by the current feed() call carry more than
-   * one printable character total (a bracketed paste, or several 1-char text
-   * tokens from a fast-typed burst in one stdin chunk). A burst can never be
-   * a deliberate single-key panel hotkey, so it must not be exploded into
-   * per-char activePanel.handleInput(ch) calls — see the text-token branch
-   * below.
+   * True when THIS token is a paste: a single 'text' token whose value holds
+   * more than one character. The SDK tokenizer emits a bracketed paste
+   * (\x1b[?2004h, enabled in main.ts init) as exactly one such token; discrete
+   * keystrokes — even several batched into one feed() by render-tick latency —
+   * arrive as separate 1-char tokens. See the text-token branch below.
    */
-  isPrintableBurst: boolean;
+  isPasteToken: boolean;
+  /**
+   * One-shot hint emitted when a paste is dropped because the focused panel has
+   * no text capture (Invariant A: focus must not silently flip to the composer).
+   */
+  onPasteDropped?: (panelName: string) => void;
   /**
    * True while a turn is actively streaming; gates Escape's cancel-first
    * precedence (I6.1) ahead of the panel's own two-stage escape contract
@@ -149,18 +153,19 @@ export function handlePanelFocusToken(state: PanelFocusRouteState, token: InputT
 
   if (token.type === 'text' && token.value) {
     const activePanel = state.panelManager.getActive();
-    // A burst (paste or several fast-typed chars in one stdin chunk) is never
-    // a deliberate single-key panel hotkey. Eating it silently as per-char
-    // hotkeys leaves the user with no echo and no error, looking exactly
-    // like dead keystrokes. Unless the active panel has its own text-capture
-    // buffer open (a `/`-search or draft-answer field that deliberately
-    // wants every character, burst or not — see isCapturingTextBurst), unfocus
-    // the panel and let the token fall through to the prompt route instead,
-    // same as it would from an unfocused panel.
-    if (state.isPrintableBurst && !activePanel?.isCapturingTextBurst?.()) {
-      panelFocused = false;
+    // Invariant A/B (W6.2). A paste (isPasteToken: one multi-char text token)
+    // into a focused text-capturing panel (a `/`-search or steer-draft field —
+    // isCapturingTextBurst) is forwarded verbatim below; into any other focused
+    // panel it is DROPPED with a one-shot hint — never exploded into per-char
+    // hotkeys, and never a silent focus flip to the composer (what the old
+    // per-feed char-sum burst guard did, which also misfired on two quick nav
+    // keys in one feed). Focus moves only on an explicit transfer verb, so
+    // panelFocused is left unchanged. Discrete 1-char keystrokes are not pastes
+    // and fall through to the per-char dispatch below, one at a time.
+    if (state.isPasteToken && !activePanel?.isCapturingTextBurst?.()) {
+      state.onPasteDropped?.(activePanel?.name ?? 'the panel');
       state.requestRender();
-      return { handled: false, panelFocused };
+      return { handled: true, panelFocused };
     }
     if (activePanel?.handleInput) {
       for (const ch of token.value) {
@@ -326,7 +331,8 @@ export type KeyRouteState = {
   commandRegistry?: CommandRegistry | null;
   autocomplete: AutocompleteEngine | null;
   blockActionsMenu: { open: (block: BlockMeta) => void };
-  processModal: { open: () => void };
+  /** W6.2 e: F2 opens+focuses the Fleet panel (which subsumes the retired process modal). */
+  openFleetPanel: () => void;
   modalOpened: (name: string) => void;
   saveUndoState: () => void;
   /** Break the undo coalescing group (call on cursor moves). */
@@ -599,8 +605,11 @@ export function handlePromptKeyToken(state: KeyRouteState, token: InputToken): {
 
   if (token.logicalName === 'f2') {
     indicatorFocused = false;
-    state.modalOpened('process');
-    state.processModal.open();
+    // W6.2 e: F2 opens AND focuses the Fleet panel, which subsumes the retired
+    // process modal (the last remaining opener of ProcessModal — and, through
+    // it, AgentDetailModal/LiveTailModal). openFleetPanel sets panelFocused on
+    // the shared context directly, so nothing more is returned here.
+    state.openFleetPanel();
     return { handled: true, prompt, cursorPos, inputScrollTop, commandMode, indicatorFocused };
   }
 

@@ -328,9 +328,9 @@ describe('handleGlobalShortcutToken', () => {
     expect(jumped).toBe(false);
   });
 
-  test('panel-ops (Ctrl+O) prefers commandContext.openOpsPanel when wired', () => {
-    const openOpsPanel = mock(() => {});
+  test('panel-ops (Ctrl+O) opens AND focuses the Fleet panel (ops-control retired to a fleet alias, W6.2 b)', () => {
     const opened: string[] = [];
+    let focused = false;
     const state = buildState({
       panelFocused: false,
       panelManager: {
@@ -340,35 +340,7 @@ describe('handleGlobalShortcutToken', () => {
         hide: () => {},
         getActivePanel: () => null,
         open: (id: string) => { opened.push(id); },
-      } as unknown as GlobalShortcutRouteState['panelManager'],
-      keybindingsManager: {
-        matches: () => false,
-        lookup: (token: { logicalName?: string; ctrl?: boolean }) =>
-          token.logicalName === 'o' && !!token.ctrl ? 'panel-ops' : null,
-      } as unknown as GlobalShortcutRouteState['keybindingsManager'],
-      commandContext: { openOpsPanel } as unknown as NonNullable<GlobalShortcutRouteState['commandContext']>,
-    });
-    const handled = handleGlobalShortcutToken(
-      state,
-      { type: 'key', name: '\x0f', logicalName: 'o', ctrl: true, shift: false, meta: false },
-      24,
-    );
-    expect(handled).toBe(true);
-    expect(openOpsPanel).toHaveBeenCalled();
-    expect(opened).toEqual([]);
-  });
-
-  test('panel-ops (Ctrl+O) falls back to opening the ops-control panel directly when no callback is wired', () => {
-    const opened: string[] = [];
-    const state = buildState({
-      panelFocused: false,
-      panelManager: {
-        isVisible: () => true,
-        getAllOpen: () => [],
-        close: () => {},
-        hide: () => {},
-        getActivePanel: () => null,
-        open: (id: string) => { opened.push(id); },
+        focusPanels: () => { focused = true; },
       } as unknown as GlobalShortcutRouteState['panelManager'],
       keybindingsManager: {
         matches: () => false,
@@ -383,8 +355,43 @@ describe('handleGlobalShortcutToken', () => {
       24,
     );
     expect(handled).toBe(true);
-    expect(opened).toEqual(['ops-control']);
+    expect(opened).toEqual(['fleet']);
+    expect(focused).toBe(true);
+    expect(state.panelFocused).toBe(true);
     expect(state.requestRender).toHaveBeenCalled();
+  });
+
+  test('BARE PageUp/PageDown still scroll the transcript (fast-path preserved)', () => {
+    const scroll = mock((_n: number) => {});
+    const cyclePanelTab = mock((_d: 'next' | 'prev') => {});
+    const state = buildState({ panelFocused: false, scroll, cyclePanelTab });
+    expect(handleGlobalShortcutToken(state, { type: 'key', name: '', logicalName: 'pageup', ctrl: false, shift: false, meta: false }, 24)).toBe(true);
+    expect(handleGlobalShortcutToken(state, { type: 'key', name: '', logicalName: 'pagedown', ctrl: false, shift: false, meta: false }, 24)).toBe(true);
+    expect(scroll).toHaveBeenCalledTimes(2);
+    expect(cyclePanelTab).not.toHaveBeenCalled();
+  });
+
+  test('Ctrl+PageUp / Ctrl+PageDown reach the keybinding lookup (NOT the scroll fast-path) and cycle tabs (W6.2 b)', () => {
+    const scroll = mock((_n: number) => {});
+    const cyclePanelTab = mock((_d: 'next' | 'prev') => {});
+    const state = buildState({
+      panelFocused: false,
+      scroll,
+      cyclePanelTab,
+      keybindingsManager: {
+        matches: () => false,
+        lookup: (token: { logicalName?: string; ctrl?: boolean }) => {
+          if (token.logicalName === 'pageup' && token.ctrl) return 'panel-tab-prev';
+          if (token.logicalName === 'pagedown' && token.ctrl) return 'panel-tab-next';
+          return null;
+        },
+      } as unknown as GlobalShortcutRouteState['keybindingsManager'],
+    });
+    // \x1b[5;5~ / \x1b[6;5~ tokenize to pageup/pagedown with ctrl:true.
+    expect(handleGlobalShortcutToken(state, { type: 'key', name: '', logicalName: 'pageup', ctrl: true, shift: false, meta: false }, 24)).toBe(true);
+    expect(handleGlobalShortcutToken(state, { type: 'key', name: '', logicalName: 'pagedown', ctrl: true, shift: false, meta: false }, 24)).toBe(true);
+    expect(cyclePanelTab.mock.calls).toEqual([['prev'], ['next']]);
+    expect(scroll).not.toHaveBeenCalled(); // guard kept the chords out of the scroll fast-path
   });
 
   test('escape does not bypass panel focus handling', () => {
