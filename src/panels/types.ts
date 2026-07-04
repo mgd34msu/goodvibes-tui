@@ -17,6 +17,18 @@ export interface PanelIntegrationContext {
 }
 
 /**
+ * A cross-panel deep-link target (DEBT-5 item 4): a specific node a panel
+ * should select + reveal when opened via `PanelManager.open(id, pane, target)`,
+ * e.g. a Fleet tree node keyed by its process id and (optionally) its
+ * ProcessKind for disambiguation. Panel-agnostic on purpose — only panels that
+ * have a "node" concept implement `Panel.receiveDeepLink`.
+ */
+export interface PanelDeepLinkTarget {
+  readonly id: string;
+  readonly kind?: string;
+}
+
+/**
  * Named logical key identifiers emitted by the input tokenizer.
  * These are the ONLY key names that will appear in `handleInput` calls;
  * the tokenizer never emits DOM/browser-style names like 'ArrowUp' or 'Enter'.
@@ -139,6 +151,18 @@ export interface Panel {
    * to intervene before the global shortcut acts.
    */
   interceptPanelClose?(): boolean;
+
+  /**
+   * Optional: consume a deep-link target handed in by `PanelManager.open(id,
+   * pane, target)` (DEBT-5 item 4) — select + reveal the matching node on the
+   * panel's next snapshot. A panel without a "node" concept simply doesn't
+   * implement this (the call is a no-op via optional chaining in
+   * PanelManager). A panel that DOES implement it owns its own honest
+   * "not found" surface (e.g. FleetPanel.setError) when the target no longer
+   * resolves — PanelManager has no transcript/print seam to report on its
+   * behalf.
+   */
+  receiveDeepLink?(target: PanelDeepLinkTarget): void;
 }
 
 export interface PanelRegistration extends Pick<Panel, 'id' | 'name' | 'icon' | 'category'> {

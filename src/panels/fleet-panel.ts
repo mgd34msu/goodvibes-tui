@@ -4,18 +4,11 @@
 // W2.2 — FleetPanel: the live unified observability tree. Renders the
 // registered process fleet (agents incl. WRFC roles, WRFC chains/subtasks,
 // workflow-tool FSMs, watchers, background processes) as a depth-first tree
-// with a selected-row detail region.
-//
-// Wave-3 (W3.1 Part C) adds session tabs: Enter on an attachable node (agent
-// or wrfc-chain) opens a tab showing that process's transcript (agent) or
-// live member summary (chain); the tree itself is the always-present root
-// tab. See fleet-tabs.ts for the tab-state model and fleet-transcript.ts for
-// tab content rendering — this file owns input dispatch and layout only.
-//
-// Coexists with (does not replace) the process modal, ops, wrfc, and
-// inspector entry points this wave — only the footer process indicator's
-// [Enter] is repointed to open this panel (see handler-feed-routes.ts).
-// Removal of the older entry points is Wave 6.
+// with a selected-row detail region. Session tabs (W3.1 Part C): Enter on an
+// attachable node (agent/wrfc-chain) opens a tab with that process's
+// transcript/member summary — see fleet-tabs.ts + fleet-transcript.ts. This
+// file owns input dispatch and layout; fleet-deep-link.ts owns the
+// cross-panel jump target (DEBT-5 item 4).
 // ---------------------------------------------------------------------------
 
 import { readFile } from 'node:fs/promises';
@@ -54,6 +47,7 @@ import {
 } from './fleet-tabs.ts';
 import { reconcileSteerBadges as reconcileSteerBadgesPure, steerBadgeGlyph, steerBadgeTone } from './fleet-steer.ts';
 import { FleetStopTracker, fleetStateDisplay, toggleFleetPause, buildFleetTreeHints } from './fleet-stop.ts';
+import { resolveFleetDeepLinkIndex } from './fleet-deep-link.ts';
 import { parseAgentLedger, renderFleetAgentTranscript, renderFleetChainSummary, renderFleetLedgerFallback, renderFleetTranscriptLoading } from './fleet-transcript.ts';
 import { renderFleetTabStrip } from '../renderer/fleet-tab-strip.ts';
 
@@ -286,15 +280,11 @@ export class FleetPanel extends ScrollableListPanel<FleetTreeRow> {
   }
 
   /**
-   * W3.3 (cross-restart honesty) — investigation confirmed there is no
-   * bridge from a prior TUI process's in-memory registry (or the daemon's
-   * separate one) into this one: a restart always starts from an empty
-   * `AgentManager` Map, so a completed process from a previous session can
-   * never reappear as a tree row here, no matter how recently it ran. That
-   * is a real, permanent limitation (not a bug to fix in this item — see the
-   * W3.3 brief's design point 5), so it is documented plainly here rather
-   * than silently leaving the empty tree looking like "nothing has ever run"
-   * or, worse, implying a restart would bring prior processes back.
+   * W3.3 (cross-restart honesty): a restart always starts from an empty
+   * `AgentManager` Map (no bridge from a prior TUI/daemon registry), so a
+   * completed process from a previous session can never reappear here — a
+   * real, permanent limitation (W3.3 brief point 5), documented rather than
+   * silently implying "nothing has ever run" or that a restart brings it back.
    */
   protected override getEmptyStateActions(): Array<{ command: string; summary: string }> {
     return [
@@ -359,6 +349,13 @@ export class FleetPanel extends ScrollableListPanel<FleetTreeRow> {
   /** Find a node's live ProcessNode in the current snapshot, or null (pruned/never registered). */
   private findLiveNode(nodeId: string): FleetTreeRow['node'] | null {
     return this.getItems().find((row) => row.node.id === nodeId)?.node ?? null;
+  }
+
+  /** DEBT-5 item 4 (see fleet-deep-link.ts). */
+  public receiveDeepLink(target: { readonly id: string; readonly kind?: string }): void {
+    const idx = resolveFleetDeepLinkIndex(this.getItems(), target);
+    if (idx < 0) { this.setError('node no longer present.'); return; }
+    this.clearError(); this.selectedIndex = idx; this.selectedNodeId = target.id; this.markDirty();
   }
 
   /**

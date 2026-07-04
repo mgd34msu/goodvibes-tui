@@ -64,6 +64,16 @@ class WorkPlanModalSurface implements ConfigModalSurface {
 
   private readonly hasRow = (row: ConfigModalRow | null): boolean => row !== null;
 
+  /** 'i'/'w' jump to the selected item's linked agent/WRFC chain in Fleet
+   *  (DEBT-5 item 4 — restores the retired WorkPlanPanel's per-item deep-link,
+   *  lost when W6.1 migrated this surface to a modal without it). Gated on
+   *  the link actually being present, same as the retired panel gated the key
+   *  on `item?.linked?.agentId`/`wrfcId` before ever reaching the jump. */
+  private readonly hasAgentLink = (row: ConfigModalRow | null): boolean =>
+    !!(row && this.itemFrom(row.id)?.linked?.agentId);
+  private readonly hasWrfcLink = (row: ConfigModalRow | null): boolean =>
+    !!(row && this.itemFrom(row.id)?.linked?.wrfcId);
+
   readonly actions = [
     { key: 'enter', id: 'cycleStatus', label: 'cycle status', enabledFor: this.hasRow },
     { key: '1', id: 'setPending', label: 'pending', enabledFor: this.hasRow },
@@ -75,6 +85,8 @@ class WorkPlanModalSurface implements ConfigModalSurface {
     { key: 'd', id: 'remove', label: 'delete', enabledFor: this.hasRow },
     { key: 'c', id: 'clearCompleted', label: 'clear done' },
     { key: 'a', id: 'add', label: 'add' },
+    { key: 'i', id: 'jumpAgent', label: 'jump agent', enabledFor: this.hasAgentLink },
+    { key: 'w', id: 'jumpWrfc', label: 'jump wrfc', enabledFor: this.hasWrfcLink },
     { key: 'r', id: 'refresh', label: 'refresh' },
   ];
 
@@ -122,6 +134,22 @@ class WorkPlanModalSurface implements ConfigModalSurface {
     if (!item) return;
     if (id === 'cycleStatus') { void ctx.executeCommand?.('work-plan', ['cycle', item.id]); ctx.setStatus(`Dispatched /work-plan cycle ${item.id}.`); return; }
     if (id === 'remove') { void ctx.executeCommand?.('work-plan', ['remove', item.id]); ctx.setStatus(`Dispatched /work-plan remove ${item.id}.`); return; }
+    if (id === 'jumpAgent') {
+      const agentId = item.linked?.agentId;
+      if (!agentId) return;
+      // 'agent' matches the SDK's ProcessKind for a live agent node — see
+      // FleetPanel.receiveDeepLink's id+kind match.
+      void ctx.executeCommand?.('panel', ['open', 'fleet', '--target', `${agentId}:agent`]);
+      ctx.setStatus(`Opened Fleet on agent ${agentId}.`);
+      return;
+    }
+    if (id === 'jumpWrfc') {
+      const wrfcId = item.linked?.wrfcId;
+      if (!wrfcId) return;
+      void ctx.executeCommand?.('panel', ['open', 'fleet', '--target', `${wrfcId}:wrfc-chain`]);
+      ctx.setStatus(`Opened Fleet on WRFC chain ${wrfcId}.`);
+      return;
+    }
     const status: WorkPlanItemStatus | null =
       id === 'setPending' ? 'pending' : id === 'setInProgress' ? 'in_progress' : id === 'setBlocked' ? 'blocked'
       : id === 'setDone' ? 'done' : id === 'setFailed' ? 'failed' : id === 'setCancelled' ? 'cancelled' : null;
