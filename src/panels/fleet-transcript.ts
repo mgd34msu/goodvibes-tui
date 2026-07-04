@@ -70,6 +70,28 @@ export interface FleetTranscriptRender {
 }
 
 /**
+ * W3.3 (design point 4) — a 'frozen' transcript is a static capture of a
+ * completed process, not something that will change on the next render. The
+ * distinction matters because this wave also introduced kill/interrupt
+ * display bugs (elapsed/usage briefly climbing after a terminal state
+ * shows) — a done-section tab that looked indistinguishable from a live one
+ * would misleadingly suggest the underlying agent is still doing something.
+ * Shown once at the top of a 'frozen' tab's content; 'live' tabs never show
+ * it, and 'unavailable' tabs get the ledger fallback's own notice instead
+ * (renderFleetLedgerFallback below) rather than this one.
+ */
+const FROZEN_TRANSCRIPT_NOTICE = 'Read-only — this agent finished; not a live view.';
+
+function renderFrozenTranscriptNotice(width: number): Line[] {
+  const palette = DEFAULT_PANEL_PALETTE;
+  return renderConversationNotice(FROZEN_TRANSCRIPT_NOTICE, width, {
+    accent: palette.warn ?? DEFAULT_PANEL_PALETTE.warn,
+    text: palette.dim,
+    dim: true,
+  });
+}
+
+/**
  * Render an agent tab's transcript from a `ConversationMessageSnapshot[]`
  * already fetched by the caller (this module does no I/O of its own — it is
  * a pure renderer, same convention as fleet-read-model.ts).
@@ -117,10 +139,15 @@ export function renderFleetAgentTranscript(
   const messageLineRegistry: number[] = [];
   lineCache.renderInto(context, snapshot as ConversationMessageSnapshot[], width, messageLineRegistry, 0, -1);
 
-  const visible = historyLines.length > height && height > 0
-    ? historyLines.slice(historyLines.length - height)
+  // Terminal agents reserve room for the frozen-transcript notice ABOVE the
+  // tail window so the "read-only" framing is always visible, never scrolled
+  // off by a long conversation's tail-window slice.
+  const notice = isTerminal ? renderFrozenTranscriptNotice(width) : [];
+  const budgetHeight = Math.max(0, height - notice.length);
+  const visible = historyLines.length > budgetHeight && budgetHeight > 0
+    ? historyLines.slice(historyLines.length - budgetHeight)
     : historyLines;
-  return { mode: isTerminal ? 'frozen' : 'live', lines: visible };
+  return { mode: isTerminal ? 'frozen' : 'live', lines: [...notice, ...visible] };
 }
 
 // ---------------------------------------------------------------------------
@@ -209,13 +236,21 @@ function renderLedgerEntry(width: number, entry: Record<string, unknown>, palett
       const toolName = typeof entry['toolName'] === 'string' ? entry['toolName'] : 'tool';
       const success = entry['success'] !== false;
       const bad = palette.bad ?? DEFAULT_PANEL_PALETTE.bad;
+      // W3.3: the writer already truncates this to 500 chars (session.ts's
+      // resultPreview field) — passed through verbatim (collapsed to one
+      // line), never re-summarized or fabricated, then tail-truncated again
+      // to fit the row.
+      const rawPreview = typeof entry['resultPreview'] === 'string' ? entry['resultPreview'] : '';
+      const preview = rawPreview.replace(/\s+/g, ' ').trim();
+      const label = `${toolName}${success ? '' : ' (failed)'}`;
+      const text = preview ? `${label} — ${preview}` : label;
       return renderConversationEventLine(width, {
         marker: success ? '●' : '✗',
         markerFg: success ? palette.info : bad,
         label: 'tool',
         labelFg: success ? palette.info : bad,
       }, [
-        { text: `${toolName}${success ? '' : ' (failed)'}`, fg: success ? palette.value : bad },
+        { text: truncateDisplay(text, Math.max(0, width - 12)), fg: success ? palette.value : bad },
       ]);
     }
     case 'session_end': {
@@ -250,7 +285,7 @@ export function renderFleetLedgerFallback(
 ): Line[] {
   const palette = DEFAULT_PANEL_PALETTE;
   const notice = renderConversationNotice(
-    'Full transcript unavailable for this agent — showing its activity log instead.',
+    'Read-only. Full transcript unavailable for this agent — showing its activity log instead.',
     width,
     { accent: palette.warn, text: palette.dim, dim: true },
   );
