@@ -1,6 +1,7 @@
 import type { InputToken } from '@pellux/goodvibes-sdk/platform/core';
 import type { SelectionResult, SelectionAction } from './selection-modal.ts';
 import type { CommandContext } from './command-registry.ts';
+import type { ConfigModal } from './config-modal.ts';
 import { openTtsProviderPicker, openTtsVoicePicker } from './tts-settings-actions.ts';
 import { isTextBackspace } from './delete-key-policy.ts';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
@@ -530,6 +531,70 @@ export function handleProfilePickerToken(state: ProfilePickerRouteState, token: 
     else if (token.value === 's') saveCurrent();
   }
 
+  state.requestRender();
+  return true;
+}
+
+type ConfigModalRouteState = {
+  configModal: ConfigModal;
+  commandContext?: CommandContext;
+  requestRender: () => void;
+  handleEscape: () => void;
+};
+
+/**
+ * Route a key to the generic config-modal host (W6.1 MIGRATE-TO-MODAL
+ * surfaces). The host owns the reserved navigation keys (Esc, up/down/j/k tab
+ * left/right); every other key is offered to the active surface's declarative
+ * action table (fireAction handles the two-press confirm for destructive
+ * actions). Any unrecognised key is absorbed so the modal stays modal — this is
+ * the same "active modal captures all keys" shape as the other modal routers.
+ */
+export function handleConfigModalToken(state: ConfigModalRouteState, token: InputToken): boolean {
+  if (!state.configModal.active) return false;
+
+  if (token.type === 'key') {
+    switch (token.logicalName) {
+      case 'escape':
+        state.handleEscape();
+        return true;
+      case 'up':
+        state.configModal.moveUp();
+        state.requestRender();
+        return true;
+      case 'down':
+        state.configModal.moveDown();
+        state.requestRender();
+        return true;
+      case 'left':
+        state.configModal.prevTab();
+        state.requestRender();
+        return true;
+      case 'right':
+      case 'tab':
+        state.configModal.nextTab();
+        state.requestRender();
+        return true;
+    }
+  } else if (token.type === 'text') {
+    if (token.value === 'j') { state.configModal.moveDown(); state.requestRender(); return true; }
+    if (token.value === 'k') { state.configModal.moveUp(); state.requestRender(); return true; }
+  }
+
+  const actionKey = token.type === 'key' ? (token.logicalName ?? '') : token.type === 'text' ? token.value : '';
+  const fired = actionKey.length > 0 && state.configModal.fireAction(actionKey, {
+    print: (message: string) => state.commandContext?.print(message),
+    executeCommand: state.commandContext?.executeCommand,
+    openModal: state.commandContext?.openModal,
+  });
+  if (fired) {
+    state.requestRender();
+    return true;
+  }
+
+  // Unhandled key while a config modal is open: drop any pending confirm and
+  // absorb the key (the modal owns the keyboard while it is active).
+  state.configModal.clearConfirmOnMiss();
   state.requestRender();
   return true;
 }

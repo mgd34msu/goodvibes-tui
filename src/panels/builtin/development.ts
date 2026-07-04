@@ -1,15 +1,18 @@
 import type { PanelManager } from '../panel-manager.ts';
 import { GitPanel } from '../git-panel.ts';
 import { DiffPanel } from '../diff-panel.ts';
-import { PlanDashboardPanel } from '../plan-dashboard-panel.ts';
 import { CostTrackerPanel } from '../cost-tracker-panel.ts';
-import { IntelligencePanel } from '../intelligence-panel.ts';
-import { FileExplorerPanel } from '../file-explorer-panel.ts';
-import { FilePreviewPanel } from '../file-preview-panel.ts';
-import { SymbolOutlinePanel } from '../symbol-outline-panel.ts';
 import type { ResolvedBuiltinPanelDeps } from './shared.ts';
 import { requireUiServices, withUnconfiguredFallback } from './shared.ts';
 
+// W6.1 (the purge): plan, intelligence, explorer, preview, and symbols were
+// registered here before the purge. plan was RETIRE-INTO-FLEET (its
+// execution-plan view is subsumed by Fleet — operations.ts:84); the other
+// four were DELETE-disposition (no surviving human surface — intelligence's
+// read-model still backs the surviving `/intelligence` CLI subcommands, see
+// intelligence-runtime.ts; explorer/preview/symbols had no dedicated
+// read-model to preserve). See .goodvibes/audit/2026-07-04-wave6-briefs.json
+// (W6.1) for the full disposition map.
 export function registerDevelopmentPanels(manager: PanelManager, deps: ResolvedBuiltinPanelDeps): void {
   manager.registerType({
     id: 'git',
@@ -26,19 +29,9 @@ export function registerDevelopmentPanels(manager: PanelManager, deps: ResolvedB
     ),
   });
 
-  manager.registerType({
-    id: 'plan',
-    name: 'Plan',
-    // Distinct from Planning's 'P' (builtin/agent.ts) — interim glyph per
-    // WO-128; WO-152 owns the registry-wide icon-uniqueness assertion.
-    icon: '▤',
-    category: 'agent',
-    description: 'Active execution plan with phase progress and item status',
-    factory: () => {
-      const ui = requireUiServices(deps);
-      return new PlanDashboardPanel(ui.events.workflows, { planManager: deps.planManager });
-    },
-  });
+  // Compat: '/panel open plan' (and any saved layout/muscle memory) still
+  // resolves — redirected to fleet, which absorbs the execution-plan view.
+  manager.registerAlias('plan', 'fleet');
 
   manager.registerType({
     id: 'diff',
@@ -82,47 +75,4 @@ export function registerDevelopmentPanels(manager: PanelManager, deps: ResolvedB
       ),
     });
   }
-
-  manager.registerType({
-    id: 'intelligence',
-    name: 'Intelligence',
-    icon: 'J',
-    category: 'development',
-    description: 'Workspace diagnostics, symbol search, hover, and completion readiness with recovery guidance',
-    factory: () => new IntelligencePanel(requireUiServices(deps).readModels.intelligence),
-  });
-
-  manager.registerType({
-    id: 'explorer',
-    name: 'Explorer',
-    icon: 'E',
-    category: 'development',
-    description: 'File system browser with keyboard navigation',
-    factory: () => {
-        const ui = requireUiServices(deps);
-        return new FileExplorerPanel(ui.environment.workingDirectory, ui.environment.workingDirectory);
-      },
-    });
-
-  manager.registerType({
-    id: 'preview',
-    name: 'Preview',
-    // WO-152: was 'V' in the registry vs the live panel's own 'P' (base-panel
-    // super() call) — a pre-existing registry/instance icon mismatch as well
-    // as a collision (project-planning and plugins both also used 'P').
-    // Unified to a single unique glyph in both places.
-    icon: '◑',
-    category: 'development',
-    description: 'Syntax-highlighted file preview',
-    factory: () => new FilePreviewPanel(),
-  });
-
-  manager.registerType({
-    id: 'symbols',
-    name: 'Symbols',
-    icon: 'S',
-    category: 'development',
-    description: 'Symbol outline for the active file: functions, classes, and exports',
-    factory: () => new SymbolOutlinePanel(),
-  });
 }

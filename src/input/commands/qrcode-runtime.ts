@@ -1,5 +1,5 @@
 import type { CommandRegistry } from '../command-registry.ts';
-import { openCommandPanel } from './runtime-services.ts';
+import { openModalCommand } from './runtime-services.ts';
 
 /**
  * Register the /qrcode command.
@@ -11,9 +11,9 @@ export function registerQrcodeRuntimeCommands(registry: CommandRegistry): void {
   registry.register({
     name: 'qrcode',
     aliases: ['qr', 'pair'],
-    description: 'Open the QR code panel for companion app pairing',
+    description: 'Open the companion-app pairing modal (QR code)',
     handler(_args, ctx) {
-      openCommandPanel(ctx, 'qr-code');
+      openModalCommand(ctx, 'pairing-modal');
     },
   });
 }

@@ -203,3 +203,49 @@ describe('BasePanel.handleScroll default', () => {
     expect(p.handleScroll(3)).toBe(false);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Wave-6 replay fix: markDirty requests a compositor frame via the wired
+// requester — without it, live panels (fleet ticks/subscriptions) sat stale
+// while the app was idle until the next keypress produced a frame.
+// ---------------------------------------------------------------------------
+
+import { setPanelFrameRequester } from '../../panels/base-panel.ts';
+
+class DirtyPanel extends BasePanel {
+  public constructor() { super('dirty-test', 'Dirty', 'Y', 'runtime-ops'); }
+  public render(): Line[] { return []; }
+  public exposeMarkDirty(): void { this.markDirty(); }
+}
+
+describe('markDirty frame requesting', () => {
+  test('invokes the wired requester and sets needsRender', () => {
+    let frames = 0;
+    setPanelFrameRequester(() => { frames += 1; });
+    try {
+      const panel = new DirtyPanel();
+      panel.markRendered();
+      expect(panel.needsRender).toBe(false);
+      panel.exposeMarkDirty();
+      expect(panel.needsRender).toBe(true);
+      expect(frames).toBe(1);
+      // Already dirty: the pending frame covers it — no second request
+      // (guards against mid-render self-dirtying scheduling frames forever).
+      panel.exposeMarkDirty();
+      expect(frames).toBe(1);
+      panel.markRendered();
+      panel.exposeMarkDirty();
+      expect(frames).toBe(2);
+    } finally {
+      setPanelFrameRequester(null);
+    }
+  });
+
+  test('no requester wired — markDirty still safe and sets the flag', () => {
+    setPanelFrameRequester(null);
+    const panel = new DirtyPanel();
+    panel.markRendered();
+    expect(() => panel.exposeMarkDirty()).not.toThrow();
+    expect(panel.needsRender).toBe(true);
+  });
+});

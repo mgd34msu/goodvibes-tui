@@ -32,8 +32,6 @@ import { isPanelSearchBackspace, isPanelSearchCancel, isPanelSearchCommit, isPan
 import { buildAlignedRow, buildKeyboardHints, buildPanelLine, buildPanelWorkspace, buildSearchInputLine, DEFAULT_PANEL_PALETTE, getPanelWorkspaceContentBudget, type ColumnSpec, type PanelPalette } from './polish.ts';
 import {
   fleetKindTag,
-  fleetStateGlyph,
-  fleetStateTone,
   fleetUsageTokens,
   hasFleetCost,
   isRunningProcessState,
@@ -55,6 +53,7 @@ import {
   type SteerBadge,
 } from './fleet-tabs.ts';
 import { reconcileSteerBadges as reconcileSteerBadgesPure, steerBadgeGlyph, steerBadgeTone } from './fleet-steer.ts';
+import { FleetStopTracker, fleetStateDisplay, toggleFleetPause, buildFleetTreeHints } from './fleet-stop.ts';
 import { parseAgentLedger, renderFleetAgentTranscript, renderFleetChainSummary, renderFleetLedgerFallback, renderFleetTranscriptLoading } from './fleet-transcript.ts';
 import { renderFleetTabStrip } from '../renderer/fleet-tab-strip.ts';
 
@@ -112,6 +111,8 @@ function formatFleetCost(costUsd: number | null | undefined, costState: ProcessC
 export interface FleetActionCallbacks {
   /** Graceful interruption (AgentManager.cancel / trigger-schedule disable, via the registry). */
   readonly interrupt: (id: string) => boolean;
+  /** Wave-6 (wo-F item d2): re-arm a `paused` node (disabled trigger/schedule or automation job) — interrupt()'s inverse. Honest false when not paused / non-resumable. */
+  readonly resume: (id: string) => boolean;
   /** Hard stop, optionally cascading to killable descendants. Returns the node ids acted on. */
   readonly kill: (id: string, opts: { readonly cascade: boolean }) => readonly string[];
   /**
@@ -135,6 +136,7 @@ export interface FleetActionCallbacks {
 
 const NOOP_ACTIONS: FleetActionCallbacks = {
   interrupt: (_id: string) => false,
+  resume: (_id: string) => false,
   kill: (_id: string, _opts: { readonly cascade: boolean }) => [],
   getConversationSnapshot: (_agentId: string) => [],
   resolveSessionLogPath: (agentId: string) => agentId,
@@ -160,6 +162,9 @@ export class FleetPanel extends ScrollableListPanel<FleetTreeRow> {
    * default until the first navigation/tick establishes one).
    */
   private selectedNodeId: string | null = null;
+
+  /** d1 (W6.2): the "stopping…" write-window overlay tracker (see fleet-stop.ts). */
+  private readonly stopTracker = new FleetStopTracker();
 
   public constructor(
     private readonly readModel: FleetReadModel,
@@ -461,6 +466,7 @@ export class FleetPanel extends ScrollableListPanel<FleetTreeRow> {
         return true;
       }
       this.actions.interrupt(selected.node.id);
+      this.stopTracker.mark(selected.node.id);
       this.markDirty();
       return true;
     }
@@ -479,24 +485,27 @@ export class FleetPanel extends ScrollableListPanel<FleetTreeRow> {
         id: node.id,
         label: `${node.kind} ${shortId}${suffix}`,
         verb: 'Kill',
-        onConfirm: () => { this.actions.kill(node.id, { cascade: true }); },
+        // d1 (W6.2): mark 'stopping…' only once the kill is confirmed, not while
+        // the confirm overlay is merely armed.
+        onConfirm: () => {
+          this.actions.kill(node.id, { cascade: true });
+          this.stopTracker.mark(node.id);
+        },
       });
       return true;
     }
 
-    // B4 pause (wo703): reuses actions.interrupt verbatim — the registry's
-    // interrupt() already disables trigger/schedule nodes, just previously
-    // unreachable behind the interruptible gate (always false for them).
-    // pausable is the honest gate; no new action/registry plumbing needed.
+    // d2 (W6.2): 'p' toggles pause<->resume by the selected node's state (see
+    // toggleFleetPause in fleet-stop.ts).
     if (key === 'p') {
-      if (!selected || isTerminalProcessState(selected.node.state)) return false;
-      if (!selected.node.capabilities.pausable) {
-        this.setError(`${selected.node.kind} does not support pause.`);
-        return true;
-      }
-      this.actions.interrupt(selected.node.id);
-      this.markDirty();
-      return true;
+      if (!selected) return false;
+      return toggleFleetPause(selected.node, {
+        interrupt: (id) => this.actions.interrupt(id),
+        resume: (id) => this.actions.resume(id),
+        setError: (m) => this.setError(m),
+        markDirty: () => this.markDirty(),
+        tracker: this.stopTracker,
+      });
     }
 
     if (key === 'f') {
@@ -585,19 +594,25 @@ export class FleetPanel extends ScrollableListPanel<FleetTreeRow> {
 
   protected renderItem(row: FleetTreeRow, _index: number, _selected: boolean, width: number): Line {
     const node = row.node;
-    const tone = fleetStateTone(node.state);
-    const color = toneColor(tone, C);
+    // d1: while a stop is in flight, fleetStateDisplay overrides the state
+    // glyph/label/tone with a display-only 'stopping…' so the row never claims
+    // the past-tense outcome before the state has actually flipped.
+    const stopping = this.stopTracker.isStopping(node.id);
+    const disp = fleetStateDisplay(node.state, stopping);
+    const color = toneColor(disp.tone, C);
     const label = `${row.treePrefix}${node.label}`;
     const badge = this.steerBadgeForNode(node.id);
-    const activity = badge
-      ? `${steerBadgeGlyph(badge.status)} ${node.currentActivity?.text ?? ''}`.trimEnd()
-      : (node.currentActivity?.text ?? '');
-    const activityColor = badge ? steerBadgeTone(badge.status, C) : C.dim;
+    const activity = stopping
+      ? disp.label
+      : badge
+        ? `${steerBadgeGlyph(badge.status)} ${node.currentActivity?.text ?? ''}`.trimEnd()
+        : (node.currentActivity?.text ?? '');
+    const activityColor = stopping ? color : badge ? steerBadgeTone(badge.status, C) : C.dim;
 
     return buildAlignedRow(
       width,
       [
-        { text: fleetStateGlyph(node.state), fg: color },
+        { text: disp.glyph, fg: color },
         { text: fleetKindTag(node.kind), fg: C.dim },
         { text: label, fg: C.value },
         { text: formatElapsed(node.elapsedMs), fg: C.dim },
@@ -616,16 +631,19 @@ export class FleetPanel extends ScrollableListPanel<FleetTreeRow> {
 
   private renderDetail(row: FleetTreeRow, width: number): Line[] {
     const node = row.node;
-    const color = toneColor(fleetStateTone(node.state), C);
+    // d1: mirror the tree row's 'stopping…' override so the literal state text
+    // never claims 'killed' mid-write either.
+    const disp = fleetStateDisplay(node.state, this.stopTracker.isStopping(node.id));
+    const color = toneColor(disp.tone, C);
 
     const line1 = buildPanelLine(width, [
       [' ', C.dim],
-      [fleetStateGlyph(node.state), color],
+      [disp.glyph, color],
       [` ${node.kind}`, C.dim],
       ['  id ', C.label],
       [node.id, C.value],
       ['  state ', C.label],
-      [node.state, color],
+      [disp.label, color],
       ['  elapsed ', C.label],
       [formatElapsed(node.elapsedMs), C.value],
     ]);
@@ -704,7 +722,12 @@ export class FleetPanel extends ScrollableListPanel<FleetTreeRow> {
 
     if (tab.kind === 'wrfc-chain') {
       const memberRows = snapshotRows.filter((row) => row.node.parentId === tab.nodeId);
-      contentLines = renderFleetChainSummary(memberRows, width);
+      // d3 (W6.2): a completed chain prunes its wrapper node, so an empty member
+      // list can mean "finished", not "not started yet". Absent (pruned) OR
+      // terminal => the honest "completed" wording; present + non-terminal with
+      // no members yet => the "not started" wording.
+      const chainDoneOrAbsent = liveNode === null || isTerminalProcessState(liveNode.state);
+      contentLines = renderFleetChainSummary(memberRows, width, chainDoneOrAbsent);
     } else {
       const isTerminal = liveNode ? isTerminalProcessState(liveNode.state) : true;
       const snapshot = this.actions.getConversationSnapshot(tab.agentId);
@@ -751,29 +774,11 @@ export class FleetPanel extends ScrollableListPanel<FleetTreeRow> {
       footer.push(...this.renderDetail(selected, width));
     }
 
-    // Only advertise i/K when the selected node can actually accept them —
-    // most kinds (schedule/trigger/watcher/workflow/wrfc-chain/wrfc-subtask/
-    // background-process) are never interruptible, and any kind stops being
-    // killable once terminal. Matches the handleInput guards above.
-    const canInterrupt = selected !== undefined
-      && !isTerminalProcessState(selected.node.state)
-      && selected.node.capabilities.interruptible;
-    const canKill = selected !== undefined
-      && !isTerminalProcessState(selected.node.state)
-      && selected.node.capabilities.killable;
-    const canPause = selected !== undefined
-      && !isTerminalProcessState(selected.node.state)
-      && selected.node.capabilities.pausable;
-
-    const hints: Array<{ keys: string; label: string }> = [
-      { keys: 'j/k', label: 'navigate' },
-      { keys: 'Enter', label: 'attach' },
-    ];
-    if (canInterrupt) hints.push({ keys: 'i', label: 'interrupt' });
-    if (canKill) hints.push({ keys: 'K', label: 'kill' });
-    if (canPause) hints.push({ keys: 'p', label: 'pause' });
-    hints.push({ keys: 'f', label: this.follow ? 'follow:on' : 'follow' });
-    if (this.tabsState.tabs.length > 0) hints.push({ keys: '[ ]', label: 'tabs' });
+    // Capability-gated tree hints — only advertise i/K/p when the selected node
+    // can actually accept them (most kinds are never interruptible; nothing is
+    // killable once terminal), incl. the d2 state-dependent p pause/resume chip.
+    // Mirrors the handleInput guards above. See buildFleetTreeHints (fleet-stop.ts).
+    const hints = buildFleetTreeHints(selected?.node, this.follow, this.tabsState.tabs.length > 0);
 
     // Tab strip renders only when tabs exist — omitting it entirely with no
     // tabs attached keeps the pre-Wave-3 root-tree rendering byte-identical.

@@ -21,7 +21,7 @@ function buildState(overrides: Partial<PanelFocusRouteState> = {}): PanelFocusRo
     handlePathCompletion: mock(() => false),
     cyclePanelTab: mock(() => {}),
     onPanelInputConsumed: undefined,
-    isPrintableBurst: false,
+    isPasteToken: false,
     isTurnActive: () => false,
     cancelGeneration: mock(() => {}),
     ...overrides,
@@ -157,7 +157,7 @@ describe('handlePanelFocusToken', () => {
     const received: string[] = [];
     const state = buildState({
       panelFocused: true,
-      isPrintableBurst: false,
+      isPasteToken: false,
       panelManager: {
         isVisible: () => true,
         getAllOpen: () => [{ id: 'a' }],
@@ -172,62 +172,70 @@ describe('handlePanelFocusToken', () => {
     expect(received).toEqual(['r']);
   });
 
-  test('a multi-char text burst (bracketed paste: one token, multi-char value) unfocuses the panel and falls through to the prompt', () => {
+  test('Invariant B repro: two discrete 1-char tokens (isPasteToken false) BOTH reach the focused panel, focus unchanged', () => {
+    // The old per-feed char-sum burst guard flagged "j then k landing in one
+    // feed()" as a burst and yanked focus to the composer, dropping both nav
+    // keys. Under the per-token model each 1-char token has isPasteToken=false
+    // and is delivered to the panel one at a time.
     const received: string[] = [];
     const state = buildState({
       panelFocused: true,
-      isPrintableBurst: true,
+      isPasteToken: false,
       panelManager: {
         isVisible: () => true,
         getAllOpen: () => [{ id: 'a' }],
-        getActive: () => ({ id: 'a', handleInput: (k: string) => { received.push(k); return true; } }),
+        getActive: () => ({ id: 'a', name: 'fleet', handleInput: (k: string) => { received.push(k); return true; } }),
+        getActivePanel: () => ({ id: 'a' }),
+        close: () => {},
+      } as unknown as PanelFocusRouteState['panelManager'],
+    });
+    const first = handlePanelFocusToken(state, { type: 'text', value: 'j' });
+    const second = handlePanelFocusToken(state, { type: 'text', value: 'k' });
+    expect(received).toEqual(['j', 'k']);
+    expect(first.handled).toBe(true);
+    expect(first.panelFocused).toBe(true);
+    expect(second.handled).toBe(true);
+    expect(second.panelFocused).toBe(true);
+  });
+
+  test('Invariant A: a paste (one multi-char token) into a non-capturing focused panel is DROPPED with a hint, focus UNCHANGED', () => {
+    const received: string[] = [];
+    const hints: string[] = [];
+    const state = buildState({
+      panelFocused: true,
+      isPasteToken: true,
+      onPasteDropped: (panelName: string) => { hints.push(panelName); },
+      panelManager: {
+        isVisible: () => true,
+        getAllOpen: () => [{ id: 'a' }],
+        getActive: () => ({ id: 'a', name: 'fleet', handleInput: (k: string) => { received.push(k); return true; } }),
         getActivePanel: () => ({ id: 'a' }),
         close: () => {},
       } as unknown as PanelFocusRouteState['panelManager'],
     });
     // A real bracketed paste tokenizes to ONE 'text' token whose value is the
-    // whole pasted string (see InputTokenizer, tokenizer.ts ~178-198).
+    // whole pasted string (see InputTokenizer, tokenizer.js:18-28).
     const result = handlePanelFocusToken(state, { type: 'text', value: 'hello world' });
-    expect(received).toEqual([]);
-    expect(result.handled).toBe(false);
-    expect(result.panelFocused).toBe(false);
+    expect(received).toEqual([]);              // not exploded into per-char hotkeys
+    expect(result.handled).toBe(true);          // consumed here — never reaches the composer
+    expect(result.panelFocused).toBe(true);     // focus NOT flipped to the composer
+    expect(hints).toEqual(['fleet']);           // one-shot hint names the focused panel
     expect(state.requestRender).toHaveBeenCalled();
   });
 
-  test('a fast-typed burst (several 1-char text tokens from one feed() call) unfocuses the panel instead of firing per-char hotkeys', () => {
-    // isPrintableBurst is computed once per feedInputTokens() call over the
-    // WHOLE tokens array (handler-feed.ts), so a burst of individually
-    // 1-char tokens is flagged exactly the same way a single multi-char
-    // paste token is. Simulate feeding the tokens for "abc" one at a time
-    // with isPrintableBurst already true, as feedInputTokens would.
+  test('a paste is forwarded char-by-char when the focused panel owns a text capture (e.g. a `/`-search or steer-draft field)', () => {
     const received: string[] = [];
+    const hints: string[] = [];
     const state = buildState({
       panelFocused: true,
-      isPrintableBurst: true,
-      panelManager: {
-        isVisible: () => true,
-        getAllOpen: () => [{ id: 'a' }],
-        getActive: () => ({ id: 'a', handleInput: (k: string) => { received.push(k); return true; } }),
-        getActivePanel: () => ({ id: 'a' }),
-        close: () => {},
-      } as unknown as PanelFocusRouteState['panelManager'],
-    });
-    const first = handlePanelFocusToken(state, { type: 'text', value: 'a' });
-    expect(received).toEqual([]);
-    expect(first.handled).toBe(false);
-    expect(first.panelFocused).toBe(false);
-  });
-
-  test('a burst is still forwarded char-by-char when the active panel has an open text-capture buffer (e.g. a `/`-search field)', () => {
-    const received: string[] = [];
-    const state = buildState({
-      panelFocused: true,
-      isPrintableBurst: true,
+      isPasteToken: true,
+      onPasteDropped: (panelName: string) => { hints.push(panelName); },
       panelManager: {
         isVisible: () => true,
         getAllOpen: () => [{ id: 'a' }],
         getActive: () => ({
           id: 'a',
+          name: 'fleet',
           handleInput: (k: string) => { received.push(k); return true; },
           isCapturingTextBurst: () => true,
         }),
@@ -237,6 +245,7 @@ describe('handlePanelFocusToken', () => {
     });
     const result = handlePanelFocusToken(state, { type: 'text', value: 'abc' });
     expect(received).toEqual(['a', 'b', 'c']);
+    expect(hints).toEqual([]);                  // capture consumed it — no drop hint
     expect(result.handled).toBe(true);
     expect(result.panelFocused).toBe(true);
   });

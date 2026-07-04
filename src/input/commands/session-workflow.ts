@@ -79,11 +79,23 @@ function buildTranscriptReviewLines(
   ];
 }
 
-function reopenPanelsFromReturnContext(ctx: CommandContext, summary: SessionReturnContextSummary | undefined): string[] {
+// Exported (test-only concern) so the MIGRATE-TO-MODAL redirect-skip honesty
+// (W6 review, finding 3: saved-layout restore with 'sessions' must not lie)
+// can be unit-tested directly instead of through a full /resume harness.
+export function reopenPanelsFromReturnContext(ctx: CommandContext, summary: SessionReturnContextSummary | undefined): string[] {
   if (!summary?.openPanels || summary.openPanels.length === 0) return [];
   const panelManager = requirePanelManager(ctx);
   const reopened: string[] = [];
+  const movedToModal: string[] = [];
   for (const panelId of summary.openPanels.slice(0, 4)) {
+    // W6.1 (the purge): a MIGRATE-TO-MODAL id has no panel to restore — a modal
+    // is not part of the saved panel layout. Skip it (don't pop a modal
+    // mid-resume) and note it once, rather than firing openModal + revealing an
+    // empty workspace during resume.
+    if (panelManager.getModalRedirect(panelId) !== undefined) {
+      movedToModal.push(panelId);
+      continue;
+    }
     try {
       panelManager.open(panelId);
       reopened.push(panelId);
@@ -92,6 +104,9 @@ function reopenPanelsFromReturnContext(ctx: CommandContext, summary: SessionRetu
     }
   }
   if (reopened.length > 0) panelManager.show();
+  if (movedToModal.length > 0) {
+    ctx.print(`Note: ${movedToModal.join(', ')} moved to a modal — reopen via its command instead of as a panel.`);
+  }
   return reopened;
 }
 

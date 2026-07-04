@@ -33,7 +33,7 @@ export function registerSettingsSyncRuntimeCommands(registry: CommandRegistry): 
       const controlPlaneConfigDir = ctx.platform.configManager.getControlPlaneConfigDir();
       const sub = (args[0] ?? 'review').toLowerCase();
       if (sub === 'panel' || sub === 'open') {
-        openCommandPanel(ctx, 'settings-sync');
+        ctx.openModal?.('settings-sync-modal'); // W6.1: settings-sync panel -> config modal
         return;
       }
       if (sub === 'show') {

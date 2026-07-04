@@ -7,7 +7,6 @@ import {
 } from '../../core/format-user-error.ts';
 import { SystemMessageRouter, createSystemMessageRouter } from '../../core/system-message-router.ts';
 import type { ConversationManager } from '../../core/conversation';
-import type { SystemMessagesPanel, SystemMessagePriority } from '../../panels/system-messages-panel.ts';
 import type { SystemMessageKind, SystemMessageTarget } from '../../core/system-message-router.ts';
 
 // ---------------------------------------------------------------------------
@@ -128,14 +127,6 @@ function makeConversation(): {
   };
 }
 
-function makePanel(): { push: ReturnType<typeof mock>; _pushed: Array<{ text: string; priority: SystemMessagePriority }> } {
-  const _pushed: Array<{ text: string; priority: SystemMessagePriority }> = [];
-  return {
-    push: mock((text: string, priority: SystemMessagePriority) => { _pushed.push({ text, priority }); }),
-    _pushed,
-  } as unknown as { push: ReturnType<typeof mock>; _pushed: Array<{ text: string; priority: SystemMessagePriority }> };
-}
-
 function makeTargetResolver(
   overrides: Partial<Record<SystemMessageKind, SystemMessageTarget>> = {},
 ): (kind: SystemMessageKind) => SystemMessageTarget {
@@ -154,21 +145,22 @@ function simulateTurnError(
   router.high(`[Error] ${message} ${action}`);
 }
 
+// W6.1 (the purge): SystemMessagesPanel was DELETE-disposition and has been
+// removed; SystemMessageRouter no longer takes a panel argument at all (see
+// system-message-router.ts's file doc — every message now reaches
+// conversation.addTypedSystemMessage()). These tests used to also assert on
+// a mock panel's push() calls; that assertion is gone, the conversation
+// assertion is what remains and is unchanged in spirit.
 describe('TURN_ERROR -> SystemMessageRouter', () => {
   test('auth error routes as high-priority message containing /login', () => {
     const conv = makeConversation();
-    const panel = makePanel();
     const router = createSystemMessageRouter(
       conv as unknown as ConversationManager,
-      panel as unknown as SystemMessagesPanel,
       makeTargetResolver({ system: 'both' }),
     );
 
     simulateTurnError(router, { status: 401, message: 'Unauthorized' });
 
-    expect(panel._pushed).toHaveLength(1);
-    expect(panel._pushed[0]!.priority).toBe('high');
-    expect(panel._pushed[0]!.text).toContain('/login');
     expect(conv.addTypedSystemMessage).toHaveBeenCalledTimes(1);
     const [msg, kind] = (conv.addTypedSystemMessage as ReturnType<typeof mock>).mock.calls[0] as [string, string];
     expect(kind).toBe('system');
@@ -177,61 +169,53 @@ describe('TURN_ERROR -> SystemMessageRouter', () => {
 
   test('rate-limit error routes as high-priority message containing /model', () => {
     const conv = makeConversation();
-    const panel = makePanel();
     const router = createSystemMessageRouter(
       conv as unknown as ConversationManager,
-      panel as unknown as SystemMessagesPanel,
       makeTargetResolver({ system: 'both' }),
     );
 
     simulateTurnError(router, { status: 429, message: 'Too Many Requests' });
 
-    expect(panel._pushed[0]!.priority).toBe('high');
-    expect(panel._pushed[0]!.text).toContain('/model');
+    const [msg] = (conv.addTypedSystemMessage as ReturnType<typeof mock>).mock.calls[0] as [string, string];
+    expect(msg).toContain('/model');
   });
 
   test('context-overflow error routes as high-priority message containing /compact', () => {
     const conv = makeConversation();
-    const panel = makePanel();
     const router = createSystemMessageRouter(
       conv as unknown as ConversationManager,
-      panel as unknown as SystemMessagesPanel,
       makeTargetResolver({ system: 'both' }),
     );
 
     simulateTurnError(router, new Error('context window exceeded'));
 
-    expect(panel._pushed[0]!.priority).toBe('high');
-    expect(panel._pushed[0]!.text).toContain('/compact');
+    const [msg] = (conv.addTypedSystemMessage as ReturnType<typeof mock>).mock.calls[0] as [string, string];
+    expect(msg).toContain('/compact');
   });
 
   test('network error routes as high-priority message', () => {
     const conv = makeConversation();
-    const panel = makePanel();
     const router = createSystemMessageRouter(
       conv as unknown as ConversationManager,
-      panel as unknown as SystemMessagesPanel,
       makeTargetResolver({ system: 'both' }),
     );
 
     simulateTurnError(router, new Error('fetch failed'));
 
-    expect(panel._pushed[0]!.priority).toBe('high');
-    expect(panel._pushed[0]!.text).toMatch(/network/i);
+    const [msg] = (conv.addTypedSystemMessage as ReturnType<typeof mock>).mock.calls[0] as [string, string];
+    expect(msg).toMatch(/network/i);
   });
 
   test('generic error routes as high-priority message', () => {
     const conv = makeConversation();
-    const panel = makePanel();
     const router = createSystemMessageRouter(
       conv as unknown as ConversationManager,
-      panel as unknown as SystemMessagesPanel,
       makeTargetResolver({ system: 'both' }),
     );
 
     simulateTurnError(router, new Error('completely unknown failure'));
 
-    expect(panel._pushed[0]!.priority).toBe('high');
-    expect(panel._pushed[0]!.text).toMatch(/\[Error\]/i);
+    const [msg] = (conv.addTypedSystemMessage as ReturnType<typeof mock>).mock.calls[0] as [string, string];
+    expect(msg).toMatch(/\[Error\]/i);
   });
 });

@@ -4,41 +4,15 @@ export { BasePanel } from './base-panel.ts';
 export { PanelManager } from './panel-manager.ts';
 export { TokenBudgetPanel } from './token-budget-panel.ts';
 export { CostTrackerPanel } from './cost-tracker-panel.ts';
-export { AgentInspectorPanel } from './agent-inspector-panel.ts';
-export { WrfcPanel } from './wrfc-panel.ts';
-export { ProviderHealthPanel } from './provider-health-panel.ts';
-export { ProviderHealthTracker } from './provider-health-tracker.ts';
-export type { ProviderHealth, ProviderStatus } from './provider-health-tracker.ts';
 export { GitPanel } from './git-panel.ts';
-export { SymbolOutlinePanel } from './symbol-outline-panel.ts';
-export type { SymbolEntry, SymbolKind } from './symbol-outline-panel.ts';
-export { SessionBrowserPanel } from './session-browser-panel.ts';
-export { DocsPanel } from './docs-panel.ts';
-export { ThinkingPanel } from './thinking-panel.ts';
-export { ToolInspectorPanel } from './tool-inspector-panel.ts';
-export { DebugPanel } from './debug-panel.ts';
-export type { ApiCallEntry, ApiCallStatus } from './debug-panel.ts';
 export { registerBuiltinPanels } from './builtin-panels.ts';
 export type { BuiltinPanelDeps } from './builtin-panels.ts';
-export { IncidentReviewPanel } from './incident-review-panel.ts';
-export { PolicyPanel } from './policy-panel.ts';
+// W6.1 (the purge) — group B: plugins/skills panels are register-retired but
+// their modules are retained for shared non-class exports (PluginManagerControls;
+// discoverSkills + SkillRecord/SkillOrigin, consumed by command runtimes and the
+// skills modal). The other group-A and group-B panel classes are deleted outright
+// (their views migrated to config-modal surfaces in src/panels/modals/).
 export { PluginsPanel } from './plugins-panel.ts';
 export { SkillsPanel } from './skills-panel.ts';
-export { TasksPanel } from './tasks-panel.ts';
-export { OrchestrationPanel } from './orchestration-panel.ts';
-export { CommunicationPanel } from './communication-panel.ts';
-export { CockpitPanel } from './cockpit-panel.ts';
 export { FleetPanel } from './fleet-panel.ts';
 export type { FleetActionCallbacks } from './fleet-panel.ts';
-export { RemotePanel } from './remote-panel.ts';
-export { ServicesPanel } from './services-panel.ts';
-export { SubscriptionPanel } from './subscription-panel.ts';
-export { HooksPanel } from './hooks-panel.ts';
-export { SecurityPanel } from './security-panel.ts';
-export { MarketplacePanel } from './marketplace-panel.ts';
-export { SandboxPanel } from './sandbox-panel.ts';
-export { ApprovalPanel } from './approval-panel.ts';
-export { KnowledgeGraphPanel } from './knowledge-graph-panel.ts';
-export { SystemMessagesPanel } from './system-messages-panel.ts';
-export { PanelListPanel } from './panel-list-panel.ts';
-export type { SystemMessageEntry, SystemMessagePriority } from './system-messages-panel.ts';

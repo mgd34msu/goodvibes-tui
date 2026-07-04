@@ -23,14 +23,12 @@ import type { SelectionManager } from './selection.ts';
 import type { InfiniteBuffer } from '../core/history.ts';
 import type { AutocompleteEngine } from './autocomplete.ts';
 import type { BookmarkModal } from './bookmark-modal.ts';
-import type { AgentDetailModal } from '../renderer/agent-detail-modal.ts';
-import type { LiveTailModal } from '../renderer/live-tail-modal.ts';
 import type { SettingsModal } from './settings-modal.ts';
 import type { McpWorkspace } from './mcp-workspace.ts';
 import type { SessionPickerModal } from './session-picker-modal.ts';
+import type { ConfigModal } from './config-modal.ts';
 import type { ProfilePickerModal } from './profile-picker-modal.ts';
 import type { ContextInspectorModal } from '../renderer/context-inspector.ts';
-import type { ProcessModal } from '../renderer/process-modal.ts';
 import type { FilePickerModal } from './file-picker.ts';
 import type { BlockActionsMenu } from '../renderer/block-actions.ts';
 import type { SelectionModal } from './selection-modal.ts';
@@ -105,14 +103,12 @@ export interface InputHandlerLike {
 
   // ── Modal objects ─────────────────────────────────────────────────────────
   bookmarkModal: BookmarkModal;
-  agentDetailModal: AgentDetailModal;
-  liveTailModal: LiveTailModal;
   settingsModal: SettingsModal;
   mcpWorkspace: McpWorkspace;
   sessionPickerModal: SessionPickerModal;
   profilePickerModal: ProfilePickerModal;
+  configModal: ConfigModal;
   contextInspectorModal: ContextInspectorModal;
-  processModal: ProcessModal;
   modelPicker: ModelPickerModal;
   filePicker: FilePickerModal;
   blockActionsMenu: BlockActionsMenu;

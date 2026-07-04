@@ -19,15 +19,13 @@ import type { SelectionResult, SelectionAction } from './selection-modal.ts';
 import { SearchManager } from './search.ts';
 import { InputHistory, HistorySearch } from './input-history.ts';
 import type { BlockMeta, ConversationManager } from '../core/conversation';
-import { ProcessModal } from '../renderer/process-modal.ts';
-import { LiveTailModal } from '../renderer/live-tail-modal.ts';
 import { BlockActionsMenu } from '../renderer/block-actions.ts';
-import { AgentDetailModal } from '../renderer/agent-detail-modal.ts';
 import { ContextInspectorModal } from '../renderer/context-inspector.ts';
 import { BookmarkModal } from './bookmark-modal.ts';
 import { SettingsModal } from './settings-modal.ts';
 import { McpWorkspace } from './mcp-workspace.ts';
 import { SessionPickerModal } from './session-picker-modal.ts';
+import { ConfigModal } from './config-modal.ts';
 import { ProfilePickerModal } from './profile-picker-modal.ts';
 import { OnboardingWizardController, type OnboardingWizardAction, type OnboardingWizardMode } from './onboarding/onboarding-wizard.ts';
 import {
@@ -106,9 +104,7 @@ import {
   handleBlockActionsToken,
   handleEscapeOnlyModalToken,
   handleFilePickerToken,
-  handleLiveTailToken,
   handleModelPickerToken,
-  handleProcessModalToken,
 } from './handler-picker-routes.ts';
 import { handleGlobalShortcutToken } from './handler-shortcuts.ts';
 import { feedInputTokens } from './handler-feed.ts';
@@ -184,13 +180,11 @@ export class InputHandler implements InputHandlerLike {
   public modelPicker: ModelPickerModal;
   public selectionModal = new SelectionModal();
   public searchManager = new SearchManager();
-  public processModal: ProcessModal;
-  public liveTailModal: LiveTailModal;
-  public agentDetailModal: AgentDetailModal;
   public contextInspectorModal = new ContextInspectorModal();
   public bookmarkModal: BookmarkModal;
   public blockActionsMenu = new BlockActionsMenu();
   public settingsModal = new SettingsModal();
+  public configModal = new ConfigModal();
   public mcpWorkspace = new McpWorkspace();
   public onboardingWizard = new OnboardingWizardController();
   public onboardingModelPickerCancelSnapshot: OnboardingWizardSnapshot | null = null;
@@ -272,23 +266,8 @@ export class InputHandler implements InputHandlerLike {
       uiServices.providers.benchmarkStore,
       uiServices.providers.providerRegistry,
     );
-    this.processModal = new ProcessModal({
-      agentManager: uiServices.agents.agentManager,
-      processManager: uiServices.shell.processManager,
-      wrfcController: uiServices.agents.wrfcController,
-    });
-    this.liveTailModal = new LiveTailModal({
-      agentManager: uiServices.agents.agentManager,
-      processManager: uiServices.shell.processManager,
-    });
-    this.agentDetailModal = new AgentDetailModal({
-      agentManager: uiServices.agents.agentManager,
-      agentMessageBus: uiServices.agents.agentMessageBus,
-      sessionLogPathResolver: (agentId) => uiServices.environment.shellPaths.resolveProjectPath('tui', 'sessions', `${agentId}.jsonl`),
-      // SDK 0.23.0: supply wrfcController so the modal can show constraint data
-      wrfcController: uiServices.agents.wrfcController,
-      cancelAgent: (agentId: string) => uiServices.agents.agentManager.cancel(agentId),
-    });
+    // W6.1 retirement: ProcessModal/LiveTailModal/AgentDetailModal were removed
+    // — F2 now opens the Fleet panel, which subsumes the live process tree.
     this.bookmarkModal = new BookmarkModal(uiServices.shell.bookmarkManager);
     this.sessionPickerModal = new SessionPickerModal(uiServices.sessions.sessionManager);
     this.profilePickerModal = new ProfilePickerModal(uiServices.shell.profileManager);
@@ -322,6 +301,7 @@ export class InputHandler implements InputHandlerLike {
         mcpWorkspace: this.mcpWorkspace,
         sessionPickerModal: this.sessionPickerModal,
         profilePickerModal: this.profilePickerModal,
+        configModal: this.configModal,
         historySearch: this.historySearch,
         commandRegistry: this.commandRegistry,
         commandContext: this.commandContext,
@@ -329,9 +309,6 @@ export class InputHandler implements InputHandlerLike {
         filePicker: this.filePicker,
         modelPicker: this.modelPicker,
         onboardingWizard: this.onboardingWizard,
-        processModal: this.processModal,
-        liveTailModal: this.liveTailModal,
-        agentDetailModal: this.agentDetailModal,
         contextInspectorModal: this.contextInspectorModal,
         blockActionsMenu: this.blockActionsMenu,
         searchManager: this.searchManager,

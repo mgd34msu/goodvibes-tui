@@ -549,14 +549,18 @@ describe('buildFleetSnapshot — workstream/phase/work-item rollup (wo703)', () 
 describe('createFleetReadModel', () => {
   function makeRegistry(nodes: ProcessNode[]): FleetRegistryLike & {
     interruptCalls: string[];
+    resumeCalls: string[];
     killCalls: Array<{ id: string; opts: unknown }>;
     steerCalls: Array<{ id: string; text: string }>;
   } {
     const interruptCalls: string[] = [];
+    const resumeCalls: string[] = [];
     const killCalls: Array<{ id: string; opts: unknown }> = [];
     const steerCalls: Array<{ id: string; text: string }> = [];
     const listeners = new Set<(snap: { capturedAt: number; nodes: readonly ProcessNode[] }) => void>();
     return {
+      resume: (id: string) => { resumeCalls.push(id); return true; },
+      resumeCalls,
       query: () => ({ capturedAt: NOW, nodes }),
       subscribe: (listener) => {
         listeners.add(listener);
@@ -596,6 +600,13 @@ describe('createFleetReadModel', () => {
     expect(registry.interruptCalls).toEqual(['agent-x']);
     expect(model.kill('agent-x', { cascade: true })).toEqual(['agent-x']);
     expect(registry.killCalls).toEqual([{ id: 'agent-x', opts: { cascade: true } }]);
+  });
+
+  test('resume (d2) delegates to the underlying registry', () => {
+    const registry = makeRegistry([]);
+    const model = createFleetReadModel(registry);
+    expect(model.resume('sched-x')).toBe(true);
+    expect(registry.resumeCalls).toEqual(['sched-x']);
   });
 
   test('steer delegates to the underlying registry', () => {
@@ -653,9 +664,65 @@ describe('createStaticFleetReadModel', () => {
     const unsub = model.subscribe(() => { throw new Error('must not be called'); });
     expect(() => unsub()).not.toThrow();
     expect(model.interrupt('x')).toBe(false);
+    expect(model.resume('x')).toBe(false);
     expect(model.kill('x', { cascade: true })).toEqual([]);
     expect(model.steer('x', 'hello')).toEqual({ queued: false, reason: 'no live registry' });
     const unsubConsumed = model.subscribeConsumed(() => { throw new Error('must not be called'); });
     expect(() => unsubConsumed()).not.toThrow();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// d4 (W6.2): /schedule AutomationManager jobs surface in the fleet tree as
+// 'schedule'-kind nodes with the automation-manager source marker. The SDK's
+// adaptAutomationJob (platform/runtime/fleet/adapters/automation.ts) produces
+// the ProcessNode; this mirrors its exact documented output (a job created via
+// /schedule IS a schedule from the user's viewpoint) and proves the TUI
+// read-model surfaces it correctly — kind 'schedule', 'sched' tag, disabled ->
+// 'paused' + resumable, and the raw.source marker that distinguishes it from a
+// workflow-tool ScheduleEntry sharing the same kind.
+// ---------------------------------------------------------------------------
+
+/** Mirror of the SDK adaptAutomationJob output (not cleanly re-exported from the fleet index, so replicated here from its verified source shape). */
+function adaptedAutomationJobNode(job: { id: string; name: string; prompt: string; enabled: boolean }): ProcessNode {
+  return {
+    id: `automation-job:${job.id}`,
+    kind: 'schedule',
+    parentId: undefined,
+    label: job.name,
+    task: job.prompt,
+    state: (job.enabled ? 'idle' : 'paused') as ProcessState,
+    elapsedMs: 0,
+    costUsd: null,
+    costState: 'unpriced',
+    capabilities: { interruptible: false, killable: true, pausable: job.enabled, resumable: !job.enabled, steerable: false },
+    raw: { source: 'automation-manager', job },
+  } as ProcessNode;
+}
+
+describe('automation-sourced schedule node (d4)', () => {
+  test('a disabled /schedule job surfaces as a paused, resumable "schedule" node with the automation-manager source marker', () => {
+    const node = adaptedAutomationJobNode({ id: 'nightly', name: 'nightly digest', prompt: 'summarize', enabled: false });
+    const snapshot = buildFleetSnapshot([node], NOW);
+    const row = snapshot.rows.find((r) => r.node.id === 'automation-job:nightly');
+    expect(row).toBeDefined();
+    expect(row!.node.kind).toBe('schedule');
+    expect(fleetKindTag(row!.node.kind)).toBe('sched');
+    expect(row!.node.state).toBe('paused');
+    expect(row!.node.capabilities.resumable).toBe(true);
+    // The source marker distinguishes an automation job from a workflow-tool
+    // ScheduleEntry that shares the 'schedule' kind (isAutomationJobRaw's check).
+    expect((row!.node.raw as { source?: string }).source).toBe('automation-manager');
+  });
+
+  test('an enabled /schedule job surfaces as an idle, pausable "schedule" node', () => {
+    const node = adaptedAutomationJobNode({ id: 'hourly', name: 'hourly sync', prompt: 'sync', enabled: true });
+    const rows = buildFleetRows([node]);
+    const surfaced = rows.find((r) => r.node.id === 'automation-job:hourly');
+    expect(surfaced).toBeDefined();
+    expect(surfaced!.node.kind).toBe('schedule');
+    expect(surfaced!.node.state).toBe('idle');
+    expect(surfaced!.node.capabilities.pausable).toBe(true);
+    expect(surfaced!.node.capabilities.resumable).toBe(false);
   });
 });

@@ -9,6 +9,20 @@ import { fitDisplay } from '../utils/terminal-width.ts';
 /** Canonical error-surface foreground (bad/red), kept out of the render body. */
 const ERROR_FG = '#ef4444';
 
+/**
+ * Frame requester wired by main.ts to the render scheduler. Without it,
+ * markDirty() only sets a flag the compositor reads when a frame is ALREADY
+ * being composed for another reason (input, streaming) — so a live panel
+ * (fleet ticks, registry subscriptions) sat visibly stale while the app was
+ * idle until the next keypress (Wave-6 replay finding). The scheduler
+ * coalesces same-tick requests, so this stays cheap.
+ */
+let panelFrameRequester: (() => void) | null = null;
+
+export function setPanelFrameRequester(requester: (() => void) | null): void {
+  panelFrameRequester = requester;
+}
+
 export abstract class BasePanel implements Panel {
   public needsRender = true;
   public isTransient = false;
@@ -219,7 +233,14 @@ export abstract class BasePanel implements Panel {
   /** R2: Called by the compositor after a successful render to clear the dirty flag. */
   public markRendered(): void { this.needsRender = false; }
 
-  protected markDirty(): void { this.needsRender = true; }
+  protected markDirty(): void {
+    // Request only on the false→true transition: a pending frame already
+    // covers repeat marks, and a panel that dirties itself mid-render must
+    // not schedule frames forever.
+    const wasDirty = this.needsRender;
+    this.needsRender = true;
+    if (!wasDirty) panelFrameRequester?.();
+  }
 
   /**
    * Check whether the panel is currently permitted to render.

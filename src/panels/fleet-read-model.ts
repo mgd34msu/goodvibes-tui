@@ -89,8 +89,9 @@ const STATE_GLYPHS: Record<ProcessState, string> = {
   idle: '·',
   queued: '…',
   // Wave-6 SDK: schedules/triggers/automation jobs report 'paused' when
-  // disabled (previously mislabeled 'killed'). NOT terminal — resumable.
-  // '❚' verified free against every other glyph in this table.
+  // disabled (previously mislabeled 'killed'). NOT terminal — resumable via
+  // ProcessRegistry.resume() (W6.2 d2 wires the full pause/resume UI in
+  // fleet-stop.ts). '❚' verified free against every other glyph in this table.
   paused: '❚',
 };
 
@@ -390,6 +391,13 @@ export interface FleetReadModel {
   subscribe(listener: () => void): () => void;
   /** Graceful interruption where the source supports one. Returns true when accepted. */
   interrupt(id: string): boolean;
+  /**
+   * Wave-6 (wo-F item d2): re-arm a `paused` node (a disabled trigger/schedule,
+   * or an automation job). The inverse of interrupt()'s pause. Returns true when
+   * accepted; false for a node that is not currently `paused` or whose kind has
+   * no resume path (honest refusal).
+   */
+  resume(id: string): boolean;
   /** Hard stop, optionally cascading to descendants. Returns the node ids acted on. */
   kill(id: string, opts?: { readonly cascade?: boolean }): readonly string[];
   /**
@@ -411,7 +419,7 @@ export interface FleetReadModel {
 }
 
 /** Narrow surface of ProcessRegistry this read-model depends on. */
-export type FleetRegistryLike = Pick<ProcessRegistry, 'query' | 'subscribe' | 'interrupt' | 'kill' | 'steer'>;
+export type FleetRegistryLike = Pick<ProcessRegistry, 'query' | 'subscribe' | 'interrupt' | 'resume' | 'kill' | 'steer'>;
 
 /**
  * Create a live FleetReadModel backed by the SDK's ProcessRegistry.
@@ -433,6 +441,9 @@ export function createFleetReadModel(
     },
     interrupt(id: string): boolean {
       return registry.interrupt(id);
+    },
+    resume(id: string): boolean {
+      return registry.resume(id);
     },
     kill(id: string, opts?: { readonly cascade?: boolean }): readonly string[] {
       return registry.kill(id, opts);
@@ -458,6 +469,7 @@ export function createStaticFleetReadModel(snapshot: FleetSnapshot): FleetReadMo
     getSnapshot: () => snapshot,
     subscribe: () => () => {},
     interrupt: () => false,
+    resume: () => false,
     kill: () => [],
     steer: () => ({ queued: false, reason: 'no live registry' }),
     subscribeConsumed: () => () => {},

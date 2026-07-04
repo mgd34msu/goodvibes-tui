@@ -7,7 +7,8 @@ export type AgentInspectorEntryKind = 'user' | 'assistant' | 'tool_call' | 'tool
 
 // ---------------------------------------------------------------------------
 // Shared agent status / stall constants
-// Used by AgentInspectorPanel, AgentDetailModal, and cockpit read-model consumers.
+// Used by the Fleet panel's agent views and read-model consumers (formerly also
+// AgentDetailModal, which was retired in W6.1).
 // ---------------------------------------------------------------------------
 
 /** Terminal statuses — cancel not offered; stall check skipped. */

@@ -22,15 +22,13 @@ import type { SelectionResult } from './selection-modal.ts';
 import type { SearchManager } from './search.ts';
 import type { InputHistory, HistorySearch } from './input-history.ts';
 import type { ConversationManager } from '../core/conversation';
-import type { ProcessModal } from '../renderer/process-modal.ts';
-import type { LiveTailModal } from '../renderer/live-tail-modal.ts';
 import type { BlockActionsMenu } from '../renderer/block-actions.ts';
-import type { AgentDetailModal } from '../renderer/agent-detail-modal.ts';
 import type { ContextInspectorModal } from '../renderer/context-inspector.ts';
 import type { BookmarkModal } from './bookmark-modal.ts';
 import type { SettingsModal } from './settings-modal.ts';
 import type { McpWorkspace } from './mcp-workspace.ts';
 import type { SessionPickerModal } from './session-picker-modal.ts';
+import type { ConfigModal } from './config-modal.ts';
 import type { ProfilePickerModal } from './profile-picker-modal.ts';
 import type { OnboardingWizardController } from './onboarding/onboarding-wizard.ts';
 import type { WrappedPromptInfo } from './handler-prompt-buffer.ts';
@@ -83,8 +81,7 @@ export interface FeedContextMutableInit {
  *   - `pasteRegistry`, `imageRegistry` — owned Maps, never replaced
  *   - `selectionModal`, `bookmarkModal`, `settingsModal`, `sessionPickerModal`,
  *     `profilePickerModal` — modal objects constructed once
- *   - `filePicker`, `modelPicker`, `processModal`, `liveTailModal`,
- *     `agentDetailModal`, `contextInspectorModal`, `blockActionsMenu`,
+ *   - `filePicker`, `modelPicker`, `contextInspectorModal`, `blockActionsMenu`,
  *     `searchManager`, `historySearch`, `onboardingWizard` — service objects constructed once
  *   - `panelManager`, `keybindingsManager` — from uiServices, stable
  *   - `modalStack` — reference to the handler's shared array
@@ -110,6 +107,7 @@ export interface FeedContextStableRefs {
   mcpWorkspace: McpWorkspace;
   sessionPickerModal: SessionPickerModal;
   profilePickerModal: ProfilePickerModal;
+  configModal: ConfigModal;
   historySearch: HistorySearch;
   commandRegistry: CommandRegistry | null;
   commandContext: CommandContext | undefined;
@@ -117,9 +115,6 @@ export interface FeedContextStableRefs {
   filePicker: FilePickerModal;
   modelPicker: ModelPickerModal;
   onboardingWizard: OnboardingWizardController;
-  processModal: ProcessModal;
-  liveTailModal: LiveTailModal;
-  agentDetailModal: AgentDetailModal;
   contextInspectorModal: ContextInspectorModal;
   blockActionsMenu: BlockActionsMenu;
   searchManager: SearchManager;

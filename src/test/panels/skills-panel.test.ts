@@ -4,13 +4,11 @@ import { join } from 'node:path';
 import { PanelManager } from '../../panels/panel-manager.ts';
 import { registerBuiltinPanels } from '../../panels/builtin-panels.ts';
 import { SkillsPanel, discoverSkills } from '../../panels/skills-panel.ts';
-import { FilePreviewPanel } from '../../panels/file-preview-panel.ts';
 import { RuntimeEventBus, installEcosystemCatalogEntry } from '@/runtime/index.ts';
 import { createRuntimeServices } from '../../runtime/services.ts';
 import { createUiRuntimeServices } from '../../runtime/ui-services.ts';
 import { createRuntimeStore } from '../../runtime/store/index.ts';
 import type { Line } from '../../types/grid.ts';
-import { SystemMessagesPanel } from '../../panels/system-messages-panel.ts';
 import type { ShellPathService } from '@/runtime/index.ts';
 import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 
@@ -82,9 +80,13 @@ describe('SkillsPanel', () => {
       componentHealthMonitor: services.componentHealthMonitor,
       worktreeRegistry: services.worktreeRegistry,
       sandboxSessionRegistry: services.sandboxSessionRegistry,
-      systemMessagesPanel: new SystemMessagesPanel(services.configManager, services.componentHealthMonitor),
     });
-    expect(manager.getRegisteredTypes().some((entry) => entry.id === 'skills')).toBe(true);
+    // W6.1 (the purge) — group B: skills migrated to the 'skills-modal' config-
+    // modal surface (WO-P). The panel is no longer a registered type; the id
+    // redirects to the surface (registered in registerBuiltinModals).
+    expect(manager.getRegisteredTypes().some((entry) => entry.id === 'skills')).toBe(false);
+    expect(manager.getModalRedirect('skills')).toBe('skills-modal');
+    expect(manager.getModalSurface('skills-modal')?.name).toBe('skills-modal');
   });
 
   test('discovers project-local skills before global skills and renders origin path', async () => {
@@ -240,44 +242,25 @@ describe('SkillsPanel', () => {
     expect(text).toContain('No skills discovered');
   });
 
-  test('Enter opens the selected skill markdown in the preview panel', async () => {
+  // W6.1 (the purge): Enter used to open the skill's markdown source in the
+  // preview panel via handlePanelIntegrationAction. 'preview' is
+  // DELETE-disposition with no successor surface, so that cross-panel jump
+  // was removed rather than repointed — Enter is now a no-op key-consume
+  // (browse-only) on this list until WO-B migrates Skills to a modal.
+  test('Enter on a skill row is consumed but no longer opens a preview panel', async () => {
     writeSkill(
       cwd,
       '.goodvibes/tui/skills/alpha/SKILL.md',
       ['---', 'name: alpha', 'description: Alpha skill', '---', ''].join('\n'),
     );
-    const manager = new PanelManager();
-    const services = createRuntimeServices({
-      configManager: new ConfigManager({ surfaceRoot: 'tui',
-        workingDir: cwd,
-        homeDir,
-        configDir: join(homeDir, '.goodvibes', 'test-skills-preview'),
-      }),
-      runtimeBus: new RuntimeEventBus(),
-      runtimeStore: createRuntimeStore(),
-      workingDir: cwd,
-      homeDirectory: homeDir,
-    });
-    const uiServices = createUiRuntimeServices(services);
-    registerBuiltinPanels(manager, {
-      providerRegistry: services.providerRegistry,
-      uiServices,
-      tokenAuditor: services.tokenAuditor,
-      componentHealthMonitor: services.componentHealthMonitor,
-      worktreeRegistry: services.worktreeRegistry,
-      sandboxSessionRegistry: services.sandboxSessionRegistry,
-      systemMessagesPanel: new SystemMessagesPanel(services.configManager, services.componentHealthMonitor),
-    });
-
-    const skillsPanel = manager.open('skills') as SkillsPanel;
+    // W6.1 (the purge): skills is register-retired (redirects to the modal), so
+    // construct the retained panel class directly — the same pattern the other
+    // tests in this file use — to exercise its Enter/no-preview behavior.
+    const skillsPanel = new SkillsPanel({ shellPaths: makeShellPaths(cwd, homeDir) });
     skillsPanel.onActivate();
     await skillsPanel.awaitReady();
     expect(skillsPanel.handleInput('enter')).toBe(true);
-    expect(skillsPanel.handlePanelIntegrationAction('enter', { panelManager: manager })).toBe(true);
-
-    const previewPanel = manager.getPanel('preview');
-    expect(previewPanel).toBeInstanceOf(FilePreviewPanel);
-    expect((previewPanel as FilePreviewPanel).getCurrentFilePath()).toContain('alpha');
+    expect(skillsPanel.handlePanelIntegrationAction).toBeUndefined();
   });
 
   test('tags marketplace-installed skills with provenance from the install receipt', async () => {

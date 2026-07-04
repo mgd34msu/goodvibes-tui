@@ -19,7 +19,7 @@ import {
   type EcosystemCatalogEntry,
   type EcosystemEntryKind,
 } from '@/runtime/index.ts';
-import { openCommandPanel, requireEcosystemCatalogPaths, requireReadModels, requireShellPaths } from './runtime-services.ts';
+import { openModalCommand, requireEcosystemCatalogPaths, requireReadModels, requireShellPaths } from './runtime-services.ts';
 
 function resolveMarketplaceEntry(
   kind: EcosystemEntryKind,
@@ -45,7 +45,7 @@ export function registerMarketplaceRuntimeCommands(registry: CommandRegistry): v
       const ecosystemPaths = requireEcosystemCatalogPaths(ctx);
       const sub = args[0] ?? 'open';
       if (sub === 'open' || sub === 'panel') {
-        openCommandPanel(ctx, 'marketplace');
+        openModalCommand(ctx, 'marketplace-modal');
         return;
       }
       if (sub === 'overview') {

@@ -464,6 +464,69 @@ describe('ModelPickerModal', () => {
     });
   });
 
+  // ── Embedding provider picker (B29) ──────────────────────────────────────
+
+  describe('openEmbeddingProviders()', () => {
+    const PROVIDERS = [
+      { id: 'hashed-local', label: 'Hashed Local Embeddings', dimensions: 384, configured: true },
+      { id: 'openai', label: 'OpenAI Embeddings', dimensions: 1536, configured: false, detail: 'Set OPENAI_API_KEY to enable.' },
+    ];
+
+    test('activates the picker in embeddingProvider mode and selects the current provider', () => {
+      picker.openEmbeddingProviders(PROVIDERS, 'openai');
+      expect(picker.active).toBe(true);
+      expect(picker.mode).toBe('embeddingProvider');
+      expect(picker.selectedIndex).toBe(1);
+      expect(picker.embeddingProviders).toEqual(PROVIDERS);
+    });
+
+    test('falls back to index 0 when the current provider id is not in the list', () => {
+      picker.openEmbeddingProviders(PROVIDERS, 'nonexistent');
+      expect(picker.selectedIndex).toBe(0);
+    });
+
+    test('getItemCount reflects the embedding provider list length', () => {
+      picker.openEmbeddingProviders(PROVIDERS, 'hashed-local');
+      expect(picker.getItemCount()).toBe(2);
+    });
+
+    test('getItems shows unconfigured providers honestly, not hidden', () => {
+      picker.openEmbeddingProviders(PROVIDERS, 'hashed-local');
+      const items = picker.getItems();
+      expect(items).toHaveLength(2);
+      const openaiItem = items.find((item) => item.id === 'openai');
+      expect(openaiItem?.isConfigured).toBe(false);
+      expect(openaiItem?.detail).toContain('unconfigured');
+      const localItem = items.find((item) => item.id === 'hashed-local');
+      expect(localItem?.isConfigured).toBe(true);
+      expect(localItem?.detail).not.toContain('unconfigured');
+    });
+
+    test('close() resets embeddingProviders and the picker session', () => {
+      picker.openEmbeddingProviders(PROVIDERS, 'hashed-local');
+      picker.close();
+      expect(picker.embeddingProviders).toHaveLength(0);
+      expect(picker.active).toBe(false);
+    });
+
+    test('setTarget("embeddings") switches mode to embeddingProvider and restores it on leaving', () => {
+      picker.openAllModels(ALL_MODELS, 'free-1');
+      picker.embeddingProviders = PROVIDERS;
+      picker.setTargetInfos([
+        { target: 'main', label: 'Main Chat', description: '', provider: 'provA', model: 'provA:free-1', enabled: true, inherited: false },
+        { target: 'embeddings', label: 'Embeddings', description: '', provider: 'hashed-local', model: '', enabled: true, inherited: false },
+      ]);
+      expect(picker.mode).toBe('model');
+
+      picker.setTarget('embeddings');
+      expect(picker.mode).toBe('embeddingProvider');
+      expect(picker.selectedIndex).toBe(0); // aligned to hashed-local
+
+      picker.setTarget('main');
+      expect(picker.mode).toBe('model');
+    });
+  });
+
   // ── Mode transitions ──────────────────────────────────────────────────────
 
   describe('mode transitions', () => {

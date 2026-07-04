@@ -5,7 +5,15 @@ import type {
   ProjectPlanningState,
 } from '@pellux/goodvibes-sdk/platform/knowledge';
 import type { CommandRegistry } from '../command-registry.ts';
-import { requirePlanManager, requireSessionLineageTracker } from './runtime-services.ts';
+import { openModalCommand, requirePlanManager, requireSessionLineageTracker } from './runtime-services.ts';
+
+/**
+ * Single-token verbs that look like a `/plan` subcommand but are not real ones
+ * (some, like `dismiss`, were dispatched by UI that assumed a subcommand that
+ * never existed). A lone one of these is refused rather than seeded as a goal,
+ * so a stray verb can never overwrite the project goal with itself.
+ */
+const PSEUDO_SUBCOMMAND_VERBS = new Set(['dismiss', 'answer', 'pause', 'stop', 'cancel']);
 
 function recordNextQuestion(
   state: Partial<ProjectPlanningState>,
@@ -43,7 +51,7 @@ function formatNextQuestion(question: ProjectPlanningQuestion | undefined): stri
   if (!question) return 'No next question recorded.';
   const lines = [`Next question: ${question.prompt}`];
   if (question.recommendedAnswer) lines.push(`Recommended answer: ${question.recommendedAnswer}`);
-  lines.push('Answer in the prompt, or focus the Planning panel to choose/type an answer.');
+  lines.push('Answer in the prompt, or open the Planning modal to choose/type an answer.');
   return lines.join('\n');
 }
 
@@ -67,7 +75,7 @@ export function registerPlanningRuntimeCommands(registry: CommandRegistry): void
 
       const projectPlanningService = ctx.workspace.projectPlanningService;
       const projectId = ctx.workspace.projectPlanningProjectId;
-      const openProjectPlanningPanel = () => ctx.showPanel?.('project-planning');
+      const openProjectPlanningPanel = () => openModalCommand(ctx, 'planning-modal');
 
       if (args.length === 0) {
         if (projectPlanningService && projectId) {
@@ -162,6 +170,21 @@ export function registerPlanningRuntimeCommands(registry: CommandRegistry): void
           return;
         }
         ctx.print(planManager.toMarkdown(plan));
+        return;
+      }
+
+      // Defense (Wave 6 review): a single verb-looking token is almost never a
+      // real planning goal — it is a mistyped or removed subcommand. The
+      // Planning modal used to dispatch `/plan dismiss`, which has no
+      // subcommand and silently fell through to this free-form branch, seeding
+      // the goal with the literal "dismiss". Refuse to seed on a lone
+      // known-or-formerly-planned verb and point at the real usage instead of
+      // corrupting the goal.
+      if (args.length === 1 && PSEUDO_SUBCOMMAND_VERBS.has(args[0].toLowerCase())) {
+        ctx.print(
+          `Unknown /plan subcommand "${args[0]}" — did you mean panel, approve, list, show, or status? ` +
+          `To seed a planning goal, use /plan <a real sentence describing the change>.`,
+        );
         return;
       }
 
