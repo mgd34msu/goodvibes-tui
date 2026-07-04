@@ -101,6 +101,8 @@ export interface UiRuntimeSharedServices {
     readonly distributedRuntime: RuntimeServices['distributedRuntime'];
     readonly remoteRunnerRegistry: RuntimeServices['remoteRunnerRegistry'] & RemoteRunnerRegistry;
     readonly remoteSupervisor: RuntimeServices['remoteSupervisor'] & RemoteSupervisor;
+    /** W2.2: the shared live process registry backing the Fleet panel. */
+    readonly processRegistry: RuntimeServices['processRegistry'];
   };
 }
 
@@ -183,6 +185,7 @@ export function createUiRuntimeServices(
       distributedRuntime: runtimeServices.distributedRuntime,
       remoteRunnerRegistry: runtimeServices.remoteRunnerRegistry,
       remoteSupervisor: runtimeServices.remoteSupervisor,
+      processRegistry: runtimeServices.processRegistry,
     },
     events: createUiRuntimeEvents(runtimeServices.runtimeBus),
     readModels: createUiReadModels(runtimeServices, options),

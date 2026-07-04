@@ -88,6 +88,8 @@ import {
   createWorkflowServices,
   type WorkflowServices,
 } from '@pellux/goodvibes-sdk/platform/tools';
+import { createProcessRegistry, type ProcessRegistry } from '@pellux/goodvibes-sdk/platform/runtime/fleet';
+import { calcSessionCost, isModelPriced } from '../export/cost-utils.ts';
 import { WorkPlanStore } from '../work-plans/work-plan-store.ts';
 import {
   registerDaemonHandlers,
@@ -249,6 +251,8 @@ export interface RuntimeServices {
   readonly agentOrchestrator: AgentOrchestrator;
   readonly wrfcController: WrfcController;
   readonly processManager: ProcessManager;
+  /** W2.1/W2.2: unified live process registry (agents, WRFC chains, workflows, watchers, background processes) backing the Fleet panel. */
+  readonly processRegistry: ProcessRegistry;
   readonly modeManager: ModeManager;
   readonly fileUndoManager: FileUndoManager;
   readonly workspaceCheckpointManager: WorkspaceCheckpointManager;
@@ -605,6 +609,26 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
     artifactStore,
   });
   const processManager = new ProcessManager();
+  // W2.1/W2.2: one shared process registry aggregating the managers above —
+  // the Fleet panel (panels/fleet-read-model.ts) is its first consumer.
+  // Constructed once here (not per-consumer) so the coalesced tick and the
+  // agent-activity side-table are shared, not duplicated.
+  const processRegistry = createProcessRegistry({
+    agentManager,
+    wrfcController,
+    processManager,
+    watcherRegistry,
+    workflow,
+    approvalBroker,
+    sessionBroker,
+    runtimeBus: options.runtimeBus,
+    // Honest pricing: never fabricate a cost for an unrecognized model.
+    priceUsage: (model, usage) => {
+      const modelId = model ?? 'unknown';
+      if (!isModelPriced(modelId)) return null;
+      return calcSessionCost(usage.inputTokens, usage.outputTokens, usage.cacheReadTokens, usage.cacheWriteTokens, modelId);
+    },
+  });
   const modeManager = new ModeManager();
   const fileUndoManager = new FileUndoManager();
   const workspaceCheckpointManager = new WorkspaceCheckpointManager({
@@ -752,6 +776,7 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
     agentOrchestrator,
     wrfcController,
     processManager,
+    processRegistry,
     modeManager,
     fileUndoManager,
     workspaceCheckpointManager,
