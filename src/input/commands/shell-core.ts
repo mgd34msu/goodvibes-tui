@@ -163,7 +163,10 @@ export function registerShellCoreCommands(registry: CommandRegistry): void {
           { id: '/quit', label: '/quit', detail: 'Exit', category: 'Tools & System' },
           { id: '/wq', label: '/wq', detail: 'Commit all git changes and then exit', category: 'Tools & System' },
         ];
-        ctx.openSelection('Help  —  Commands', items, { allowSearch: true }, (result) => {
+        // UX-C: every item here is a command, and picking one RUNS it — label
+        // the verb "Run" (matching the slash-command palette) instead of the
+        // generic "Select" default.
+        ctx.openSelection('Help  —  Commands', items, { allowSearch: true, primaryVerbLabel: 'Run' }, (result) => {
           if (!result) return;
           const command = result.item.id;
           if (command.startsWith('/')) {

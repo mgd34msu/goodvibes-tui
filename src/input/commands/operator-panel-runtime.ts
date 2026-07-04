@@ -50,11 +50,12 @@ export function registerOperatorPanelCommand(registry: CommandRegistry): void {
           // no panel lands in the workspace. Report that honestly rather than
           // claiming "Panel opened: <id>".
           const redirectTarget = pm.getModalRedirect(id);
+          // UX-C focus rule 1a: the command path leaves focus in the composer
+          // ("mid-command-flow") — neither branch here grabs panel focus.
           if (ctx.showPanel) ctx.showPanel(id, pane as 'top' | 'bottom' | undefined);
           else {
             pm.open(id, pane as 'top' | 'bottom' | undefined);
             pm.show();
-            ctx.focusPanels?.();
             ctx.renderRequest();
           }
           if (redirectTarget) {
@@ -146,11 +147,12 @@ export function registerOperatorPanelCommand(registry: CommandRegistry): void {
       } else {
         const id = args[0]!;
         try {
+          // UX-C: bare `/panel <id>` is the same command path as `/panel open
+          // <id>` — composer stays focused.
           if (ctx.showPanel) ctx.showPanel(id);
           else {
             pm.open(id);
             pm.show();
-            ctx.focusPanels?.();
             ctx.renderRequest();
           }
         } catch {

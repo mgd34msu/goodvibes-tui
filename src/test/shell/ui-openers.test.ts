@@ -153,12 +153,24 @@ describe('wireShellUiOpeners', () => {
     expect(conversation.setSplashSuppressed).toHaveBeenCalledWith(false);
   });
 
-  test('showPanel opens, shows, and focuses the panel workspace', () => {
+  // UX-C item 1a: showPanel is exclusively called from the command path
+  // (/panel open, /tasks, /routes, ...) — it now opens/shows the panel but
+  // leaves keyboard focus in the composer by default ("the user is
+  // mid-command-flow"). A caller that explicitly opts in with { focus: true }
+  // still gets focusPanels() called.
+  test('showPanel opens and shows the panel workspace WITHOUT grabbing focus by default', () => {
     (commandContext.showPanel as (panelId: string) => void)('tasks');
     expect(panelManager.open).toHaveBeenCalledWith('tasks', undefined);
     expect(panelManager.show).toHaveBeenCalled();
-    expect(panelManager.focusPanels).toHaveBeenCalled();
+    expect(panelManager.focusPanels).not.toHaveBeenCalled();
     expect(conversation.setSplashSuppressed).toHaveBeenCalledWith(true);
+  });
+
+  test('showPanel(id, pane, { focus: true }) still grabs focus — the escape hatch', () => {
+    (commandContext.showPanel as (panelId: string, pane?: 'top' | 'bottom', opts?: { focus?: boolean }) => void)(
+      'tasks', undefined, { focus: true },
+    );
+    expect(panelManager.focusPanels).toHaveBeenCalled();
   });
 
   test('openOnboardingWizard delegates through the shared opener seam', () => {

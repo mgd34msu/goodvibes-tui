@@ -306,7 +306,13 @@ describe('command modal handoff', () => {
     expect(state.nextImageId).toBe(2);
   });
 
-  test('slash panel commands can hand focus directly to the panel workspace', async () => {
+  // UX-C item 1a: the command path ("/panel open <id>" and every other
+  // command that opens a panel) leaves keyboard focus in the composer by
+  // default now — "the user is mid-command-flow". This used to force
+  // panelFocused=true unconditionally; the evaluator's ranked friction catalog
+  // treats an implicit focus grab from a typed command as the same class of
+  // bug as chords silently absorbing typed text.
+  test('slash panel commands open the panel but leave focus in the composer by default (UX-C: command path never auto-focuses)', async () => {
     const modalStack = ['command'];
     const registry = new CommandRegistry();
     let showPanelCalled = false;
@@ -341,8 +347,40 @@ describe('command modal handoff', () => {
 
     expect(handled).toBe(true);
     expect(showPanelCalled).toBe(true);
-    expect(state.panelFocused).toBe(true);
+    expect(state.panelFocused).toBe(false);
     expect(state.commandMode).toBe(false);
+  });
+
+  test('a command that explicitly opts in with showPanel(id, pane, { focus: true }) still grabs focus (escape hatch preserved)', async () => {
+    const modalStack = ['command'];
+    const registry = new CommandRegistry();
+    registry.register({
+      name: 'panel',
+      description: 'Open panel',
+      handler: (_args, ctx) => {
+        ctx.showPanel?.('git', undefined, { focus: true });
+      },
+    });
+    const state = {
+      commandMode: true,
+      prompt: '/panel',
+      cursorPos: '/panel'.length,
+      autocomplete: null,
+      modalStack,
+      commandRegistry: registry,
+      commandContext: makeCommandContext({ showPanel: () => {} }),
+      panelFocused: false,
+      panelManager: makePanelManager(),
+      conversationManager: { log: () => {} } as never,
+      requestRender: () => {},
+      handleEscape: () => {},
+    };
+
+    const handled = handleCommandModeToken(state, key('enter'));
+    await Promise.resolve();
+
+    expect(handled).toBe(true);
+    expect(state.panelFocused).toBe(true);
   });
 
   test('after escape closes slash mode, subsequent typing stays in normal prompt mode until / is typed again', async () => {

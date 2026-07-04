@@ -250,6 +250,54 @@ describe('handlePanelFocusToken', () => {
     expect(result.panelFocused).toBe(true);
   });
 
+  // UX-C item 1d: '/' is a new, explicit transfer verb — consistent with the
+  // Wave-6 invariant (focus only ever moves on an explicit verb, never
+  // implicitly) — that returns focus to the composer AND lets the '/' land
+  // there to start a command, from any focused panel that isn't itself
+  // capturing free text.
+  describe("'/' explicit transfer verb (UX-C item 1d)", () => {
+    test("'/' from a non-capturing focused panel returns focus to the composer and is NOT consumed here (falls through to the composer's own '/' handling)", () => {
+      const received: string[] = [];
+      const state = buildState({
+        panelFocused: true,
+        panelManager: {
+          isVisible: () => true,
+          getAllOpen: () => [{ id: 'a' }],
+          getActive: () => ({ id: 'a', name: 'fleet', handleInput: (k: string) => { received.push(k); return true; } }),
+          getActivePanel: () => ({ id: 'a' }),
+          close: () => {},
+        } as unknown as PanelFocusRouteState['panelManager'],
+      });
+      const result = handlePanelFocusToken(state, { type: 'text', value: '/' });
+      expect(received).toEqual([]);            // never dispatched to the panel as a keystroke
+      expect(result.handled).toBe(false);       // falls through — the composer's text route arms it
+      expect(result.panelFocused).toBe(false);  // focus already flipped back here
+    });
+
+    test("a panel that captures free text (isCapturingTextBurst) keeps '/' for itself — capture wins", () => {
+      const received: string[] = [];
+      const state = buildState({
+        panelFocused: true,
+        panelManager: {
+          isVisible: () => true,
+          getAllOpen: () => [{ id: 'a' }],
+          getActive: () => ({
+            id: 'a',
+            name: 'fleet',
+            handleInput: (k: string) => { received.push(k); return true; },
+            isCapturingTextBurst: () => true,
+          }),
+          getActivePanel: () => ({ id: 'a' }),
+          close: () => {},
+        } as unknown as PanelFocusRouteState['panelManager'],
+      });
+      const result = handlePanelFocusToken(state, { type: 'text', value: '/' });
+      expect(received).toEqual(['/']);          // the panel's own filter/draft got it
+      expect(result.handled).toBe(true);
+      expect(result.panelFocused).toBe(true);   // focus stays on the panel
+    });
+  });
+
   test('panel-close is NOT owned by this route (delegated to the global shortcut handler)', () => {
     // panel-close / panel-close-all / panel-tab-next / panel-tab-prev used to be
     // duplicated here but are consumed earlier by handleGlobalShortcutToken, so

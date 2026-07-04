@@ -94,16 +94,26 @@ export function handleSelectionModalToken(state: SelectionRouteState, token: Inp
         if (selected) {
           dispatchSelectionAction(action, selected);
         }
+      } else if (state.selectionModal.allowSearch) {
+        // UX-C instant filter: an unclaimed keystroke arms search AND starts
+        // the query immediately, instead of silently doing nothing until the
+        // user discovers '/' first (the "help search needs '/' arming while
+        // the palette filters instantly" evaluator finding — /help has no
+        // customActions, so every letter used to be swallowed here). '/'
+        // above still works too; this is additive, not a replacement, and
+        // never fires for a claimed hotkey letter (checked first, above).
+        state.selectionModal.focusSearch();
+        state.selectionModal.setQuery(token.value);
       }
     }
   } else if (token.type === 'key') {
     if (token.logicalName === 'escape') {
-      if (state.selectionModal.allowSearch && state.selectionModal.searchFocused) {
-        if (state.selectionModal.query.length > 0) state.selectionModal.setQuery('');
-        else state.selectionModal.blurSearch();
-        state.requestRender();
-        return true;
-      }
+      // UX-C: ONE Escape always closes the modal, regardless of search state.
+      // Clearing an in-progress query is Backspace's job, not Esc's — the old
+      // two-stage contract (1st Esc clears query, 2nd blurs search, 3rd
+      // finally closes) was the "help modal took 3 Escapes after searching"
+      // evaluator finding (searchFocused is not modal-specific — every
+      // SelectionModal-based picker had the same multi-Esc pattern).
       state.handleEscape();
       return true;
     }

@@ -36,6 +36,14 @@ export class SelectionModal {
   public selectedIndex = 0;
   public allowSearch = true;
   public customActions: Map<string, SelectionAction> = new Map();
+  /**
+   * UX-C vocab unification: overrides the default per-primaryAction Enter
+   * verb ("Select"/"Toggle"/"Edit"/"Delete") shown in the footer hint. Used by
+   * callers whose items are really commands (e.g. /help) so the hint reads
+   * "[Enter] Run", matching the slash-command palette's own verb, instead of
+   * the generic "Select".
+   */
+  public primaryVerbLabel: string | undefined = undefined;
 
   /** Open the modal with items and title */
   open(
@@ -45,6 +53,7 @@ export class SelectionModal {
       preSelectId?: string;
       allowSearch?: boolean;
       customActions?: Map<string, SelectionAction>;
+      primaryVerbLabel?: string;
     }
   ): void {
     this.title = title;
@@ -53,6 +62,7 @@ export class SelectionModal {
     this.allowSearch = opts?.allowSearch ?? true;
     this.searchFocused = false;
     this.customActions = opts?.customActions ?? new Map();
+    this.primaryVerbLabel = opts?.primaryVerbLabel;
     this.active = true;
     this.filterItems();
 
@@ -74,6 +84,7 @@ export class SelectionModal {
     this.filteredItems = [];
     this.selectedIndex = 0;
     this.customActions = new Map();
+    this.primaryVerbLabel = undefined;
   }
 
   moveUp(): void {

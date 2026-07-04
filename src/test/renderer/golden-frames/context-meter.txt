@@ -5,7 +5,7 @@
 |   Token Usage [ Input: 1.0k │ Output: 512 │ Cache Read: 0 │ Cache Write: 0 │ Total: 1.5k │ ~n/a ]  |
 |   Context Usage: ██████████████████░░░░░░▸░░░░░  60% [ 60.0k / 100.0k ]                            |
 |   /workspace/my-project  │  claude-opus-4 (anthropic)  │  7 tools                                  |
-|   Ctrl+P panels · F2 fleet · ? help · Ctrl+C x2 quit                                               |
+|   Ctrl+P toggle panels · F2 fleet · ? help · Ctrl+C x2 quit                                        |
 @STYLES
 0 2 fg=#2a2a2a
 0 3 fg=#2a2a2a

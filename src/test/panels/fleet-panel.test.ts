@@ -591,6 +591,52 @@ describe('FleetPanel — K arms a kill confirm', () => {
     expect(text).not.toContain('Kill "');
     expect(text).toContain('does not support kill');
   });
+
+  // UX-C item 6: a cascade kill (actions.kill(id, { cascade: true })) takes
+  // down every non-terminal descendant regardless of that node's OWN
+  // `killable` capability — the old count only tallied `capabilities.killable`
+  // descendants ("active leaves"), so a 6-node non-terminal subtree with only
+  // 2 individually-killable nodes reported "(+2 children)" — the evaluator's
+  // exact finding. It must now report the FULL count that will actually die,
+  // plus how many of those are individually killable.
+  test('K arms a confirm phrased "(+N descendants, M active)" counting the FULL non-terminal subtree, not just individually-killable nodes', () => {
+    const root = makeNode({ id: 'root-1', state: 'executing-tool', capabilities: { interruptible: true, killable: true, pausable: false, steerable: false } });
+    const childA = makeNode({ id: 'child-a', parentId: 'root-1', state: 'streaming', capabilities: { interruptible: true, killable: true, pausable: false, steerable: false } });
+    const childB = makeNode({ id: 'child-b', parentId: 'root-1', state: 'streaming', capabilities: { interruptible: true, killable: true, pausable: false, steerable: false } });
+    const childC = makeNode({ id: 'child-c', parentId: 'root-1', kind: 'watcher', state: 'idle', capabilities: { interruptible: false, killable: false, pausable: false, steerable: false } });
+    const childD = makeNode({ id: 'child-d', parentId: 'root-1', state: 'executing-tool', capabilities: { interruptible: false, killable: false, pausable: false, steerable: false } });
+    const grandchild1 = makeNode({ id: 'grandchild-1', parentId: 'child-a', state: 'streaming', capabilities: { interruptible: false, killable: false, pausable: false, steerable: false } });
+    const grandchild2 = makeNode({ id: 'grandchild-2', parentId: 'child-c', state: 'streaming', capabilities: { interruptible: false, killable: false, pausable: false, steerable: false } });
+    // An already-terminal descendant does NOT count — it is already dead, a
+    // cascade kill has nothing to do to it.
+    const terminalChild = makeNode({ id: 'terminal-child', parentId: 'root-1', state: 'failed', capabilities: { interruptible: false, killable: true, pausable: false, steerable: false } });
+
+    const readModel = createStaticFleetReadModel(buildFleetSnapshot(
+      [root, childA, childB, childC, childD, grandchild1, grandchild2, terminalChild], NOW,
+    ));
+    const actions = makeActions();
+    const panel = new FleetPanel(readModel, actions);
+
+    expect(panel.handleInput('K')).toBe(true);
+    const text = linesText(panel.render(100, 24));
+    expect(text).toContain('+6 descendants, 2 active');
+
+    panel.handleInput('y');
+    expect(actions.killCalls).toEqual([{ id: 'root-1', opts: { cascade: true } }]);
+  });
+
+  test('K on a node with exactly one non-terminal descendant uses the singular "descendant" (no "active" pluralization issue either)', () => {
+    const root = makeNode({ id: 'root-1', state: 'executing-tool', capabilities: { interruptible: true, killable: true, pausable: false, steerable: false } });
+    const onlyChild = makeNode({ id: 'only-child', parentId: 'root-1', state: 'streaming', capabilities: { interruptible: true, killable: true, pausable: false, steerable: false } });
+    const readModel = createStaticFleetReadModel(buildFleetSnapshot([root, onlyChild], NOW));
+    const actions = makeActions();
+    const panel = new FleetPanel(readModel, actions);
+
+    expect(panel.handleInput('K')).toBe(true);
+    const text = linesText(panel.render(100, 24));
+    expect(text).toContain('+1 descendant, 1 active');
+    expect(text).not.toContain('descendants');
+  });
 });
 
 // ---------------------------------------------------------------------------

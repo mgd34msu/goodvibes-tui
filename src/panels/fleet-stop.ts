@@ -8,7 +8,7 @@
 // ---------------------------------------------------------------------------
 
 import type { ProcessNode, ProcessState } from '@pellux/goodvibes-sdk/platform/runtime/fleet';
-import { fleetStateGlyph, fleetStateTone, isTerminalProcessState, type FleetStateTone } from './fleet-read-model.ts';
+import { fleetStateGlyph, fleetStateTone, isTerminalProcessState, type FleetStateTone, type FleetTreeRow } from './fleet-read-model.ts';
 
 /** How long 'stopping…' lingers after a stop keypress before the true state is shown regardless (never masks a stuck kill). */
 export const STOP_SETTLE_MS = 1500;
@@ -122,4 +122,31 @@ export function buildFleetTreeHints(
   hints.push({ keys: 'f', label: follow ? 'follow:on' : 'follow' });
   if (hasTabs) hints.push({ keys: '[ ]', label: 'tabs' });
   return hints;
+}
+
+/** K-confirm descendant stats (UX-C item 6): total = every non-terminal descendant (what a cascade kill takes down); active = the individually-killable subset. Was "active only" (Wave-3 C7), undercounting a mixed subtree. */
+export function countDescendantStats(rows: readonly FleetTreeRow[], nodeId: string): { total: number; active: number } {
+  const byParent = new Map<string, string[]>();
+  for (const row of rows) {
+    if (!row.node.parentId) continue;
+    const siblings = byParent.get(row.node.parentId) ?? [];
+    siblings.push(row.node.id);
+    byParent.set(row.node.parentId, siblings);
+  }
+  const byId = new Map(rows.map((row) => [row.node.id, row] as const));
+  let total = 0, active = 0;
+  const stack = [...(byParent.get(nodeId) ?? [])];
+  const seen = new Set<string>();
+  while (stack.length > 0) {
+    const id = stack.pop()!;
+    if (seen.has(id)) continue;
+    seen.add(id);
+    const row = byId.get(id);
+    if (row && !isTerminalProcessState(row.node.state)) {
+      total++;
+      if (row.node.capabilities.killable) active++;
+    }
+    for (const child of byParent.get(id) ?? []) stack.push(child);
+  }
+  return { total, active };
 }

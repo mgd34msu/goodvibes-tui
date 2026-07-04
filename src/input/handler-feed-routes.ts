@@ -153,15 +153,16 @@ export function handlePanelFocusToken(state: PanelFocusRouteState, token: InputT
 
   if (token.type === 'text' && token.value) {
     const activePanel = state.panelManager.getActive();
-    // Invariant A/B (W6.2). A paste (isPasteToken: one multi-char text token)
-    // into a focused text-capturing panel (a `/`-search or steer-draft field —
-    // isCapturingTextBurst) is forwarded verbatim below; into any other focused
-    // panel it is DROPPED with a one-shot hint — never exploded into per-char
-    // hotkeys, and never a silent focus flip to the composer (what the old
-    // per-feed char-sum burst guard did, which also misfired on two quick nav
-    // keys in one feed). Focus moves only on an explicit transfer verb, so
-    // panelFocused is left unchanged. Discrete 1-char keystrokes are not pastes
-    // and fall through to the per-char dispatch below, one at a time.
+    // UX-C: '/' is an explicit transfer verb back to the composer (a capturing panel, isCapturingTextBurst, keeps '/' for itself).
+    if (token.value === '/' && !activePanel?.isCapturingTextBurst?.()) {
+      panelFocused = false;
+      return { handled: false, panelFocused };
+    }
+    // Invariant A/B (W6.2): a paste (isPasteToken, one multi-char token) into
+    // a capturing panel forwards verbatim below; elsewhere it is DROPPED with
+    // a one-shot hint (never exploded into hotkeys, never a silent focus
+    // flip — focus moves only on an explicit verb). Discrete keystrokes fall
+    // through to the per-char dispatch below.
     if (state.isPasteToken && !activePanel?.isCapturingTextBurst?.()) {
       state.onPasteDropped?.(activePanel?.name ?? 'the panel');
       state.requestRender();
@@ -603,12 +604,11 @@ export function handlePromptKeyToken(state: KeyRouteState, token: InputToken): {
     return { handled: true, prompt, cursorPos, inputScrollTop, commandMode, indicatorFocused };
   }
 
+  // UX-C: F2 is now handled globally with toggle semantics (handler-shortcuts.ts)
+  // BEFORE it ever reaches this route; this branch is dead in the real
+  // pipeline but stays for panel-entry-points-reachable.test.ts's direct test.
   if (token.logicalName === 'f2') {
     indicatorFocused = false;
-    // W6.2 e: F2 opens AND focuses the Fleet panel, which subsumes the deleted
-    // process modal (ProcessModal/AgentDetailModal/LiveTailModal — removed in
-    // W6.1 once this repoint made them unreachable). openFleetPanel sets
-    // panelFocused on the shared context directly, so nothing more is returned.
     state.openFleetPanel();
     return { handled: true, prompt, cursorPos, inputScrollTop, commandMode, indicatorFocused };
   }
