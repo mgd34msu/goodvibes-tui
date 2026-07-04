@@ -24,6 +24,7 @@ function buildState() {
     settingsModal: { active: false, editingMode: false, cancelEdit: () => {}, open: () => {}, close: () => {} },
     sessionPickerModal: { active: false, open: () => {}, close: () => {} },
     profilePickerModal: { active: false, open: () => {}, close: () => {} },
+    configModal: { active: false, close: () => {}, reopen: () => {} },
     contextInspectorModal: { active: false, open: function () { this.active = true; }, close: function () { this.active = false; } },
     processModal: { active: false, open: function () { this.active = true; }, close: function () { this.active = false; } },
     modelPicker: { active: false, open: () => {}, close: () => {} },

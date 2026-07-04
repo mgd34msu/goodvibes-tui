@@ -98,12 +98,7 @@ export function registerPlatformSandboxRuntimeCommands(registry: CommandRegistry
       const shellPaths = requireShellPaths(ctx);
       const sub = args[0] ?? 'open';
       if (sub === 'open' || sub === 'panel') {
-        if (ctx.showPanel) ctx.showPanel('sandbox');
-        else {
-          const panelManager = requirePanelManager(ctx);
-          panelManager.open('sandbox');
-          panelManager.show();
-        }
+        ctx.openModal?.('sandbox-modal'); // W6.1: sandbox panel -> config modal
         return;
       }
       if (sub === 'review') {

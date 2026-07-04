@@ -93,15 +93,20 @@ class LocalAuthModalSurface implements ConfigModalSurface {
 
   onAction(id: string, ctx: ConfigModalActionContext): void {
     switch (id) {
+      // add-user / rotate-password require the masked password-entry sub-mode,
+      // which renders on the LocalAuthPanel and cannot draw or capture input
+      // underneath this fullscreen modal. Point the operator at the command
+      // (which opens masked entry) rather than dispatching it into a hidden
+      // surface — the secure flow stays a keystroke away, just not from here.
       case 'add-user':
-        void ctx.executeCommand?.('local-auth', ['add-user']);
-        ctx.setStatus('Opening add-user prompt…');
+        ctx.print('To add a user securely, run  /local-auth add-user <username>  (opens masked password entry).');
+        ctx.setStatus('Run /local-auth add-user <username> for masked entry.');
         break;
       case 'rotate-pw': {
         const username = usernameOf(ctx.row);
         if (!username) return;
-        void ctx.executeCommand?.('local-auth', ['rotate-password', username]);
-        ctx.setStatus(`Opening password entry for ${username}…`);
+        ctx.print(`To rotate securely, run  /local-auth rotate-password ${username}  (opens masked password entry).`);
+        ctx.setStatus(`Run /local-auth rotate-password ${username} for masked entry.`);
         break;
       }
       case 'delete': {
