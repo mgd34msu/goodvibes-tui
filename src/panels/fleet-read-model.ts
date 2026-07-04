@@ -374,6 +374,25 @@ export function buildFleetSnapshot(nodes: readonly ProcessNode[], capturedAt: nu
   return { rows, totalCost, totalTokens, runningCount, capturedAt };
 }
 
+/**
+ * The fleet's honest leaf cost total — the SAME figure as
+ * FleetSnapshot.totalCost, but computed in one pass WITHOUT building the display
+ * rows, for cheap per-frame use (the always-visible footer). Excludes rollup
+ * aggregates (chain/subtask/workstream/phase) AND the WRFC owner (its usage is a
+ * mixed-model rollup of its children), so it is a true leaf-sum with no
+ * double-count. Null when nothing priced. Add this to the main session cost for
+ * the true "you + fleet" total.
+ */
+export function fleetLeafCostTotal(nodes: readonly ProcessNode[]): number | null {
+  let total: number | null = null;
+  for (const node of nodes) {
+    if (isFleetAggregateRollupNode(node)) continue;
+    if (!hasFleetCost(node.costUsd, node.costState)) continue;
+    total = (total ?? 0) + (node.costUsd as number);
+  }
+  return total;
+}
+
 // ---------------------------------------------------------------------------
 // Read-model — two-factory shape (live / static), mirrors cockpit-read-model.ts
 // ---------------------------------------------------------------------------

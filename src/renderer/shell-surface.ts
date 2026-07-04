@@ -15,7 +15,7 @@ export interface ShellFooterBuildOptions {
    * themselves (main.ts does) do not need to also pass this.
    */
   readonly panelFocused?: boolean;
-  readonly usage: { up: number; down: number };
+  readonly usage: { up: number; down: number; fleetCostUsd?: number | null };
   readonly showExitNotice: boolean;
   readonly lastCopyTime: number;
   readonly model?: string;
