@@ -65,6 +65,7 @@ import { buildContextStatusHint } from './renderer/context-status-hint.ts';
 import { evaluateSessionMaintenance } from '@/runtime/index.ts';
 import { createCancelGeneration } from './core/turn-cancellation.ts';
 import { wrapRequestPermissionWithAlert } from './core/approval-alert.ts';
+import { setPanelFrameRequester } from './panels/base-panel.ts';
 
 const ALT_SCREEN_ENTER = '\x1b[?1049h'; const ALT_SCREEN_EXIT  = '\x1b[?1049l';
 const MOUSE_ENABLE     = '\x1b[?1000h\x1b[?1002h\x1b[?1006h'; const MOUSE_DISABLE    = '\x1b[?1006l\x1b[?1002l\x1b[?1000l';
@@ -651,6 +652,7 @@ async function main() {
   const terminalOutputGuard = installTuiTerminalOutputGuard({ stdout, stderr: process.stderr, notify: (message) => { systemMessageRouter.low(message); render(); } });
 
   setRenderRequest(renderNow); // bootstrap's 16ms coalescer calls the composite directly
+  setPanelFrameRequester(render); // live panels repaint when idle (Wave-6 replay: fleet sat stale until keypress)
   orchestratorRefs.requestRender = render;
   commandContext.renderRequest = render;
   wireShellUiOpeners({
