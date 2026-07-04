@@ -21,12 +21,18 @@ export function renderPanelWorkspaceBar(
   return renderTabStrip({
     width,
     onLayout,
-    tabs: tabs.map((tab) => ({
+    tabs: tabs.map((tab, i) => ({
       // tab.active = selected in its own pane (drives highlighted background).
       // tab.focused = has keyboard focus (drives brighter text / focus indicator).
       // A tab can be active-but-not-focused (selected in the unfocused pane) or
       // active-and-focused (selected in the focused pane).
-      label: `${tab.pane === 'bottom' ? 'v' : '^'} ${tab.icon} ${tab.name}${tab.focused ? ' ▸' : ''}`,
+      //
+      // A14: the pane marker uses ▲/▼ (top/bottom pane). The old '^'/'v'
+      // prefixes read as a Ctrl caret (^) implying a non-existent Ctrl+<tab>
+      // hotkey. The REAL per-tab jump key is Alt+N (panel-tab-1..9), rendered
+      // here as ⌥N for the first nine tabs so the shown affordance matches the
+      // binding (tabs past nine have no Alt+N chord, so no index is shown).
+      label: `${tab.pane === 'bottom' ? '▼' : '▲'}${i < 9 ? ` ⌥${i + 1}` : ''} ${tab.icon} ${tab.name}${tab.focused ? ' ▸' : ''}`,
       active: tab.active,
     })),
     prefixLabel: ' PANELS ',

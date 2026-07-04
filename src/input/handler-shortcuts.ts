@@ -55,13 +55,16 @@ export function handleGlobalShortcutToken(
 ): boolean {
   if (token.type !== 'key') return false;
 
-  // Fast-path: bare pageup/pagedown have no keybinding entry.
-  if (token.logicalName === 'pageup') {
+  // Fast-path: BARE pageup/pagedown scroll the transcript. The `!token.ctrl`
+  // guard is load-bearing: Ctrl+PageUp/PageDown are the panel-tab-prev/next
+  // chords, so they must fall through to the keybinding lookup below instead of
+  // being swallowed here as a scroll.
+  if (token.logicalName === 'pageup' && !token.ctrl) {
     if (state.panelFocused) return false;
     state.scroll(-Math.max(1, viewportHeight - 2));
     return true;
   }
-  if (token.logicalName === 'pagedown') {
+  if (token.logicalName === 'pagedown' && !token.ctrl) {
     if (state.panelFocused) return false;
     state.scroll(Math.max(1, viewportHeight - 2));
     return true;
@@ -167,17 +170,17 @@ export function handleGlobalShortcutToken(
     }
 
     case 'panel-ops': {
-      // Ctrl+O: open the Ops Control panel. Prefer the command-context callback
-      // (wired only when the operator-control-plane feature flag is on) so it
-      // reuses whatever show/open semantics bootstrap.ts set up; otherwise fall
-      // back to opening the always-registered 'ops-control' panel type directly
-      // — it renders an honest not-configured state when its deps are absent.
-      if (state.commandContext?.openOpsPanel) {
-        state.commandContext.openOpsPanel();
-      } else {
-        state.panelManager.open('ops-control');
-        state.requestRender();
-      }
+      // Ctrl+O: open AND focus the Fleet panel. The former Ops Control panel was
+      // retired to an 'ops-control' -> 'fleet' alias (W6.1); rather than route
+      // through the now-aliased openOpsPanel callback (which opens without
+      // transferring focus), open 'fleet' directly and grab focus — mirroring
+      // the footer indicator's [Enter] -> openFleetPanel path so j/k/i/K land in
+      // the panel immediately instead of the composer.
+      const pm = state.panelManager;
+      pm.open('fleet');
+      pm.focusPanels();
+      state.panelFocused = true;
+      state.requestRender();
       return true;
     }
 
