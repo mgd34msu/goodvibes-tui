@@ -170,6 +170,26 @@ describe('FleetPanel — i interrupts the selected node', () => {
     expect(panel.handleInput('i')).toBe(false);
     expect(actions.interruptCalls).toHaveLength(0);
   });
+
+  test('i on a non-terminal but non-interruptible node is consumed, shows a status message, and does not call interrupt', () => {
+    // Realistic case: every fleet kind except 'agent' reports
+    // capabilities.interruptible: false unconditionally (schedule/trigger/
+    // watcher/workflow/wrfc-chain/wrfc-subtask/background-process — see the
+    // SDK's fleet adapters), even while actively running.
+    const node = makeNode({
+      id: 'chain-1',
+      kind: 'wrfc-chain',
+      state: 'executing-tool',
+      capabilities: { interruptible: false, killable: true, pausable: false },
+    });
+    const readModel = createStaticFleetReadModel(buildFleetSnapshot([node], NOW));
+    const actions = makeActions();
+    const panel = new FleetPanel(readModel, actions);
+    expect(panel.handleInput('i')).toBe(true);
+    expect(actions.interruptCalls).toHaveLength(0);
+    const text = linesText(panel.render(100, 24));
+    expect(text).toContain('does not support interrupt');
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -262,6 +282,74 @@ describe('FleetPanel — K arms a kill confirm', () => {
     expect(panel.handleInput('K')).toBe(false);
     expect(actions.killCalls).toHaveLength(0);
   });
+
+  test('K on a non-terminal but non-killable node is consumed, shows a status message, and does not arm a confirm', () => {
+    const node = makeNode({
+      id: 'watch-1',
+      kind: 'watcher',
+      state: 'idle',
+      capabilities: { interruptible: false, killable: false, pausable: false },
+    });
+    const readModel = createStaticFleetReadModel(buildFleetSnapshot([node], NOW));
+    const actions = makeActions();
+    const panel = new FleetPanel(readModel, actions);
+    expect(panel.handleInput('K')).toBe(true);
+    expect(actions.killCalls).toHaveLength(0);
+    const text = linesText(panel.render(100, 24));
+    expect(text).not.toContain('Kill "');
+    expect(text).toContain('does not support kill');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// i/K hints only appear when the selected node's capabilities allow them
+// ---------------------------------------------------------------------------
+
+describe('FleetPanel — i/K footer hints are gated on capabilities', () => {
+  test('both hints show for a node that supports interrupt and kill', () => {
+    const node = makeNode({ id: 'agent-1', state: 'streaming', capabilities: { interruptible: true, killable: true, pausable: false } });
+    const readModel = createStaticFleetReadModel(buildFleetSnapshot([node], NOW));
+    const panel = new FleetPanel(readModel);
+    const text = linesText(panel.render(100, 24));
+    expect(text).toContain('i interrupt');
+    expect(text).toContain('K kill');
+  });
+
+  test('the i hint is omitted when the selected node cannot be interrupted', () => {
+    const node = makeNode({ id: 'chain-1', kind: 'wrfc-chain', state: 'executing-tool', capabilities: { interruptible: false, killable: true, pausable: false } });
+    const readModel = createStaticFleetReadModel(buildFleetSnapshot([node], NOW));
+    const panel = new FleetPanel(readModel);
+    const text = linesText(panel.render(100, 24));
+    expect(text).not.toContain('i interrupt');
+    expect(text).toContain('K kill');
+  });
+
+  test('the K hint is omitted when the selected node cannot be killed', () => {
+    const node = makeNode({ id: 'agent-1', state: 'streaming', capabilities: { interruptible: true, killable: false, pausable: false } });
+    const readModel = createStaticFleetReadModel(buildFleetSnapshot([node], NOW));
+    const panel = new FleetPanel(readModel);
+    const text = linesText(panel.render(100, 24));
+    expect(text).toContain('i interrupt');
+    expect(text).not.toContain('K kill');
+  });
+
+  test('both hints are omitted for a terminal node (neither affordance applies)', () => {
+    const node = makeNode({ id: 'done-1', state: 'done', capabilities: { interruptible: false, killable: false, pausable: false } });
+    const readModel = createStaticFleetReadModel(buildFleetSnapshot([node], NOW));
+    const panel = new FleetPanel(readModel);
+    const text = linesText(panel.render(100, 24));
+    expect(text).not.toContain('i interrupt');
+    expect(text).not.toContain('K kill');
+    expect(text).toContain('f follow');
+  });
+
+  test('both hints are omitted with an empty fleet (no selection)', () => {
+    const readModel = createStaticFleetReadModel(buildFleetSnapshot([], NOW));
+    const panel = new FleetPanel(readModel);
+    const text = linesText(panel.render(100, 24));
+    expect(text).not.toContain('i interrupt');
+    expect(text).not.toContain('K kill');
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -320,6 +408,86 @@ describe('FleetPanel — f toggles follow', () => {
     const selectedLine = text.split('\n').find((l) => l.includes('old-running'));
     expect(selectedLine).toBeDefined();
     expect(selectedLine).toContain('▸');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Selection anchored to node.id across snapshot updates (bug fix): the old
+// index-anchored selection silently landed on a different process when a
+// node above the cursor left the snapshot, and vanished entirely (no row
+// marked ▸) when the list shrank below the old selectedIndex, until the next
+// keypress. Both must self-correct on the very next render.
+// ---------------------------------------------------------------------------
+
+describe('FleetPanel — selection is anchored to node.id, not index, across snapshot updates', () => {
+  test('removal of a node above the cursor keeps the selection on the same node, not whatever now sits at the old index', () => {
+    const before = buildFleetSnapshot([
+      makeNode({ id: 'row-a', startedAt: NOW - 3_000 }),
+      makeNode({ id: 'row-b', startedAt: NOW - 2_000 }),
+      makeNode({ id: 'row-c', startedAt: NOW - 1_000 }),
+    ], NOW);
+    const { model, setSnapshot, fireDirty } = makeMutableReadModel(before);
+    const panel = new FleetPanel(model);
+
+    panel.handleInput('j'); // select row-b (index 1)
+    let text = linesText(panel.render(100, 24));
+    expect(text.split('\n').find((l) => l.includes('▸'))).toContain('row-b');
+
+    // row-a (above the cursor) leaves the snapshot — row-b is now at index 0.
+    setSnapshot(buildFleetSnapshot([
+      makeNode({ id: 'row-b', startedAt: NOW - 2_000 }),
+      makeNode({ id: 'row-c', startedAt: NOW - 1_000 }),
+    ], NOW));
+    fireDirty();
+
+    text = linesText(panel.render(100, 24));
+    const selectedLine = text.split('\n').find((l) => l.includes('▸'));
+    expect(selectedLine).toBeDefined();
+    expect(selectedLine).toContain('row-b');
+    expect(selectedLine).not.toContain('row-c');
+  });
+
+  test('the list shrinking below the previously-selected index clamps to the nearest valid row immediately, without an extra keypress', () => {
+    const before = buildFleetSnapshot([
+      makeNode({ id: 'row-a', startedAt: NOW - 3_000 }),
+      makeNode({ id: 'row-b', startedAt: NOW - 2_000 }),
+      makeNode({ id: 'row-c', startedAt: NOW - 1_000 }),
+    ], NOW);
+    const { model, setSnapshot, fireDirty } = makeMutableReadModel(before);
+    const panel = new FleetPanel(model);
+
+    panel.handleInput('j');
+    panel.handleInput('j'); // select row-c (index 2)
+
+    // Snapshot shrinks to a single node — the old index (2) is now out of bounds.
+    setSnapshot(buildFleetSnapshot([
+      makeNode({ id: 'row-a', startedAt: NOW - 3_000 }),
+    ], NOW));
+    fireDirty();
+
+    const text = linesText(panel.render(100, 24));
+    const selectedLine = text.split('\n').find((l) => l.includes('▸'));
+    expect(selectedLine).toBeDefined();
+    expect(selectedLine).toContain('row-a');
+  });
+
+  test('an unrelated snapshot update (no add/remove) leaves the selection exactly where it was', () => {
+    const before = buildFleetSnapshot([
+      makeNode({ id: 'row-a', startedAt: NOW - 3_000 }),
+      makeNode({ id: 'row-b', startedAt: NOW - 2_000 }),
+    ], NOW);
+    const { model, setSnapshot, fireDirty } = makeMutableReadModel(before);
+    const panel = new FleetPanel(model);
+
+    panel.handleInput('j'); // select row-b
+    setSnapshot(buildFleetSnapshot([
+      makeNode({ id: 'row-a', startedAt: NOW - 3_000, elapsedMs: 9_999 }),
+      makeNode({ id: 'row-b', startedAt: NOW - 2_000, elapsedMs: 9_999 }),
+    ], NOW));
+    fireDirty();
+
+    const text = linesText(panel.render(100, 24));
+    expect(text.split('\n').find((l) => l.includes('▸'))).toContain('row-b');
   });
 });
 

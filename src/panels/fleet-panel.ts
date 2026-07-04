@@ -109,6 +109,17 @@ export class FleetPanel extends ScrollableListPanel<FleetTreeRow> {
   private follow = false;
   private detailFocused = false;
   private tickTimer: ReturnType<typeof setInterval> | null = null;
+  /**
+   * The node id the cursor is anchored to, independent of its row index.
+   * `selectedIndex` is a plain offset into `getItems()`'s current order —
+   * every snapshot rebuilds that array from scratch (new nodes, completed
+   * nodes pruned, tree re-sorted), so a stale index silently points at
+   * whatever row now happens to occupy that slot. `reanchorSelection()`
+   * re-locates this id in every fresh snapshot and repoints selectedIndex
+   * there; null means "no anchor yet" (follows the base class's index-0
+   * default until the first navigation/tick establishes one).
+   */
+  private selectedNodeId: string | null = null;
 
   public constructor(
     private readonly readModel: FleetReadModel,
@@ -119,6 +130,7 @@ export class FleetPanel extends ScrollableListPanel<FleetTreeRow> {
     this.actions = { ...NOOP_ACTIONS, ...actions };
     this.confirmOverlay = new PanelConfirmOverlay(() => this.markDirty());
     this.unsub = readModel.subscribe(() => {
+      this.reanchorSelection();
       this.applyFollow();
       this.markDirty();
     });
@@ -128,9 +140,11 @@ export class FleetPanel extends ScrollableListPanel<FleetTreeRow> {
     super.onActivate();
     // Time-derived fields (elapsed, follow target) stay live even when no
     // registry tick fires while this panel is on screen (cockpit-panel.ts
-    // STALL_TICK_MS precedent).
+    // STALL_TICK_MS precedent). Also re-anchors defensively in case the
+    // underlying list changed without a subscribe notification.
     if (this.tickTimer === null) {
       this.tickTimer = this.registerTimer(setInterval(() => {
+        this.reanchorSelection();
         this.applyFollow();
         this.markDirty();
       }, 1000));
@@ -187,8 +201,39 @@ export class FleetPanel extends ScrollableListPanel<FleetTreeRow> {
     });
     if (bestIdx >= 0) {
       this.selectedIndex = bestIdx;
+      this.selectedNodeId = rows[bestIdx]!.node.id;
       this.needsRender = true;
     }
+  }
+
+  /** Record the current selection's node id as the anchor for future snapshot updates. */
+  private captureSelectionAnchor(): void {
+    const item = this.getSelectedItem();
+    this.selectedNodeId = item ? item.node.id : null;
+  }
+
+  /**
+   * Re-locate `selectedNodeId` in the current (possibly just-changed)
+   * snapshot and repoint `selectedIndex` at its new position — this is what
+   * makes the selection follow a specific process across adds/removes/
+   * reorders instead of drifting onto whatever row now occupies the old
+   * index. When the anchored node is no longer present (completed and
+   * pruned, killed and pruned, etc.) — or no anchor has been established
+   * yet — falls back to the base class's clampSelection() (nearest valid
+   * index, never an out-of-bounds/vanished selection) and re-anchors to
+   * whatever that lands on.
+   */
+  private reanchorSelection(): void {
+    const rows = this.getItems();
+    if (this.selectedNodeId !== null) {
+      const idx = rows.findIndex((row) => row.node.id === this.selectedNodeId);
+      if (idx >= 0) {
+        this.selectedIndex = idx;
+        return;
+      }
+    }
+    this.clampSelection();
+    this.captureSelectionAnchor();
   }
 
   public override handleInput(key: string): boolean {
@@ -203,6 +248,16 @@ export class FleetPanel extends ScrollableListPanel<FleetTreeRow> {
       // Guard: only consume on a real, non-terminal node (cockpit-panel.ts
       // precedent) so the key falls through when there is nothing to act on.
       if (!selected || isTerminalProcessState(selected.node.state)) return false;
+      // Not every kind can be interrupted (only 'agent' nodes ever are — see
+      // the SDK's fleet adapters: schedule/trigger/watcher/workflow/
+      // wrfc-chain/wrfc-subtask/background-process all report
+      // capabilities.interruptible: false unconditionally). Consume the key
+      // and say so rather than silently calling interrupt() on a node the
+      // registry has no interrupt route for.
+      if (!selected.node.capabilities.interruptible) {
+        this.setError(`${selected.node.kind} does not support interrupt.`);
+        return true;
+      }
       this.actions.interrupt(selected.node.id);
       this.markDirty();
       return true;
@@ -210,6 +265,10 @@ export class FleetPanel extends ScrollableListPanel<FleetTreeRow> {
 
     if (key === 'K') {
       if (!selected || isTerminalProcessState(selected.node.state)) return false;
+      if (!selected.node.capabilities.killable) {
+        this.setError(`${selected.node.kind} does not support kill.`);
+        return true;
+      }
       const node = selected.node;
       const shortId = node.id.length > 8 ? node.id.slice(-8) : node.id;
       this.confirmOverlay.arm({
@@ -236,7 +295,9 @@ export class FleetPanel extends ScrollableListPanel<FleetTreeRow> {
       return true;
     }
 
-    return super.handleInput(key);
+    const consumed = super.handleInput(key);
+    if (consumed) this.captureSelectionAnchor();
+    return consumed;
   }
 
   protected renderItem(row: FleetTreeRow, _index: number, _selected: boolean, width: number): Line {
@@ -308,16 +369,29 @@ export class FleetPanel extends ScrollableListPanel<FleetTreeRow> {
       footer.push(...this.renderDetail(selected, width));
     }
 
+    // Only advertise i/K when the selected node can actually accept them —
+    // most kinds (schedule/trigger/watcher/workflow/wrfc-chain/wrfc-subtask/
+    // background-process) are never interruptible, and any kind stops being
+    // killable once terminal. Matches the handleInput guards above.
+    const canInterrupt = selected !== undefined
+      && !isTerminalProcessState(selected.node.state)
+      && selected.node.capabilities.interruptible;
+    const canKill = selected !== undefined
+      && !isTerminalProcessState(selected.node.state)
+      && selected.node.capabilities.killable;
+
+    const hints: Array<{ keys: string; label: string }> = [
+      { keys: 'j/k', label: 'navigate' },
+      { keys: 'Enter', label: 'detail' },
+    ];
+    if (canInterrupt) hints.push({ keys: 'i', label: 'interrupt' });
+    if (canKill) hints.push({ keys: 'K', label: 'kill' });
+    hints.push({ keys: 'f', label: this.follow ? 'follow:on' : 'follow' });
+
     return this.renderList(width, height, {
       title: 'Fleet',
       footer,
-      hints: [
-        { keys: 'j/k', label: 'navigate' },
-        { keys: 'Enter', label: 'detail' },
-        { keys: 'i', label: 'interrupt' },
-        { keys: 'K', label: 'kill' },
-        { keys: 'f', label: this.follow ? 'follow:on' : 'follow' },
-      ],
+      hints,
     });
   }
 }

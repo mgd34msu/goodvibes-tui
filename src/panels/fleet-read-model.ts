@@ -236,6 +236,66 @@ export function buildFleetRows(nodes: readonly ProcessNode[]): FleetTreeRow[] {
   return rows;
 }
 
+/**
+ * Kinds whose usage/costUsd (and, for 'running', whose derived state) are the
+ * SDK's OWN rollup of *other* nodes that ALSO appear individually in the flat
+ * list — summing across every flat node would therefore double-count them.
+ * Per registry.ts assemble() + wrfc.ts adaptChain/adaptSubtask:
+ *   - 'wrfc-chain': usage/costUsd = sum over the chain's member agents
+ *     (chain.allAgentIds minus the owner) via adaptChain's aggregateCost/
+ *     sumUsage — those member agents are pushed onto the flat node list as
+ *     their own 'agent' nodes too. The chain's derived ProcessState ('running'
+ *     while any phase is active) likewise just mirrors its members' states.
+ *   - 'wrfc-subtask': never carries usage/cost (adaptSubtask always sets
+ *     usage: undefined, costUsd: null, costState: 'unpriced') and its
+ *     'running' phase state mirrors whichever agent is currently working the
+ *     subtask. Excluded for the same "grouping construct, not an actor"
+ *     reason as the chain, even though today it can never contribute a
+ *     nonzero cost/token reading (defense in depth against a future adapter
+ *     change, not load-bearing).
+ */
+const ROLLUP_KINDS = new Set<ProcessKind>(['wrfc-chain', 'wrfc-subtask']);
+
+/**
+ * True for the WRFC owner agent's node specifically: an 'agent'-kind node
+ * whose source AgentRecord has wrfcRole === 'owner'. The owner runs no LLM
+ * turn itself — at chain completion the SDK backfills owner.usage from
+ * aggregateChainUsage(chain) (wrfc-controller.ts completeOwnerAgent), which
+ * is the SAME phase-children total already carried by the chain node AND by
+ * each phase-child agent's own node. Detected via the opaque `raw` field
+ * (the AgentRecord) since ProcessNode itself has no wrfcRole — this is the
+ * one place fleet-read-model reaches into `raw` for aggregation honesty
+ * rather than drill-down display.
+ */
+function isWrfcOwnerAgentNode(node: ProcessNode): boolean {
+  if (node.kind !== 'agent') return false;
+  const raw = node.raw;
+  return typeof raw === 'object' && raw !== null && (raw as { wrfcRole?: unknown }).wrfcRole === 'owner';
+}
+
+/**
+ * Nodes whose usage/costUsd would double-count against other nodes already
+ * in the same flat list (see ROLLUP_KINDS / isWrfcOwnerAgentNode above).
+ * Excluded from totalCost/totalTokens. NOT excluded from runningCount by
+ * this predicate alone — see isFleetRunningLeaf.
+ */
+function isFleetAggregateRollupNode(node: ProcessNode): boolean {
+  return ROLLUP_KINDS.has(node.kind) || isWrfcOwnerAgentNode(node);
+}
+
+/**
+ * Nodes that count toward runningCount. Excludes ROLLUP_KINDS (a running
+ * wrfc-chain/wrfc-subtask reflects the very same unit of work as its running
+ * member agent, which is already counted) but — unlike the cost/token
+ * exclusion above — does NOT exclude the WRFC owner agent: the owner is a
+ * real, distinct supervising process (not an arithmetic sum of other rows),
+ * so counting it as "running" alongside its phase children is not a double
+ * count in the way summing its rolled-up usage/cost would be.
+ */
+function isFleetRunningLeaf(node: ProcessNode): boolean {
+  return !ROLLUP_KINDS.has(node.kind) && isRunningProcessState(node.state);
+}
+
 /** Build the full FleetSnapshot (rows + honest aggregates) from a flat node list. */
 export function buildFleetSnapshot(nodes: readonly ProcessNode[], capturedAt: number = Date.now()): FleetSnapshot {
   const rows = buildFleetRows(nodes);
@@ -245,14 +305,16 @@ export function buildFleetSnapshot(nodes: readonly ProcessNode[], capturedAt: nu
   let runningCount = 0;
 
   for (const node of nodes) {
-    if (hasFleetCost(node.costUsd, node.costState)) {
-      totalCost = (totalCost ?? 0) + (node.costUsd as number);
+    if (!isFleetAggregateRollupNode(node)) {
+      if (hasFleetCost(node.costUsd, node.costState)) {
+        totalCost = (totalCost ?? 0) + (node.costUsd as number);
+      }
+      const tokens = fleetUsageTokens(node.usage);
+      if (tokens !== null) {
+        totalTokens = (totalTokens ?? 0) + tokens;
+      }
     }
-    const tokens = fleetUsageTokens(node.usage);
-    if (tokens !== null) {
-      totalTokens = (totalTokens ?? 0) + tokens;
-    }
-    if (isRunningProcessState(node.state)) runningCount++;
+    if (isFleetRunningLeaf(node)) runningCount++;
   }
 
   return { rows, totalCost, totalTokens, runningCount, capturedAt };

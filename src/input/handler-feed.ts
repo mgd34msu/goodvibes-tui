@@ -352,7 +352,18 @@ export function feedInputTokens(context: InputFeedContext, tokens: readonly Inpu
     const indicatorRoute = handleIndicatorFocusToken({
       indicatorFocused: context.indicatorFocused,
       modalOpened: context.modalOpened,
-      openFleetPanel: () => context.panelManager.open('fleet'),
+      openFleetPanel: () => {
+        context.panelManager.open('fleet');
+        // panelManager.open() only makes the panel visible/active — it does
+        // NOT transfer keyboard focus off the composer (that is a separate
+        // focusTarget axis; see PanelManager.focusPanels()/getFocusTarget()).
+        // Without this, j/k/i/K silently land in the composer until the user
+        // manually presses Tab. Match the Ctrl+P panel-picker launcher route
+        // (ui-openers.ts openPanelPicker), which calls focusPanels()
+        // immediately after opening.
+        context.panelManager.focusPanels();
+        context.panelFocused = true;
+      },
       requestRender: context.requestRender,
     }, token);
     context.indicatorFocused = indicatorRoute.indicatorFocused;

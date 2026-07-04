@@ -237,6 +237,103 @@ describe('buildFleetSnapshot — honest cost/token aggregates', () => {
     expect(snapA.rows[0]!.node.elapsedMs).toBe(123_456);
     expect(snapB.rows[0]!.node.elapsedMs).toBe(123_456);
   });
+
+  // -------------------------------------------------------------------------
+  // Leaf-only aggregation (bug fix): a wrfc-chain node's usage/costUsd is the
+  // SDK's OWN rollup of its member agents (see wrfc.ts adaptChain / registry.ts
+  // assemble()), and those same member agents ALSO appear individually in the
+  // flat node list. Summing over every flat node therefore double-counts —
+  // the chain total gets added ON TOP of the totals its own members already
+  // contribute. Same story for a completed WRFC owner agent: the SDK backfills
+  // owner.usage from aggregateChainUsage(chain) (wrfc-controller.ts
+  // completeOwnerAgent), which is the SAME phase-children total the chain node
+  // (and the phase children themselves) already carry.
+  // -------------------------------------------------------------------------
+
+  test('a wrfc-chain node plus its two member agents contributes cost ONCE (the chain total), not chain+members', () => {
+    const chain = makeNode({
+      id: 'chain:c1',
+      kind: 'wrfc-chain',
+      costState: 'priced',
+      costUsd: 0.345,
+      usage: { inputTokens: 900, outputTokens: 300, cacheReadTokens: 0, cacheWriteTokens: 0, llmCallCount: 2, turnCount: 2, toolCallCount: 4 },
+    });
+    const memberA = makeNode({
+      id: 'member-a',
+      parentId: 'chain:c1',
+      costState: 'priced',
+      costUsd: 0.3,
+      usage: { inputTokens: 600, outputTokens: 200, cacheReadTokens: 0, cacheWriteTokens: 0, llmCallCount: 1, turnCount: 1, toolCallCount: 2 },
+    });
+    const memberB = makeNode({
+      id: 'member-b',
+      parentId: 'chain:c1',
+      costState: 'priced',
+      costUsd: 0.045,
+      usage: { inputTokens: 300, outputTokens: 100, cacheReadTokens: 0, cacheWriteTokens: 0, llmCallCount: 1, turnCount: 1, toolCallCount: 2 },
+    });
+    const snap = buildFleetSnapshot([chain, memberA, memberB], NOW);
+    expect(snap.totalCost).toBeCloseTo(0.345, 10);
+    expect(snap.totalTokens).toBe(1_200); // members only: (600+200) + (300+100), chain's own usage excluded
+  });
+
+  test('runningCount excludes the wrfc-chain rollup row itself — only its running members count', () => {
+    const chain = makeNode({ id: 'chain:c1', kind: 'wrfc-chain', state: 'executing-tool' });
+    const memberA = makeNode({ id: 'member-a', parentId: 'chain:c1', state: 'executing-tool' });
+    const memberB = makeNode({ id: 'member-b', parentId: 'chain:c1', state: 'done' });
+    const snap = buildFleetSnapshot([chain, memberA, memberB], NOW);
+    expect(snap.runningCount).toBe(1);
+  });
+
+  test('a wrfc-subtask node never contributes usage/cost even if it somehow carried a priced reading', () => {
+    const subtask = makeNode({
+      id: 'subtask:s1',
+      kind: 'wrfc-subtask',
+      costState: 'priced',
+      costUsd: 5, // hostile fixture: real subtasks never carry this, but the aggregator must not trust kind-mismatched data
+    });
+    const snap = buildFleetSnapshot([subtask], NOW);
+    expect(snap.totalCost).toBeNull();
+  });
+
+  test('a completed WRFC owner agent (raw.wrfcRole === "owner") is excluded from cost/token totals — its usage is a rollup of its already-counted phase children', () => {
+    const engineer = makeNode({
+      id: 'engineer-1',
+      parentId: 'chain:c2',
+      costState: 'priced',
+      costUsd: 0.2,
+      usage: { inputTokens: 400, outputTokens: 100, cacheReadTokens: 0, cacheWriteTokens: 0, llmCallCount: 1, turnCount: 1, toolCallCount: 1 },
+    });
+    const reviewer = makeNode({
+      id: 'reviewer-1',
+      parentId: 'chain:c2',
+      costState: 'priced',
+      costUsd: 0.1,
+      usage: { inputTokens: 200, outputTokens: 50, cacheReadTokens: 0, cacheWriteTokens: 0, llmCallCount: 1, turnCount: 1, toolCallCount: 1 },
+    });
+    // Owner: SDK-backfilled usage/cost === sum of engineer+reviewer (see
+    // wrfc-controller.ts completeOwnerAgent -> aggregateChainUsage). raw
+    // carries the AgentRecord shape (wrfcRole: 'owner') the SDK actually sets.
+    const owner = makeNode({
+      id: 'owner-1',
+      kind: 'agent',
+      state: 'done',
+      costState: 'priced',
+      costUsd: 0.3,
+      usage: { inputTokens: 600, outputTokens: 150, cacheReadTokens: 0, cacheWriteTokens: 0, llmCallCount: 2, turnCount: 2, toolCallCount: 2 },
+      raw: { wrfcRole: 'owner' },
+    });
+    const snap = buildFleetSnapshot([owner, engineer, reviewer], NOW);
+    expect(snap.totalCost).toBeCloseTo(0.3, 10); // engineer(0.2) + reviewer(0.1), NOT +owner's duplicate 0.3
+    expect(snap.totalTokens).toBe(750); // (400+100) + (200+50), owner's duplicate 750 excluded
+  });
+
+  test('a non-owner agent node (raw.wrfcRole is engineer/undefined/absent) still contributes normally', () => {
+    const plain = makeNode({ id: 'plain-agent', costState: 'priced', costUsd: 0.1 });
+    const engineer = makeNode({ id: 'eng', costState: 'priced', costUsd: 0.2, raw: { wrfcRole: 'engineer' } });
+    const snap = buildFleetSnapshot([plain, engineer], NOW);
+    expect(snap.totalCost).toBeCloseTo(0.3, 10);
+  });
 });
 
 // ---------------------------------------------------------------------------
