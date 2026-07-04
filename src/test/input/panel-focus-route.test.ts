@@ -22,6 +22,8 @@ function buildState(overrides: Partial<PanelFocusRouteState> = {}): PanelFocusRo
     cyclePanelTab: mock(() => {}),
     onPanelInputConsumed: undefined,
     isPrintableBurst: false,
+    isTurnActive: () => false,
+    cancelGeneration: mock(() => {}),
     ...overrides,
   };
 }

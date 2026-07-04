@@ -298,6 +298,9 @@ export async function bootstrapRuntime(
   const inputHistory = shell.inputHistory;
   const lastGitInfoRef = shell.lastGitInfoRef;
   const setOpenAgentDetail = shell.setOpenAgentDetail;
+  // W1.6 FIX 2: dispose the header's live-repo-state poll (git-status.ts
+  // startPolling) on shutdown, same pattern as acpTaskSyncInterval above.
+  bootstrapUnsubs.push(() => gitStatusProvider.stopPolling());
   const pluginCommandRegistry = {
     register(command: {
       readonly name: string;
