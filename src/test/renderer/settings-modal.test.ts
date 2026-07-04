@@ -124,7 +124,8 @@ describe('renderSettingsModal', () => {
   test('category rail and header show the active category count', () => {
     const lines = renderSettingsModal(modal, W);
     const texts = linesToText(lines).join('\n');
-    expect(texts).toContain('Display (8)');
+    // 9 = the SDK display keys plus the DEBT-2 synthetic display.themeMode entry.
+    expect(texts).toContain('Display (9)');
   });
 
   test('category rail is grouped and opens with category focus', () => {
@@ -133,7 +134,7 @@ describe('renderSettingsModal', () => {
     expect(modal.focusPane).toBe('categories');
     expect(texts).toContain('INTERFACE');
     expect(texts).toContain('AI ROUTING');
-    expect(texts).toContain('  ▸ Display (8)');
+    expect(texts).toContain('  ▸ Display (9)');
     const interfaceLine = lines.find(line => lineToString(line).includes('INTERFACE'));
     expect(interfaceLine).toBeDefined();
     const interfaceIndex = lineToString(interfaceLine!).indexOf('INTERFACE');

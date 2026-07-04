@@ -1,9 +1,9 @@
 # GV_GOLDEN surface=settings-modal-normal width=100 height=30
 |┌─ Configuration Workspace / Settings ─────────────────────────────────────────────────────────────┐|
-|│ Categories             │ Display (8)                                                             │|
+|│ Categories             │ Display (9)                                                             │|
 |│──────────────────────────────────────────────────────────────────────────────────────────────────│|
 |│ INTERFACE              │ Display configuration                                                   │|
-|│   ▸ Display (8)        │ stream                                                                  │|
+|│   ▸ Display (9)        │ stream                                                                  │|
 |│     UI (4)             │ Key: display.stream                                                     │|
 |│     Behavior (15)      │ Current: true                                                           │|
 |│     Permissions (15)   │ Default: true                                                           │|
@@ -22,7 +22,7 @@
 |│ SURFACES & CLOUD       │   showReasoningSumma  false       boolean    default       false        │|
 |│     Surfaces (73)      │   showTokenSpeed      false       boolean    default       false        │|
 |│     MCP (0)            │   showToolPreview     false       boolean    default       false        │|
-|│     Cloudflare (31)    │                                                                         │|
+|│     Cloudflare (31)    │   themeMode           auto        enum       default       auto         │|
 |│ AUTOMATION             │                                                                         │|
 |│     Batch (8)          │                                                                         │|
 |│     Automation (7)     │                                                                         │|
@@ -3641,76 +3641,147 @@
 23 25 fg=#64748b
 23 25 bg=#11131a
 23 26 bg=#11131a
+23 27 fg=244
 23 27 bg=#11131a
+23 28 fg=244
 23 28 bg=#11131a
+23 29 fg=244
 23 29 bg=#11131a
+23 30 fg=244
 23 30 bg=#11131a
+23 31 fg=244
 23 31 bg=#11131a
+23 32 fg=244
 23 32 bg=#11131a
+23 33 fg=244
 23 33 bg=#11131a
+23 34 fg=244
 23 34 bg=#11131a
+23 35 fg=244
 23 35 bg=#11131a
+23 36 fg=244
 23 36 bg=#11131a
+23 37 fg=244
 23 37 bg=#11131a
+23 38 fg=244
 23 38 bg=#11131a
+23 39 fg=244
 23 39 bg=#11131a
+23 40 fg=244
 23 40 bg=#11131a
+23 41 fg=244
 23 41 bg=#11131a
+23 42 fg=244
 23 42 bg=#11131a
+23 43 fg=244
 23 43 bg=#11131a
+23 44 fg=244
 23 44 bg=#11131a
+23 45 fg=244
 23 45 bg=#11131a
+23 46 fg=244
 23 46 bg=#11131a
+23 47 fg=244
 23 47 bg=#11131a
+23 48 fg=244
 23 48 bg=#11131a
+23 49 fg=244
 23 49 bg=#11131a
+23 50 fg=244
 23 50 bg=#11131a
+23 51 fg=244
 23 51 bg=#11131a
+23 52 fg=244
 23 52 bg=#11131a
+23 53 fg=244
 23 53 bg=#11131a
+23 54 fg=244
 23 54 bg=#11131a
+23 55 fg=244
 23 55 bg=#11131a
+23 56 fg=244
 23 56 bg=#11131a
+23 57 fg=244
 23 57 bg=#11131a
+23 58 fg=244
 23 58 bg=#11131a
+23 59 fg=244
 23 59 bg=#11131a
+23 60 fg=244
 23 60 bg=#11131a
+23 61 fg=244
 23 61 bg=#11131a
+23 62 fg=244
 23 62 bg=#11131a
+23 63 fg=244
 23 63 bg=#11131a
+23 64 fg=244
 23 64 bg=#11131a
+23 65 fg=244
 23 65 bg=#11131a
+23 66 fg=244
 23 66 bg=#11131a
+23 67 fg=244
 23 67 bg=#11131a
+23 68 fg=244
 23 68 bg=#11131a
+23 69 fg=244
 23 69 bg=#11131a
+23 70 fg=244
 23 70 bg=#11131a
+23 71 fg=244
 23 71 bg=#11131a
+23 72 fg=244
 23 72 bg=#11131a
+23 73 fg=244
 23 73 bg=#11131a
+23 74 fg=244
 23 74 bg=#11131a
+23 75 fg=244
 23 75 bg=#11131a
+23 76 fg=244
 23 76 bg=#11131a
+23 77 fg=244
 23 77 bg=#11131a
+23 78 fg=244
 23 78 bg=#11131a
+23 79 fg=244
 23 79 bg=#11131a
+23 80 fg=244
 23 80 bg=#11131a
+23 81 fg=244
 23 81 bg=#11131a
+23 82 fg=244
 23 82 bg=#11131a
+23 83 fg=244
 23 83 bg=#11131a
+23 84 fg=244
 23 84 bg=#11131a
+23 85 fg=244
 23 85 bg=#11131a
+23 86 fg=244
 23 86 bg=#11131a
+23 87 fg=244
 23 87 bg=#11131a
+23 88 fg=244
 23 88 bg=#11131a
+23 89 fg=244
 23 89 bg=#11131a
+23 90 fg=244
 23 90 bg=#11131a
+23 91 fg=244
 23 91 bg=#11131a
+23 92 fg=244
 23 92 bg=#11131a
+23 93 fg=244
 23 93 bg=#11131a
+23 94 fg=244
 23 94 bg=#11131a
+23 95 fg=244
 23 95 bg=#11131a
+23 96 fg=244
 23 96 bg=#11131a
+23 97 fg=244
 23 97 bg=#11131a
 23 98 bg=#11131a
 23 99 fg=#64748b

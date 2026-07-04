@@ -208,8 +208,72 @@ Object.freeze(UI_TONES_LIGHT);
  * set for the given background mode. Single read path for UI_TONES; the
  * 'dark' resolution is byte-identical to the UI_TONES constant.
  *
- * Call with 'dark' (the safe default) until terminal-bg-probe lands.
+ * Prefer activeUiTones() at call sites — resolveUiTones is the pure per-mode
+ * resolver underneath it.
  */
 export function resolveUiTones(mode: ThemeMode): Readonly<UiToneTokens> {
   return mode === 'light' ? UI_TONES_LIGHT : UI_TONES;
+}
+
+// ===========================================================================
+// Active-mode runtime (DEBT-2 / F5 terminal-bg-probe landing).
+//
+// The mode is decided ONCE at startup — from appearance config (display.themeMode
+// forced dark/light) or the terminal-background probe (auto) — and is then stable
+// for the session. Two read shapes exist because the two token layers are
+// consumed differently:
+//
+//   - Transcript tokens (ThemeTokens): read live per render via activeTheme(),
+//     so a dark→light repaint (auto mode, light wins within the probe window)
+//     re-resolves without any module reload.
+//
+//   - Chrome tokens (UiToneTokens): baked into module-level palette CONSTANTS
+//     (DEFAULT_PANEL_PALETTE, DEFAULT_OVERLAY_PALETTE, FULLSCREEN_PALETTE,
+//     DEFAULT_STYLE) that hundreds of call sites read by reference. Those
+//     constants cannot be re-resolved per call without a rewrite, so each owner
+//     registers an in-place rebuild via registerThemeRefresh(); setActiveThemeMode
+//     runs every rebuild in registration order (base palettes before the
+//     extendPalette-derived panel palettes) so a single mode flip updates them
+//     all. The rebuild is fully reversible: light→dark restores byte-identical
+//     dark values (tests rely on this to keep the shared test process's default
+//     at dark).
+// ===========================================================================
+
+/** User-facing appearance preference: auto probes the terminal; dark/light force. */
+export type ThemeModeSetting = 'auto' | 'dark' | 'light';
+
+/** The resolved mode in effect for the current session. Dark is the safe default. */
+let activeMode: ThemeMode = 'dark';
+
+/** In-place palette rebuilders, run (in registration order) on every mode flip. */
+const themeRefreshers: Array<() => void> = [];
+
+/**
+ * Register an in-place palette rebuild to run whenever the active mode changes.
+ * Base-palette owners register at their own module-eval time (before any
+ * extendPalette-derived palette, which depends on the base), so refreshers run
+ * base-first — the ordering the extended palettes require to re-merge correctly.
+ */
+export function registerThemeRefresh(rebuild: () => void): void {
+  themeRefreshers.push(rebuild);
+}
+
+/**
+ * Set the active background mode and rebuild every registered chrome palette
+ * in place. Idempotent and reversible. Callers: startup (forced mode or probe
+ * result) and the settings-modal change hook for forced modes.
+ */
+export function setActiveThemeMode(mode: ThemeMode): void {
+  activeMode = mode;
+  for (const rebuild of themeRefreshers) rebuild();
+}
+
+/** Transcript tokens for the active mode — read live, per render. */
+export function activeTheme(): Readonly<ThemeTokens> {
+  return resolveTheme(activeMode);
+}
+
+/** Chrome tokens for the active mode — used to build (and rebuild) palettes. */
+export function activeUiTones(): Readonly<UiToneTokens> {
+  return resolveUiTones(activeMode);
 }

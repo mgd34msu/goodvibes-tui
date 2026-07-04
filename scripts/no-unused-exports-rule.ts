@@ -105,6 +105,22 @@ export const NO_UNUSED_EXPORTS_EXEMPT: ReadonlySet<string> = new Set([
   'src/renderer/compaction-history-modal.ts#formatCompactionEvent', // W5.4/B28 (wo803): wired via buildCompactionHistoryText (called internally); quality-score grade-suffix present/absent/null branches pinned by dedicated tests, independent of the SDK's own module-level compaction-event singleton
   'src/renderer/term-caps.ts#SYNC_BEGIN', // wired via wrapSynced; exact DEC 2026 escape sequence pinned by dedicated tests
   'src/renderer/term-caps.ts#SYNC_END', // wired via wrapSynced; exact DEC 2026 escape sequence pinned by dedicated tests
+  // DEBT-2 terminal-bg-probe: the OSC 11 parser/classifier/filter are wired
+  // internally via installBackgroundThemeProbe (called from main.ts) and the
+  // TerminalBackgroundProbe class, but the fake-terminal harness pins their exact
+  // behaviour (BEL vs ST terminators, split/interleaved chunks, rgb/# variants,
+  // luminance boundary, tmux wrapping) by calling them directly.
+  'src/renderer/terminal-bg-probe.ts#OSC11_QUERY',
+  'src/renderer/terminal-bg-probe.ts#DEFAULT_PROBE_TIMEOUT_MS',
+  'src/renderer/terminal-bg-probe.ts#LUMINANCE_LIGHT_THRESHOLD',
+  'src/renderer/terminal-bg-probe.ts#parseColorSpec',
+  'src/renderer/terminal-bg-probe.ts#classifyBackgroundLuminance',
+  'src/renderer/terminal-bg-probe.ts#TerminalBackgroundProbe',
+  'src/renderer/terminal-bg-probe.ts#wrapForTmuxPassthrough',
+  // DEBT-2: DARK_THEME is the frozen dark-token singleton (=== resolveTheme('dark')).
+  // Call sites moved to activeTheme(); it stays as the public convenience alias and
+  // is pinned by theme.test.ts's identity assertions.
+  'src/renderer/theme.ts#DARK_THEME',
 
 ]);
 
