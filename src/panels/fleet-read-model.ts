@@ -124,6 +124,10 @@ const KIND_TAGS: Record<ProcessKind, string> = {
   schedule: 'sched',
   watcher: 'watch',
   'background-process': 'exec',
+  // Wave 4 (wo703): orchestration-engine kinds (adapters/orchestration.ts).
+  workstream: 'stream',
+  phase: 'phase',
+  'work-item': 'item',
 };
 
 export function fleetStateGlyph(state: ProcessState): string {
@@ -263,8 +267,28 @@ export function buildFleetRows(nodes: readonly ProcessNode[]): FleetTreeRow[] {
  *     reason as the chain, even though today it can never contribute a
  *     nonzero cost/token reading (defense in depth against a future adapter
  *     change, not load-bearing).
+ *
+ * Wave 4 (wo703) additions — verified against adapters/orchestration.ts:
+ *   - 'workstream': adaptWorkstream SUMS every work-item's usage/costUsd
+ *     exactly once (sumWorkItemUsage/aggregateWorkItemCost), the same
+ *     "rollup of nodes that also appear individually" shape as adaptChain —
+ *     each work item ALSO appears as its own 'work-item' node in the flat
+ *     list, so summing over every flat node would double-count. Its derived
+ *     state likewise mirrors its items' states, so it is excluded from
+ *     runningCount for the same non-double-counting reason as 'wrfc-chain'.
+ *   - 'phase': adaptPhase reports NO usage/cost (mirrors adaptSubtask's
+ *     "report nothing" choice exactly — usage: undefined, costUsd: null,
+ *     costState: 'unpriced') and its 'running' state mirrors whichever
+ *     work-item currently occupies it. Same defense-in-depth inclusion as
+ *     'wrfc-subtask': never contributes today, excluded anyway in case a
+ *     future adapter change gives it one.
+ *   - 'work-item' is deliberately NOT in this set: unlike a phase, a work
+ *     item carries its OWN direct usage/cost (item.usage, cumulative across
+ *     every phase it has visited) — it is the leaf contributor, the
+ *     'wrfc-subtask'-for-capabilities analogue but the 'agent'-for-usage
+ *     analogue. Excluding it would silently zero out real cost/token totals.
  */
-const ROLLUP_KINDS = new Set<ProcessKind>(['wrfc-chain', 'wrfc-subtask']);
+const ROLLUP_KINDS = new Set<ProcessKind>(['wrfc-chain', 'wrfc-subtask', 'workstream', 'phase']);
 
 /**
  * True for the WRFC owner agent's node specifically: an 'agent'-kind node

@@ -117,6 +117,7 @@ export type CreateBootstrapCommandContextOptions = {
   wrfcController?: import('@pellux/goodvibes-sdk/platform/agents').WrfcController;
   componentHealthMonitor: import('@/runtime/index.ts').ComponentHealthMonitor;
   hydrateSessionUsage?: () => void;
+  workstreamEngine?: import('./workstream-services.ts').WorkstreamCommandService;
 };
 
 export function createBootstrapCommandContext(
@@ -172,6 +173,7 @@ export function createBootstrapCommandContext(
     wrfcController,
     changeTracker,
     hydrateSessionUsage,
+    workstreamEngine,
     planManager,
     adaptivePlanner,
     sessionOrchestration,
@@ -229,6 +231,7 @@ export function createBootstrapCommandContext(
     wrfcController,
     changeTracker,
     hydrateSessionUsage,
+    workstreamEngine,
   });
   const provider = createBootstrapCommandProviderSection({
     providerRegistry,

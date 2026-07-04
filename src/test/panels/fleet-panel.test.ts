@@ -589,6 +589,95 @@ describe('FleetPanel — K arms a kill confirm', () => {
 });
 
 // ---------------------------------------------------------------------------
+// p — pause (Wave 4, wo703 B4 control parity). Reuses actions.interrupt
+// verbatim, gated on capabilities.pausable instead of interruptible (which
+// trigger/schedule always report false) — see fleet-panel.ts's handleInput
+// doc comment for why no new action/registry plumbing was needed.
+// ---------------------------------------------------------------------------
+
+describe('FleetPanel — p pauses a pausable node', () => {
+  test('p calls actions.interrupt (not a new pause action) with the selected node id', () => {
+    const node = makeNode({
+      id: 'trigger-1',
+      kind: 'trigger',
+      state: 'idle',
+      capabilities: { interruptible: false, killable: true, pausable: true, steerable: false },
+    });
+    const readModel = createStaticFleetReadModel(buildFleetSnapshot([node], NOW));
+    const actions = makeActions();
+    const panel = new FleetPanel(readModel, actions);
+    expect(panel.handleInput('p')).toBe(true);
+    expect(actions.interruptCalls).toEqual(['trigger-1']);
+  });
+
+  test('p on an empty list is unconsumed', () => {
+    const readModel = createStaticFleetReadModel(buildFleetSnapshot([], NOW));
+    const actions = makeActions();
+    const panel = new FleetPanel(readModel, actions);
+    expect(panel.handleInput('p')).toBe(false);
+    expect(actions.interruptCalls).toHaveLength(0);
+  });
+
+  test('p on a terminal node is unconsumed and does not call interrupt', () => {
+    const node = makeNode({
+      id: 'trigger-done',
+      kind: 'trigger',
+      state: 'killed',
+      capabilities: { interruptible: false, killable: true, pausable: true, steerable: false },
+    });
+    const readModel = createStaticFleetReadModel(buildFleetSnapshot([node], NOW));
+    const actions = makeActions();
+    const panel = new FleetPanel(readModel, actions);
+    expect(panel.handleInput('p')).toBe(false);
+    expect(actions.interruptCalls).toHaveLength(0);
+  });
+
+  test('p on a non-pausable node is consumed, shows a status message, and does not call interrupt', () => {
+    const node = makeNode({ id: 'agent-1', state: 'streaming', capabilities: { interruptible: true, killable: true, pausable: false, steerable: false } });
+    const readModel = createStaticFleetReadModel(buildFleetSnapshot([node], NOW));
+    const actions = makeActions();
+    const panel = new FleetPanel(readModel, actions);
+    expect(panel.handleInput('p')).toBe(true);
+    expect(actions.interruptCalls).toHaveLength(0);
+    const text = linesText(panel.render(100, 24));
+    expect(text).toContain('does not support pause');
+  });
+
+  test('the p footer hint shows only for a pausable, non-terminal node', () => {
+    const pausable = makeNode({
+      id: 'schedule-1',
+      kind: 'schedule',
+      state: 'idle',
+      capabilities: { interruptible: false, killable: true, pausable: true, steerable: false },
+    });
+    const notPausable = makeNode({ id: 'agent-1', state: 'streaming', capabilities: { interruptible: true, killable: true, pausable: false, steerable: false } });
+    expect(linesText(new FleetPanel(createStaticFleetReadModel(buildFleetSnapshot([pausable], NOW))).render(100, 24))).toContain('p pause');
+    expect(linesText(new FleetPanel(createStaticFleetReadModel(buildFleetSnapshot([notPausable], NOW))).render(100, 24))).not.toContain('p pause');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Wave 4 (wo703) fleet-tree nesting: workstream/phase render as honest,
+// non-attachable aggregate nodes (Enter refuses with the same message as any
+// other transcript-less kind); a work-item still delegates to its live agent
+// for capabilities (per adaptWorkItem), but the node itself stays
+// non-attachable (isAttachableFleetKind — see fleet-tabs.test.ts).
+// ---------------------------------------------------------------------------
+
+describe('FleetPanel — Enter on workstream/phase/work-item nodes (wo703)', () => {
+  test('Enter on a workstream, phase, or work-item node refuses with the honest "no transcript" message', () => {
+    for (const kind of ['workstream', 'phase', 'work-item'] as const) {
+      const node = makeNode({ id: `node-${kind}`, kind, state: 'executing-tool' });
+      const readModel = createStaticFleetReadModel(buildFleetSnapshot([node], NOW));
+      const panel = new FleetPanel(readModel);
+      expect(panel.handleInput('enter')).toBe(true);
+      const text = linesText(panel.render(100, 24));
+      expect(text).toContain('has no transcript to attach');
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
 // s — steer composer (Wave-3, W3.2): one-line input on an active attached
 // tab whose node is steerable. Capability-gated like i/K; submit calls
 // actions.steer with the node id and typed text; refusal renders inline.

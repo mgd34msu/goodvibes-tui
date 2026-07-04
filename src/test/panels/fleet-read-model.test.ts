@@ -392,10 +392,108 @@ describe('fleetStateGlyph / fleetStateTone / isTerminalProcessState / isRunningP
   });
 
   test('fleetKindTag returns a short tag for every ProcessKind', () => {
-    const kinds = ['agent', 'wrfc-chain', 'wrfc-subtask', 'workflow', 'trigger', 'schedule', 'watcher', 'background-process'] as const;
+    const kinds = [
+      'agent', 'wrfc-chain', 'wrfc-subtask', 'workflow', 'trigger', 'schedule', 'watcher', 'background-process',
+      // Wave 4 (wo703): orchestration-engine kinds.
+      'workstream', 'phase', 'work-item',
+    ] as const;
     for (const k of kinds) {
       expect(fleetKindTag(k).length).toBeGreaterThan(0);
     }
+    // Compile-forced exhaustiveness lives in KIND_TAGS' Record<ProcessKind, string>
+    // itself; this just double-checks every one of those 11 kinds actually
+    // resolves to a real tag (not the '?? kind' fallback) at runtime too.
+    expect(new Set(kinds.map(fleetKindTag)).size).toBe(kinds.length);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Wave 4 (wo703) — orchestration-engine kinds: workstream/phase double-count
+// exclusion (adaptWorkstream sums every work-item once; adaptPhase reports
+// nothing), work-item leaf inclusion (it carries its own direct usage/cost),
+// and buildFleetRows nesting workstream -> phase -> work-item -> agent.
+// ---------------------------------------------------------------------------
+
+describe('buildFleetSnapshot — workstream/phase/work-item rollup (wo703)', () => {
+  function makeUsage(inputTokens: number, outputTokens: number) {
+    return { inputTokens, outputTokens, cacheReadTokens: 0, cacheWriteTokens: 0, llmCallCount: 1, turnCount: 1, toolCallCount: 1 };
+  }
+
+  test('a workstream node plus its work items contributes cost/tokens ONCE (the workstream total), not workstream+items', () => {
+    const workstream = makeNode({
+      id: 'workstream:w1',
+      kind: 'workstream',
+      costState: 'priced',
+      costUsd: 0.5,
+      usage: makeUsage(900, 300),
+    });
+    const itemA = makeNode({
+      id: 'work-item:i1',
+      kind: 'work-item',
+      parentId: 'workstream:w1',
+      costState: 'priced',
+      costUsd: 0.3,
+      usage: makeUsage(600, 200),
+    });
+    const itemB = makeNode({
+      id: 'work-item:i2',
+      kind: 'work-item',
+      parentId: 'workstream:w1',
+      costState: 'priced',
+      costUsd: 0.2,
+      usage: makeUsage(300, 100),
+    });
+    const snap = buildFleetSnapshot([workstream, itemA, itemB], NOW);
+    expect(snap.totalCost).toBeCloseTo(0.5, 10);
+    expect(snap.totalTokens).toBe(1_200); // items only: (600+200)+(300+100); workstream's own rolled-up usage excluded
+  });
+
+  test('a phase node never contributes usage/cost even if it somehow carried a priced reading', () => {
+    const phase = makeNode({
+      id: 'phase:w1:p1',
+      kind: 'phase',
+      parentId: 'workstream:w1',
+      costState: 'priced',
+      costUsd: 9, // hostile fixture: real phases never carry this (adaptPhase always reports null/unpriced)
+    });
+    const snap = buildFleetSnapshot([phase], NOW);
+    expect(snap.totalCost).toBeNull();
+  });
+
+  test('a work-item leaf DOES contribute its own usage/cost — it is not a rollup kind', () => {
+    const item = makeNode({
+      id: 'work-item:solo',
+      kind: 'work-item',
+      costState: 'priced',
+      costUsd: 0.75,
+      usage: makeUsage(400, 100),
+    });
+    const snap = buildFleetSnapshot([item], NOW);
+    expect(snap.totalCost).toBe(0.75);
+    expect(snap.totalTokens).toBe(500);
+  });
+
+  test('runningCount excludes the workstream and phase rollup rows — only the running work-item (or its agent) counts', () => {
+    const workstream = makeNode({ id: 'workstream:w1', kind: 'workstream', state: 'executing-tool' });
+    const phase = makeNode({ id: 'phase:w1:p1', kind: 'phase', parentId: 'workstream:w1', state: 'executing-tool' });
+    const item = makeNode({ id: 'work-item:i1', kind: 'work-item', parentId: 'phase:w1:p1', state: 'executing-tool' });
+    const snap = buildFleetSnapshot([workstream, phase, item], NOW);
+    expect(snap.runningCount).toBe(1);
+  });
+
+  test('buildFleetRows nests workstream -> phase -> work-item -> agent via parentId, with zero new tree code', () => {
+    const nodes = [
+      makeNode({ id: 'workstream:w1', kind: 'workstream', startedAt: NOW - 10_000 }),
+      makeNode({ id: 'phase:w1:p1', kind: 'phase', parentId: 'workstream:w1', startedAt: NOW - 9_000 }),
+      makeNode({ id: 'work-item:i1', kind: 'work-item', parentId: 'phase:w1:p1', startedAt: NOW - 8_000 }),
+      makeNode({ id: 'agent-1', kind: 'agent', parentId: 'work-item:i1', startedAt: NOW - 7_000 }),
+    ];
+    const rows = buildFleetRows(nodes);
+    const byId = new Map(rows.map((r) => [r.node.id, r]));
+    expect(byId.get('workstream:w1')!.depth).toBe(0);
+    expect(byId.get('phase:w1:p1')!.depth).toBe(1);
+    expect(byId.get('work-item:i1')!.depth).toBe(2);
+    expect(byId.get('agent-1')!.depth).toBe(3);
   });
 });
 
