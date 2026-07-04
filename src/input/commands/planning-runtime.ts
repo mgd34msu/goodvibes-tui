@@ -8,12 +8,15 @@ import type { CommandRegistry } from '../command-registry.ts';
 import { openModalCommand, requirePlanManager, requireSessionLineageTracker } from './runtime-services.ts';
 
 /**
- * Single-token verbs that look like a `/plan` subcommand but are not real ones
- * (some, like `dismiss`, were dispatched by UI that assumed a subcommand that
- * never existed). A lone one of these is refused rather than seeded as a goal,
- * so a stray verb can never overwrite the project goal with itself.
+ * Single-token verbs that look like a `/plan` subcommand but are not real ones.
+ * A lone one of these is refused rather than seeded as a goal, so a stray verb
+ * can never overwrite the project goal with itself.
+ *
+ * DEBT-3: `dismiss` and `answer` are now REAL subcommands (handled above this
+ * guard), so they were removed from the refuse-list. `pause`/`stop`/`cancel`
+ * remain here — they still have no backing verb and must not seed a goal.
  */
-const PSEUDO_SUBCOMMAND_VERBS = new Set(['dismiss', 'answer', 'pause', 'stop', 'cancel']);
+const PSEUDO_SUBCOMMAND_VERBS = new Set(['pause', 'stop', 'cancel']);
 
 function recordNextQuestion(
   state: Partial<ProjectPlanningState>,
@@ -59,7 +62,7 @@ export function registerPlanningRuntimeCommands(registry: CommandRegistry): void
   registry.register({
     name: 'plan',
     description: 'Inspect or seed TUI-owned project planning state',
-    usage: '[panel | approve | list | show <id> | mode | explain | override <strategy> | status | clear | <planning goal>]',
+    usage: '[panel | approve | dismiss | answer <n> <text> | list | show <id> | mode | explain | override <strategy> | status | clear | <planning goal>]',
     argsHint: '[panel|approve|status|<goal>]',
     async handler(args, ctx) {
       const planManager = requirePlanManager(ctx);
@@ -170,6 +173,92 @@ export function registerPlanningRuntimeCommands(registry: CommandRegistry): void
           return;
         }
         ctx.print(planManager.toMarkdown(plan));
+        return;
+      }
+
+      // DEBT-3: /plan dismiss — archive the current plan. Dismisses the active
+      // execution plan (ExecutionPlanManager.dismiss, honest per-state) AND
+      // deactivates the project-planning interview state shown in the modal so a
+      // later /plan <goal> starts fresh. Mid-execution is refused outright.
+      if (args[0] === 'dismiss') {
+        const dismissal = planManager.dismiss(ctx.session.runtime.sessionId);
+        if (dismissal.outcome === 'requires-cancel') {
+          ctx.print(
+            `Plan "${dismissal.blockedBy?.title ?? 'active plan'}" is mid-execution and was not dismissed. ` +
+            `Run /workstream cancel to stop it first, then /plan dismiss.`,
+          );
+          return;
+        }
+        let planningNote = '';
+        if (projectPlanningService && projectId) {
+          const current = await projectPlanningService.getState({ projectId });
+          if (current.state && current.state.metadata?.['active'] === true) {
+            await projectPlanningService.upsertState({
+              projectId,
+              state: {
+                ...current.state,
+                metadata: {
+                  ...(current.state.metadata ?? {}),
+                  active: false,
+                  dismissedAt: Date.now(),
+                  dismissedFrom: 'plan-command',
+                },
+              },
+            });
+            planningNote = ' Project planning interview marked inactive.';
+          }
+        }
+        if (dismissal.outcome === 'dismissed') {
+          ctx.print(
+            `Dismissed plan "${dismissal.plan?.title ?? 'active plan'}" ` +
+            `(archived as dismissed; retained in /plan list; /plan <goal> starts fresh).${planningNote}`,
+          );
+        } else if (planningNote) {
+          ctx.print(`No active execution plan to dismiss.${planningNote}`);
+        } else {
+          ctx.print('No active plan or planning state to dismiss.');
+        }
+        return;
+      }
+
+      // DEBT-3: /plan answer <n|question-id> <text> — record a real answer to an
+      // open planning question (moves open → answered, consumed on next refine).
+      if (args[0] === 'answer') {
+        if (!projectPlanningService || !projectId) {
+          ctx.print('Project planning service is not available in this runtime.');
+          return;
+        }
+        const ref = args[1];
+        const answerText = args.slice(2).join(' ').trim();
+        if (!ref || !answerText) {
+          ctx.print('Usage: /plan answer <question-number|question-id> <your answer>');
+          return;
+        }
+        const asNum = Number(ref);
+        const selector = Number.isInteger(asNum) && asNum >= 1
+          ? { questionIndex: asNum - 1 }
+          : { questionId: ref };
+        const answerResult = await projectPlanningService.answerQuestion({ projectId, ...selector, answer: answerText });
+        if (!answerResult.answered) {
+          if (answerResult.reason === 'no-state') {
+            ctx.print('No project planning state exists yet. Seed it with /plan <goal>.');
+          } else if (answerResult.reason === 'question-not-found') {
+            const open = answerResult.openQuestions;
+            const listing = open.length > 0
+              ? open.map((question, index) => `  ${index + 1}. ${question.prompt} (${question.id})`).join('\n')
+              : '  (no open questions)';
+            ctx.print(`No open question matched "${ref}". Open questions:\n${listing}`);
+          } else {
+            ctx.print('Usage: /plan answer <question-number|question-id> <your answer>');
+          }
+          return;
+        }
+        openProjectPlanningPanel();
+        ctx.print(
+          `Recorded answer to: ${answerResult.question?.prompt ?? 'question'}\n` +
+          `Readiness: ${answerResult.evaluation.readiness}\n` +
+          formatNextQuestion(answerResult.evaluation.nextQuestion),
+        );
         return;
       }
 

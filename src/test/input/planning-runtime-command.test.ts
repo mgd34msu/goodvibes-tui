@@ -70,7 +70,12 @@ function makeService(initial: ProjectPlanningState | null = null): {
   };
 }
 
-function makeContext(service: ProjectPlanningService, out: string[], opened: string[]): CommandContext {
+function makeContext(
+  service: ProjectPlanningService,
+  out: string[],
+  opened: string[],
+  planManagerOverride: Record<string, unknown> = {},
+): CommandContext {
   return {
     print: (message: string) => out.push(message),
     showPanel: (panelId: string) => { opened.push(panelId); },
@@ -100,6 +105,8 @@ function makeContext(service: ProjectPlanningService, out: string[], opened: str
         getSummary: () => '',
         list: () => [],
         toMarkdown: () => '',
+        dismiss: () => ({ outcome: 'no-active-plan' }),
+        ...planManagerOverride,
       },
     },
     provider: {},
@@ -212,12 +219,9 @@ describe('/plan project planning runtime command', () => {
     expect(fake.state()?.openQuestions.length).toBeGreaterThan(0);
   });
 
-  // W6 review (finding 4b, defense): a lone verb-looking token is almost never
-  // a real planning goal — it is a mistyped/removed subcommand. The Planning
-  // modal used to dispatch `/plan dismiss`, which fell through here and seeded
-  // the goal with "dismiss". A single pseudo-subcommand verb must be refused
-  // (no upsertState, no panel open) with honest guidance instead of seeded.
-  test('a lone pseudo-subcommand verb ("dismiss") is refused, never seeded — no upsertState, honest guidance', async () => {
+  // DEBT-3: `dismiss` and `answer` are REAL subcommands now — they must NOT be
+  // refused as pseudo-verbs, and they must never seed a goal named after themselves.
+  test('/plan dismiss with no active plan and no interview state → honest no-op, never seeded', async () => {
     const registry = new CommandRegistry();
     registerPlanningRuntimeCommands(registry);
     const out: string[] = [];
@@ -227,13 +231,88 @@ describe('/plan project planning runtime command', () => {
     await registry.execute('plan', ['dismiss'], makeContext(fake.service, out, opened));
 
     expect(fake.state()).toBeNull(); // never seeded — the goal is not overwritten with "dismiss"
-    expect(opened).toEqual([]);
-    expect(out.join('\n')).toContain('Unknown /plan subcommand "dismiss"');
-    expect(out.join('\n')).toContain('/plan <a real sentence');
+    expect(out.join('\n')).toContain('No active plan or planning state to dismiss.');
+    expect(out.join('\n')).not.toContain('Unknown /plan subcommand');
   });
 
-  test('every pseudo-subcommand verb (dismiss/answer/pause/stop/cancel) is refused as a lone token', async () => {
-    for (const verb of ['dismiss', 'answer', 'pause', 'stop', 'cancel']) {
+  test('/plan dismiss deactivates an active project-planning interview state', async () => {
+    const registry = new CommandRegistry();
+    registerPlanningRuntimeCommands(registry);
+    const out: string[] = [];
+    const fake = makeService(makeState({ goal: 'Ship it', metadata: { active: true, owner: 'tui' } }));
+
+    await registry.execute('plan', ['dismiss'], makeContext(fake.service, out, []));
+
+    expect(fake.state()?.metadata?.['active']).toBe(false);
+    expect(fake.state()?.metadata?.['dismissedFrom']).toBe('plan-command');
+    expect(out.join('\n')).toContain('Project planning interview marked inactive.');
+  });
+
+  test('/plan dismiss refuses a mid-execution plan and points at /workstream cancel', async () => {
+    const registry = new CommandRegistry();
+    registerPlanningRuntimeCommands(registry);
+    const out: string[] = [];
+    const fake = makeService(makeState({ goal: 'Running', metadata: { active: true } }));
+    const planManager = { dismiss: () => ({ outcome: 'requires-cancel', blockedBy: { title: 'Running plan' } }) };
+
+    await registry.execute('plan', ['dismiss'], makeContext(fake.service, out, [], planManager));
+
+    expect(out.join('\n')).toContain('mid-execution');
+    expect(out.join('\n')).toContain('/workstream cancel');
+    // The interview state is left untouched when execution is mid-flight.
+    expect(fake.state()?.metadata?.['active']).toBe(true);
+  });
+
+  test('/plan answer <index> <text> records a real answer and clears its open-question gap', async () => {
+    const registry = new CommandRegistry();
+    registerPlanningRuntimeCommands(registry);
+    const out: string[] = [];
+    const opened: string[] = [];
+    const answerCalls: unknown[] = [];
+    const fake = makeService(makeState({ goal: 'Answer path', openQuestions: [{ id: 'q1', prompt: 'What scope?', status: 'open' }] }));
+    // Wrap the service with an answerQuestion that records + reports honestly.
+    const service = {
+      ...(fake.service as unknown as Record<string, unknown>),
+      answerQuestion: async (input: { questionIndex?: number; questionId?: string; answer: string }) => {
+        answerCalls.push(input);
+        return {
+          ok: true, projectId: 'proj', knowledgeSpaceId: 'project:proj', answered: true,
+          question: { id: 'q1', prompt: 'What scope?', status: 'answered', answer: input.answer },
+          openQuestions: [], state: fake.state(),
+          evaluation: evaluateProjectPlanningReadiness(makeState({ goal: 'Answer path' })),
+        };
+      },
+    } as unknown as ProjectPlanningService;
+
+    await registry.execute('plan', ['answer', '1', 'focused', 'first', 'pass'], makeContext(service, out, opened));
+
+    expect(answerCalls).toEqual([{ projectId: 'proj', questionIndex: 0, answer: 'focused first pass' }]);
+    expect(out.join('\n')).toContain('Recorded answer to: What scope?');
+    expect(opened).toContain('planning-modal');
+  });
+
+  test('/plan answer with a bad question ref reports honestly (no seed)', async () => {
+    const registry = new CommandRegistry();
+    registerPlanningRuntimeCommands(registry);
+    const out: string[] = [];
+    const fake = makeService(makeState({ goal: 'Answer path', openQuestions: [{ id: 'q1', prompt: 'What scope?', status: 'open' }] }));
+    const service = {
+      ...(fake.service as unknown as Record<string, unknown>),
+      answerQuestion: async () => ({
+        ok: true, projectId: 'proj', knowledgeSpaceId: 'project:proj', answered: false,
+        reason: 'question-not-found',
+        openQuestions: [{ id: 'q1', prompt: 'What scope?', status: 'open' }],
+        state: fake.state(), evaluation: evaluateProjectPlanningReadiness(makeState({ goal: 'Answer path' })),
+      }),
+    } as unknown as ProjectPlanningService;
+
+    await registry.execute('plan', ['answer', 'nope', 'my', 'answer'], makeContext(service, out, []));
+    expect(out.join('\n')).toContain('No open question matched "nope"');
+    expect(out.join('\n')).toContain('1. What scope? (q1)');
+  });
+
+  test('remaining pseudo-subcommand verbs (pause/stop/cancel) are still refused as lone tokens', async () => {
+    for (const verb of ['pause', 'stop', 'cancel']) {
       const registry = new CommandRegistry();
       registerPlanningRuntimeCommands(registry);
       const out: string[] = [];

@@ -13,7 +13,7 @@ export interface PlanningAnswerAction {
   readonly label: string;
   readonly detail: string;
   readonly answer: string;
-  readonly kind?: 'answer' | 'approve' | 'dismiss';
+  readonly kind?: 'answer' | 'approve';
   readonly disabled?: boolean;
 }
 
@@ -35,8 +35,12 @@ function compactAnswerDetail(text: string): string {
  * canned suggestions first (de-duplicated by normalized answer text — a
  * question that matches more than one keyword category, e.g. scope +
  * recommendedAnswer echoing one of the scope answers verbatim, must not show
- * the same suggested answer twice), then the fixed ask-narrower/custom/
- * dismiss actions.
+ * the same suggested answer twice), then the fixed ask-narrower/custom actions.
+ *
+ * DEBT-3: dismissing planning is no longer a pseudo answer-row — it is a
+ * first-class confirmed modal action (the `d` key), so no dismiss row is
+ * produced here. A canned answer records against the current open question via
+ * /plan answer; the custom row's free-form text is submitted to chat.
  */
 export function buildAnswerActions(question: ProjectPlanningQuestion, draftAnswer: string): PlanningAnswerAction[] {
   const canned: PlanningAnswerAction[] = [];
@@ -119,18 +123,9 @@ export function buildAnswerActions(question: ProjectPlanningQuestion, draftAnswe
   actions.push({
     id: 'custom',
     label: 'Submit typed answer',
-    detail: draftAnswer ? compactAnswerDetail(draftAnswer) : 'Type an answer first; this row becomes the custom answer.',
+    detail: draftAnswer ? compactAnswerDetail(draftAnswer) : 'Type an answer first; this row submits it to chat.',
     answer: draftAnswer.trim(),
     disabled: !draftAnswer.trim(),
-  });
-  actions.push({
-    id: 'dismiss-planning',
-    // Honest label: there is no /plan subcommand that pauses planning, so this
-    // row only closes the panel — it does NOT change any planning state.
-    label: 'Close (planning unchanged)',
-    detail: 'Close this panel. Pausing project planning is not available as a command yet, so planning state is left unchanged; /plan reopens it later.',
-    answer: 'Pause project planning for this workspace and continue without the planning panel.',
-    kind: 'dismiss',
   });
   return actions;
 }

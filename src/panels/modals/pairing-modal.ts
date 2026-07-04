@@ -18,9 +18,11 @@ import { encodeConnectionPayload, generateQrMatrix, renderQrToString } from '@pe
 // buildView, cached) so a missing daemon home degrades honestly rather than
 // throwing at modal-registration time.
 //
-// KNOWN GAP (flagged in the report): src/input/commands/qrcode-runtime.ts only
-// registers `/qrcode` (open); it has no `regenerate` subcommand yet, and this
-// surface cannot observe a regenerated token without being re-opened.
+// DEBT-3: the regenerate action now dispatches the real `/qrcode regenerate`
+// verb (which rotates the shared operator-token store) and, once it resolves,
+// RE-PULLS the lazy connection-info thunk so the modal shows the rotated token +
+// QR in place without being re-opened. `confirm: true` keeps the two-press
+// guard so a stray keystroke never rotates a live companion's token.
 // ---------------------------------------------------------------------------
 
 export interface PairingModalConnectionInfo {
@@ -58,7 +60,7 @@ class PairingModalSurface implements ConfigModalSurface {
   readonly actions = [
     { key: 'v', id: 'toggleReveal', label: 'reveal token' },
     { key: 'c', id: 'copyToken', label: 'copy token', enabledFor: () => Boolean(this.deps.copyToClipboard) },
-    { key: 'r', id: 'regenerate', label: 'regenerate token' },
+    { key: 'r', id: 'regenerate', label: 'regenerate token', confirm: true },
   ];
 
   onOpen(requestRender: () => void): void { this.requestRender = requestRender; }
@@ -117,8 +119,25 @@ class PairingModalSurface implements ConfigModalSurface {
       return;
     }
     if (id === 'regenerate') {
-      void ctx.executeCommand?.('qrcode', ['regenerate']);
-      ctx.setStatus('Dispatched /qrcode regenerate (reopen to see the new token).');
+      const dispatched = ctx.executeCommand?.('qrcode', ['regenerate']);
+      if (!dispatched) {
+        ctx.setStatus('Token rotation is unavailable in this runtime.');
+        return;
+      }
+      ctx.setStatus('Rotating pairing token…');
+      void dispatched
+        .then((ok) => {
+          if (ok === false) { ctx.setStatus('Token rotation did not complete.'); return; }
+          // Re-pull the lazy connection-info thunk: /qrcode regenerate rewrote
+          // the shared token store, so a fresh getConnectionInfo() reflects the
+          // rotated token + QR. ensureInfo caches on first build — clear it.
+          this.info = undefined;
+          this.revealed = false;
+          this.ensureInfo();
+          this.requestRender();
+          ctx.setStatus('Pairing token rotated — new token and QR loaded.');
+        })
+        .catch(() => { ctx.setStatus('Token rotation failed.'); });
     }
   }
 }
