@@ -28,6 +28,8 @@ export { TasksPanel } from './tasks-panel.ts';
 export { OrchestrationPanel } from './orchestration-panel.ts';
 export { CommunicationPanel } from './communication-panel.ts';
 export { CockpitPanel } from './cockpit-panel.ts';
+export { FleetPanel } from './fleet-panel.ts';
+export type { FleetActionCallbacks } from './fleet-panel.ts';
 export { RemotePanel } from './remote-panel.ts';
 export { ServicesPanel } from './services-panel.ts';
 export { SubscriptionPanel } from './subscription-panel.ts';

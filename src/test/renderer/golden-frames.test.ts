@@ -73,6 +73,9 @@ import { SessionManager } from '@pellux/goodvibes-sdk/platform/sessions';
 import { ProfileManager } from '@pellux/goodvibes-sdk/platform/profiles';
 import type { AgentRecord } from '@pellux/goodvibes-sdk/platform/tools';
 import type { BackgroundProcess } from '@pellux/goodvibes-sdk/platform/tools';
+import type { ProcessNode } from '@pellux/goodvibes-sdk/platform/runtime/fleet';
+import { FleetPanel } from '../../panels/fleet-panel.ts';
+import { buildFleetSnapshot, createStaticFleetReadModel } from '../../panels/fleet-read-model.ts';
 import type { Cell, Line } from '../../types/grid.ts';
 
 // ---------------------------------------------------------------------------
@@ -1157,6 +1160,104 @@ function renderProcessSurface(width: number, height: number): Line[] {
 }
 
 describeOverlayGolden('process-modal', renderProcessSurface);
+
+// fleet — a deterministic multi-level tree (WRFC owner->engineer->reviewer
+// chain, one exec node, one terminal agent) with a FIXED `now` passed into
+// buildFleetSnapshot (never Date.now()) so elapsed columns never flicker
+// across runs/machines — W2.2 golden fixture.
+const FIXED_FLEET_NOW = 1_700_000_000_000;
+
+function buildFleetGoldenNodes(): ProcessNode[] {
+  return [
+    {
+      id: 'wrfc-owner-01',
+      kind: 'agent',
+      label: '[WRFC owner] Fix the golden fixture',
+      task: 'Fix the golden fixture',
+      state: 'executing-tool',
+      startedAt: FIXED_FLEET_NOW - 300_000,
+      elapsedMs: 300_000,
+      usage: { inputTokens: 12_000, outputTokens: 3_400, cacheReadTokens: 0, cacheWriteTokens: 0, llmCallCount: 3, turnCount: 3, toolCallCount: 5 },
+      model: 'claude-opus-4-6',
+      provider: 'anthropic',
+      costUsd: 0.87,
+      costState: 'priced',
+      currentActivity: { kind: 'tool', text: 'Read src/panels/fleet-panel.ts', toolName: 'Read', at: FIXED_FLEET_NOW - 1_000 },
+      capabilities: { interruptible: true, killable: true, pausable: false },
+    },
+    {
+      id: 'wrfc-engineer-01',
+      parentId: 'wrfc-owner-01',
+      kind: 'agent',
+      label: '[Engineer] Implement the fix',
+      task: 'Implement the fix',
+      state: 'streaming',
+      startedAt: FIXED_FLEET_NOW - 200_000,
+      elapsedMs: 200_000,
+      usage: { inputTokens: 8_000, outputTokens: 2_200, cacheReadTokens: 500, cacheWriteTokens: 0, llmCallCount: 2, turnCount: 2, toolCallCount: 3 },
+      model: 'claude-sonnet-4-6',
+      provider: 'anthropic',
+      costUsd: 0.045,
+      costState: 'priced',
+      currentActivity: { kind: 'output-line', text: 'Writing fleet-panel.ts', at: FIXED_FLEET_NOW - 500 },
+      capabilities: { interruptible: true, killable: true, pausable: false },
+    },
+    {
+      id: 'wrfc-reviewer-01',
+      parentId: 'wrfc-owner-01',
+      kind: 'agent',
+      label: '[Reviewer] Review the fix',
+      task: 'Review the fix',
+      state: 'awaiting-approval',
+      startedAt: FIXED_FLEET_NOW - 50_000,
+      elapsedMs: 50_000,
+      model: 'claude-opus-4-6',
+      provider: 'anthropic',
+      costUsd: null,
+      costState: 'unpriced',
+      currentActivity: { kind: 'phase', text: 'Awaiting operator approval', at: FIXED_FLEET_NOW - 2_000 },
+      capabilities: { interruptible: true, killable: true, pausable: true },
+    },
+    {
+      id: 'exec-golden-01',
+      kind: 'background-process',
+      label: 'bun test src/test/renderer',
+      state: 'executing-tool',
+      startedAt: FIXED_FLEET_NOW - 15_000,
+      elapsedMs: 15_000,
+      costUsd: null,
+      costState: 'unpriced',
+      currentActivity: { kind: 'output-line', text: '42 pass 0 fail', at: FIXED_FLEET_NOW - 1_000 },
+      capabilities: { interruptible: false, killable: true, pausable: false },
+    },
+    {
+      id: 'agent-done-01',
+      kind: 'agent',
+      label: '[Agent] Regenerate splash goldens',
+      task: 'Regenerate splash goldens',
+      state: 'done',
+      startedAt: FIXED_FLEET_NOW - 500_000,
+      completedAt: FIXED_FLEET_NOW - 400_000,
+      elapsedMs: 100_000,
+      usage: { inputTokens: 5_000, outputTokens: 1_200, cacheReadTokens: 0, cacheWriteTokens: 0, llmCallCount: 1, turnCount: 1, toolCallCount: 1 },
+      model: 'claude-haiku-4-5',
+      provider: 'anthropic',
+      costUsd: 0.012,
+      costState: 'priced',
+      capabilities: { interruptible: false, killable: false, pausable: false },
+    },
+  ];
+}
+
+function renderFleetSurface(width: number, height: number): Line[] {
+  const snapshot = buildFleetSnapshot(buildFleetGoldenNodes(), FIXED_FLEET_NOW);
+  const readModel = createStaticFleetReadModel(snapshot);
+  const panel = new FleetPanel(readModel);
+  panel.handleInput('j'); // select the second row (engineer) so the detail region is non-trivial
+  return panel.render(width, height);
+}
+
+describeOverlayGolden('fleet-panel', renderFleetSurface);
 
 // context inspector — ConversationManager with fixed message content, no
 // timestamps rendered by this surface.

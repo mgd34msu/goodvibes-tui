@@ -342,7 +342,7 @@ export function feedInputTokens(context: InputFeedContext, tokens: readonly Inpu
     const indicatorRoute = handleIndicatorFocusToken({
       indicatorFocused: context.indicatorFocused,
       modalOpened: context.modalOpened,
-      processModal: context.processModal,
+      openFleetPanel: () => context.panelManager.open('fleet'),
       requestRender: context.requestRender,
     }, token);
     context.indicatorFocused = indicatorRoute.indicatorFocused;
