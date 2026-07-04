@@ -28,6 +28,7 @@ import { BookmarkModal } from './bookmark-modal.ts';
 import { SettingsModal } from './settings-modal.ts';
 import { McpWorkspace } from './mcp-workspace.ts';
 import { SessionPickerModal } from './session-picker-modal.ts';
+import { ConfigModal } from './config-modal.ts';
 import { ProfilePickerModal } from './profile-picker-modal.ts';
 import { OnboardingWizardController, type OnboardingWizardAction, type OnboardingWizardMode } from './onboarding/onboarding-wizard.ts';
 import {
@@ -191,6 +192,7 @@ export class InputHandler implements InputHandlerLike {
   public bookmarkModal: BookmarkModal;
   public blockActionsMenu = new BlockActionsMenu();
   public settingsModal = new SettingsModal();
+  public configModal = new ConfigModal();
   public mcpWorkspace = new McpWorkspace();
   public onboardingWizard = new OnboardingWizardController();
   public onboardingModelPickerCancelSnapshot: OnboardingWizardSnapshot | null = null;
@@ -322,6 +324,7 @@ export class InputHandler implements InputHandlerLike {
         mcpWorkspace: this.mcpWorkspace,
         sessionPickerModal: this.sessionPickerModal,
         profilePickerModal: this.profilePickerModal,
+        configModal: this.configModal,
         historySearch: this.historySearch,
         commandRegistry: this.commandRegistry,
         commandContext: this.commandContext,

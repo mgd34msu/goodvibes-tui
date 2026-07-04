@@ -31,6 +31,7 @@ import type { BookmarkModal } from './bookmark-modal.ts';
 import type { SettingsModal } from './settings-modal.ts';
 import type { McpWorkspace } from './mcp-workspace.ts';
 import type { SessionPickerModal } from './session-picker-modal.ts';
+import type { ConfigModal } from './config-modal.ts';
 import type { ProfilePickerModal } from './profile-picker-modal.ts';
 import type { OnboardingWizardController } from './onboarding/onboarding-wizard.ts';
 import type { WrappedPromptInfo } from './handler-prompt-buffer.ts';
@@ -110,6 +111,7 @@ export interface FeedContextStableRefs {
   mcpWorkspace: McpWorkspace;
   sessionPickerModal: SessionPickerModal;
   profilePickerModal: ProfilePickerModal;
+  configModal: ConfigModal;
   historySearch: HistorySearch;
   commandRegistry: CommandRegistry | null;
   commandContext: CommandContext | undefined;

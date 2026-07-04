@@ -231,6 +231,7 @@ export function handleEscapeForHandler(handler: InputHandler): void {
       mcpWorkspace: handler.mcpWorkspace,
       sessionPickerModal: handler.sessionPickerModal,
       profilePickerModal: handler.profilePickerModal,
+      configModal: handler.configModal,
       contextInspectorModal: handler.contextInspectorModal,
       processModal: handler.processModal,
       modelPicker: handler.modelPicker,
