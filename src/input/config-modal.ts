@@ -105,6 +105,21 @@ export class ConfigModal {
    * appends in one shot — see handleConfigModalToken). Filtering only ever
    * narrows the ACTIVE tab's rows and is reset on tab switch (a query typed
    * against one tab's rows has no defined meaning against another's).
+   *
+   * FILTER-CONVENTION RULING (batch integration — where '/'-armed vs instant
+   * filtering is decided across the TUI's list UIs):
+   *   - '/'-ARMED here (config-modal host surfaces): these surfaces bind PLAIN
+   *     single keys to ACTION HOTKEYS (e.g. 'r' refresh, 'd' delete). A key
+   *     can't be both an action and a filter character, so filtering must be
+   *     explicitly armed with '/' first. This is DEBT-5's design.
+   *   - INSTANT filtering (pure pickers — help overlay, command palette,
+   *     selection-modal): these have no single-key actions, so every printable
+   *     key is unambiguously a filter character and narrows the list on the
+   *     first keystroke. This is UX-C's design (selection-modal-overlay.ts).
+   *   - Both keep single-Esc-close semantics. The only extra step is here: a
+   *     two-stage Esc (first Esc clears a NON-EMPTY query, second Esc closes)
+   *     — see the Esc branch in handleConfigModalToken. With an empty query,
+   *     one Esc closes, exactly like the instant pickers.
    */
   private filterActive = false;
   private filterQuery = '';
