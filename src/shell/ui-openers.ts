@@ -15,6 +15,8 @@ import type { ServiceInspectionQuery } from '../runtime/ui-service-queries.ts';
 import type { EmbeddingProviderPickerEntry, ModelPickerTargetInfo } from '../input/model-picker.ts';
 import type { SelectionItem } from '../input/selection-modal.ts';
 import { syncServiceSettingToPlatform } from './service-settings-sync.ts';
+import { setActiveThemeMode } from '../renderer/theme.ts';
+import { THEME_MODE_CONFIG_KEY, coerceThemeModeSetting } from '../renderer/theme-mode-config.ts';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 
 type WireShellUiOpenersOptions = {
@@ -325,10 +327,23 @@ export function wireShellUiOpeners(options: WireShellUiOpenersOptions): void {
   commandContext.openSettingsModal = (target?: string) => {
     input.modalOpened('settings');
     input.settingsModal.open(configManager, featureFlags, subscriptionManager, serviceRegistry, mcpRegistry, secretsManager, {
-      onSettingApplied: (change) => syncServiceSettingToPlatform(
-        { configManager, workingDirectory, homeDirectory },
-        change,
-      ),
+      onSettingApplied: (change) => {
+        // DEBT-2: forced dark/light applies immediately (rebuild palettes + full
+        // repaint); auto only re-probes at startup, so it takes effect next launch.
+        if (String(change.key) === THEME_MODE_CONFIG_KEY) {
+          const next = coerceThemeModeSetting(change.value);
+          if (next === 'dark' || next === 'light') {
+            setActiveThemeMode(next);
+            commandContext.requestFullRepaint?.();
+            return { message: `Theme mode: ${next} (applied now)` };
+          }
+          return { message: 'Theme mode: auto (probes terminal on next startup)' };
+        }
+        return syncServiceSettingToPlatform(
+          { configManager, workingDirectory, homeDirectory },
+          change,
+        );
+      },
     });
     input.settingsModal.selectTarget(target);
     render();

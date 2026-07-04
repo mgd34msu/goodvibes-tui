@@ -57,6 +57,11 @@ const CATEGORY_INFO: Record<SettingsCategory, string> = {
 };
 
 const ENUM_VALUE_DESCRIPTIONS: Record<string, Record<string, string>> = {
+  'display.themeMode': {
+    auto: 'Probe the terminal background colour (OSC 11) once at startup and pick light or dark. Falls back to dark on unreadable/unsupported terminals. Only evaluated at startup — selecting auto takes effect next launch.',
+    dark: 'Force the dark theme regardless of terminal background. Applies immediately.',
+    light: 'Force the light theme regardless of terminal background. Applies immediately.',
+  },
   'behavior.hitlMode': {
     quiet: 'Minimize operational interruptions and surface fewer Human-in-the-Loop prompts.',
     balanced: 'Show important Human-in-the-Loop prompts without turning routine work into noise.',
