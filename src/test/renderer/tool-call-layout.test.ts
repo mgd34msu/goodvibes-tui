@@ -117,4 +117,14 @@ describe('tool call layout', () => {
     // 64200ms = 1m04s via formatElapsed
     expect(text).toContain('1m04s');
   });
+
+  // UX-B item 2c: a tool still awaiting a decision (approval) must not show the
+  // completed green ✓ — it uses the hollow idle glyph until it actually runs.
+  test('pending tool shows the idle glyph, not the completed check', () => {
+    const toolCall: ToolCall = { id: 'call_p', name: 'write', arguments: { path: 'a.txt' } };
+    const [line] = renderToolCallBlock(toolCall, 'pending', undefined, 72);
+    const text = lineToString(line);
+    expect(text).toContain('◌');
+    expect(text).not.toContain('✓');
+  });
 });
