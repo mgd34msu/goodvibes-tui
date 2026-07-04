@@ -10,11 +10,22 @@
  */
 
 import { getCompactionEvents } from '@pellux/goodvibes-sdk/platform/core';
+import { getCompactionQualityScore } from './compaction-quality.ts';
 import type { CompactionEvent } from '@pellux/goodvibes-sdk/platform/core';
+import type { CompactionQualityScore } from './compaction-quality.ts';
 
 // ─── formatCompactionEvent ────────────────────────────────────────────────────
 
-function formatCompactionEvent(ev: CompactionEvent, n: number): string {
+/**
+ * Exported for direct unit testing (W5.4/B28) — the grade suffix is a pure
+ * function of the event and an optional score, independent of whichever
+ * runtime lookup (getCompactionQualityScore) supplies that score.
+ */
+export function formatCompactionEvent(
+  ev: CompactionEvent,
+  n: number,
+  qualityScore?: CompactionQualityScore | null,
+): string {
   const date = new Date(ev.timestamp);
   const timeStr = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   const savings = Math.max(0, ev.tokensBeforeEstimate - ev.tokensAfterEstimate);
@@ -22,11 +33,15 @@ function formatCompactionEvent(ev: CompactionEvent, n: number): string {
     ? Math.round((savings / ev.tokensBeforeEstimate) * 100)
     : 0;
   const trigger = ev.trigger === 'auto' ? 'auto' : 'manual';
+  // Honest omission: no score means none was computed for this event (e.g. it
+  // pre-dates this feature, or ran through the small-window path, which has
+  // no CompactionEvent to key a score by) — never fabricate a grade.
+  const qualityStr = qualityScore ? `  quality=${qualityScore.grade} (${qualityScore.score.toFixed(2)})` : '';
   return (
     `#${n} ${timeStr} [${trigger}]  ` +
     `${ev.messagesBeforeCompaction}→${ev.messagesAfterCompaction} msgs  ` +
     `~${fmtN(ev.tokensBeforeEstimate)}→~${fmtN(ev.tokensAfterEstimate)} tok  ` +
-    `saved ${savingsPct}%`
+    `saved ${savingsPct}%${qualityStr}`
   );
 }
 
@@ -48,7 +63,8 @@ export function buildCompactionHistoryText(): string {
   ];
   const ordered = [...events].reverse();
   for (let i = 0; i < ordered.length; i++) {
-    lines.push('  ' + formatCompactionEvent(ordered[i], ordered.length - i));
+    const ev = ordered[i]!;
+    lines.push('  ' + formatCompactionEvent(ev, ordered.length - i, getCompactionQualityScore(ev.timestamp)));
   }
   lines.push('  (Restore not available — the SDK does not yet expose a snapshot restore API.)');
   return lines.join('\n');

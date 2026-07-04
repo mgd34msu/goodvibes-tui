@@ -1,6 +1,7 @@
 import type { CommandContext } from '../command-registry.ts';
 import { VALID_REVIEW_STATES, VALID_SCOPES, isValidReviewState, isValidScope } from './recall-shared.ts';
 import { getMemoryApi } from './recall-query.ts';
+import { buildTurnInjectionsText } from '../../renderer/turn-injection.ts';
 
 export function handleRecallQueue(args: string[], context: CommandContext): void {
   const memory = getMemoryApi(context);
@@ -100,6 +101,43 @@ export function handleRecallExplain(args: string[], context: CommandContext): vo
     return;
   }
   context.print(explanation.prompt ?? '[recall] No explainable project knowledge was selected.');
+}
+
+/**
+ * W5.2 (wo803) — per-turn passive knowledge injection inspectability.
+ *
+ * Reads `AgentRecord.turnInjections` (Wave-5 wo801) via
+ * `context.ops.agentManager.exportState()` — the CommandContext-exposed
+ * `ShellAgentManagerService` doesn't have a `getStatus`/`list` pair, but
+ * `exportState()` returns the same full `AgentRecord[]` (it's what
+ * compactConversation() already uses for the same reason).
+ *
+ * The main interactive session is deliberately NOT offered as an implicit
+ * default here: it does not run through the passive-injection engine in this
+ * build (see turn-injection.ts's module doc for why), so there is nothing
+ * honest to show for it without an explicit agent id.
+ */
+export function handleRecallInjections(args: string[], context: CommandContext): void {
+  const agentManager = context.ops.agentManager;
+  const records = agentManager?.exportState() ?? [];
+  const agentId = args[0];
+  if (!agentId) {
+    const known = records.map((record) => record.id).slice(0, 10);
+    const hint = known.length > 0 ? ` Known agent ids: ${known.join(', ')}.` : '';
+    context.print(
+      '[recall] Usage: /recall injections <agentId>\n' +
+      '  Shows per-turn passive knowledge injection records (Wave-5) for a spawned agent (Task/automation runs).\n' +
+      '  The main interactive session does not route through the passive-injection engine in this build, so there is nothing to show for it here.' +
+      hint,
+    );
+    return;
+  }
+  const record = records.find((candidate) => candidate.id === agentId);
+  if (!record) {
+    context.print(`[recall] Agent not found: ${agentId}`);
+    return;
+  }
+  context.print(buildTurnInjectionsText(agentId, record.turnInjections ?? []));
 }
 
 export function handleRecallPromote(args: string[], context: CommandContext): void {
