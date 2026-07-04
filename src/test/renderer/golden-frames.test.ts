@@ -1183,7 +1183,7 @@ function buildFleetGoldenNodes(): ProcessNode[] {
       costUsd: 0.87,
       costState: 'priced',
       currentActivity: { kind: 'tool', text: 'Read src/panels/fleet-panel.ts', toolName: 'Read', at: FIXED_FLEET_NOW - 1_000 },
-      capabilities: { interruptible: true, killable: true, pausable: false },
+      capabilities: { interruptible: true, killable: true, pausable: false, steerable: false },
     },
     {
       id: 'wrfc-engineer-01',
@@ -1200,7 +1200,7 @@ function buildFleetGoldenNodes(): ProcessNode[] {
       costUsd: 0.045,
       costState: 'priced',
       currentActivity: { kind: 'output-line', text: 'Writing fleet-panel.ts', at: FIXED_FLEET_NOW - 500 },
-      capabilities: { interruptible: true, killable: true, pausable: false },
+      capabilities: { interruptible: true, killable: true, pausable: false, steerable: false },
     },
     {
       id: 'wrfc-reviewer-01',
@@ -1216,7 +1216,7 @@ function buildFleetGoldenNodes(): ProcessNode[] {
       costUsd: null,
       costState: 'unpriced',
       currentActivity: { kind: 'phase', text: 'Awaiting operator approval', at: FIXED_FLEET_NOW - 2_000 },
-      capabilities: { interruptible: true, killable: true, pausable: true },
+      capabilities: { interruptible: true, killable: true, pausable: true, steerable: false },
     },
     {
       id: 'exec-golden-01',
@@ -1228,7 +1228,7 @@ function buildFleetGoldenNodes(): ProcessNode[] {
       costUsd: null,
       costState: 'unpriced',
       currentActivity: { kind: 'output-line', text: '42 pass 0 fail', at: FIXED_FLEET_NOW - 1_000 },
-      capabilities: { interruptible: false, killable: true, pausable: false },
+      capabilities: { interruptible: false, killable: true, pausable: false, steerable: false },
     },
     {
       id: 'agent-done-01',
@@ -1244,7 +1244,28 @@ function buildFleetGoldenNodes(): ProcessNode[] {
       provider: 'anthropic',
       costUsd: 0.012,
       costState: 'priced',
-      capabilities: { interruptible: false, killable: false, pausable: false },
+      capabilities: { interruptible: false, killable: false, pausable: false, steerable: false },
+    },
+    // Wave-3 verb formalization: 'interrupted' fixture row so the new
+    // glyph/tone gets golden coverage (distinct from 'killed'/⊘ above).
+    // startedAt is deliberately the MOST RECENT of all roots so this row
+    // sorts last and simply appends — it must not reorder or disturb any
+    // existing row (in particular the `j`-selected wrfc-owner-01 below).
+    {
+      id: 'agent-interrupted-01',
+      kind: 'agent',
+      label: '[Agent] Stopped by operator',
+      task: 'Stopped by operator',
+      state: 'interrupted',
+      startedAt: FIXED_FLEET_NOW - 5_000,
+      completedAt: FIXED_FLEET_NOW - 3_000,
+      elapsedMs: 2_000,
+      usage: { inputTokens: 2_000, outputTokens: 300, cacheReadTokens: 0, cacheWriteTokens: 0, llmCallCount: 1, turnCount: 1, toolCallCount: 0 },
+      model: 'claude-haiku-4-5',
+      provider: 'anthropic',
+      costUsd: 0.004,
+      costState: 'priced',
+      capabilities: { interruptible: false, killable: false, pausable: false, steerable: false },
     },
   ];
 }
@@ -1258,6 +1279,113 @@ function renderFleetSurface(width: number, height: number): Line[] {
 }
 
 describeOverlayGolden('fleet-panel', renderFleetSurface);
+
+// Wave-3 (W3.1 Part C) — one attached agent session tab, deterministic
+// transcript content via a stub getConversationSnapshot. Separate golden
+// surface (not folded into 'fleet-panel' above) so the root-tab-only
+// fixture's bytes stay stable independent of tab-view layout changes.
+function renderFleetTabSurface(width: number, height: number): Line[] {
+  const snapshot = buildFleetSnapshot(buildFleetGoldenNodes(), FIXED_FLEET_NOW);
+  const readModel = createStaticFleetReadModel(snapshot);
+  const panel = new FleetPanel(readModel, {
+    getConversationSnapshot: (agentId: string) =>
+      agentId === 'wrfc-owner-01'
+        ? [
+          { role: 'user', content: 'Fix the golden fixture' },
+          { role: 'assistant', content: 'On it — reading fleet-panel.ts first.' },
+        ]
+        : [],
+  });
+  panel.handleInput('j'); // select row 1: wrfc-owner-01 (a running agent; row 0 is the terminal agent-done-01)
+  panel.handleInput('enter'); // attach it
+  return panel.render(width, height);
+}
+
+describeOverlayGolden('fleet-panel-tab', renderFleetTabSurface);
+
+// Wave-3 (W3.2) — a steerable agent's attached tab. Two separate surfaces
+// (not folded into 'fleet-panel-tab' above) since the composer and the
+// queued badge are mutually-exclusive views (the composer input line
+// replaces the badge line while open; the badge reappears once the draft
+// closes) — one fixed frame cannot honestly show both at once, so each
+// state gets its own deterministic golden.
+function fleetSteerGoldenNode(): ProcessNode {
+  return {
+    id: 'agent-steer-01',
+    kind: 'agent',
+    label: '[Agent] Long-running build fix',
+    task: 'Long-running build fix',
+    state: 'executing-tool',
+    startedAt: FIXED_FLEET_NOW - 120_000,
+    elapsedMs: 120_000,
+    usage: { inputTokens: 4_000, outputTokens: 900, cacheReadTokens: 0, cacheWriteTokens: 0, llmCallCount: 2, turnCount: 2, toolCallCount: 3 },
+    model: 'claude-sonnet-4-6',
+    provider: 'anthropic',
+    costUsd: 0.03,
+    costState: 'priced',
+    currentActivity: { kind: 'tool', text: 'Running build', toolName: 'Bash', at: FIXED_FLEET_NOW - 2_000 },
+    capabilities: { interruptible: true, killable: true, pausable: false, steerable: true },
+  };
+}
+
+// State 1: the composer is open with in-progress typed text (pre-submit) —
+// exercises the 's' gate, the one-line input, and the Enter/Esc footer hints.
+function renderFleetSteerComposeSurface(width: number, height: number): Line[] {
+  const snapshot = buildFleetSnapshot([fleetSteerGoldenNode()], FIXED_FLEET_NOW);
+  const readModel = createStaticFleetReadModel(snapshot);
+  const panel = new FleetPanel(readModel);
+  panel.handleInput('enter'); // attach + focus the tab
+  panel.handleInput('s'); // open the steer composer
+  for (const ch of 'please add a regression test') panel.handleInput(ch);
+  return panel.render(width, height);
+}
+
+describeOverlayGolden('fleet-panel-steer-compose', renderFleetSteerComposeSurface);
+
+// State 2: post-submit — the composer has closed and a queued badge is
+// visible (both in the tab footer's status line and the tree row's
+// activity-column glyph, once switched back to the root tab).
+function renderFleetSteerQueuedSurface(width: number, height: number): Line[] {
+  const snapshot = buildFleetSnapshot([fleetSteerGoldenNode()], FIXED_FLEET_NOW);
+  const readModel = createStaticFleetReadModel(snapshot);
+  const panel = new FleetPanel(readModel, {
+    steer: (_id: string, _text: string) => ({ queued: true, messageId: 'golden-msg-1' }),
+  });
+  panel.handleInput('enter'); // attach + focus the tab
+  panel.handleInput('s');
+  for (const ch of 'please add a regression test') panel.handleInput(ch);
+  panel.handleInput('enter'); // submit -> queued badge
+  return panel.render(width, height);
+}
+
+describeOverlayGolden('fleet-panel-steer-queued', renderFleetSteerQueuedSurface);
+
+// W3.3 — a terminal agent's tab whose full-fidelity snapshot is unavailable
+// (evicted from the SDK's retention ring, or never registered), degraded to
+// the on-disk ledger fallback. Attaches 'agent-done-01' (row 0 — the same
+// terminal fixture node the base fleet-panel golden already uses) with
+// getConversationSnapshot always empty, then populates the tab's
+// ledgerEntries directly (bypassing the async fs read, same technique as
+// fleet-panel.test.ts) so the golden is fully synchronous and deterministic.
+function renderFleetLedgerTabSurface(width: number, height: number): Line[] {
+  const snapshot = buildFleetSnapshot(buildFleetGoldenNodes(), FIXED_FLEET_NOW);
+  const readModel = createStaticFleetReadModel(snapshot);
+  const panel = new FleetPanel(readModel, {
+    getConversationSnapshot: () => [], // evicted/never-registered — forces the ledger fallback
+  });
+  panel.handleInput('enter'); // row 0 is 'agent-done-01' (terminal) by default selection
+  const tab = panel.getTabsState().tabs[0]!;
+  tab.ledgerEntries = [
+    { type: 'meta', agentId: 'agent-done-01', model: 'claude-haiku-4-5', provider: 'anthropic', title: '', timestamp: FIXED_FLEET_NOW - 500_000 },
+    { type: 'session_config', task: 'Regenerate splash goldens', timestamp: FIXED_FLEET_NOW - 499_000 },
+    { type: 'tool_execution', turn: 1, toolName: 'Bash', success: true, resultPreview: 'goldens regenerated: 12 files', timestamp: FIXED_FLEET_NOW - 450_000 },
+    { type: 'session_end', status: 'completed', toolCallCount: 1, durationMs: 100_000, timestamp: FIXED_FLEET_NOW - 400_000 },
+  ];
+  tab.ledgerLoadStarted = true;
+  return panel.render(width, height);
+}
+
+describeOverlayGolden('fleet-panel-ledger-tab', renderFleetLedgerTabSurface);
 
 // context inspector — ConversationManager with fixed message content, no
 // timestamps rendered by this surface.

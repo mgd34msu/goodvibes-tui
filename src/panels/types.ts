@@ -126,6 +126,19 @@ export interface Panel {
    * back to its built-in `instanceof` routing.
    */
   handlePanelIntegrationAction?(key: string, ctx: PanelIntegrationContext): boolean;
+
+  /**
+   * Optional: called by the global Ctrl+X (`panel-close`) shortcut BEFORE it
+   * closes this panel (handler-shortcuts.ts). Return `true` to consume
+   * Ctrl+X for an in-panel action instead — e.g. FleetPanel (Wave-3 session
+   * tabs) detaches its active tab and leaves the panel open. Return `false`
+   * (or omit this hook) to fall through to the ordinary close behavior.
+   * Ctrl+X never reaches a panel's own `handleInput` (ctrl/meta combos are
+   * intercepted earlier — see handlePanelFocusToken in
+   * src/input/handler-feed-routes.ts), so this is the one seam a panel has
+   * to intervene before the global shortcut acts.
+   */
+  interceptPanelClose?(): boolean;
 }
 
 export interface PanelRegistration extends Pick<Panel, 'id' | 'name' | 'icon' | 'category'> {
