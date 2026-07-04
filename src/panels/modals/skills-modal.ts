@@ -1,36 +1,24 @@
 import { MODAL_TONES } from './modal-theme.ts';
+import { infoRow } from './modal-surface-helpers.ts';
 import { readFileSync, readdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, sep } from 'node:path';
-import type { ModalConfig, ModalSection, ModalListItem } from '../../renderer/modal-factory.ts';
-import type { BoundModalSurface, ModalAction, ModalViewState } from './modal-surface.ts';
+import type { ConfigModalActionContext, ConfigModalRow, ConfigModalSurface, ConfigModalView } from '../../input/config-modal-types.ts';
 import type { SkillOrigin, SkillRecord } from '../skills-panel.ts';
 import { listInstalledEcosystemEntries, type EcosystemCatalogPathOptions, type ShellPathService } from '@/runtime/index.ts';
 
 // ---------------------------------------------------------------------------
-// Skills → modal (W6 WO-B). Mirrors src/panels/skills-panel.ts:
-// SkillsPanel({ componentHealthMonitor, shellPaths, ecosystemPaths }).
-// `componentHealthMonitor` is a panel-only render-perf concern
-// (ScrollableListPanel base class) — irrelevant to a stateless config
-// builder, so it is dropped from the dep shape here.
+// Skills → config-modal surface (W6.1 group-B port). Project-local and global
+// skill-pack discovery. Disk scans happen only in refresh() (never in
+// buildView), mirroring the panel's onActivate()-triggered load. Browse-only:
+// the panel never had a command-routable mutation verb (no /skills delete/remove
+// subcommand exists), so the only action is refresh/navigate. Selection-blind
+// port: the panel's selected-skill path/deps/includes detail is folded into
+// each row label.
 //
-// discoverSkills() in skills-panel.ts (lines 151-178) is async (fsPromises),
-// but BoundModalSurface.refresh() is synchronous (modal-surface.ts:72) — the
-// host calls it once on open and again on the 'refresh' action, with no
-// await. So this file re-implements the same directory/frontmatter/
-// marketplace-provenance conventions synchronously (node:fs sync calls)
-// rather than reusing discoverSkills. If skills-panel.ts's discovery
-// mechanics change (new directories, frontmatter fields, provenance
-// matching), this needs a parallel update — the two are independent
-// implementations of the same on-disk contract.
-//
-// W6.1 removed Enter's cross-open into the preview panel (skills-panel.ts
-// lines 370-376: "DELETE-disposition with no successor surface"), and the
-// panel's local 'd' delete (skills-panel.ts:304-313, a real fs.rm) has no
-// /skills command equivalent (skills-runtime.ts has no delete/remove
-// subcommand) — see this module's test file and the WO report for why that
-// verb is intentionally left out of the modal rather than silently
-// mutating disk with no charter-compliant command path to route through.
+// discoverSkills() in the panel was async; the sync re-implementation below
+// mirrors the same directory/frontmatter/marketplace-provenance conventions
+// (the two are independent implementations of the same on-disk contract).
 // ---------------------------------------------------------------------------
 
 export interface SkillsModalDeps {
@@ -44,9 +32,7 @@ function parseFrontmatter(content: string): Record<string, string> {
   const result: Record<string, string> = {};
   for (const line of match[1].split('\n')) {
     const [key, ...rest] = line.split(':');
-    if (key && rest.length > 0) {
-      result[key.trim()] = rest.join(':').trim();
-    }
+    if (key && rest.length > 0) result[key.trim()] = rest.join(':').trim();
   }
   return result;
 }
@@ -62,11 +48,7 @@ function getSkillDirectories(cwd: string, homeDir: string): Array<{ root: string
 
 function readSkillFileSync(path: string, origin: SkillOrigin): SkillRecord | null {
   let content = '';
-  try {
-    content = readFileSync(path, 'utf-8');
-  } catch {
-    return null;
-  }
+  try { content = readFileSync(path, 'utf-8'); } catch { return null; }
   const frontmatter = parseFrontmatter(content);
   const body = content.replace(/^---\n[\s\S]*?\n---\n?/, '');
   const name = frontmatter.name ?? path.split(/[\\/]/).pop()?.replace(/\.md$/, '') ?? 'skill';
@@ -77,19 +59,13 @@ function readSkillFileSync(path: string, origin: SkillOrigin): SkillRecord | nul
   const includes: string[] = [];
   const includeRegex = /^@([\w/-]+)/gm;
   let match: RegExpExecArray | null;
-  while ((match = includeRegex.exec(body)) !== null) {
-    includes.push(match[1]);
-  }
+  while ((match = includeRegex.exec(body)) !== null) includes.push(match[1]);
   return { name, description, path, origin, dependencies, includes, frontmatter };
 }
 
 function scanSkillDirectorySync(root: string, origin: SkillOrigin): SkillRecord[] {
   let entries: string[] = [];
-  try {
-    entries = readdirSync(root);
-  } catch {
-    return [];
-  }
+  try { entries = readdirSync(root); } catch { return []; }
   const records: SkillRecord[] = [];
   for (const entry of entries.sort((a, b) => a.localeCompare(b))) {
     if (entry.endsWith('.md')) {
@@ -105,11 +81,7 @@ function scanSkillDirectorySync(root: string, origin: SkillOrigin): SkillRecord[
 
 function applyMarketplaceProvenance(records: SkillRecord[], ecosystemPaths: EcosystemCatalogPathOptions): SkillRecord[] {
   let receipts: ReturnType<typeof listInstalledEcosystemEntries>;
-  try {
-    receipts = listInstalledEcosystemEntries('skill', ecosystemPaths);
-  } catch {
-    return records;
-  }
+  try { receipts = listInstalledEcosystemEntries('skill', ecosystemPaths); } catch { return records; }
   if (receipts.length === 0) return records;
   return records.map((record) => {
     const receipt = receipts.find((candidate) => record.path === candidate.targetPath || record.path.startsWith(`${candidate.targetPath}${sep}`));
@@ -122,11 +94,9 @@ function discoverSkillsSync(
   shellPaths: Pick<ShellPathService, 'workingDirectory' | 'homeDirectory'>,
   ecosystemPaths?: EcosystemCatalogPathOptions,
 ): SkillRecord[] {
-  const cwd = shellPaths.workingDirectory;
-  const homeDir = shellPaths.homeDirectory;
   const seen = new Set<string>();
   const records: SkillRecord[] = [];
-  for (const { root, origin } of getSkillDirectories(cwd, homeDir)) {
+  for (const { root, origin } of getSkillDirectories(shellPaths.workingDirectory, shellPaths.homeDirectory)) {
     for (const record of scanSkillDirectorySync(root, origin)) {
       if (seen.has(record.name.toLowerCase())) continue;
       seen.add(record.name.toLowerCase());
@@ -142,139 +112,78 @@ function discoverSkillsSync(
 
 function originLabel(origin: SkillOrigin): string {
   switch (origin) {
-    case 'project-local':
-      return 'project';
-    case 'global':
-      return 'global';
-    case 'custom':
-      return 'custom';
+    case 'project-local': return 'project';
+    case 'global': return 'global';
+    case 'custom': return 'custom';
   }
 }
 
-function matchesQuery(skill: SkillRecord, q: string): boolean {
-  if (q === '') return true;
-  const haystack = [
-    skill.name,
-    skill.description,
-    skill.path,
-    skill.origin,
-    skill.marketplaceProvenance ?? '',
-    skill.dependencies.join(' '),
-    skill.includes.join(' '),
-  ].join(' ').toLowerCase();
-  return haystack.includes(q.toLowerCase());
-}
+class SkillsModalSurface implements ConfigModalSurface {
+  readonly name = 'skills-modal';
+  readonly title = 'Skills';
+  private cached: SkillRecord[] = [];
+  private requestRender: () => void = () => {};
 
-/**
- * Skills → modal. Project-local and global skill-pack discovery. Disk scans
- * happen only in refresh() (never in buildConfig), mirroring the panel's
- * explicit onActivate()-triggered load. Browse-only: this panel never had a
- * command-routable mutation verb (no /skills delete/remove subcommand exists
- * — see skills-runtime.ts), so the only action is refresh/navigate.
- */
-export function bindSkillsModal(deps: SkillsModalDeps): BoundModalSurface {
-  let cached: SkillRecord[] = [];
+  constructor(private readonly deps: SkillsModalDeps) {}
 
-  const refresh = (): void => {
-    cached = discoverSkillsSync(deps.shellPaths, deps.ecosystemPaths);
-  };
+  readonly actions = [{ key: 'r', id: 'refresh', label: 'refresh' }];
 
-  const visibleSkills = (view: ModalViewState): SkillRecord[] => cached.filter((skill) => matchesQuery(skill, view.query));
+  onOpen(requestRender: () => void): void { this.requestRender = requestRender; this.refresh(); }
 
-  const selectedSkill = (view: ModalViewState): SkillRecord | undefined => {
-    const visible = visibleSkills(view);
-    if (visible.length === 0) return undefined;
-    return visible[Math.max(0, Math.min(view.selectedIndex, visible.length - 1))];
-  };
+  private refresh(): void { this.cached = discoverSkillsSync(this.deps.shellPaths, this.deps.ecosystemPaths); }
 
-  const buildConfig = (view: ModalViewState): ModalConfig => {
-    if (cached.length === 0) {
-      return {
-        title: 'Skills',
-        width: 76,
-        sections: [
-          { type: 'text', content: 'No skills discovered.' },
-          { type: 'separator' },
-          { type: 'title', content: 'Next steps' },
-          { type: 'text', content: '.goodvibes/skills       — place skill .md files here (project-local) or ~/.goodvibes/skills (global)', style: { dim: true } },
-          { type: 'text', content: '/registry search skills — inspect the same skill directories from the shell', style: { dim: true } },
-        ],
-        footer: 'no skills discovered · esc close',
-      };
+  buildView(): ConfigModalView {
+    const rows: ConfigModalRow[] = [];
+    if (this.cached.length === 0) {
+      rows.push(infoRow('empty:0', 'No skills discovered.'));
+      rows.push(infoRow('empty:title', 'Next steps'));
+      rows.push(infoRow('empty:dir', '.goodvibes/skills       — place skill .md files here (project-local) or ~/.goodvibes/skills (global)', { dim: true }));
+      rows.push(infoRow('empty:registry', '/registry search skills — inspect the same skill directories from the shell', { dim: true }));
+      return { title: 'Skills', tabs: [{ id: 'skills', label: 'Skills', rows, emptyText: '' }] };
     }
 
-    const sections: ModalSection[] = [];
-    const projectCount = cached.filter((s) => s.origin === 'project-local').length;
-    const globalCount = cached.filter((s) => s.origin === 'global').length;
-    sections.push({
-      type: 'text',
-      content: `skills ${cached.length}  project ${projectCount}  global ${globalCount}`,
-      style: { dim: true },
-    });
-    sections.push({ type: 'separator' });
+    const projectCount = this.cached.filter((s) => s.origin === 'project-local').length;
+    const globalCount = this.cached.filter((s) => s.origin === 'global').length;
+    const header = [`skills ${this.cached.length}  project ${projectCount}  global ${globalCount}`];
 
-    const visible = visibleSkills(view);
-    const clampedIndex = Math.max(0, Math.min(view.selectedIndex, visible.length - 1));
-    const items: ModalListItem[] = visible.map((skill, index) => {
+    for (const skill of this.cached) {
       const badge = skill.marketplaceProvenance ? '★' : ' ';
       const dot = skill.origin === 'project-local' ? '◆' : '•';
-      return {
-        label: `${dot} ${badge} ${skill.name.padEnd(24)} ${(skill.description || 'No description provided.')}`,
-        selected: index === clampedIndex,
-      };
-    });
-    if (items.length === 0) {
-      sections.push({ type: 'text', content: `No skills match “${view.query}”.`, style: { dim: true } });
-    } else {
-      sections.push({ type: 'list', items });
-    }
-
-    const selected = visible[clampedIndex];
-    if (selected) {
-      sections.push({ type: 'separator' });
-      sections.push({ type: 'text', content: `[${originLabel(selected.origin)}]  ${selected.path}`, style: { dim: true } });
-      sections.push({ type: 'text', content: selected.description || 'No description provided.' });
-      sections.push({ type: 'text', content: `depends: ${selected.dependencies.length > 0 ? selected.dependencies.join(', ') : 'none'}`, style: { dim: true } });
-      sections.push({ type: 'text', content: `includes: ${selected.includes.length > 0 ? selected.includes.join(', ') : 'none'}`, style: { dim: true } });
-      sections.push({
-        type: 'text',
-        content: `provenance: ${selected.marketplaceProvenance ?? 'not installed via marketplace'}`,
-        style: { fg: selected.marketplaceProvenance ? MODAL_TONES.info : undefined, dim: !selected.marketplaceProvenance },
+      const detail = [
+        `[${originLabel(skill.origin)}]`,
+        skill.description || 'No description provided.',
+        skill.dependencies.length > 0 ? `deps ${skill.dependencies.length}` : null,
+        skill.includes.length > 0 ? `inc ${skill.includes.length}` : null,
+        skill.marketplaceProvenance ?? null,
+      ].filter((s): s is string => s !== null).join(' · ');
+      rows.push({
+        id: skill.path,
+        label: `${dot} ${badge} ${skill.name.padEnd(24)} ${detail}`,
+        ...(skill.marketplaceProvenance ? { style: { fg: MODAL_TONES.info } } : {}),
       });
     }
 
-    return {
-      title: 'Skills',
-      width: 76,
-      search: view.query,
-      sections,
-      hints: ['up/down move', 'r refresh', '/ filter'],
-    };
-  };
+    return { title: 'Skills', tabs: [{ id: 'skills', label: 'Skills', header, rows }] };
+  }
 
-  return {
-    name: 'skills',
-    title: 'Skills',
-    refresh,
-    buildConfig,
-    rowIds: (view) => visibleSkills(view).map((skill) => skill.path),
-    actions: {
-      refresh: () => ({ kind: 'refresh' }),
-    },
-  };
+  onAction(id: string, ctx: ConfigModalActionContext): void {
+    if (id === 'refresh') { this.refresh(); ctx.setStatus('Rescanned skill directories.'); }
+  }
+}
+
+export function createSkillsModalSurface(deps: SkillsModalDeps): ConfigModalSurface {
+  return new SkillsModalSurface(deps);
 }
 
 /**
- * Deterministic golden fixture: a fresh, empty tmp directory tree wired as
- * both cwd and homeDir, so refresh() finds no `.goodvibes/skills` directories
- * anywhere and renders the static empty-state copy. The random tmp path
- * never appears in the rendered lines, so the golden is byte-stable; the dir
- * is removed after refresh() since buildConfig() never touches disk itself.
+ * Deterministic golden fixture: a fresh tmp directory tree wired as both cwd and
+ * homeDir and removed immediately (scanSkillDirectorySync catches missing dirs →
+ * []), so refresh() finds no `.goodvibes/skills` directories and renders the
+ * static empty-state copy. The random tmp path never appears in the output.
  */
-export function skillsModalGoldenSurface(): BoundModalSurface {
+export function skillsModalGoldenSurface(): ConfigModalSurface {
   const root = mkdtempSync(join(tmpdir(), 'gv-skills-golden-'));
-  const surface = bindSkillsModal({ shellPaths: { workingDirectory: root, homeDirectory: root } });
-  surface.refresh();
+  const surface = createSkillsModalSurface({ shellPaths: { workingDirectory: root, homeDirectory: root } });
   rmSync(root, { recursive: true, force: true });
   return surface;
 }

@@ -1,27 +1,28 @@
 import { MODAL_TONES } from './modal-theme.ts';
-import type { ModalConfig, ModalSection } from '../../renderer/modal-factory.ts';
-import type { BoundModalSurface, ModalAction } from './modal-surface.ts';
+import { infoRow } from './modal-surface-helpers.ts';
+import type {
+  ConfigModalActionContext,
+  ConfigModalRow,
+  ConfigModalSurface,
+  ConfigModalView,
+} from '../../input/config-modal-types.ts';
 import { encodeConnectionPayload, generateQrMatrix, renderQrToString } from '@pellux/goodvibes-sdk/platform/pairing';
 
 // ---------------------------------------------------------------------------
-// QR Code → 'pairing' modal (W6 WO-B). Mirrors src/panels/qr-panel.ts
-// (QrPanel), constructed there as
-//   new QrPanel(connectionInfo, regenerate, copyToClipboard, controlPlaneReadModel, localUserAuthManager)
-// The panel's core content — connection URL/token/username(/password) plus a
-// scannable QR block — is read/navigate only. `regenerateToken` is dropped
-// from this modal's deps entirely: it is a destructive mutation (it
-// invalidates any live companion session) that the panel itself gated behind
-// an in-panel confirm prompt (QrPanel.confirmRegenerate / ConfirmState). The
-// charter rule (modal-surface.ts) is explicit that a confirm/approval must
-// never be folded into a modal, so regenerate routes out to a command instead
-// of being callable here at all (see the `regenerate` action below).
-// `localUserAuthManager` (used by the panel only to decide whether to show
-// that confirm) is dropped for the same reason — this modal never needs to
-// know whether a companion session is live, because it never performs the
-// regenerate itself.
+// QR Code → 'pairing' config-modal surface (W6.1 group-B port). Connection
+// URL/token/username(/password) plus a scannable QR block — read/navigate only.
+// Token regeneration is a destructive mutation (it invalidates any live
+// companion session) that the panel gated behind an in-panel confirm; per
+// charter that confirm is never folded into a modal, so regenerate routes to a
+// command instead. `getConnectionInfo` is a lazy thunk (loaded once on first
+// buildView, cached) so a missing daemon home degrades honestly rather than
+// throwing at modal-registration time.
+//
+// KNOWN GAP (flagged in the report): src/input/commands/qrcode-runtime.ts only
+// registers `/qrcode` (open); it has no `regenerate` subcommand yet, and this
+// surface cannot observe a regenerated token without being re-opened.
 // ---------------------------------------------------------------------------
 
-/** Minimal structural mirror of `QrPanelConnectionInfo` (src/panels/qr-panel.ts). */
 export interface PairingModalConnectionInfo {
   readonly url: string;
   readonly token: string;
@@ -30,19 +31,13 @@ export interface PairingModalConnectionInfo {
   readonly version?: string;
   readonly surface?: string;
 }
-
-/** Minimal structural mirror of `UiControlPlaneSnapshot` (src/runtime/ui-read-models.ts) — only the field this modal reads. */
-export interface PairingModalControlPlaneSnapshot {
-  readonly activeClientIds: readonly string[];
-}
-
-/** Minimal structural mirror of `UiReadModel<T>` (src/runtime/ui-read-models.ts). */
-export interface PairingModalReadModel<T> {
-  getSnapshot(): T;
-}
+export interface PairingModalControlPlaneSnapshot { readonly activeClientIds: readonly string[]; }
+export interface PairingModalReadModel<T> { getSnapshot(): T; }
 
 export interface PairingModalDeps {
-  readonly connectionInfo: PairingModalConnectionInfo;
+  /** Lazy connection-info provider — returns null when the daemon/companion
+   *  token cannot be resolved (honest degraded state instead of a throw). */
+  readonly getConnectionInfo: () => PairingModalConnectionInfo | null;
   readonly controlPlaneReadModel?: PairingModalReadModel<PairingModalControlPlaneSnapshot>;
   readonly copyToClipboard?: (text: string) => void;
 }
@@ -51,126 +46,99 @@ export interface PairingModalDeps {
 // length (mirrors QrPanel.SECRET_MASK), so masking doesn't leak length.
 const SECRET_MASK = '••••••••••••';
 
-/**
- * QR Code → modal. `connectionInfo` is a snapshot captured at bind time (like
- * the panel's constructor argument) rather than a live getter — refresh() is
- * a no-op because there is nothing this surface owns to reload; regenerating
- * the token happens entirely outside the modal (see `regenerate` below), so
- * this surface has no way to observe a regenerated token without being
- * re-bound. Flagged in the work-order report as a known limitation.
- */
-export function bindPairingModal(deps: PairingModalDeps): BoundModalSurface {
-  let revealed = false;
+class PairingModalSurface implements ConfigModalSurface {
+  readonly name = 'pairing-modal';
+  readonly title = 'Companion Pairing';
+  private info: PairingModalConnectionInfo | null | undefined = undefined;
+  private revealed = false;
+  private requestRender: () => void = () => {};
 
-  const buildConfig = (): ModalConfig => {
-    const { url, token, username, password } = deps.connectionInfo;
-    const displayToken = revealed ? token : SECRET_MASK;
-    const displayPassword = password !== undefined ? (revealed ? password : SECRET_MASK) : undefined;
+  constructor(private readonly deps: PairingModalDeps) {}
 
-    const sections: ModalSection[] = [];
-    sections.push({ type: 'text', content: 'Scan with the GoodVibes companion app to pair this session.', style: { dim: true } });
-    sections.push({ type: 'separator' });
-    sections.push({ type: 'text', content: `URL       ${url}` });
-    sections.push({ type: 'text', content: `Token     ${displayToken}`, style: { fg: MODAL_TONES.reasoning } });
-    sections.push({ type: 'text', content: `Username  ${username}` });
-    if (displayPassword !== undefined) {
-      sections.push({ type: 'text', content: `Password  ${displayPassword}` });
+  readonly actions = [
+    { key: 'v', id: 'toggleReveal', label: 'reveal token' },
+    { key: 'c', id: 'copyToken', label: 'copy token', enabledFor: () => Boolean(this.deps.copyToClipboard) },
+    { key: 'r', id: 'regenerate', label: 'regenerate token' },
+  ];
+
+  onOpen(requestRender: () => void): void { this.requestRender = requestRender; }
+
+  private ensureInfo(): PairingModalConnectionInfo | null {
+    if (this.info === undefined) {
+      try { this.info = this.deps.getConnectionInfo(); } catch { this.info = null; }
     }
-    if (deps.controlPlaneReadModel) {
-      const connected = deps.controlPlaneReadModel.getSnapshot().activeClientIds.length;
-      sections.push({
-        type: 'text',
-        content: `Companions connected: ${connected}`,
-        style: connected > 0 ? { fg: MODAL_TONES.good } : { dim: true },
-      });
-    }
-    sections.push({ type: 'separator' });
+    return this.info;
+  }
 
-    // ASCII QR block — same payload shape as QrPanel.render(), rendered as a
-    // preformatted Unicode half-block string (renderQrToString) rather than
-    // the panel's cell-by-cell Line[] renderer, since ModalSection only
-    // carries plain text content. Sized at `width: 88` below to comfortably
-    // fit this fixture's payload without the modal's word-wrap splitting a
-    // block row; a much longer live token/URL can still grow the QR past
-    // that width and wrap mid-row at render time — a known cosmetic
-    // limitation, not a data-correctness one.
+  buildView(): ConfigModalView {
+    const info = this.ensureInfo();
+    if (!info) {
+      return { title: 'Companion Pairing', degraded: 'Companion pairing is unavailable — the daemon connection info could not be resolved for this session.', tabs: [{ id: 'pairing', label: 'Pairing', rows: [] }] };
+    }
+    const { url, token, username, password } = info;
+    const displayToken = this.revealed ? token : SECRET_MASK;
+    const displayPassword = password !== undefined ? (this.revealed ? password : SECRET_MASK) : undefined;
+
+    const rows: ConfigModalRow[] = [];
+    rows.push(infoRow('intro', 'Scan with the GoodVibes companion app to pair this session.', { dim: true }));
+    rows.push(infoRow('url', `URL       ${url}`));
+    rows.push(infoRow('token', `Token     ${displayToken}`, { fg: MODAL_TONES.reasoning }));
+    rows.push(infoRow('username', `Username  ${username}`));
+    if (displayPassword !== undefined) rows.push(infoRow('password', `Password  ${displayPassword}`));
+    if (this.deps.controlPlaneReadModel) {
+      const connected = this.deps.controlPlaneReadModel.getSnapshot().activeClientIds.length;
+      rows.push(infoRow('companions', `Companions connected: ${connected}`, connected > 0 ? { fg: MODAL_TONES.good } : { dim: true }));
+    }
+
+    // ASCII QR block — same payload shape as QrPanel.render(); the multi-line
+    // preformatted string is split into one non-selectable row per block row.
     const payload = encodeConnectionPayload({
-      url,
-      token,
-      username,
+      url, token, username,
       ...(password !== undefined ? { password } : {}),
-      version: deps.connectionInfo.version ?? '0.0.0',
-      surface: deps.connectionInfo.surface ?? 'tui',
+      version: info.version ?? '0.0.0',
+      surface: info.surface ?? 'tui',
     });
-    const matrix = generateQrMatrix(payload);
-    sections.push({ type: 'text', content: renderQrToString(matrix), style: { fg: MODAL_TONES.qrDark, bg: MODAL_TONES.qrLight } });
+    const qr = renderQrToString(generateQrMatrix(payload));
+    qr.split('\n').forEach((line, i) => rows.push(infoRow(`qr:${i}`, line, { fg: MODAL_TONES.qrDark, bg: MODAL_TONES.qrLight })));
 
     return {
       title: 'Companion Pairing',
-      width: 88,
-      sections,
-      hints: [
-        revealed ? 'v hide token' : 'v reveal token',
-        ...(deps.copyToClipboard ? ['c copy token'] : []),
-        'r regenerate token',
-      ],
+      tabs: [{ id: 'pairing', label: 'Pairing', rows, hints: [this.revealed ? 'v hide token' : 'v reveal token'] }],
     };
-  };
+  }
 
-  const toggleReveal: ModalAction = () => {
-    revealed = !revealed;
-    return { kind: 'none' };
-  };
+  onAction(id: string, ctx: ConfigModalActionContext): void {
+    const info = this.ensureInfo();
+    if (id === 'toggleReveal') { this.revealed = !this.revealed; this.requestRender(); return; }
+    if (id === 'copyToken') {
+      if (!this.deps.copyToClipboard || !info) { ctx.print('Clipboard not available.'); return; }
+      this.deps.copyToClipboard(info.token);
+      ctx.print('Token copied to clipboard.');
+      return;
+    }
+    if (id === 'regenerate') {
+      void ctx.executeCommand?.('qrcode', ['regenerate']);
+      ctx.setStatus('Dispatched /qrcode regenerate (reopen to see the new token).');
+    }
+  }
+}
 
-  const copyToken: ModalAction = () => {
-    if (!deps.copyToClipboard) return { kind: 'print', text: 'Clipboard not available.' };
-    deps.copyToClipboard(deps.connectionInfo.token);
-    return { kind: 'print', text: 'Token copied to clipboard.' };
-  };
-
-  // Regeneration invalidates any live companion session and the panel gated
-  // it behind a confirm prompt — never modal-ized (charter rule). This routes
-  // to a command instead. NOTE (gap, flagged in the report): as of this
-  // change src/input/commands/qrcode-runtime.ts only registers `/qrcode`
-  // (open the panel/modal); it has no `regenerate` subcommand yet. Adding one
-  // — including wherever it should surface its own live-session confirm — is
-  // out of scope here (command runtimes are off-limits for this work order).
-  const regenerate: ModalAction = () => ({ kind: 'runCommand', command: '/qrcode regenerate' });
-
-  return {
-    name: 'pairing',
-    title: 'Companion Pairing',
-    refresh: () => {},
-    buildConfig,
-    rowIds: () => [],
-    actions: {
-      toggleReveal,
-      copyToken,
-      regenerate,
-      refresh: () => ({ kind: 'refresh' }),
-    },
-  };
+export function createPairingModalSurface(deps: PairingModalDeps): ConfigModalSurface {
+  return new PairingModalSurface(deps);
 }
 
 /**
  * Deterministic golden fixture: a frozen connectionInfo literal (no real
- * token/QR generation call — encodeConnectionPayload/generateQrMatrix are
- * pure functions of this literal, so the rendered QR block is byte-stable)
- * and a frozen control-plane snapshot.
+ * token/QR generation call — encodeConnectionPayload/generateQrMatrix are pure
+ * functions of this literal) and a frozen control-plane snapshot.
  */
-export function pairingModalGoldenSurface(): BoundModalSurface {
+export function pairingModalGoldenSurface(): ConfigModalSurface {
   const connectionInfo: PairingModalConnectionInfo = {
-    url: 'http://192.168.1.50:3141',
-    token: 'golden-token-0123456789abcdef',
-    username: 'golden-user',
-    password: 'golden-pass',
-    version: '0.0.0',
-    surface: 'tui',
+    url: 'http://192.168.1.50:3141', token: 'golden-token-0123456789abcdef', username: 'golden-user', password: 'golden-pass', version: '0.0.0', surface: 'tui',
   };
-  const controlPlaneReadModel: PairingModalReadModel<PairingModalControlPlaneSnapshot> = {
-    getSnapshot: () => ({ activeClientIds: ['golden-client-1'] }),
-  };
-  const surface = bindPairingModal({ connectionInfo, controlPlaneReadModel, copyToClipboard: () => {} });
-  surface.refresh();
-  return surface;
+  return createPairingModalSurface({
+    getConnectionInfo: () => connectionInfo,
+    controlPlaneReadModel: { getSnapshot: () => ({ activeClientIds: ['golden-client-1'] }) },
+    copyToClipboard: () => {},
+  });
 }

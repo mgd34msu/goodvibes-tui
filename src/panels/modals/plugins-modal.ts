@@ -1,6 +1,11 @@
 import { MODAL_TONES } from './modal-theme.ts';
-import type { ModalConfig, ModalSection, ModalListItem } from '../../renderer/modal-factory.ts';
-import type { BoundModalSurface, ModalAction, ModalViewState } from './modal-surface.ts';
+import { infoRow } from './modal-surface-helpers.ts';
+import type {
+  ConfigModalActionContext,
+  ConfigModalRow,
+  ConfigModalSurface,
+  ConfigModalView,
+} from '../../input/config-modal-types.ts';
 import type {
   PluginManager,
   PluginManagerObserver,
@@ -8,20 +13,13 @@ import type {
 } from '@pellux/goodvibes-sdk/platform/plugins';
 
 // ---------------------------------------------------------------------------
-// Plugins → modal (W6 WO-B). Mirrors src/panels/plugins-panel.ts:
-// PluginsPanel(manager: PluginManagerControls), where
-//   PluginManagerControls = PluginManagerObserver
-//     & Pick<PluginManager, 'enable' | 'disable' | 'verify' | 'liftQuarantine'>
-// (plugins-panel.ts:37-38). This modal only needs the READ methods the panel
-// used to render (list/capabilities/getTrustRecord/getQuarantineRecord) plus
-// `verify`, which the SDK implements as a pure inspection call — it never
-// mutates trust/quarantine state (see
-// node_modules/@pellux/goodvibes-sdk/dist/platform/plugins/manager.js:114-122,
-// PluginManager.verify delegates to PluginTrustStore.verify(), a read-only
-// signature check). `enable`/`disable`/`liftQuarantine` are DROPPED from the
-// dep shape on purpose: those verbs are destructive/interactive mutations and
-// route to the `/plugin` command path instead (action-parity charter rule —
-// see modal-surface.ts), so this modal never needs to call them directly.
+// Plugins → config-modal surface (W6.1 group-B port). Mirrors the retired
+// PluginsPanel's read surface (list/capabilities/getTrustRecord/
+// getQuarantineRecord) plus `verify` (a pure read-only signature check).
+// enable/disable/liftQuarantine are DROPPED from the dep shape on purpose:
+// those verbs are destructive/interactive mutations and route to the `/plugin`
+// command path (action-parity charter rule). Selection-blind port: the panel's
+// selected-plugin signature/quarantine/verify detail is folded into row labels.
 // ---------------------------------------------------------------------------
 
 /** Minimal structural read surface this modal needs from the live plugin manager. */
@@ -32,7 +30,6 @@ export interface PluginsModalDeps {
   readonly pluginManager: PluginsModalManager;
 }
 
-/** Cached result of a 'v' verify press, kept until a new verify or the process restarts. */
 interface VerifyResult {
   readonly valid: boolean;
   readonly fingerprint?: string | undefined;
@@ -53,220 +50,116 @@ function statusColor(plugin: PluginStatus): string {
   return MODAL_TONES.muted;
 }
 
-function trustColor(tier: PluginStatus['trustTier']): string {
-  switch (tier) {
-    case 'trusted':
-      return MODAL_TONES.good;
-    case 'limited':
-      return MODAL_TONES.warn;
-    case 'untrusted':
-      return MODAL_TONES.bad;
-  }
-}
-
-function matchesQuery(plugin: PluginStatus, q: string): boolean {
-  if (q === '') return true;
-  const needle = q.toLowerCase();
-  return plugin.name.toLowerCase().includes(needle)
-    || plugin.trustTier.toLowerCase().includes(needle)
-    || plugin.version.toLowerCase().includes(needle);
-}
-
 /**
  * Plugins → modal. Trust, capabilities, signature, and quarantine posture for
- * the active plugin registry. `pluginManager.list()` etc. are already
- * in-memory reads (no disk I/O per call — see PluginManager), so buildConfig
- * reads live and refresh() is a no-op, matching the panel's own always-live
- * getItems(). Enable/disable/lift-quarantine/capture-to-memory route to their
- * command paths rather than mutating the manager directly from the modal.
+ * the active plugin registry. `pluginManager.list()` etc. are in-memory reads
+ * (no disk I/O per call), so buildView reads live and refresh() is a no-op.
+ * Enable/disable/lift-quarantine/capture-to-memory route to their command
+ * paths rather than mutating the manager directly from the modal.
  */
-export function bindPluginsModal(deps: PluginsModalDeps): BoundModalSurface {
-  const { pluginManager } = deps;
-  const verifyResults = new Map<string, VerifyResult>();
+class PluginsModalSurface implements ConfigModalSurface {
+  readonly name = 'plugins-modal';
+  readonly title = 'Plugins';
+  private readonly verifyResults = new Map<string, VerifyResult>();
+  private requestRender: () => void = () => {};
 
-  const visiblePlugins = (view: ModalViewState): PluginStatus[] =>
-    pluginManager.list().filter((plugin) => matchesQuery(plugin, view.query));
+  constructor(private readonly deps: PluginsModalDeps) {}
 
-  const selectedPlugin = (view: ModalViewState): PluginStatus | undefined => {
-    const visible = visiblePlugins(view);
-    if (visible.length === 0) return undefined;
-    return visible[Math.max(0, Math.min(view.selectedIndex, visible.length - 1))];
-  };
+  readonly actions = [
+    { key: 'e', id: 'enable', label: 'enable', enabledFor: (row: ConfigModalRow | null) => this.pluginFrom(row)?.active === false },
+    { key: 'd', id: 'disable', label: 'disable', enabledFor: (row: ConfigModalRow | null) => this.pluginFrom(row)?.enabled === true },
+    { key: 'v', id: 'verify', label: 'verify' },
+    { key: 'q', id: 'liftQuarantine', label: 'lift quarantine', enabledFor: (row: ConfigModalRow | null) => this.pluginFrom(row)?.quarantined === true },
+    { key: 'm', id: 'captureToMemory', label: 'capture to memory', enabledFor: (row: ConfigModalRow | null) => this.pluginFrom(row)?.quarantined === true },
+    { key: 'r', id: 'refresh', label: 'refresh' },
+  ];
 
-  const buildConfig = (view: ModalViewState): ModalConfig => {
-    const all = pluginManager.list();
+  onOpen(requestRender: () => void): void { this.requestRender = requestRender; }
+
+  private pluginFrom(row: ConfigModalRow | null): PluginStatus | undefined {
+    if (!row) return undefined;
+    return this.deps.pluginManager.list().find((p) => p.name === row.id);
+  }
+
+  buildView(): ConfigModalView {
+    const all = this.deps.pluginManager.list();
+    const rows: ConfigModalRow[] = [];
 
     if (all.length === 0) {
-      return {
-        title: 'Plugins',
-        width: 76,
-        sections: [
-          { type: 'text', content: 'No plugins discovered.' },
-          { type: 'separator' },
-          { type: 'title', content: 'Next steps' },
-          { type: 'text', content: '/plugin list  — inspect plugin discovery paths and current registry state', style: { dim: true } },
-          { type: 'text', content: '/marketplace  — review curated ecosystem entries and provenance posture', style: { dim: true } },
-        ],
-        footer: 'no plugins discovered · esc close',
-      };
+      rows.push(infoRow('empty:0', 'No plugins discovered.'));
+      rows.push(infoRow('empty:title', 'Next steps'));
+      rows.push(infoRow('empty:list', '/plugin list  — inspect plugin discovery paths and current registry state', { dim: true }));
+      rows.push(infoRow('empty:market', '/marketplace  — review curated ecosystem entries and provenance posture', { dim: true }));
+      return { title: 'Plugins', tabs: [{ id: 'plugins', label: 'Plugins', rows, emptyText: '' }] };
     }
 
-    const sections: ModalSection[] = [];
     const active = all.filter((p) => p.active).length;
     const untrusted = all.filter((p) => p.trustTier === 'untrusted').length;
     const quarantined = all.filter((p) => p.quarantined).length;
-    sections.push({
-      type: 'text',
-      content: `plugins ${all.length}  active ${active}  untrusted ${untrusted}  quarantined ${quarantined}`,
-      style: { dim: true },
-    });
-    sections.push({ type: 'separator' });
+    const header = [`plugins ${all.length}  active ${active}  untrusted ${untrusted}  quarantined ${quarantined}`];
 
-    const visible = visiblePlugins(view);
-    const clampedIndex = Math.max(0, Math.min(view.selectedIndex, visible.length - 1));
-    const items: ModalListItem[] = visible.map((plugin, index) => ({
-      label: `${plugin.name.padEnd(22)} ${statusLabel(plugin).padEnd(11)} ${plugin.trustTier.toUpperCase().padEnd(10)} ${plugin.version}`,
-      selected: index === clampedIndex,
-    }));
-    if (items.length === 0) {
-      sections.push({ type: 'text', content: `No plugins match “${view.query}”.`, style: { dim: true } });
-    } else {
-      sections.push({ type: 'list', items });
-    }
-
-    const selected = visible[clampedIndex];
-    if (selected) {
-      sections.push({ type: 'separator' });
-      sections.push({
-        type: 'text',
-        content: `state ${statusLabel(selected)}  trust ${selected.trustTier}  v${selected.version}`,
-        style: { fg: statusColor(selected) },
+    for (const plugin of all) {
+      const caps = this.deps.pluginManager.capabilities(plugin.name);
+      const trustRecord = this.deps.pluginManager.getTrustRecord(plugin.name);
+      const quarantineRecord = this.deps.pluginManager.getQuarantineRecord(plugin.name);
+      const verify = this.verifyResults.get(plugin.name);
+      const suffix = [
+        trustRecord?.signatureFingerprint ? `sig ${trustRecord.signatureFingerprint}` : 'unsigned',
+        caps ? `caps ${caps.requested.length}/${caps.highRisk.length}hr/${caps.blocked.length}blk` : null,
+        quarantineRecord ? `quarantine: ${quarantineRecord.reason}` : null,
+        verify ? `verify ${verify.valid ? 'VALID' : 'INVALID'}${verify.fingerprint ? ` fp=${verify.fingerprint}` : (!verify.valid && verify.reason ? ` — ${verify.reason}` : '')}` : null,
+      ].filter((s): s is string => s !== null).join(' · ');
+      rows.push({
+        id: plugin.name,
+        label: `${plugin.name.padEnd(22)} ${statusLabel(plugin).padEnd(11)} ${plugin.trustTier.toUpperCase().padEnd(10)} v${plugin.version} · ${suffix}`,
+        style: { fg: statusColor(plugin) },
       });
-      sections.push({ type: 'text', content: selected.description || '(no description)', style: { dim: true } });
-
-      const caps = pluginManager.capabilities(selected.name);
-      if (caps) {
-        sections.push({
-          type: 'text',
-          content: `capabilities requested ${caps.requested.length}  high-risk ${caps.highRisk.length}  blocked ${caps.blocked.length}`,
-        });
-      }
-
-      const trustRecord = pluginManager.getTrustRecord(selected.name);
-      if (trustRecord?.signatureFingerprint) {
-        sections.push({ type: 'text', content: `signature ${trustRecord.signatureFingerprint}`, style: { fg: MODAL_TONES.info } });
-      } else {
-        sections.push({ type: 'text', content: 'signature unsigned (no provenance fingerprint on record)', style: { fg: MODAL_TONES.warn } });
-      }
-
-      const quarantineRecord = pluginManager.getQuarantineRecord(selected.name);
-      if (quarantineRecord) {
-        sections.push({ type: 'text', content: `quarantine: ${quarantineRecord.reason}`, style: { fg: MODAL_TONES.bad } });
-      }
-
-      const verify = verifyResults.get(selected.name);
-      if (verify) {
-        const suffix = verify.fingerprint ? ` fp=${verify.fingerprint}` : (!verify.valid && verify.reason ? ` — ${verify.reason}` : '');
-        sections.push({
-          type: 'text',
-          content: `verify ${verify.valid ? 'VALID' : 'INVALID'}${suffix}`,
-          style: { fg: verify.valid ? MODAL_TONES.good : MODAL_TONES.bad },
-        });
-      }
     }
 
-    return {
-      title: 'Plugins',
-      width: 76,
-      search: view.query,
-      sections,
-      hints: [
-        'up/down move',
-        'e enable',
-        'd disable',
-        'v verify',
-        ...(selected?.quarantined ? ['q lift quarantine', 'm capture to memory'] : []),
-        'r refresh',
-        '/ filter',
-      ],
-    };
-  };
+    return { title: 'Plugins', tabs: [{ id: 'plugins', label: 'Plugins', header, rows }] };
+  }
 
-  const enable: ModalAction = (view) => {
-    const plugin = selectedPlugin(view);
-    if (!plugin || plugin.active) return { kind: 'none' };
-    return { kind: 'runCommand', command: `/plugin enable ${plugin.name}` };
-  };
+  onAction(id: string, ctx: ConfigModalActionContext): void {
+    if (id === 'refresh') { ctx.setStatus('Plugins are read live.'); ctx.requestRender(); return; }
+    const plugin = this.pluginFrom(ctx.row);
+    if (!plugin) return;
+    switch (id) {
+      case 'enable':
+        if (!plugin.active) { void ctx.executeCommand?.('plugin', ['enable', plugin.name]); ctx.setStatus(`Dispatched /plugin enable ${plugin.name}.`); }
+        break;
+      case 'disable':
+        if (plugin.enabled) { void ctx.executeCommand?.('plugin', ['disable', plugin.name]); ctx.setStatus(`Dispatched /plugin disable ${plugin.name}.`); }
+        break;
+      case 'verify': {
+        const result = this.deps.pluginManager.verify(plugin.name);
+        this.verifyResults.set(plugin.name, { valid: result.valid, fingerprint: result.fingerprint, reason: result.reason });
+        ctx.setStatus(`verify ${result.valid ? 'VALID' : 'INVALID'}`);
+        this.requestRender();
+        break;
+      }
+      case 'liftQuarantine':
+        if (plugin.quarantined) { void ctx.executeCommand?.('plugin', ['quarantine', plugin.name, 'lift']); ctx.setStatus(`Dispatched /plugin quarantine ${plugin.name} lift.`); }
+        break;
+      case 'captureToMemory':
+        if (plugin.quarantined) { void ctx.executeCommand?.('recall', ['capture', 'plugin', plugin.name]); ctx.setStatus(`Dispatched /recall capture plugin ${plugin.name}.`); }
+        break;
+    }
+  }
+}
 
-  const disable: ModalAction = (view) => {
-    const plugin = selectedPlugin(view);
-    if (!plugin || !plugin.enabled) return { kind: 'none' };
-    return { kind: 'runCommand', command: `/plugin disable ${plugin.name}` };
-  };
-
-  const verify: ModalAction = (view) => {
-    const plugin = selectedPlugin(view);
-    if (!plugin) return { kind: 'none' };
-    const result = pluginManager.verify(plugin.name);
-    verifyResults.set(plugin.name, { valid: result.valid, fingerprint: result.fingerprint, reason: result.reason });
-    return { kind: 'none' };
-  };
-
-  const liftQuarantine: ModalAction = (view) => {
-    const plugin = selectedPlugin(view);
-    if (!plugin?.quarantined) return { kind: 'none' };
-    return { kind: 'runCommand', command: `/plugin quarantine ${plugin.name} lift` };
-  };
-
-  const captureToMemory: ModalAction = (view) => {
-    const plugin = selectedPlugin(view);
-    if (!plugin?.quarantined) return { kind: 'none' };
-    return { kind: 'runCommand', command: `/recall capture plugin ${plugin.name}` };
-  };
-
-  return {
-    name: 'plugins',
-    title: 'Plugins',
-    refresh: () => {},
-    buildConfig,
-    rowIds: (view) => visiblePlugins(view).map((plugin) => plugin.name),
-    actions: {
-      refresh: () => ({ kind: 'refresh' }),
-      enable,
-      disable,
-      verify,
-      liftQuarantine,
-      captureToMemory,
-    },
-  };
+export function createPluginsModalSurface(deps: PluginsModalDeps): ConfigModalSurface {
+  return new PluginsModalSurface(deps);
 }
 
 /**
  * Deterministic golden fixture: a fixed two-plugin roster (one active/trusted,
- * one quarantined/untrusted) so both the base list rendering and the
- * quarantine-only hints ('q lift quarantine', 'm capture to memory') are
- * exercised without any disk I/O, wall-clock, or random ids.
+ * one quarantined/untrusted) so both the base list rendering and the quarantine
+ * suffix are exercised without any disk I/O, wall-clock, or random ids.
  */
-export function pluginsModalGoldenSurface(): BoundModalSurface {
+export function pluginsModalGoldenSurface(): ConfigModalSurface {
   const fixedPlugins: PluginStatus[] = [
-    {
-      name: 'formatter',
-      version: '1.0.0',
-      description: 'Deterministic golden fixture plugin.',
-      enabled: true,
-      active: true,
-      trustTier: 'trusted',
-      quarantined: false,
-    },
-    {
-      name: 'risky-tool',
-      version: '0.2.0',
-      description: 'Second golden fixture plugin, quarantined.',
-      enabled: false,
-      active: false,
-      trustTier: 'untrusted',
-      quarantined: true,
-    },
+    { name: 'formatter', version: '1.0.0', description: 'Deterministic golden fixture plugin.', enabled: true, active: true, trustTier: 'trusted', quarantined: false },
+    { name: 'risky-tool', version: '0.2.0', description: 'Second golden fixture plugin, quarantined.', enabled: false, active: false, trustTier: 'untrusted', quarantined: true },
   ];
   const manager: PluginsModalManager = {
     list: () => fixedPlugins,
@@ -277,7 +170,5 @@ export function pluginsModalGoldenSurface(): BoundModalSurface {
       : undefined),
     verify: () => ({ ok: true, valid: true, fingerprint: 'golden-fixture-fp' }),
   };
-  const surface = bindPluginsModal({ pluginManager: manager });
-  surface.refresh();
-  return surface;
+  return createPluginsModalSurface({ pluginManager: manager });
 }
