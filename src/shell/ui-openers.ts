@@ -441,10 +441,14 @@ export function wireShellUiOpeners(options: WireShellUiOpenersOptions): void {
     render();
   };
 
-  commandContext.showPanel = (panelId, pane) => {
+  commandContext.showPanel = (panelId, pane, opts) => {
     panelManager.open(panelId, pane);
     panelManager.show();
-    panelManager.focusPanels();
+    // UX-C focus rule 1a: every registered caller of showPanel is a slash
+    // command (/panel open, /routes, /approval, /tasks, /ops-control, ...) —
+    // the command path leaves focus in the composer ("the user is
+    // mid-command-flow") unless the caller explicitly asks to grab it.
+    if (opts?.focus) panelManager.focusPanels();
     conversation.setSplashSuppressed(true);
     conversation.rebuildHistory();
     render();

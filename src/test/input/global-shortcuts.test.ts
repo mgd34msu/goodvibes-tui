@@ -171,6 +171,10 @@ describe('handleGlobalShortcutToken', () => {
     expect(handled).toBe(true);
     expect(intercepted).toBe(true);
     expect(closed).toHaveLength(0); // the panel stayed open — Ctrl+X was consumed for the in-panel detach instead
+    // UX-C item 1b: a consumed detach still hands focus back to the composer —
+    // it used to leave panelFocused untouched (the evaluator's "Ctrl+X detach
+    // landed focus in the panel and a typed question became nav keys").
+    expect(state.panelFocused).toBe(false);
   });
 
   test('Wave-3: when interceptPanelClose() returns false (e.g. the root tree tab), Ctrl+X falls through to the ordinary close', () => {
@@ -273,8 +277,9 @@ describe('handleGlobalShortcutToken', () => {
     expect(state.panelFocused).toBe(false);
   });
 
-  test('panel-tab-N (Alt+digit) jumps to the Nth workspace tab, routed globally', () => {
+  test('panel-tab-N (Alt+digit) jumps to the Nth workspace tab, routed globally, AND grabs focus (UX-C 1a: a chord is "I\'m going panel-driving")', () => {
     let jumpedTo = -1;
+    let focused = false;
     const state = buildState({
       panelFocused: false,
       panelManager: {
@@ -284,6 +289,7 @@ describe('handleGlobalShortcutToken', () => {
         hide: () => {},
         getActivePanel: () => ({ id: 'a' }),
         activateWorkspaceIndex: (i: number) => { jumpedTo = i; },
+        focusPanels: () => { focused = true; },
       } as unknown as GlobalShortcutRouteState['panelManager'],
       keybindingsManager: {
         matches: () => false,
@@ -299,6 +305,8 @@ describe('handleGlobalShortcutToken', () => {
     );
     expect(handled).toBe(true);
     expect(jumpedTo).toBe(2); // Alt+3 → index 2
+    expect(focused).toBe(true);
+    expect(state.panelFocused).toBe(true);
     expect(state.requestRender).toHaveBeenCalled();
   });
 
@@ -359,6 +367,128 @@ describe('handleGlobalShortcutToken', () => {
     expect(focused).toBe(true);
     expect(state.panelFocused).toBe(true);
     expect(state.requestRender).toHaveBeenCalled();
+  });
+
+  // UX-C item 2: F2 and Ctrl+O TOGGLE the Fleet panel — the same chord that
+  // opens+focuses it also closes it when it is already open and focused. The
+  // old behavior only ever opened+focused, which is why "F2 pressed 4x never
+  // closed the panel" (evaluator finding): a second press while already
+  // focused was silently swallowed by handlePanelFocusToken before it could
+  // ever reach a close branch. F2 is not in the keybinding table (hardcoded,
+  // like pageup/pagedown/escape), so these tests drive it via logicalName
+  // directly rather than through keybindingsManager.lookup.
+  describe('F2 / Ctrl+O — toggleFleetPanel (UX-C item 2)', () => {
+    test('F2 opens AND focuses the Fleet panel when it is not open', () => {
+      const opened: string[] = [];
+      let focused = false;
+      const state = buildState({
+        panelFocused: false,
+        panelManager: {
+          isVisible: () => true,
+          getAllOpen: () => [],
+          close: () => {},
+          hide: () => {},
+          getActivePanel: () => null,
+          open: (id: string) => { opened.push(id); },
+          focusPanels: () => { focused = true; },
+        } as unknown as GlobalShortcutRouteState['panelManager'],
+      });
+      const handled = handleGlobalShortcutToken(
+        state,
+        { type: 'key', name: '\x1bOQ', logicalName: 'f2', ctrl: false, shift: false, meta: false },
+        24,
+      );
+      expect(handled).toBe(true);
+      expect(opened).toEqual(['fleet']);
+      expect(focused).toBe(true);
+      expect(state.panelFocused).toBe(true);
+    });
+
+    test('F2 CLOSES the Fleet panel when it is already open and focused (the "4x never closed" regression)', () => {
+      const closed: string[] = [];
+      const state = buildState({
+        panelFocused: true,
+        panelManager: {
+          isVisible: () => true,
+          getAllOpen: () => [{ id: 'fleet' }],
+          close: (id: string) => { closed.push(id); },
+          hide: () => {},
+          getActivePanel: () => ({ id: 'fleet' }),
+        } as unknown as GlobalShortcutRouteState['panelManager'],
+      });
+      const handled = handleGlobalShortcutToken(
+        state,
+        { type: 'key', name: '\x1bOQ', logicalName: 'f2', ctrl: false, shift: false, meta: false },
+        24,
+      );
+      expect(handled).toBe(true);
+      expect(closed).toEqual(['fleet']);
+      expect(state.panelFocused).toBe(false);
+    });
+
+    test('F2 FOCUSES (does not close) the Fleet panel when it is open but NOT the focused tab', () => {
+      const opened: string[] = [];
+      let focused = false;
+      const state = buildState({
+        panelFocused: true,
+        panelManager: {
+          isVisible: () => true,
+          getAllOpen: () => [{ id: 'fleet' }, { id: 'git' }],
+          close: () => {},
+          hide: () => {},
+          // 'git' is the currently-focused active panel, not 'fleet'.
+          getActivePanel: () => ({ id: 'git' }),
+          open: (id: string) => { opened.push(id); },
+          focusPanels: () => { focused = true; },
+        } as unknown as GlobalShortcutRouteState['panelManager'],
+      });
+      const handled = handleGlobalShortcutToken(
+        state,
+        { type: 'key', name: '\x1bOQ', logicalName: 'f2', ctrl: false, shift: false, meta: false },
+        24,
+      );
+      expect(handled).toBe(true);
+      expect(opened).toEqual(['fleet']); // brought to front, not toggled closed
+      expect(focused).toBe(true);
+      expect(state.panelFocused).toBe(true);
+    });
+
+    test('Ctrl+F2 / Alt+F2 are NOT the bare toggle (modifier guard, mirrors pageup/pagedown)', () => {
+      const state = buildState({ panelFocused: false });
+      const handled = handleGlobalShortcutToken(
+        state,
+        { type: 'key', name: '\x1bOQ', logicalName: 'f2', ctrl: true, shift: false, meta: false },
+        24,
+      );
+      expect(handled).toBe(false);
+    });
+
+    test('Ctrl+O CLOSES the Fleet panel when it is already open and focused (same toggle as F2)', () => {
+      const closed: string[] = [];
+      const state = buildState({
+        panelFocused: true,
+        panelManager: {
+          isVisible: () => true,
+          getAllOpen: () => [{ id: 'fleet' }],
+          close: (id: string) => { closed.push(id); },
+          hide: () => {},
+          getActivePanel: () => ({ id: 'fleet' }),
+        } as unknown as GlobalShortcutRouteState['panelManager'],
+        keybindingsManager: {
+          matches: () => false,
+          lookup: (token: { logicalName?: string; ctrl?: boolean }) =>
+            token.logicalName === 'o' && !!token.ctrl ? 'panel-ops' : null,
+        } as unknown as GlobalShortcutRouteState['keybindingsManager'],
+      });
+      const handled = handleGlobalShortcutToken(
+        state,
+        { type: 'key', name: '\x0f', logicalName: 'o', ctrl: true, shift: false, meta: false },
+        24,
+      );
+      expect(handled).toBe(true);
+      expect(closed).toEqual(['fleet']);
+      expect(state.panelFocused).toBe(false);
+    });
   });
 
   test('BARE PageUp/PageDown still scroll the transcript (fast-path preserved)', () => {
