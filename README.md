@@ -157,12 +157,12 @@ The TUI now consumes the extracted `@pellux/goodvibes-sdk` (`0.34.0`) platform l
 
 ### Panels, Control Rooms, And Workspaces
 - Split-pane panel system with panel picker, layout control, and keyboard-first focus behavior
-- Dedicated control rooms for provider accounts, provider health, local auth, settings sync, remote, MCP, marketplace, orchestration, tasks, intelligence, worktrees, approvals, forensics, security, policy, cockpit, system messages, and more
-- Summary-first heavy panels with posture, issues, next actions, and detail regions
-- Routed system-message workspace for startup discovery and operational notices
+- Six persistent consoles — the Fleet hub plus git, diff, cost, tokens, and local-auth — with heavier operator surfaces (providers, remote, MCP, marketplace, orchestration, tasks, intelligence, worktrees, approvals, policy, security, settings sync, and more) re-homed as configuration/review modals on a single liveness-enforcing config-modal host
+- Retired panel ids resolve honestly through aliases, modal redirects, and "this moved" notices, so `/panel open <id>` and saved layouts never point at nothing
+- Summary-first heavy surfaces with posture, issues, next actions, and detail regions
 - Cross-panel actions between Explorer, Preview, and Symbols so file browsing can open previews and jump to symbol locations directly from panel focus
-- Live panels stay subscribed while open, so agent, tool, and thinking updates continue while the panel is visible
-- Dedicated `Agents` panel provides a view-only live peek into running agent sessions while the background-process strip remains the fast-access surface below the prompt
+- Live panels stay subscribed while open and repaint while the main thread is idle, so agent, tool, and thinking updates never look frozen
+- The Fleet panel is the live control room for running agents, workstreams, and scheduled jobs — attach/detach (detach never kills), steer, pause/resume, and capability-gated interrupt/kill — reached by `F2`, `Ctrl+O`, or the footer `[Enter]`
 
 ### Modal And Selection UX
 - Modal stack navigation that unwinds correctly back to the slash-command menu and prior nested modals
@@ -587,7 +587,7 @@ Changing `service.autostart` or `service.enabled` from `/config` reconciles the 
 
 GoodVibes is built around routing runtime state to the right surface.
 
-The current product ships dedicated workspaces for:
+The Fleet panel is the one persistent operator control room; most other operator surfaces now open as configuration and review modals on a shared, liveness-enforcing config-modal host rather than as standing panels. The product surfaces state for:
 
 - provider accounts and provider health
 - local auth and local service posture
@@ -1265,6 +1265,9 @@ Those pieces cover conversation-noise routing, panel-health/performance budgets,
 | `/session [action]` | `/sess` | Full session management: list, rename, resume, fork, save, info, export, search, delete |
 | `/undo [file]` | `/u` | Remove last turn, or `/undo file` to revert last file write/edit |
 | `/redo [file]` | — | Restore last undone turn, or `/redo file` to re-apply last reverted file |
+| `/checkpoints` | — | List workspace checkpoints, newest first |
+| `/checkpoint [label]` | — | Create a manual workspace checkpoint (forensic retention) |
+| `/rewind [id]` | — | Preview and restore a workspace checkpoint (files only — conversation history is unchanged) |
 | `/retry [text]` | `/r` | Re-send the last user message |
 | `/template` | `/tmpl` | Manage prompt templates: save, use, list, edit, delete |
 | `/tools` | `/t` | List available tools |
@@ -1275,8 +1278,9 @@ Those pieces cover conversation-noise routing, panel-health/performance budgets,
 | `/memory [action]` | — | Session memory management: `list`, `add <text>`, `remove <id>` |
 | `/keep <text>` | — | Pin text to session memory; survives context compaction |
 | `/memory-sync [action]` | `/memsync` | Durable memory export/import and bundle exchange: `export <path> [scope]`, `import <path>` |
-| `/recall [action]` | `/rc` | Durable knowledge and memory substrate: capture, review, explain, export, import, and handoff |
+| `/recall [action]` | `/rc` | Durable knowledge and memory substrate: capture, review, explain, inspect `injections`, export, import, and handoff |
 | `/knowledge [action]` | `/know`, `/kb` | Structured knowledge graph: ingest URLs/bookmarks, inspect issues, build packets, and run consolidation jobs |
+| `/codebase [action]` | — | Repo source-tree code index: `build`, `status`, and `search` |
 | `/context` | `/ctx` | Inspect context window usage (token breakdown per message) |
 | `/next-error` | `/ne` | Jump to the next error message in the conversation |
 | `/prev-error` | `/pe` | Jump to the previous error message in the conversation |
@@ -1287,6 +1291,7 @@ Those pieces cover conversation-noise routing, panel-health/performance budgets,
 | `/scan` | — | Scan for local LLM servers |
 | `/plan [goal]` | — | Inspect or seed TUI-owned project planning state; `panel`, `approve`, `list`, and `show <id>` are supported |
 | `/work-plan [action]` | `/wp`, `/todo`, `/workplan` | Open or update the persistent workspace work-plan checklist |
+| `/workstream [action]` | — | Author and oversee multi-phase agent workstreams (orchestration engine) |
 | `/panel [action]` | `/panels` | Panel management: open, close, list, toggle, move, focus, split, width, height |
 | `/plugin [action]` | — | Manage plugins (enable/disable/reload/list) |
 | `/marketplace [action]` | — | Browse curated plugin, skill, hook-pack, and policy-pack surfaces |
@@ -1297,6 +1302,7 @@ Those pieces cover conversation-noise routing, panel-health/performance budgets,
 | `/wrfc` | — | Show WRFC chain status, constraint satisfaction counts, and per-constraint `[SAT]`/`[UNS]`/`[UNV]` breakdown |
 | `/health [action]` | — | Unified runtime health review and repair entry point |
 | `/guidance [action]` | — | Contextual operational guidance without cluttering the conversation |
+| `/test [pattern]` | — | Run the project test script and show pass/fail results |
 | `/remote [action]` | — | Distributed peer, node-host contract, work-queue, and artifact control room |
 | `/sandbox [action]` | — | Isolation presets, doctor/probe, sessions, and QEMU setup flows |
 | `/setup [action]` | — | First-run readiness, services, sandbox, transfer bundles, and deep links |
@@ -1310,6 +1316,8 @@ Those pieces cover conversation-noise routing, panel-health/performance budgets,
 | `/keybindings` | `/kb` | List current keyboard bindings and their config file path |
 | `/schedule [action]` | `/sched` | Manage scheduled agent tasks (cron): add, list, remove, enable, disable, run |
 | `/image <path>` | `/img` | Attach an image file to the next message |
+| `/imagine <prompt>` | — | Generate an image from a prompt |
+| `/search <query>` | — | Search the web and render ranked results with source labels (`--limit <n>`) |
 | `/paste` | `/clip` | Pull supported text or image data directly from the system clipboard into the prompt |
 | `/refresh-models` | — | Refresh model catalog, benchmarks, and token limits |
 | `/notify [action]` | `/ntf` | Manage webhook notifications (ntfy.sh): add, remove, list, clear, test |
@@ -1388,12 +1396,13 @@ All shortcuts are customizable via `~/.goodvibes/tui/keybindings.json`. Use `/ke
 | Key | Action |
 |-----|--------|
 | `Ctrl+P` | Toggle panel sidebar |
-| `Ctrl+]` | Next panel tab |
-| `Ctrl+[` | Previous panel tab |
+| `F2` | Open and focus the Fleet panel |
+| `Ctrl+]` / `Ctrl+PageDown` | Next panel tab |
+| `Ctrl+PageUp` | Previous panel tab |
 | `Alt+1`…`Alt+9` | Jump to panel tab 1–9 |
 | `Ctrl+X` | Close the focused panel |
 | `Ctrl+Shift+X` | Close all panels |
-| `Ctrl+O` | Open the Ops Control panel |
+| `Ctrl+O` | Open and focus the Fleet panel (formerly Ops Control) |
 | `Ctrl+G` | Toggle focus between split panes |
 
 ### System
