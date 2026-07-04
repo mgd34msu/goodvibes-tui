@@ -2,7 +2,13 @@ import type { CommandRegistry } from '../command-registry.ts';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 
 /**
- * registerImageRuntimeCommands - `/image <prompt>`.
+ * registerImageRuntimeCommands - `/imagine <prompt>`.
+ *
+ * Named 'imagine', not 'image' — `/image <path> [prompt]` already exists
+ * (local-runtime.ts) and does something entirely different (attach a local
+ * image file to the next message). Re-verified against the current registry
+ * before wiring this in: the brief that scoped this command was written
+ * before checking for the collision.
  *
  * First production caller of MediaProviderRegistry.generate() — the SDK
  * plumbing existed with zero non-test call sites before this command.
@@ -15,7 +21,7 @@ import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
  */
 export function registerImageRuntimeCommands(registry: CommandRegistry): void {
   registry.register({
-    name: 'image',
+    name: 'imagine',
     description: 'Generate an image from a prompt via a configured media provider',
     usage: '<prompt>',
     argsHint: '<prompt>',
@@ -29,7 +35,7 @@ export function registerImageRuntimeCommands(registry: CommandRegistry): void {
 
       const prompt = args.join(' ').trim();
       if (!prompt) {
-        ctx.print('Usage: /image <prompt>');
+        ctx.print('Usage: /imagine <prompt>');
         return;
       }
 

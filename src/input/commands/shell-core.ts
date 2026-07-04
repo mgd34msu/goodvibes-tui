@@ -154,7 +154,7 @@ export function registerShellCoreCommands(registry: CommandRegistry): void {
           { id: '/template use', label: '/template use <name>', detail: 'Execute template', category: 'Templates' },
           { id: '/tools', label: '/tools', detail: 'List available tools', category: 'Tools & System' },
           { id: '/search', label: '/search <query> [--limit <n>]', detail: 'Search the web and show ranked results', category: 'Tools & System' },
-          { id: '/image', label: '/image <prompt>', detail: 'Generate an image from a prompt', category: 'Tools & System' },
+          { id: '/imagine', label: '/imagine <prompt>', detail: 'Generate an image from a prompt', category: 'Tools & System' },
           { id: '/paste', label: '/paste', detail: 'Insert clipboard text or image into the prompt', category: 'Tools & System' },
           { id: '/shortcuts', label: '/shortcuts', detail: 'View keyboard shortcuts reference', category: 'Tools & System' },
           { id: '/commands', label: '/commands', detail: 'Browse all commands in a scrollable list', category: 'Tools & System' },
