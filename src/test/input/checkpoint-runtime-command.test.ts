@@ -16,6 +16,12 @@ import { WorkspaceCheckpointManager } from '@pellux/goodvibes-sdk/platform/works
 import { CommandRegistry, type CommandContext } from '../../input/command-registry.ts';
 import { registerCheckpointRuntimeCommands } from '../../input/commands/checkpoint-runtime.ts';
 import { DiffPanel } from '../../panels/diff-panel.ts';
+import type { Line } from '../../types/grid.ts';
+
+/** Plain-text rendering of a confirm-overlay line, same helper as confirm-state.test.ts. */
+function lineText(line: Line): string {
+  return line.map((c) => c.char ?? ' ').join('').trimEnd();
+}
 
 const tempDirs: string[] = [];
 afterEach(() => {
@@ -45,7 +51,9 @@ function makeCtx(dir: string, mgr?: WorkspaceCheckpointManager) {
   const printed: string[] = [];
   const systemMessages: string[] = [];
   const opened: string[] = [];
+  const closed: string[] = [];
   let focusCalls = 0;
+  let focusPromptCalls = 0;
   let renderCalls = 0;
   let diffPanel: DiffPanel | null = null;
 
@@ -57,6 +65,13 @@ function makeCtx(dir: string, mgr?: WorkspaceCheckpointManager) {
       diffPanel = new DiffPanel(dir, () => { renderCalls++; });
       return diffPanel;
     },
+    // Mirrors the real PanelManager.close() contract closely enough for
+    // these tests: records the call and drops the panel so a caller that
+    // re-checks getAllOpen()/getDiffPanel() after close sees it gone.
+    close: (id: string) => {
+      closed.push(id);
+      if (id === 'diff') diffPanel = null;
+    },
     activateById: () => {},
     isVisible: () => true,
     show: () => {},
@@ -67,6 +82,7 @@ function makeCtx(dir: string, mgr?: WorkspaceCheckpointManager) {
     renderRequest: () => { renderCalls++; },
     exit: () => {},
     focusPanels: () => { focusCalls++; },
+    focusPrompt: () => { focusPromptCalls++; },
     session: {
       conversationManager: {
         addSystemMessage: (text: string) => { systemMessages.push(text); },
@@ -88,7 +104,9 @@ function makeCtx(dir: string, mgr?: WorkspaceCheckpointManager) {
     printed,
     systemMessages,
     opened,
+    closed,
     getFocusCalls: () => focusCalls,
+    getFocusPromptCalls: () => focusPromptCalls,
     getRenderCalls: () => renderCalls,
     getDiffPanel: () => diffPanel,
   };
@@ -270,7 +288,7 @@ describe('/rewind — confirm flow', () => {
 
     const registry = new CommandRegistry();
     registerCheckpointRuntimeCommands(registry);
-    const { ctx, printed, opened, getFocusCalls, getDiffPanel } = makeCtx(dir, mgr);
+    const { ctx, printed, opened, closed, getFocusCalls, getFocusPromptCalls, getDiffPanel } = makeCtx(dir, mgr);
 
     await registry.execute('rewind', [checkpoint1!.id], ctx);
 
@@ -281,12 +299,25 @@ describe('/rewind — confirm flow', () => {
     expect(panel!.confirmOverlay.pending).toBe(true);
     expect(printed.some((l) => l.includes('Previewing checkpoint'))).toBe(true);
 
-    // Cancel — no restore should happen.
+    // Label correctness: renderConfirmLines builds `${verb} "${label}"?` itself
+    // (panels/confirm-state.ts), so the armed label must be the bare subject —
+    // no leading "Restore" and no quotes of its own — or the verb and quotes
+    // end up duplicated (`Restore "Restore "baseline-pin"…`).
+    const confirmLine = lineText(panel!.confirmOverlay.renderLines(80)![0]!);
+    expect(confirmLine).toContain('Restore "first (');
+    expect(confirmLine).not.toContain('Restore "Restore');
+    expect((confirmLine.match(/Restore/g) ?? []).length).toBe(1);
+
+    // Cancel — no restore should happen, and the preview panel auto-closes
+    // (a denied restore leaves nothing actionable to look at).
     expect(panel!.handleInput('n')).toBe(true);
     expect(panel!.confirmOverlay.pending).toBe(false);
     expect(printed.some((l) => /Rewind cancelled/i.test(l))).toBe(true);
     expect(readFileSync(join(dir, 'a.txt'), 'utf-8')).toBe('v2');
     expect(existsSync(join(dir, 'b.txt'))).toBe(true);
+    expect(closed).toEqual(['diff']);
+    expect(getFocusPromptCalls()).toBeGreaterThan(0);
+    expect(getDiffPanel()).toBeNull();
   });
 
   test('any key other than y/n/Enter/Esc is absorbed and keeps the confirm pending', async () => {
@@ -328,7 +359,7 @@ describe('/rewind — confirm flow', () => {
 
     const registry = new CommandRegistry();
     registerCheckpointRuntimeCommands(registry);
-    const { ctx, printed, systemMessages, getDiffPanel } = makeCtx(dir, mgr);
+    const { ctx, printed, systemMessages, closed, getFocusPromptCalls, getDiffPanel } = makeCtx(dir, mgr);
 
     await registry.execute('rewind', [checkpoint1!.id], ctx);
     const panel = getDiffPanel()!;
@@ -355,6 +386,13 @@ describe('/rewind — confirm flow', () => {
     expect(systemMessages.length).toBe(1);
     expect(systemMessages[0]).toContain('[Rewind] Restored checkpoint "first"');
     expect(systemMessages[0]).toContain('conversation history is unchanged');
+
+    // The diff preview panel auto-closes once the restore has actually
+    // happened — it would otherwise linger open showing a now-stale preview
+    // with no obvious way to dismiss it.
+    expect(closed).toEqual(['diff']);
+    expect(getFocusPromptCalls()).toBeGreaterThan(0);
+    expect(getDiffPanel()).toBeNull();
   });
 });
 

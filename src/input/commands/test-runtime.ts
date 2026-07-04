@@ -183,6 +183,19 @@ export async function runTestCommand(
       durationMs,
       `timed out after ${timeoutSeconds}s`,
     );
+    // Durable end state: logToolResultBlock (above) renders straight into the
+    // display-only history buffer and never touches the real message list, so
+    // it does not survive the next full rebuildHistory() (which rebuilds
+    // strictly from conversationManager.getMessageSnapshot()) — the very next
+    // dirty render silently wipes it back to how the transcript looked before
+    // /test ran. addSystemMessage persists the same content as a real message
+    // (same durable pattern as /rewind's confirm notice in
+    // checkpoint-runtime.ts) so the timeout outcome survives like any other
+    // command's output. The streamed output during the run is allowed to stay
+    // transient — only this final state needs to persist.
+    ctx.session.conversationManager.addSystemMessage(
+      `[Test] Timed out after ${timeoutSeconds}s and was killed.`,
+    );
     ctx.renderRequest();
     return;
   }
@@ -196,13 +209,22 @@ export async function runTestCommand(
     const summary = `${parsed.passed}/${parsed.totalFiles} files passed`;
     const errorMsg = ok ? undefined : `${parsed.failed} file${parsed.failed === 1 ? '' : 's'} failed`;
     ctx.session.conversationManager.logToolResultBlock(toolCall, ok ? 'done' : 'error', summary, durationMs, errorMsg);
+    const durableLines = [`[Test] ${summary}${errorMsg ? ` — ${errorMsg}` : ''}`];
     if (parsed.failingFiles.length > 0) {
       const shown = parsed.failingFiles.slice(0, MAX_FAILING_NAMES_SHOWN);
       const lines = ['Failing test files:', ...shown.map((f) => `  - ${f}`)];
       const remaining = parsed.failingFiles.length - shown.length;
       if (remaining > 0) lines.push(`  ...and ${remaining} more`);
       ctx.print(lines.join('\n'));
+      durableLines.push(...lines);
     }
+    // See the timeout branch's comment above: logToolResultBlock's tool-styled
+    // render is display-only and does not survive the next full history
+    // rebuild. addSystemMessage persists the pass/fail summary AND the
+    // failing-file detail as a real message so both remain in the transcript
+    // after the command completes, not just during the ~1s before the next
+    // render wipes the display-only copy.
+    ctx.session.conversationManager.addSystemMessage(durableLines.join('\n'));
   } else {
     ctx.session.conversationManager.logToolResultBlock(
       toolCall,
@@ -213,6 +235,9 @@ export async function runTestCommand(
     );
     const tail = combinedOutput.split('\n').slice(-RAW_TAIL_LINES).join('\n');
     ctx.print(`(could not parse structured test results; showing raw tail)\n${tail}`);
+    ctx.session.conversationManager.addSystemMessage(
+      `[Test] exit code ${exitCode} (could not parse structured test results)`,
+    );
   }
 
   ctx.renderRequest();
