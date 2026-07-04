@@ -9,7 +9,7 @@
 // module rather than duplicating the logic inline.
 // ---------------------------------------------------------------------------
 
-import type { ProcessNode } from '@pellux/goodvibes-sdk/platform/runtime/fleet';
+import { STEER_TTL_MS, type ProcessNode } from '@pellux/goodvibes-sdk/platform/runtime/fleet';
 import { isTerminalProcessState } from './fleet-read-model.ts';
 import type { FleetTab, SteerBadgeStatus } from './fleet-tabs.ts';
 import { DEFAULT_PANEL_PALETTE, type PanelPalette } from './polish.ts';
@@ -64,6 +64,21 @@ export function reconcileSteerBadges(
           note: node
             ? `the ${node.kind} went ${node.state} before the steer was delivered`
             : 'the target is no longer tracked',
+          resolvedAt: now,
+        };
+        changed = true;
+      } else if (badge.queuedAt !== undefined && now - badge.queuedAt > STEER_TTL_MS) {
+        // Long-tool-call case: the target is still healthy and non-terminal,
+        // but the underlying steer message's own TTL (the SDK's MessageBus —
+        // see registry.js's steer(), which stamps every steer with
+        // STEER_TTL_MS) has lapsed without a COMMUNICATION_CONSUMED ever
+        // arriving. The SDK gives no explicit expiry signal, so without this
+        // the badge would show 'queued' forever even though the message is
+        // provably gone from the bus.
+        tab.steerBadge = {
+          ...badge,
+          status: 'dropped',
+          note: 'expired undelivered',
           resolvedAt: now,
         };
         changed = true;

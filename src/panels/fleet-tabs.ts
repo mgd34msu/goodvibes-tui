@@ -54,6 +54,19 @@ export interface SteerBadge {
   readonly note?: string;
   /** epoch ms when status left 'queued' (consumed or dropped) — drives FleetPanel's linger-then-clear tick. */
   readonly resolvedAt?: number;
+  /**
+   * epoch ms when status entered 'queued' (set once, at submit time). Drives
+   * fleet-steer.ts's reconcileSteerBadges TTL-expiry fallback: the SDK's
+   * MessageBus attaches its own STEER_TTL_MS to the underlying steer message
+   * (see registry.js's steer()) but never tells the TUI when that TTL lapses
+   * without delivery — the "agent stays healthy/non-terminal through one
+   * very long tool call, and the steer simply expires unseen in the bus"
+   * case. Without this, that badge would show 'queued' forever. Optional
+   * because older/hand-built badges (tests, pre-fix data) may not carry it —
+   * absence just means "no TTL-expiry inference possible for this badge",
+   * not an error.
+   */
+  readonly queuedAt?: number;
 }
 
 /**

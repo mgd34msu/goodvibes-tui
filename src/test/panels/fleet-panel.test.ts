@@ -656,7 +656,11 @@ describe('FleetPanel — s opens the steer composer on an active, steerable tab'
     expect(actions.steerCalls).toEqual([{ id: 'agent-1', text: 'hello agent' }]);
     expect(panel.isCapturingTextBurst()).toBe(false); // draft closed after submit
     expect(panel.getTabsState().tabs[0]!.steerDraft).toBeNull();
-    expect(panel.getTabsState().tabs[0]!.steerBadge).toEqual({ messageId: 'msg-1', status: 'queued' });
+    // queuedAt (epoch ms, set at submit time) drives reconcileSteerBadges'
+    // TTL-expiry fallback — see fleet-steer.test.ts for that behavior;
+    // asserted loosely here since the exact timestamp is not the point of
+    // this test.
+    expect(panel.getTabsState().tabs[0]!.steerBadge).toEqual({ messageId: 'msg-1', status: 'queued', queuedAt: expect.any(Number) });
   });
 
   test('Esc cancels the draft without calling steer, and returns focus to the tab without detaching', () => {
@@ -871,6 +875,63 @@ describe('FleetPanel — steer badge lifecycle', () => {
     fireDirty();
 
     expect(panel.getTabsState().tabs[0]!.steerBadge?.status).toBe('dropped');
+  });
+
+  test('consumed-wins: a COMMUNICATION_CONSUMED arriving AFTER the badge was already inferred dropped (target went terminal) still upgrades it to consumed — the SDK\'s honest signal beats the TUI\'s own inference', () => {
+    const running = makeNode({
+      id: 'agent-1',
+      state: 'streaming',
+      capabilities: { interruptible: true, killable: true, pausable: false, steerable: true },
+    });
+    const { model, setSnapshot, fireDirty, fireConsumed } = makeMutableReadModel(buildFleetSnapshot([running], NOW));
+    const actions = makeActions();
+    const panel = new FleetPanel(model, actions);
+    panel.handleInput('enter');
+    panel.handleInput('s');
+    panel.handleInput('h');
+    panel.handleInput('enter');
+    const messageId = panel.getTabsState().tabs[0]!.steerBadge!.messageId;
+    expect(panel.getTabsState().tabs[0]!.steerBadge?.status).toBe('queued');
+
+    // Target goes terminal before any consumed event arrives — the TUI
+    // infers 'dropped' (risk #2's honest-but-possibly-wrong guess).
+    const doneNode = makeNode({
+      id: 'agent-1',
+      state: 'done',
+      capabilities: { interruptible: false, killable: false, pausable: false, steerable: false },
+    });
+    setSnapshot(buildFleetSnapshot([doneNode], NOW));
+    fireDirty();
+    expect(panel.getTabsState().tabs[0]!.steerBadge?.status).toBe('dropped');
+
+    // The real signal arrives late, still within the badge's short linger
+    // window (it has not been cleared to null yet) — the truth wins.
+    fireConsumed({ messageId, agentId: 'agent-1', turn: 3 });
+    expect(panel.getTabsState().tabs[0]!.steerBadge?.status).toBe('consumed');
+  });
+
+  test('a badge already consumed is left alone by a second (duplicate) COMMUNICATION_CONSUMED event', () => {
+    const node = makeNode({
+      id: 'agent-1',
+      state: 'streaming',
+      capabilities: { interruptible: true, killable: true, pausable: false, steerable: true },
+    });
+    const { model, fireConsumed } = makeMutableReadModel(buildFleetSnapshot([node], NOW));
+    const actions = makeActions();
+    const panel = new FleetPanel(model, actions);
+    panel.handleInput('enter');
+    panel.handleInput('s');
+    panel.handleInput('h');
+    panel.handleInput('enter');
+    const messageId = panel.getTabsState().tabs[0]!.steerBadge!.messageId;
+
+    fireConsumed({ messageId, agentId: 'agent-1', turn: 2 });
+    const firstResolvedAt = panel.getTabsState().tabs[0]!.steerBadge!.resolvedAt;
+    expect(panel.getTabsState().tabs[0]!.steerBadge?.status).toBe('consumed');
+
+    fireConsumed({ messageId, agentId: 'agent-1', turn: 3 }); // duplicate/late-retried event
+    expect(panel.getTabsState().tabs[0]!.steerBadge?.status).toBe('consumed');
+    expect(panel.getTabsState().tabs[0]!.steerBadge?.resolvedAt).toBe(firstResolvedAt); // untouched, not re-stamped
   });
 });
 
