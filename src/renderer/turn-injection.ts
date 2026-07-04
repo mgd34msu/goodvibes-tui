@@ -33,6 +33,24 @@ function fmtN(n: number): string {
   return n.toLocaleString();
 }
 
+/**
+ * Annotate each injected id with its source (Stage B). Code-index hits get a
+ * ` [code]` tag; memory records are left bare so a memory-only line renders
+ * byte-identically to the pre-Stage-B output. `injectedSources` is parallel to
+ * `injectedIds`; a missing/short entry defaults to memory (no tag).
+ */
+function labelInjectedIds(entry: TurnInjectionEntry): string {
+  const sources = entry.injectedSources ?? [];
+  return entry.injectedIds
+    .map((id, i) => (sources[i] === 'code-index' ? `${id} [code]` : id))
+    .join(', ');
+}
+
+/** Honest one-clause note when a wired code index was queried but injected nothing this turn. */
+function codeSkipNote(entry: TurnInjectionEntry): string {
+  return entry.codeInjectionSkipped ? `, code skipped: ${entry.codeInjectionSkipped}` : '';
+}
+
 /** Render a single TurnInjectionRecord as one readable line. */
 export function formatTurnInjectionEntry(entry: TurnInjectionEntry): string {
   const backendTag = entry.embeddingBackend === 'fallback-lexical' ? ' [lexical fallback]' : '';
@@ -42,7 +60,8 @@ export function formatTurnInjectionEntry(entry: TurnInjectionEntry): string {
     const reasonText = entry.reason === 'no records cleared relevance floor'
       ? 'nothing injected this turn — nothing cleared the relevance floor'
       : `nothing injected this turn — ${entry.reason ?? 'unknown reason'}`;
-    return `  turn ${entry.turn}: ${reasonText}${backendTag} (considered ${entry.candidatesConsidered}, floor ${entry.relevanceFloor})`;
+    const codeConsidered = entry.codeCandidatesConsidered ? `, code considered ${entry.codeCandidatesConsidered}` : '';
+    return `  turn ${entry.turn}: ${reasonText}${backendTag} (considered ${entry.candidatesConsidered}${codeConsidered}, floor ${entry.relevanceFloor})${codeSkipNote(entry)}`;
   }
   const droppedStr = entry.droppedForBudget.length > 0
     ? `, dropped for budget: ${entry.droppedForBudget.join(', ')}`
@@ -52,8 +71,8 @@ export function formatTurnInjectionEntry(entry: TurnInjectionEntry): string {
   // (Wave-5 replay flagged the omission). Truncated to keep the line scannable.
   const queryStr = entry.query ? ` for ${JSON.stringify(truncateQuery(entry.query))}` : '';
   return (
-    `  turn ${entry.turn}: injected ${entry.injectedIds.join(', ')}${queryStr} ` +
-    `(~${fmtN(entry.tokenCost)}/${fmtN(entry.budgetTokens)} tok, floor ${entry.relevanceFloor})${droppedStr}${backendTag}`
+    `  turn ${entry.turn}: injected ${labelInjectedIds(entry)}${queryStr} ` +
+    `(~${fmtN(entry.tokenCost)}/${fmtN(entry.budgetTokens)} tok, floor ${entry.relevanceFloor})${droppedStr}${backendTag}${codeSkipNote(entry)}`
   );
 }
 

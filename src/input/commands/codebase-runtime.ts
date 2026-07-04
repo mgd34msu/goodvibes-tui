@@ -14,11 +14,12 @@
 // node while it runs), status (counts, skips, degradation state, last
 // build), search <query> (explicit retrieval, results labeled
 // 'lexical'|'semantic' honestly — never implied as more precise than they
-// are). This is Stage A only: no auto-injection into coding turns (Stage B,
-// out of scope — see the wo802/W5.3 design doc).
+// are). Stage B (now landed) adds passive auto-injection into coding turns and
+// tool-site incremental reindex; `status` surfaces both honestly (the
+// auto-injection flag+setting gate, and the last reindex activity).
 // ---------------------------------------------------------------------------
 
-import type { CodeIndexStats, CodeContextResult } from '@pellux/goodvibes-sdk/platform/state';
+import type { CodeIndexStats, CodeContextResult, CodeIndexReindexActivity } from '@pellux/goodvibes-sdk/platform/state';
 import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import { isCodeIndexAutoStartEnabled, CODE_INDEX_MAX_FILES, CODE_INDEX_MAX_FILE_BYTES, CODE_INDEX_MAX_TOTAL_BYTES } from '../../runtime/code-index-services.ts';
 import type { CommandContext, CommandRegistry } from '../command-registry.ts';
@@ -33,7 +34,40 @@ function formatBytes(bytes: number): string {
   return `${bytes}B`;
 }
 
-function renderCodeIndexStatus(stats: CodeIndexStats, configManager: Pick<ConfigManager, 'get'>): string {
+/**
+ * Honest one-line auto-injection state (Stage B): both the (default-off)
+ * `agent-passive-code-injection` feature flag AND storage.codeIndexEnabled must
+ * be on for passive code injection to run — state which is off, and why.
+ */
+function renderAutoInjectionState(flagEnabled: boolean, settingEnabled: boolean): string {
+  if (flagEnabled && settingEnabled) {
+    return '  auto-injection: on (code hits may be injected into coding turns within the shared knowledge budget)';
+  }
+  const reasons: string[] = [];
+  if (!flagEnabled) reasons.push('agent-passive-code-injection flag off (default off) — enable in the settings modal flags section');
+  if (!settingEnabled) reasons.push('storage.codeIndexEnabled off — /config to change');
+  return `  auto-injection: off (${reasons.join('; ')})`;
+}
+
+/** Honest last-reindex activity line (Stage B tool-site incremental reindex). */
+function renderReindexActivity(activity: CodeIndexReindexActivity | null, now: number): string {
+  if (!activity) return '  last reindex: none this session (writes/edits reindex touched files once the index is built)';
+  const agoSec = Math.max(0, Math.round((now - activity.at) / 1000));
+  const detail = activity.status === 'error'
+    ? `error: ${activity.error ?? 'unknown'}`
+    : activity.status === 'skipped'
+      ? `skipped (${activity.mode ?? 'empty'})`
+      : `indexed (${activity.mode ?? 'symbols'})`;
+  return `  last reindex: ${activity.path} — ${detail}, ${agoSec}s ago`;
+}
+
+interface CodeIndexStatusExtras {
+  readonly flagEnabled: boolean;
+  readonly reindexActivity: CodeIndexReindexActivity | null;
+  readonly now?: number;
+}
+
+function renderCodeIndexStatus(stats: CodeIndexStats, configManager: Pick<ConfigManager, 'get'>, extras: CodeIndexStatusExtras): string {
   const lines: string[] = [];
   lines.push(`Code index — backend: ${stats.backend}, available: ${stats.available ? 'yes' : 'no'}`);
   lines.push(`  path: ${stats.path}`);
@@ -48,6 +82,9 @@ function renderCodeIndexStatus(stats: CodeIndexStats, configManager: Pick<Config
   lines.push(
     `  auto-build on startup: ${autoStart ? 'on' : 'off'} (storage.codeIndexEnabled, default off — /config to change)`,
   );
+  // Stage B surfacing: passive code auto-injection state (flag + setting) and the last tool-site reindex.
+  lines.push(renderAutoInjectionState(extras.flagEnabled, autoStart));
+  lines.push(renderReindexActivity(extras.reindexActivity, extras.now ?? Date.now()));
   lines.push(
     `  bounds: max ${CODE_INDEX_MAX_FILES} files (maxFiles), ${formatBytes(CODE_INDEX_MAX_FILE_BYTES)} per file (maxFileBytes),`
     + ` ${formatBytes(CODE_INDEX_MAX_TOTAL_BYTES)} total per build (maxTotalBytes)`,
@@ -146,7 +183,10 @@ export function registerCodebaseRuntimeCommands(registry: CommandRegistry): void
       const sub = args[0];
 
       if (!sub || sub === 'status') {
-        ctx.print(renderCodeIndexStatus(store.stats(), ctx.platform.configManager));
+        ctx.print(renderCodeIndexStatus(store.stats(), ctx.platform.configManager, {
+          flagEnabled: ctx.session.isPassiveCodeInjectionFlagEnabled?.() ?? false,
+          reindexActivity: ctx.session.codeIndexReindexScheduler?.lastActivity() ?? null,
+        }));
         return;
       }
 
