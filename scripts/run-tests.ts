@@ -41,7 +41,7 @@ const JOBS = (() => {
   return Math.max(1, Math.min(8, availableParallelism() - 1));
 })();
 
-// Age-based sweep at startup (see scripts/test-tmp-sweep.ts): remove stale
+// Age-based sweep at startup (see scripts/stale-tmp-sweep.ts): remove stale
 // entries older than 1 h under .test-tmp — both leftover run-* runner subtrees
 // AND makeProjectTempDir leftovers (<prefix>-<random>) that a signal-killed test
 // process's exit hook never cleaned. Replaces the previous full-root wipe and is
