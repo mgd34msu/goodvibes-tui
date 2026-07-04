@@ -40,12 +40,14 @@ import type { SystemMessageRouter } from '../core/system-message-router.ts';
 /**
  * Honest, human-facing outcome of a WRFC chain, derived from real chain
  * state rather than guessed. `chain.state` alone cannot distinguish a
- * user-cancelled chain from an ordinary review/gate failure — cancelChain()
- * transitions the chain to the terminal 'failed' state but records a
- * `chain_cancelled` owner decision, so that decision log is the source of
- * truth for the 'cancelled' distinction. A chain still non-terminal after
- * rehydrate's zombie-reap check (see wrfc-persistence.ts) is reported as
- * 'interrupted' — it has been re-imported and is live again, not history.
+ * user-cancelled chain from an ordinary review/gate failure. The SDK now
+ * records that distinction first-class as `chain.failureKind` ('cancelled'
+ * vs 'transport'/'other'), set by cancelChain()/failChain(), so that field
+ * is the primary source of truth. Snapshots persisted before the field
+ * existed lack it; for those we fall back to the owner-decision log, where
+ * cancelChain() also records a `chain_cancelled` decision. A chain still
+ * non-terminal after rehydrate's zombie-reap check (see wrfc-persistence.ts)
+ * is reported as 'interrupted' — re-imported and live again, not history.
  */
 export type ChainOutcome = 'passed' | 'failed' | 'cancelled' | 'interrupted';
 
@@ -57,8 +59,16 @@ function isTerminalState(state: WrfcChain['state']): boolean {
 export function describeChainOutcome(chain: WrfcChain): ChainOutcome {
   if (!isTerminalState(chain.state)) return 'interrupted';
   if (chain.state === 'passed') return 'passed';
-  const lastAction = chain.ownerDecisions.length > 0 ? chain.ownerDecisions[chain.ownerDecisions.length - 1]?.action : undefined;
-  return lastAction === 'chain_cancelled' ? 'cancelled' : 'failed';
+  // Primary: the SDK's first-class failureKind, authoritative for chains
+  // failed/cancelled under the current SDK.
+  if (chain.failureKind === 'cancelled') return 'cancelled';
+  // Fallback for pre-failureKind snapshots: consult the owner-decision log,
+  // where cancelChain() records a chain_cancelled decision.
+  if (chain.failureKind === undefined) {
+    const lastAction = chain.ownerDecisions.length > 0 ? chain.ownerDecisions[chain.ownerDecisions.length - 1]?.action : undefined;
+    if (lastAction === 'chain_cancelled') return 'cancelled';
+  }
+  return 'failed';
 }
 
 /** Pick the most recently completed (or, if still interrupted, most recently created) chain from a set. Null if the set is empty. */
