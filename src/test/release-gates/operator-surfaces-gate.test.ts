@@ -24,7 +24,6 @@ import { createPeerClient } from '@/runtime/index.ts';
 import type { CommandContext } from '../../input/command-registry.ts';
 import { ToolRegistry } from '@pellux/goodvibes-sdk/platform/tools';
 import { MemoryRegistry, MemoryStore } from '@pellux/goodvibes-sdk/platform/state';
-import { SystemMessagesPanel } from '../../panels/system-messages-panel.ts';
 import { createOrchestrationReadModel } from '../helpers/ui-read-models.ts';
 import { listHookPointContracts } from '@pellux/goodvibes-sdk/platform/hooks';
 
@@ -182,49 +181,63 @@ describe('operator surfaces gate', () => {
       componentHealthMonitor: runtimeServices.componentHealthMonitor,
       worktreeRegistry: runtimeServices.worktreeRegistry,
       sandboxSessionRegistry: runtimeServices.sandboxSessionRegistry,
-      systemMessagesPanel: new SystemMessagesPanel(runtimeServices.configManager, runtimeServices.componentHealthMonitor),
     });
     const ids = manager.getRegisteredTypes().map((entry) => entry.id);
 
     expect(ids).toContain('policy');
     expect(ids).toContain('hooks');
-    expect(ids).toContain('communication');
-    expect(ids).toContain('cockpit');
     expect(ids).toContain('security');
     expect(ids).toContain('marketplace');
     expect(ids).toContain('sandbox');
-    expect(ids).toContain('approval');
     expect(ids).toContain('subscription');
     expect(ids).toContain('knowledge');
     expect(ids).toContain('remote');
-    expect(ids).toContain('incident');
-    expect(ids).toContain('orchestration');
-    // WO-114: the 'forensics' panel merged into the incident console; the
-    // retired id survives only as a PanelManager alias, so it must resolve
-    // to the same instance instead of appearing as a standalone type.
-    expect(manager.open('forensics')).toBe(manager.open('incident'));
+    expect(ids).toContain('fleet');
+
+    // W6.1 (the purge): communication, cockpit, approval, incident,
+    // orchestration, and ops were RETIRE-INTO-FLEET — they no longer appear
+    // as standalone registered types; each id now resolves (via
+    // PanelManager.registerAlias) to the same Fleet instance.
+    for (const retiredId of ['communication', 'cockpit', 'approval', 'incident', 'orchestration', 'ops']) {
+      expect(ids).not.toContain(retiredId);
+      expect(manager.open(retiredId)).toBe(manager.open('fleet'));
+    }
+    // WO-114: the 'forensics' panel merged into the incident console, which
+    // itself later retired into fleet (W6.1) — both ids now resolve straight
+    // to fleet (alias resolution is a single hop; forensics does not chain
+    // through the also-retired 'incident').
+    expect(manager.open('forensics')).toBe(manager.open('fleet'));
     // WO-112: the 'providers' stats panel and 'accounts' panel merged into
     // the provider-health console; both retired ids survive only as
     // PanelManager aliases, so they must resolve to the same instance.
     expect(ids).toContain('provider-health');
     expect(manager.open('providers')).toBe(manager.open('provider-health'));
     expect(manager.open('accounts')).toBe(manager.open('provider-health'));
-    // WO-110: the 'agent-logs' console merged into inspector; the retired id
-    // survives only as a PanelManager alias.
-    expect(manager.open('agent-logs')).toBe(manager.open('inspector'));
+    // WO-110: the 'agent-logs' console merged into inspector, which itself
+    // later retired into fleet (W6.1) — both ids now resolve straight to
+    // fleet.
+    expect(manager.open('agent-logs')).toBe(manager.open('fleet'));
+    expect(manager.open('inspector')).toBe(manager.open('fleet'));
+    // WRFC retired into fleet alongside inspector (W6.1).
+    expect(manager.open('wrfc')).toBe(manager.open('fleet'));
     // WO-113: the 'context' visualizer merged into the tokens console; the
     // retired id survives only as a PanelManager alias.
     expect(manager.open('context')).toBe(manager.open('tokens'));
     expect(ids).toContain('sessions');
-    expect(ids).toContain('ops');
+    // W6.1: panel-list was DELETE-disposition — it no longer resolves at all
+    // (no alias, unlike the RETIRE ids above).
+    expect(ids).not.toContain('panel-list');
   });
 
-  test('WO-152: cost/memory/incident/eval are always registered and open to a "not configured" state without their optional dependency', () => {
+  test('WO-152: cost/memory are always registered and open to a "not configured" state without their optional dependency', () => {
     const manager = new PanelManager();
     const uiServices = createUiRuntimeServices(runtimeServices);
-    // Deliberately omit forensicsRegistry, memoryRegistry, evalRegistry, and
-    // getOrchestratorUsage — the exact conditions that used to skip
-    // registration entirely and make `/panel open <id>` report "Unknown panel".
+    // Deliberately omit memoryRegistry and getOrchestratorUsage — the exact
+    // conditions that used to skip registration entirely and make
+    // `/panel open <id>` report "Unknown panel".
+    // (W6.1: forensicsRegistry/evalRegistry are also omitted here, but that
+    // no longer matters for this assertion — incident retired into fleet and
+    // eval was deleted outright; see the next assertions below.)
     registerBuiltinPanels(manager, {
       providerRegistry: runtimeServices.providerRegistry,
       uiServices,
@@ -233,15 +246,12 @@ describe('operator surfaces gate', () => {
       componentHealthMonitor: runtimeServices.componentHealthMonitor,
       worktreeRegistry: runtimeServices.worktreeRegistry,
       sandboxSessionRegistry: runtimeServices.sandboxSessionRegistry,
-      systemMessagesPanel: new SystemMessagesPanel(runtimeServices.configManager, runtimeServices.componentHealthMonitor),
     });
     const ids = manager.getRegisteredTypes().map((entry) => entry.id);
     expect(ids).toContain('cost');
     expect(ids).toContain('memory');
-    expect(ids).toContain('incident');
-    expect(ids).toContain('eval');
 
-    for (const id of ['cost', 'memory', 'incident', 'eval']) {
+    for (const id of ['cost', 'memory']) {
       // Must not throw "Unknown panel" — the registration always exists now.
       const panel = manager.open(id);
       expect(panel.id).toBe(id);
@@ -249,6 +259,12 @@ describe('operator surfaces gate', () => {
       expect(text.toLowerCase()).toContain('not configured');
       manager.close(id);
     }
+
+    // W6.1 (the purge): 'incident' retired into fleet (no "not configured"
+    // empty state anymore — it just opens Fleet); 'eval' was deleted
+    // outright (DELETE-disposition, no surviving human surface).
+    expect(ids).not.toContain('eval');
+    expect(manager.open('incident')).toBe(manager.open('fleet'));
   });
 
   test('command registry exposes the provider, policy, and session control surfaces', () => {

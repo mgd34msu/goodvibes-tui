@@ -8,9 +8,6 @@ import type { ToolRegistry } from '@pellux/goodvibes-sdk/platform/tools';
 import type { ProviderRegistry } from '@pellux/goodvibes-sdk/platform/providers';
 import type { PanelManager } from '../../panels/panel-manager.ts';
 import type { PanelIntegrationContext } from '../../panels/types.ts';
-import { ToolInspectorPanel } from '../../panels/tool-inspector-panel.ts';
-import { createUiRuntimeEvents } from '../../runtime/ui-events.ts';
-import { createRuntimeBusStub } from './workspace/_shared.ts';
 
 function linesText(lines: ReturnType<DocsPanel['render']>): string {
   return lines.map((line) => line.map((cell) => cell.char ?? ' ').join('').trimEnd()).join('\n');
@@ -86,7 +83,12 @@ describe('DocsPanel', () => {
     expect(text).toContain('Keybindings manager not wired into this session.');
   });
 
-  test('Enter on a tool row opens the tool inspector filtered to that tool', () => {
+  // W6.1 (the purge): 'tools'/ToolInspectorPanel was DELETE-disposition (tool
+  // results already render inline in the transcript, plus a per-node tool
+  // list in Fleet). Enter on a tool row now opens Fleet instead — there is
+  // no filter-by-tool equivalent there yet, so this only asserts the coarser
+  // jump, not a specific-tool filter.
+  test('Enter on a tool row opens fleet (tools retired — no filtered inspector remains)', () => {
     const toolRegistry = {
       list: () => [
         { definition: { name: 'read', description: 'Read files', sideEffects: [], concurrency: 'safe', supportsProgress: false, supportsStreamingOutput: false } },
@@ -100,25 +102,17 @@ describe('DocsPanel', () => {
     panel.handleInput('down');
     expect(panel.handleInput('enter')).toBe(true);
 
-    const events = createUiRuntimeEvents(createRuntimeBusStub());
-    const inspector = new ToolInspectorPanel(events.tools, events.turns);
-    const filterByToolSpy = { called: false as boolean, tool: '' };
-    inspector.filterByTool = ((tool: string) => {
-      filterByToolSpy.called = true;
-      filterByToolSpy.tool = tool;
-    }) as typeof inspector.filterByTool;
-
+    let openedId: string | null = null;
     const panelManager = {
       open: (id: string) => {
-        expect(id).toBe('tools');
-        return inspector;
+        openedId = id;
+        return null;
       },
     } as unknown as PanelManager;
     const ctx: PanelIntegrationContext = { panelManager };
 
     expect(panel.handlePanelIntegrationAction?.('enter', ctx)).toBe(true);
-    expect(filterByToolSpy.called).toBe(true);
-    expect(filterByToolSpy.tool).toBe('read');
+    expect(openedId).toBe('fleet');
   });
 
   test('Enter on a model row marks it ACTIVE via providerRegistry.setCurrentModel', () => {

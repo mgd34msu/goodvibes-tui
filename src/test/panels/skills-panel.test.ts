@@ -4,13 +4,11 @@ import { join } from 'node:path';
 import { PanelManager } from '../../panels/panel-manager.ts';
 import { registerBuiltinPanels } from '../../panels/builtin-panels.ts';
 import { SkillsPanel, discoverSkills } from '../../panels/skills-panel.ts';
-import { FilePreviewPanel } from '../../panels/file-preview-panel.ts';
 import { RuntimeEventBus, installEcosystemCatalogEntry } from '@/runtime/index.ts';
 import { createRuntimeServices } from '../../runtime/services.ts';
 import { createUiRuntimeServices } from '../../runtime/ui-services.ts';
 import { createRuntimeStore } from '../../runtime/store/index.ts';
 import type { Line } from '../../types/grid.ts';
-import { SystemMessagesPanel } from '../../panels/system-messages-panel.ts';
 import type { ShellPathService } from '@/runtime/index.ts';
 import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 
@@ -82,7 +80,6 @@ describe('SkillsPanel', () => {
       componentHealthMonitor: services.componentHealthMonitor,
       worktreeRegistry: services.worktreeRegistry,
       sandboxSessionRegistry: services.sandboxSessionRegistry,
-      systemMessagesPanel: new SystemMessagesPanel(services.configManager, services.componentHealthMonitor),
     });
     expect(manager.getRegisteredTypes().some((entry) => entry.id === 'skills')).toBe(true);
   });
@@ -240,7 +237,12 @@ describe('SkillsPanel', () => {
     expect(text).toContain('No skills discovered');
   });
 
-  test('Enter opens the selected skill markdown in the preview panel', async () => {
+  // W6.1 (the purge): Enter used to open the skill's markdown source in the
+  // preview panel via handlePanelIntegrationAction. 'preview' is
+  // DELETE-disposition with no successor surface, so that cross-panel jump
+  // was removed rather than repointed — Enter is now a no-op key-consume
+  // (browse-only) on this list until WO-B migrates Skills to a modal.
+  test('Enter on a skill row is consumed but no longer opens a preview panel', async () => {
     writeSkill(
       cwd,
       '.goodvibes/tui/skills/alpha/SKILL.md',
@@ -266,18 +268,14 @@ describe('SkillsPanel', () => {
       componentHealthMonitor: services.componentHealthMonitor,
       worktreeRegistry: services.worktreeRegistry,
       sandboxSessionRegistry: services.sandboxSessionRegistry,
-      systemMessagesPanel: new SystemMessagesPanel(services.configManager, services.componentHealthMonitor),
     });
 
     const skillsPanel = manager.open('skills') as SkillsPanel;
     skillsPanel.onActivate();
     await skillsPanel.awaitReady();
     expect(skillsPanel.handleInput('enter')).toBe(true);
-    expect(skillsPanel.handlePanelIntegrationAction('enter', { panelManager: manager })).toBe(true);
-
-    const previewPanel = manager.getPanel('preview');
-    expect(previewPanel).toBeInstanceOf(FilePreviewPanel);
-    expect((previewPanel as FilePreviewPanel).getCurrentFilePath()).toContain('alpha');
+    expect(skillsPanel.handlePanelIntegrationAction).toBeUndefined();
+    expect(manager.getRegisteredTypes().some((entry) => entry.id === 'preview')).toBe(false);
   });
 
   test('tags marketplace-installed skills with provenance from the install receipt', async () => {

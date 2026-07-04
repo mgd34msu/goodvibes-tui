@@ -9,7 +9,6 @@ import type { ToolCatalogQuery } from '../runtime/ui-service-queries.ts';
 import type { ModelDefinition } from '@pellux/goodvibes-sdk/platform/providers';
 import type { KeybindingsManager } from '../input/keybindings.ts';
 import type { PanelIntegrationContext } from './types.ts';
-import { ToolInspectorPanel } from './tool-inspector-panel.ts';
 import { isPanelSearchBackspace, isPanelSearchPrintable } from './search-focus.ts';
 
 const C = extendPalette(DEFAULT_PANEL_PALETTE, {
@@ -174,17 +173,17 @@ export class DocsPanel extends BasePanel {
   }
 
   /**
-   * Cross-panel integration hook — opens ToolInspectorPanel filtered to the
-   * tool selected on Enter (session.ts:102 sibling-open pattern), consuming
-   * the intent recorded by _activateSelected.
+   * Cross-panel integration hook — used to open ToolInspectorPanel filtered
+   * to the tool selected on Enter. W6.1 (the purge) deleted 'tools' (no
+   * surviving human surface — tool results render inline in the transcript,
+   * plus a per-node tool list in Fleet), so this now opens Fleet instead;
+   * there is no filter-by-tool equivalent there yet, so the jump is coarser
+   * than before.
    */
   handlePanelIntegrationAction(_key: string, ctx: PanelIntegrationContext): boolean {
     if (!this._pendingToolJump) return false;
-    const tool = this._pendingToolJump;
     this._pendingToolJump = null;
-    const inspector = ctx.panelManager.open('tools');
-    if (!(inspector instanceof ToolInspectorPanel)) return false;
-    inspector.filterByTool(tool);
+    ctx.panelManager.open('fleet');
     return true;
   }
 

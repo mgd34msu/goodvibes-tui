@@ -16,8 +16,6 @@ import {
 import type { WorkPlanItem, WorkPlanItemStatus, WorkPlanStore } from '../work-plans/work-plan-store.ts';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 import { isTextBackspace } from '../input/delete-key-policy.ts';
-import { AgentInspectorPanel } from './agent-inspector-panel.ts';
-import { WrfcPanel } from './wrfc-panel.ts';
 import type { PanelIntegrationContext } from './types.ts';
 
 type WorkPlanDraftField = 'title' | 'owner' | 'notes';
@@ -180,9 +178,11 @@ export class WorkPlanPanel extends ScrollableListPanel<WorkPlanItem> {
   }
 
   /**
-   * Cross-panel jumps: 'i' opens the Inspector focused on the selected
-   * item's linked agent; 'w' opens the WRFC panel focused on its linked
-   * chain.
+   * Cross-panel jumps: 'i' and 'w' used to focus the Inspector/WRFC panels
+   * on the selected item's linked agent/chain. W6.1 (the purge) retired both
+   * into Fleet (registerAlias('inspector'|'wrfc', 'fleet')), which has no
+   * per-agent/per-chain deep-link API yet — so these now just open Fleet;
+   * the specific-item jump is gone until Fleet grows an equivalent seam.
    */
   handlePanelIntegrationAction(key: string, ctx: PanelIntegrationContext): boolean {
     const item = this.getSelectedItem();
@@ -190,22 +190,14 @@ export class WorkPlanPanel extends ScrollableListPanel<WorkPlanItem> {
     if (key === 'i') {
       const agentId = item.linked?.agentId;
       if (!agentId) return false;
-      const inspector = ctx.panelManager.open('inspector');
-      if (inspector instanceof AgentInspectorPanel) {
-        inspector.inspectAgent(agentId);
-        return true;
-      }
-      return false;
+      ctx.panelManager.open('inspector');
+      return true;
     }
     if (key === 'w') {
       const wrfcId = item.linked?.wrfcId;
       if (!wrfcId) return false;
-      const wrfc = ctx.panelManager.open('wrfc');
-      if (wrfc instanceof WrfcPanel) {
-        wrfc.selectChain(wrfcId);
-        return true;
-      }
-      return false;
+      ctx.panelManager.open('wrfc');
+      return true;
     }
     return false;
   }

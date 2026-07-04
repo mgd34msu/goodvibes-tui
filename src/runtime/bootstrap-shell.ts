@@ -16,7 +16,6 @@ import { GitStatusProvider } from '../renderer/git-status.ts';
 import type { GitHeaderInfo } from '../renderer/git-status.ts';
 import type { PermissionRequestHandler } from '@pellux/goodvibes-sdk/platform/permissions';
 import { registerBuiltinPanels } from '../panels/builtin-panels.ts';
-import { SystemMessagesPanel } from '../panels/system-messages-panel.ts';
 import { createSystemMessageRouter, type SystemMessageRouter } from '../core/system-message-router.ts';
 import { getConfigSnapshot } from '../config/index.ts';
 import { createBootstrapCommandContext } from './bootstrap-command-context.ts';
@@ -41,11 +40,6 @@ export interface BootstrapShellState {
   readonly lastGitInfoRef: { value: GitHeaderInfo | undefined };
   readonly inputHistory: InputHistory;
   readonly systemMessageRouter: SystemMessageRouter;
-  /**
-   * Wire the agent detail modal opener after InputHandler is constructed.
-   * Call with `(id) => input.agentDetailModal.open(id)` from main.ts.
-   */
-  readonly setOpenAgentDetail: (fn: (agentId: string) => void) => void;
 }
 
 export interface BootstrapShellOptions {
@@ -93,7 +87,6 @@ export function createBootstrapShell(options: BootstrapShellOptions): BootstrapS
     completeModelSelectionSideEffect,
   } = options;
 
-  const systemMessagesPanel = new SystemMessagesPanel(configManager, services.componentHealthMonitor);
   // W0.9: after any resume seam replays historical messages into `conversation`,
   // the freshly-constructed `orchestrator` still has its zeroed default usage
   // (SDK gap — Orchestrator.usage is never persisted/reseeded). Recompute it
@@ -138,8 +131,6 @@ export function createBootstrapShell(options: BootstrapShellOptions): BootstrapS
     adaptivePlanner: services.adaptivePlanner,
     runtimeBus,
   });
-
-  const openAgentDetailRef: { fn: (agentId: string) => void } = { fn: (_agentId: string) => {} };
 
   // WO-139: initial cost-budget alert threshold (USD; 0/unset = disabled).
   // Once the session starts, the real control surface is the CostTrackerPanel
@@ -191,7 +182,6 @@ export function createBootstrapShell(options: BootstrapShellOptions): BootstrapS
     componentHealthMonitor: services.componentHealthMonitor,
     worktreeRegistry: services.worktreeRegistry,
     sandboxSessionRegistry: services.sandboxSessionRegistry,
-    systemMessagesPanel,
     memoryRegistry: services.memoryRegistry,
     uiServices,
     pluginManager: services.pluginManager,
@@ -199,7 +189,6 @@ export function createBootstrapShell(options: BootstrapShellOptions): BootstrapS
     hookActivityTracker: services.hookActivityTracker,
     hookWorkbench: services.hookWorkbench,
     mcpRegistry: services.mcpRegistry,
-    openAgentDetail: (agentId: string) => openAgentDetailRef.fn(agentId),
     daemonHomeDir: join(services.homeDirectory, '.goodvibes', 'daemon'),
     opsApi,
     planRuntime,
@@ -212,7 +201,6 @@ export function createBootstrapShell(options: BootstrapShellOptions): BootstrapS
 
   const systemMessageRouter = createSystemMessageRouter(
     conversation,
-    systemMessagesPanel,
     (kind) => {
       const ui = getConfigSnapshot(configManager).ui;
       if (kind === 'wrfc') return ui.wrfcMessages;
@@ -341,8 +329,5 @@ export function createBootstrapShell(options: BootstrapShellOptions): BootstrapS
     lastGitInfoRef,
     inputHistory,
     systemMessageRouter,
-    setOpenAgentDetail: (fn: (agentId: string) => void) => {
-      openAgentDetailRef.fn = fn;
-    },
   };
 }

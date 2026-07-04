@@ -106,7 +106,6 @@ async function main() {
     permissionPromptRef,
     _writeLastSessionPointer: writeLastSessionPointer,
     systemMessageRouter,
-    setOpenAgentDetail,
   } = ctx;
   const workingDir = ctx.services.workingDirectory;
   const homeDirectory = ctx.services.homeDirectory;
@@ -416,7 +415,6 @@ async function main() {
   input.filePicker.setOnUpdate(() => render());
   input.agentDetailModal.setOnRefresh(() => render());
   input.processModal.setOnRefresh(() => render());
-  setOpenAgentDetail((id) => input.agentDetailModal.open(id));
 
   // Model picker callback is handled in bootstrap.ts — do not duplicate here.
   input.setHistory(inputHistory);

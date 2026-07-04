@@ -4,7 +4,6 @@ import type { PanelManager } from '../panel-manager.ts';
 import { SessionBrowserPanel } from '../session-browser-panel.ts';
 import { QrPanel } from '../qr-panel.ts';
 import { DocsPanel } from '../docs-panel.ts';
-import { PanelListPanel } from '../panel-list-panel.ts';
 import { TokenBudgetPanel } from '../token-budget-panel.ts';
 import type { ResolvedBuiltinPanelDeps } from './shared.ts';
 import { requireUiServices } from './shared.ts';
@@ -41,6 +40,16 @@ function readBootstrapPassword(credentialPath: string): string | undefined {
   return undefined;
 }
 
+// W6.1 (the purge): panel-list and system-messages were registered here
+// before the purge — both DELETE-disposition. panel-list was a picker over a
+// handful of panels (dead weight now that the registry is much smaller —
+// the picker itself is replaced by a live-registry selection modal on
+// Ctrl+P, see shell/ui-openers.ts). system-messages' buffered notices are
+// rerouted to the transcript's system channel instead of vanishing: with no
+// panel attached, SystemMessageRouter's delivery resolution
+// (resolveSystemMessageDelivery, SDK) already falls back to
+// conversation.addTypedSystemMessage for every kind/target combination — see
+// bootstrap-shell.ts and core/system-message-router.ts.
 export function registerSessionPanels(manager: PanelManager, deps: ResolvedBuiltinPanelDeps): void {
   const ui = requireUiServices(deps);
   manager.registerType({
@@ -95,27 +104,6 @@ export function registerSessionPanels(manager: PanelManager, deps: ResolvedBuilt
   });
 
   manager.registerType({
-    id: 'panel-list',
-    name: 'Panel List',
-    icon: 'L',
-    category: 'session',
-    description: 'Browse all registered panels grouped by category, with open/closed status and Enter-to-open',
-    factory: () => new PanelListPanel(manager, deps.componentHealthMonitor),
-  });
-
-  manager.registerType({
-    id: 'system-messages',
-    name: 'System Messages',
-    // WO-152: was 'J' (collided with intelligence + tasks).
-    icon: '▥',
-    category: 'runtime-ops',
-    description: 'Operational system messages routed away from the main conversation (scans, discovery, plugin events, tool status)',
-    preload: true,
-    retainOnClose: true,
-    factory: () => deps.systemMessagesPanel,
-  });
-
-  manager.registerType({
     id: 'tokens',
     name: 'Tokens',
     // WO-152: registry previously said 'K' while the live panel's own
@@ -127,7 +115,9 @@ export function registerSessionPanels(manager: PanelManager, deps: ResolvedBuilt
     description: 'Token + context console: gauge, true composition, per-turn history, inline cost, and one-key compact',
     // Preloaded (absorbed from the retired ContextVisualizerPanel) so turn
     // history and pressure accumulate in the background even before the user
-    // opens the tab.
+    // opens the tab. The only builtin panel that still preloads post-purge
+    // (W6.1) — see registerBuiltinPanels callers for the others' preload
+    // removal.
     preload: true,
     retainOnClose: true,
     factory: () => {

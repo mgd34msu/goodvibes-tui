@@ -14,7 +14,7 @@ import { EvalRunner } from '@/runtime/index.ts';
 import { BUILTIN_SUITES } from '@/runtime/index.ts';
 import { formatScorecard } from '@/runtime/index.ts';
 import { loadBaseline, captureBaseline, formatBaselineComparison, writeBaseline } from '@/runtime/index.ts';
-import type { EvalRegistry } from '../../panels/eval-panel.ts';
+import type { EvalRegistry } from '../../panels/eval-registry.ts';
 import { formatSuiteResult, formatGateResult } from '@/runtime/index.ts';
 import { requireShellPaths } from './runtime-services.ts';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
