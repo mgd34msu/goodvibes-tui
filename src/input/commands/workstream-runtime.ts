@@ -20,7 +20,7 @@
 // ---------------------------------------------------------------------------
 
 import { AdaptivePlanner } from '@pellux/goodvibes-sdk/platform/core';
-import type { Workstream } from '@pellux/goodvibes-sdk/platform/orchestration';
+import type { PhaseKind, PhaseRole, WorkItemState, Workstream } from '@pellux/goodvibes-sdk/platform/orchestration';
 import type { WorkstreamCommandService, WorkstreamDraft } from '../../runtime/workstream-services.ts';
 import type { CommandContext, CommandRegistry } from '../command-registry.ts';
 
@@ -32,7 +32,43 @@ function shortId(id: string): string {
   return id.length > 12 ? id.slice(0, 12) : id;
 }
 
-const ACTIVE_ITEM_STATES = new Set(['pending', 'awaiting-capacity', 'in-phase']);
+/**
+ * The engine's ONLY two terminal work-item states (mirrors the SDK's own
+ * internal TERMINAL_ITEM_STATES in platform/runtime/fleet/adapters/
+ * orchestration.ts and engine.ts's kill() guard — neither is exported, so
+ * this is kept in lockstep by hand). Deriving "active" as NOT-terminal
+ * instead of enumerating the non-terminal states means a state this module
+ * doesn't know about yet (as 'blocked-budget' once was here) is still
+ * correctly treated as in-flight rather than silently falling through the
+ * cancel path.
+ */
+const TERMINAL_ITEM_STATES = new Set<WorkItemState>(['passed', 'failed']);
+
+function isActiveItemState(state: WorkItemState): boolean {
+  return !TERMINAL_ITEM_STATES.has(state);
+}
+
+/** Mirrors the engine's templateForPhase (phase-runner.ts): only 'review'/'gate' phases run the general template — everything else, INCLUDING 'custom', runs the engineer template regardless of phase.role's text. */
+function templateForPhaseKind(kind: PhaseKind): string {
+  return kind === 'review' || kind === 'gate' ? 'general' : 'engineer';
+}
+
+/**
+ * phase.role for a 'custom' phase is the free-text description passed to
+ * `/workstream insert-phase` — it is purely COSMETIC. Neither
+ * templateForPhase nor buildPhaseTask (phase-runner.ts, engine-side) ever
+ * reads it: a custom phase always runs the engineer template against the
+ * work item's own task text. Rendering it as `<kind> — <role>` like a real
+ * role would falsely imply the description drives what the phase does, so
+ * custom phases get an explicit "this is a description, not a role" label
+ * instead.
+ */
+function formatPhaseLabel(phase: { readonly kind: PhaseKind; readonly role: PhaseRole }): string {
+  if (phase.kind === 'custom') {
+    return `custom: "${phase.role}" (runs the ${templateForPhaseKind(phase.kind)} template)`;
+  }
+  return `${phase.kind} — ${phase.role}`;
+}
 
 function summarizeItemStates(ws: Workstream): string {
   const counts = new Map<string, number>();
@@ -49,7 +85,7 @@ function renderDraftProposal(draft: WorkstreamDraft): string {
   );
   lines.push('Phases:');
   draft.spec.phases.forEach((phase, i) => {
-    lines.push(`  ${i + 1}. ${phase.kind} — ${phase.role} (capacity ${phase.capacity})`);
+    lines.push(`  ${i + 1}. ${formatPhaseLabel(phase)} (capacity ${phase.capacity})`);
   });
   lines.push('Work items:');
   for (const item of draft.spec.items) {
@@ -61,6 +97,12 @@ function renderDraftProposal(draft: WorkstreamDraft): string {
       : `Approve with: /workstream approve ${draft.id}`,
   );
   lines.push(`Edit the task: /workstream edit ${draft.id} <new task...>   Discard: /workstream cancel ${draft.id}`);
+  // Honest limitation (see workstream-services.ts's REALITY-WINS doc): the
+  // engine has no pre-creation draft concept, so this proposal is
+  // process-lifetime, in-memory state only — never journaled like a launched
+  // Workstream is. State that plainly, the same way an unsent chat draft
+  // would be, rather than letting a restart silently make it vanish.
+  lines.push('Note: not saved — lost if the TUI restarts before launch.');
   return lines.join('\n');
 }
 
@@ -69,7 +111,7 @@ function renderWorkstreamStatus(ws: Workstream): string {
   lines.push(`Workstream ${ws.id} — "${ws.title}"`);
   lines.push('Phases:');
   for (const phase of ws.phases) {
-    lines.push(`  [${phase.ordinal}] ${phase.kind} — ${phase.role} (capacity ${phase.capacity})`);
+    lines.push(`  [${phase.ordinal}] ${formatPhaseLabel(phase)} (capacity ${phase.capacity})`);
   }
   lines.push('Items:');
   for (const item of ws.items) {
@@ -100,6 +142,21 @@ function resolveWorkstream(service: WorkstreamCommandService, ref: string): Work
   const exact = service.engine.getWorkstream(ref);
   if (exact) return exact;
   return service.engine.listWorkstreams().find((ws) => ws.id.startsWith(ref));
+}
+
+/**
+ * approve/edit/launch all fail this way when `id` doesn't resolve to a held
+ * draft. A bare "No pending proposal found" reads like a typo'd id even when
+ * the real cause is that drafts are process-lifetime, in-memory-only state
+ * (see renderDraftProposal's note and workstream-services.ts's REALITY-WINS
+ * doc) and a TUI restart wiped every one of them. Only hint at that when the
+ * service is holding zero drafts at all — with other drafts present, a typo
+ * or stale id is the more honest guess and the plain message stays.
+ */
+function draftNotFoundMessage(service: WorkstreamCommandService, id: string): string {
+  const base = `No pending proposal found: ${id}`;
+  if (service.listDrafts().length > 0) return base;
+  return `${base} (proposals aren't saved — a TUI restart since you created it would explain this; recreate it with /workstream create)`;
 }
 
 // ---------------------------------------------------------------------------
@@ -189,7 +246,7 @@ export function registerWorkstreamRuntimeCommands(registry: CommandRegistry): vo
         }
         const draft = service.approveDraft(id);
         if (!draft) {
-          ctx.print(`No pending proposal found: ${id}`);
+          ctx.print(draftNotFoundMessage(service, id));
           return;
         }
         ctx.print(`Approved ${id}. Launch with: /workstream launch ${id}`);
@@ -205,7 +262,7 @@ export function registerWorkstreamRuntimeCommands(registry: CommandRegistry): vo
         }
         const draft = service.editDraft(id, task);
         if (!draft) {
-          ctx.print(`No pending proposal found: ${id}`);
+          ctx.print(draftNotFoundMessage(service, id));
           return;
         }
         ctx.print(renderDraftProposal(draft));
@@ -220,7 +277,7 @@ export function registerWorkstreamRuntimeCommands(registry: CommandRegistry): vo
         }
         const draft = service.getDraft(id);
         if (!draft) {
-          ctx.print(`No pending proposal found: ${id}`);
+          ctx.print(draftNotFoundMessage(service, id));
           return;
         }
         if (!draft.approved) {
@@ -252,7 +309,7 @@ export function registerWorkstreamRuntimeCommands(registry: CommandRegistry): vo
           ctx.print(`No workstream or pending proposal found: ${id}`);
           return;
         }
-        const active = ws.items.filter((item) => ACTIVE_ITEM_STATES.has(item.state));
+        const active = ws.items.filter((item) => isActiveItemState(item.state));
         let killedCount = 0;
         for (const item of active) {
           if (service.engine.kill(item.id)) killedCount++;

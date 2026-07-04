@@ -89,11 +89,14 @@ function makeFakeEngine(seed: Workstream[] = []): OrchestrationEngine & { create
       return phase;
     },
     start: (id: string) => { startedIds.push(id); },
+    // Mirrors the real engine's kill() guard (engine.ts): only 'passed' and
+    // 'failed' are terminal — 'blocked-budget' (and every other non-terminal
+    // state) is killable, same as 'pending'/'awaiting-capacity'/'in-phase'.
     kill: (itemId: string) => {
       killedIds.push(itemId);
       for (const ws of workstreams.values()) {
         const item = ws.items.find((it) => it.id === itemId);
-        if (item && (item.state === 'pending' || item.state === 'awaiting-capacity' || item.state === 'in-phase')) {
+        if (item && item.state !== 'passed' && item.state !== 'failed') {
           item.state = 'failed';
           return true;
         }
@@ -240,6 +243,18 @@ describe('workstream-runtime — create', () => {
     expect(printed).toEqual(['Usage: /workstream create <task...>']);
     expect(service.listDrafts()).toHaveLength(0);
   });
+
+  test('create carries an honest note that the proposal is not saved and is lost on restart', async () => {
+    const registry = new CommandRegistry();
+    registerWorkstreamRuntimeCommands(registry);
+    const service = makeFakeService();
+    const { ctx, printed } = makeCtx(service);
+
+    await registry.execute('workstream', ['create', 'ship', 'the', 'thing'], ctx);
+
+    expect(printed[0]).toContain('not saved');
+    expect(printed[0]).toContain('restart');
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -307,6 +322,30 @@ describe('workstream-runtime — approve / edit / launch', () => {
     await registry.execute('workstream', ['launch', 'does-not-exist'], ctx);
 
     expect(printed.every((line) => line.includes('No pending proposal found'))).toBe(true);
+  });
+
+  test('unknown id with zero drafts held mentions a restart as the likely cause', async () => {
+    const registry = new CommandRegistry();
+    registerWorkstreamRuntimeCommands(registry);
+    const service = makeFakeService();
+    const { ctx, printed } = makeCtx(service);
+
+    await registry.execute('workstream', ['launch', 'does-not-exist'], ctx);
+
+    expect(printed.at(-1)).toContain('No pending proposal found');
+    expect(printed.at(-1)).toContain('restart');
+  });
+
+  test('unknown id with other drafts still held stays a plain not-found (no restart guess)', async () => {
+    const registry = new CommandRegistry();
+    registerWorkstreamRuntimeCommands(registry);
+    const service = makeFakeService();
+    const { ctx, printed } = makeCtx(service);
+    await registry.execute('workstream', ['create', 'a', 'real', 'draft'], ctx);
+
+    await registry.execute('workstream', ['launch', 'does-not-exist'], ctx);
+
+    expect(printed.at(-1)).toBe('No pending proposal found: does-not-exist');
   });
 });
 
@@ -424,5 +463,47 @@ describe('workstream-runtime — list / status / insert-phase / cancel', () => {
 
     expect(service.engine.killedIds).toEqual(['item-a']); // 'passed' item-b is already terminal — never targeted
     expect(printed.at(-1)).toContain('Cancelled 1 of 1');
+  });
+
+  test('cancel reaches blocked-budget items too — not just pending/awaiting-capacity/in-phase', async () => {
+    const live = makeWorkstream({
+      id: 'ws-blocked',
+      title: 'blocked target',
+      phases: [makePhase({ id: 'p1', ordinal: 0 })],
+      items: [
+        { id: 'item-blocked', title: 'stuck on budget', task: 'stuck on budget', currentPhaseId: 'p1', state: 'blocked-budget', allAgentIds: [], visits: new Map(), touchedPaths: [], usage: { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, llmCallCount: 0, turnCount: 0, toolCallCount: 0, costUsd: null, costState: 'unpriced' }, transportRetryCount: 0, createdAt: Date.now() },
+      ],
+    });
+    const service = makeFakeService([live]);
+    const { ctx, printed } = makeCtx(service);
+    const registry = new CommandRegistry();
+    registerWorkstreamRuntimeCommands(registry);
+
+    await registry.execute('workstream', ['cancel', 'ws-blocked'], ctx);
+
+    expect(service.engine.killedIds).toEqual(['item-blocked']);
+    expect(printed.at(-1)).toContain('Cancelled 1 of 1');
+    expect(printed.at(-1)).not.toContain('no in-flight work items');
+  });
+
+  test('status renders a custom insert-phase description honestly, not as a real role', async () => {
+    const live = makeWorkstream({
+      id: 'ws-custom',
+      title: 'custom target',
+      phases: [makePhase({ id: 'p1', ordinal: 0 })],
+    });
+    const service = makeFakeService([live]);
+    const { ctx, printed } = makeCtx(service);
+    const registry = new CommandRegistry();
+    registerWorkstreamRuntimeCommands(registry);
+    await registry.execute('workstream', ['insert-phase', 'ws-custom', 'security', 'audit'], ctx);
+
+    await registry.execute('workstream', ['status', 'ws-custom'], ctx);
+
+    const output = printed.at(-1)!;
+    expect(output).toContain('custom: "security audit"');
+    expect(output).toContain('engineer template');
+    // Must not render the free text as if it were a real phase role like "custom — security audit".
+    expect(output).not.toContain('custom — security audit');
   });
 });
