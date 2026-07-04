@@ -1,23 +1,24 @@
 // ---------------------------------------------------------------------------
 // ecosystem-modals-golden.test.ts — golden frames for the W6.1 group-B
-// (ecosystem & governance) modal surfaces migrated off retired panels.
+// (ecosystem & governance) modal surfaces, RE-BASELINED through the canonical
+// config-modal host (group-B port, WO-P).
 //
-// Self-contained harness (a minimal copy of golden-frames.test.ts's encoder)
-// so this suite is fully decoupled from golden-frames.test.ts — it is edited
-// concurrently by WO-A, and keeping my additions in their own file avoids a
-// merge hotspot. Goldens land in the shared golden-frames/ dir. Existing
-// goldens (splash, fleet, settings, …) are never read or written here.
+// Each surface is opened in a real ConfigModal and rendered via
+// renderConfigModal → ModalFactory (the exact production render path), rather
+// than the retired BoundModalSurface.buildConfig() bridge. Each surface gets a
+// normal (100 wide) and hostile (28 wide) pair. The 24 committed goldens are
+// the same file names as before — re-baselined in place, per-file justification
+// "re-baselined through canonical config-modal host (group-B port)".
 //
-// Each NEW modal surface gets a normal (100 wide) and hostile (28 wide) pair,
-// rendered from a frozen deterministic fixture via ModalFactory.createModal.
 // Update path: GOODVIBES_UPDATE_GOLDENS=1 bun test <this file>.
 // ---------------------------------------------------------------------------
 
 import { describe, test, expect } from 'bun:test';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { ModalFactory } from '../../renderer/modal-factory.ts';
-import { EMPTY_VIEW, type BoundModalSurface } from '../../panels/modals/modal-surface.ts';
+import { ConfigModal } from '../../input/config-modal.ts';
+import { renderConfigModal } from '../../renderer/config-modal.ts';
+import type { ConfigModalSurface } from '../../input/config-modal-types.ts';
 import { marketplaceModalGoldenSurface } from '../../panels/modals/marketplace-modal.ts';
 import { pluginsModalGoldenSurface } from '../../panels/modals/plugins-modal.ts';
 import { skillsModalGoldenSurface } from '../../panels/modals/skills-modal.ts';
@@ -34,6 +35,7 @@ import type { Cell, Line } from '../../types/grid.ts';
 
 const GOLDENS_DIR = new URL('./golden-frames/', import.meta.url).pathname;
 const UPDATE = process.env['GOODVIBES_UPDATE_GOLDENS'] === '1';
+const HEIGHT = 40;
 
 function snapshotEncode(surface: string, lines: Line[]): string {
   const height = lines.length;
@@ -65,60 +67,39 @@ function assertGolden(surface: string, lines: Line[]): void {
     writeFileSync(path, actual, 'utf-8');
     return;
   }
-  if (!existsSync(path)) {
-    throw new Error(`[${surface}] golden file missing. Run with GOODVIBES_UPDATE_GOLDENS=1 to generate.`);
-  }
+  if (!existsSync(path)) throw new Error(`[${surface}] golden file missing. Run with GOODVIBES_UPDATE_GOLDENS=1 to generate.`);
   const expected = readFileSync(path, 'utf-8');
-  if (expected !== actual) {
-    throw new Error(`[${surface}] golden-frame mismatch. Run with GOODVIBES_UPDATE_GOLDENS=1 to regenerate.`);
-  }
+  if (expected !== actual) throw new Error(`[${surface}] golden-frame mismatch. Run with GOODVIBES_UPDATE_GOLDENS=1 to regenerate.`);
 }
 
-function renderSurface(surface: BoundModalSurface, width: number): Line[] {
-  return ModalFactory.createModal(surface.buildConfig(EMPTY_VIEW), width);
+/** Open a surface in the real host and render it — the production render path. */
+function renderSurface(surface: ConfigModalSurface, width: number): Line[] {
+  const modal = new ConfigModal();
+  modal.open(surface, () => {});
+  const lines = renderConfigModal(modal, width, HEIGHT);
+  modal.close();
+  return lines;
 }
 
-/**
- * Registry of migrated group-B modal surfaces. Each entry is individually
- * justified in the WO-B report. `factory` must return a surface whose render
- * is deterministic (no wall-clock, no live disk after refresh()).
- */
 interface GoldenModalEntry {
   readonly name: string;
-  // Async allowed: Promise-backed surfaces (planning) await their initial load
-  // in the fixture so the render is deterministic without a test-only hook.
-  readonly factory: () => BoundModalSurface | Promise<BoundModalSurface>;
+  readonly factory: () => ConfigModalSurface | Promise<ConfigModalSurface>;
 }
 
 const GOLDEN_MODALS: readonly GoldenModalEntry[] = [
-  // Each entry is a NEW modal surface migrated from a retired group-B panel;
-  // normal (100w) + hostile (28w) pair, individually justified below.
-
-  // marketplace: locks the B30 honest empty-state copy (local publish/import
-  // catalog, not a remote store) byte-for-byte — migrated from panel `marketplace`.
+  // marketplace: locks the B30 honest empty-state copy byte-for-byte INSIDE the host render.
   { name: 'marketplace-modal', factory: marketplaceModalGoldenSurface },
-  // plugins: trust/quarantine/capability roster view — migrated from panel `plugins`.
   { name: 'plugins-modal', factory: pluginsModalGoldenSurface },
-  // skills: project-local/global skill discovery view — migrated from panel `skills`.
   { name: 'skills-modal', factory: skillsModalGoldenSurface },
-  // hooks: registered hooks/chains/contracts view — migrated from panel `hooks`.
   { name: 'hooks-modal', factory: hooksModalGoldenSurface },
-  // security: token-audit/policy-posture/MCP-quarantine review — migrated from panel `security`.
   { name: 'security-modal', factory: securityModalGoldenSurface },
-  // policy: governance bundles/gate/rollout-history view — migrated from panel `policy`.
   { name: 'policy-modal', factory: policyModalGoldenSurface },
-  // knowledge: SDK knowledge-graph nodes/sources/issue-queue — migrated from panel `knowledge`.
   { name: 'knowledge-modal', factory: knowledgeModalGoldenSurface },
-  // memory: project memory decisions/constraints/patterns — migrated from panel `memory`.
   { name: 'memory-modal', factory: memoryModalGoldenSurface },
-  // work-plan: persistent workspace checklist — migrated from panel `work-plan`.
   { name: 'work-plan-modal', factory: workPlanModalGoldenSurface },
-  // keybindings: docs (tools/models) + shortcuts-overlay reference merged into
-  // one modal — migrated from panel `docs` (merges shortcuts-overlay content).
   { name: 'keybindings-modal', factory: keybindingsModalGoldenSurface },
-  // pairing: companion-app pairing (QR + connection info) — migrated from panel `qr-code`.
   { name: 'pairing-modal', factory: pairingModalGoldenSurface },
-  // planning: passive project-planning artifacts — migrated from panel `project-planning`.
+  // planning: Promise-backed surface (awaits its initial async load in the fixture).
   { name: 'planning-modal', factory: planningModalGoldenSurface },
 ];
 
@@ -128,7 +109,7 @@ const SIZES = [
 ] as const;
 
 for (const entry of GOLDEN_MODALS) {
-  describe(`ecosystem-modal golden — ${entry.name}`, () => {
+  describe(`group-B modal golden (host-rendered) — ${entry.name}`, () => {
     for (const size of SIZES) {
       const surfaceName = `${entry.name}-${size.label}`;
       test(`${size.label} width matches committed golden`, async () => {
