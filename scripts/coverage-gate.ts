@@ -35,7 +35,11 @@ export interface CoverageSummary {
  * Column order is File | % Funcs | % Lines per the bun text reporter.
  */
 export function parseCoverageSummary(output: string): CoverageSummary | null {
-  for (const line of output.split("\n")) {
+  // The nested bun process colorizes the table when FORCE_COLOR is present in
+  // the environment (even empty), which broke the startsWith match below.
+  // Parse color-blind: the gate must not depend on the caller's shell.
+  const plain = output.replace(/\x1b\[[0-9;]*m/g, "");
+  for (const line of plain.split("\n")) {
     const trimmed = line.trim();
     if (!trimmed.startsWith("All files")) continue;
     const cells = trimmed.split("|").map((cell) => cell.trim());
