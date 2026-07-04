@@ -9,6 +9,8 @@
 // ---------------------------------------------------------------------------
 
 import { describe, expect, test } from 'bun:test';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import type { ProcessNode } from '@pellux/goodvibes-sdk/platform/runtime/fleet';
 import {
   parseAgentLedger,
@@ -19,6 +21,8 @@ import {
 import { MessageLineCache } from '../../core/conversation-line-cache.ts';
 import { linesToText } from '../setup.ts';
 import type { FleetTreeRow } from '../../panels/fleet-read-model.ts';
+
+const LEDGER_FIXTURE_PATH = join(import.meta.dir, 'fixtures', 'agent-ledger-sample.jsonl');
 
 describe('renderFleetAgentTranscript', () => {
   test("a non-empty snapshot on a RUNNING agent renders content and reports mode 'live'", () => {
@@ -45,6 +49,39 @@ describe('renderFleetAgentTranscript', () => {
     );
     expect(result.mode).toBe('frozen');
     expect(linesToText(result.lines).some((l) => l.includes('hello frozen'))).toBe(true);
+  });
+
+  test("a 'frozen' transcript carries an honest read-only notice (W3.3 design point 4) that a 'live' one does not", () => {
+    const frozen = renderFleetAgentTranscript(
+      [{ role: 'user', content: 'done agent content' }],
+      /* isTerminal */ true,
+      new MessageLineCache(),
+      80,
+      20,
+      null,
+    );
+    expect(linesToText(frozen.lines).some((l) => l.includes('Read-only'))).toBe(true);
+    expect(linesToText(frozen.lines).some((l) => l.includes('not a live view'))).toBe(true);
+
+    const live = renderFleetAgentTranscript(
+      [{ role: 'user', content: 'running agent content' }],
+      /* isTerminal */ false,
+      new MessageLineCache(),
+      80,
+      20,
+      null,
+    );
+    expect(linesToText(live.lines).some((l) => l.includes('Read-only'))).toBe(false);
+  });
+
+  test("the frozen notice reserves its own row instead of pushing tail-window content out of a tight height budget", () => {
+    const messages = Array.from({ length: 40 }, (_, i) => ({ role: 'user' as const, content: `message ${i}` }));
+    const result = renderFleetAgentTranscript(messages, /* isTerminal */ true, new MessageLineCache(), 80, 5, null);
+    expect(result.lines.length).toBeLessThanOrEqual(5);
+    const text = linesToText(result.lines);
+    expect(text.some((l) => l.includes('Read-only'))).toBe(true);
+    // The most recent message is still visible alongside the notice.
+    expect(text.some((l) => l.includes('message 39'))).toBe(true);
   });
 
   test("an empty snapshot on a TERMINAL agent reports mode 'unavailable' with no lines (caller degrades to the ledger fallback)", () => {
@@ -152,5 +189,72 @@ describe('renderFleetLedgerFallback', () => {
     const entries = Array.from({ length: 30 }, (_, i) => ({ type: 'llm_request', turn: i }));
     const lines = renderFleetLedgerFallback(entries, 80, 5);
     expect(lines.length).toBeLessThanOrEqual(5);
+  });
+
+  test('shows a truncated result preview for a successful tool_execution row (W3.3: "genuinely useful", not just a name)', () => {
+    const lines = linesToText(renderFleetLedgerFallback(
+      [{ type: 'tool_execution', toolName: 'Read', success: true, resultPreview: 'line one\nline two of file content' }],
+      80,
+      20,
+    ));
+    expect(lines.some((l) => l.includes('Read') && l.includes('line one'))).toBe(true);
+  });
+
+  test('a tool_execution row with no resultPreview still renders (older/degraded entries do not crash)', () => {
+    const lines = linesToText(renderFleetLedgerFallback([{ type: 'tool_execution', toolName: 'Read', success: true }], 80, 20));
+    expect(lines.some((l) => l.includes('Read'))).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// W3.3 — a real fixture matching the SDK writer's exact message vocabulary
+// (goodvibes-sdk packages/sdk/src/platform/agents/session.ts's `meta` message
+// and orchestrator-runner.ts's session_config/llm_request/llm_response/
+// tool_execution/session_end messages — see this test's fixture file for the
+// exact field names each type carries). Exercises parseAgentLedger +
+// renderFleetLedgerFallback end-to-end against on-disk content rather than
+// only hand-built entry objects, so a real drift between the writer's shape
+// and this reader's assumptions would show up here.
+// ---------------------------------------------------------------------------
+
+describe('ledger fallback — real fixture (writer-shape regression)', () => {
+  test('parses every line of a realistic multi-turn agent ledger', () => {
+    const raw = readFileSync(LEDGER_FIXTURE_PATH, 'utf-8');
+    const entries = parseAgentLedger(raw);
+    expect(entries).toHaveLength(9);
+    expect(entries[0]!['type']).toBe('meta');
+    expect(entries.at(-1)!['type']).toBe('session_end');
+  });
+
+  test('renders an honest, information-dense activity log from the fixture: model, task, tool previews, and the final outcome', () => {
+    const raw = readFileSync(LEDGER_FIXTURE_PATH, 'utf-8');
+    const entries = parseAgentLedger(raw);
+    const lines = linesToText(renderFleetLedgerFallback(entries, 100, 30));
+    const text = lines.join('\n');
+
+    // Read-only / not-a-transcript framing (design point 4).
+    expect(text).toContain('Read-only');
+    expect(text).toContain('Full transcript unavailable');
+
+    // meta — model/provider.
+    expect(text).toContain('claude-sonnet-5');
+    expect(text).toContain('anthropic');
+
+    // session_config — the task.
+    expect(text).toContain('Fix the flaky retry test');
+
+    // llm_request/llm_response — per-turn counts (request/response accounting).
+    expect(text).toContain('turn 1');
+    expect(text).toContain('turn 2');
+
+    // tool_execution — success WITH preview, and failure WITH preview + "(failed)".
+    expect(text).toContain('Read');
+    expect(text).toContain("import { retry }");
+    expect(text).toContain('Edit (failed)');
+    expect(text).toContain('old_string not found');
+
+    // session_end — honest final status + timing, not fabricated.
+    expect(text).toContain('failed');
+    expect(text).toMatch(/\d+(\.\d+)?s/); // formatElapsed(2700ms) renders a seconds-based duration
   });
 });
