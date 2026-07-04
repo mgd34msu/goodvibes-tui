@@ -67,7 +67,7 @@ export function registerPlanningRuntimeCommands(registry: CommandRegistry): void
 
       const projectPlanningService = ctx.workspace.projectPlanningService;
       const projectId = ctx.workspace.projectPlanningProjectId;
-      const openProjectPlanningPanel = () => openModalCommand(ctx, 'planning');
+      const openProjectPlanningPanel = () => openModalCommand(ctx, 'planning-modal');
 
       if (args.length === 0) {
         if (projectPlanningService && projectId) {

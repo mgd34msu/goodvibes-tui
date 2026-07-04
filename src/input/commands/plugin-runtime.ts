@@ -33,7 +33,7 @@ export function registerPluginRuntimeCommands(registry: CommandRegistry): void {
       const sub = args[0];
 
       if (!sub || sub === 'open' || sub === 'panel') {
-        openModalCommand(ctx, 'plugins');
+        openModalCommand(ctx, 'plugins-modal');
         return;
       }
 

@@ -4,7 +4,6 @@ import { createFleetReadModel } from '../fleet-read-model.ts';
 import { LocalAuthPanel } from '../local-auth-panel.ts';
 import type { ResolvedBuiltinPanelDeps } from './shared.ts';
 import { requireUiServices } from './shared.ts';
-import { registerEcosystemModalRedirects } from '../modals/modal-surface.ts';
 
 // WO-152: the former single 'monitoring' category (33 panels pre-merge) is
 // split into five operator domains, applied per-registration below. Kept in
@@ -28,10 +27,10 @@ import { registerEcosystemModalRedirects } from '../modals/modal-surface.ts';
 // sandbox) migrated to config-modal surfaces registered in builtin-modals.ts
 // (WO-A); the Ecosystem & Governance group (plugins, skills, hooks, security,
 // marketplace, policy, knowledge, memory, docs, qr-code, work-plan,
-// project-planning) migrated to config-modal surfaces (WO-B). All are reached
-// via their panel ids' modal redirects (registerEcosystemModalRedirects below,
-// plus the WO-A redirects in builtin-modals.ts). local-auth is a DELIBERATE
-// EXCEPTION — see its registration below.
+// project-planning) migrated to config-modal surfaces (WO-P). All surfaces AND
+// their panel-id redirects are registered centrally in registerBuiltinModals
+// (builtin-modals.ts) now — the interim ecosystem redirect bridge was deleted
+// with the group-B port. local-auth is a DELIBERATE EXCEPTION — see below.
 export function registerOperationsPanels(manager: PanelManager, deps: ResolvedBuiltinPanelDeps): void {
   const ui = requireUiServices(deps);
 
@@ -104,11 +103,4 @@ export function registerOperationsPanels(manager: PanelManager, deps: ResolvedBu
     description: 'Local daemon/listener auth users, bootstrap posture, and active sessions (also the masked password-entry host)',
     factory: () => new LocalAuthPanel(deps.localUserAuthManager),
   });
-
-  // W6.1 (the purge) — group B: register the ecosystem/governance panel→modal
-  // redirects so `/panel open <id>` and saved layouts resolve to the modal
-  // (via the injected openModal callback) instead of a retired panel. Config +
-  // dispatch registration with the config-modal host is a separate one-call
-  // step (registerBuiltinModals in builtin-modals.ts) wired by the integrator.
-  registerEcosystemModalRedirects(manager);
 }
