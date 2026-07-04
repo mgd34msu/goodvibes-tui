@@ -205,6 +205,22 @@ describe('ConfigModal host', () => {
     expect(modal.fireAction('z', ctx)).toBe(false);
   });
 
+  // DEBT-3: the generic submitInput seam is threaded into the action context so
+  // a surface can hand free-form text to the chat/model turn path.
+  test('fireAction threads submitInput into the action context', () => {
+    let received: string | null = null;
+    const modal = new ConfigModal();
+    modal.open(makeSurface({
+      view: () => ({ title: 'T', tabs: [{ id: 'a', label: 'A', rows: [{ id: 'u1', label: 'user' }] }] }),
+      actions: [{ key: 's', id: 'send', label: 'send' }],
+      onAction: (_id, ctx) => { ctx.submitInput?.('hello world'); },
+    }));
+    const submitted: string[] = [];
+    expect(modal.fireAction('s', { print: () => {}, executeCommand: undefined, submitInput: (t) => submitted.push(t) })).toBe(true);
+    received = submitted[0] ?? null;
+    expect(received).toBe('hello world');
+  });
+
   test('enabledFor gates an action to matching rows', () => {
     const fired: string[] = [];
     const modal = new ConfigModal();

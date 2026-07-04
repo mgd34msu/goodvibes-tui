@@ -20,16 +20,19 @@ import { buildAnswerActions, isGenericRecommendation, type PlanningAnswerAction 
 // ---------------------------------------------------------------------------
 // Project Planning → 'planning' config-modal surface (W6.1 group-B port). Shows
 // readiness/questions/decisions/task-graph/handoff — read-only except choosing
-// and submitting an answer to the current open question, approving execution,
-// or refreshing. Submit/approve route to the `/plan` command.
+// an answer to the current open question, approving execution, dismissing the
+// plan, or refreshing.
 //
-// KNOWN GAP (flagged in the report): `/plan` has no subcommand that answers the
-// CURRENT open question. The live app calls a submitPlanningAnswer callback that
-// feeds the answer through the normal chat prompt — the action context has no
-// such seam. Lacking a slash-command equivalent, submit routes the chosen answer
-// text through `/plan <answer text>` (the free-form branch, which RESEEDS the
-// goal rather than resolving the specific question) — a known-imprecise
-// stand-in, surfaced honestly in an in-modal note.
+// DEBT-3 — the seams are now real:
+//   - A CANNED answer to a real open question dispatches `/plan answer <id> <text>`
+//     (records it; the open-question gap clears on the next refine).
+//   - The CUSTOM free-form typed answer (and any answer to a synthetic readiness
+//     question with no open-question record) is submitted to chat via the generic
+//     `submitInput` seam — a real model turn. ORDERING GUARD: the modal closes
+//     BEFORE the turn starts (a turn under a live modal is the modal-liveness
+//     hazard). No more `/plan <text>` reseed approximation.
+//   - Dismiss is a first-class CONFIRMED action (`d`) dispatching `/plan dismiss`,
+//     plus the plain Esc close (planning unchanged).
 // ---------------------------------------------------------------------------
 
 export type PlanningModalService = Pick<ProjectPlanningService, 'status' | 'getState' | 'listDecisions' | 'getLanguage' | 'evaluate'>;
@@ -134,6 +137,7 @@ class PlanningModalSurface implements ConfigModalSurface {
   readonly actions = [
     { key: 'enter', id: 'submit', label: 'submit', enabledFor: () => this.currentAnswerActions().actions.length > 0 },
     { key: 'a', id: 'approve', label: 'approve execution' },
+    { key: 'd', id: 'dismiss', label: 'dismiss planning', confirm: true },
     { key: 'r', id: 'refresh', label: 'refresh' },
   ];
 
@@ -199,7 +203,7 @@ class PlanningModalSurface implements ConfigModalSurface {
       for (const action of actions) {
         rows.push({ id: action.id, label: `${action.label} - ${action.detail}`, ...(action.disabled ? { selectable: false } : {}) });
       }
-      line({ content: 'Note: submit reseeds the plan goal via /plan <text> (no per-question answer command exists yet).', fg: undefined });
+      line({ content: 'Enter records a canned answer against this question; the custom row submits your typed text to chat.', fg: undefined });
     }
 
     for (const l of buildGapsLines(evaluation)) line(l);
@@ -209,31 +213,49 @@ class PlanningModalSurface implements ConfigModalSurface {
 
     return {
       title: 'Planning',
-      tabs: [{ id: 'planning', label: 'Planning', header, rows, hints: [...(question ? ['enter submit'] : []), 'a approve execution'] }],
+      tabs: [{ id: 'planning', label: 'Planning', header, rows }],
     };
   }
 
   onAction(id: string, ctx: ConfigModalActionContext): void {
     if (id === 'refresh') { this.refresh(); ctx.setStatus('Reloading project planning state…'); return; }
     if (id === 'approve') { void ctx.executeCommand?.('plan', ['approve']); ctx.setStatus('Dispatched /plan approve.'); return; }
+    if (id === 'dismiss') {
+      // First-class, confirmed (host two-press) mutating dismiss.
+      void ctx.executeCommand?.('plan', ['dismiss']);
+      ctx.setStatus('Dispatched /plan dismiss.');
+      ctx.close();
+      return;
+    }
     if (id !== 'submit') return;
     const { question, actions } = this.currentAnswerActions();
     if (!question || actions.length === 0) return;
     const action = ctx.row ? actions.find((a) => a.id === ctx.row!.id) : undefined;
-    if (!action || action.disabled || !action.answer.trim()) { ctx.print('Choose a non-empty answer option.'); return; }
+    if (!action || action.disabled) { ctx.print('Choose an answer option.'); return; }
     if (action.kind === 'approve') { void ctx.executeCommand?.('plan', ['approve']); ctx.setStatus('Dispatched /plan approve.'); return; }
-    if (action.kind === 'dismiss') {
-      // There is NO `/plan dismiss` subcommand. Dispatching it fell through to
-      // planning-runtime's free-form goal-seed branch and OVERWROTE the project
-      // goal with the literal string "dismiss". Do not dispatch and do not
-      // mutate any state — print an honest note and close the panel. Planning
-      // is untouched (matching the relabeled "Close (planning unchanged)" row).
-      ctx.print('Pausing project planning isn\'t available as a command yet; planning state left unchanged. Closing the panel.');
-      ctx.close();
+
+    const answerText = action.answer.trim();
+    if (!answerText) { ctx.print('Choose a non-empty answer, or type an answer for the custom row.'); return; }
+
+    // A canned answer to a REAL open question records structurally via /plan answer.
+    const isOpenQuestion = this.snapshot?.state?.openQuestions.some(
+      (q) => q.id === question.id && (q.status ?? 'open') === 'open',
+    ) ?? false;
+    if (action.id !== 'custom' && isOpenQuestion) {
+      void ctx.executeCommand?.('plan', ['answer', question.id, ...answerText.split(/\s+/)]);
+      ctx.setStatus('Dispatched /plan answer for the current question.');
       return;
     }
-    void ctx.executeCommand?.('plan', action.answer.trim().split(/\s+/));
-    ctx.setStatus(`Dispatched /plan ${action.answer.trim()} (reseeds the goal — see the in-modal note).`);
+
+    // Free-form (custom typed) answer, or an answer to a synthetic readiness
+    // question with no open-question record → submit to chat as a real turn.
+    // ORDERING GUARD: close the modal BEFORE the turn starts (modal-liveness).
+    if (ctx.submitInput) {
+      ctx.close();
+      ctx.submitInput(answerText);
+      return;
+    }
+    ctx.print('Submitting to chat is unavailable in this runtime; answer left unsent.');
   }
 }
 

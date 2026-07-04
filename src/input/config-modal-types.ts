@@ -89,6 +89,17 @@ export interface ConfigModalActionContext {
    *  services surface jumping to the subscription surface). Swaps the active
    *  surface in place — the same seam ctx.openModal uses. */
   readonly openModal?: (name: string) => void;
+  /**
+   * Submit text to the chat/model as a real user turn — the same composer
+   * submission seam `handleUserInput` uses (threaded from CommandContext.submitInput).
+   * Generic across surfaces (any modal may hand free-form input to the model).
+   *
+   * ORDERING GUARD: a turn must never start while a modal owns the keyboard —
+   * that is the modal-liveness hazard (a live turn painting under a modal that
+   * still captures keys). Callers MUST `close()` the modal BEFORE invoking
+   * `submitInput`. The planning modal's free-form submit follows this ordering.
+   */
+  readonly submitInput?: (text: string) => void;
   /** Request a re-render. */
   readonly requestRender: () => void;
   /** Set the modal's transient status line (e.g. a result or error message). */

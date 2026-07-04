@@ -229,6 +229,7 @@ export class ConfigModal {
       print: ctx.print,
       executeCommand: ctx.executeCommand,
       openModal: ctx.openModal,
+      submitInput: ctx.submitInput,
       requestRender: this.requestRender,
       setStatus: (m: string) => { this.statusMessage = m; },
       close: () => this.close(),
