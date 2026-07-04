@@ -1,9 +1,7 @@
 import { join } from 'node:path';
 import { FocusTracker } from '../core/focus-tracker.ts';
-import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
+import { ConfigManager, ServiceRegistry, SubscriptionManager, ToolLLM } from '@pellux/goodvibes-sdk/platform/config';
 import { SecretsManager } from '../config/secrets.ts';
-import { ServiceRegistry } from '@pellux/goodvibes-sdk/platform/config';
-import { SubscriptionManager } from '@pellux/goodvibes-sdk/platform/config';
 import { AutomationDeliveryManager, AutomationManager, AutomationRouteStore } from '@pellux/goodvibes-sdk/platform/automation';
 import { ChannelDeliveryRouter, ChannelPluginRegistry, ChannelPolicyManager, RouteBindingManager, SurfaceRegistry } from '@pellux/goodvibes-sdk/platform/channels';
 import { ApprovalBroker, GatewayMethodCatalog, SharedSessionBroker } from '@pellux/goodvibes-sdk/platform/control-plane';
@@ -23,10 +21,9 @@ import {
 } from '@pellux/goodvibes-sdk/platform/knowledge';
 import { MediaProviderRegistry, ensureBuiltinMediaProviders } from '@pellux/goodvibes-sdk/platform/media';
 import { MultimodalService } from '@pellux/goodvibes-sdk/platform/multimodal';
-import { AgentManager } from '@pellux/goodvibes-sdk/platform/tools';
 import { AgentMessageBus, AgentOrchestrator, ArchetypeLoader, WrfcController } from '@pellux/goodvibes-sdk/platform/agents';
-import { ProcessManager } from '@pellux/goodvibes-sdk/platform/tools';
-import { FileUndoManager, MemoryRegistry, MemoryStore, ModeManager } from '@pellux/goodvibes-sdk/platform/state';
+import { AgentManager, OverflowHandler, ProcessManager, createWorkflowServices, type WorkflowServices } from '@pellux/goodvibes-sdk/platform/tools';
+import { FileStateCache, FileUndoManager, MemoryEmbeddingProviderRegistry, MemoryRegistry, MemoryStore, ModeManager, ProjectIndex, type CodeIndexStore } from '@pellux/goodvibes-sdk/platform/state';
 import { WorkspaceCheckpointManager } from '@pellux/goodvibes-sdk/platform/workspace';
 import type { RuntimeEventBus } from '@/runtime/index.ts';
 import { createDomainDispatch } from './store/index.ts';
@@ -36,31 +33,20 @@ import { RemoteRunnerRegistry, RemoteSupervisor } from '@/runtime/index.ts';
 import { IntegrationHelperService } from '@/runtime/index.ts';
 import { VoiceProviderRegistry, VoiceService, ensureBuiltinVoiceProviders } from '@pellux/goodvibes-sdk/platform/voice';
 import { WebSearchProviderRegistry, WebSearchService } from '@pellux/goodvibes-sdk/platform/web-search';
-import { MemoryEmbeddingProviderRegistry } from '@pellux/goodvibes-sdk/platform/state';
 import { PanelManager } from '../panels/panel-manager.ts';
 import { HookActivityTracker } from '@pellux/goodvibes-sdk/platform/hooks';
 import { HookDispatcher, createHookWorkbench, type HookWorkbench } from '@pellux/goodvibes-sdk/platform/hooks';
 import { PluginManager } from '@pellux/goodvibes-sdk/platform/plugins';
 import { BookmarkManager } from '@pellux/goodvibes-sdk/platform/bookmarks';
 import { ProfileManager } from '@pellux/goodvibes-sdk/platform/profiles';
-import { SessionManager } from '@pellux/goodvibes-sdk/platform/sessions';
-import { CrossSessionTaskRegistry } from '@pellux/goodvibes-sdk/platform/sessions';
+import { SessionManager, CrossSessionTaskRegistry, SessionChangeTracker } from '@pellux/goodvibes-sdk/platform/sessions';
 import { ApiTokenAuditor, UserAuthManager } from '@pellux/goodvibes-sdk/platform/security';
 import { WebhookNotifier } from '@pellux/goodvibes-sdk/platform/integrations';
 import { McpRegistry } from '@pellux/goodvibes-sdk/platform/mcp';
-import { DeterministicReplayEngine } from '@pellux/goodvibes-sdk/platform/core';
 import { BenchmarkStore, CacheHitTracker, FavoritesStore, inferFallbackContextWindow, type ModelDefinition, ModelLimitsService, ProviderCapabilityRegistry, ProviderOptimizer, ProviderRegistry } from '@pellux/goodvibes-sdk/platform/providers';
 import { KeybindingsManager } from '../input/keybindings.ts';
-import { SessionMemoryStore } from '@pellux/goodvibes-sdk/platform/core';
-import { SessionLineageTracker } from '@pellux/goodvibes-sdk/platform/core';
-import { SessionChangeTracker } from '@pellux/goodvibes-sdk/platform/sessions';
-import { ExecutionPlanManager } from '@pellux/goodvibes-sdk/platform/core';
-import { AdaptivePlanner } from '@pellux/goodvibes-sdk/platform/core';
-import { FileStateCache } from '@pellux/goodvibes-sdk/platform/state';
-import { ProjectIndex } from '@pellux/goodvibes-sdk/platform/state';
+import { AdaptivePlanner, DeterministicReplayEngine, ExecutionPlanManager, SessionLineageTracker, SessionMemoryStore } from '@pellux/goodvibes-sdk/platform/core';
 import { IdempotencyStore } from '@/runtime/index.ts';
-import { OverflowHandler } from '@pellux/goodvibes-sdk/platform/tools';
-import { ToolLLM } from '@pellux/goodvibes-sdk/platform/config';
 import { ComponentHealthMonitor } from '@/runtime/index.ts';
 import { WorktreeRegistry } from '@/runtime/index.ts';
 import { SandboxSessionRegistry } from '@/runtime/index.ts';
@@ -69,13 +55,10 @@ import { isFeatureFlagEnabled } from './surface-feature-flags.ts';
 import type { FeatureFlagManager } from '@/runtime/index.ts';
 import { createFeatureFlagManager } from '@/runtime/index.ts';
 import { PolicyRuntimeState } from '@/runtime/index.ts';
-import {
-  createWorkflowServices,
-  type WorkflowServices,
-} from '@pellux/goodvibes-sdk/platform/tools';
 import { createProcessRegistry, type ProcessRegistry } from '@pellux/goodvibes-sdk/platform/runtime/fleet';
 import { calcSessionCost, isModelPriced } from '../export/cost-utils.ts';
 import { createWorkstreamServices, type OrchestrationEngine, type WorkstreamCommandService } from './workstream-services.ts';
+import { codeIndexDbPath, createCodeIndexServices } from './code-index-services.ts';
 import { WorkPlanStore } from '../work-plans/work-plan-store.ts';
 import {
   registerDaemonHandlers,
@@ -242,6 +225,8 @@ export interface RuntimeServices {
   /** Wave 4 (wo703): the phase/work-item orchestration engine — see runtime/workstream-services.ts. */
   readonly orchestrationEngine: OrchestrationEngine;
   readonly workstreamCommands: WorkstreamCommandService;
+  /** Wave 5 (wo804): the repo source-tree code index — see runtime/code-index-services.ts. */
+  readonly codeIndexStore: CodeIndexStore;
   /** W2.1/W2.2: unified live process registry (agents, WRFC chains, workflows, watchers, background processes) backing the Fleet panel. */
   readonly processRegistry: ProcessRegistry;
   readonly modeManager: ModeManager;
@@ -612,6 +597,10 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
   const { orchestrationEngine, workstreamCommands } = createWorkstreamServices({
     agentManager, configManager, adaptivePlanner, runtimeBus: options.runtimeBus, projectRoot: workingDirectory,
   });
+  // Wave 5 (wo804): repo source-tree code index, sharing memoryEmbeddingRegistry
+  // with MemoryStore above. Auto-build is config-gated (default off) — see
+  // code-index-services.ts's header doc.
+  const { codeIndexStore } = createCodeIndexServices({ workingDirectory, configManager, memoryEmbeddingRegistry });
   // W2.1/W2.2: one shared process registry aggregating the managers above —
   // the Fleet panel (panels/fleet-read-model.ts) is its first consumer.
   // Constructed once here (not per-consumer) so the coalesced tick and the
@@ -620,6 +609,7 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
     agentManager,
     wrfcController,
     orchestrationEngine, // Wave 4 (wo703): folds workstream/phase/work-item nodes into the fleet
+    codeIndexService: codeIndexStore, // Wave 5 (wo804): folds a single 'code-index' node into the fleet
     processManager,
     watcherRegistry,
     workflow,
@@ -784,6 +774,7 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
     processManager,
     orchestrationEngine,
     workstreamCommands,
+    codeIndexStore,
     processRegistry,
     modeManager,
     fileUndoManager,
@@ -792,6 +783,9 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
     async rerootStores(newWorkingDir: string): Promise<void> {
       const newMemoryDbPath = join(newWorkingDir, '.goodvibes', 'tui', 'memory.sqlite');
       await memoryStore.reroot(newMemoryDbPath);
+      // Wave 5 (wo804) risk #7: the code index must follow memory to the new
+      // tree, or it keeps pointing at the old working directory.
+      await codeIndexStore.reroot(newWorkingDir, codeIndexDbPath(newWorkingDir));
       await projectIndex.reroot(newWorkingDir);
     },
   };
