@@ -29,23 +29,27 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import './contract/skills-panel.contract.ts';
-import './contract/hooks-panel.contract.ts';
-import './contract/security-panel.contract.ts';
 import './contract/plugins-panel.contract.ts';
 import './contract/local-auth-panel.contract.ts';
 import './contract/git-panel.contract.ts';
 import './contract/diff-panel.contract.ts';
 import './contract/token-budget-panel.contract.ts';
-import './contract/project-planning-panel.contract.ts';
-import './contract/memory-panel.contract.ts';
-import './contract/knowledge-graph-panel.contract.ts';
-import './contract/marketplace-panel.contract.ts';
+
+// W6.1 (the purge) — the two config-modal migrations combined: WO-A removed
+// the services/subscription/settings-sync contract modules (sandbox, remote,
+// provider-health had none of their own), and WO-B removed marketplace, hooks,
+// security, knowledge-graph, memory, and project-planning as those panels
+// migrated to config-modal surfaces under src/panels/modals/ (golden-tested in
+// ecosystem-modals-golden.test.ts + config-modal-surfaces-*.test.ts). The
+// skills/plugins panel classes are retained (shared non-class exports) so their
+// contract modules stay. Surviving modules: skills, plugins, local-auth, git,
+// diff, token-budget. Count dropped from 15 → 6.
 
 // One entry per registered panel covered by this contract suite. Kept as an
 // explicit count (rather than trusting a bare directory listing on its own)
 // so a stray file left in contract/ without being wired up above still fails
 // the parity check below instead of silently losing coverage.
-const CONTRACT_MODULE_COUNT = 12;
+const CONTRACT_MODULE_COUNT = 6;
 
 describe('migrated panels — contract module registry parity', () => {
   test('one contract module exists per registered panel', () => {

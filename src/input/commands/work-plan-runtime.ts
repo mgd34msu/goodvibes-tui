@@ -1,7 +1,7 @@
 import type { CommandRegistry } from '../command-registry.ts';
 import type { WorkPlanItemStatus, WorkPlanStore } from '../../work-plans/work-plan-store.ts';
 import { WORK_PLAN_STATUSES } from '../../work-plans/work-plan-store.ts';
-import { requirePanelManager } from './runtime-services.ts';
+import { openModalCommand } from './runtime-services.ts';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 
 const STATUS_COMMANDS: Record<string, WorkPlanItemStatus> = {
@@ -25,14 +25,8 @@ function getStore(ctx: import('../command-registry.ts').CommandContext): WorkPla
 }
 
 function openPanel(ctx: import('../command-registry.ts').CommandContext): void {
-  if (ctx.showPanel) {
-    ctx.showPanel('work-plan');
-    return;
-  }
-  const panelManager = requirePanelManager(ctx);
-  panelManager.open('work-plan');
-  panelManager.show();
-  ctx.renderRequest();
+  // W6.1: work-plan migrated to the 'work-plan' modal — open it via the seam.
+  openModalCommand(ctx, 'work-plan');
 }
 
 function formatList(store: WorkPlanStore): string {

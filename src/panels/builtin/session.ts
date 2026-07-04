@@ -1,44 +1,7 @@
-import { networkInterfaces } from 'node:os';
-import { readFileSync } from 'node:fs';
 import type { PanelManager } from '../panel-manager.ts';
-import { SessionBrowserPanel } from '../session-browser-panel.ts';
-import { QrPanel } from '../qr-panel.ts';
-import { DocsPanel } from '../docs-panel.ts';
 import { TokenBudgetPanel } from '../token-budget-panel.ts';
 import type { ResolvedBuiltinPanelDeps } from './shared.ts';
 import { requireUiServices } from './shared.ts';
-import {
-  getOrCreateCompanionToken,
-  regenerateCompanionToken,
-  buildCompanionConnectionInfo,
-} from '@pellux/goodvibes-sdk/platform/pairing';
-import { copyToClipboard } from '../../utils/clipboard.ts';
-
-function getLocalNetworkIp(): string {
-  const nets = networkInterfaces();
-  for (const name of Object.keys(nets)) {
-    for (const net of nets[name] ?? []) {
-      if (net.family === 'IPv4' && !net.internal) {
-        return net.address;
-      }
-    }
-  }
-  return 'localhost';
-}
-
-function readBootstrapPassword(credentialPath: string): string | undefined {
-  try {
-    const content = readFileSync(credentialPath, 'utf-8');
-    for (const line of content.split('\n')) {
-      if (line.startsWith('password=')) {
-        return line.slice('password='.length).trim();
-      }
-    }
-  } catch {
-    // credential file may not exist yet
-  }
-  return undefined;
-}
 
 // W6.1 (the purge): panel-list and system-messages were registered here
 // before the purge — both DELETE-disposition. panel-list was a picker over a
@@ -50,59 +13,15 @@ function readBootstrapPassword(credentialPath: string): string | undefined {
 // (resolveSystemMessageDelivery, SDK) already falls back to
 // conversation.addTypedSystemMessage for every kind/target combination — see
 // bootstrap-shell.ts and core/system-message-router.ts.
+//
+// W6.1 (the purge) — group B: 'qr-code', 'sessions', and 'docs' also migrated.
+// 'qr-code' → the 'pairing' modal; 'docs' → the 'keybindings' modal (merged
+// with the shortcuts-overlay content); 'sessions' folds into the existing
+// session-picker modal ('sessions' redirects to 'sessionPicker'). Their
+// panel→modal redirects are registered centrally via
+// registerEcosystemModalRedirects (see registerOperationsPanels). Only 'tokens'
+// (KEEP) is still registered here.
 export function registerSessionPanels(manager: PanelManager, deps: ResolvedBuiltinPanelDeps): void {
-  const ui = requireUiServices(deps);
-  manager.registerType({
-    id: 'qr-code',
-    name: 'QR Code',
-    icon: 'Q',
-    category: 'session',
-    description: 'QR code for companion app pairing — scan to connect a mobile or desktop companion',
-    factory: () => {
-      if (!deps.daemonHomeDir) throw new Error('daemonHomeDir must be provided to the session panel factory via BuiltinPanelDeps');
-      const daemonHomeDir = deps.daemonHomeDir;
-      const tokenRecord = getOrCreateCompanionToken('tui', { daemonHomeDir });
-      const daemonPort = deps.configManager.get('controlPlane.port');
-      const daemonHost = String(process.env['GOODVIBES_DAEMON_HOST'] ?? getLocalNetworkIp());
-      const daemonUrl = `http://${daemonHost}:${daemonPort}`;
-      const bootstrapPassword = readBootstrapPassword(deps.localUserAuthManager.getBootstrapCredentialPath());
-      const connectionInfo = buildCompanionConnectionInfo({
-        daemonUrl,
-        token: tokenRecord.token,
-        password: bootstrapPassword,
-        surface: 'tui',
-      });
-      const regenerate = (): typeof connectionInfo => {
-        const newRecord = regenerateCompanionToken({ daemonHomeDir });
-        return buildCompanionConnectionInfo({
-          daemonUrl,
-          token: newRecord.token,
-          password: bootstrapPassword,
-          surface: 'tui',
-        });
-      };
-      return new QrPanel(connectionInfo, regenerate, copyToClipboard, ui.readModels.controlPlane, deps.localUserAuthManager);
-    },
-  });
-
-  manager.registerType({
-    id: 'sessions',
-    name: 'Sessions',
-    icon: 'H',
-    category: 'session',
-    description: 'Browse, search, and resume past conversation sessions',
-    factory: () => new SessionBrowserPanel(deps.sessionManager, deps.resumeSession),
-  });
-
-  manager.registerType({
-    id: 'docs',
-    name: 'Docs',
-    icon: '?',
-    category: 'session',
-    description: 'Tool list, model capabilities, and keyboard shortcut reference',
-    factory: () => new DocsPanel(deps.toolRegistry, deps.providerRegistry, requireUiServices(deps).shell.keybindingsManager),
-  });
-
   manager.registerType({
     id: 'tokens',
     name: 'Tokens',
