@@ -24,7 +24,7 @@ const versionLine = (version: string) =>
   `　✦　v${version}　█　terminal AI assistant　█　自動ｺｰﾄﾞ 　✦`;
 
 /** Fixed hint line — the three primary shell entry points. */
-const HINT_LINE = 'Ctrl+P panels  /  ? help  /  F2 processes';
+const HINT_LINE = 'Ctrl+P panels  /  ? help  /  F2 fleet';
 
 export interface SplashOptions {
   workingDir?: string;
