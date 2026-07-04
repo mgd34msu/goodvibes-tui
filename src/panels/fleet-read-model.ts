@@ -89,8 +89,9 @@ const STATE_GLYPHS: Record<ProcessState, string> = {
   idle: '·',
   queued: '…',
   // Wave-6 SDK: schedules/triggers/automation jobs report 'paused' when
-  // disabled (previously mislabeled 'killed'). NOT terminal — resumable.
-  // '❚' verified free against every other glyph in this table.
+  // disabled (previously mislabeled 'killed'). NOT terminal — resumable via
+  // ProcessRegistry.resume() (W6.2 d2 wires the full pause/resume UI in
+  // fleet-stop.ts). '❚' verified free against every other glyph in this table.
   paused: '❚',
 };
 

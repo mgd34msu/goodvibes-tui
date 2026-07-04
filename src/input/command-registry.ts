@@ -79,6 +79,14 @@ export interface CommandUiActions {
     /** Which config target to write the selected model to. Defaults to 'main'. */
     target?: import('./model-picker.ts').ModelPickerTarget;
   }) => void;
+  /**
+   * Commit an embedding-provider selection from the model picker's
+   * 'embeddingProvider' mode (the 'embeddings' target). Deliberately separate
+   * from completeModelSelection — embedding providers are not
+   * ModelDefinition-shaped, so routing them through the same commit path
+   * would require fabricating a fake model object.
+   */
+  completeEmbeddingProviderSelection?: (providerId: string) => void;
   clearScreen?: () => void;
   activatePlan?: (planId: string, task: string) => void;
   requestPermission?: PermissionRequestHandler;
@@ -214,6 +222,11 @@ export interface CommandPlatformConfigServices {
   readonly configManager: ConfigManager;
   readonly voiceProviderRegistry?: VoiceProviderRegistry;
   readonly voiceService?: VoiceService;
+  /** Direct-command consumer (`/search`) alongside the existing agent-tool consumer. */
+  readonly webSearchService?: import('@pellux/goodvibes-sdk/platform/web-search').WebSearchService;
+  /** Direct-command consumer (`/image`) — first production caller of `.generate()`. */
+  readonly mediaProviders?: import('@pellux/goodvibes-sdk/platform/media').MediaProviderRegistry;
+  readonly artifactStore?: import('@pellux/goodvibes-sdk/platform/artifacts').ArtifactStore;
 }
 
 export interface CommandPlatformServices
