@@ -72,6 +72,54 @@ describe('Ctrl+C behavior', () => {
   });
 });
 
+// UX-B item 6b: stopping in-flight speech / aborting the turn must never
+// prevent the quit double-press window from advancing. A throw from the async
+// TTS-stop path would otherwise swallow the press and strand the user.
+describe('Ctrl+C exit chord survives a throwing TTS-stop (UX-B 6b)', () => {
+  function callHandleCtrlC(
+    state: { lastCtrlCTime: number; lastCtrlCTimeoutId: ReturnType<typeof setTimeout> | null; showExitNotice: boolean },
+    cancelGeneration: (() => void) | undefined,
+    exitApp: () => void,
+  ): void {
+    handleCtrlC(
+      '', () => {}, () => {}, () => {},
+      cancelGeneration,
+      exitApp,
+      () => {},
+      state.lastCtrlCTime,
+      (v) => { state.lastCtrlCTime = v; },
+      (v) => { state.showExitNotice = v; },
+      state.lastCtrlCTimeoutId,
+      (v) => { state.lastCtrlCTimeoutId = v; },
+    );
+  }
+
+  test('a throwing cancelGeneration still records the press and lets a second press quit', () => {
+    const state = { lastCtrlCTime: 0, lastCtrlCTimeoutId: null as ReturnType<typeof setTimeout> | null, showExitNotice: false };
+    let exited = false;
+    const throwingCancel = mock(() => { throw new Error('audio subprocess kill failed'); });
+    const nowSpy = spyOn(Date, 'now');
+    try {
+      // First press while "TTS is speaking": cancelGeneration throws, but the
+      // quit window must still open (press recorded).
+      nowSpy.mockReturnValue(1_000);
+      callHandleCtrlC(state, throwingCancel, () => { exited = true; });
+      expect(throwingCancel).toHaveBeenCalledTimes(1);
+      expect(state.showExitNotice).toBe(true);
+      expect(state.lastCtrlCTime).toBe(1_000);
+      expect(exited).toBe(false);
+
+      // Second press within the window: exits, even though cancel throws again.
+      nowSpy.mockReturnValue(1_500);
+      callHandleCtrlC(state, throwingCancel, () => { exited = true; });
+      expect(exited).toBe(true);
+    } finally {
+      if (state.lastCtrlCTimeoutId !== null) clearTimeout(state.lastCtrlCTimeoutId);
+      nowSpy.mockRestore();
+    }
+  });
+});
+
 // W0.4(f): a second empty-prompt Ctrl+C press arriving just inside the 1s
 // "press again to exit" window used to leave the FIRST press's hide-timer
 // live — nothing cleared it. If exitApp() isn't perfectly synchronous, that
