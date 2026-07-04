@@ -303,7 +303,7 @@ export function renderShortcutsOverlay(
     row(kb('panel-focus-toggle'), 'Swap focus between top / bottom pane'),
     row(kb('panel-close'), 'Close active panel'),
     row(kb('panel-close-all'), 'Close all panels'),
-    row(kb('panel-ops'), 'Open the Ops Control panel'),
+    row(kb('panel-ops'), 'Open and focus the Fleet panel'),
     '',
     '  In-Panel Controls',
     '  ' + '\u2500'.repeat(40),

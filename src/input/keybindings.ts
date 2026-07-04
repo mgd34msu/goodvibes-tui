@@ -88,7 +88,7 @@ export const ACTION_DESCRIPTIONS: Record<KeyAction, string> = {
   'panel-tab-7':           'Jump to workspace panel tab 7',
   'panel-tab-8':           'Jump to workspace panel tab 8',
   'panel-tab-9':           'Jump to workspace panel tab 9',
-  'panel-ops':             'Open the Ops Control panel',
+  'panel-ops':             'Open and focus the Fleet panel',
   'panel-focus-toggle':    'Switch keyboard focus between top and bottom pane',
   'history-search':        'Reverse input history search',
   'search':                'Toggle conversation search',
@@ -119,8 +119,14 @@ export const DEFAULT_KEYBINDINGS: Record<KeyAction, KeyCombo[]> = {
   'panel-picker':          [{ key: 'p', ctrl: true }],
   'panel-close':            [{ key: 'x', ctrl: true }],
   'panel-close-all':         [{ key: 'x', ctrl: true, shift: true }],
-  'panel-tab-next':        [{ key: ']', ctrl: true }],
-  'panel-tab-prev':        [{ key: '[', ctrl: true }],
+  // Ctrl+] stays the primary next-tab chord; Ctrl+PageDown is added as a second
+  // binding. Ctrl+[ was REMOVED as prev-tab: it is byte 0x1B (ESC), so the
+  // legacy tokenizer path emits it as 'escape' — the binding never matched on
+  // most terminals AND the key fired Escape (a split-brain chord). Ctrl+PageUp
+  // replaces it: Ctrl+PageUp/PageDown tokenize consistently (\x1b[5;5~ /
+  // \x1b[6;5~ -> pageup/pagedown ctrl:true) in both the legacy and CSI-u paths.
+  'panel-tab-next':        [{ key: ']', ctrl: true }, { key: 'pagedown', ctrl: true }],
+  'panel-tab-prev':        [{ key: 'pageup', ctrl: true }],
   // Alt+1..9: jump directly to the Nth workspace panel tab (across both panes).
   // The tokenizer delivers Alt as the token's `meta` modifier; comboMatches /
   // lookup treat `meta` as an alias for `alt`, so these alt-combos route through
@@ -134,10 +140,10 @@ export const DEFAULT_KEYBINDINGS: Record<KeyAction, KeyCombo[]> = {
   'panel-tab-7':           [{ key: '7', alt: true }],
   'panel-tab-8':           [{ key: '8', alt: true }],
   'panel-tab-9':           [{ key: '9', alt: true }],
-  // Ctrl+O: open the Ops Control panel (operator intervention console).
-  // Routed globally in handleGlobalShortcutToken: prefers commandContext.openOpsPanel()
-  // when the operator-control-plane feature flag wired it, else falls back to opening
-  // the always-registered 'ops-control' panel type directly via the panel manager.
+  // Ctrl+O: open and focus the Fleet panel. The former Ops Control panel was
+  // retired to an 'ops-control' -> 'fleet' alias (W6.1); the binding is KEPT
+  // (repointed, not removed) so the Ctrl+O muscle memory still lands somewhere
+  // useful. Routed globally in handleGlobalShortcutToken.
   'panel-ops':             [{ key: 'o', ctrl: true }],
   // Ctrl+G: toggle keyboard focus between the top and bottom panes. Ctrl+G is
   // otherwise unbound in the default table.
@@ -355,7 +361,15 @@ export class KeybindingsManager {
     if (combo.ctrl) parts.push('Ctrl');
     if (combo.alt) parts.push('Alt');
     if (combo.shift) parts.push('Shift');
-    parts.push(combo.key.length === 1 ? combo.key.toUpperCase() : combo.key);
+    // Friendly display for named keys with a conventional abbreviation, so a
+    // chord like Ctrl+PageUp reads consistently with the "PageUp / PageDn"
+    // scroll help text. Single chars upper-case; other named keys pass through.
+    const KEY_DISPLAY: Record<string, string> = { pageup: 'PageUp', pagedown: 'PageDn' };
+    parts.push(
+      combo.key.length === 1
+        ? combo.key.toUpperCase()
+        : KEY_DISPLAY[combo.key] ?? combo.key,
+    );
     return parts.join('+');
   }
 
