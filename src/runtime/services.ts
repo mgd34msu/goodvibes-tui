@@ -23,7 +23,7 @@ import { MediaProviderRegistry, ensureBuiltinMediaProviders } from '@pellux/good
 import { MultimodalService } from '@pellux/goodvibes-sdk/platform/multimodal';
 import { AgentMessageBus, AgentOrchestrator, ArchetypeLoader, WrfcController } from '@pellux/goodvibes-sdk/platform/agents';
 import { AgentManager, OverflowHandler, ProcessManager, createWorkflowServices, type WorkflowServices } from '@pellux/goodvibes-sdk/platform/tools';
-import { FileStateCache, FileUndoManager, MemoryEmbeddingProviderRegistry, MemoryRegistry, MemoryStore, ModeManager, ProjectIndex, type CodeIndexStore } from '@pellux/goodvibes-sdk/platform/state';
+import { FileStateCache, FileUndoManager, MemoryEmbeddingProviderRegistry, MemoryRegistry, MemoryStore, ModeManager, ProjectIndex, type CodeIndexStore, type CodeIndexReindexScheduler } from '@pellux/goodvibes-sdk/platform/state';
 import { WorkspaceCheckpointManager } from '@pellux/goodvibes-sdk/platform/workspace';
 import type { RuntimeEventBus } from '@/runtime/index.ts';
 import { createDomainDispatch } from './store/index.ts';
@@ -58,7 +58,7 @@ import { PolicyRuntimeState } from '@/runtime/index.ts';
 import { createProcessRegistry, type ProcessRegistry } from '@pellux/goodvibes-sdk/platform/runtime/fleet';
 import { calcSessionCost, isModelPriced } from '../export/cost-utils.ts';
 import { createWorkstreamServices, type OrchestrationEngine, type WorkstreamCommandService } from './workstream-services.ts';
-import { codeIndexDbPath, createCodeIndexServices } from './code-index-services.ts';
+import { codeIndexDbPath, createCodeIndexServices, isCodeInjectionSettingEnabled } from './code-index-services.ts';
 import { WorkPlanStore } from '../work-plans/work-plan-store.ts';
 import {
   registerDaemonHandlers,
@@ -227,6 +227,7 @@ export interface RuntimeServices {
   readonly workstreamCommands: WorkstreamCommandService;
   /** Wave 5 (wo804): the repo source-tree code index — see runtime/code-index-services.ts. */
   readonly codeIndexStore: CodeIndexStore;
+  readonly codeIndexReindexScheduler: CodeIndexReindexScheduler; // Wave-5 Stage B tool-site reindex
   /** W2.1/W2.2: unified live process registry (agents, WRFC chains, workflows, watchers, background processes) backing the Fleet panel. */
   readonly processRegistry: ProcessRegistry;
   readonly modeManager: ModeManager;
@@ -603,7 +604,8 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
   // Wave 5 (wo804): repo source-tree code index, sharing memoryEmbeddingRegistry
   // with MemoryStore above. Auto-build is config-gated (default off) — see
   // code-index-services.ts's header doc.
-  const { codeIndexStore } = createCodeIndexServices({ workingDirectory, configManager, memoryEmbeddingRegistry });
+  const { codeIndexStore, codeIndexReindexScheduler } = createCodeIndexServices({ workingDirectory, configManager, memoryEmbeddingRegistry });
+  const codeInjectionOrchestratorDeps = { codeIndex: codeIndexStore, isCodeInjectionSettingEnabled: () => isCodeInjectionSettingEnabled(configManager), codeIndexReindexScheduler }; // Wave-5 Stage B seam (agent here; main via orchestrator-core-services.ts)
   // W2.1/W2.2: one shared process registry aggregating the managers above —
   // the Fleet panel (panels/fleet-read-model.ts) is its first consumer.
   // Constructed once here (not per-consumer) so the coalesced tick and the
@@ -678,6 +680,7 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
     remoteRunnerRegistry,
     knowledgeService,
     memoryRegistry,
+    ...codeInjectionOrchestratorDeps, // Wave-5 Stage B: agent-run code injection + tool-site reindex
     archetypeLoader,
     configManager,
     providerRegistry,
@@ -779,6 +782,7 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
     orchestrationEngine,
     workstreamCommands,
     codeIndexStore,
+    codeIndexReindexScheduler,
     processRegistry,
     modeManager,
     fileUndoManager,

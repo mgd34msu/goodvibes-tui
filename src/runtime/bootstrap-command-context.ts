@@ -123,6 +123,8 @@ export type CreateBootstrapCommandContextOptions = {
   hydrateSessionUsage?: () => void;
   workstreamEngine?: import('./workstream-services.ts').WorkstreamCommandService;
   codeIndexStore?: import('@pellux/goodvibes-sdk/platform/state').CodeIndexStore;
+  codeIndexReindexScheduler?: import('@pellux/goodvibes-sdk/platform/state').CodeIndexReindexScheduler;
+  isPassiveCodeInjectionFlagEnabled?: () => boolean;
   getMainSessionTurnInjections?: () => readonly import('../renderer/turn-injection.ts').TurnInjectionEntry[];
 };
 
@@ -184,6 +186,8 @@ export function createBootstrapCommandContext(
     hydrateSessionUsage,
     workstreamEngine,
     codeIndexStore,
+    codeIndexReindexScheduler,
+    isPassiveCodeInjectionFlagEnabled,
     getMainSessionTurnInjections,
     planManager,
     adaptivePlanner,
@@ -244,6 +248,8 @@ export function createBootstrapCommandContext(
     hydrateSessionUsage,
     workstreamEngine,
     codeIndexStore,
+    codeIndexReindexScheduler,
+    isPassiveCodeInjectionFlagEnabled,
     getMainSessionTurnInjections,
   });
   const provider = createBootstrapCommandProviderSection({

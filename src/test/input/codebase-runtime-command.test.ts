@@ -63,11 +63,19 @@ async function waitUntilNotBuilding(store: CodeIndexStore, timeoutMs = 10_000): 
   }
 }
 
-function makeCtx(store: CodeIndexStore | undefined, configManager: ConfigManager) {
+function makeCtx(
+  store: CodeIndexStore | undefined,
+  configManager: ConfigManager,
+  extras: { flagEnabled?: boolean; reindexActivity?: unknown } = {},
+) {
   const printed: string[] = [];
   const ctx = {
     print: (text: string) => { printed.push(text); },
-    session: { codeIndexStore: store },
+    session: {
+      codeIndexStore: store,
+      isPassiveCodeInjectionFlagEnabled: () => extras.flagEnabled ?? false,
+      codeIndexReindexScheduler: { lastActivity: () => extras.reindexActivity ?? null },
+    },
     platform: { configManager },
     workspace: {},
     provider: {},
@@ -123,6 +131,65 @@ describe('/codebase status', () => {
     registry.get('codebase')!.handler([], ctx);
     expect(printed.join('\n')).toContain('Code index — backend: sqlite-vec');
 
+    store.close();
+  });
+
+  test('Stage B: auto-injection off by default states BOTH gates (flag off + setting off)', () => {
+    const { store, configManager } = makeRealStore();
+    const registry = new CommandRegistry();
+    registerCodebaseRuntimeCommands(registry);
+    const { ctx, printed } = makeCtx(store, configManager); // flag off, setting off
+
+    registry.get('codebase')!.handler(['status'], ctx);
+    const output = printed.join('\n');
+    expect(output).toContain('auto-injection: off');
+    expect(output).toContain('agent-passive-code-injection flag off');
+    expect(output).toContain('storage.codeIndexEnabled off');
+    store.close();
+  });
+
+  test('Stage B: auto-injection on when the flag AND storage.codeIndexEnabled are both on', () => {
+    const { store, configManager } = makeRealStore();
+    configManager.set(CODE_INDEX_ENABLED_CONFIG_KEY as ConfigKey, true as never);
+    const registry = new CommandRegistry();
+    registerCodebaseRuntimeCommands(registry);
+    const { ctx, printed } = makeCtx(store, configManager, { flagEnabled: true });
+
+    registry.get('codebase')!.handler(['status'], ctx);
+    expect(printed.join('\n')).toContain('auto-injection: on');
+    store.close();
+  });
+
+  test('Stage B: flag on but setting off states only the setting reason', () => {
+    const { store, configManager } = makeRealStore();
+    const registry = new CommandRegistry();
+    registerCodebaseRuntimeCommands(registry);
+    const { ctx, printed } = makeCtx(store, configManager, { flagEnabled: true }); // setting still off
+
+    registry.get('codebase')!.handler(['status'], ctx);
+    const output = printed.join('\n');
+    expect(output).toContain('auto-injection: off');
+    expect(output).toContain('storage.codeIndexEnabled off');
+    expect(output).not.toContain('agent-passive-code-injection flag off');
+    store.close();
+  });
+
+  test('Stage B: last-reindex activity is surfaced honestly (none, then indexed)', () => {
+    const { store, configManager } = makeRealStore();
+    const registry = new CommandRegistry();
+    registerCodebaseRuntimeCommands(registry);
+
+    const none = makeCtx(store, configManager);
+    registry.get('codebase')!.handler(['status'], none.ctx);
+    expect(none.printed.join('\n')).toContain('last reindex: none this session');
+
+    const withActivity = makeCtx(store, configManager, {
+      reindexActivity: { path: '/repo/src/demo.ts', at: Date.now(), status: 'indexed', mode: 'symbols' },
+    });
+    registry.get('codebase')!.handler(['status'], withActivity.ctx);
+    const output = withActivity.printed.join('\n');
+    expect(output).toContain('last reindex: /repo/src/demo.ts');
+    expect(output).toContain('indexed (symbols)');
     store.close();
   });
 

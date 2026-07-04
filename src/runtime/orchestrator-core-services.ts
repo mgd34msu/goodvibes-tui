@@ -2,6 +2,7 @@ import type { OrchestratorCoreServices } from '@pellux/goodvibes-sdk/platform/co
 import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import type { ProviderRegistry } from '@pellux/goodvibes-sdk/platform/providers';
 import type { RuntimeServices } from './services.ts';
+import { isCodeInjectionSettingEnabled } from './code-index-services.ts';
 
 /** The slice of the runtime services bag the shared orchestrator payload draws from. */
 export type OrchestratorCoreServicesSource = Pick<
@@ -12,6 +13,8 @@ export type OrchestratorCoreServicesSource = Pick<
   | 'sessionLineageTracker'
   | 'idempotencyStore'
   | 'memoryRegistry'
+  | 'codeIndexStore'
+  | 'codeIndexReindexScheduler'
 >;
 
 /**
@@ -45,5 +48,12 @@ export function buildSharedOrchestratorCoreServices(input: {
     sessionLineageTracker: services.sessionLineageTracker,
     idempotencyStore: services.idempotencyStore,
     memoryRegistry: services.memoryRegistry,
+    // Wave-5 Stage B — main-session code auto-injection + tool-site reindex. Injection is
+    // additionally gated by the default-off `agent-passive-code-injection` flag inside the
+    // SDK; here we supply the source, the live storage.codeIndexEnabled predicate, and the
+    // reindex scheduler.
+    codeIndex: services.codeIndexStore,
+    isCodeInjectionSettingEnabled: () => isCodeInjectionSettingEnabled(configManager),
+    codeIndexReindexScheduler: services.codeIndexReindexScheduler,
   };
 }

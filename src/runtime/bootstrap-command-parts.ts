@@ -118,6 +118,8 @@ export interface BootstrapCommandSectionOptions {
   readonly hydrateSessionUsage?: () => void;
   readonly workstreamEngine?: import('./workstream-services.ts').WorkstreamCommandService;
   readonly codeIndexStore?: CodeIndexStore;
+  readonly codeIndexReindexScheduler?: import('@pellux/goodvibes-sdk/platform/state').CodeIndexReindexScheduler;
+  readonly isPassiveCodeInjectionFlagEnabled?: () => boolean;
   readonly getMainSessionTurnInjections?: () => readonly import('../renderer/turn-injection.ts').TurnInjectionEntry[];
   readonly agentManager?: ShellAgentManagerService;
   readonly modeManager?: ShellModeManagerService;
@@ -321,7 +323,7 @@ export function createBootstrapCommandActions(
 export function createBootstrapCommandSessionSection(
   options: Pick<
     BootstrapCommandSectionOptions,
-    'conversation' | 'runtime' | 'sessionManager' | 'sessionMemoryStore' | 'sessionLineageTracker' | 'wrfcController' | 'changeTracker' | 'hydrateSessionUsage' | 'workstreamEngine' | 'codeIndexStore' | 'getMainSessionTurnInjections'
+    'conversation' | 'runtime' | 'sessionManager' | 'sessionMemoryStore' | 'sessionLineageTracker' | 'wrfcController' | 'changeTracker' | 'hydrateSessionUsage' | 'workstreamEngine' | 'codeIndexStore' | 'codeIndexReindexScheduler' | 'isPassiveCodeInjectionFlagEnabled' | 'getMainSessionTurnInjections'
   >,
 ): BootstrapCommandSessionSection {
   return {
@@ -335,6 +337,8 @@ export function createBootstrapCommandSessionSection(
     hydrateSessionUsage: options.hydrateSessionUsage,
     workstreamEngine: options.workstreamEngine,
     codeIndexStore: options.codeIndexStore,
+    codeIndexReindexScheduler: options.codeIndexReindexScheduler,
+    isPassiveCodeInjectionFlagEnabled: options.isPassiveCodeInjectionFlagEnabled,
     getMainSessionTurnInjections: options.getMainSessionTurnInjections,
   };
 }
