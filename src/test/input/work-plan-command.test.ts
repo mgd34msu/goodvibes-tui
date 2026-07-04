@@ -72,4 +72,42 @@ describe('workplan command', () => {
     expect(out.join('\n')).toContain('Ship persistent plan');
     expect(out.join('\n')).toContain('done');
   });
+
+  // W6 command-path parity: the work-plan modal's edit/export actions route to
+  // these verbs (thin wrappers over WorkPlanStore.updateItem / exportMarkdown).
+  test('edit patches an item and export writes the plan markdown to disk', async () => {
+    const registry = new CommandRegistry();
+    registerWorkPlanRuntimeCommands(registry);
+    const command = registry.get('workplan')!;
+    const store = new WorkPlanStore({
+      homeDirectory: mkdtempSync(join(tmpdir(), 'gv-work-plan-edit-')),
+      projectId: 'project:edit',
+      projectRoot: '/tmp/edit',
+    });
+    const out: string[] = [];
+    const ctx = makeContext(out, [], store);
+
+    await command.handler(['add', 'Original title'], ctx);
+    const id = store.listItems()[0]!.id.slice(0, 8);
+
+    // edit: bare words are the new title (parseAddArgs convention), flags patch fields.
+    out.length = 0;
+    await command.handler(['edit', id, 'Renamed task', '--owner', 'mike'], ctx);
+    const edited = store.listItems()[0]!;
+    expect(edited.title).toBe('Renamed task');
+    expect(edited.owner).toBe('mike');
+    expect(out.join('\n')).toContain('Updated work plan item');
+
+    // edit with no patch fields prints usage (no silent no-op).
+    out.length = 0;
+    await command.handler(['edit', id], ctx);
+    expect(out.join('\n')).toContain('Usage: /work-plan edit');
+
+    // export: writes a sibling .md and reports the path.
+    out.length = 0;
+    await command.handler(['export'], ctx);
+    const printed = out.join('\n');
+    expect(printed).toContain('Exported work plan markdown to');
+    expect(printed).toContain('.md');
+  });
 });
