@@ -86,6 +86,13 @@ export function getDisplayWidth(text: string): number {
       code === 0x2717 ||
       code === 0x2714 ||
       code === 0x2718 ||
+      // ✕ (0x2715) and ✖ (0x2716) — the multiplication-X cross family used for
+      // the error-line prefix. Terminals draw them one cell wide, but they sit
+      // inside the 0x2600–0x27bf emoji block below and would otherwise be counted
+      // as width 2, desyncing the styled cell grid from the physical glyph and
+      // corrupting the following text (the "✕t" glitch on the steer error line).
+      code === 0x2715 ||
+      code === 0x2716 ||
       code === 0x2022 ||
       code === 0x258d ||
       (code >= 0x2500 && code <= 0x257f)

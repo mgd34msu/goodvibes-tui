@@ -60,6 +60,19 @@ describe('ANSI escape stripping in getDisplayWidth', () => {
     const s = '\x1b[m\x1b[0m\x1b[1m';
     expect(getDisplayWidth(s)).toBe(0);
   });
+
+  test('cross/tick glyph family counts as width 1 (fixes the "✕t" error-line glitch)', () => {
+    // WO UX-A item 4: ✕ (U+2715) / ✖ (U+2716) sit inside the emoji block but
+    // terminals draw them one cell wide. Counting them as 2 desynced the styled
+    // cell grid from the physical glyph and corrupted the following text.
+    expect(getDisplayWidth('✕')).toBe(1);
+    expect(getDisplayWidth('✖')).toBe(1);
+    // Sibling glyphs already width-1 stay width-1.
+    expect(getDisplayWidth('✗')).toBe(1);
+    expect(getDisplayWidth('✓')).toBe(1);
+    // The exact error-line prefix renders at its true width (space + ✕ + space).
+    expect(getDisplayWidth(' ✕ ')).toBe(3);
+  });
 });
 
 describe('bracket-text-without-ESC over-strip guard', () => {

@@ -17,7 +17,7 @@
 |                            |
 |                            |
 |                            |
-| ⧗ steer queued — awaiting t|
+| ⧗ steer queued for [Agent] |
 | [ ] switch tab   Ctrl+X det|
 @STYLES
 0 0 fg=#e2e8f0

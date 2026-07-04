@@ -796,6 +796,37 @@ describe('FleetPanel — s opens the steer composer on an active, steerable tab'
     const text = linesText(panel.render(100, 24));
     expect(text).toContain('agent is retrying, try again shortly');
   });
+
+  test('refusal PRESERVES the draft, states why, and suggests live steerable siblings (WO UX-A item 4)', () => {
+    // Target refuses; a second agent IS steerable, so the error should keep the
+    // typed text and point at the sibling instead of silently discarding the draft.
+    const target = makeNode({ id: 'agent-1', label: 'Builder', state: 'streaming', capabilities: { interruptible: true, killable: true, pausable: false, steerable: true } });
+    const sibling = makeNode({ id: 'agent-2', label: 'Reviewer', state: 'streaming', capabilities: { interruptible: true, killable: true, pausable: false, steerable: true } });
+    const actions = makeActions({ steer: () => ({ queued: false, reason: 'agent is not active and cannot be steered' }) });
+    const readModel = createStaticFleetReadModel(buildFleetSnapshot([target, sibling], NOW));
+    const panel = new FleetPanel(readModel, actions);
+    panel.handleInput('enter'); // attach the first (Builder) tab
+    panel.handleInput('s');
+    for (const ch of 'fix the bug') panel.handleInput(ch);
+    panel.handleInput('enter');
+
+    // Draft kept intact (composer still open with the text), no badge set.
+    expect(panel.getTabsState().tabs[0]!.steerDraft).toBe('fix the bug');
+    expect(panel.getTabsState().tabs[0]!.steerBadge).toBeNull();
+    const text = linesText(panel.render(120, 24));
+    expect(text).toContain('Draft kept');
+    expect(text).toContain('Reviewer'); // the live steerable sibling is suggested
+  });
+
+  test('queued acknowledgment names the target and points at the ⧗ badge', () => {
+    const { panel } = attachSteerableTab();
+    panel.handleInput('s');
+    for (const ch of 'do the thing') panel.handleInput(ch);
+    panel.handleInput('enter');
+    const text = linesText(panel.render(120, 24));
+    expect(text).toContain('steer queued');
+    expect(text).toContain('⧗'); // references the delivery-tracking badge glyph
+  });
 });
 
 // ---------------------------------------------------------------------------
