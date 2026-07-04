@@ -279,6 +279,7 @@ export function createBootstrapShell(options: BootstrapShellOptions): BootstrapS
     sessionLineageTracker: services.sessionLineageTracker,
     wrfcController: services.wrfcController,
     workstreamEngine: services.workstreamCommands,
+    codeIndexStore: services.codeIndexStore,
     changeTracker: services.sessionChangeTracker,
     planManager: services.planManager,
     adaptivePlanner: services.adaptivePlanner,
