@@ -110,6 +110,40 @@ describe('handleGlobalShortcutToken', () => {
     expect(closed).toEqual(['system-messages']);
   });
 
+  test('W1.6: panel-close (Ctrl+X) still closes the panel unconditionally during an active turn — unaffected by the Escape cancel-first gate added in handler-feed-routes.ts', () => {
+    // handleGlobalShortcutToken runs before handlePanelFocusToken in the feed
+    // loop (handler-feed.ts) and, like panel-picker above, this route has no
+    // isThinking/turn-active field to gate on at all — GlobalShortcutRouteState
+    // is structurally incapable of expressing "a turn is running", so
+    // panel-close cannot become entangled with the new cancel-first Escape
+    // precedence (which lives entirely inside handlePanelFocusToken instead).
+    const closed: string[] = [];
+    const state = buildState({
+      panelFocused: true,
+      panelManager: {
+        getAllOpen: () => [{ id: 'system-messages' }],
+        close: (id: string) => { closed.push(id); },
+        hide: () => {},
+        getActivePanel: () => ({ id: 'system-messages' }),
+        isVisible: () => true,
+      } as unknown as GlobalShortcutRouteState['panelManager'],
+      keybindingsManager: {
+        matches: () => false,
+        lookup: () => 'panel-close',
+      } as unknown as GlobalShortcutRouteState['keybindingsManager'],
+    });
+
+    const handled = handleGlobalShortcutToken(
+      state,
+      { type: 'key', name: '\x18', logicalName: 'x', ctrl: true, shift: false, meta: false },
+      24,
+    );
+
+    expect(handled).toBe(true);
+    expect(state.panelFocused).toBe(false);
+    expect(closed).toEqual(['system-messages']);
+  });
+
   test('panel-focus-toggle (Ctrl+G) grabs workspace focus from the prompt', () => {
     const state = buildState({
       panelFocused: false,

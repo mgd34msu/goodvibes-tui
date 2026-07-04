@@ -68,6 +68,9 @@ export interface CommandUiActions {
   };
   executeCommand?: (name: string, args: string[]) => Promise<boolean>;
   cancelGeneration?: () => void;
+  /** True while an LLM turn is actively streaming. Used to give Escape
+   *  cancel-turn precedence over a focused panel's own escape handling. */
+  isGenerating?: () => boolean;
   completeModelSelection?: (selection: {
     model: { id: string; provider: string; displayName: string; registryKey: string };
     effort: string;
