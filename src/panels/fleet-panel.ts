@@ -6,14 +6,23 @@
 // workflow-tool FSMs, watchers, background processes) as a depth-first tree
 // with a selected-row detail region.
 //
+// Wave-3 (W3.1 Part C) adds session tabs: Enter on an attachable node (agent
+// or wrfc-chain) opens a tab showing that process's transcript (agent) or
+// live member summary (chain); the tree itself is the always-present root
+// tab. See fleet-tabs.ts for the tab-state model and fleet-transcript.ts for
+// tab content rendering — this file owns input dispatch and layout only.
+//
 // Coexists with (does not replace) the process modal, ops, wrfc, and
 // inspector entry points this wave — only the footer process indicator's
 // [Enter] is repointed to open this panel (see handler-feed-routes.ts).
 // Removal of the older entry points is Wave 6.
 // ---------------------------------------------------------------------------
 
+import { readFile } from 'node:fs/promises';
 import type { Line } from '../types/grid.ts';
 import type { ProcessCostState, ProcessUsage } from '@pellux/goodvibes-sdk/platform/runtime/fleet';
+import type { ConversationMessageSnapshot } from '@pellux/goodvibes-sdk/platform/core';
+import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import { ScrollableListPanel } from './scrollable-list-panel.ts';
 import { PanelConfirmOverlay } from './panel-confirm-overlay.ts';
 import { formatAgentCost } from './agent-inspector-shared.ts';
@@ -21,8 +30,11 @@ import { formatElapsed } from '../utils/format-elapsed.ts';
 import { truncateDisplay } from '../utils/terminal-width.ts';
 import {
   buildAlignedRow,
+  buildKeyboardHints,
   buildPanelLine,
+  buildPanelWorkspace,
   DEFAULT_PANEL_PALETTE,
+  getPanelWorkspaceContentBudget,
   type ColumnSpec,
   type PanelPalette,
 } from './polish.ts';
@@ -38,6 +50,24 @@ import {
   type FleetStateTone,
   type FleetTreeRow,
 } from './fleet-read-model.ts';
+import {
+  activeFleetTab,
+  attachFleetTab,
+  detachActiveFleetTab,
+  EMPTY_FLEET_TABS_STATE,
+  isAttachableFleetKind,
+  stepFleetTab,
+  type FleetTab,
+  type FleetTabsState,
+} from './fleet-tabs.ts';
+import {
+  parseAgentLedger,
+  renderFleetAgentTranscript,
+  renderFleetChainSummary,
+  renderFleetLedgerFallback,
+  renderFleetTranscriptLoading,
+} from './fleet-transcript.ts';
+import { renderFleetTabStrip } from '../renderer/fleet-tab-strip.ts';
 
 const C = DEFAULT_PANEL_PALETTE;
 
@@ -95,11 +125,22 @@ export interface FleetActionCallbacks {
   readonly interrupt: (id: string) => boolean;
   /** Hard stop, optionally cascading to killable descendants. Returns the node ids acted on. */
   readonly kill: (id: string, opts: { readonly cascade: boolean }) => readonly string[];
+  /**
+   * Wave-3 (C6): fetch an agent's conversation history — live (running) or
+   * frozen (just-completed, still in the SDK's retention ring). Empty array
+   * means "unavailable" (evicted, or never registered) — FleetPanel degrades
+   * to the on-disk ledger fallback in that case, never fabricating content.
+   */
+  readonly getConversationSnapshot: (agentId: string) => readonly ConversationMessageSnapshot[];
+  /** Wave-3 (C6): resolve the on-disk `<agentId>.jsonl` event-ledger path for the degraded fallback view. */
+  readonly resolveSessionLogPath: (agentId: string) => string;
 }
 
 const NOOP_ACTIONS: FleetActionCallbacks = {
   interrupt: (_id: string) => false,
   kill: (_id: string, _opts: { readonly cascade: boolean }) => [],
+  getConversationSnapshot: (_agentId: string) => [],
+  resolveSessionLogPath: (agentId: string) => agentId,
 };
 
 export class FleetPanel extends ScrollableListPanel<FleetTreeRow> {
@@ -107,7 +148,7 @@ export class FleetPanel extends ScrollableListPanel<FleetTreeRow> {
   private readonly actions: FleetActionCallbacks;
   private readonly confirmOverlay: PanelConfirmOverlay;
   private follow = false;
-  private detailFocused = false;
+  private tabsState: FleetTabsState = EMPTY_FLEET_TABS_STATE;
   private tickTimer: ReturnType<typeof setInterval> | null = null;
   /**
    * The node id the cursor is anchored to, independent of its row index.
@@ -124,6 +165,7 @@ export class FleetPanel extends ScrollableListPanel<FleetTreeRow> {
   public constructor(
     private readonly readModel: FleetReadModel,
     actions: Partial<FleetActionCallbacks> = {},
+    private readonly configManager: ConfigManager | null = null,
   ) {
     super('fleet', 'Fleet', '⊟', 'runtime-ops');
     this.showSelectionGutter = true; // W0.8: visible ▸ focus indicator
@@ -162,15 +204,35 @@ export class FleetPanel extends ScrollableListPanel<FleetTreeRow> {
   public override onDestroy(): void {
     super.onDestroy();
     this.unsub();
+    for (const tab of this.tabsState.tabs) tab.lineCache.clear();
   }
 
-  /** True once Enter has focused the selected row's detail (Wave-3 tab-attach seam). */
-  public isDetailFocused(): boolean {
-    return this.detailFocused;
+  /** True while a session tab (not the root tree) is focused. Replaces the old Wave-2 isDetailFocused() seam. */
+  public isTabActive(): boolean {
+    return this.tabsState.activeTabIndex > 0;
+  }
+
+  /** Introspection for tests: the current tab-bar state (read-only). */
+  public getTabsState(): FleetTabsState {
+    return this.tabsState;
   }
 
   public isFollowing(): boolean {
     return this.follow;
+  }
+
+  /**
+   * Ctrl+X (panel-close) collision resolution (Wave-3 Part C4): the global
+   * shortcut route (handler-shortcuts.ts) calls this BEFORE closing the
+   * panel. Detaching the active tab consumes the key; on the root tree tab
+   * there is nothing to detach, so this returns false and Ctrl+X falls
+   * through to its ordinary panel-close behavior.
+   */
+  public interceptPanelClose(): boolean {
+    if (this.tabsState.activeTabIndex === 0) return false;
+    this.tabsState = detachActiveFleetTab(this.tabsState);
+    this.markDirty();
+    return true;
   }
 
   protected getItems(): readonly FleetTreeRow[] {
@@ -236,11 +298,68 @@ export class FleetPanel extends ScrollableListPanel<FleetTreeRow> {
     this.captureSelectionAnchor();
   }
 
+  /** Count of descendants of `nodeId` (in the current snapshot) that report `capabilities.killable` — the Wave-3 K-confirm child count (Part C7). */
+  private countKillableDescendants(nodeId: string): number {
+    const rows = this.getItems();
+    const byParent = new Map<string, string[]>();
+    for (const row of rows) {
+      if (!row.node.parentId) continue;
+      const siblings = byParent.get(row.node.parentId) ?? [];
+      siblings.push(row.node.id);
+      byParent.set(row.node.parentId, siblings);
+    }
+    const byId = new Map(rows.map((row) => [row.node.id, row] as const));
+    let count = 0;
+    const stack = [...(byParent.get(nodeId) ?? [])];
+    const seen = new Set<string>();
+    while (stack.length > 0) {
+      const id = stack.pop()!;
+      if (seen.has(id)) continue;
+      seen.add(id);
+      const row = byId.get(id);
+      if (row?.node.capabilities.killable) count++;
+      for (const child of byParent.get(id) ?? []) stack.push(child);
+    }
+    return count;
+  }
+
+  /** Kick off (once) the async ledger-fallback load for a tab whose conversation snapshot is unavailable. */
+  private ensureLedgerLoaded(tab: FleetTab): void {
+    if (tab.ledgerLoadStarted) return;
+    tab.ledgerLoadStarted = true;
+    const path = this.actions.resolveSessionLogPath(tab.agentId);
+    readFile(path, 'utf-8')
+      .then((raw) => {
+        tab.ledgerEntries = parseAgentLedger(raw);
+        this.markDirty();
+      })
+      .catch(() => {
+        tab.ledgerEntries = [];
+        this.markDirty();
+      });
+  }
+
   public override handleInput(key: string): boolean {
     if (this.lastError !== null) this.clearError();
 
     // Confirm overlay owns input first (K-armed kill confirm).
     if (this.confirmOverlay.handleInput(key)) return true;
+
+    // Tab switching works from ANY view (root tree or an attached tab) once
+    // at least one tab is open — [ / ] step through Tree, tab 1, tab 2, ...
+    // Ctrl+X detach is handled by interceptPanelClose(), not handleInput (it
+    // must win a global-shortcut race — see that method's doc comment).
+    if ((key === '[' || key === ']') && this.tabsState.tabs.length > 0) {
+      this.tabsState = stepFleetTab(this.tabsState, key === ']' ? 1 : -1);
+      this.markDirty();
+      return true;
+    }
+
+    if (this.tabsState.activeTabIndex > 0) {
+      // A session tab is focused — the tree isn't visible, so tree-only keys
+      // (navigate/i/K/f/Enter) don't apply here.
+      return false;
+    }
 
     const selected = this.getSelectedItem();
 
@@ -271,9 +390,11 @@ export class FleetPanel extends ScrollableListPanel<FleetTreeRow> {
       }
       const node = selected.node;
       const shortId = node.id.length > 8 ? node.id.slice(-8) : node.id;
+      const childCount = this.countKillableDescendants(node.id);
+      const suffix = childCount > 0 ? ` (+${childCount} child${childCount === 1 ? '' : 'ren'})` : '';
       this.confirmOverlay.arm({
         id: node.id,
-        label: `${node.kind} ${shortId}`,
+        label: `${node.kind} ${shortId}${suffix}`,
         verb: 'Kill',
         onConfirm: () => { this.actions.kill(node.id, { cascade: true }); },
       });
@@ -289,8 +410,12 @@ export class FleetPanel extends ScrollableListPanel<FleetTreeRow> {
 
     if (key === 'enter' || key === 'return') {
       if (!selected) return false;
-      // Wave 3: attach session tab here (selected.node.id is the stable attach handle).
-      this.detailFocused = true;
+      const node = selected.node;
+      if (!isAttachableFleetKind(node.kind)) {
+        this.setError(`${node.kind} has no transcript to attach.`);
+        return true;
+      }
+      this.tabsState = attachFleetTab(this.tabsState, node);
       this.markDirty();
       return true;
     }
@@ -360,7 +485,50 @@ export class FleetPanel extends ScrollableListPanel<FleetTreeRow> {
     return [line1, line2, line3, line4];
   }
 
-  public override render(width: number, height: number): Line[] {
+  /** Renders the active session tab's content (transcript / chain summary / ledger fallback) in place of the tree. */
+  private renderTabView(width: number, height: number): Line[] {
+    const palette = this.getPalette();
+    const tab = activeFleetTab(this.tabsState);
+    if (!tab) return this.renderTreeView(width, height); // defensive; should be unreachable
+    const stripLine = renderFleetTabStrip(this.tabsState, width);
+
+    const hints: Array<{ keys: string; label: string }> = [
+      { keys: '[ ]', label: 'switch tab' },
+      { keys: 'Ctrl+X', label: 'detach' },
+    ];
+    const footerLines = [buildKeyboardHints(width, hints, palette)];
+    const contentBudget = getPanelWorkspaceContentBudget(width, height, { footerLines, palette });
+    const contentHeight = Math.max(1, contentBudget - (stripLine ? 1 : 0));
+
+    const snapshotRows = this.readModel.getSnapshot().rows;
+    let contentLines: Line[];
+
+    if (tab.kind === 'wrfc-chain') {
+      const memberRows = snapshotRows.filter((row) => row.node.parentId === tab.nodeId);
+      contentLines = renderFleetChainSummary(memberRows, width);
+    } else {
+      const liveNode = snapshotRows.find((row) => row.node.id === tab.nodeId)?.node ?? null;
+      const isTerminal = liveNode ? isTerminalProcessState(liveNode.state) : true;
+      const snapshot = this.actions.getConversationSnapshot(tab.agentId);
+      const result = renderFleetAgentTranscript(snapshot, isTerminal, tab.lineCache, width, contentHeight, this.configManager);
+      if (result.mode === 'unavailable') {
+        this.ensureLedgerLoaded(tab);
+        contentLines = tab.ledgerEntries !== null
+          ? renderFleetLedgerFallback(tab.ledgerEntries, width, contentHeight)
+          : renderFleetTranscriptLoading(width);
+      } else {
+        contentLines = result.lines;
+      }
+    }
+
+    const sections = [
+      ...(stripLine ? [{ lines: [stripLine] }] : []),
+      { lines: contentLines },
+    ];
+    return buildPanelWorkspace(width, height, { title: `Fleet — ${tab.label}`, sections, footerLines, palette });
+  }
+
+  private renderTreeView(width: number, height: number): Line[] {
     const selected = this.getSelectedItem();
     const footer: Line[] = [];
     if (this.confirmOverlay.pending) {
@@ -382,16 +550,28 @@ export class FleetPanel extends ScrollableListPanel<FleetTreeRow> {
 
     const hints: Array<{ keys: string; label: string }> = [
       { keys: 'j/k', label: 'navigate' },
-      { keys: 'Enter', label: 'detail' },
+      { keys: 'Enter', label: 'attach' },
     ];
     if (canInterrupt) hints.push({ keys: 'i', label: 'interrupt' });
     if (canKill) hints.push({ keys: 'K', label: 'kill' });
     hints.push({ keys: 'f', label: this.follow ? 'follow:on' : 'follow' });
+    if (this.tabsState.tabs.length > 0) hints.push({ keys: '[ ]', label: 'tabs' });
+
+    // Tab strip renders only when tabs exist — omitting it entirely with no
+    // tabs attached keeps the pre-Wave-3 root-tree rendering byte-identical.
+    const stripLine = renderFleetTabStrip(this.tabsState, width);
+    const header = stripLine ? [stripLine] : undefined;
 
     return this.renderList(width, height, {
       title: 'Fleet',
+      header,
       footer,
       hints,
     });
+  }
+
+  public override render(width: number, height: number): Line[] {
+    if (this.tabsState.activeTabIndex > 0) return this.renderTabView(width, height);
+    return this.renderTreeView(width, height);
   }
 }
