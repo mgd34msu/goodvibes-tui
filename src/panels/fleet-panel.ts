@@ -505,6 +505,21 @@ export class FleetPanel extends ScrollableListPanel<FleetTreeRow> {
       return true;
     }
 
+    if (key === 's') {
+      // Batch replay D4: 's' from the TREE was silently dead — steering
+      // required an undiscoverable Enter-attach first. Attach-and-steer in
+      // one press for a steerable node; honest refusal otherwise.
+      if (!selected) return false;
+      const node = selected.node;
+      if (!node.capabilities.steerable || !isAttachableFleetKind(node.kind)) {
+        this.setError(`${node.kind} does not support steer.`);
+        return true;
+      }
+      this.tabsState = attachFleetTab(this.tabsState, node);
+      this.markDirty();
+      return this.tryOpenSteerDraft(activeFleetTab(this.tabsState)!);
+    }
+
     const consumed = super.handleInput(key);
     if (consumed) this.captureSelectionAnchor();
     return consumed;

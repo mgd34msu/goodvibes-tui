@@ -115,6 +115,7 @@ export function buildFleetTreeHints(
     { keys: 'j/k', label: 'navigate' },
     { keys: 'Enter', label: 'attach' },
   ];
+  if (live && selected.capabilities.steerable) hints.push({ keys: 's', label: 'steer' }); // D4: discoverable from the tree (attach-and-steer)
   if (live && selected.capabilities.interruptible) hints.push({ keys: 'i', label: 'interrupt' });
   if (live && selected.capabilities.killable) hints.push({ keys: 'K', label: 'kill' });
   if (live && !isPaused && selected.capabilities.pausable) hints.push({ keys: 'p', label: 'pause' });

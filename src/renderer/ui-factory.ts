@@ -534,6 +534,12 @@ export class UIFactory {
       phrase = 'Waiting for your approval';
     } else if (stallInfo?.reconnect) {
       phrase = `Reconnecting (attempt ${stallInfo.reconnect.attempt}/${stallInfo.reconnect.maxAttempts})...`;
+    } else if (isStalled && (outputTokens ?? 0) === 0) {
+      // Pre-first-token silence is NORMAL for reasoning models (they think
+      // before emitting) — "Stalled" reads as hung/broken and blames the
+      // wrong party (batch replay D1). Honest wording until the first token;
+      // "Stalled" is reserved for silence AFTER the stream started producing.
+      phrase = `Waiting for model ${Math.floor(stallInfo.msSinceLastDelta / 1000)}s...`;
     } else if (isStalled) {
       phrase = `Stalled ${Math.floor(stallInfo.msSinceLastDelta / 1000)}s...`;
     } else {

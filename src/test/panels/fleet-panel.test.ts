@@ -743,14 +743,15 @@ describe('FleetPanel — s opens the steer composer on an active, steerable tab'
     expect(panel.getTabsState().tabs[0]!.steerDraft).toBe('');
   });
 
-  test('s is unavailable (not even a hint) and not consumed as steer while the root tree is focused', () => {
-    // 's' has no meaning on the root tree in this wave (composer only exists
-    // on an attached tab) — it falls through to ordinary list handling.
-    const node = makeNode({ id: 'agent-1', capabilities: { interruptible: true, killable: true, pausable: false, steerable: true } });
+  test('s IS available from the root tree for a steerable node (batch replay D4 superseded the Wave-3 tab-only contract)', () => {
+    // Pre-D4 this asserted 's' was hidden/dead on the tree; steering required
+    // an undiscoverable Enter-attach first. Now the tree hints advertise it
+    // and 's' attaches-and-steers in one press (see the D4 describe block).
+    const node = makeNode({ id: 'agent-1', state: 'streaming', capabilities: { interruptible: true, killable: true, pausable: false, steerable: true } });
     const readModel = createStaticFleetReadModel(buildFleetSnapshot([node], NOW));
     const panel = new FleetPanel(readModel);
     const text = linesText(panel.render(100, 24));
-    expect(text).not.toContain('s steer');
+    expect(text).toContain('s steer');
   });
 
   test('s on a non-steerable tab sets an honest error and does not open the draft', () => {
@@ -1484,5 +1485,29 @@ describe('FleetPanel — batch refutation fixes', () => {
     panel.handleInput('enter'); // re-attach the tab
     const text = linesText(panel.render(120, 24));
     expect(text).not.toContain('steer queued');
+  });
+});
+
+describe('FleetPanel — batch replay D4: steer from the tree', () => {
+  test("'s' on a steerable tree node attaches and opens the steer composer", () => {
+    const { panel } = attachSteerableTab();
+    // Back to the tree first (attachSteerableTab leaves the tab focused).
+    panel.receiveDeepLink({ id: 'agent-1' });
+    expect(panel.getTabsState().activeTabIndex).toBe(0);
+    expect(panel.handleInput('s')).toBe(true);
+    expect(panel.getTabsState().activeTabIndex).toBe(1);
+    expect(panel.getTabsState().tabs[0]!.steerDraft).not.toBeNull();
+  });
+
+  test("'s' on a non-steerable node refuses honestly", () => {
+    const node = makeNode({
+      id: 'sched-1', kind: 'schedule',
+      capabilities: { interruptible: false, killable: true, pausable: true, steerable: false },
+    });
+    const readModel = createStaticFleetReadModel(buildFleetSnapshot([node], NOW));
+    const panel = new FleetPanel(readModel, makeActions());
+    expect(panel.handleInput('s')).toBe(true);
+    const text = linesText(panel.render(120, 24));
+    expect(text).toContain('does not support steer');
   });
 });
