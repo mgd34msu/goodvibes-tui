@@ -1,6 +1,7 @@
 import { mkdirSync, readdirSync, rmSync, statSync } from 'node:fs';
 import { availableParallelism } from 'node:os';
 import { join, relative } from 'node:path';
+import { filterTestFilesByPattern, parseTestPattern } from './test-pattern-rule.ts';
 
 const ROOT = process.cwd();
 const SEARCH_ROOT = join(ROOT, 'src');
@@ -15,6 +16,13 @@ const RUNNER_DIR = join(TEST_TMP_ROOT, `run-${process.pid}`);
 
 // Pass --coverage through to bun test when invoked with that flag.
 const COVERAGE = process.argv.includes('--coverage');
+
+// Optional positional pattern filter (first non-flag argv token), e.g. the TUI's
+// /test <pattern> passthrough. Matched as a substring against each test file's
+// path relative to ROOT, so both a bare filename fragment ("diff-runtime") and a
+// directory-scoped pattern ("src/test/input") work. Logic lives in
+// test-pattern-rule.ts so it can be unit tested without running the full suite.
+const PATTERN = parseTestPattern(process.argv.slice(2));
 
 // Per-file worker pool size. The per-file process isolation (one bun test
 // process per file, each with its own TMPDIR) is the point of this runner;
@@ -71,9 +79,10 @@ function collectTests(dir: string, acc: string[]): void {
   }
 }
 
-const testFiles: string[] = [];
-collectTests(SEARCH_ROOT, testFiles);
-testFiles.sort((a, b) => a.localeCompare(b));
+const allTestFiles: string[] = [];
+collectTests(SEARCH_ROOT, allTestFiles);
+allTestFiles.sort((a, b) => a.localeCompare(b));
+const testFiles = filterTestFilesByPattern(allTestFiles, ROOT, PATTERN);
 
 // Sweep stale sibling runner dirs (older than 1 h), then create this runner's
 // own subdir. Sibling runners still in progress are untouched by the sweep.
@@ -82,7 +91,7 @@ rmSync(RUNNER_DIR, { recursive: true, force: true });
 mkdirSync(RUNNER_DIR, { recursive: true });
 
 if (testFiles.length === 0) {
-  console.error('No test files found under src/');
+  console.error(PATTERN ? `No test files matched pattern: ${PATTERN}` : 'No test files found under src/');
   process.exit(1);
 }
 
@@ -154,7 +163,7 @@ async function worker(): Promise<void> {
   }
 }
 
-console.log(`Running ${testFiles.length} test files with ${JOBS} parallel job${JOBS === 1 ? '' : 's'}.`);
+console.log(`Running ${testFiles.length} test files with ${JOBS} parallel job${JOBS === 1 ? '' : 's'}${PATTERN ? ` (pattern: ${PATTERN})` : ''}.`);
 await Promise.all(Array.from({ length: Math.min(JOBS, testFiles.length) }, () => worker()));
 
 // Remove this runner's own subdir at completion. Sibling runners are untouched.
