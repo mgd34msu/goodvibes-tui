@@ -383,4 +383,199 @@ describe('shell/blocking-input', () => {
     expect(deleted).toBe(1);
     expect(rendered).toBe(1);
   });
+
+  // ---------------------------------------------------------------------------
+  // Hunk-mode routing (W1.3) — pendingPermission.hunkState present.
+  //
+  // Every non-hunk-mode test above passes `pendingPermission` objects with no
+  // `hunkState` property, so they exercise the exact same y/a/n switch as
+  // before this change — the regression safety net this suite is pinning.
+  // ---------------------------------------------------------------------------
+  describe('hunk-mode routing (pendingPermission.hunkState present)', () => {
+    function makeHunkPending(overrides?: {
+      selected?: number[];
+      cursor?: number;
+      resolve?: (approved: boolean, remember?: boolean, modifiedArgs?: Record<string, unknown>) => void;
+    }) {
+      const hunks = [
+        { path: 'a.ts', find: 'one', replace: 'ONE' },
+        { path: 'a.ts', find: 'two', replace: 'TWO' },
+        { path: 'b.ts', find: 'three', replace: 'THREE' },
+      ];
+      const resolveCalls: Array<[boolean, boolean | undefined, Record<string, unknown> | undefined]> = [];
+      const resolve = overrides?.resolve ?? ((approved: boolean, remember?: boolean, modifiedArgs?: Record<string, unknown>) => {
+        resolveCalls.push([approved, remember, modifiedArgs]);
+      });
+      const pendingPermission = {
+        callId: 'call-1',
+        tool: 'edit',
+        args: { edits: hunks },
+        category: 'write',
+        analysis: { classification: 'write', riskLevel: 'medium', summary: 'test', reasons: [] },
+        resolve,
+        hunkState: {
+          hunks,
+          cursor: overrides?.cursor ?? 0,
+          selected: new Set(overrides?.selected ?? [0, 1, 2]),
+        },
+      } as unknown as PendingPermissionState;
+      return { pendingPermission, resolveCalls };
+    }
+
+    test('j/k move the cursor without resolving', () => {
+      const { conversation } = makeConversation();
+      const { router } = makeRouter();
+      const { pendingPermission, resolveCalls } = makeHunkPending();
+      let rendered = 0;
+
+      const result = handleBlockingShellInput({
+        data: 'j',
+        pendingPermission,
+        recoveryPending: false,
+        abortTurn: () => {},
+        conversation: conversation as never,
+        systemMessageRouter: router as never,
+        render: () => { rendered++; },
+        loadRecoveryConversation: () => null,
+        deleteRecoveryFile: () => {},
+        ...JOURNAL_STUBS,
+      });
+
+      expect(result.handled).toBe(true);
+      expect(result.pendingPermission).not.toBeNull();
+      expect((result.pendingPermission as unknown as { hunkState: { cursor: number } }).hunkState.cursor).toBe(1);
+      expect(resolveCalls).toHaveLength(0);
+      expect(rendered).toBe(1);
+    });
+
+    test('space toggles the cursor row without resolving', () => {
+      const { conversation } = makeConversation();
+      const { router } = makeRouter();
+      const { pendingPermission, resolveCalls } = makeHunkPending();
+
+      const result = handleBlockingShellInput({
+        data: ' ',
+        pendingPermission,
+        recoveryPending: false,
+        abortTurn: () => {},
+        conversation: conversation as never,
+        systemMessageRouter: router as never,
+        render: () => {},
+        loadRecoveryConversation: () => null,
+        deleteRecoveryFile: () => {},
+        ...JOURNAL_STUBS,
+      });
+
+      const hunkState = (result.pendingPermission as unknown as { hunkState: { selected: Set<number> } }).hunkState;
+      expect(hunkState.selected.has(0)).toBe(false);
+      expect(resolveCalls).toHaveLength(0);
+    });
+
+    test('enter resolves once with approved=true and a modifiedArgs payload matching the current selection', () => {
+      const { conversation } = makeConversation();
+      const { router } = makeRouter();
+      const { pendingPermission, resolveCalls } = makeHunkPending({ selected: [0, 2] });
+      let rendered = 0;
+
+      const result = handleBlockingShellInput({
+        data: '\r',
+        pendingPermission,
+        recoveryPending: false,
+        abortTurn: () => {},
+        conversation: conversation as never,
+        systemMessageRouter: router as never,
+        render: () => { rendered++; },
+        loadRecoveryConversation: () => null,
+        deleteRecoveryFile: () => {},
+        ...JOURNAL_STUBS,
+      });
+
+      expect(result.handled).toBe(true);
+      expect(result.pendingPermission).toBeNull();
+      expect(resolveCalls).toHaveLength(1);
+      const [approved, remember, modifiedArgs] = resolveCalls[0]!;
+      expect(approved).toBe(true);
+      expect(remember).toBe(false);
+      expect(modifiedArgs).toEqual({
+        edits: [
+          { path: 'a.ts', find: 'one', replace: 'ONE' },
+          { path: 'b.ts', find: 'three', replace: 'THREE' },
+        ],
+      });
+      expect(rendered).toBe(1);
+    });
+
+    test('n resolves approved=false and calls abortTurn(), same as the non-hunk deny path', () => {
+      const { conversation } = makeConversation();
+      const { router } = makeRouter();
+      const { pendingPermission, resolveCalls } = makeHunkPending();
+      let aborted = 0;
+
+      const result = handleBlockingShellInput({
+        data: 'n',
+        pendingPermission,
+        recoveryPending: false,
+        abortTurn: () => { aborted++; },
+        conversation: conversation as never,
+        systemMessageRouter: router as never,
+        render: () => {},
+        loadRecoveryConversation: () => null,
+        deleteRecoveryFile: () => {},
+        ...JOURNAL_STUBS,
+      });
+
+      expect(result.pendingPermission).toBeNull();
+      expect(resolveCalls).toEqual([[false, false, undefined]]);
+      expect(aborted).toBe(1);
+    });
+
+    test('esc resolves approved=false and calls abortTurn(), same as the non-hunk deny path', () => {
+      const { conversation } = makeConversation();
+      const { router } = makeRouter();
+      const { pendingPermission, resolveCalls } = makeHunkPending();
+      let aborted = 0;
+
+      const result = handleBlockingShellInput({
+        data: '\x1b',
+        pendingPermission,
+        recoveryPending: false,
+        abortTurn: () => { aborted++; },
+        conversation: conversation as never,
+        systemMessageRouter: router as never,
+        render: () => {},
+        loadRecoveryConversation: () => null,
+        deleteRecoveryFile: () => {},
+        ...JOURNAL_STUBS,
+      });
+
+      expect(result.pendingPermission).toBeNull();
+      expect(resolveCalls).toEqual([[false, false, undefined]]);
+      expect(aborted).toBe(1);
+    });
+
+    test('a re-selects all hunks in hunk mode instead of the outer "allow always (session)" behavior', () => {
+      const { conversation } = makeConversation();
+      const { router } = makeRouter();
+      const { pendingPermission, resolveCalls } = makeHunkPending({ selected: [1] });
+
+      const result = handleBlockingShellInput({
+        data: 'a',
+        pendingPermission,
+        recoveryPending: false,
+        abortTurn: () => {},
+        conversation: conversation as never,
+        systemMessageRouter: router as never,
+        render: () => {},
+        loadRecoveryConversation: () => null,
+        deleteRecoveryFile: () => {},
+        ...JOURNAL_STUBS,
+      });
+
+      // Must NOT resolve (that would be the outer "remember" path) — hunk mode
+      // fully preempts the outer switch (Risk 1).
+      expect(resolveCalls).toHaveLength(0);
+      const hunkState = (result.pendingPermission as unknown as { hunkState: { selected: Set<number> } }).hunkState;
+      expect(hunkState.selected.size).toBe(3);
+    });
+  });
 });
