@@ -16,6 +16,7 @@ import type { ToolRegistry } from '@pellux/goodvibes-sdk/platform/tools';
 import type { ForensicsRegistry } from '@/runtime/index.ts';
 import type { PolicyRuntimeState } from '@/runtime/index.ts';
 import type { FileUndoManager } from '@pellux/goodvibes-sdk/platform/state';
+import type { WorkspaceCheckpointManager } from '@pellux/goodvibes-sdk/platform/workspace';
 import type { McpRegistry } from '@pellux/goodvibes-sdk/platform/mcp';
 import type { MemoryRegistry } from '@pellux/goodvibes-sdk/platform/state';
 import type { IntegrationHelperService } from '@/runtime/index.ts';
@@ -68,6 +69,7 @@ export type CreateBootstrapCommandContextOptions = {
   remoteRuntime?: RemoteCommandService;
   planRuntime?: PlanRuntimeService;
   fileUndoManager: FileUndoManager;
+  workspaceCheckpointManager?: WorkspaceCheckpointManager;
   memoryRegistry?: MemoryRegistry;
   integrationHelpers?: IntegrationHelperService;
   automationManager?: ShellAutomationManagerRuntimeService;
@@ -139,6 +141,7 @@ export function createBootstrapCommandContext(
     remoteRuntime,
     planRuntime,
     fileUndoManager,
+    workspaceCheckpointManager,
     memoryRegistry,
     integrationHelpers,
     automationManager,
@@ -236,6 +239,7 @@ export function createBootstrapCommandContext(
   const workspace = createBootstrapCommandWorkspaceSection({
     keybindingsManager,
     fileUndoManager,
+    workspaceCheckpointManager,
     panelManager,
     profileManager,
     bookmarkManager,

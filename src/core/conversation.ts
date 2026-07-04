@@ -18,6 +18,7 @@ import {
   addConversationSplashScreen,
   conversationTextToLines,
   logConversationText,
+  logConversationToolResult,
   renderConversationAssistantMessage,
   renderConversationSystemMessage,
   renderConversationToolMessage,
@@ -725,6 +726,23 @@ export class ConversationManager extends SdkConversationManager {
 
   public log(text: string, style: Partial<Cell> = {}, indent = '      '): void {
     logConversationText(this.renderingContext(), this._getWidth(), text, style, indent);
+  }
+
+  /**
+   * logToolResultBlock - Append a single tool-call-styled result line to the display
+   * history only (never touches the LLM message list), so a slash command's subprocess
+   * result (e.g. /test) renders visually identical to a real tool-call result without
+   * leaking into model context.
+   */
+  public logToolResultBlock(
+    toolCall: ToolCall,
+    status: 'done' | 'error',
+    resultSummary: string,
+    durationMs: number,
+    errorMsg?: string,
+  ): void {
+    logConversationToolResult(this.renderingContext(), this._getWidth(), toolCall, status, resultSummary, durationMs, errorMsg);
+    this.markDirty();
   }
 
   /**

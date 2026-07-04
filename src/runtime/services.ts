@@ -31,6 +31,7 @@ import { ArchetypeLoader } from '@pellux/goodvibes-sdk/platform/agents';
 import { ProcessManager } from '@pellux/goodvibes-sdk/platform/tools';
 import { ModeManager } from '@pellux/goodvibes-sdk/platform/state';
 import { FileUndoManager } from '@pellux/goodvibes-sdk/platform/state';
+import { WorkspaceCheckpointManager } from '@pellux/goodvibes-sdk/platform/workspace';
 import { MemoryRegistry } from '@pellux/goodvibes-sdk/platform/state';
 import { MemoryStore } from '@pellux/goodvibes-sdk/platform/state';
 import type { RuntimeEventBus } from '@/runtime/index.ts';
@@ -250,6 +251,7 @@ export interface RuntimeServices {
   readonly processManager: ProcessManager;
   readonly modeManager: ModeManager;
   readonly fileUndoManager: FileUndoManager;
+  readonly workspaceCheckpointManager: WorkspaceCheckpointManager;
   readonly integrationHelpers: IntegrationHelperService;
   /**
    * Re-root path-bound stores (MemoryStore, ProjectIndex) to a new working directory.
@@ -605,6 +607,20 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
   const processManager = new ProcessManager();
   const modeManager = new ModeManager();
   const fileUndoManager = new FileUndoManager();
+  const workspaceCheckpointManager = new WorkspaceCheckpointManager({
+    workspaceRoot: workingDirectory,
+    runtimeBus: options.runtimeBus,
+  });
+  // Fire-and-forget: subscriptions go live immediately if init() succeeds.
+  // If it rejects, WorkspaceCheckpointManager caches that rejection on
+  // `initPromise` and never clears it, so every later call (create/list/
+  // diff/restore — each awaits init() first) re-throws the same error
+  // forever: checkpointing becomes entirely unavailable for the rest of the
+  // session, not "degraded to manual-only". The `.catch(() => {})` here only
+  // exists to prevent an unhandled rejection at startup; the checkpoint
+  // commands (checkpoint-runtime.ts) are what actually catch and report the
+  // failure to the user, on first use.
+  void workspaceCheckpointManager.init().catch(() => {});
   const integrationHelpers = new IntegrationHelperService({
     workingDirectory,
     homeDirectory,
@@ -738,6 +754,7 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
     processManager,
     modeManager,
     fileUndoManager,
+    workspaceCheckpointManager,
     integrationHelpers,
     async rerootStores(newWorkingDir: string): Promise<void> {
       const newMemoryDbPath = join(newWorkingDir, '.goodvibes', 'tui', 'memory.sqlite');

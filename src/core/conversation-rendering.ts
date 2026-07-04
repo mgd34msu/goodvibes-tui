@@ -3,6 +3,7 @@ import { renderMarkdownTracked } from '../renderer/markdown.ts';
 import { renderDiffView } from '../renderer/diff-view.ts';
 import { DARK_THEME } from '../renderer/theme.ts';
 import { renderToolCallBlock } from '../renderer/tool-call.ts';
+import type { ToolCall } from '@pellux/goodvibes-sdk/platform/types';
 import { renderThinkingBlock } from '../renderer/thinking.ts';
 import { renderSystemMessage } from '../renderer/system-message.ts';
 import { createEmptyLine, type Line, type Cell } from '../types/grid.ts';
@@ -401,4 +402,22 @@ export function logConversationText(
 ): void {
   const lines = text.split('\n').map((line) => UIFactory.stringToLine(indent + line, width, style));
   context.history.addLines(lines);
+}
+
+/**
+ * logConversationToolResult - Append a single tool-call-style result line to the
+ * display history only, reusing renderToolCallBlock so a display-only render (e.g.
+ * a slash command's subprocess result) is visually indistinguishable from the
+ * model's own tool-call results. Display-only: never touches message history.
+ */
+export function logConversationToolResult(
+  context: Pick<ConversationRenderContext, 'history'>,
+  width: number,
+  toolCall: ToolCall,
+  status: 'done' | 'error',
+  resultSummary: string,
+  durationMs: number,
+  errorMsg?: string,
+): void {
+  context.history.addLines(renderToolCallBlock(toolCall, status, resultSummary, width, durationMs, errorMsg));
 }

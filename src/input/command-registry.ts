@@ -7,6 +7,7 @@ import type { ToolRegistry } from '@pellux/goodvibes-sdk/platform/tools';
 import type { PermissionRequestHandler } from '@pellux/goodvibes-sdk/platform/permissions';
 import type { SelectionItem, SelectionResult, SelectionAction } from './selection-modal.ts';
 import type { FileUndoManager } from '@pellux/goodvibes-sdk/platform/state';
+import type { WorkspaceCheckpointManager } from '@pellux/goodvibes-sdk/platform/workspace';
 import type { PanelManager } from '../panels/panel-manager.ts';
 import type { KeybindingsManager } from './keybindings.ts';
 import type { OnboardingWizardMode } from './onboarding/onboarding-wizard.ts';
@@ -68,6 +69,9 @@ export interface CommandUiActions {
   };
   executeCommand?: (name: string, args: string[]) => Promise<boolean>;
   cancelGeneration?: () => void;
+  /** True while an LLM turn is actively streaming. Used to give Escape
+   *  cancel-turn precedence over a focused panel's own escape handling. */
+  isGenerating?: () => boolean;
   completeModelSelection?: (selection: {
     model: { id: string; provider: string; displayName: string; registryKey: string };
     effort: string;
@@ -173,6 +177,7 @@ export interface CommandProviderServices {
 export interface CommandWorkspaceUiServices {
   keybindingsManager?: KeybindingsManager;
   fileUndoManager?: FileUndoManager;
+  workspaceCheckpointManager?: WorkspaceCheckpointManager;
   panelManager?: PanelManager;
   profileManager?: import('@pellux/goodvibes-sdk/platform/profiles').ProfileManager;
   bookmarkManager?: import('@pellux/goodvibes-sdk/platform/bookmarks').BookmarkManager;
