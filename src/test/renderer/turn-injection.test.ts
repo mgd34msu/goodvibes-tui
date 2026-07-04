@@ -14,7 +14,9 @@ function makeEntry(overrides: Partial<TurnInjectionEntry> = {}): TurnInjectionEn
     turn: 1,
     query: 'fix the flaky retry test',
     candidatesConsidered: 3,
+    codeCandidatesConsidered: 0,
     injectedIds: [],
+    injectedSources: [],
     droppedForBudget: [],
     tokenCost: 0,
     budgetTokens: 800,
@@ -99,6 +101,36 @@ describe('formatTurnInjectionEntry', () => {
   test('available embedding backend is not tagged (no noise on the common case)', () => {
     const line = formatTurnInjectionEntry(makeEntry({ injectedIds: ['mem-1'], embeddingBackend: 'available' }));
     expect(line).not.toContain('lexical');
+  });
+
+  test('Stage B: code-index hits are tagged [code]; memory hits stay bare (parallel injectedSources)', () => {
+    const line = formatTurnInjectionEntry(makeEntry({
+      injectedIds: ['mem-1', 'src/auth.ts:10-30'],
+      injectedSources: ['memory', 'code-index'],
+      ingestModes: ['keyword', 'semantic'],
+      tokenCost: 220,
+    }));
+    expect(line).toContain('mem-1,');
+    expect(line).toContain('src/auth.ts:10-30 [code]');
+    expect(line).not.toContain('mem-1 [code]');
+  });
+
+  test('Stage B: memory-only line renders with no [code] tag (byte-compatible with pre-Stage-B)', () => {
+    const line = formatTurnInjectionEntry(makeEntry({ injectedIds: ['mem-1', 'mem-2'], injectedSources: ['memory', 'memory'], tokenCost: 100 }));
+    expect(line).not.toContain('[code]');
+    expect(line).toContain('injected mem-1, mem-2');
+  });
+
+  test('Stage B: an empty turn states why code was skipped when a code index was queried', () => {
+    const line = formatTurnInjectionEntry(makeEntry({
+      injectedIds: [],
+      candidatesConsidered: 2,
+      codeCandidatesConsidered: 3,
+      reason: 'no records cleared relevance floor',
+      codeInjectionSkipped: 'no code chunks cleared the relevance floor',
+    }));
+    expect(line).toContain('code considered 3');
+    expect(line).toContain('code skipped: no code chunks cleared the relevance floor');
   });
 });
 

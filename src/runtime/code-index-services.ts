@@ -38,7 +38,7 @@
 // ---------------------------------------------------------------------------
 
 import { join } from 'node:path';
-import { CodeIndexStore } from '@pellux/goodvibes-sdk/platform/state';
+import { CodeIndexStore, CodeIndexReindexScheduler } from '@pellux/goodvibes-sdk/platform/state';
 import type { MemoryEmbeddingProviderRegistry } from '@pellux/goodvibes-sdk/platform/state';
 import type { ConfigKey, ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import { readBooleanConfig } from '../core/alert-gating.ts';
@@ -67,8 +67,26 @@ export interface CodeIndexServicesDeps {
   readonly memoryEmbeddingRegistry: MemoryEmbeddingProviderRegistry;
 }
 
+/**
+ * Whether Stage B code auto-injection / tool-site reindex may run: the SAME
+ * storage.codeIndexEnabled switch that gates auto-build. Read live so a runtime
+ * /config toggle takes effect without restart. (The separate, default-off
+ * `agent-passive-code-injection` feature flag gates injection additionally; this
+ * is only the storage-side setting the SDK asks embedders to respect.)
+ */
+export function isCodeInjectionSettingEnabled(configManager: Pick<ConfigManager, 'get'>): boolean {
+  return isCodeIndexAutoStartEnabled(configManager);
+}
+
 export interface CodeIndexServices {
   readonly codeIndexStore: CodeIndexStore;
+  /**
+   * Wave-5 Stage B tool-site incremental reindex scheduler, bound to codeIndexStore and
+   * gated live on storage.codeIndexEnabled. Threaded into both SDK orchestrators (main +
+   * agent) so a successful write/edit debounces an incremental reindex, and into the command
+   * context so /codebase status can report the last reindex activity honestly.
+   */
+  readonly codeIndexReindexScheduler: CodeIndexReindexScheduler;
 }
 
 /** Absolute path to the TUI's code-index sqlite file, sibling to memory.sqlite under .goodvibes/tui/. */
@@ -108,5 +126,10 @@ export function createCodeIndexServices(deps: CodeIndexServicesDeps): CodeIndexS
   if (isCodeIndexAutoStartEnabled(deps.configManager)) {
     codeIndexStore.scheduleBuild();
   }
-  return { codeIndexStore };
+  const codeIndexReindexScheduler = new CodeIndexReindexScheduler({
+    target: codeIndexStore,
+    workingDirectory: deps.workingDirectory,
+    isEnabled: () => isCodeInjectionSettingEnabled(deps.configManager),
+  });
+  return { codeIndexStore, codeIndexReindexScheduler };
 }
