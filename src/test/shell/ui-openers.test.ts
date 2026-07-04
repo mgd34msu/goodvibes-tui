@@ -33,6 +33,9 @@ describe('wireShellUiOpeners', () => {
       focusPanels: mock(() => {}),
       focusPrompt: mock(() => {}),
       setOpenModalCallback: mock(() => {}),
+      // W6.1: no config-modal surface registered on this bare mock manager, so
+      // getModalSurface always resolves to undefined (the honest no-op path).
+      getModalSurface: mock(() => undefined),
     };
     conversation = {
       setSplashSuppressed: mock(() => {}),
@@ -126,13 +129,14 @@ describe('wireShellUiOpeners', () => {
     expect(render).not.toHaveBeenCalled();
   });
 
-  // W6.1 (the purge) skeleton: no MIGRATE-TO-MODAL surface is registered yet
-  // (WO-A/B add real modal dispatch here). openModal must still be a safe,
-  // honest no-op rather than throwing or silently doing nothing.
+  // W6.1 (the purge): openModal resolves the name to a registered config-modal
+  // surface (PanelManager.getModalSurface). With no surface registered it must
+  // stay a safe, honest no-op — an explanatory print, not a throw or a blank
+  // modal. The same callback is injected into PanelManager for redirect hits.
   test('openModal is wired onto both CommandContext and PanelManager, and is safe with no real modal registered', () => {
     expect(panelManager.setOpenModalCallback).toHaveBeenCalledWith(commandContext.openModal);
     (commandContext.openModal as (name: string) => void)('providers-modal');
-    expect(input.modalOpened).toHaveBeenCalledWith('providers-modal');
+    expect(panelManager.getModalSurface).toHaveBeenCalledWith('providers-modal');
     expect(commandContext.print).toHaveBeenCalledWith("'providers-modal' is not available yet in this build.");
     expect(render).toHaveBeenCalled();
   });

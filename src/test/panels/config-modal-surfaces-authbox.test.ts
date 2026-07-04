@@ -105,22 +105,30 @@ describe('local-auth modal surface', () => {
     expect(calls).toEqual([['local-auth', ['delete-user', 'alice']]]);
   });
 
-  test('add-user dispatches /local-auth add-user with no password argument', () => {
+  test('add-user points at the masked /local-auth command instead of dispatching under the modal', () => {
     const surface = createLocalAuthModalSurface(makeAuthManager(true));
     const calls: Array<[string, string[]]> = [];
+    const printed: string[] = [];
     surface.onAction?.('add-user', ctx(null, {
+      print: (m) => printed.push(m),
       executeCommand: async (name, args) => { calls.push([name, args]); return true; },
     }));
-    expect(calls).toEqual([['local-auth', ['add-user']]]);
+    // Masked entry cannot render under a fullscreen modal — no command is
+    // dispatched into a hidden surface; the operator is pointed at the command.
+    expect(calls).toEqual([]);
+    expect(printed.join('\n')).toContain('/local-auth add-user');
   });
 
-  test('rotate-pw dispatches /local-auth rotate-password for the selected username', () => {
+  test('rotate-pw points at the masked /local-auth command for the selected username', () => {
     const surface = createLocalAuthModalSurface(makeAuthManager(true));
     const calls: Array<[string, string[]]> = [];
+    const printed: string[] = [];
     surface.onAction?.('rotate-pw', ctx({ id: 'user:bob', label: '' }, {
+      print: (m) => printed.push(m),
       executeCommand: async (name, args) => { calls.push([name, args]); return true; },
     }));
-    expect(calls).toEqual([['local-auth', ['rotate-password', 'bob']]]);
+    expect(calls).toEqual([]);
+    expect(printed.join('\n')).toContain('/local-auth rotate-password bob');
   });
 
   test('clear-bootstrap dispatches /local-auth clear-bootstrap-file', () => {

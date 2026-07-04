@@ -53,8 +53,13 @@ export function registerBuiltinModals(manager: PanelManager, deps: ResolvedBuilt
   manager.registerModalSurface(createSettingsSyncModalSurface(deps.configManager));
   manager.registerModalRedirect('settings-sync', 'settings-sync-modal');
 
+  // local-auth-modal is the browse surface reached via the /local-auth
+  // front-door (ctx.openModal). Deliberately NO registerModalRedirect for
+  // 'local-auth': that id must keep resolving to the still-registered
+  // LocalAuthPanel so the masked password-entry path (openLocalAuthMaskedEntry ->
+  // showPanel('local-auth') -> getPanel('local-auth')) is not broken. See the
+  // note in builtin/operations.ts.
   manager.registerModalSurface(createLocalAuthModalSurface(deps.localUserAuthManager));
-  manager.registerModalRedirect('local-auth', 'local-auth-modal');
 
   manager.registerModalSurface(createSandboxModalSurface(deps.configManager, deps.sandboxSessionRegistry, deps.requestRender));
   manager.registerModalRedirect('sandbox', 'sandbox-modal');

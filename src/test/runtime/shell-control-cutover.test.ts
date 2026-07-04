@@ -122,9 +122,10 @@ describe('GC-ARCH-004: shell control cutover enforcement', () => {
     // W6.1 (the purge): debug-panel.ts was DELETE-disposition and no longer
     // exists — removed from this list (a deleted file trivially can't emit
     // render:request).
-    const restrictedFiles = [
-      'src/panels/provider-health-panel.ts',
-    ];
+    // W6.1 (config-modal migration, same wave): provider-health-panel.ts was
+    // migrated to a config-modal surface and deleted — removed from this
+    // list for the same reason.
+    const restrictedFiles: string[] = [];
 
     for (const relPath of restrictedFiles) {
       const absPath = join(projectRoot, relPath);
@@ -158,11 +159,13 @@ describe('GC-ARCH-004: shell control cutover enforcement', () => {
     // W6.1 (the purge): thinking-panel.ts and debug-panel.ts were
     // DELETE-disposition and no longer exist — removed from this list (a
     // deleted file trivially can't subscribe to anything).
+    // W6.1 (config-modal migration, same wave): provider-health-panel.ts was
+    // migrated to a config-modal surface and deleted — removed from this
+    // list for the same reason.
     const restrictedFiles = [
       // WO-113: context-visualizer-panel.ts merged into token-budget-panel.ts;
       // the successor inherits the legacy-turn-bus ban.
       'src/panels/token-budget-panel.ts',
-      'src/panels/provider-health-panel.ts',
       'src/panels/cost-tracker-panel.ts',
       'src/main.ts',
     ];
@@ -269,9 +272,11 @@ describe('GC-ARCH-004: shell control cutover enforcement', () => {
     const violations: string[] = [];
     // W6.1 (the purge): ops-strategy-panel.ts ('ops') was RETIRE-INTO-FLEET
     // and no longer exists — removed from this list.
+    // W6.1 (config-modal migration, same wave): provider-health-panel.ts was
+    // migrated to a config-modal surface and deleted — removed from this
+    // list for the same reason.
     const restrictedFiles = [
       'src/runtime/bootstrap.ts',
-      'src/panels/provider-health-panel.ts',
     ];
     const legacyTokens = [
       "providers:changed",

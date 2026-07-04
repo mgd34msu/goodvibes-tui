@@ -188,11 +188,31 @@ describe('operator surfaces gate', () => {
     expect(ids).toContain('hooks');
     expect(ids).toContain('security');
     expect(ids).toContain('marketplace');
-    expect(ids).toContain('sandbox');
-    expect(ids).toContain('subscription');
     expect(ids).toContain('knowledge');
-    expect(ids).toContain('remote');
     expect(ids).toContain('fleet');
+    // W6.1 (WO-A): local-auth stays a registered panel — it is the host for the
+    // masked password-entry sub-mode (LocalAuthPanel.openMaskedEntry) and cannot
+    // be retired without regressing that secure input path.
+    expect(ids).toContain('local-auth');
+
+    // W6.1 (WO-A, the purge): services, subscription, remote, provider-health,
+    // settings-sync, and sandbox were MIGRATE-TO-MODAL — no longer registered as
+    // panels; each id resolves to a config-modal surface via
+    // registerModalRedirect. 'providers'/'accounts' (former provider-health
+    // panel aliases) now redirect to the same providers-modal.
+    for (const id of ['services', 'subscription', 'remote', 'provider-health', 'settings-sync', 'sandbox']) {
+      expect(ids).not.toContain(id);
+    }
+    expect(manager.getModalRedirect('services')).toBe('services-modal');
+    expect(manager.getModalRedirect('subscription')).toBe('subscription-modal');
+    expect(manager.getModalRedirect('remote')).toBe('remote-modal');
+    expect(manager.getModalRedirect('provider-health')).toBe('providers-modal');
+    expect(manager.getModalRedirect('providers')).toBe('providers-modal');
+    expect(manager.getModalRedirect('accounts')).toBe('providers-modal');
+    expect(manager.getModalRedirect('settings-sync')).toBe('settings-sync-modal');
+    expect(manager.getModalRedirect('sandbox')).toBe('sandbox-modal');
+    // local-auth is deliberately NOT redirected (masked-entry host).
+    expect(manager.getModalRedirect('local-auth')).toBeUndefined();
 
     // W6.1 (the purge): communication, cockpit, approval, incident,
     // orchestration, and ops were RETIRE-INTO-FLEET — they no longer appear
@@ -207,12 +227,6 @@ describe('operator surfaces gate', () => {
     // to fleet (alias resolution is a single hop; forensics does not chain
     // through the also-retired 'incident').
     expect(manager.open('forensics')).toBe(manager.open('fleet'));
-    // WO-112: the 'providers' stats panel and 'accounts' panel merged into
-    // the provider-health console; both retired ids survive only as
-    // PanelManager aliases, so they must resolve to the same instance.
-    expect(ids).toContain('provider-health');
-    expect(manager.open('providers')).toBe(manager.open('provider-health'));
-    expect(manager.open('accounts')).toBe(manager.open('provider-health'));
     // WO-110: the 'agent-logs' console merged into inspector, which itself
     // later retired into fleet (W6.1) — both ids now resolve straight to
     // fleet.
@@ -371,20 +385,22 @@ describe('operator surfaces gate', () => {
     expect(opened).toBe(true);
   });
 
-  test('subscription command opens the subscription panel', async () => {
+  test('subscription command opens the subscription config modal', async () => {
     const registry = new CommandRegistry();
     registerBuiltinCommands(registry);
     const subscription = registry.get('subscription');
     expect(subscription).toBeDefined();
 
-    let opened = false;
+    // W6.1: the subscription panel migrated to a config-modal surface — the bare
+    // command now opens it via ctx.openModal, not ctx.openSubscriptionPanel.
+    let openedModal: string | null = null;
     await subscription!.handler([], makeCommandContext('sess-subscription-panel', {
-      openSubscriptionPanel: () => {
-        opened = true;
+      openModal: (name: string) => {
+        openedModal = name;
       },
     }));
 
-    expect(opened).toBe(true);
+    expect(openedModal).toBe('subscription-modal');
   });
 
   test('security command opens the security panel', async () => {
@@ -456,20 +472,22 @@ describe('operator surfaces gate', () => {
     expect(memoryOpened).toBe(true);
   });
 
-  test('remote command opens the remote panel', async () => {
+  test('remote command opens the remote config modal', async () => {
     const registry = new CommandRegistry();
     registerBuiltinCommands(registry);
     const remote = registry.get('remote');
     expect(remote).toBeDefined();
 
-    let opened = false;
+    // W6.1: the remote panel migrated to a config-modal surface — the bare
+    // command now opens it via ctx.openModal, not ctx.openRemotePanel.
+    let openedModal: string | null = null;
     await remote!.handler([], makeCommandContext('sess-remote-panel', {
-      openRemotePanel: () => {
-        opened = true;
+      openModal: (name: string) => {
+        openedModal = name;
       },
     }));
 
-    expect(opened).toBe(true);
+    expect(openedModal).toBe('remote-modal');
   });
 
   test('cockpit command opens the cockpit panel', async () => {

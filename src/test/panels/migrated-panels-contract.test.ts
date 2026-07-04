@@ -15,6 +15,12 @@
 // wrfc, plan-dashboard, orchestration, tasks; DELETE: system-messages) —
 // see .goodvibes/audit/2026-07-04-wave6-briefs.json (W6.1). Count dropped
 // from 28 to 15.
+//
+// W6.1 (config-modal migration, same wave): services, subscription, and
+// settings-sync were migrated to config-modal surfaces and their contract
+// modules removed; sandbox, remote, and provider-health were also migrated
+// to modals but never had contract modules of their own. Count dropped
+// from 15 to 12.
 // ---------------------------------------------------------------------------
 
 import { describe, test, expect } from 'bun:test';
@@ -25,11 +31,8 @@ import { fileURLToPath } from 'node:url';
 import './contract/skills-panel.contract.ts';
 import './contract/hooks-panel.contract.ts';
 import './contract/security-panel.contract.ts';
-import './contract/settings-sync-panel.contract.ts';
-import './contract/subscription-panel.contract.ts';
 import './contract/plugins-panel.contract.ts';
 import './contract/local-auth-panel.contract.ts';
-import './contract/services-panel.contract.ts';
 import './contract/git-panel.contract.ts';
 import './contract/diff-panel.contract.ts';
 import './contract/token-budget-panel.contract.ts';
@@ -42,7 +45,7 @@ import './contract/marketplace-panel.contract.ts';
 // explicit count (rather than trusting a bare directory listing on its own)
 // so a stray file left in contract/ without being wired up above still fails
 // the parity check below instead of silently losing coverage.
-const CONTRACT_MODULE_COUNT = 15;
+const CONTRACT_MODULE_COUNT = 12;
 
 describe('migrated panels — contract module registry parity', () => {
   test('one contract module exists per registered panel', () => {
