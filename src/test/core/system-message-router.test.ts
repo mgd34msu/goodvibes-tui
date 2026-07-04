@@ -83,9 +83,14 @@ describe('classifyPriority (via routeAuto)', () => {
     expect(conv.addTypedSystemMessage).toHaveBeenCalledWith('[Scan] Found ollama at localhost:11434', 'operational');
   });
 
-  test('[Agents] status messages classify as low but still reach conversation', () => {
+  test('[Agents] periodic "N running" snapshots are suppressed; lifecycle lines still reach conversation (UX-B 1d)', () => {
+    // The 30s "N running:" snapshot is transcript churn — dropped; the same live
+    // detail is shown in the fleet panel and the footer count.
     router.routeAuto('[Agents] 3 running:\n  abc12345: working');
-    expect(conv.addTypedSystemMessage).toHaveBeenCalledWith('[Agents] 3 running:\n  abc12345: working', 'operational');
+    expect(conv.addTypedSystemMessage).not.toHaveBeenCalled();
+    // A meaningful lifecycle line is not a snapshot and still routes.
+    router.routeAuto('[Agents] ✓ abc12345 completed');
+    expect(conv.addTypedSystemMessage).toHaveBeenCalledWith('[Agents] ✓ abc12345 completed', 'operational');
   });
 
   test('[Tool] activity messages classify as operational and can route separately', () => {
@@ -201,7 +206,9 @@ describe('routeAuto classification', () => {
   const lowCases = [
     '[Scan] Found server at localhost',
     '[Local] ollama at localhost:11434',
-    '[Agents] 2 running: task a',
+    // Not the "N running:" periodic snapshot (that is suppressed — see below);
+    // a lifecycle line still reaches the transcript.
+    '[Agents] ✓ task a completed',
     '[MCP] Discovered server foo',
     '[Plugin] loaded my-plugin',
     '[Tool] edit wrote app.ts',
@@ -226,5 +233,45 @@ describe('routeAuto classification', () => {
   test('WRFC messages classify as wrfc and follow WRFC target policy', () => {
     router.routeAuto('[WRFC] Chain abc123 started');
     expect(conv.addTypedSystemMessage).toHaveBeenCalledWith('[WRFC] Chain abc123 started', 'wrfc');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Noise gate integration (UX-B item 1)
+// ---------------------------------------------------------------------------
+
+describe('router noise gate', () => {
+  test('1b — a provider-replay burst folds to a single line on the next microtask', async () => {
+    const conv = makeConversation();
+    const router = createSystemMessageRouter(conv as unknown as ConversationManager, makeTargetResolver());
+    router.low('[Local] ollama at localhost:11434 (2 models) — from last session');
+    router.low('[Local] lmstudio at localhost:1234 (5 models) — from last session');
+    // Nothing emitted synchronously — the burst is buffered.
+    expect(conv.addTypedSystemMessage).not.toHaveBeenCalled();
+    await Promise.resolve();
+    expect(conv._messages).toEqual([
+      '[Local] Restored 2 providers from last session (ollama, lmstudio)',
+    ]);
+  });
+
+  test('1c — replay lines for a terminal chain are dropped, active ones pass', () => {
+    const conv = makeConversation();
+    const router = createSystemMessageRouter(
+      conv as unknown as ConversationManager,
+      makeTargetResolver(),
+      { isChainTerminal: (id) => id === 'dead' },
+    );
+    router.low('[Replay] WRFC chain dead transitioned pending → engineering — waiting for action (first notified 1 turn ago)');
+    router.low('[Replay] WRFC chain live transitioned pending → engineering — waiting for action (first notified 1 turn ago)');
+    expect(conv._messages).toEqual([
+      '[Replay] WRFC chain live transitioned pending → engineering — waiting for action (first notified 1 turn ago)',
+    ]);
+  });
+
+  test('1d — periodic running-agents snapshots never reach the transcript', () => {
+    const conv = makeConversation();
+    const router = createSystemMessageRouter(conv as unknown as ConversationManager, makeTargetResolver());
+    router.low('[Agents] 2 running:\n  abc: Turn 3 · Thinking…');
+    expect(conv.addTypedSystemMessage).not.toHaveBeenCalled();
   });
 });

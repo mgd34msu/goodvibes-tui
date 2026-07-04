@@ -3,6 +3,7 @@ import { renderMarkdownTracked } from '../renderer/markdown.ts';
 import { renderDiffView } from '../renderer/diff-view.ts';
 import { DARK_THEME } from '../renderer/theme.ts';
 import { renderToolCallBlock } from '../renderer/tool-call.ts';
+import { summarizeToolResult } from '../renderer/tool-result-summary.ts';
 import type { ToolCall } from '@pellux/goodvibes-sdk/platform/types';
 import { renderThinkingBlock } from '../renderer/thinking.ts';
 import { renderSystemMessage } from '../renderer/system-message.ts';
@@ -39,6 +40,20 @@ const NAVIGABLE_KINDS: ReadonlySet<SystemMessageKind> = new Set(['system', 'wrfc
 
 type Message = ConversationMessageSnapshot;
 
+/**
+ * Collect the ids of tool calls that have a matching tool-result message in the
+ * given slice — i.e. the tools that actually ran. Used to decide whether an
+ * assistant tool call still shows as pending (awaiting approval) or done.
+ * (UX-B item 2c.)
+ */
+export function collectCompletedToolCallIds(messages: readonly Message[]): Set<string> {
+  const ids = new Set<string>();
+  for (const message of messages) {
+    if (message.role === 'tool' && message.callId) ids.add(message.callId);
+  }
+  return ids;
+}
+
 function summarizeCallId(callId: string, maxLength = 24): string {
   return callId.length <= maxLength ? callId : `${callId.slice(0, maxLength - 1)}…`;
 }
@@ -56,6 +71,15 @@ export interface ConversationRenderContext {
   readonly messageKindRegistry: ReadonlyMap<number, SystemMessageKind>;
   readonly configManager: ConfigManager | null;
   readonly splashOptions: SplashOptions;
+  /**
+   * Tool-call ids that have a corresponding tool-result message (i.e. the tool
+   * actually ran). An assistant tool call whose id is NOT in this set is still
+   * awaiting a decision (e.g. an approval prompt) and renders with a pending
+   * glyph instead of the completed ✓. When undefined (single-message callers
+   * without sibling context), every tool call renders as done — the prior
+   * behaviour. (UX-B item 2c.)
+   */
+  readonly completedToolCallIds?: ReadonlySet<string>;
 }
 
 export function renderConversationUserMessage(
@@ -196,7 +220,11 @@ export function renderConversationAssistantMessage(
 
   if (message.toolCalls && message.toolCalls.length > 0) {
     for (const tc of message.toolCalls) {
-      context.history.addLines(renderToolCallBlock(tc, 'done', undefined, width));
+      // A tool call with no result message yet is still awaiting a decision
+      // (e.g. approval) — show a pending glyph, not the completed ✓.
+      const ran = context.completedToolCallIds === undefined
+        || (tc.id !== undefined && context.completedToolCallIds.has(tc.id));
+      context.history.addLines(renderToolCallBlock(tc, ran ? 'done' : 'pending', undefined, width));
     }
   }
 }
@@ -237,7 +265,17 @@ export function renderConversationToolMessage(
   // block-registry meta merge below regardless of collapsed/expanded state.
   const diffParse = isDiff ? parseDiffForApply(message.content) : undefined;
 
-  const isShort = message.content.length <= 200;
+  // Human one-line summary for tool results (write/read/exec/edit): shown as the
+  // collapsed line so the transcript reads "wrote foo.txt (532 B)" instead of a
+  // raw JSON blob; the full payload stays behind the expand toggle. Only for
+  // 'tool' blocks (diffs render their own view). (UX-B item 3.)
+  const resultSummary = blockType === 'tool'
+    ? summarizeToolResult(message.toolName, message.content)
+    : null;
+
+  // A summarizable result is kept collapsed-by-default even when short, so the
+  // one-line summary wins and the raw JSON is tucked behind the expand toggle.
+  const isShort = message.content.length <= 200 && resultSummary === null;
   const isCollapsed = isShort
     ? false
     : context.collapseState.has(collapseKey)
@@ -263,11 +301,20 @@ export function renderConversationToolMessage(
 
   if (isCollapsed) {
     const collapseSuffixReserve = 30;
-    const preview = contentLines[0].slice(0, width - LAYOUT.LEFT_MARGIN - LAYOUT.RIGHT_MARGIN - collapseSuffixReserve);
+    const avail = Math.max(0, width - LAYOUT.LEFT_MARGIN - LAYOUT.RIGHT_MARGIN - collapseSuffixReserve);
     const hiddenCount = lineCount - 1;
-    const collapsedText = hiddenCount > 0
-      ? `${preview}...  [${GLYPHS.navigation.collapsed} ${hiddenCount} hidden]`
-      : preview;
+    let collapsedText: string;
+    if (resultSummary !== null) {
+      // Summary line — the header already shows "▸ N lines", so no hidden badge.
+      collapsedText = resultSummary.length > avail
+        ? `${resultSummary.slice(0, Math.max(0, avail - 1))}…`
+        : resultSummary;
+    } else {
+      const preview = contentLines[0].slice(0, avail);
+      collapsedText = hiddenCount > 0
+        ? `${preview}...  [${GLYPHS.navigation.collapsed} ${hiddenCount} hidden]`
+        : preview;
+    }
     const rendered = renderConversationCollapsedFragment(collapsedText, width, {
       prefix: blockType === 'diff' ? ` ${GLYPHS.status.dualPane} ` : ` ${GLYPHS.navigation.collapsed} `,
       prefixFg: blockType === 'diff' ? T.diffAccent : T.toolAccent,
@@ -326,23 +373,28 @@ export function appendConversationMessages(
 ): void {
   const lineNumberMode = context.configManager?.get('display.lineNumbers') ?? 'off';
   const collapseThreshold = context.configManager?.get('display.collapseThreshold') ?? 30;
+  // Derive pending vs done for tool calls from sibling tool-result messages,
+  // unless the caller already supplied the set. (UX-B item 2c.)
+  const renderContext: ConversationRenderContext = context.completedToolCallIds !== undefined
+    ? context
+    : { ...context, completedToolCallIds: collectCompletedToolCallIds(messages) };
 
   for (let msgIdx = 0; msgIdx < messages.length; msgIdx++) {
     const message = messages[msgIdx];
     // absoluteIdx aligns the slice-relative loop counter with the absolute
     // message index used as the key in messageKindRegistry and messageLineRegistry.
     const absoluteIdx = msgIndexOffset + msgIdx;
-    messageLineRegistry[absoluteIdx] = context.history.getLineCount();
+    messageLineRegistry[absoluteIdx] = renderContext.history.getLineCount();
     if (message.role === 'user') {
-      renderConversationUserMessage(context, message, width);
+      renderConversationUserMessage(renderContext, message, width);
     } else if (message.role === 'assistant') {
-      renderConversationAssistantMessage(context, message, width, lineNumberMode, collapseThreshold, absoluteIdx);
+      renderConversationAssistantMessage(renderContext, message, width, lineNumberMode, collapseThreshold, absoluteIdx);
     } else if (message.role === 'system') {
-      renderConversationSystemMessage(context, message, width, absoluteIdx);
+      renderConversationSystemMessage(renderContext, message, width, absoluteIdx);
     } else if (message.role === 'tool') {
-      renderConversationToolMessage(context, message, width, absoluteIdx);
+      renderConversationToolMessage(renderContext, message, width, absoluteIdx);
     }
-    context.history.addLine(createEmptyLine(width));
+    renderContext.history.addLine(createEmptyLine(width));
   }
 }
 

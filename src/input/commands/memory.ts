@@ -138,7 +138,7 @@ export const recallCommand: SlashCommand = {
           '  stale <id> [reason...]                          — Mark a record stale with an operator reason',
           '  contradict <id> [reason...]                     — Mark a record contradicted with an operator reason',
           '  explain <task...> [--scope <path> ...]         — Show the knowledge records that would be injected for a task',
-          '  injections [agentId]                           — Show per-turn passive knowledge injection records (Wave-5); no id shows the main session, an id shows that spawned agent',
+          '  injections [agentId]                           — Show per-turn passive knowledge injection records; no id shows the main session, an id shows that spawned agent',
           '  promote <id> <scope>                           — Promote a memory record into session|project|team scope',
           '  export <path> [--scope <scope>] [--cls <class>] — Export a durable knowledge bundle',
           '  import <path>                                  — Import a durable knowledge bundle',

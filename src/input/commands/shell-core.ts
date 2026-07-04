@@ -294,6 +294,12 @@ export function registerShellCoreCommands(registry: CommandRegistry): void {
     handler(_args, ctx) {
       ctx.session.runtime.debugMode = !ctx.session.runtime.debugMode;
       ctx.print(`Debug mode: ${ctx.session.runtime.debugMode ? 'ON' : 'OFF'}`);
+      // Honest quiet counter for direct terminal writes the guard intercepted
+      // (routed here instead of spamming the transcript). (UX-B item 1a.)
+      const intercepted = ctx.session.runtime.terminalWritesIntercepted ?? 0;
+      if (intercepted > 0) {
+        ctx.print(`Terminal writes intercepted this session: ${intercepted} (details in the activity log)`);
+      }
     },
   });
 

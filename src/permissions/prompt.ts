@@ -12,6 +12,72 @@ export type { PermissionPromptRequest, PermissionPromptDecision, PermissionReque
 /** Visible hunk rows before a "+N more" trailer kicks in (Risk 3). */
 const MAX_VISIBLE_HUNKS = 8;
 
+/** Path rows shown before collapsing to a "N files: a, b, +K more" line (UX-B 2a). */
+const MAX_PATH_ROWS = 3;
+
+/** Trailing filename for compact display of a long/absolute path. */
+function baseName(p: string): string {
+  const cleaned = p.replace(/[/\\]+$/, '');
+  const idx = Math.max(cleaned.lastIndexOf('/'), cleaned.lastIndexOf('\\'));
+  return idx >= 0 ? cleaned.slice(idx + 1) : cleaned;
+}
+
+/** Make an absolute path relative to the working directory when it sits under it. */
+function relativize(p: string, cwd?: string): string {
+  if (!cwd || !p.startsWith('/')) return p;
+  if (p === cwd) return '.';
+  const prefix = cwd.endsWith('/') ? cwd : `${cwd}/`;
+  return p.startsWith(prefix) ? p.slice(prefix.length) : p;
+}
+
+/** Collect string elements or `el[field]` strings from an array arg. */
+function collectField(arr: unknown, field: string): string[] {
+  if (!Array.isArray(arr)) return [];
+  const out: string[] = [];
+  for (const el of arr) {
+    if (typeof el === 'string') out.push(el);
+    else if (el && typeof el === 'object' && typeof (el as Record<string, unknown>)[field] === 'string') {
+      out.push((el as Record<string, unknown>)[field] as string);
+    }
+  }
+  return out;
+}
+
+/**
+ * The real display target(s) of a tool invocation — the paths/commands/urls a
+ * user needs to see, extracted from the actual arg shapes so a nested
+ * `{files:[{path}]}` no longer falls through to a raw JSON blob. (UX-B 2a.)
+ * Returns [] when nothing recognisable is present (caller falls back).
+ */
+function cardTargets(args: Record<string, unknown>): string[] {
+  const files = collectField(args.files, 'path');
+  if (files.length) return files;
+  if (typeof args.path === 'string') return [args.path];
+  if (typeof args.file === 'string') return [args.file];
+  const commands = collectField(args.commands, 'cmd');
+  if (commands.length) return commands;
+  if (typeof args.command === 'string') return [args.command];
+  if (typeof args.cmd === 'string') return [args.cmd];
+  if (typeof args.pattern === 'string') return [args.pattern];
+  const urls = collectField(args.urls, 'url');
+  if (urls.length) return urls;
+  const queries = collectField(args.queries, 'query');
+  if (queries.length) return queries;
+  if (typeof args.query === 'string') return [args.query];
+  if (typeof args.task === 'string') return [args.task];
+  return [];
+}
+
+/** Short human verb for a permission category, for the condensed summary line. */
+function categoryVerb(category: PermissionCategory): string {
+  switch (category) {
+    case 'write':    return 'write';
+    case 'execute':  return 'run';
+    case 'delegate': return 'delegate';
+    default:         return 'read';
+  }
+}
+
 /**
  * Single source of truth for how many Line rows the hunk-list section
  * occupies: 1 header row + up to MAX_VISIBLE_HUNKS checkbox rows + 1 trailer
@@ -49,12 +115,62 @@ export class PermissionPromptUI {
     };
   }
 
-  static getPromptHeight(request: PermissionPromptRequest, hunkState?: HunkSelectionState): number {
+  /** The relativised display target(s) for the Path field, with a raw fallback. */
+  private static resolvedTargets(request: PermissionPromptRequest): string[] {
+    const cwd = request.workingDirectory;
+    const targets = cardTargets(request.args).map((t) => relativize(t, cwd));
+    return targets.length > 0 ? targets : [getDisplayArg(request.tool, request.args)];
+  }
+
+  /** Path-field row texts — one per target when few, a "N files:" summary when many. */
+  private static pathRowTexts(targets: string[], maxLen: number): string[] {
+    const clamp = (s: string): string => (s.length > maxLen ? `...${s.slice(-(maxLen - 3))}` : s);
+    if (targets.length <= 1) return [clamp(targets[0] ?? '(unknown)')];
+    if (targets.length <= MAX_PATH_ROWS) return targets.map(clamp);
+    const shown = targets.slice(0, 2).map(baseName).join(', ');
+    return [clamp(`${targets.length} files: ${shown}, +${targets.length - 2} more`)];
+  }
+
+  /**
+   * A low-risk, project-local request is shown condensed (one summary line +
+   * choices) unless the user expanded it with `d`. High/critical risk, external
+   * scope, and hunk-selectable edits always show the full block. (UX-B 2b.)
+   */
+  private static isCondensed(
+    request: PermissionPromptRequest,
+    hunkState: HunkSelectionState | undefined,
+    detailsExpanded: boolean,
+  ): boolean {
+    if (hunkState || detailsExpanded) return false;
+    // Shell execution, delegation and network requests always show the full
+    // card — their action semantics (command, side effects, host, checklist)
+    // warrant scrutiny even when the risk model rates them low. Only mundane
+    // low-risk filesystem reads/writes condense. (UX-B 2b.)
+    if (request.category === 'execute' || request.category === 'delegate') return false;
+    const analysis = this.fallbackAnalysis(request);
+    if (analysis.riskLevel !== 'low') return false;
+    const scope = analysis.blastRadius;
+    return scope === undefined || scope === 'local' || scope === 'project';
+  }
+
+  static getPromptHeight(
+    request: PermissionPromptRequest,
+    hunkState?: HunkSelectionState,
+    detailsExpanded = false,
+  ): number {
+    // Condensed low-risk card: top separator, title, summary, choices, bottom
+    // separator — see createPromptLines' condensed branch (must stay in sync).
+    if (this.isCondensed(request, hunkState, detailsExpanded)) return 5;
     const analysis = this.fallbackAnalysis(request);
     const reasonLines = Math.min(2, Math.max(1, analysis.reasons.length));
     const extraLines = (analysis.host ? 1 : 0) + (analysis.surface ? 1 : 0) + (analysis.sideEffects && analysis.sideEffects.length > 0 ? 1 : 0);
     const hunkLines = hunkState ? hunkListRowCount(hunkState) : 0;
-    return 12 + reasonLines + extraLines + hunkLines;
+    // Base 12 counted a single arg line; the Path field now spans `pathRows`
+    // lines and the full card adds one raw-args row (2a reachability), so the
+    // arg allotment becomes pathRows + 1 → base 12 + pathRows (12 already
+    // included one of those). See createPromptLines' full branch.
+    const pathRows = this.pathRowTexts(this.resolvedTargets(request), 999).length;
+    return 12 + pathRows + reasonLines + extraLines + hunkLines;
   }
 
   /** Returns the key argument to display for a given tool invocation. */
@@ -84,18 +200,40 @@ export class PermissionPromptUI {
    * createPromptLines - Renders the permission prompt as an array of Lines.
    * Injected into the viewport by the render function when a request is pending.
    */
-  static createPromptLines(width: number, request: PermissionRequest, hunkState?: HunkSelectionState): Line[] {
+  static createPromptLines(
+    width: number,
+    request: PermissionRequest,
+    hunkState?: HunkSelectionState,
+    detailsExpanded = false,
+  ): Line[] {
     const lines: Line[] = [];
     const { tool, args, category } = request;
     const analysis = this.fallbackAnalysis(request);
     const brief = buildPermissionApprovalBrief(request);
-    const displayArg = this.getDisplayArg(tool, args);
     const { label, color } = this.getCategoryLabel(category);
 
     const ACCENT = '135'; // purple
     const WARN   = color;
     const TEXT   = '252';
     const DIM    = '244';
+
+    const maxArgLen = Math.max(10, width - 16);
+    const pathRows = this.pathRowTexts(this.resolvedTargets(request), maxArgLen);
+
+    // Condensed low-risk / project-local card: one summary line (verb → target
+    // (scope)) plus the choices. Full block is one `d` away. (UX-B 2b.)
+    if (this.isCondensed(request, hunkState, detailsExpanded)) {
+      lines.push(UIFactory.stringToLine('─'.repeat(width), width, { fg: ACCENT, dim: true }));
+      lines.push(UIFactory.stringToLine(` [${label}] ${brief.title} `.padEnd(width), width, { fg: WARN, bold: true }));
+      const scopeText = analysis.blastRadius ? ` (${analysis.blastRadius})` : '';
+      const summaryLine = `   ${categoryVerb(category)} → ${pathRows[0]}${scopeText}`;
+      lines.push(UIFactory.stringToLine(summaryLine.padEnd(width), width, { fg: TEXT }));
+      lines.push(UIFactory.stringToLine(
+        `   [Y] Allow once    [A] Allow always (session)    [N] Deny    [d] details`.padEnd(width),
+        width, { fg: ACCENT, bold: true }));
+      lines.push(UIFactory.stringToLine('─'.repeat(width), width, { fg: ACCENT, dim: true }));
+      return lines;
+    }
 
     // Top separator
     lines.push(UIFactory.stringToLine('─'.repeat(width), width, { fg: ACCENT, dim: true }));
@@ -109,13 +247,13 @@ export class PermissionPromptUI {
     const toolLine = `   Tool      : ${tool}`;
     lines.push(UIFactory.stringToLine(toolLine.padEnd(width), width, { fg: TEXT }));
 
-    // Key argument row - truncate if too long
-    const maxArgLen = Math.max(10, width - 16);
-    const truncatedArg = displayArg.length > maxArgLen
-      ? '...' + displayArg.slice(-(maxArgLen - 3))
-      : displayArg;
-    const argLine = `   ${brief.subjectLabel.padEnd(9)}: ${truncatedArg}`;
-    lines.push(UIFactory.stringToLine(argLine.padEnd(width), width, { fg: TEXT }));
+    // Path/subject row(s): actual target path(s), one per line when few, a
+    // "N files: a, b, +K more" summary when many. Raw args move to the Args row
+    // below so this field never shows a truncated JSON blob. (UX-B 2a.)
+    pathRows.forEach((rowText, i) => {
+      const labelCol = i === 0 ? brief.subjectLabel.padEnd(9) : ' '.repeat(9);
+      lines.push(UIFactory.stringToLine(`   ${labelCol}: ${rowText}`.padEnd(width), width, { fg: TEXT }));
+    });
 
     // Working directory row
     const cwd = request.workingDirectory ?? '(unknown)';
@@ -170,6 +308,13 @@ export class PermissionPromptUI {
     const checklistLine = `   Checklist : ${truncatedChecklist}`;
     lines.push(UIFactory.stringToLine(checklistLine.padEnd(width), width, { fg: DIM }));
 
+    // Raw args row — the full tool arguments live here in the details view so
+    // the Path field above can render clean path(s), never a JSON blob. (2a.)
+    const rawArgs = JSON.stringify(args);
+    const maxRawLen = Math.max(10, width - 16);
+    const truncatedRaw = rawArgs.length > maxRawLen ? `${rawArgs.slice(0, maxRawLen - 3)}...` : rawArgs;
+    lines.push(UIFactory.stringToLine(`   Args      : ${truncatedRaw}`.padEnd(width), width, { fg: DIM }));
+
     // Blank spacer
     lines.push(UIFactory.stringToLine(' '.repeat(width), width));
 
@@ -207,10 +352,12 @@ export class PermissionPromptUI {
       lines.push(UIFactory.stringToLine(trailerLine.padEnd(width), width, { fg: DIM }));
     }
 
-    // Choices row
+    // Choices row. A condensable card shown in full is the expanded form, so it
+    // offers `[d]` to collapse back; other full cards omit the details toggle.
+    const collapseHint = this.isCondensed(request, hunkState, false) ? '    [d] hide details' : '';
     const choicesLine = hunkState
       ? `   [j/k] Navigate  [Space] Toggle  [A] All  [Enter] Apply selected  [N] Deny`
-      : `   [Y] Allow once    [A] Allow always (session)    [N] Deny`;
+      : `   [Y] Allow once    [A] Allow always (session)    [N] Deny${collapseHint}`;
     lines.push(UIFactory.stringToLine(choicesLine.padEnd(width), width, { fg: ACCENT, bold: true }));
 
     // Bottom separator

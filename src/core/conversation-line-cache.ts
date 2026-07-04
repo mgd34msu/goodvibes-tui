@@ -49,6 +49,7 @@ import {
   renderConversationSystemMessage,
   renderConversationToolMessage,
   renderConversationUserMessage,
+  collectCompletedToolCallIds,
 } from './conversation-rendering.ts';
 import type { ConversationMessageSnapshot } from '@pellux/goodvibes-sdk/platform/core';
 // SystemMessageKind imported from runtime directly to avoid a cycle, mirroring
@@ -94,6 +95,18 @@ interface KeyMeta {
   readonly showReasoningSummary: boolean;
   readonly blockBase: number;
   readonly kind: SystemMessageKind | undefined;
+  /**
+   * True when this (assistant) message has a tool call with no result yet — it
+   * renders as pending rather than done. Keyed so the entry invalidates and
+   * re-renders ✓ once the tool result arrives. (UX-B item 2c.)
+   */
+  readonly hasPendingTool: boolean;
+}
+
+/** Whether an assistant message has any tool call still awaiting a result. */
+function hasPendingToolCall(m: Message, completed: ReadonlySet<string>): boolean {
+  if (m.role !== 'assistant' || !m.toolCalls) return false;
+  return m.toolCalls.some((tc) => tc.id === undefined || !completed.has(tc.id));
 }
 
 interface CacheEntry {
@@ -272,6 +285,11 @@ export class MessageLineCache {
       showReasoningSummary: context.configManager?.get('display.showReasoningSummary') ?? false,
     };
 
+    // Tool calls with no matching tool-result message are still pending; the
+    // render context and the cache key both depend on this. (UX-B item 2c.)
+    const completedToolCallIds = collectCompletedToolCallIds(messages);
+    const renderContext: ConversationRenderContext = { ...context, completedToolCallIds };
+
     const touched = new Set<number>();
 
     for (let i = 0; i < messages.length; i++) {
@@ -283,17 +301,18 @@ export class MessageLineCache {
 
       const uncacheable = absoluteIdx === streamingPlaceholderAbsIdx;
       const kind = context.messageKindRegistry.get(absoluteIdx);
+      const hasPendingTool = hasPendingToolCall(message, completedToolCallIds);
 
       if (!uncacheable) {
         const existing = this.entries.get(absoluteIdx);
-        if (existing && this.isValid(existing, message, width, cfg, blockBase, kind, context.collapseState)) {
+        if (existing && this.isValid(existing, message, width, cfg, blockBase, kind, hasPendingTool, context.collapseState)) {
           this.applyEntry(context, existing, base);
           touched.add(absoluteIdx);
           continue;
         }
       }
 
-      const entry = this.renderScratch(context, message, width, absoluteIdx, cfg, blockBase, kind);
+      const entry = this.renderScratch(renderContext, message, width, absoluteIdx, cfg, blockBase, kind, hasPendingTool);
       this.applyEntry(context, entry, base);
       if (!uncacheable) {
         this.entries.set(absoluteIdx, entry);
@@ -319,6 +338,7 @@ export class MessageLineCache {
     cfg: RenderConfig,
     blockBase: number,
     kind: SystemMessageKind | undefined,
+    hasPendingTool: boolean,
     collapseState: Map<string, boolean>,
   ): boolean {
     const k = entry.keyMeta;
@@ -330,7 +350,8 @@ export class MessageLineCache {
       k.showThinking !== cfg.showThinking ||
       k.showReasoningSummary !== cfg.showReasoningSummary ||
       k.blockBase !== blockBase ||
-      k.kind !== kind
+      k.kind !== kind ||
+      k.hasPendingTool !== hasPendingTool
     ) {
       return false;
     }
@@ -355,6 +376,7 @@ export class MessageLineCache {
     cfg: RenderConfig,
     blockBase: number,
     kind: SystemMessageKind | undefined,
+    hasPendingTool: boolean,
   ): CacheEntry {
     const scratchLines: Line[] = [];
     const scratchHistory = {
@@ -378,6 +400,7 @@ export class MessageLineCache {
       messageKindRegistry: context.messageKindRegistry,
       configManager: context.configManager,
       splashOptions: context.splashOptions,
+      completedToolCallIds: context.completedToolCallIds,
     };
 
     renderOne(scratchCtx, message, width, absoluteIdx, cfg);
@@ -397,6 +420,7 @@ export class MessageLineCache {
         showReasoningSummary: cfg.showReasoningSummary,
         blockBase,
         kind,
+        hasPendingTool,
       },
       contentSig: contentSigOf(message),
       lines: scratchLines,
