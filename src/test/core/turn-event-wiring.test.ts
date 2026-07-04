@@ -7,12 +7,16 @@
  * - stopReason mapping: 'completed' → 'ok', non-completed → 'fail'.
  * - No double-fire across the persist/rotate branches (notification fires
  *   before the auto-save block, not again in the catch/journal path).
+ * - W2.3: budget-breach edge-trigger fires once per crossing on TURN_COMPLETED.
+ * - W2.3: AGENT_FAILED / WORKFLOW_CHAIN_FAILED fire a desktop alert gated by
+ *   focus + the per-class config keys.
  */
 
-import { describe, test, expect, mock } from 'bun:test';
+import { describe, test, expect, mock, spyOn } from 'bun:test';
 import { wireTurnEventHandlers } from '../../core/turn-event-wiring.ts';
 import type { WireTurnEventHandlersOptions } from '../../core/turn-event-wiring.ts';
 import type { WebhookNotifier } from '@pellux/goodvibes-sdk/platform/integrations';
+import { FocusTracker } from '../../core/focus-tracker.ts';
 
 // ---------------------------------------------------------------------------
 // Minimal fake event bus
@@ -46,12 +50,18 @@ function makeFakeTurnEventBus() {
 function makeFakeEvents() {
   const turns = makeFakeTurnEventBus();
   const tools = makeFakeTurnEventBus();
-  // UiRuntimeEvents shape: { turns, tools, ... } — only turns and tools used by wireTurnEventHandlers
+  const agents = makeFakeTurnEventBus();
+  const workflows = makeFakeTurnEventBus();
+  // UiRuntimeEvents shape: { turns, tools, agents, workflows, ... } — these
+  // four are what wireTurnEventHandlers reads (W2.3 added agents/workflows
+  // for the agent/chain-failure desktop alerts).
   return {
     // @ts-expect-error — duck-typed minimal fake for UiRuntimeEvents
-    events: { turns, tools } as WireTurnEventHandlersOptions['events'],
+    events: { turns, tools, agents, workflows } as WireTurnEventHandlersOptions['events'],
     emitTurn: (type: string, payload: unknown) => turns.emit(type, payload),
     emitTool: (type: string, payload: unknown) => tools.emit(type, payload),
+    emitAgent: (type: string, payload: unknown) => agents.emit(type, payload),
+    emitWorkflow: (type: string, payload: unknown) => workflows.emit(type, payload),
   };
 }
 
@@ -79,8 +89,10 @@ function makeMinimalOptions(
   overrides: Partial<WireTurnEventHandlersOptions> = {},
 ): WireTurnEventHandlersOptions & {
   emitTurn: (type: string, payload: unknown) => void;
+  emitAgent: (type: string, payload: unknown) => void;
+  emitWorkflow: (type: string, payload: unknown) => void;
 } {
-  const { events, emitTurn } = makeFakeEvents();
+  const { events, emitTurn, emitAgent, emitWorkflow } = makeFakeEvents();
 
   const defaults: WireTurnEventHandlersOptions = {
     events,
@@ -91,13 +103,13 @@ function makeMinimalOptions(
       // Satisfy ConversationManager duck-type — only toJSON/getTitleSource/title used in TURN_COMPLETED
     } as WireTurnEventHandlersOptions['conversation'],
     runtime: { sessionId: 'test-sess-id-001', model: 'test-model', provider: 'test-provider' },
-    orchestrator: { lastInputTokens: 0 },
+    orchestrator: { lastInputTokens: 0, usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 } },
     configManager: {
       // Return 60s threshold so notifications fire when elapsedMs >= 60_000
       get: (key: string): unknown => (key === 'behavior.notifyAfterSeconds' ? 60 : undefined),
     },
     providerRegistry: {
-      getCurrentModel: () => ({ contextWindow: 200_000 }),
+      getCurrentModel: () => ({ contextWindow: 200_000, id: 'test-model' }),
       getContextWindowForModel: (m: { contextWindow: number }) => m.contextWindow,
     },
     systemMessageRouter: {
@@ -119,7 +131,7 @@ function makeMinimalOptions(
     _clock: () => 0,
   };
 
-  return { ...defaults, ...overrides, emitTurn };
+  return { ...defaults, ...overrides, emitTurn, emitAgent, emitWorkflow };
 }
 
 // ---------------------------------------------------------------------------
@@ -247,3 +259,175 @@ describe('wireTurnEventHandlers — TURN_COMPLETED notification integration', ()
     expect(notifier.send).not.toHaveBeenCalled();
   });
 });
+
+// ---------------------------------------------------------------------------
+// W2.3 — budget-breach edge trigger on TURN_COMPLETED
+// ---------------------------------------------------------------------------
+
+describe('wireTurnEventHandlers — budget-breach alert (W2.3)', () => {
+  // 'claude-sonnet-4-6' has real fallback pricing in cost-utils.ts ($3/1M input)
+  // so calcSessionCost produces a real, non-zero cost.
+  const PRICED_MODEL = 'claude-sonnet-4-6';
+
+  function makeBudgetOptions(overrides: Partial<WireTurnEventHandlersOptions> = {}) {
+    const tracker = new FocusTracker();
+    tracker.setFocused(false); // unfocused — alerts allowed
+    return makeMinimalOptions({
+      focusTracker: tracker,
+      providerRegistry: {
+        getCurrentModel: () => ({ contextWindow: 200_000, id: PRICED_MODEL }),
+        getContextWindowForModel: (m: { contextWindow: number }) => m.contextWindow,
+      },
+      configManager: {
+        get: (key: string): unknown => {
+          if (key === 'behavior.notifyAfterSeconds') return 0; // disable long-task noise in this suite
+          if (key === 'behavior.budgetAlertUsd') return 1; // $1 budget
+          return undefined;
+        },
+      },
+      ...overrides,
+    });
+  }
+
+  test('fires once when session cost crosses the configured budget', () => {
+    const { notifier, sentMessages } = makeSpyNotifier();
+    const opts = makeBudgetOptions({
+      webhookNotifier: notifier,
+      orchestrator: { lastInputTokens: 0, usage: { input: 10_000_000, output: 0, cacheRead: 0, cacheWrite: 0 } }, // $30 cost
+    });
+    wireTurnEventHandlers(opts);
+    opts.emitTurn('TURN_COMPLETED', { type: 'TURN_COMPLETED', turnId: 't1', response: 'hi', stopReason: 'completed' });
+    expect(notifier.send).toHaveBeenCalledTimes(1);
+    expect(sentMessages[0]).toContain('budget');
+  });
+
+  test('does not fire again on a second TURN_COMPLETED while still over budget', () => {
+    const { notifier } = makeSpyNotifier();
+    const opts = makeBudgetOptions({
+      webhookNotifier: notifier,
+      orchestrator: { lastInputTokens: 0, usage: { input: 10_000_000, output: 0, cacheRead: 0, cacheWrite: 0 } },
+    });
+    wireTurnEventHandlers(opts);
+    opts.emitTurn('TURN_COMPLETED', { type: 'TURN_COMPLETED', turnId: 't1', response: 'hi', stopReason: 'completed' });
+    opts.emitTurn('TURN_COMPLETED', { type: 'TURN_COMPLETED', turnId: 't2', response: 'hi', stopReason: 'completed' });
+    expect(notifier.send).toHaveBeenCalledTimes(1);
+  });
+
+  test('does not fire when under budget', () => {
+    const { notifier } = makeSpyNotifier();
+    const opts = makeBudgetOptions({
+      webhookNotifier: notifier,
+      orchestrator: { lastInputTokens: 0, usage: { input: 100, output: 0, cacheRead: 0, cacheWrite: 0 } }, // tiny cost
+    });
+    wireTurnEventHandlers(opts);
+    opts.emitTurn('TURN_COMPLETED', { type: 'TURN_COMPLETED', turnId: 't1', response: 'hi', stopReason: 'completed' });
+    expect(notifier.send).not.toHaveBeenCalled();
+  });
+
+  test('does not fire when no focusTracker is supplied (feature inert without one)', () => {
+    const { notifier } = makeSpyNotifier();
+    const opts = makeBudgetOptions({
+      webhookNotifier: notifier,
+      focusTracker: undefined,
+      orchestrator: { lastInputTokens: 0, usage: { input: 10_000_000, output: 0, cacheRead: 0, cacheWrite: 0 } },
+    });
+    wireTurnEventHandlers(opts);
+    opts.emitTurn('TURN_COMPLETED', { type: 'TURN_COMPLETED', turnId: 't1', response: 'hi', stopReason: 'completed' });
+    expect(notifier.send).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// W2.3 — agent/chain-failure desktop alerts
+// ---------------------------------------------------------------------------
+
+describe('wireTurnEventHandlers — agent/chain-failure alerts (W2.3)', () => {
+  // notifyCompletion (SDK) writes a terminal bell ('\x07') synchronously for
+  // any durationMs > 5000 — the alert modules pass FORCE_NOTIFY_DURATION_MS
+  // (30_001) precisely so this is observable without mocking the SDK module
+  // (process-global module mocking is disallowed by this repo's test
+  // discipline rules). Same technique as src/test/utils/notify.test.ts.
+
+  test('AGENT_FAILED rings the bell when unfocused and notifyOnAgentFailure is on', () => {
+    const spy = spyOnStdoutWrite();
+    const tracker = new FocusTracker();
+    tracker.setFocused(false);
+    const opts = makeMinimalOptions({
+      focusTracker: tracker,
+      configManager: { get: () => undefined }, // all defaults: notifyAfterSeconds off (undefined->default 60 unrelated), notifyOnAgentFailure default true
+    });
+    wireTurnEventHandlers(opts);
+    opts.emitAgent('AGENT_FAILED', { type: 'AGENT_FAILED', agentId: 'agent-12345678', error: 'boom', durationMs: 1000 });
+    expect(spy).toHaveBeenCalledWith('\x07');
+    spy.mockRestore();
+  });
+
+  test('AGENT_FAILED is suppressed when focused (default gating)', () => {
+    const spy = spyOnStdoutWrite();
+    const tracker = new FocusTracker();
+    tracker.setFocused(true);
+    const opts = makeMinimalOptions({
+      focusTracker: tracker,
+      configManager: { get: () => undefined },
+    });
+    wireTurnEventHandlers(opts);
+    opts.emitAgent('AGENT_FAILED', { type: 'AGENT_FAILED', agentId: 'agent-12345678', error: 'boom', durationMs: 1000 });
+    expect(spy).not.toHaveBeenCalledWith('\x07');
+    spy.mockRestore();
+  });
+
+  test('AGENT_FAILED never fires when notifyOnAgentFailure is off', () => {
+    const spy = spyOnStdoutWrite();
+    const tracker = new FocusTracker();
+    tracker.setFocused(false);
+    const opts = makeMinimalOptions({
+      focusTracker: tracker,
+      configManager: { get: (k: string) => (k === 'behavior.notifyOnAgentFailure' ? false : undefined) },
+    });
+    wireTurnEventHandlers(opts);
+    opts.emitAgent('AGENT_FAILED', { type: 'AGENT_FAILED', agentId: 'agent-12345678', error: 'boom', durationMs: 1000 });
+    expect(spy).not.toHaveBeenCalledWith('\x07');
+    spy.mockRestore();
+  });
+
+  test('no agent/chain-failure listeners are registered when focusTracker is absent', () => {
+    const spy = spyOnStdoutWrite();
+    const opts = makeMinimalOptions({ focusTracker: undefined });
+    wireTurnEventHandlers(opts);
+    expect(() => opts.emitAgent('AGENT_FAILED', { type: 'AGENT_FAILED', agentId: 'a', error: 'e', durationMs: 1 })).not.toThrow();
+    expect(spy).not.toHaveBeenCalledWith('\x07');
+    spy.mockRestore();
+  });
+
+  test('WORKFLOW_CHAIN_FAILED (Wave-0 failure state) rings the bell when unfocused', () => {
+    const spy = spyOnStdoutWrite();
+    const tracker = new FocusTracker();
+    tracker.setFocused(false);
+    const opts = makeMinimalOptions({
+      focusTracker: tracker,
+      configManager: { get: () => undefined },
+    });
+    wireTurnEventHandlers(opts);
+    opts.emitWorkflow('WORKFLOW_CHAIN_FAILED', { type: 'WORKFLOW_CHAIN_FAILED', chainId: 'chain-abcdef123456', reason: 'review rejected', failureKind: 'other' });
+    expect(spy).toHaveBeenCalledWith('\x07');
+    spy.mockRestore();
+  });
+
+  test('WORKFLOW_CHAIN_FAILED never fires when notifyOnChainFailure is off', () => {
+    const spy = spyOnStdoutWrite();
+    const tracker = new FocusTracker();
+    tracker.setFocused(false);
+    const opts = makeMinimalOptions({
+      focusTracker: tracker,
+      configManager: { get: (k: string) => (k === 'behavior.notifyOnChainFailure' ? false : undefined) },
+    });
+    wireTurnEventHandlers(opts);
+    opts.emitWorkflow('WORKFLOW_CHAIN_FAILED', { type: 'WORKFLOW_CHAIN_FAILED', chainId: 'chain-abcdef123456', reason: 'transient transport error', failureKind: 'transport' });
+    expect(spy).not.toHaveBeenCalledWith('\x07');
+    spy.mockRestore();
+  });
+});
+
+function spyOnStdoutWrite(): ReturnType<typeof spyOn> {
+  return spyOn(process.stdout, 'write').mockImplementation(() => true);
+}

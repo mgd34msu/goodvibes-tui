@@ -17,6 +17,7 @@ import {
   NOTIFY_AFTER_SECONDS_DEFAULT,
   NOTIFY_AFTER_SECONDS_OFF,
 } from '../../core/long-task-notifier.ts';
+import { FocusTracker } from '../../core/focus-tracker.ts';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -287,6 +288,96 @@ describe('maybeNotifyLongTask — webhook delivery', () => {
         webhookNotifier: null,
       })
     ).not.toThrow();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// maybeNotifyLongTask — focus gating (W2.3)
+// ---------------------------------------------------------------------------
+
+describe('maybeNotifyLongTask — focus gating (W2.3)', () => {
+  test('fires when unfocused and both focusTracker + configGet are supplied', () => {
+    const tracker = new FocusTracker();
+    tracker.setFocused(false);
+    const notifier = makeFakeNotifier(['https://ntfy.sh/topic']);
+    const result = maybeNotifyLongTask({
+      elapsedMs: 120_000,
+      status: 'ok',
+      kind: 'turn',
+      sessionId: 'sess-abc-123',
+      thresholdSeconds: 60,
+      webhookNotifier: notifier as unknown as import('@pellux/goodvibes-sdk/platform/integrations').WebhookNotifier,
+      focusTracker: tracker,
+      configGet: makeConfigGet({}),
+    });
+    expect(result).toBe(true);
+    expect(notifier.send).toHaveBeenCalledTimes(1);
+  });
+
+  test('fires when focus was never observed (unknown)', () => {
+    const tracker = new FocusTracker();
+    const notifier = makeFakeNotifier(['https://ntfy.sh/topic']);
+    const result = maybeNotifyLongTask({
+      elapsedMs: 120_000,
+      status: 'ok',
+      kind: 'turn',
+      sessionId: 'sess-abc-123',
+      thresholdSeconds: 60,
+      webhookNotifier: notifier as unknown as import('@pellux/goodvibes-sdk/platform/integrations').WebhookNotifier,
+      focusTracker: tracker,
+      configGet: makeConfigGet({}),
+    });
+    expect(result).toBe(true);
+  });
+
+  test('suppressed when focused and notifyOnlyWhenUnfocused defaults on', () => {
+    const tracker = new FocusTracker();
+    tracker.setFocused(true);
+    const notifier = makeFakeNotifier(['https://ntfy.sh/topic']);
+    const result = maybeNotifyLongTask({
+      elapsedMs: 120_000,
+      status: 'ok',
+      kind: 'turn',
+      sessionId: 'sess-abc-123',
+      thresholdSeconds: 60,
+      webhookNotifier: notifier as unknown as import('@pellux/goodvibes-sdk/platform/integrations').WebhookNotifier,
+      focusTracker: tracker,
+      configGet: makeConfigGet({}),
+    });
+    expect(result).toBe(false);
+    expect(notifier.send).not.toHaveBeenCalled();
+  });
+
+  test('fires even when focused, when notifyOnlyWhenUnfocused is off', () => {
+    const tracker = new FocusTracker();
+    tracker.setFocused(true);
+    const notifier = makeFakeNotifier(['https://ntfy.sh/topic']);
+    const result = maybeNotifyLongTask({
+      elapsedMs: 120_000,
+      status: 'ok',
+      kind: 'turn',
+      sessionId: 'sess-abc-123',
+      thresholdSeconds: 60,
+      webhookNotifier: notifier as unknown as import('@pellux/goodvibes-sdk/platform/integrations').WebhookNotifier,
+      focusTracker: tracker,
+      configGet: makeConfigGet({ 'behavior.notifyOnlyWhenUnfocused': false }),
+    });
+    expect(result).toBe(true);
+    expect(notifier.send).toHaveBeenCalledTimes(1);
+  });
+
+  test('pre-W2.3 behavior preserved: always fires when focusTracker/configGet are both omitted', () => {
+    const notifier = makeFakeNotifier(['https://ntfy.sh/topic']);
+    const result = maybeNotifyLongTask({
+      elapsedMs: 120_000,
+      status: 'ok',
+      kind: 'turn',
+      sessionId: 'sess-abc-123',
+      thresholdSeconds: 60,
+      webhookNotifier: notifier as unknown as import('@pellux/goodvibes-sdk/platform/integrations').WebhookNotifier,
+    });
+    expect(result).toBe(true);
+    expect(notifier.send).toHaveBeenCalledTimes(1);
   });
 });
 
