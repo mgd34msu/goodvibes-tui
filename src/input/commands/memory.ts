@@ -22,16 +22,70 @@ import { VALID_CLASSES, VALID_REVIEW_STATES, VALID_SCOPES } from './recall-share
 
 // ── Top-level command ─────────────────────────────────────────────────────────
 
+/**
+ * DEBT-5 item 3 divergence note: the work order names this front door
+ * "/memory", but `/memory` is already a distinct, unrelated command
+ * (session-pinned notes, src/input/commands/session-content.ts) with no
+ * modal surface. The modal that actually exists for this data — the
+ * Project Memory Substrate — is `memory-modal.ts`, owned by THIS command
+ * (`/recall`), confirmed by the panel-id redirect
+ * `registerModalRedirect('memory', 'memory-modal')` in builtin-modals.ts.
+ * Applying the ruling here (not to the unrelated /memory command) is the
+ * literal-truth reading: this is the command with "a full modal surface".
+ */
+function printRecallUsage(context: CommandContext): void {
+  const usage = [
+    'Usage: /recall <subcommand>',
+    '  add <class> <summary> [--scope <session|project|team>] [--detail <text>] [--tags <t,t>] [--session <id>] [--task <id>] [--file <path>]',
+    `       classes: ${VALID_CLASSES.join(', ')}`,
+    '  capture incident <id|latest>                    — Capture a forensics incident as durable memory',
+    '  capture policy                                  — Capture the latest policy preflight review as durable memory',
+    '  capture mcp <server>                            — Capture MCP trust/quarantine posture as durable memory',
+    '  capture plugin <name>                           — Capture plugin trust/quarantine posture as durable memory',
+    '  search [query] [--semantic] [--cls <class>] [--scope <scope>] [--limit <n>]  — Full-text or sqlite-vec semantic search',
+    '  vector [status|doctor|rebuild]                  — Inspect or rebuild the sqlite-vec memory index',
+    '  get <id>                                       — Show record with provenance + links',
+    '  link <fromId> <toId> <relation>               — Create a directed relation between records',
+    '  queue [limit]                                  — Show the operator review queue',
+    '  review <id> <state> [--confidence <n>] [--by <name>] [--reason <text>]',
+    '  stale <id> [reason...]                          — Mark a record stale with an operator reason',
+    '  contradict <id> [reason...]                     — Mark a record contradicted with an operator reason',
+    '  explain <task...> [--scope <path> ...]         — Show the knowledge records that would be injected for a task',
+    '  injections [agentId]                           — Show per-turn passive knowledge injection records; no id shows the main session, an id shows that spawned agent',
+    '  promote <id> <scope>                           — Promote a memory record into session|project|team scope',
+    '  export <path> [--scope <scope>] [--cls <class>] — Export a durable knowledge bundle',
+    '  import <path>                                  — Import a durable knowledge bundle',
+    '  handoff-export <path> [--scope <scope>]        — Export a reviewable handoff bundle for team/shared use',
+    '  handoff-inspect <path>                         — Inspect a handoff bundle before import',
+    '  handoff-import <path>                          — Import a handoff bundle into durable memory',
+    '  list [class] [--scope <scope>]                 — List all records grouped by class',
+    '  remove <id>                                    — Delete a record',
+  ].join('\n');
+  context.print(usage);
+}
+
 export const recallCommand: SlashCommand = {
   name: 'recall',
   aliases: ['rc'],
-  description: 'Project memory: add decisions, constraints, incidents, and patterns with provenance',
-  usage: '<subcommand> [args]',
-  argsHint: 'add|search|link|get|list|remove',
+  description: 'Bare opens the Memory modal; project memory subcommands add decisions, constraints, incidents, and patterns with provenance',
+  usage: '[<subcommand> [args]] — bare opens the modal; report prints the subcommand usage text',
+  argsHint: 'add|search|link|get|list|remove|report',
   handler: async (args: string[], context: CommandContext): Promise<void> => {
     const [sub, ...rest] = args;
 
+    // DEBT-5 item 3: bare `/recall` opens the memory-modal surface — the old
+    // bare/unknown-subcommand usage block moved to an explicit `report`
+    // subcommand (scriptability preserved: /recall report).
+    if (sub === undefined) {
+      context.openModal?.('memory-modal');
+      return;
+    }
+
     switch (sub) {
+      case 'report':
+        printRecallUsage(context);
+        break;
+
       case 'add':
         await handleRecallAdd(rest, context);
         break;
@@ -120,37 +174,9 @@ export const recallCommand: SlashCommand = {
         await handleRecallHandoffImport(rest, context);
         break;
 
-      default: {
-        const usage = [
-          'Usage: /recall <subcommand>',
-          '  add <class> <summary> [--scope <session|project|team>] [--detail <text>] [--tags <t,t>] [--session <id>] [--task <id>] [--file <path>]',
-          `       classes: ${VALID_CLASSES.join(', ')}`,
-          '  capture incident <id|latest>                    — Capture a forensics incident as durable memory',
-          '  capture policy                                  — Capture the latest policy preflight review as durable memory',
-          '  capture mcp <server>                            — Capture MCP trust/quarantine posture as durable memory',
-          '  capture plugin <name>                           — Capture plugin trust/quarantine posture as durable memory',
-          '  search [query] [--semantic] [--cls <class>] [--scope <scope>] [--limit <n>]  — Full-text or sqlite-vec semantic search',
-          '  vector [status|doctor|rebuild]                  — Inspect or rebuild the sqlite-vec memory index',
-          '  get <id>                                       — Show record with provenance + links',
-          '  link <fromId> <toId> <relation>               — Create a directed relation between records',
-          '  queue [limit]                                  — Show the operator review queue',
-          '  review <id> <state> [--confidence <n>] [--by <name>] [--reason <text>]',
-          '  stale <id> [reason...]                          — Mark a record stale with an operator reason',
-          '  contradict <id> [reason...]                     — Mark a record contradicted with an operator reason',
-          '  explain <task...> [--scope <path> ...]         — Show the knowledge records that would be injected for a task',
-          '  injections [agentId]                           — Show per-turn passive knowledge injection records; no id shows the main session, an id shows that spawned agent',
-          '  promote <id> <scope>                           — Promote a memory record into session|project|team scope',
-          '  export <path> [--scope <scope>] [--cls <class>] — Export a durable knowledge bundle',
-          '  import <path>                                  — Import a durable knowledge bundle',
-          '  handoff-export <path> [--scope <scope>]        — Export a reviewable handoff bundle for team/shared use',
-          '  handoff-inspect <path>                         — Inspect a handoff bundle before import',
-          '  handoff-import <path>                          — Import a handoff bundle into durable memory',
-          '  list [class] [--scope <scope>]                 — List all records grouped by class',
-          '  remove <id>                                    — Delete a record',
-        ].join('\n');
-        context.print(usage);
+      default:
+        printRecallUsage(context);
         break;
-      }
     }
   },
 };

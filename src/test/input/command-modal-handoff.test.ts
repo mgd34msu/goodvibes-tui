@@ -351,14 +351,16 @@ describe('command modal handoff', () => {
     expect(state.commandMode).toBe(false);
   });
 
-  test('a command that explicitly opts in with showPanel(id, pane, { focus: true }) still grabs focus (escape hatch preserved)', async () => {
+  test('a command that explicitly opts in with showPanel(id, pane, target, { focus: true }) still grabs focus (escape hatch preserved)', async () => {
     const modalStack = ['command'];
     const registry = new CommandRegistry();
     registry.register({
       name: 'panel',
       description: 'Open panel',
       handler: (_args, ctx) => {
-        ctx.showPanel?.('git', undefined, { focus: true });
+        // Reconciled signature: (panelId, pane, target, opts) — the DEBT-5 deep-link
+        // target sits at arg 3, so the focus opt-in moves to arg 4 (opts).
+        ctx.showPanel?.('git', undefined, undefined, { focus: true });
       },
     });
     const state = {

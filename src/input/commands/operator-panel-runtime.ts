@@ -1,13 +1,32 @@
 import type { CommandRegistry } from '../command-registry.ts';
+import type { PanelDeepLinkTarget } from '../../panels/panel-manager.ts';
 import { requirePanelManager } from './runtime-services.ts';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
+
+/**
+ * Parse `--target <id>[:<kind>]` out of the args following `<panel-id>
+ * [top|bottom]` (DEBT-5 item 4). Splits the args array in place (removing the
+ * flag + its value) so positional `pane` parsing downstream is unaffected by
+ * where the flag appears. Only `open fleet` currently has a deep-link
+ * consumer (FleetPanel.receiveDeepLink) — other panel ids just ignore an
+ * unused target via PanelManager's optional-chaining delivery.
+ */
+function extractTargetFlag(rest: string[]): PanelDeepLinkTarget | undefined {
+  const flagIdx = rest.indexOf('--target');
+  if (flagIdx < 0) return undefined;
+  const raw = rest[flagIdx + 1];
+  rest.splice(flagIdx, 2);
+  if (!raw) return undefined;
+  const sep = raw.indexOf(':');
+  return sep >= 0 ? { id: raw.slice(0, sep), kind: raw.slice(sep + 1) } : { id: raw };
+}
 
 export function registerOperatorPanelCommand(registry: CommandRegistry): void {
   registry.register({
     name: 'panel',
     aliases: ['panels'],
     description: 'Open, place, resize, or list panels. Usage: /panel [open <id> [top|bottom]|close <id>|list|toggle|move|focus|split|width|height]',
-    usage: '[open <id> [top|bottom]|close <id>|list|toggle|move <top|bottom|other> [id]|focus <top|bottom|toggle>|split [show|hide|toggle]|width <left|right|reset>|height <up|down|reset>]',
+    usage: '[open <id> [top|bottom] [--target <id>[:<kind>]]|close <id>|list|toggle|move <top|bottom|other> [id]|focus <top|bottom|toggle>|split [show|hide|toggle]|width <left|right|reset>|height <up|down|reset>]',
     argsHint: '<open|close|list|toggle|move|focus|split|width|height> [id]',
     handler(args, ctx) {
       const pm = requirePanelManager(ctx);
@@ -38,10 +57,12 @@ export function registerOperatorPanelCommand(registry: CommandRegistry): void {
         ctx.print(lines.length > 0 ? lines.join('\n') : 'No panels registered.');
       } else if (sub === 'open') {
         const id = args[1];
-        const pane = args[2]?.toLowerCase();
+        const rest = args.slice(2);
+        const target = extractTargetFlag(rest);
+        const pane = rest[0]?.toLowerCase();
         if (!id) { ctx.print('Usage: /panel open <panel-id>'); return; }
         if (pane && pane !== 'top' && pane !== 'bottom') {
-          ctx.print('Usage: /panel open <panel-id> [top|bottom]');
+          ctx.print('Usage: /panel open <panel-id> [top|bottom] [--target <id>[:<kind>]]');
           return;
         }
         try {
@@ -51,10 +72,11 @@ export function registerOperatorPanelCommand(registry: CommandRegistry): void {
           // claiming "Panel opened: <id>".
           const redirectTarget = pm.getModalRedirect(id);
           // UX-C focus rule 1a: the command path leaves focus in the composer
-          // ("mid-command-flow") — neither branch here grabs panel focus.
-          if (ctx.showPanel) ctx.showPanel(id, pane as 'top' | 'bottom' | undefined);
+          // ("mid-command-flow") — showPanel does not grab panel focus here.
+          // DEBT-5: forward the deep-link target so the panel lands on the row.
+          if (ctx.showPanel) ctx.showPanel(id, pane as 'top' | 'bottom' | undefined, target);
           else {
-            pm.open(id, pane as 'top' | 'bottom' | undefined);
+            pm.open(id, pane as 'top' | 'bottom' | undefined, target);
             pm.show();
             ctx.renderRequest();
           }

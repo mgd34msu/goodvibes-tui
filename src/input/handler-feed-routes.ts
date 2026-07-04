@@ -13,11 +13,13 @@ import {
 } from './handler-prompt-buffer.ts';
 import { cleanupMarkerRegistry, expandPrompt, findMarkerAtPos, registerPaste } from './handler-content-actions.ts';
 import type { PanelManager } from '../panels/panel-manager.ts';
-import { renderPanelWorkspaceBar } from '../renderer/panel-workspace-bar.ts';
-import type { TabHitRegion } from '../renderer/tab-strip.ts';
+import { getPanelUnderMouse, workspaceTabAtMouse } from './panel-mouse-geometry.ts';
+import type { PanelMouseLayout } from './panel-mouse-geometry.ts';
+export type { PanelMouseLayout };
 import type { KeybindingsManager } from './keybindings.ts';
 import type { KillRing } from './kill-ring.ts';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
+import { trackPanelPasteFloodGuard, type PanelBurstGuardState } from './panel-paste-flood-guard.ts';
 
 export type PanelFocusRouteState = {
   panelManager: PanelManager;
@@ -43,6 +45,9 @@ export type PanelFocusRouteState = {
    * no text capture (Invariant A: focus must not silently flip to the composer).
    */
   onPasteDropped?: (panelName: string) => void;
+  /** Wall-clock time (ms) for this token; `burstGuard` is DEBT-5 item 5's flood-guard state, mutated in place across tokens (see panel-paste-flood-guard.ts). */
+  now: number;
+  burstGuard: PanelBurstGuardState;
   /**
    * True while a turn is actively streaming; gates Escape's cancel-first
    * precedence (I6.1) ahead of the panel's own two-stage escape contract
@@ -87,20 +92,13 @@ export function handlePanelFocusToken(state: PanelFocusRouteState, token: InputT
     // (e.g. dismiss a confirm dialog or clear search). Only unfocus if the
     // panel returns false (unconsumed) or there is no active panel.
     if (token.logicalName === 'escape') {
-      // I6.1: while a turn is streaming, a focused panel must not be able to
-      // swallow the only way to cancel it (replay R5) — Escape's first job is
-      // always cancel-turn. The panel's own two-stage consume-or-unfocus
-      // contract below only runs once no turn is active, so a *second*
-      // Escape (now with the turn already cancelled) falls through to it
-      // normally. panelFocused is left unchanged here (panel stays open and
-      // focused) — the panel close moves to that second Escape, or to
-      // Ctrl+X (panel-close, keybindings.ts), which is handled earlier in
-      // handleGlobalShortcutToken and is unaffected by this branch. This
-      // deliberately calls cancelGeneration() directly instead of routing
-      // through the shared handleEscape() (handler-modal-stack.ts) — that
-      // function's fallthrough order (modal-pop -> active-modal-close ->
-      // clear-nonempty-prompt -> cancelGeneration) is not guaranteed to reach
-      // cancelGeneration first in every state combination.
+      // I6.1/replay R5: while streaming, a focused panel must not swallow the
+      // only way to cancel — Escape's first job is always cancel-turn; the
+      // panel's own two-stage consume-or-unfocus contract only runs once no
+      // turn is active, so a *second* Escape falls through to it normally
+      // (panelFocused stays unchanged here). Calls cancelGeneration()
+      // directly rather than the shared handleEscape() (handler-modal-stack.ts),
+      // whose fallthrough order doesn't guarantee reaching it first.
       if (state.isTurnActive()) {
         state.cancelGeneration();
         state.requestRender();
@@ -119,13 +117,10 @@ export function handlePanelFocusToken(state: PanelFocusRouteState, token: InputT
     }
     const kb = state.keybindingsManager;
     // NOTE: panel-tab-next/prev, panel-close, and panel-close-all are handled
-    // globally in handleGlobalShortcutToken, which runs earlier in the feed
-    // loop and consumes those tokens before they ever reach this focused-panel
-    // route. Their old copies lived here too and had drifted (this route never
-    // called pm.hide() on close-all); they were unreachable, so they are gone
-    // and close/close-all semantics now live in exactly one place. Only
-    // panel-focus-toggle stays here, because it is meaningful only while the
-    // panel workspace already owns focus (it swaps between the two panes).
+    // globally in handleGlobalShortcutToken (runs earlier in the feed loop) —
+    // their old, drifted copies here were unreachable and are gone. Only
+    // panel-focus-toggle stays, since it's meaningful only once the panel
+    // workspace already owns focus (it swaps between the two panes).
     if (kb.matches('panel-focus-toggle', token)) {
       // Switch keyboard focus between the top and bottom panes (no-op when
       // there is no visible, non-empty bottom pane).
@@ -168,6 +163,17 @@ export function handlePanelFocusToken(state: PanelFocusRouteState, token: InputT
       state.requestRender();
       return { handled: true, panelFocused };
     }
+
+    // DEBT-5 item 5 — paste flood guard (rate-based; see panel-paste-flood-guard.ts).
+    if (!state.isPasteToken && !activePanel?.isCapturingTextBurst?.()) {
+      const guard = trackPanelPasteFloodGuard(state.burstGuard, state.now);
+      if (!guard.dispatch) {
+        if (guard.showHintNow) state.onPasteDropped?.(activePanel?.name ?? 'the panel');
+        state.requestRender();
+        return { handled: true, panelFocused };
+      }
+    }
+
     if (activePanel?.handleInput) {
       for (const ch of token.value) {
         activePanel.handleInput(ch);
@@ -205,8 +211,7 @@ export function handleIndicatorFocusToken(state: IndicatorFocusRouteState, token
     }
     if (token.logicalName === 'enter') {
       indicatorFocused = false;
-      // W2.2: repointed from the retired process modal (removed in W6.2) to the
-      // Fleet panel — F2 also opens the Fleet panel (handlePromptKeyToken f2).
+      // W2.2: opens the Fleet panel (see openFleetPanel's own doc, line ~352).
       state.openFleetPanel();
       state.requestRender();
       return { handled: true, indicatorFocused };
@@ -631,89 +636,6 @@ export type MouseRouteState = {
   handlePaste: () => void;
   handleCopy: () => void;
 };
-
-export type PanelMouseLayout = {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-  hasBottomPane: boolean;
-  verticalSplitRatio: number;
-};
-
-function clampRatio(value: number): number {
-  return Math.max(0.2, Math.min(0.8, value));
-}
-
-function getActivePanelInPane(panelManager: PanelManager, pane: 'top' | 'bottom') {
-  const target = pane === 'top' ? panelManager.getTopPane() : panelManager.getBottomPane();
-  return target.panels[target.activeIndex] ?? null;
-}
-
-function getPanelUnderMouse(
-  panelManager: PanelManager,
-  layout: PanelMouseLayout | null,
-  row: number,
-  col: number,
-) {
-  if (
-    layout === null
-    || !panelManager.isVisible()
-    || panelManager.getAllOpen().length === 0
-    || col < layout.x
-    || col >= layout.x + layout.width
-    || row < layout.y
-    || row >= layout.y + layout.height
-  ) {
-    return null;
-  }
-
-  const panelRow = row - layout.y;
-  if (!layout.hasBottomPane) {
-    return getActivePanelInPane(panelManager, 'top');
-  }
-
-  // Single consolidated workspace bar (row 0) + h-separator; the rest splits
-  // between the two panes' content.
-  const panelAreaRows = Math.max(0, layout.height - 1);
-  const contentRows = Math.max(0, panelAreaRows - 1);
-  const topContentRows = contentRows <= 1
-    ? contentRows
-    : Math.max(1, Math.floor(contentRows * clampRatio(layout.verticalSplitRatio)));
-  // panelRow 0 = workspace bar; rows 1..topContentRows = top pane; rest = bottom.
-  return panelRow <= topContentRows
-    ? getActivePanelInPane(panelManager, 'top')
-    : getActivePanelInPane(panelManager, 'bottom');
-}
-
-/**
- * If the mouse is over the consolidated workspace tab bar (the first panel
- * row), return the index of the tab under the cursor, else null. Recomputes the
- * tab hit regions by rendering the bar with a layout callback — cheap and keeps
- * the click geometry in lockstep with what was drawn.
- */
-function workspaceTabAtMouse(
-  panelManager: PanelManager,
-  layout: PanelMouseLayout | null,
-  row: number,
-  col: number,
-): number | null {
-  if (
-    layout === null
-    || !panelManager.isVisible()
-    || panelManager.getAllOpen().length === 0
-    || row !== layout.y // workspace bar is the first panel row
-    || col < layout.x
-    || col >= layout.x + layout.width
-  ) {
-    return null;
-  }
-  let regions: readonly TabHitRegion[] = [];
-  renderPanelWorkspaceBar(panelManager.getWorkspaceTabs(), layout.width, true, (r) => { regions = r; });
-  const relCol = col - layout.x;
-  const hit = regions.find((rg) => relCol >= rg.startCol && relCol < rg.endCol);
-  return hit ? hit.index : null;
-}
 
 function scrollPanelUnderMouse(
   state: MouseRouteState,

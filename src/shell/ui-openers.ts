@@ -456,8 +456,10 @@ export function wireShellUiOpeners(options: WireShellUiOpenersOptions): void {
     render();
   };
 
-  commandContext.showPanel = (panelId, pane, opts) => {
-    panelManager.open(panelId, pane);
+  commandContext.showPanel = (panelId, pane, target, opts) => {
+    // DEBT-5: forward the deep-link target so a jumped-to panel lands on the
+    // right row (fleet --target); undefined for ordinary opens.
+    panelManager.open(panelId, pane, target);
     panelManager.show();
     // UX-C focus rule 1a: every registered caller of showPanel is a slash
     // command (/panel open, /routes, /approval, /tasks, /ops-control, ...) —
