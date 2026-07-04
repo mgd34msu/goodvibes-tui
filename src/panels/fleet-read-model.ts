@@ -88,6 +88,13 @@ const STATE_GLYPHS: Record<ProcessState, string> = {
   interrupted: '◌',
   idle: '·',
   queued: '…',
+  // Wave 6 (wo-F item d2, SDK main@0715bbe3): 'paused' is a new non-terminal
+  // ProcessState (disabled trigger/schedule/automation-job, resumable via
+  // ProcessRegistry.resume() — see the SDK's ProcessState doc comment). Full
+  // pause/resume UI plumbing is wo-F's scope; this entry only keeps this
+  // Record<ProcessState, string> exhaustive so the type compiles against the
+  // newer SDK. '⏸' verified free against every other glyph in this table.
+  paused: '⏸',
 };
 
 const STATE_TONES: Record<ProcessState, FleetStateTone> = {
@@ -105,6 +112,10 @@ const STATE_TONES: Record<ProcessState, FleetStateTone> = {
   interrupted: 'warn',
   idle: 'muted',
   queued: 'muted',
+  // See the STATE_GLYPHS comment above: exhaustiveness-only for now (wo-F owns
+  // the full pause/resume UI). 'warn', not 'muted' — a paused-but-resumable
+  // process is closer to "needs attention" than a passive/neutral state.
+  paused: 'warn',
 };
 
 /** Terminal states — interrupt/kill are not offered; not counted as running. */
