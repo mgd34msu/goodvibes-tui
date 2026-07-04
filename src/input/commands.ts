@@ -38,6 +38,7 @@ import { registerControlRoomRuntimeCommands } from './commands/control-room-runt
 import { registerMcpRuntimeCommands } from './commands/mcp-runtime.ts';
 import { registerSessionContentCommands } from './commands/session-content.ts';
 import { registerCheckpointRuntimeCommands } from './commands/checkpoint-runtime.ts';
+import { registerWorkstreamRuntimeCommands } from './commands/workstream-runtime.ts';
 import { registerLocalRuntimeCommands } from './commands/local-runtime.ts';
 import { registerExperienceRuntimeCommands } from './commands/experience-runtime.ts';
 import { registerIncidentRuntimeCommands } from './commands/incident-runtime.ts';
@@ -119,6 +120,7 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
   registerBranchRuntimeCommands(registry);
   registerSessionContentCommands(registry);
   registerCheckpointRuntimeCommands(registry);
+  registerWorkstreamRuntimeCommands(registry);
 
   // ── /policy ───────────────────────────────────────────────────────────────
   registry.register(policyCommand);

@@ -44,6 +44,16 @@ describe('isAttachableFleetKind', () => {
       expect(isAttachableFleetKind(kind)).toBe(false);
     }
   });
+
+  // Wave 4 (wo703): workstream/phase/work-item are aggregates (workstream,
+  // phase) or delegate-to-their-agent leaves (work-item) — none carry their
+  // own transcript, mirroring wrfc-subtask. Users attach the live 'agent'
+  // leaf directly; no default change here, verified explicitly per the brief.
+  test('workstream/phase/work-item are not attachable', () => {
+    for (const kind of ['workstream', 'phase', 'work-item'] as const) {
+      expect(isAttachableFleetKind(kind)).toBe(false);
+    }
+  });
 });
 
 describe('attachFleetTab', () => {
