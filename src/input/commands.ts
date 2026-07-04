@@ -61,6 +61,8 @@ import { registerTtsRuntimeCommands } from './commands/tts-runtime.ts';
 import { registerCloudflareRuntimeCommands } from './commands/cloudflare-runtime.ts';
 import { registerWorkPlanRuntimeCommands } from './commands/work-plan-runtime.ts';
 import { registerCostRuntimeCommands } from './commands/cost-runtime.ts';
+import { registerWebSearchRuntimeCommands } from './commands/websearch-runtime.ts';
+import { registerImageRuntimeCommands } from './commands/image-runtime.ts';
 
 /**
  * registerBuiltinCommands - Register all built-in slash commands into the registry.
@@ -123,6 +125,8 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
   registerCheckpointRuntimeCommands(registry);
   registerWorkstreamRuntimeCommands(registry);
   registerCodebaseRuntimeCommands(registry);
+  registerWebSearchRuntimeCommands(registry);
+  registerImageRuntimeCommands(registry);
 
   // ── /policy ───────────────────────────────────────────────────────────────
   registry.register(policyCommand);
