@@ -222,7 +222,16 @@ class PlanningModalSurface implements ConfigModalSurface {
     const action = ctx.row ? actions.find((a) => a.id === ctx.row!.id) : undefined;
     if (!action || action.disabled || !action.answer.trim()) { ctx.print('Choose a non-empty answer option.'); return; }
     if (action.kind === 'approve') { void ctx.executeCommand?.('plan', ['approve']); ctx.setStatus('Dispatched /plan approve.'); return; }
-    if (action.kind === 'dismiss') { void ctx.executeCommand?.('plan', ['dismiss']); ctx.setStatus('Dispatched /plan dismiss.'); return; }
+    if (action.kind === 'dismiss') {
+      // There is NO `/plan dismiss` subcommand. Dispatching it fell through to
+      // planning-runtime's free-form goal-seed branch and OVERWROTE the project
+      // goal with the literal string "dismiss". Do not dispatch and do not
+      // mutate any state — print an honest note and close the panel. Planning
+      // is untouched (matching the relabeled "Close (planning unchanged)" row).
+      ctx.print('Pausing project planning isn\'t available as a command yet; planning state left unchanged. Closing the panel.');
+      ctx.close();
+      return;
+    }
     void ctx.executeCommand?.('plan', action.answer.trim().split(/\s+/));
     ctx.setStatus(`Dispatched /plan ${action.answer.trim()} (reseeds the goal — see the in-modal note).`);
   }

@@ -79,4 +79,27 @@ describe('planning modal surface', () => {
     surface.onAction?.('approve', actionCtx(null, cap.extra));
     expect(cap.calls).toEqual([['plan', ['approve']]]);
   });
+
+  // W6 review (finding 4): the dismiss row used to dispatch `/plan dismiss`,
+  // which has no subcommand and fell through to the free-form goal-seed branch,
+  // OVERWRITING the project goal with the literal string "dismiss". It must now
+  // mutate nothing: no command dispatched, an honest note, and it closes.
+  test('the dismiss row mutates nothing — no /plan dispatch, honest note, and it closes the panel', async () => {
+    const state: ProjectPlanningState = { ...noQuestionState(), readiness: 'needs-user-input', openQuestions: [{ id: 'q1', prompt: 'What is the scope?', status: 'open' }] };
+    const surface = await warm(serviceWithState(state));
+    const cap = captureCommands();
+    const printed: string[] = [];
+    let closed = 0;
+    surface.onAction?.('submit', actionCtx({ id: 'dismiss-planning', label: '' }, { ...cap.extra, print: (m) => printed.push(m), close: () => { closed += 1; } }));
+    expect(cap.calls).toEqual([]); // no /plan dismiss (or any command) dispatched
+    expect(printed.join('\n')).toContain("Pausing project planning isn't available as a command yet");
+    expect(closed).toBe(1);
+  });
+
+  test('the dismiss row is relabeled to match what it does (closes; leaves planning unchanged)', async () => {
+    const state: ProjectPlanningState = { ...noQuestionState(), readiness: 'needs-user-input', openQuestions: [{ id: 'q1', prompt: 'What is the scope?', status: 'open' }] };
+    const text = tabText((await warm(serviceWithState(state))).buildView(), 'planning');
+    expect(text).toContain('Close (planning unchanged)');
+    expect(text).not.toContain('Close planning and continue without it');
+  });
 });
