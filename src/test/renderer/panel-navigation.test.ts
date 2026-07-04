@@ -12,7 +12,11 @@ describe('panel navigation chrome', () => {
     const line = renderPanelWorkspaceBar(tabs, 100, true);
     const text = lineToString(line);
     expect(text).toContain('PANELS');
-    expect(text).toContain('^ J System Messages');
-    expect(text).toContain('v W WRFC');
+    // A14: pane marker is ▲/▼ (not ^/v, which read as a Ctrl caret), and each of
+    // the first nine tabs shows its real Alt+N jump index as ⌥N. ⌥ (U+2325) is a
+    // width-2 glyph, so its second display cell reconstructs as a space here
+    // (it renders as one 2-column glyph in the terminal).
+    expect(text).toContain('▲ ⌥ 1 J System Messages');
+    expect(text).toContain('▼ ⌥ 2 W WRFC');
   });
 });

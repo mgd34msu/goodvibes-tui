@@ -111,19 +111,15 @@ export type BootstrapContext = RuntimeContext & {
   /** Command registry used by InputHandler. main.ts needs this to wire input. */
   commandRegistry: import('../input/command-registry.ts').CommandRegistry;
   /**
-   * System message router instantiated at startup, wired to conversation and panel manager.
+   * System message router instantiated at startup, wired to conversation.
    *
    * @remarks
    * Route operational messages through this rather than calling
-   * conversation.addSystemMessage() directly so that low-priority messages
-   * stay out of the main conversation and go to the SystemMessagesPanel instead.
+   * conversation.addSystemMessage() directly so routing-target config
+   * (panel/conversation/both) and the forced-inline critical prefixes stay
+   * centralized in one place.
    */
   systemMessageRouter: SystemMessageRouter;
-  /**
-   * Wire the agent detail modal opener after InputHandler is constructed in main.ts.
-   * Call with `(id) => input.agentDetailModal.open(id)` once the InputHandler is ready.
-   */
-  setOpenAgentDetail: (fn: (agentId: string) => void) => void;
 };
 
 // ── Bootstrap function ────────────────────────────────────────────────────
@@ -294,7 +290,6 @@ export async function bootstrapRuntime(
   const gitStatusProvider = shell.gitStatusProvider;
   const inputHistory = shell.inputHistory;
   const lastGitInfoRef = shell.lastGitInfoRef;
-  const setOpenAgentDetail = shell.setOpenAgentDetail;
   // W1.6 FIX 2: dispose the header's live-repo-state poll (git-status.ts
   // startPolling) on shutdown, same pattern as acpTaskSyncInterval above.
   bootstrapUnsubs.push(() => gitStatusProvider.stopPolling());
@@ -628,7 +623,6 @@ export async function bootstrapRuntime(
     _getConfiguredProviderIds: () => services.providerRegistry.getConfiguredProviderIds(),
     commandRegistry,
     systemMessageRouter,
-    setOpenAgentDetail,
     shutdown: async (sessionData) => {
       // Clear bootstrap-owned subscriptions
       bootstrapUnsubs.forEach(fn => fn());

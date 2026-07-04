@@ -80,6 +80,10 @@ export interface BootstrapCommandSectionOptions {
   readonly mcpRegistry: McpRegistry;
   readonly voiceProviderRegistry?: VoiceProviderRegistry;
   readonly voiceService?: VoiceService;
+  /** B31: direct-command consumers (`/search`, `/image`) of already-constructed RuntimeServices. */
+  readonly webSearchService?: import('@pellux/goodvibes-sdk/platform/web-search').WebSearchService;
+  readonly mediaProviders?: import('@pellux/goodvibes-sdk/platform/media').MediaProviderRegistry;
+  readonly artifactStore?: import('@pellux/goodvibes-sdk/platform/artifacts').ArtifactStore;
   readonly forensicsRegistry: ForensicsRegistry;
   readonly policyRuntimeState: PolicyRuntimeState;
   readonly readModels: UiReadModels;
@@ -187,8 +191,15 @@ export function createBootstrapCommandActions(
   } = options;
 
   const showPanel = (panelId: string, pane?: 'top' | 'bottom') => {
+    // W6.1 (the purge): a MIGRATE-TO-MODAL id resolves to a modal, not a panel.
+    // panelManager.open() fires the injected openModal callback and returns a
+    // no-op sentinel — so skip panelManager.show() (which would reveal an empty
+    // panel workspace behind the modal) when this id redirects. Keeps every
+    // showPanel-based front-door (openHooksPanel/openSecurityPanel/… and the
+    // migrated command runtimes) opening the modal cleanly.
+    const redirected = panelManager.getModalRedirect(panelId) !== undefined;
     panelManager.open(panelId, pane);
-    panelManager.show();
+    if (!redirected) panelManager.show();
     requestRender();
   };
 
@@ -284,11 +295,15 @@ export function createBootstrapCommandActions(
     openMemoryPanel: () => {
       showPanel('memory');
     },
+    // W6.1: remote/subscription migrated to config-modal surfaces. open() hits
+    // the modal redirect and invokes the openModal callback — do NOT go through
+    // showPanel here, which would additionally reveal + focus an (empty) panel
+    // workspace behind the fullscreen modal.
     openRemotePanel: () => {
-      showPanel('remote');
+      panelManager.open('remote');
     },
     openSubscriptionPanel: () => {
-      showPanel('subscription');
+      panelManager.open('subscription');
     },
     openLocalAuthMaskedEntry: (kind, username) => {
       showPanel('local-auth');
@@ -363,7 +378,7 @@ export function createBootstrapCommandWorkspaceSection(
 export function createBootstrapCommandPlatformSection(
   options: Pick<
     BootstrapCommandSectionOptions,
-    'configManager' | 'voiceProviderRegistry' | 'voiceService'
+    'configManager' | 'voiceProviderRegistry' | 'voiceService' | 'webSearchService' | 'mediaProviders' | 'artifactStore'
   >,
   shellServices: BootstrapCommandShellServices,
 ): BootstrapCommandPlatformSection {
@@ -372,6 +387,9 @@ export function createBootstrapCommandPlatformSection(
     configManager: options.configManager,
     voiceProviderRegistry: options.voiceProviderRegistry,
     voiceService: options.voiceService,
+    webSearchService: options.webSearchService,
+    mediaProviders: options.mediaProviders,
+    artifactStore: options.artifactStore,
     ...shellServices.platform,
   };
 }

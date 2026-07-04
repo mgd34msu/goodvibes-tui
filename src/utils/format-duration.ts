@@ -1,16 +1,21 @@
 /**
  * Shared ms-duration formatters for the panel layer.
  *
- * Three families are exported, each matching a distinct behavior cluster.
+ * Two families are exported, each matching a distinct behavior cluster.
  * DO NOT replace these with formatElapsed from utils/format-elapsed.ts —
  * formatElapsed floors to integer seconds and lacks the null/'?ms' guards
  * that the latency panels require.
+ *
+ * W6.1 (the purge): formatShortDuration (used only by incident-review-panel
+ * and eval-panel, both removed — RETIRE-INTO-FLEET and DELETE respectively)
+ * was removed as a genuinely orphaned export — no remaining caller anywhere
+ * in src/.
  */
 
 /**
  * Format a latency value in milliseconds with sub-second precision.
  *
- * Used by: debug-panel, provider-health-panel
+ * Used by: provider-health-panel
  *
  *   ms <= 0     → 'n/a'
  *   ms >= 10000 → '12.3s'    (one decimal)
@@ -27,7 +32,7 @@ export function formatLatencyMs(ms: number): string {
 /**
  * Format a task/agent duration with minute-rolling notation.
  *
- * Used by: tool-inspector-panel, agent-inspector-shared
+ * Used by: agent-inspector-shared
  *
  *   ms < 1000   → '500ms'
  *   ms < 60000  → '3.5s'
@@ -37,19 +42,4 @@ export function formatDuration(ms: number): string {
   if (ms < 1000)  return `${ms}ms`;
   if (ms < 60000) return `${(ms / 1000).toFixed(1)}s`;
   return `${Math.floor(ms / 60000)}m${Math.floor((ms % 60000) / 1000)}s`;
-}
-
-/**
- * Format a short eval/forensics duration; treats undefined as '?ms'.
- *
- * Used by: incident-review-panel, eval-panel
- *
- *   undefined → '?ms'
- *   ms < 1000 → '500ms'
- *   else      → '1.5s'
- */
-export function formatShortDuration(ms: number | undefined): string {
-  if (ms === undefined) return '?ms';
-  if (ms < 1000)        return `${ms}ms`;
-  return `${(ms / 1000).toFixed(1)}s`;
 }

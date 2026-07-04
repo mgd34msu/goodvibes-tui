@@ -170,13 +170,6 @@ export const EMPTY_SESSION_MEMORY_QUERY = {
   list: () => [],
 } as unknown as import('../../../runtime/ui-service-queries.ts').SessionMemoryQuery;
 
-export const EMPTY_PLAN_DASHBOARD_QUERY = {
-  getActive: () => null,
-  list: () => [],
-  getSummary: () => '',
-  toMarkdown: () => '',
-} as unknown as import('../../../panels/plan-dashboard-panel.ts').PlanDashboardPanelDeps['planManager'];
-
 export const EMPTY_PROJECT_PLANNING_SERVICE = {
   status: async () => ({
     ok: true,
@@ -221,21 +214,11 @@ export const EMPTY_PROJECT_PLANNING_SERVICE = {
   upsertState: async () => ({ ok: true, projectId: 'proj', knowledgeSpaceId: 'project:proj', state: null }),
 } as unknown as import('@pellux/goodvibes-sdk/platform/knowledge').ProjectPlanningService;
 
-export const EMPTY_WORKFLOW_EVENT_FEED = {
-  on: (_event: string, _cb: unknown) => () => {},
-  onEnvelope: (_event: string, _cb: unknown) => () => {},
-  emit: () => {},
-} as unknown as import('../../../runtime/ui-events.ts').UiEventFeed<import('@/runtime/index.ts').WorkflowEvent>;
-
 export const EMPTY_TURN_EVENT_FEED = {
   on: (_event: string, _cb: unknown) => () => {},
   onEnvelope: (_event: string, _cb: unknown) => () => {},
   emit: () => {},
 } as unknown as import('../../../runtime/ui-events.ts').UiEventFeed<never>;
-
-export const EMPTY_WRFC_DEPS = {
-  controller: { listChains: () => [] },
-} as unknown as import('../../../panels/wrfc-panel.ts').WrfcPanelDeps;
 
 export const EMPTY_SERVICES_SUBSCRIPTION_QUERY = {
   list: () => [],

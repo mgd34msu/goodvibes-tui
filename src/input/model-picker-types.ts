@@ -1,15 +1,17 @@
 import type { ModelDefinition } from '@pellux/goodvibes-sdk/platform/providers';
 
-export type PickerMode = 'model' | 'provider' | 'effort' | 'contextCap';
+export type PickerMode = 'model' | 'provider' | 'effort' | 'contextCap' | 'embeddingProvider';
 
 /**
  * Which config keys the model picker writes to on commit.
- * 'main'   -> provider.provider + provider.model (default)
- * 'helper' -> helper.globalProvider + helper.globalModel (+ helper.enabled: true)
- * 'tool'   -> tools.llmProvider + tools.llmModel (+ tools.llmEnabled: true)
- * 'tts'    -> tts.llmProvider + tts.llmModel
+ * 'main'       -> provider.provider + provider.model (default)
+ * 'helper'     -> helper.globalProvider + helper.globalModel (+ helper.enabled: true)
+ * 'tool'       -> tools.llmProvider + tools.llmModel (+ tools.llmEnabled: true)
+ * 'tts'        -> tts.llmProvider + tts.llmModel
+ * 'embeddings' -> provider.embeddingProvider, via MemoryEmbeddingProviderRegistry.setDefaultProvider()
+ *                 (not an LLM route — no model concept, see ModelPickerTargetInfo.configuredNote)
  */
-export type ModelPickerTarget = 'main' | 'helper' | 'tool' | 'tts';
+export type ModelPickerTarget = 'main' | 'helper' | 'tool' | 'tts' | 'embeddings';
 
 export type ModelPickerFocusPane = 'targets' | 'items';
 
@@ -21,6 +23,22 @@ export interface ModelPickerTargetInfo {
   readonly model: string;
   readonly enabled: boolean;
   readonly inherited: boolean;
+  /**
+   * Honest override for the "Current:" summary line. Used by the 'embeddings'
+   * target (which has no model concept — only a provider id + dimensions +
+   * configured state) so the renderer never prints a phantom "model:" value.
+   * When set, this replaces the computed provider:model route text.
+   */
+  readonly configuredNote?: string;
+}
+
+/** One entry in the embedding-provider picker list (PickerMode 'embeddingProvider'). */
+export interface EmbeddingProviderPickerEntry {
+  readonly id: string;
+  readonly label: string;
+  readonly dimensions: number;
+  readonly configured: boolean;
+  readonly detail?: string;
 }
 
 /**

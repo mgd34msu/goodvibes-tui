@@ -200,7 +200,24 @@ non-list-panel class).
 
 ## Canonical example — SkillsPanel
 
-Adapted from `src/panels/skills-panel.ts` — see `src/panels/memory-panel.ts` for the canonical `extendPalette` usage.
+> **W6.1 note (the panel purge).** Most read/navigate surfaces — including
+> Skills, Memory, Marketplace, Security, Hooks, Policy, Knowledge, Providers,
+> Services, Remote, Sandbox, Settings-Sync — no longer render as standalone
+> registered panels. They migrated to **config-modal surfaces** rendered through
+> the single config-modal host (`src/input/config-modal.ts` +
+> `src/renderer/config-modal.ts`); author a new one by implementing the
+> `ConfigModalSurface` contract in `src/input/config-modal-types.ts` and
+> registering it in `src/panels/builtin-modals.ts` (see
+> `src/panels/modals/provider-health-modal.ts` for the live exemplar). The
+> `SkillsPanel` class below is **retained only for its shared non-class exports**
+> (`discoverSkills`, `SkillRecord`), not as a registered panel. For a still-live
+> registered `BasePanel` + `extendPalette` example, use a KEEP panel such as
+> `src/panels/cost-tracker-panel.ts` or `src/panels/token-budget-panel.ts`
+> (`memory-panel.ts`, referenced below historically, was deleted in the W6.1
+> migration). The rest of this section stays as the reference `BasePanel`
+> authoring walk-through for the panels that remain.
+
+Adapted from `src/panels/skills-panel.ts` — see `src/panels/cost-tracker-panel.ts` for the canonical `extendPalette` usage on a still-registered panel.
 
 ### Step 1 — palette constant
 

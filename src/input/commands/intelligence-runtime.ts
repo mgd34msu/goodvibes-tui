@@ -55,7 +55,17 @@ export function registerIntelligenceRuntimeCommands(registry: CommandRegistry): 
     async handler(args, ctx) {
       const sub = (args[0] ?? 'review').toLowerCase();
       if (sub === 'panel' || sub === 'open') {
-        openCommandPanel(ctx, 'intelligence');
+        // W6.1 (the purge): 'intelligence'/IntelligencePanel was
+        // DELETE-disposition (no surviving human surface — its read model
+        // stays and still backs every subcommand below). There is no alias
+        // to resolve through, so this prints an honest notice and opens
+        // Fleet instead of throwing "Unknown panel".
+        ctx.print('Intelligence panel retired — use /intelligence review|diagnostics|symbols|outline|definition|references|hover|repair for the live data. Opening Fleet.');
+        try {
+          openCommandPanel(ctx, 'fleet');
+        } catch {
+          // Panel registry may be unavailable in lightweight command-only contexts.
+        }
         return;
       }
 

@@ -13,31 +13,29 @@ export function registerOperatorPanelCommand(registry: CommandRegistry): void {
       const pm = requirePanelManager(ctx);
       const sub = args[0]?.toLowerCase() ?? '';
       if (!sub || sub === 'toggle') {
-        try {
-          if (ctx.showPanel) ctx.showPanel('panel-list');
-          else {
-            pm.open('panel-list');
-            pm.show();
-            ctx.focusPanels?.();
-            ctx.renderRequest();
-          }
-        } catch {
-          pm.toggle();
-          ctx.renderRequest();
-        }
+        // W6.1 (the purge): 'panel-list' (the browse-all-panels picker) was
+        // DELETE-disposition — a picker over a handful of panels is dead
+        // weight now (see the Ctrl+P selectionModal repoint in
+        // shell/ui-openers.ts for its interactive replacement). Bare
+        // `/panel` and `/panel toggle` now do what "toggle" actually means:
+        // toggle the workspace, which opens 'fleet' by default when nothing
+        // is open (PanelManager.toggle()) rather than force-opening a
+        // specific browse panel.
+        pm.toggle();
+        ctx.renderRequest();
       } else if (sub === 'list') {
-        try {
-          if (ctx.showPanel) ctx.showPanel('panel-list');
-          else {
-            pm.open('panel-list');
-            pm.show();
-            ctx.focusPanels?.();
-            ctx.renderRequest();
+        // Print a text listing instead of opening a picker panel — grouped
+        // by category from the live registry, so this can never drift from
+        // what's actually registered.
+        const byCategory = pm.getTypesByCategory();
+        const lines: string[] = [];
+        for (const [category, entries] of byCategory) {
+          lines.push(`${category}:`);
+          for (const entry of entries) {
+            lines.push(`  ${entry.icon} ${entry.id} — ${entry.name}`);
           }
-        } catch {
-          pm.show();
-          ctx.renderRequest();
         }
+        ctx.print(lines.length > 0 ? lines.join('\n') : 'No panels registered.');
       } else if (sub === 'open') {
         const id = args[1];
         const pane = args[2]?.toLowerCase();
@@ -47,6 +45,11 @@ export function registerOperatorPanelCommand(registry: CommandRegistry): void {
           return;
         }
         try {
+          // A MIGRATE-TO-MODAL id (e.g. 'sessions' -> the session-picker modal)
+          // resolves to a modal, not a panel: opening it fires the redirect and
+          // no panel lands in the workspace. Report that honestly rather than
+          // claiming "Panel opened: <id>".
+          const redirectTarget = pm.getModalRedirect(id);
           if (ctx.showPanel) ctx.showPanel(id, pane as 'top' | 'bottom' | undefined);
           else {
             pm.open(id, pane as 'top' | 'bottom' | undefined);
@@ -54,9 +57,22 @@ export function registerOperatorPanelCommand(registry: CommandRegistry): void {
             ctx.focusPanels?.();
             ctx.renderRequest();
           }
-          ctx.print(`Panel opened: ${id}${pane ? ` (${pane} pane)` : ''}`);
+          if (redirectTarget) {
+            ctx.print(`"${id}" moved to the ${redirectTarget} modal — opening it.`);
+          } else {
+            ctx.print(`Panel opened: ${id}${pane ? ` (${pane} pane)` : ''}`);
+          }
         } catch (e) {
-          ctx.print(`Error: ${summarizeError(e)}`);
+          // A deleted/unknown panel id throws "No panel type registered with
+          // id: <id>" from PanelManager.open — surface the same friendly line
+          // the bare-/panel path uses instead of leaking the raw error. Any
+          // genuinely unexpected failure still shows its real message.
+          const message = summarizeError(e);
+          if (message.includes('No panel type registered with id')) {
+            ctx.print(`Unknown panel "${id}". Use /panel list to see available panels.`);
+          } else {
+            ctx.print(`Error: ${message}`);
+          }
         }
       } else if (sub === 'close') {
         const id = args[1];

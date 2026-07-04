@@ -8,11 +8,9 @@ import { renderModelWorkspace } from './model-workspace.ts';
 import { renderSelectionModalOverlay } from './selection-modal-overlay.ts';
 import { renderSearchOverlay } from './search-overlay.ts';
 import { renderHistorySearchOverlay } from './history-search-overlay.ts';
-import { renderProcessModal } from './process-modal.ts';
-import { renderAgentDetailModal } from './agent-detail-modal.ts';
-import { renderLiveTailModal } from './live-tail-modal.ts';
 import { renderContextInspector } from './context-inspector.ts';
 import { renderSettingsModal } from './settings-modal.ts';
+import { renderConfigModal } from './config-modal.ts';
 import { renderMcpWorkspace } from './mcp-workspace.ts';
 import { renderSessionPickerModal } from './session-picker-modal.ts';
 import { renderProfilePickerModal } from './profile-picker-modal.ts';
@@ -78,20 +76,9 @@ export function applyConversationOverlays(
     next.push(...renderHistorySearchOverlay(input.historySearch, conversationWidth));
   }
 
-  if (!fullscreenClaimed && input.processModal.active) {
-    const lines = renderProcessModal(input.processModal, conversationWidth, viewportHeight);
-    next = overlayViewportBottom(next, lines, conversationWidth, viewportHeight, bottomDockInset);
-  }
-
-  if (!fullscreenClaimed && input.agentDetailModal.active) {
-    const lines = renderAgentDetailModal(input.agentDetailModal, conversationWidth, viewportHeight);
-    next = overlayViewportBottom(next, lines, conversationWidth, viewportHeight, bottomDockInset);
-  }
-
-  if (!fullscreenClaimed && input.liveTailModal.active) {
-    const lines = renderLiveTailModal(input.liveTailModal, conversationWidth, viewportHeight);
-    next = overlayViewportBottom(next, lines, conversationWidth, viewportHeight, bottomDockInset);
-  }
+  // W6.1 retirement: the process, agent-detail, and live-tail modal overlays
+  // were removed with those modals — F2 now opens the Fleet panel, which
+  // subsumes the live process tree.
 
   if (!fullscreenClaimed && input.contextInspectorModal.active) {
     const lines = renderContextInspector(conversation, conversationWidth, viewportHeight, contextWindow);
@@ -100,6 +87,12 @@ export function applyConversationOverlays(
 
   if (input.settingsModal.active) {
     const lines = renderSettingsModal(input.settingsModal, conversationWidth, viewportHeight);
+    next = replaceViewportWithOverlay(lines, conversationWidth, viewportHeight);
+    fullscreenClaimed = true;
+  }
+
+  if (!fullscreenClaimed && input.configModal.active) {
+    const lines = renderConfigModal(input.configModal, conversationWidth, viewportHeight);
     next = replaceViewportWithOverlay(lines, conversationWidth, viewportHeight);
     fullscreenClaimed = true;
   }

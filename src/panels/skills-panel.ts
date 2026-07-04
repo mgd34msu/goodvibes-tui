@@ -5,8 +5,6 @@ import { createEmptyLine } from '../types/grid.ts';
 import { type ConfirmState, handleConfirmInput, renderConfirmLines } from './confirm-state.ts';
 import { getDisplayWidth, truncateDisplay } from '../utils/terminal-width.ts';
 import { ScrollableListPanel } from './scrollable-list-panel.ts';
-import { FilePreviewPanel } from './file-preview-panel.ts';
-import type { PanelIntegrationContext } from './types.ts';
 import type { ComponentHealthMonitor } from '../runtime/perf/panel-health-monitor.ts';
 import { listInstalledEcosystemEntries, type EcosystemCatalogPathOptions, type ShellPathService } from '@/runtime/index.ts';
 import {
@@ -257,11 +255,6 @@ export class SkillsPanel extends ScrollableListPanel<SkillRecord> {
   // I1: confirm state for destructive delete
   private confirm: ConfirmState | null = null;
   private readyPromise: Promise<void> | null = null;
-  // Staged pending action consumed by handlePanelIntegrationAction (same
-  // pattern as diff-panel.ts's pendingOpenPreview): Enter marks the intent
-  // here, the actual PanelManager/preview wiring happens once the
-  // integration context is available.
-  private pendingOpenPreview = false;
 
   public constructor(options: SkillsPanelOptions) {
     super('skills', 'Skills', '▩', 'automation-control', options.componentHealthMonitor);
@@ -374,50 +367,13 @@ export class SkillsPanel extends ScrollableListPanel<SkillRecord> {
 
   public override onDestroy(): void {}
 
-  protected override onSelect(_skill: SkillRecord): void {
-    // Enter opens the skill's markdown source in the preview panel — see
-    // handlePanelIntegrationAction for the actual PanelManager wiring
-    // (needs the integration context, not available here). Selection itself
-    // is read back from getVisibleItems() in that hook. onSelect is only
-    // invoked by ScrollableListPanel's navigation handler when the filter is
-    // not active, so no manual guard is needed here.
-    this.pendingOpenPreview = true;
-  }
-
-  /**
-   * Cross-panel integration hook — Enter opens the selected skill's markdown
-   * source in the preview panel via the same open/focus bridge DiffPanel
-   * uses (src/input/panel-integration-actions.ts), without this panel
-   * needing to know about PanelManager pane/focus mechanics beyond what ctx
-   * exposes.
-   */
-  public handlePanelIntegrationAction(_key: string, ctx: PanelIntegrationContext): boolean {
-    if (!this.pendingOpenPreview) return false;
-    this.pendingOpenPreview = false;
-    const skill = this.getSelectedItem();
-    if (!skill) return false;
-
-    const pm = ctx.panelManager;
-    let previewPanel = pm.getPanel('preview');
-    if (previewPanel instanceof FilePreviewPanel) {
-      const pane = pm.getPaneOf('preview');
-      pm.activateById('preview');
-      if (pane) pm.focusPane(pane);
-    } else {
-      const targetPane: 'top' | 'bottom' = pm.isBottomPaneVisible()
-        ? (pm.getFocusedPane() === 'top' ? 'bottom' : 'top')
-        : 'bottom';
-      const opened = pm.open('preview', targetPane);
-      pm.show();
-      pm.focusPane(targetPane);
-      previewPanel = opened instanceof FilePreviewPanel ? opened : null;
-    }
-    if (previewPanel instanceof FilePreviewPanel) {
-      previewPanel.openFile(skill.path);
-      return true;
-    }
-    return false;
-  }
+  // W6.1 (the purge): Enter used to open the skill's markdown source in the
+  // preview panel via a staged pendingOpenPreview flag + handlePanelIntegrationAction
+  // (same pattern diff-panel.ts used). 'preview' is DELETE-disposition with no
+  // successor surface (no file-picker-overlay preview to repoint to either —
+  // verified), so that cross-panel jump was removed rather than repointed;
+  // Enter is currently a no-op on this list (browse-only until WO-B migrates
+  // Skills to a modal).
 
   public handleInput(key: string): boolean {
     // I1: y/n confirmation dialog for delete

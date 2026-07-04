@@ -5,19 +5,26 @@
  * Delivery is resolved from the message KIND ('system' | 'wrfc' |
  * 'operational'), which maps to a configurable routing target
  * (ui.systemMessages / ui.wrfcMessages / ui.operationalMessages, each
- * 'panel' | 'conversation' | 'both'). resolveSystemMessageDelivery() turns that
- * target — plus whether a panel is attached — into a { toPanel, toConversation }
- * decision. The priority ('high' | 'low') only sets the panel emphasis; it does
- * not by itself decide conversation delivery.
+ * 'panel' | 'conversation' | 'both'). resolveSystemMessageDelivery() turns
+ * that target — plus whether a panel is attached — into a { toPanel,
+ * toConversation } decision.
  *
- * Critical override: errors, provider failovers, and compaction/context notices
- * (see FORCE_CONVERSATION_PREFIXES) ALWAYS also reach the main conversation,
- * regardless of target, so the user never has to open the SystemMessagesPanel
- * to discover them.
+ * W6.1 (the purge): the SystemMessagesPanel this router used to optionally
+ * push into was DELETE-disposition (no surviving human surface — a picker
+ * over the old panel registry, not something worth a dedicated console) and
+ * has been removed entirely, so this router now always resolves with
+ * `hasPanel = false`. Per resolveSystemMessageDelivery's own contract that
+ * means EVERY kind/target combination (including 'panel'-only) falls back
+ * to `toConversation: true` — nothing this router routes can vanish; it all
+ * reaches conversation.addTypedSystemMessage(), which the transcript
+ * renders as a navigable system line. This is deliberate, not a regression:
+ * operational chatter that used to be tucked away in a rarely-opened panel
+ * now surfaces inline, same as the messages that were already forced there
+ * (see FORCE_CONVERSATION_PREFIXES below).
  *
  * Usage:
  * ```ts
- * const router = createSystemMessageRouter(conversation, panel);
+ * const router = createSystemMessageRouter(conversation);
  * router.routeSystemMessage('[Provider] anthropic registered', 'low');
  * router.routeSystemMessage('[Session] Saved session abc123', 'high');
  * ```
@@ -33,7 +40,6 @@
  */
 
 import type { ConversationManager } from './conversation';
-import type { SystemMessagesPanel, SystemMessagePriority } from '../panels/system-messages-panel.ts';
 import {
   classifySystemMessageKind,
   classifySystemMessagePriority,
@@ -48,13 +54,15 @@ export type {
   SystemMessageTarget,
 } from '@/runtime/index.ts';
 
+/** Panel emphasis level. Panel delivery was removed in W6.1 (see file doc); kept as the priority vocabulary for callers and for the SDK's delivery-resolution signature. */
+export type SystemMessagePriority = 'high' | 'low';
+
 /**
  * Message categories that are operationally critical enough that the user must
  * see them inline in the main conversation, regardless of the configured
- * routing target (ui.systemMessages defaults to panel-only). Errors, provider
- * failovers, and compaction/context notices fall here: a user should never have
- * to open the SystemMessagesPanel to discover that a turn errored, a provider
- * failed over, or the context was compacted.
+ * routing target. Errors, provider failovers, and compaction/context notices
+ * fall here: a user should never have to go hunting to discover that a turn
+ * errored, a provider failed over, or the context was compacted.
  *
  * Detection is by the stable message prefix tag, mirroring how the SDK
  * classifiers key off message content. This deliberately does NOT force every
@@ -72,13 +80,12 @@ function mustReachConversation(message: string): boolean {
 // ---------------------------------------------------------------------------
 
 /**
- * Routes system messages to the conversation and/or the SystemMessagesPanel
- * based on priority level.
+ * Routes system messages to the conversation based on priority level and
+ * configured target. See file doc for the W6.1 panel removal.
  */
 export class SystemMessageRouter {
   constructor(
     private readonly conversation: ConversationManager,
-    private panel: SystemMessagesPanel | null,
     private readonly getTargetForKind: (kind: SystemMessageKind) => SystemMessageTarget = defaultSystemMessageTarget,
   ) {}
 
@@ -87,28 +94,26 @@ export class SystemMessageRouter {
   /**
    * Route a system message.
    *
-   * Delivery is resolved from the kind and its configured target; priority only
-   * sets panel emphasis. Critical notices (errors/failover/compaction, see
-   * FORCE_CONVERSATION_PREFIXES) are additionally forced into the conversation.
+   * Delivery is resolved from the kind and its configured target. Critical
+   * notices (errors/failover/compaction, see FORCE_CONVERSATION_PREFIXES)
+   * are additionally forced into the conversation.
    *
    * @param message  - Message text.
-   * @param priority - 'high' | 'low'.
+   * @param priority - 'high' | 'low' (kept for callers; no longer changes
+   *                   delivery now that there is no panel to emphasize on).
    * @param kind     - Classification kind ('system' | 'wrfc' | 'operational');
    *                   used to resolve routing target and conversation navigability.
    */
   routeTypedSystemMessage(
     message: string,
-    priority: SystemMessagePriority,
+    _priority: SystemMessagePriority,
     kind: SystemMessageKind,
   ): void {
     const target = this.getTargetForKind(kind);
-    const delivery = resolveSystemMessageDelivery(target, this.panel !== null);
-    if (delivery.toPanel) {
-      this.panel?.push(message, priority);
-    }
-    // Critical notices (errors, failover, compaction) must surface inline even
-    // when the configured target is panel-only — otherwise a user without the
-    // SystemMessagesPanel open would never see them.
+    // hasPanel is always false post-W6.1 — resolveSystemMessageDelivery's own
+    // contract means every target ('panel' | 'conversation' | 'both')
+    // resolves toConversation: true in that case (see file doc).
+    const delivery = resolveSystemMessageDelivery(target, false);
     const toConversation = delivery.toConversation || mustReachConversation(message);
     if (toConversation) {
       // addTypedSystemMessage threads the kind into the conversation so the
@@ -153,21 +158,6 @@ export class SystemMessageRouter {
   wrfc(message: string, priority: SystemMessagePriority = 'high'): void {
     this.routeTypedSystemMessage(message, priority, 'wrfc');
   }
-
-  /**
-   * Returns the current panel reference.
-   */
-  getPanel(): SystemMessagesPanel | null {
-    return this.panel;
-  }
-
-  /**
-   * Replace the panel reference after construction (late binding).
-   * Pass null to detach the panel.
-   */
-  setPanel(panel: SystemMessagesPanel | null): void {
-    this.panel = panel;
-  }
 }
 
 // ---------------------------------------------------------------------------
@@ -175,17 +165,13 @@ export class SystemMessageRouter {
 // ---------------------------------------------------------------------------
 
 /**
- * Create a SystemMessageRouter wired to the given conversation and panel.
+ * Create a SystemMessageRouter wired to the given conversation.
  *
- * @param conversation - The ConversationManager for high-priority messages.
- * @param panel        - The SystemMessagesPanel for all messages. Can be null
- *                       (router still works; messages to panel are silently
- *                       dropped until a panel is available).
+ * @param conversation - The ConversationManager all routed messages reach.
  */
 export function createSystemMessageRouter(
   conversation: ConversationManager,
-  panel: SystemMessagesPanel | null = null,
   getTargetForKind: (kind: SystemMessageKind) => SystemMessageTarget = defaultSystemMessageTarget,
 ): SystemMessageRouter {
-  return new SystemMessageRouter(conversation, panel, getTargetForKind);
+  return new SystemMessageRouter(conversation, getTargetForKind);
 }

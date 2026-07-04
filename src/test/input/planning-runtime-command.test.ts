@@ -74,6 +74,8 @@ function makeContext(service: ProjectPlanningService, out: string[], opened: str
   return {
     print: (message: string) => out.push(message),
     showPanel: (panelId: string) => { opened.push(panelId); },
+    // W6.1: /plan open now routes to the 'planning' modal via ctx.openModal.
+    openModal: (name: string) => { opened.push(name); },
     session: {
       runtime: {
         model: 'gpt-test',
@@ -204,9 +206,55 @@ describe('/plan project planning runtime command', () => {
 
     await registry.execute('plan', ['replace', 'the', 'planning', 'panel'], makeContext(fake.service, out, opened));
 
-    expect(opened).toContain('project-planning');
-    expect(out.join('\n')).toContain('Answer in the prompt, or focus the Planning panel');
+    expect(opened).toContain('planning-modal');
+    expect(out.join('\n')).toContain('Answer in the prompt, or open the Planning modal');
     expect(fake.state()?.metadata?.['active']).toBe(true);
     expect(fake.state()?.openQuestions.length).toBeGreaterThan(0);
+  });
+
+  // W6 review (finding 4b, defense): a lone verb-looking token is almost never
+  // a real planning goal — it is a mistyped/removed subcommand. The Planning
+  // modal used to dispatch `/plan dismiss`, which fell through here and seeded
+  // the goal with "dismiss". A single pseudo-subcommand verb must be refused
+  // (no upsertState, no panel open) with honest guidance instead of seeded.
+  test('a lone pseudo-subcommand verb ("dismiss") is refused, never seeded — no upsertState, honest guidance', async () => {
+    const registry = new CommandRegistry();
+    registerPlanningRuntimeCommands(registry);
+    const out: string[] = [];
+    const opened: string[] = [];
+    const fake = makeService();
+
+    await registry.execute('plan', ['dismiss'], makeContext(fake.service, out, opened));
+
+    expect(fake.state()).toBeNull(); // never seeded — the goal is not overwritten with "dismiss"
+    expect(opened).toEqual([]);
+    expect(out.join('\n')).toContain('Unknown /plan subcommand "dismiss"');
+    expect(out.join('\n')).toContain('/plan <a real sentence');
+  });
+
+  test('every pseudo-subcommand verb (dismiss/answer/pause/stop/cancel) is refused as a lone token', async () => {
+    for (const verb of ['dismiss', 'answer', 'pause', 'stop', 'cancel']) {
+      const registry = new CommandRegistry();
+      registerPlanningRuntimeCommands(registry);
+      const out: string[] = [];
+      const fake = makeService();
+      await registry.execute('plan', [verb], makeContext(fake.service, out, []));
+      expect(fake.state()).toBeNull();
+      expect(out.join('\n')).toContain(`Unknown /plan subcommand "${verb}"`);
+    }
+  });
+
+  test('a real multi-word goal that merely starts with a verb-looking word still seeds', async () => {
+    const registry = new CommandRegistry();
+    registerPlanningRuntimeCommands(registry);
+    const out: string[] = [];
+    const opened: string[] = [];
+    const fake = makeService();
+
+    await registry.execute('plan', ['cancel', 'the', 'legacy', 'billing', 'flow'], makeContext(fake.service, out, opened));
+
+    expect(fake.state()?.metadata?.['active']).toBe(true); // multi-word → genuine goal → seeded
+    expect(fake.state()?.goal).toBe('cancel the legacy billing flow');
+    expect(opened).toContain('planning-modal');
   });
 });

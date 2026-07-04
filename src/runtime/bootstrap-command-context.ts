@@ -62,6 +62,10 @@ export type CreateBootstrapCommandContextOptions = {
   mcpRegistry: McpRegistry;
   voiceProviderRegistry?: VoiceProviderRegistry;
   voiceService?: VoiceService;
+  /** B31: direct-command consumers (`/search`, `/image`) of already-constructed RuntimeServices. */
+  webSearchService?: import('@pellux/goodvibes-sdk/platform/web-search').WebSearchService;
+  mediaProviders?: import('@pellux/goodvibes-sdk/platform/media').MediaProviderRegistry;
+  artifactStore?: import('@pellux/goodvibes-sdk/platform/artifacts').ArtifactStore;
   forensicsRegistry: ForensicsRegistry;
   policyRuntimeState: PolicyRuntimeState;
   readModels: UiReadModels;
@@ -137,6 +141,9 @@ export function createBootstrapCommandContext(
     mcpRegistry,
     voiceProviderRegistry,
     voiceService,
+    webSearchService,
+    mediaProviders,
+    artifactStore,
     forensicsRegistry,
     policyRuntimeState,
     readModels,
@@ -256,7 +263,7 @@ export function createBootstrapCommandContext(
     projectPlanningProjectId,
     workPlanStore,
   }, shellServices);
-  const platform = createBootstrapCommandPlatformSection({ configManager, voiceProviderRegistry, voiceService }, shellServices);
+  const platform = createBootstrapCommandPlatformSection({ configManager, voiceProviderRegistry, voiceService, webSearchService, mediaProviders, artifactStore }, shellServices);
   const extensions = createBootstrapCommandExtensionsSection({
     toolRegistry,
     mcpRegistry,

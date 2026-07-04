@@ -8,8 +8,6 @@ import { truncateDisplay, getDisplayWidth } from '../utils/terminal-width.ts';
 import { GitService } from '@pellux/goodvibes-sdk/platform/git';
 import { BasePanel } from './base-panel.ts';
 import { UI_TONES, DIFF_TONES } from '../renderer/ui-primitives.ts';
-import { FilePreviewPanel } from './file-preview-panel.ts';
-import type { PanelIntegrationContext } from './types.ts';
 import { logger } from '@pellux/goodvibes-sdk/platform/utils';
 import { PanelConfirmOverlay } from './panel-confirm-overlay.ts';
 import {
@@ -262,9 +260,6 @@ export class DiffPanel extends BasePanel {
   private entries: DiffEntry[] = [];
   private selectedFile = 0;
   private scrollOffset = 0;
-
-  /** Set by the 'o' key; consumed by handlePanelIntegrationAction on the next dispatch. */
-  private pendingOpenPreview = false;
 
   /** One-line confirmation for the 'w'/'h'/'s' self-load hotkeys — otherwise a
    * reload that produces identical content is visually indistinguishable
@@ -522,48 +517,17 @@ export class DiffPanel extends BasePanel {
       case 'w': this.runHotkeyReload('working tree', () => this.showGitDiff());       return true;
       case 'h': this.runHotkeyReload('HEAD',         () => this.showGitDiff('HEAD')); return true;
       case 's': this.runHotkeyReload('staged',       () => this.showStagedDiff());    return true;
-      case 'o': {
-        if (!this.currentEntry()) return false;
-        this.pendingOpenPreview = true;
-        return true;
-      }
       default: return false;
     }
   }
 
-  /**
-   * Cross-panel integration hook — 'o' opens the currently selected file in
-   * the preview panel via the same open/focus bridge FileExplorerPanel uses
-   * (src/input/panel-integration-actions.ts), without this panel needing to
-   * know about PanelManager pane/focus mechanics beyond what ctx exposes.
-   */
-  handlePanelIntegrationAction(_key: string, ctx: PanelIntegrationContext): boolean {
-    if (!this.pendingOpenPreview) return false;
-    this.pendingOpenPreview = false;
-    const entry = this.currentEntry();
-    if (!entry) return false;
-
-    const pm = ctx.panelManager;
-    let previewPanel = pm.getPanel('preview');
-    if (previewPanel instanceof FilePreviewPanel) {
-      const pane = pm.getPaneOf('preview');
-      pm.activateById('preview');
-      if (pane) pm.focusPane(pane);
-    } else {
-      const targetPane: 'top' | 'bottom' = pm.isBottomPaneVisible()
-        ? (pm.getFocusedPane() === 'top' ? 'bottom' : 'top')
-        : 'bottom';
-      const opened = pm.open('preview', targetPane);
-      pm.show();
-      pm.focusPane(targetPane);
-      previewPanel = opened instanceof FilePreviewPanel ? opened : null;
-    }
-    if (previewPanel instanceof FilePreviewPanel) {
-      previewPanel.openFile(entry.filePath);
-      return true;
-    }
-    return false;
-  }
+  // W6.1 (the purge): 'o' used to open the currently selected file in the
+  // preview panel via a staged pendingOpenPreview flag + a
+  // handlePanelIntegrationAction cross-panel hook (the same bridge
+  // FileExplorerPanel used). 'preview' is DELETE-disposition with no
+  // successor surface (no file-picker-overlay preview to repoint to
+  // either — verified), so the key and the hook were removed rather than
+  // repointed; diff no longer has an 'o' action.
 
   private scrollUp(): void {
     if (this.scrollOffset > 0) {

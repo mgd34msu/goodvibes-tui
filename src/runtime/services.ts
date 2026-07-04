@@ -254,6 +254,9 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
   const runtimeDispatch = createDomainDispatch(options.runtimeStore);
   const gatewayMethods = new GatewayMethodCatalog();
   const panelManager = new PanelManager();
+  // W6.1 (the purge): MIGRATE-TO-MODAL surface + redirect registration moved to
+  // registerBuiltinPanels (builtin-panels.ts), where the panels' resolved deps
+  // are available for the surfaces to close over.
   const keybindingsManager = new KeybindingsManager({
     configPath: shellPaths.resolveUserPath('tui', 'keybindings.json'),
   });
@@ -616,6 +619,7 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
     approvalBroker,
     sessionBroker,
     messageBus: agentMessageBus, // Wave-3: backs steer()/`steerable` (wo612 builds the composer UI on top)
+    automationManager, // Wave 6 (wo-F item d4): folds /schedule AutomationJobs into the fleet as 'schedule' nodes
     runtimeBus: options.runtimeBus,
     // Honest pricing: never fabricate a cost for an unrecognized model.
     priceUsage: (model, usage) => {

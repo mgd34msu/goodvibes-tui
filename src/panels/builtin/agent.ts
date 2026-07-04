@@ -1,113 +1,27 @@
 import type { PanelManager } from '../panel-manager.ts';
-import { AgentInspectorPanel } from '../agent-inspector-panel.ts';
-import { ThinkingPanel } from '../thinking-panel.ts';
-import { ToolInspectorPanel } from '../tool-inspector-panel.ts';
-import { WrfcPanel } from '../wrfc-panel.ts';
-import { ProjectPlanningPanel } from '../project-planning-panel.ts';
-import { WorkPlanPanel } from '../work-plan-panel.ts';
 import type { ResolvedBuiltinPanelDeps } from './shared.ts';
-import { requireUiServices } from './shared.ts';
 
+// W6.1 (the purge): thinking, tools, inspector, and wrfc were registered here
+// before the purge. thinking/tools were DELETE-disposition (no surviving
+// human surface — thinking already renders inline in the transcript, tool
+// results render inline plus per-node in Fleet); inspector/wrfc were
+// RETIRE-INTO-FLEET (their live console is subsumed by the Fleet panel,
+// operations.ts:84). See registerOperationsPanels for the fleet
+// registration and .goodvibes/audit/2026-07-04-wave6-briefs.json (W6.1) for
+// the full disposition map.
 export function registerAgentPanels(manager: PanelManager, deps: ResolvedBuiltinPanelDeps): void {
-  manager.registerType({
-    id: 'thinking',
-    name: 'Thinking',
-    icon: 'T',
-    category: 'ai',
-    description: 'Stream model reasoning tokens in real-time with collapsible blocks per turn',
-    preload: true,
-    retainOnClose: true,
-    factory: () => new ThinkingPanel(requireUiServices(deps).events.turns),
-  });
+  // Compat: '/panel open agent-logs' and 'inspector' (and any saved
+  // layout/muscle memory) still resolve — redirected straight to fleet.
+  // Repointed from agent-logs->inspector (WO-110) now that inspector itself
+  // is retired; alias resolution is a single hop (PanelManager._resolveId),
+  // so this must point at the real surviving id, not at another alias.
+  manager.registerAlias('agent-logs', 'fleet');
+  manager.registerAlias('inspector', 'fleet');
+  manager.registerAlias('wrfc', 'fleet');
 
-  manager.registerType({
-    id: 'tools',
-    name: 'Tools',
-    icon: 'X',
-    category: 'ai',
-    description: 'Chronological tool call inspector with expandable args/results and filtering',
-    preload: true,
-    retainOnClose: true,
-    factory: () => {
-      const ui = requireUiServices(deps);
-      return new ToolInspectorPanel(ui.events.tools, ui.events.turns);
-    },
-  });
-
-  // WO-110: agent-logs merged into inspector — one deep agent console with
-  // the correct JSONL parser + cancel, plus agent-logs' follow/pause/filter
-  // ergonomics. Registration moved here (category 'agent') from
-  // builtin/development.ts. (WO-113 retired the 'context' registration that
-  // previously lived here: ContextVisualizerPanel merged into TokenBudgetPanel,
-  // aliased in builtin/session.ts.)
-  manager.registerType({
-    id: 'inspector',
-    name: 'Inspector',
-    icon: 'I',
-    category: 'agent',
-    description: 'Live per-agent console: timeline, tool calls, WRFC/cost badges, pause/filter/follow, and cancel',
-    preload: true,
-    retainOnClose: true,
-    factory: () => {
-      const ui = requireUiServices(deps);
-      return new AgentInspectorPanel({
-        agentManager: ui.agents.agentManager,
-        agentMessageBus: ui.agents.agentMessageBus,
-        agentEvents: ui.events.agents,
-        workingDirectory: ui.environment.workingDirectory,
-        cancelAgent: (agentId: string) => ui.agents.agentManager.cancel(agentId),
-        requestRender: deps.requestRender,
-      });
-    },
-  });
-
-  // Compat: '/panel open agent-logs' (and any saved layout/muscle memory)
-  // still resolves — redirected to the merged inspector console.
-  manager.registerAlias('agent-logs', 'inspector');
-
-  manager.registerType({
-    id: 'wrfc',
-    name: 'WRFC',
-    icon: 'W',
-    category: 'agent',
-    description: 'WRFC chain view: write, review, fix, and confirm cycle status',
-    preload: true,
-    retainOnClose: true,
-    factory: () => {
-      const ui = requireUiServices(deps);
-      return new WrfcPanel(ui.events.workflows, {
-        controller: ui.agents.wrfcController,
-        cancelChain: (agentId: string) => ui.agents.agentManager.cancel(agentId),
-      });
-    },
-  });
-
-  manager.registerType({
-    id: 'work-plan',
-    name: 'Work Plan',
-    // WO-152: was 'L' (collided with panel-list).
-    icon: '◧',
-    category: 'agent',
-    description: 'Persistent workspace checklist for multi-step work and cross-session task tracking',
-    preload: true,
-    retainOnClose: true,
-    factory: () => new WorkPlanPanel(deps.workPlanStore),
-  });
-
-  manager.registerType({
-    id: 'project-planning',
-    name: 'Planning',
-    icon: 'P',
-    category: 'agent',
-    description: 'Passive project planning artifacts: readiness, questions, decisions, language, task graph, and agent handoff metadata',
-    preload: true,
-    retainOnClose: true,
-    factory: () => new ProjectPlanningPanel({
-      service: deps.projectPlanningService,
-      projectId: deps.projectPlanningProjectId,
-      requestRender: deps.requestRender,
-      submitAnswer: deps.submitPlanningAnswer,
-      dismissPlanning: deps.dismissPlanning,
-    }),
-  });
+  // W6.1 (the purge) — group B (WO-P): 'work-plan' and 'project-planning'
+  // migrated to the 'work-plan-modal' / 'planning-modal' config-modal surfaces.
+  // Their surfaces AND panel→modal redirects are registered centrally in
+  // registerBuiltinModals (builtin-modals.ts). Panel registrations retired here.
+  void deps;
 }

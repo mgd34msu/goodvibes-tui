@@ -87,7 +87,7 @@ function makeCommandContext(overrides: Partial<CommandContext> = {}): CommandCon
 function makePanelManager(overrides: Record<string, unknown> = {}) {
   return {
     isVisible: () => true,
-    getAllOpen: () => [{ id: 'panel-list' }],
+    getAllOpen: () => [{ id: 'git' }],
     ...overrides,
   } as never;
 }
@@ -124,6 +124,7 @@ describe('command modal handoff', () => {
       settingsModal: { active: false, editingMode: false, cancelEdit: () => {}, close: () => {} } as never,
       sessionPickerModal: { active: false, close: () => {} } as never,
       profilePickerModal: { active: false, close: () => {} } as never,
+      configModal: { active: false, close: () => {}, reopen: () => {} } as never,
       contextInspectorModal: { active: false, close: () => {} } as never,
       processModal: { active: false, close: () => {} } as never,
       modelPicker: { active: false, close: () => {} } as never,
@@ -169,6 +170,7 @@ describe('command modal handoff', () => {
       settingsModal: { active: false, editingMode: false, cancelEdit: () => {}, close: () => {} } as never,
       sessionPickerModal: { active: false, close: () => {} } as never,
       profilePickerModal: { active: false, close: () => {} } as never,
+      configModal: { active: false, close: () => {}, reopen: () => {} } as never,
       contextInspectorModal: { active: false, close: () => {} } as never,
       processModal: { active: false, close: () => {} } as never,
       modelPicker: { active: true, close: () => { activeName = 'command'; } } as never,
@@ -312,7 +314,7 @@ describe('command modal handoff', () => {
       name: 'panel',
       description: 'Open panel',
       handler: (_args, ctx) => {
-        ctx.showPanel?.('panel-list');
+        ctx.showPanel?.('git');
       },
     });
     const state = {
@@ -370,6 +372,7 @@ describe('command modal handoff', () => {
       settingsModal: { active: false, editingMode: false, cancelEdit: () => {}, close: () => {} } as never,
       sessionPickerModal: { active: false, close: () => {} } as never,
       profilePickerModal: { active: false, close: () => {} } as never,
+      configModal: { active: false, close: () => {}, reopen: () => {} } as never,
       contextInspectorModal: { active: false, close: () => {} } as never,
       processModal: { active: false, close: () => {} } as never,
       modelPicker: { active: false, close: () => {} } as never,

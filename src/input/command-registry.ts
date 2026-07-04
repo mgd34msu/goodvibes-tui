@@ -79,6 +79,14 @@ export interface CommandUiActions {
     /** Which config target to write the selected model to. Defaults to 'main'. */
     target?: import('./model-picker.ts').ModelPickerTarget;
   }) => void;
+  /**
+   * Commit an embedding-provider selection from the model picker's
+   * 'embeddingProvider' mode (the 'embeddings' target). Deliberately separate
+   * from completeModelSelection — embedding providers are not
+   * ModelDefinition-shaped, so routing them through the same commit path
+   * would require fabricating a fake model object.
+   */
+  completeEmbeddingProviderSelection?: (providerId: string) => void;
   clearScreen?: () => void;
   activatePlan?: (planId: string, task: string) => void;
   requestPermission?: PermissionRequestHandler;
@@ -111,6 +119,13 @@ export interface CommandShellUiOpeners {
     callback: (result: SelectionResult | null) => void,
   ) => void;
   openSettingsModal?: (target?: string) => void;
+  /**
+   * Open a MIGRATE-TO-MODAL surface by name (W6.1 purge skeleton — WO-A/B
+   * command runtimes call this instead of openCommandPanel once their panel
+   * is converted to a ModalFactory config). Threaded from ui-openers.ts the
+   * same way openSettingsModal is.
+   */
+  openModal?: (name: string) => void;
   openSessionPicker?: () => void;
   openProfilePicker?: () => void;
   openShortcutsOverlay?: () => void;
@@ -207,6 +222,11 @@ export interface CommandPlatformConfigServices {
   readonly configManager: ConfigManager;
   readonly voiceProviderRegistry?: VoiceProviderRegistry;
   readonly voiceService?: VoiceService;
+  /** Direct-command consumer (`/search`) alongside the existing agent-tool consumer. */
+  readonly webSearchService?: import('@pellux/goodvibes-sdk/platform/web-search').WebSearchService;
+  /** Direct-command consumer (`/image`) — first production caller of `.generate()`. */
+  readonly mediaProviders?: import('@pellux/goodvibes-sdk/platform/media').MediaProviderRegistry;
+  readonly artifactStore?: import('@pellux/goodvibes-sdk/platform/artifacts').ArtifactStore;
 }
 
 export interface CommandPlatformServices
@@ -219,7 +239,7 @@ export interface CommandOpsServices
 export interface CommandExtensionRegistryServices {
   readonly toolRegistry: ToolRegistry;
   readonly mcpRegistry: McpRegistry;
-  readonly evalRegistry?: import('../panels/eval-panel.ts').EvalRegistry;
+  readonly evalRegistry?: import('../panels/eval-registry.ts').EvalRegistry;
 }
 
 export interface CommandExtensionServices

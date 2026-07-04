@@ -13,7 +13,7 @@ import {
   upsertEcosystemCatalogEntry,
   uninstallEcosystemCatalogEntry,
 } from '@/runtime/index.ts';
-import { requireEcosystemCatalogPaths, requirePluginPathOptions } from './runtime-services.ts';
+import { openModalCommand, requireEcosystemCatalogPaths, requirePluginPathOptions } from './runtime-services.ts';
 
 export function registerPluginRuntimeCommands(registry: CommandRegistry): void {
   registry.register({
@@ -33,7 +33,7 @@ export function registerPluginRuntimeCommands(registry: CommandRegistry): void {
       const sub = args[0];
 
       if (!sub || sub === 'open' || sub === 'panel') {
-        if (ctx.showPanel) ctx.showPanel('plugins');
+        openModalCommand(ctx, 'plugins-modal');
         return;
       }
 

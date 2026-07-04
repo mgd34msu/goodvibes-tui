@@ -70,8 +70,14 @@ export function registerLocalRuntimeCommands(registry: CommandRegistry): void {
     handler(args, ctx) {
       const sub = (args[0] ?? '').toLowerCase();
       if (sub === 'panel' || sub === 'review') {
+        // W6.1 (the purge): 'tools'/ToolInspectorPanel was DELETE-disposition
+        // (no surviving human surface — tool results render inline in the
+        // transcript, plus a per-node tool list in Fleet). There is no alias
+        // to resolve through, so this prints an honest notice and opens
+        // Fleet instead of the retired inspector.
+        ctx.print('Tools panel retired — tool activity now renders inline in the transcript and per-agent in the Fleet panel. Opening Fleet.');
         try {
-          openCommandPanel(ctx, 'tools');
+          openCommandPanel(ctx, 'fleet');
         } catch {
           // Panel registry may be unavailable in lightweight command-only contexts.
         }
@@ -79,9 +85,9 @@ export function registerLocalRuntimeCommands(registry: CommandRegistry): void {
           ctx.print([
             'Tool Surface Review',
             '  Native file tools stay compact by default.',
-            '  Read/write/edit/notebook capabilities are available through the native tool stack, with detail routed to the tools panel and approval surfaces instead of transcript bloat.',
+            '  Read/write/edit/notebook capabilities are available through the native tool stack, with detail routed inline and to approval surfaces instead of transcript bloat.',
             '  Shell and native tool approvals classify work into read, mutation, destructive, dependency, config, notebook, network, remote, and lifecycle risk families.',
-            '  Use /tools panel to inspect risk class, output-policy actions, spill posture, compact summaries, and approval posture for recent calls.',
+            '  Use /tools panel to jump to the Fleet panel for live per-agent tool activity.',
             '  Use /approval review shell or /approval review file when you need the action-specific why-prompted posture.',
           ].join('\n'));
         }
