@@ -1,7 +1,7 @@
 import type { CommandContext } from '../command-registry.ts';
 import { VALID_REVIEW_STATES, VALID_SCOPES, isValidReviewState, isValidScope } from './recall-shared.ts';
 import { getMemoryApi } from './recall-query.ts';
-import { buildTurnInjectionsText } from '../../renderer/turn-injection.ts';
+import { buildMainSessionTurnInjectionsText, buildTurnInjectionsText } from '../../renderer/turn-injection.ts';
 
 export function handleRecallQueue(args: string[], context: CommandContext): void {
   const memory = getMemoryApi(context);
@@ -106,32 +106,29 @@ export function handleRecallExplain(args: string[], context: CommandContext): vo
 /**
  * W5.2 (wo803) — per-turn passive knowledge injection inspectability.
  *
- * Reads `AgentRecord.turnInjections` (Wave-5 wo801) via
- * `context.ops.agentManager.exportState()` — the CommandContext-exposed
+ * With an explicit agent id, reads `AgentRecord.turnInjections` (Wave-5 wo801)
+ * via `context.ops.agentManager.exportState()` — the CommandContext-exposed
  * `ShellAgentManagerService` doesn't have a `getStatus`/`list` pair, but
  * `exportState()` returns the same full `AgentRecord[]` (it's what
  * compactConversation() already uses for the same reason).
  *
- * The main interactive session is deliberately NOT offered as an implicit
- * default here: it does not run through the passive-injection engine in this
- * build (see turn-injection.ts's module doc for why), so there is nothing
- * honest to show for it without an explicit agent id.
+ * With NO agent id (wo805 wiring), renders the MAIN interactive session's own
+ * per-turn injection ring — `Orchestrator.getTurnInjections()`, threaded onto
+ * the command context as `session.getMainSessionTurnInjections`. As of wo805 the
+ * main session DOES route through the passive-injection engine, so this is the
+ * honest main-session default (previously there was no record source, so the
+ * no-id path could only print a usage hint). When the accessor isn't wired
+ * (headless/test contexts built without an orchestrator), the main-session
+ * renderer's honest empty state stands in.
  */
 export function handleRecallInjections(args: string[], context: CommandContext): void {
-  const agentManager = context.ops.agentManager;
-  const records = agentManager?.exportState() ?? [];
   const agentId = args[0];
   if (!agentId) {
-    const known = records.map((record) => record.id).slice(0, 10);
-    const hint = known.length > 0 ? ` Known agent ids: ${known.join(', ')}.` : '';
-    context.print(
-      '[recall] Usage: /recall injections <agentId>\n' +
-      '  Shows per-turn passive knowledge injection records (Wave-5) for a spawned agent (Task/automation runs).\n' +
-      '  The main interactive session does not route through the passive-injection engine in this build, so there is nothing to show for it here.' +
-      hint,
-    );
+    const mainSessionInjections = context.session.getMainSessionTurnInjections?.() ?? [];
+    context.print(buildMainSessionTurnInjectionsText(mainSessionInjections));
     return;
   }
+  const records = context.ops.agentManager?.exportState() ?? [];
   const record = records.find((candidate) => candidate.id === agentId);
   if (!record) {
     context.print(`[recall] Agent not found: ${agentId}`);

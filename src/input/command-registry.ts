@@ -165,6 +165,14 @@ export interface CommandSessionServices {
   readonly workstreamEngine?: import('../runtime/workstream-services.ts').WorkstreamCommandService;
   /** Wave 5 (wo804): the repo source-tree code index — see runtime/code-index-services.ts. */
   readonly codeIndexStore?: import('@pellux/goodvibes-sdk/platform/state').CodeIndexStore;
+  /**
+   * Wave 5 (wo805): the MAIN interactive session's per-turn passive-injection
+   * honesty ring — `Orchestrator.getTurnInjections()`, the main-session
+   * counterpart to `AgentRecord.turnInjections` (wo801). `/recall injections`
+   * with no agent id reads this. Optional so command contexts built without an
+   * orchestrator (headless, tests) fall back to the honest empty state.
+   */
+  readonly getMainSessionTurnInjections?: () => readonly import('../renderer/turn-injection.ts').TurnInjectionEntry[];
 }
 
 export interface CommandProviderServices {

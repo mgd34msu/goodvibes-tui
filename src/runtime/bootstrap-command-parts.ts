@@ -114,6 +114,7 @@ export interface BootstrapCommandSectionOptions {
   readonly hydrateSessionUsage?: () => void;
   readonly workstreamEngine?: import('./workstream-services.ts').WorkstreamCommandService;
   readonly codeIndexStore?: CodeIndexStore;
+  readonly getMainSessionTurnInjections?: () => readonly import('../renderer/turn-injection.ts').TurnInjectionEntry[];
   readonly agentManager?: ShellAgentManagerService;
   readonly modeManager?: ShellModeManagerService;
   readonly automationManager?: ShellAutomationManagerRuntimeService;
@@ -305,7 +306,7 @@ export function createBootstrapCommandActions(
 export function createBootstrapCommandSessionSection(
   options: Pick<
     BootstrapCommandSectionOptions,
-    'conversation' | 'runtime' | 'sessionManager' | 'sessionMemoryStore' | 'sessionLineageTracker' | 'wrfcController' | 'changeTracker' | 'hydrateSessionUsage' | 'workstreamEngine' | 'codeIndexStore'
+    'conversation' | 'runtime' | 'sessionManager' | 'sessionMemoryStore' | 'sessionLineageTracker' | 'wrfcController' | 'changeTracker' | 'hydrateSessionUsage' | 'workstreamEngine' | 'codeIndexStore' | 'getMainSessionTurnInjections'
   >,
 ): BootstrapCommandSessionSection {
   return {
@@ -319,6 +320,7 @@ export function createBootstrapCommandSessionSection(
     hydrateSessionUsage: options.hydrateSessionUsage,
     workstreamEngine: options.workstreamEngine,
     codeIndexStore: options.codeIndexStore,
+    getMainSessionTurnInjections: options.getMainSessionTurnInjections,
   };
 }
 
