@@ -337,7 +337,8 @@ export type KeyRouteState = {
   commandRegistry?: CommandRegistry | null;
   autocomplete: AutocompleteEngine | null;
   blockActionsMenu: { open: (block: BlockMeta) => void };
-  processModal: { open: () => void };
+  /** W6.2 e: F2 opens+focuses the Fleet panel (which subsumes the retired process modal). */
+  openFleetPanel: () => void;
   modalOpened: (name: string) => void;
   saveUndoState: () => void;
   /** Break the undo coalescing group (call on cursor moves). */
@@ -610,8 +611,11 @@ export function handlePromptKeyToken(state: KeyRouteState, token: InputToken): {
 
   if (token.logicalName === 'f2') {
     indicatorFocused = false;
-    state.modalOpened('process');
-    state.processModal.open();
+    // W6.2 e: F2 opens AND focuses the Fleet panel, which subsumes the retired
+    // process modal (the last remaining opener of ProcessModal — and, through
+    // it, AgentDetailModal/LiveTailModal). openFleetPanel sets panelFocused on
+    // the shared context directly, so nothing more is returned here.
+    state.openFleetPanel();
     return { handled: true, prompt, cursorPos, inputScrollTop, commandMode, indicatorFocused };
   }
 
