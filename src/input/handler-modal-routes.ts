@@ -545,19 +545,50 @@ type ConfigModalRouteState = {
 /**
  * Route a key to the generic config-modal host (W6.1 MIGRATE-TO-MODAL
  * surfaces). The host owns the reserved navigation keys (Esc, up/down/j/k tab
- * left/right); every other key is offered to the active surface's declarative
- * action table (fireAction handles the two-press confirm for destructive
- * actions). Any unrecognised key is absorbed so the modal stays modal — this is
- * the same "active modal captures all keys" shape as the other modal routers.
+ * left/right, and now '/' — DEBT-5 item 1's type-to-filter, armed the same
+ * way as scrollable-list-panel.ts's opt-in filter and SettingsModal's own
+ * '/'-armed search); every other key is offered to the active surface's
+ * declarative action table (fireAction handles the two-press confirm for
+ * destructive actions). Any unrecognised key is absorbed so the modal stays
+ * modal — this is the same "active modal captures all keys" shape as the
+ * other modal routers.
+ *
+ * While the filter is armed (`configModal.isFilterActive()`), printable text
+ * tokens go to the query instead of nav/action dispatch — this is WHY 'j'/'k'
+ * lose their vim-nav meaning mid-filter (you're typing, not navigating) but
+ * Escape, Backspace, and the arrow/tab nav keys keep their ordinary meaning
+ * (arrows navigate the FILTERED list; Enter still acts on the selected row).
  */
 export function handleConfigModalToken(state: ConfigModalRouteState, token: InputToken): boolean {
   if (!state.configModal.active) return false;
 
+  const filtering = state.configModal.isFilterActive();
+
   if (token.type === 'key') {
-    switch (token.logicalName) {
-      case 'escape':
-        state.handleEscape();
+    if (token.logicalName === 'escape') {
+      // Two-stage Esc, but ONLY while there is a query to clear (the one
+      // documented exception to single-Esc-close): clearFilterOrFallthrough
+      // returns false on an empty query, so an armed-but-empty filter (or no
+      // filter at all) closes the modal in one press, same as every other
+      // modal here.
+      if (state.configModal.clearFilterOrFallthrough()) {
+        state.requestRender();
         return true;
+      }
+      state.handleEscape();
+      return true;
+    }
+    if (filtering && isTextBackspace(token.logicalName ?? '')) {
+      state.configModal.backspaceFilter();
+      state.requestRender();
+      return true;
+    }
+    if (!filtering && token.logicalName === '/') {
+      state.configModal.activateFilter();
+      state.requestRender();
+      return true;
+    }
+    switch (token.logicalName) {
       case 'up':
         state.configModal.moveUp();
         state.requestRender();
@@ -576,7 +607,23 @@ export function handleConfigModalToken(state: ConfigModalRouteState, token: Inpu
         state.requestRender();
         return true;
     }
+    // Any other 'key' token (e.g. 'enter') falls through to the action table
+    // below even while filtering — only printable TEXT tokens are captured
+    // by the filter (below), so Enter still fires on the current selection.
   } else if (token.type === 'text') {
+    if (!filtering && token.value === '/') {
+      state.configModal.activateFilter();
+      state.requestRender();
+      return true;
+    }
+    if (filtering) {
+      // The WHOLE token value lands in the filter in one call — including a
+      // multi-char paste token — never split into per-char nav/action
+      // dispatch (the text-capture invariant this item's brief calls out).
+      state.configModal.appendFilterText(token.value);
+      state.requestRender();
+      return true;
+    }
     if (token.value === 'j') { state.configModal.moveDown(); state.requestRender(); return true; }
     if (token.value === 'k') { state.configModal.moveUp(); state.requestRender(); return true; }
   }

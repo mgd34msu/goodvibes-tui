@@ -7,6 +7,7 @@ import type {
   ConfigModalView,
 } from './config-modal-types.ts';
 import type { ModalSectionStyle } from '../renderer/modal-factory.ts';
+import { truncateDisplay, wrapText } from '../utils/terminal-width.ts';
 
 export type {
   ConfigModalAction,
@@ -53,6 +54,26 @@ export interface ConfigModalRenderModel {
 const DEFAULT_VISIBLE_ROWS = 10;
 
 /**
+ * Default label wrap width for getRenderModel() callers that don't pass one
+ * (tests, mainly). Matches the renderer's real list-item wrap width at the
+ * common terminal sizes this codebase tests against: default box width 76,
+ * minus the 4-column text margin and 2-column selection indicator (see
+ * ModalFactory._renderListSection's `contentW - 2`). renderConfigModal()
+ * itself always computes and passes the ACTUAL width for the current
+ * terminal size — this constant only matters when getRenderModel() is
+ * called directly without going through the renderer.
+ */
+const DEFAULT_LABEL_WRAP_WIDTH = 70;
+
+/**
+ * Stable id for the synthesized "no matches" row DEBT-5 item 1 injects when a
+ * filter query excludes every selectable row in a tab. Non-selectable (info
+ * rows are never filtered — see ConfigModal's filter doc) so this id can
+ * never collide with a real surface row id.
+ */
+const FILTER_NO_MATCH_ROW_ID = '__config_modal_filter_no_match__';
+
+/**
  * ConfigModal — the single, generic, named config-modal host. One instance
  * lives on the InputHandler (like `settingsModal`); it renders whatever
  * `ConfigModalSurface` is currently open. Key routing is a single
@@ -76,6 +97,19 @@ export class ConfigModal {
   private pendingConfirmKey: string | null = null;
 
   /**
+   * DEBT-5 item 1 — the host's own type-to-filter, armed with '/' (matching
+   * the pre-existing "'/' to filter" convention: scrollable-list-panel.ts's
+   * opt-in filter, and SettingsModal's own '/'-armed search). `filterActive`
+   * gates whether printable keys go to the query instead of nav/actions;
+   * `filterQuery` is the TEXT-CAPTURE buffer itself (a multi-char paste token
+   * appends in one shot — see handleConfigModalToken). Filtering only ever
+   * narrows the ACTIVE tab's rows and is reset on tab switch (a query typed
+   * against one tab's rows has no defined meaning against another's).
+   */
+  private filterActive = false;
+  private filterQuery = '';
+
+  /**
    * Structure captured at the last interaction boundary (open / key press).
    * Renders overlay live values onto THIS so rows never reflow mid-interaction.
    */
@@ -95,6 +129,8 @@ export class ConfigModal {
     this.statusMessage = '';
     this.pendingConfirmKey = null;
     this.scrollOffset = 0;
+    this.filterActive = false;
+    this.filterQuery = '';
     const view = surface.buildView();
     this.frozenView = view;
     this.activeTabId = view.tabs[0]?.id ?? '';
@@ -110,6 +146,8 @@ export class ConfigModal {
     this.frozenView = null;
     this.statusMessage = '';
     this.pendingConfirmKey = null;
+    this.filterActive = false;
+    this.filterQuery = '';
   }
 
   /** Re-activate the current surface after a nested modal closes (Esc stack). */
@@ -139,7 +177,7 @@ export class ConfigModal {
    */
   syncStructure(): void {
     if (!this.surface) return;
-    const view = this.surface.buildView();
+    const view = this._applyFilter(this.surface.buildView());
     this.frozenView = view;
     if (!view.tabs.some((t) => t.id === this.activeTabId)) {
       this.activeTabId = view.tabs[0]?.id ?? '';
@@ -149,6 +187,58 @@ export class ConfigModal {
       this.selectedRowId = this._firstSelectableId(tab);
     }
     this._clampScroll();
+  }
+
+  // ── Filter (DEBT-5 item 1 — each mutation is an interaction boundary) ──────
+
+  isFilterActive(): boolean {
+    return this.filterActive;
+  }
+
+  getFilterQuery(): string {
+    return this.filterQuery;
+  }
+
+  /** Arm the filter (handleConfigModalToken calls this on '/'). Idempotent. */
+  activateFilter(): void {
+    if (this.filterActive) return;
+    this._clearConfirm();
+    this.filterActive = true;
+    this.syncStructure();
+  }
+
+  /**
+   * Append text to the query — the WHOLE token value in one call, so a
+   * multi-char paste token lands in the filter atomically rather than being
+   * split into per-char nav/action dispatch (the text-capture invariant this
+   * item's brief calls out). A no-op when the filter isn't armed.
+   */
+  appendFilterText(text: string): void {
+    if (!this.filterActive || text.length === 0) return;
+    this.filterQuery += text;
+    this.syncStructure();
+  }
+
+  backspaceFilter(): void {
+    if (!this.filterActive || this.filterQuery.length === 0) return;
+    this.filterQuery = this.filterQuery.slice(0, -1);
+    this.syncStructure();
+  }
+
+  /**
+   * Esc while filtering: a non-empty query is CLEARED (stays armed, ready to
+   * retype without pressing '/' again) and this returns true so the caller
+   * (handleConfigModalToken) stops here instead of closing the modal. An
+   * empty query returns false — the caller falls through to the ordinary
+   * close path, preserving single-Esc-close for the no-filter case (the one
+   * documented exception: two-stage Esc only when there is something to
+   * clear).
+   */
+  clearFilterOrFallthrough(): boolean {
+    if (!this.filterActive || this.filterQuery.length === 0) return false;
+    this.filterQuery = '';
+    this.syncStructure();
+    return true;
   }
 
   // ── Navigation (each is an interaction boundary) ────────────────────────────
@@ -183,6 +273,10 @@ export class ConfigModal {
 
   private _switchTab(dir: 1 | -1): void {
     this._clearConfirm();
+    // A filter query is scoped to the tab it was typed against — switching
+    // tabs resets it (DEBT-5 item 1), same as statusMessage below.
+    this.filterActive = false;
+    this.filterQuery = '';
     this.syncStructure();
     const tabs = this.frozenView?.tabs ?? [];
     if (tabs.length <= 1) return;
@@ -265,8 +359,16 @@ export class ConfigModal {
    * Compute the render model: frozen structure + live value overlay. Pure —
    * does NOT sync structure, so calling it repeatedly with only value mutations
    * yields byte-identical layout (the liveness contract).
+   *
+   * `labelWrapWidth` is the wrap column ModalFactory's list section will use
+   * for row labels (renderConfigModal computes and passes the real one for
+   * the current terminal size). It exists so the wrap-clamp below (DEBT-5
+   * item 2) can pre-empt a live label growing past ModalFactory's wrap width
+   * mid-tick — a structural change (an extra visible line) without an
+   * interaction — by measuring wrapped line counts here, before the label
+   * ever reaches the renderer.
    */
-  getRenderModel(): ConfigModalRenderModel {
+  getRenderModel(labelWrapWidth: number = DEFAULT_LABEL_WRAP_WIDTH): ConfigModalRenderModel {
     const live = this.surface?.buildView() ?? null;
     const frozen = this.frozenView;
     if (!frozen) {
@@ -295,7 +397,7 @@ export class ConfigModal {
       const src = lr ?? fr;
       return {
         id: fr.id,
-        label: src.label,
+        label: this._clampRowLabel(fr.label, src.label, labelWrapWidth),
         style: src.style,
         selected: fr.id === this.selectedRowId,
         selectable: fr.selectable !== false,
@@ -306,12 +408,27 @@ export class ConfigModal {
     const visible = this.visibleRows;
     const windowed = allRows.slice(this.scrollOffset, this.scrollOffset + visible);
 
-    const hints = [
-      ...(frozen.hints ?? []),
-      ...(frozenTab?.hints ?? []),
-      ...this._actionHints(),
-      'Esc close',
-    ];
+    // DEBT-5 item 1: while filtering, the surface's own action/tab hints are
+    // unreliable (their printable-letter keys are captured by the filter
+    // instead of firing — see handleConfigModalToken), so the footer swaps
+    // to just the filter status (query + a truthful match count) and the
+    // Esc contract for this mode. See getFilterQuery/isFilterActive callers.
+    const filtering = this.filterActive;
+    const hasQuery = filtering && this.filterQuery.length > 0;
+    const hints = filtering
+      ? [
+          this._filterStatusHint(
+            frozenRows.filter((r) => r.selectable !== false).length,
+            (liveTab?.rows ?? []).filter((r) => r.selectable !== false).length,
+          ),
+          hasQuery ? 'Esc clear · Esc close' : 'Esc close',
+        ]
+      : [
+          ...(frozen.hints ?? []),
+          ...(frozenTab?.hints ?? []),
+          ...this._actionHints(),
+          'Esc close',
+        ];
 
     return {
       title: live?.title ?? frozen.title,
@@ -327,6 +444,67 @@ export class ConfigModal {
   }
 
   // ── internals ────────────────────────────────────────────────────────────────
+
+  /**
+   * DEBT-5 item 2 (wrap-clamp overlay): keep a live label within the FROZEN
+   * row's line footprint until the next interaction boundary re-freezes it.
+   * `frozenLabel` is what the row wrapped to when the structure was captured
+   * (open/nav/filter keystroke); `liveLabel` is this tick's value. If the
+   * live label would wrap into MORE lines than the frozen one, that is a
+   * structural change (an extra visible row) happening without a keypress —
+   * exactly the hazard this closes. Clamp to the frozen line count, ellipsis
+   * on the last line to signal truncation; a live label that wraps to the
+   * SAME or FEWER lines passes through untouched (not the documented hazard).
+   * Identical strings short-circuit (the common per-tick case: unchanged or
+   * non-selected/stale rows) without doing any wrap work.
+   */
+  private _clampRowLabel(frozenLabel: string, liveLabel: string, width: number): string {
+    if (liveLabel === frozenLabel) return liveLabel;
+    const frozenLineCount = Math.max(1, wrapText(frozenLabel, width).length);
+    const liveLines = wrapText(liveLabel, width);
+    if (liveLines.length <= frozenLineCount) return liveLabel;
+    const clamped = liveLines.slice(0, frozenLineCount);
+    const lastIdx = clamped.length - 1;
+    clamped[lastIdx] = `${truncateDisplay(clamped[lastIdx]!, Math.max(1, width - 1))}…`;
+    return clamped.join('\n');
+  }
+
+  /** Footer text for the active filter: the query + a truthful match count. */
+  private _filterStatusHint(matched: number, total: number): string {
+    const q = this.filterQuery;
+    if (q.length === 0) return `/ type to filter (${total} row${total === 1 ? '' : 's'})`;
+    return `/${q} — ${matched} of ${total} match${matched === 1 ? '' : 'es'}`;
+  }
+
+  /** Apply the active filter query to every tab's rows. A no-op passthrough when not filtering. */
+  private _applyFilter(view: ConfigModalView): ConfigModalView {
+    if (!this.filterActive || this.filterQuery === '') return view;
+    const query = this.filterQuery.toLowerCase();
+    return { ...view, tabs: view.tabs.map((tab) => this._filterTab(tab, query)) };
+  }
+
+  /**
+   * Narrow one tab's rows to those matching `query` (case-insensitive
+   * substring on the label). Non-selectable rows (section titles, honest
+   * empty-state copy, warning banners) always pass through unfiltered —
+   * they're context, not data. When the query excludes every selectable row
+   * but the tab genuinely had some, append the honest "no rows match" line
+   * (DEBT-5 item 1's empty-result case) instead of silently showing nothing
+   * or misleadingly falling back to the surface's own emptyText (which
+   * describes "no data at all", not "no data matches your filter").
+   */
+  private _filterTab(tab: ConfigModalTab, query: string): ConfigModalTab {
+    const kept = tab.rows.filter((r) => r.selectable === false || r.label.toLowerCase().includes(query));
+    const hadSelectable = tab.rows.some((r) => r.selectable !== false);
+    const stillMatched = kept.some((r) => r.selectable !== false);
+    if (hadSelectable && !stillMatched) {
+      return {
+        ...tab,
+        rows: [...kept, { id: FILTER_NO_MATCH_ROW_ID, label: `No rows match "${this.filterQuery}".`, selectable: false }],
+      };
+    }
+    return { ...tab, rows: kept };
+  }
 
   private _actionHints(): string[] {
     const actions = this.surface?.actions ?? [];
