@@ -184,11 +184,20 @@ describe('operator surfaces gate', () => {
     });
     const ids = manager.getRegisteredTypes().map((entry) => entry.id);
 
-    expect(ids).toContain('policy');
-    expect(ids).toContain('hooks');
-    expect(ids).toContain('security');
-    expect(ids).toContain('marketplace');
-    expect(ids).toContain('knowledge');
+    // W6.1 (the purge) — group B (WO-B): policy/hooks/security/marketplace/
+    // knowledge migrated to config-modals. They are no longer registered panels;
+    // each redirects to its modal via PanelManager.registerModalRedirect
+    // (registered by registerEcosystemModalRedirects in registerOperationsPanels).
+    // (sandbox/subscription/remote were group A — WO-A migrated those; asserted
+    // in the WO-A block below, not registered here as they were on the WO-B
+    // branch before the group-A migration landed.)
+    for (const [panelId, modalName] of [
+      ['policy', 'policy'], ['hooks', 'hooks'], ['security', 'security'],
+      ['marketplace', 'marketplace'], ['knowledge', 'knowledge'],
+    ] as const) {
+      expect(ids).not.toContain(panelId);
+      expect(manager.getModalRedirect(panelId)).toBe(modalName);
+    }
     expect(ids).toContain('fleet');
     // W6.1 (WO-A): local-auth stays a registered panel — it is the host for the
     // masked password-entry sub-mode (LocalAuthPanel.openMaskedEntry) and cannot
@@ -237,7 +246,10 @@ describe('operator surfaces gate', () => {
     // WO-113: the 'context' visualizer merged into the tokens console; the
     // retired id survives only as a PanelManager alias.
     expect(manager.open('context')).toBe(manager.open('tokens'));
-    expect(ids).toContain('sessions');
+    // W6.1 (the purge) — group B: 'sessions' folded into the existing session
+    // picker modal — no longer a registered panel; redirects to 'sessionPicker'.
+    expect(ids).not.toContain('sessions');
+    expect(manager.getModalRedirect('sessions')).toBe('sessionPicker');
     // W6.1: panel-list was DELETE-disposition — it no longer resolves at all
     // (no alias, unlike the RETIRE ids above).
     expect(ids).not.toContain('panel-list');
@@ -292,9 +304,13 @@ describe('operator surfaces gate', () => {
     });
     const ids = manager.getRegisteredTypes().map((entry) => entry.id);
     expect(ids).toContain('cost');
-    expect(ids).toContain('memory');
+    // W6.1 (the purge) — group B: 'memory' migrated to the 'memory' config-modal.
+    // It no longer registers as a panel (the modal owns the "not configured"
+    // empty state now — see src/panels/modals/memory-modal.ts); it redirects.
+    expect(ids).not.toContain('memory');
+    expect(manager.getModalRedirect('memory')).toBe('memory');
 
-    for (const id of ['cost', 'memory']) {
+    for (const id of ['cost']) {
       // Must not throw "Unknown panel" — the registration always exists now.
       const panel = manager.open(id);
       expect(panel.id).toBe(id);

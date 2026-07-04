@@ -1,25 +1,16 @@
 import type { PanelManager } from '../panel-manager.ts';
 import { FleetPanel } from '../fleet-panel.ts';
 import { createFleetReadModel } from '../fleet-read-model.ts';
-import { PluginsPanel } from '../plugins-panel.ts';
-import { SkillsPanel } from '../skills-panel.ts';
 import { LocalAuthPanel } from '../local-auth-panel.ts';
-import { HooksPanel } from '../hooks-panel.ts';
-import { SecurityPanel } from '../security-panel.ts';
-import { MarketplacePanel } from '../marketplace-panel.ts';
-import { PolicyPanel } from '../policy-panel.ts';
 import type { ResolvedBuiltinPanelDeps } from './shared.ts';
-import { requireHookPanelDeps, requirePluginManager, requireUiServices } from './shared.ts';
+import { requireUiServices } from './shared.ts';
+import { registerEcosystemModalRedirects } from '../modals/modal-surface.ts';
 
 // WO-152: the former single 'monitoring' category (33 panels pre-merge) is
 // split into five operator domains, applied per-registration below. Kept in
 // this file's original registration order (rather than physically regrouped
 // by category) because several registrations below close over shared local
-// state — `ui`, `providerRuntime`, `runtimeStore` — defined once near the
-// top of this function. Domain membership registered here:
-//   providers:              services, subscription, remote, provider-health
-//   security-policy:        local-auth, settings-sync, security, sandbox, policy
-//   automation-control:     plugins, skills, hooks, marketplace
+// state — `ui` — defined once near the top of this function.
 //
 // W6.1 (the purge): cockpit, approval, automation, routes, control-plane,
 // worktrees, tasks, orchestration, ops, ops-control, and communication were
@@ -31,6 +22,16 @@ import { requireHookPanelDeps, requirePluginManager, requireUiServices } from '.
 // feed CockpitPanel exclusively was removed along with it — Fleet reads the
 // process registry directly via fleetReadModel below, not via the roster
 // read-model.
+//
+// W6.1 MIGRATE-TO-MODAL: the Providers & Connectivity group (services,
+// subscription, remote, provider-health) and Security group (settings-sync,
+// sandbox) migrated to config-modal surfaces registered in builtin-modals.ts
+// (WO-A); the Ecosystem & Governance group (plugins, skills, hooks, security,
+// marketplace, policy, knowledge, memory, docs, qr-code, work-plan,
+// project-planning) migrated to config-modal surfaces (WO-B). All are reached
+// via their panel ids' modal redirects (registerEcosystemModalRedirects below,
+// plus the WO-A redirects in builtin-modals.ts). local-auth is a DELIBERATE
+// EXCEPTION — see its registration below.
 export function registerOperationsPanels(manager: PanelManager, deps: ResolvedBuiltinPanelDeps): void {
   const ui = requireUiServices(deps);
 
@@ -84,47 +85,14 @@ export function registerOperationsPanels(manager: PanelManager, deps: ResolvedBu
   // resolution is a single hop, so this cannot chain through 'incident'.
   manager.registerAlias('forensics', 'fleet');
 
-  manager.registerType({
-    id: 'plugins',
-    name: 'Plugins',
-    // WO-152: was 'P' (collided with project-planning and preview).
-    icon: '◐',
-    category: 'automation-control',
-    description: 'Plugin trust, quarantine, capability, and activation status',
-    factory: () => new PluginsPanel(requirePluginManager(deps)),
-  });
-
-  manager.registerType({
-    id: 'skills',
-    name: 'Skills',
-    // WO-152: was 'K' (collided with knowledge and tokens).
-    icon: '▩',
-    category: 'automation-control',
-    description: 'Project-local and global skill discovery with origin and dependency details',
-    factory: () => new SkillsPanel({
-      componentHealthMonitor: deps.componentHealthMonitor,
-      shellPaths: ui.environment.shellPaths,
-      ecosystemPaths: {
-        cwd: ui.environment.shellPaths.workingDirectory,
-        homeDir: ui.environment.shellPaths.homeDirectory,
-        projectCatalogRoot: ui.environment.shellPaths.resolveProjectPath('tui', 'ecosystem'),
-        userCatalogRoot: ui.environment.shellPaths.resolveUserPath('tui', 'ecosystem'),
-      },
-    }),
-  });
-
-  // W6.1 (the purge): services, subscription, settings-sync are MIGRATE-TO-MODAL
-  // — their views moved to config-modal surfaces in builtin-modals.ts
-  // (services-modal / subscription-modal / settings-sync-modal), reached via
-  // those panel ids' modal redirects.
-  //
-  // local-auth is a DELIBERATE EXCEPTION: it stays a registered panel because it
-  // is the host for the masked password-entry sub-mode (LocalAuthPanel.
-  // openMaskedEntry, driven by ctx.openLocalAuthMaskedEntry — the only path that
-  // keeps a plaintext password out of argv/history/scrollback). Its browse view
-  // is mirrored by local-auth-modal (reached via the /local-auth front-door), but
-  // the panel itself cannot be retired without regressing that secure input, and
-  // no 'local-auth' modal redirect is registered (so openLocalAuthMaskedEntry's
+  // local-auth is a DELIBERATE EXCEPTION to the W6.1 purge: it stays a
+  // registered panel because it is the host for the masked password-entry
+  // sub-mode (LocalAuthPanel.openMaskedEntry, driven by
+  // ctx.openLocalAuthMaskedEntry — the only path that keeps a plaintext
+  // password out of argv/history/scrollback). Its browse view is mirrored by
+  // local-auth-modal (reached via the /local-auth front-door), but the panel
+  // itself cannot be retired without regressing that secure input, and no
+  // 'local-auth' modal redirect is registered (so openLocalAuthMaskedEntry's
   // showPanel('local-auth') + getPanel('local-auth') still resolve to it).
   manager.registerType({
     id: 'local-auth',
@@ -135,59 +103,10 @@ export function registerOperationsPanels(manager: PanelManager, deps: ResolvedBu
     factory: () => new LocalAuthPanel(deps.localUserAuthManager),
   });
 
-  manager.registerType({
-    id: 'hooks',
-    name: 'Hooks',
-    // WO-152: was 'H' (collided with sessions).
-    icon: '▨',
-    category: 'automation-control',
-    description: 'Registered hooks, chains, contracts, and execution policy details',
-    factory: () => {
-      const hookDeps = requireHookPanelDeps(deps);
-      return new HooksPanel(hookDeps.hookDispatcher, hookDeps.hookWorkbench, hookDeps.hookActivityTracker);
-    },
-  });
-
-  manager.registerType({
-    id: 'security',
-    name: 'Security',
-    // WO-152: was 'U' (collided with local-auth and policy).
-    icon: '▬',
-    category: 'security-policy',
-    description: 'Security review workspace for token audit, policy posture, MCP quarantine, and incident pressure',
-    factory: () => new SecurityPanel(ui.readModels.security),
-  });
-
-  manager.registerType({
-    id: 'marketplace',
-    name: 'Marketplace',
-    // WO-152: was 'M' (collided with memory and automation).
-    icon: '◩',
-    category: 'automation-control',
-    description: 'Curated plugin and skill marketplace with provenance, compatibility, and install posture',
-    factory: () => {
-      return new MarketplacePanel(ui.readModels.marketplace, {
-        cwd: ui.environment.shellPaths.workingDirectory,
-        homeDir: ui.environment.shellPaths.homeDirectory,
-        projectCatalogRoot: ui.environment.shellPaths.resolveProjectPath('tui', 'ecosystem'),
-        userCatalogRoot: ui.environment.shellPaths.resolveUserPath('tui', 'ecosystem'),
-      });
-    },
-  });
-
-  // W6.1 (the purge): sandbox, remote, and provider-health are
-  // MIGRATE-TO-MODAL — sandbox-modal / remote-modal / providers-modal in
-  // builtin-modals.ts. provider-health is the charter's live-modal exemplar;
-  // the 'providers' and 'accounts' ids (formerly panel aliases to it) now
-  // redirect to providers-modal (registered in builtin-modals.ts).
-
-  manager.registerType({
-    id: 'policy',
-    name: 'Policy',
-    // WO-152: was 'U' (collided with local-auth and security).
-    icon: '▭',
-    category: 'security-policy',
-    description: 'Policy governance: active/candidate bundles, divergence gate, rollout history, and simulation evidence',
-    factory: () => new PolicyPanel(deps.policyRuntimeState),
-  });
+  // W6.1 (the purge) — group B: register the ecosystem/governance panel→modal
+  // redirects so `/panel open <id>` and saved layouts resolve to the modal
+  // (via the injected openModal callback) instead of a retired panel. Config +
+  // dispatch registration with the config-modal host is a separate one-call
+  // step (registerBuiltinModals in builtin-modals.ts) wired by the integrator.
+  registerEcosystemModalRedirects(manager);
 }

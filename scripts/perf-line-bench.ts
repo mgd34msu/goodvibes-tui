@@ -41,7 +41,8 @@ import { ConversationManager } from '../src/core/conversation.ts';
 import { renderMarkdownTracked } from '../src/renderer/markdown.ts';
 import { renderCodeBlock } from '../src/renderer/code-block.ts';
 import { PanelManager } from '../src/panels/panel-manager.ts';
-import { DocsPanel } from '../src/panels/docs-panel.ts';
+import type { Panel } from '../src/panels/types.ts';
+import { createEmptyLine, createStyledCell } from '../src/types/grid.ts';
 import { buildPanelCompositeData } from '../src/renderer/panel-composite.ts';
 import { renderHelpOverlay } from '../src/renderer/help-overlay.ts';
 import { KeybindingsManager } from '../src/input/keybindings.ts';
@@ -286,11 +287,48 @@ function makeConversationContext() {
   };
 }
 
-/** Register two Docs panels and open them in the top and bottom panes. */
+/**
+ * A self-contained, deterministic full-pane content panel for the two-pane
+ * composite benchmark. Fills each pane with styled rows (mixed fg tones + a
+ * separator) so the compositor does representative per-cell work every frame.
+ * W6.1 (the purge) replaced the previously-used DocsPanel here — a migrated,
+ * now-deleted panel — with this bench-local implementation so the perf bench
+ * never breaks when a domain panel is retired.
+ */
+function createBenchPanel(id: string, name: string, icon: string): Panel {
+  const palette = ['#e2e8f0', '#94a3b8', '#38bdf8', '#22c55e', '#f59e0b'];
+  return {
+    id, name, icon, category: 'system',
+    onActivate: () => {}, onDeactivate: () => {}, onDestroy: () => {},
+    isTransient: false, isPinned: false, needsRender: true,
+    invalidate: () => {}, markRendered: () => {},
+    render: (width: number, height: number): Line[] => {
+      const lines: Line[] = [];
+      for (let row = 0; row < height; row++) {
+        if (row === 1) {
+          const sep = createEmptyLine(width);
+          for (let x = 0; x < width; x++) sep[x] = createStyledCell('─', { fg: '#334155' });
+          lines.push(sep);
+          continue;
+        }
+        const line = createEmptyLine(width);
+        const text = `  ${name} row ${row}: composite benchmark content — mixed tokens, glyphs, and padding fill`;
+        const fg = palette[row % palette.length]!;
+        for (let x = 0; x < text.length && x < width; x++) {
+          line[x] = createStyledCell(text[x]!, { fg, bold: row % 5 === 0 });
+        }
+        lines.push(line);
+      }
+      return lines;
+    },
+  };
+}
+
+/** Register two full-pane content panels and open them in the top and bottom panes. */
 function makeTwoPaneManager(): { manager: PanelManager; input: InputHandler } {
   const manager = new PanelManager();
-  manager.registerType({ id: 'bench-top', name: 'Top', icon: '⬆', category: 'system', description: 'bench top pane', factory: () => new DocsPanel() });
-  manager.registerType({ id: 'bench-bottom', name: 'Bottom', icon: '⬇', category: 'system', description: 'bench bottom pane', factory: () => new DocsPanel() });
+  manager.registerType({ id: 'bench-top', name: 'Top', icon: '⬆', category: 'system', description: 'bench top pane', factory: () => createBenchPanel('bench-top', 'Top', '⬆') });
+  manager.registerType({ id: 'bench-bottom', name: 'Bottom', icon: '⬇', category: 'system', description: 'bench bottom pane', factory: () => createBenchPanel('bench-bottom', 'Bottom', '⬇') });
   manager.show();
   manager.open('bench-top', 'top');
   manager.open('bench-bottom', 'bottom');
