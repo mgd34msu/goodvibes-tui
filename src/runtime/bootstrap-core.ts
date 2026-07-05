@@ -33,9 +33,8 @@ import { join } from 'node:path';
 import { installWrfcAgentToolGuard } from '../tools/wrfc-agent-guard.ts';
 import { createWrfcPersistence, type WrfcPersistence } from './wrfc-persistence.ts';
 import type { SystemMessagePriority } from '../core/system-message-router.ts';
-import { SessionSpineClient } from './session-spine-client.ts';
+import { SessionSpineClient, SessionUnionCache, TUI_SPINE_PARTICIPANT } from '@pellux/goodvibes-sdk/platform/runtime/session-spine';
 import { SessionInboundInputPoller, createBootstrapInboundInputPoller } from './session-inbound-inputs.ts';
-import { SessionUnionCache } from './session-union-cache.ts';
 
 // ---------------------------------------------------------------------------
 // Pre-router buffer
@@ -294,7 +293,7 @@ export async function initializeBootstrapCore(
     watcherRegistry,
   } = services;
   // S3c: dormant until bootstrap.ts activates it for an adopted 'external' daemon.
-  const sessionSpine = new SessionSpineClient();
+  const sessionSpine = new SessionSpineClient({ participant: TUI_SPINE_PARTICIPANT, recordKind: 'tui' });
   // S3d: cache-backed read facade over the local broker (passthrough until bootstrap.ts marks it embedded or activates the adopted-daemon wire union).
   const sessionUnionCache = new SessionUnionCache({ local: sharedSessionBroker });
 

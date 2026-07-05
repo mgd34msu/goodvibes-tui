@@ -15,7 +15,7 @@ import { join } from 'node:path';
 import { bootDaemon, type BootedDaemon } from '@pellux/goodvibes-sdk/platform/daemon';
 import { createHttpTransport } from '@/runtime/index.ts';
 import type { SharedSessionRecord } from '@pellux/goodvibes-sdk/platform/control-plane';
-import { SessionUnionCache, type LocalSessionReader } from '../../runtime/session-union-cache.ts';
+import { SessionUnionCache, type LocalSessionReader } from '@pellux/goodvibes-sdk/platform/runtime/session-spine';
 
 const TOKEN = 'union-integration-token';
 

@@ -6,7 +6,7 @@ import { createUiReadModels, type UiReadModels, type UiReadModelOptions } from '
 import type { ForensicsRegistry } from '@/runtime/index.ts';
 import type { ControlPlaneRecentEvent } from '@pellux/goodvibes-sdk/platform/control-plane';
 import type { ApprovalBroker } from '@pellux/goodvibes-sdk/platform/control-plane';
-import { SessionUnionCache, type SessionReadFacade } from './session-union-cache.ts';
+import { SessionUnionCache, type SessionReadFacade } from '@pellux/goodvibes-sdk/platform/runtime/session-spine';
 import type { ShellPathService } from '@/runtime/index.ts';
 import type { HostServiceStatus } from '@/runtime/index.ts';
 import type { SecretsManager } from '../config/secrets.ts';
