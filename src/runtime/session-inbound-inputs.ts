@@ -221,3 +221,32 @@ export function narrateInboundSteer(steer: InboundSteer): string {
   const verb = steer.intent === 'follow-up' ? 'follow-up received from' : 'steer received from';
   return `${verb} ${surface}${who}: ${steer.body}`;
 }
+
+/**
+ * Build the standard bootstrap-time poller: sessionId tracks the live runtime
+ * session ref, and onSteer narrates the steer to the operator then injects it
+ * via the SAME path COMPANION_MESSAGE_RECEIVED uses (orchestrator.handleUserInput
+ * when wired, else a bare conversation append + render request as a fallback
+ * before the orchestrator ref is patched). Extracted from bootstrap-core.ts to
+ * keep this module (not the bootstrap god-function) the owner of the wiring.
+ */
+export function createBootstrapInboundInputPoller(deps: {
+  readonly runtimeSessionIdRef: { readonly value: string };
+  readonly routeOrBuffer: (text: string, priority: 'low' | 'high') => void;
+  readonly orchestratorHandleUserInputRef: { readonly value: ((text: string) => void) | null };
+  readonly conversation: { readonly addUserMessage: (text: string) => void };
+  readonly requestRender: () => void;
+}): SessionInboundInputPoller {
+  return new SessionInboundInputPoller({
+    sessionId: () => deps.runtimeSessionIdRef.value || null,
+    onSteer: (steer) => {
+      deps.routeOrBuffer(narrateInboundSteer(steer), 'low');
+      if (deps.orchestratorHandleUserInputRef.value) {
+        deps.orchestratorHandleUserInputRef.value(steer.body);
+      } else {
+        deps.conversation.addUserMessage(steer.body);
+        deps.requestRender();
+      }
+    },
+  });
+}
