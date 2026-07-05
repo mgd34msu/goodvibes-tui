@@ -184,6 +184,18 @@ type DeepWidenToString<T> = T extends string ? string : { [K in keyof T]: DeepWi
 
 export type UiToneTokens = DeepWidenToString<typeof UI_TONES>;
 
+//
+// chrome.* — persistent header/footer/thinking foregrounds that paint on the
+// TRANSPARENT terminal background (see the chrome group's doc in
+// ui-primitives.ts). Unlike fg.muted/fg.dim (which stay light for the opaque
+// dark modal/panel boxes), these invert toward dark so they read on a light
+// terminal. Contrast ratios below are against a white terminal (#ffffff),
+// matching the discipline of the LIGHT ThemeTokens above:
+//   label: Slate-500 (#64748b) — header title; ~4.9:1 on #fff (matches modelNameDim)
+//   faint: Slate-400 (#94a3b8) — version/rule/clean-git; ~2.7:1 on #fff, deliberately
+//          faint (mirrors the low-contrast intent of the dark fg.dim role)
+//   warn:  Amber-700 (#b45309) — dirty git / pending risk; ~5.0:1 on #fff (matches diffAccent)
+//   bad:   Red-600  (#dc2626) — DANGER banner / shell risk (bold); ~5.3:1 on #fff
 const UI_TONES_LIGHT: UiToneTokens = {
   ...UI_TONES,
   state: {
@@ -197,10 +209,18 @@ const UI_TONES_LIGHT: UiToneTokens = {
     gradientStart: LIGHT.heading1,
     gradientEnd: LIGHT.reasoningAccent,
   },
+  chrome: {
+    ...UI_TONES.chrome,
+    label: '#64748b',
+    faint: '#94a3b8',
+    warn:  '#b45309',
+    bad:   '#dc2626',
+  },
 };
 
 Object.freeze(UI_TONES_LIGHT.state);
 Object.freeze(UI_TONES_LIGHT.accent);
+Object.freeze(UI_TONES_LIGHT.chrome);
 Object.freeze(UI_TONES_LIGHT);
 
 /**
