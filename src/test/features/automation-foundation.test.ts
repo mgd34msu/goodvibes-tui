@@ -117,7 +117,7 @@ describe('automation foundation config surface', () => {
 });
 
 describe('automation foundation feature flags', () => {
-  test('new automation and omnichannel flags are declared and default disabled', () => {
+  test('new automation and omnichannel flags are declared with their documented defaults', () => {
     const expected = [
       'automation-domain',
       'control-plane-gateway',
@@ -132,10 +132,15 @@ describe('automation foundation feature flags', () => {
       'service-management',
     ] as const;
 
+    // One-Platform Wave 1: control-plane-gateway is the single tier-10 flag that
+    // defaults ON (a stock daemon must serve its auth-gated streams). Every other
+    // omnichannel/automation flag stays OFF until individually validated.
+    const enabledByDefault = new Set<string>(['control-plane-gateway']);
+
     for (const id of expected) {
       const flag = FEATURE_FLAGS.find((entry) => entry.id === id);
       expect(flag).toBeDefined();
-      expect(flag?.defaultState).toBe('disabled');
+      expect(flag?.defaultState).toBe(enabledByDefault.has(id) ? 'enabled' : 'disabled');
     }
   });
 });
