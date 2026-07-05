@@ -63,6 +63,28 @@ This path is useful for service-style deployments, automation entrypoints, and l
 
 The installed package also exposes a `goodvibes-daemon` launcher. Global installs should put both `goodvibes` and `goodvibes-daemon` on `PATH`.
 
+## Connecting the TUI to an already-running daemon
+
+The TUI normally adopts a compatible GoodVibes daemon it finds already listening at its configured `controlPlane.host`/`controlPlane.port`, or starts its own if none is found. Adoption authenticates with a bearer token read from `<homeDirectory>/.goodvibes/daemon/operator-tokens.json`; if that file does not already hold the *same* token the target daemon was started with, the TUI cannot tell the two apart from a token it has never seen and will not adopt it.
+
+Two ways to point a TUI instance at a daemon it did not start itself:
+
+**Interactive** — in the onboarding wizard's Network step, set "GoodVibes daemon source" to "Connect to an existing running daemon," fill in that daemon's host, port, and token, and select "Connect to this daemon now." This installs the token into `operator-tokens.json`, applies the host/port, and restarts the external-services controller immediately so you see whether the connection succeeded before finishing the rest of onboarding.
+
+**Non-interactive** — set the same `GOODVIBES_DAEMON_TOKEN` environment variable used above to start a headless daemon with a fixed token, and point the TUI (or another daemon) at the same host/port and token:
+
+```sh
+# Start the daemon once, with a fixed, known token:
+GOODVIBES_DAEMON_TOKEN=gv_shared_token bun run daemon --hostname 0.0.0.0 --port 3421
+
+# Point a TUI at it (any home directory — no shared operator-tokens.json needed):
+GOODVIBES_DAEMON_TOKEN=gv_shared_token bun run dev \
+  --config controlPlane.host=<daemon-host> \
+  --config controlPlane.port=3421
+```
+
+`GOODVIBES_DAEMON_TOKEN` is read by both sides: the daemon CLI uses it as the bearer token every route requires, and the TUI runtime uses it to install (or confirm) the matching entry in its own `operator-tokens.json` before probing that host/port, so adoption succeeds without hand-editing any files. This mirrors `src/verification/live-verifier.ts`'s existing fallback to the same variable when probing a daemon's HTTP surface from the outside.
+
 ## Background service and autostart
 
 The fullscreen `/config` workspace exposes service settings under `Service`:

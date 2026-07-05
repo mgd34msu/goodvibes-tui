@@ -1,4 +1,6 @@
 import { afterEach, describe, expect, test } from 'bun:test';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { InfiniteBuffer } from '../../core/history.ts';
 import { CommandRegistry, type CommandContext } from '../../input/command-registry.ts';
 import { InputHandler } from '../../input/handler.ts';
@@ -869,7 +871,10 @@ describe('OnboardingWizardController', () => {
     wizard.setFieldValue('capabilities.browser-access', true);
     wizard.setFieldValue('network.mode', 'custom');
     wizard.setStep(1);
-    wizard.moveSelection(3, 10);
+    // F1: field 1 in the Network step is now the 'network.daemon-source' radio
+    // (start vs adopt an existing daemon) inserted ahead of the custom-mode
+    // fields, so 'network.service-port' shifted from index 3 to index 4.
+    wizard.moveSelection(4, 10);
 
     const routeState = {
       onboardingWizard: wizard,
@@ -883,7 +888,7 @@ describe('OnboardingWizardController', () => {
     handleOnboardingWizardToken(routeState, { type: 'key', logicalName: 'return' } as InputToken);
 
     expect(wizard.getSelectedField()?.id).toBe('network.service-port');
-    expect(wizard.getSelectedFieldIndex()).toBe(3);
+    expect(wizard.getSelectedFieldIndex()).toBe(4);
     expect(wizard.getTextFieldValue('network.service-port')).toBe('jk');
   });
 
@@ -893,7 +898,8 @@ describe('OnboardingWizardController', () => {
     wizard.setFieldValue('capabilities.browser-access', true);
     wizard.setFieldValue('network.mode', 'custom');
     wizard.setStep(1);
-    wizard.moveSelection(3, 10);
+    // F1: see the note above — 'network.service-port' is now at index 4.
+    wizard.moveSelection(4, 10);
 
     const routeState = {
       onboardingWizard: wizard,
@@ -908,7 +914,7 @@ describe('OnboardingWizardController', () => {
     handleOnboardingWizardToken(routeState, { type: 'key', logicalName: 'return' } as InputToken);
 
     expect(wizard.getSelectedField()?.id).toBe('network.service-port');
-    expect(wizard.getSelectedFieldIndex()).toBe(3);
+    expect(wizard.getSelectedFieldIndex()).toBe(4);
     expect(wizard.getTextFieldValue('network.service-port')).toBe('jk1');
   });
 
@@ -1994,5 +2000,143 @@ describe('daemon/auth security wizard hardening (TASK-035, TASK-036, TASK-037)',
     const cloudflareStep = wizard.steps.find((s) => s.id === 'cloudflare');
     const noticeField = cloudflareStep?.fields.find((f) => f.id === 'cloudflare.trust-proxy-notice');
     expect(noticeField?.hint).toContain('RESIDUAL RISK');
+  });
+});
+
+// F1: onboarding recognizes an adoptable running daemon by offering a
+// "connect to an existing daemon" choice with a token-paste field, instead of
+// requiring the token file to be hand-seeded on disk before the TUI starts.
+describe('network step: connect to an existing daemon (F1)', () => {
+  test('defaults to "start a new daemon" and hides the adopt fields', () => {
+    const wizard = new OnboardingWizardController();
+    wizard.open('new');
+    wizard.setFieldValue('capabilities.browser-access', true);
+
+    const networkStep = wizard.steps.find((s) => s.id === 'network');
+    expect(networkStep?.fields.find((f) => f.id === 'network.daemon-source')).toBeDefined();
+    expect(wizard.getStringFieldValue('network.daemon-source', '')).toBe('start');
+    expect(networkStep?.fields.find((f) => f.id === 'network.adopt-daemon-host')).toBeUndefined();
+    expect(networkStep?.fields.find((f) => f.id === 'network.adopt-daemon-token')).toBeUndefined();
+  });
+
+  test('choosing "adopt" reveals host/port/token fields and a connect action', () => {
+    const wizard = new OnboardingWizardController();
+    wizard.open('new');
+    wizard.setFieldValue('capabilities.browser-access', true);
+    wizard.setFieldValue('network.daemon-source', 'adopt');
+
+    const networkStep = wizard.steps.find((s) => s.id === 'network');
+    const hostField = networkStep?.fields.find((f) => f.id === 'network.adopt-daemon-host');
+    const portField = networkStep?.fields.find((f) => f.id === 'network.adopt-daemon-port');
+    const tokenField = networkStep?.fields.find((f) => f.id === 'network.adopt-daemon-token');
+    const connectAction = networkStep?.fields.find((f) => f.id === 'network.adopt-daemon-connect');
+    expect(hostField?.kind).toBe('text');
+    expect(portField?.kind).toBe('text');
+    expect(tokenField?.kind).toBe('masked');
+    expect(connectAction?.kind).toBe('action');
+    expect(connectAction && connectAction.kind === 'action' ? connectAction.action : null).toBe('connect-existing-daemon');
+    expect(networkStep?.summaryLines.some((line) => line.includes('connect to an existing running daemon'))).toBe(true);
+  });
+
+  test('connect-existing-daemon action refuses to proceed without a pasted token', async () => {
+    resetTestRuntimeServices();
+    const uiServices = createDefaultUiRuntimeServices();
+    ensureLocalAdminAuth(uiServices);
+    let restartCalled = false;
+    installExternalServices(uiServices, {
+      inspect: () => ({ daemonRunning: false, httpListenerRunning: false }),
+      restart: async () => {
+        restartCalled = true;
+        return { daemonRunning: false, httpListenerRunning: false };
+      },
+    });
+    const input = makeInput(uiServices);
+    const prints: string[] = [];
+    input.setCommandRegistry(new CommandRegistry(), {
+      session: { runtime: {} },
+      print: (text: string) => prints.push(text),
+    } as unknown as CommandContext);
+    input.openOnboardingWizard({ mode: 'new', preload: () => {} });
+    input.onboardingWizard.setFieldValue('capabilities.browser-access', true);
+    input.onboardingWizard.setFieldValue('network.daemon-source', 'adopt');
+
+    await (input as unknown as { handleOnboardingAction(action: 'connect-existing-daemon'): Promise<void> })
+      .handleOnboardingAction('connect-existing-daemon');
+
+    expect(restartCalled).toBe(false);
+    expect(prints.join('\n')).toContain('paste that daemon\'s token first');
+  });
+
+  test('connect-existing-daemon action installs the pasted token, applies host/port, and reports success on adoption', async () => {
+    resetTestRuntimeServices();
+    const uiServices = createDefaultUiRuntimeServices();
+    ensureLocalAdminAuth(uiServices);
+    const adoptedStatus: HostServiceStatus = {
+      mode: 'external',
+      host: '10.0.0.5',
+      port: 4242,
+      baseUrl: 'http://10.0.0.5:4242',
+      authenticated: true,
+      status: 'running',
+      version: '0.38.0',
+      reason: 'Existing GoodVibes daemon verified on configured host/port',
+    };
+    installExternalServices(uiServices, {
+      inspect: () => ({ daemonRunning: false, httpListenerRunning: false }),
+      restart: async () => ({
+        daemonRunning: true,
+        httpListenerRunning: false,
+        daemonStatus: adoptedStatus,
+      }),
+    });
+    const input = makeInput(uiServices);
+    const prints: string[] = [];
+    input.setCommandRegistry(new CommandRegistry(), {
+      session: { runtime: {} },
+      print: (text: string) => prints.push(text),
+    } as unknown as CommandContext);
+    input.openOnboardingWizard({ mode: 'new', preload: () => {} });
+    input.onboardingWizard.setFieldValue('capabilities.browser-access', true);
+    input.onboardingWizard.setFieldValue('network.daemon-source', 'adopt');
+    input.onboardingWizard.setFieldValue('network.adopt-daemon-host', '10.0.0.5');
+    input.onboardingWizard.setFieldValue('network.adopt-daemon-port', '4242');
+    input.onboardingWizard.setFieldValue('network.adopt-daemon-token', 'gv_pasted_token');
+
+    await (input as unknown as { handleOnboardingAction(action: 'connect-existing-daemon'): Promise<void> })
+      .handleOnboardingAction('connect-existing-daemon');
+
+    expect(prints.join('\n')).toContain('Connect to existing daemon: succeeded.');
+    expect(uiServices.platform.configManager.get('controlPlane.host')).toBe('10.0.0.5');
+    expect(uiServices.platform.configManager.get('controlPlane.port')).toBe(4242);
+    const tokenPath = join(uiServices.environment.homeDirectory, '.goodvibes', 'daemon', 'operator-tokens.json');
+    const onDisk = JSON.parse(readFileSync(tokenPath, 'utf-8')) as { token: string };
+    expect(onDisk.token).toBe('gv_pasted_token');
+  });
+
+  test('connect-existing-daemon action reports an honest diagnostic when the daemon could not be verified', async () => {
+    resetTestRuntimeServices();
+    const uiServices = createDefaultUiRuntimeServices();
+    ensureLocalAdminAuth(uiServices);
+    installExternalServices(uiServices, {
+      inspect: () => ({ daemonRunning: false, httpListenerRunning: false }),
+      restart: async () => ({ daemonRunning: false, httpListenerRunning: false }),
+    });
+    const input = makeInput(uiServices);
+    const prints: string[] = [];
+    input.setCommandRegistry(new CommandRegistry(), {
+      session: { runtime: {} },
+      print: (text: string) => prints.push(text),
+    } as unknown as CommandContext);
+    input.openOnboardingWizard({ mode: 'new', preload: () => {} });
+    input.onboardingWizard.setFieldValue('capabilities.browser-access', true);
+    input.onboardingWizard.setFieldValue('network.daemon-source', 'adopt');
+    input.onboardingWizard.setFieldValue('network.adopt-daemon-host', '10.0.0.9');
+    input.onboardingWizard.setFieldValue('network.adopt-daemon-port', '9999');
+    input.onboardingWizard.setFieldValue('network.adopt-daemon-token', 'gv_wrong_token');
+
+    await (input as unknown as { handleOnboardingAction(action: 'connect-existing-daemon'): Promise<void> })
+      .handleOnboardingAction('connect-existing-daemon');
+
+    expect(prints.join('\n')).toContain('could not verify a connection');
   });
 });

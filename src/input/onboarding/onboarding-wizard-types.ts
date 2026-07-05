@@ -53,7 +53,8 @@ export type OnboardingWizardAction =
   | 'cloudflare-verify'
   | 'cloudflare-disable'
   | 'start-openai-subscription'
-  | 'finish-openai-subscription';
+  | 'finish-openai-subscription'
+  | 'connect-existing-daemon';
 
 export type OnboardingWizardApplyFeedbackSeverity = 'info' | 'warning' | 'error';
 
