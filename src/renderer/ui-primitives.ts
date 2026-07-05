@@ -130,6 +130,10 @@ export const UI_TONES = {
     warn: '#f59e0b',
     /** Alert accent on terminal bg (DANGER banner, shell risk). == state.bad (dark). */
     bad: '#ef4444',
+    /** Success accent on terminal bg (tool-call ✓ status glyph). == state.good (dark). */
+    good: '#22c55e',
+    /** Remote-risk accent on terminal bg (risk:remote marker, plain status). */
+    remote: '#a78bfa',
   },
 } as const;
 

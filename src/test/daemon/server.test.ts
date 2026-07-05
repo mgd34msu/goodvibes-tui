@@ -85,6 +85,18 @@ describe('DaemonServer', () => {
   let homeDir: string;
   let configDir: string;
   let runtimeServices: ReturnType<typeof createRuntimeServices>;
+  // Ephemeral-port harness: every test daemon binds on port 0 and this factory
+  // captures the OS-assigned port, so two concurrent `bun test` processes never
+  // collide on a fixed port. Injecting a serveFactory also makes DaemonServer
+  // skip its pre-bind OS port probe (the facade only probes when
+  // serveFactory === Bun.serve). boundPort is refreshed on every start(); the
+  // URL templates below read it at fetch time.
+  let boundPort = 0;
+  const capturingServe = ((options) => {
+    const server = Bun.serve(options);
+    boundPort = server.port;
+    return server;
+  }) as typeof Bun.serve;
   const makeConfig = () => new ConfigManager({ surfaceRoot: 'tui',  configDir, workingDir, homeDir });
   const makeFeatureFlags = () => {
     const featureFlags = createFeatureFlagManager();
@@ -133,11 +145,11 @@ describe('DaemonServer', () => {
       getConversationTitle: () => 'Daemon Test',
     });
     return new DaemonServer({
-      port: options.port ?? 39421,
+      port: options.port ?? 0,
       host: options.host ?? '127.0.0.1',
       userAuth: options.userAuth ?? makeUserAuth(),
       runtimeServices: services,
-      ...(options.serveFactory ? { serveFactory: options.serveFactory } : {}),
+      serveFactory: options.serveFactory ?? capturingServe,
       ...(options.runtimeBus !== undefined ? { runtimeBus: options.runtimeBus } : {}),
     });
   };
@@ -246,7 +258,7 @@ describe('DaemonServer', () => {
 
     expect(serveFactory).toHaveBeenCalledTimes(1);
     expect(capturedOptions).toMatchObject({
-      port: 39421,
+      port: 0,
       hostname: '127.0.0.1',
       tls: {
         cert: Bun.file(certFile),
@@ -268,20 +280,24 @@ describe('DaemonServer', () => {
     await daemon.start();
     await daemon.stop();
 
+    // Transport IDs/endpoints are built from the CONFIGURED port, which is 0
+    // here (ephemeral bind). DaemonServer never rewrites this.port to the OS-
+    // assigned port, so these strings stay deterministically ':0' — the real
+    // bound port is captured separately (boundPort) for the fetch-based tests.
     expect(transportEvents).toEqual([
       {
         type: 'TRANSPORT_INITIALIZING',
-        transportId: 'daemon:http:127.0.0.1:39421',
+        transportId: 'daemon:http:127.0.0.1:0',
         protocol: 'http-daemon',
       },
       {
         type: 'TRANSPORT_CONNECTED',
-        transportId: 'daemon:http:127.0.0.1:39421',
-        endpoint: 'http://127.0.0.1:39421',
+        transportId: 'daemon:http:127.0.0.1:0',
+        endpoint: 'http://127.0.0.1:0',
       },
       {
         type: 'TRANSPORT_DISCONNECTED',
-        transportId: 'daemon:http:127.0.0.1:39421',
+        transportId: 'daemon:http:127.0.0.1:0',
         reason: 'Daemon server stopped',
         willRetry: false,
       },
@@ -311,14 +327,14 @@ describe('DaemonServer', () => {
   test('GET /status returns 401 without token', async () => {
     daemon.enable({ daemon: true }, TEST_TOKEN);
     await daemon.start();
-    const res = await fetch('http://127.0.0.1:39421/status');
+    const res = await fetch(`http://127.0.0.1:${boundPort}/status`);
     expect(res.status).toBe(401);
   });
 
   test('POST /login returns session token for valid credentials', async () => {
     daemon.enable({ daemon: true });
     await daemon.start();
-    const res = await fetch('http://127.0.0.1:39421/login', {
+    const res = await fetch(`http://127.0.0.1:${boundPort}/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ username: 'admin', password: 'admin' }),
@@ -333,7 +349,7 @@ describe('DaemonServer', () => {
   test('session cookies authenticate REST and SSE control-plane requests', async () => {
     daemon.enable({ daemon: true });
     await daemon.start();
-    const login = await fetch('http://127.0.0.1:39421/login', {
+    const login = await fetch(`http://127.0.0.1:${boundPort}/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ username: 'admin', password: 'admin' }),
@@ -343,12 +359,12 @@ describe('DaemonServer', () => {
     expect(sessionCookie).toContain('goodvibes_session=');
     const cookieHeader = sessionCookie!.split(';', 1)[0];
 
-    const snapshot = await fetch('http://127.0.0.1:39421/api/control-plane', {
+    const snapshot = await fetch(`http://127.0.0.1:${boundPort}/api/control-plane`, {
       headers: { Cookie: cookieHeader },
     });
     expect(snapshot.status).toBe(200);
 
-    const stream = await fetch('http://127.0.0.1:39421/api/control-plane/events?domains=control-plane', {
+    const stream = await fetch(`http://127.0.0.1:${boundPort}/api/control-plane/events?domains=control-plane`, {
       headers: { Cookie: cookieHeader },
     });
     expect(stream.status).toBe(200);
@@ -363,7 +379,7 @@ describe('DaemonServer', () => {
     daemon.enable({ daemon: true }, TEST_TOKEN);
     await daemon.start();
 
-    const anonymous = await fetch('http://127.0.0.1:39421/api/control-plane/auth');
+    const anonymous = await fetch(`http://127.0.0.1:${boundPort}/api/control-plane/auth`);
     expect(anonymous.status).toBe(200);
     expect(await anonymous.json()).toEqual({
       authenticated: false,
@@ -378,7 +394,7 @@ describe('DaemonServer', () => {
       roles: [],
     });
 
-    const shared = await fetch('http://127.0.0.1:39421/api/control-plane/auth', {
+    const shared = await fetch(`http://127.0.0.1:${boundPort}/api/control-plane/auth`, {
       headers: { Authorization: `Bearer ${TEST_TOKEN}` },
     });
     expect(shared.status).toBe(200);
@@ -402,7 +418,7 @@ describe('DaemonServer', () => {
     daemon.enable({ daemon: true });
     await daemon.start();
 
-    const login = await fetch('http://127.0.0.1:39421/login', {
+    const login = await fetch(`http://127.0.0.1:${boundPort}/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ username: 'admin', password: 'admin' }),
@@ -411,7 +427,7 @@ describe('DaemonServer', () => {
     expect(sessionCookie).toContain('goodvibes_session=');
     const cookieHeader = sessionCookie!.split(';', 1)[0];
 
-    const session = await fetch('http://127.0.0.1:39421/api/control-plane/auth', {
+    const session = await fetch(`http://127.0.0.1:${boundPort}/api/control-plane/auth`, {
       headers: { Cookie: cookieHeader },
     });
     expect(session.status).toBe(200);
@@ -434,7 +450,7 @@ describe('DaemonServer', () => {
   test('control-plane event streams no longer accept auth tokens in query parameters', async () => {
     daemon.enable({ daemon: true }, TEST_TOKEN);
     await daemon.start();
-    const stream = await fetch(`http://127.0.0.1:39421/api/control-plane/events?token=${TEST_TOKEN}&domains=control-plane`);
+    const stream = await fetch(`http://127.0.0.1:${boundPort}/api/control-plane/events?token=${TEST_TOKEN}&domains=control-plane`);
     expect(stream.status).toBe(401);
   });
 
@@ -458,7 +474,7 @@ describe('DaemonServer', () => {
     daemon.enable({ daemon: true }, TEST_TOKEN);
     await daemon.start();
     try {
-      const ingest = await fetch('http://127.0.0.1:39421/api/knowledge/ingest/url', {
+      const ingest = await fetch(`http://127.0.0.1:${boundPort}/api/knowledge/ingest/url`, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${TEST_TOKEN}`,
@@ -474,7 +490,7 @@ describe('DaemonServer', () => {
       const results = runtimeServices.knowledgeService.search('Knowledge Route Page');
       return results.length > 0 ? results : null;
     });
-    const search = await fetch('http://127.0.0.1:39421/api/knowledge/search', {
+    const search = await fetch(`http://127.0.0.1:${boundPort}/api/knowledge/search`, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${TEST_TOKEN}`,
@@ -486,21 +502,21 @@ describe('DaemonServer', () => {
     const searchJson = await search.json() as { results: Array<{ id: string }> };
     expect(searchJson.results.length).toBeGreaterThan(0);
 
-    const connectors = await fetch('http://127.0.0.1:39421/api/knowledge/connectors', {
+    const connectors = await fetch(`http://127.0.0.1:${boundPort}/api/knowledge/connectors`, {
       headers: { Authorization: `Bearer ${TEST_TOKEN}` },
     });
     expect(connectors.status).toBe(200);
     const connectorsJson = await connectors.json() as { connectors: Array<{ id: string }> };
     expect(connectorsJson.connectors.some((connector) => connector.id === 'bookmark')).toBe(true);
 
-    const connectorDoctor = await fetch('http://127.0.0.1:39421/api/knowledge/connectors/bookmark/doctor', {
+    const connectorDoctor = await fetch(`http://127.0.0.1:${boundPort}/api/knowledge/connectors/bookmark/doctor`, {
       headers: { Authorization: `Bearer ${TEST_TOKEN}` },
     });
     expect(connectorDoctor.status).toBe(200);
     const connectorDoctorJson = await connectorDoctor.json() as { report: { ready: boolean } };
     expect(connectorDoctorJson.report.ready).toBe(true);
 
-    const connectorIngest = await fetch('http://127.0.0.1:39421/api/knowledge/ingest/connector', {
+    const connectorIngest = await fetch(`http://127.0.0.1:${boundPort}/api/knowledge/ingest/connector`, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${TEST_TOKEN}`,
@@ -524,7 +540,7 @@ describe('DaemonServer', () => {
 
     const csvPath = join(workingDir, 'knowledge.csv');
     writeFileSync(csvPath, 'project,owner\nGoodVibes,buzzkill\n');
-    const ingestArtifact = await fetch('http://127.0.0.1:39421/api/knowledge/ingest/artifact', {
+    const ingestArtifact = await fetch(`http://127.0.0.1:${boundPort}/api/knowledge/ingest/artifact`, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${TEST_TOKEN}`,
@@ -542,7 +558,7 @@ describe('DaemonServer', () => {
     multipartArtifact.append('sessionId', 'session-artifact-upload');
     multipartArtifact.append('title', 'Uploaded home inventory');
     multipartArtifact.append('tags', 'upload,knowledge');
-    const ingestMultipartArtifact = await fetch('http://127.0.0.1:39421/api/knowledge/ingest/artifact', {
+    const ingestMultipartArtifact = await fetch(`http://127.0.0.1:${boundPort}/api/knowledge/ingest/artifact`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${TEST_TOKEN}` },
       body: multipartArtifact,
@@ -552,21 +568,21 @@ describe('DaemonServer', () => {
     expect(ingestMultipartArtifactJson.source.id).toBeTruthy();
     expect(ingestMultipartArtifactJson.source.title).toBe('Uploaded home inventory');
 
-    const extractions = await fetch('http://127.0.0.1:39421/api/knowledge/extractions?limit=10', {
+    const extractions = await fetch(`http://127.0.0.1:${boundPort}/api/knowledge/extractions?limit=10`, {
       headers: { Authorization: `Bearer ${TEST_TOKEN}` },
     });
     expect(extractions.status).toBe(200);
     const extractionsJson = await extractions.json() as { extractions: Array<{ id: string; format: string }> };
     expect(extractionsJson.extractions.some((extraction) => extraction.format === 'csv')).toBe(true);
 
-    const projections = await fetch('http://127.0.0.1:39421/api/knowledge/projections?limit=5', {
+    const projections = await fetch(`http://127.0.0.1:${boundPort}/api/knowledge/projections?limit=5`, {
       headers: { Authorization: `Bearer ${TEST_TOKEN}` },
     });
     expect(projections.status).toBe(200);
     const projectionsJson = await projections.json() as { targets: Array<{ kind: string }> };
     expect(projectionsJson.targets.some((target) => target.kind === 'overview')).toBe(true);
 
-    const packet = await fetch('http://127.0.0.1:39421/api/knowledge/packet', {
+    const packet = await fetch(`http://127.0.0.1:${boundPort}/api/knowledge/packet`, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${TEST_TOKEN}`,
@@ -579,7 +595,7 @@ describe('DaemonServer', () => {
     expect(packetJson.items.length).toBeGreaterThan(0);
 
     for (let index = 0; index < 3; index += 1) {
-      await fetch('http://127.0.0.1:39421/api/knowledge/search', {
+      await fetch(`http://127.0.0.1:${boundPort}/api/knowledge/search`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${TEST_TOKEN}`,
@@ -587,7 +603,7 @@ describe('DaemonServer', () => {
         },
         body: JSON.stringify({ query: 'daemon route coverage' }),
       });
-      await fetch('http://127.0.0.1:39421/api/knowledge/packet', {
+      await fetch(`http://127.0.0.1:${boundPort}/api/knowledge/packet`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${TEST_TOKEN}`,
@@ -597,13 +613,13 @@ describe('DaemonServer', () => {
       });
     }
 
-    const usage = await fetch('http://127.0.0.1:39421/api/knowledge/usage?limit=10', {
+    const usage = await fetch(`http://127.0.0.1:${boundPort}/api/knowledge/usage?limit=10`, {
       headers: { Authorization: `Bearer ${TEST_TOKEN}` },
     });
     expect(usage.status).toBe(200);
     expect(((await usage.json()) as { usage: Array<{ usageKind: string }> }).usage.length).toBeGreaterThan(0);
 
-    const jobs = await fetch('http://127.0.0.1:39421/api/knowledge/jobs', {
+    const jobs = await fetch(`http://127.0.0.1:${boundPort}/api/knowledge/jobs`, {
       headers: { Authorization: `Bearer ${TEST_TOKEN}` },
     });
     expect(jobs.status).toBe(200);
@@ -611,7 +627,7 @@ describe('DaemonServer', () => {
     expect(jobsJson.jobs.some((job) => job.id === 'knowledge-lint')).toBe(true);
     expect(jobsJson.jobs.some((job) => job.id === 'knowledge-light-consolidation')).toBe(true);
 
-    const runJob = await fetch('http://127.0.0.1:39421/api/knowledge/jobs/knowledge-light-consolidation/run', {
+    const runJob = await fetch(`http://127.0.0.1:${boundPort}/api/knowledge/jobs/knowledge-light-consolidation/run`, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${TEST_TOKEN}`,
@@ -623,28 +639,28 @@ describe('DaemonServer', () => {
     const runJobJson = await runJob.json() as { run: { id: string; status: string } };
     expect(runJobJson.run.status).toBe('completed');
 
-    const candidates = await fetch('http://127.0.0.1:39421/api/knowledge/candidates?limit=10', {
+    const candidates = await fetch(`http://127.0.0.1:${boundPort}/api/knowledge/candidates?limit=10`, {
       headers: { Authorization: `Bearer ${TEST_TOKEN}` },
     });
     expect(candidates.status).toBe(200);
     const candidatesJson = await candidates.json() as { candidates: Array<{ candidateType: string }> };
     expect(Array.isArray(candidatesJson.candidates)).toBe(true);
 
-    const schedules = await fetch('http://127.0.0.1:39421/api/knowledge/schedules?limit=10', {
+    const schedules = await fetch(`http://127.0.0.1:${boundPort}/api/knowledge/schedules?limit=10`, {
       headers: { Authorization: `Bearer ${TEST_TOKEN}` },
     });
     expect(schedules.status).toBe(200);
     const schedulesJson = await schedules.json() as { schedules: Array<{ jobId: string }> };
     expect(schedulesJson.schedules.some((schedule) => schedule.jobId === 'knowledge-light-consolidation')).toBe(true);
 
-    const jobRuns = await fetch('http://127.0.0.1:39421/api/knowledge/job-runs?limit=10', {
+    const jobRuns = await fetch(`http://127.0.0.1:${boundPort}/api/knowledge/job-runs?limit=10`, {
       headers: { Authorization: `Bearer ${TEST_TOKEN}` },
     });
     expect(jobRuns.status).toBe(200);
     const jobRunsJson = await jobRuns.json() as { runs: Array<{ id: string; jobId: string }> };
     expect(jobRunsJson.runs.some((run) => run.id === runJobJson.run.id && run.jobId === 'knowledge-light-consolidation')).toBe(true);
 
-    const renderProjection = await fetch('http://127.0.0.1:39421/api/knowledge/projections/render', {
+    const renderProjection = await fetch(`http://127.0.0.1:${boundPort}/api/knowledge/projections/render`, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${TEST_TOKEN}`,
@@ -657,7 +673,7 @@ describe('DaemonServer', () => {
     expect(renderJson.pageCount).toBe(1);
     expect(renderJson.pages[0]?.content).toContain('Knowledge Route Page');
 
-    const materializeProjection = await fetch('http://127.0.0.1:39421/api/knowledge/projections/materialize', {
+    const materializeProjection = await fetch(`http://127.0.0.1:${boundPort}/api/knowledge/projections/materialize`, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${TEST_TOKEN}`,
@@ -670,14 +686,14 @@ describe('DaemonServer', () => {
     expect(materializeJson.artifact.id).toBeTruthy();
     expect(materializeJson.artifact.mimeType).toBe('text/markdown');
 
-    const graphqlSchema = await fetch('http://127.0.0.1:39421/api/knowledge/graphql/schema', {
+    const graphqlSchema = await fetch(`http://127.0.0.1:${boundPort}/api/knowledge/graphql/schema`, {
       headers: { Authorization: `Bearer ${TEST_TOKEN}` },
     });
     expect(graphqlSchema.status).toBe(200);
     const graphqlSchemaJson = await graphqlSchema.json() as { schema: string };
     expect(graphqlSchemaJson.schema).toContain('type Query');
 
-    const graphql = await fetch('http://127.0.0.1:39421/api/knowledge/graphql', {
+    const graphql = await fetch(`http://127.0.0.1:${boundPort}/api/knowledge/graphql`, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${TEST_TOKEN}`,
@@ -715,7 +731,7 @@ describe('DaemonServer', () => {
     daemon.enable({ daemon: true });
     await daemon.start();
 
-    const login = await fetch('http://127.0.0.1:39421/login', {
+    const login = await fetch(`http://127.0.0.1:${boundPort}/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ username: 'admin', password: 'admin' }),
@@ -723,26 +739,26 @@ describe('DaemonServer', () => {
     const loginBody = await login.json() as { token: string };
     const authz = { Authorization: `Bearer ${loginBody.token}`, 'Content-Type': 'application/json' };
 
-    const inspect = await fetch('http://127.0.0.1:39421/api/local-auth', { headers: authz });
+    const inspect = await fetch(`http://127.0.0.1:${boundPort}/api/local-auth`, { headers: authz });
     expect(inspect.status).toBe(200);
     const inspectBody = await inspect.json() as { userCount: number };
     expect(inspectBody.userCount).toBe(1);
 
-    const add = await fetch('http://127.0.0.1:39421/api/local-auth/users', {
+    const add = await fetch(`http://127.0.0.1:${boundPort}/api/local-auth/users`, {
       method: 'POST',
       headers: authz,
       body: JSON.stringify({ username: 'ops', password: 'supersecret', roles: ['admin', 'operator'] }),
     });
     expect(add.status).toBe(201);
 
-    const rotate = await fetch('http://127.0.0.1:39421/api/local-auth/users/admin/password', {
+    const rotate = await fetch(`http://127.0.0.1:${boundPort}/api/local-auth/users/admin/password`, {
       method: 'POST',
       headers: authz,
       body: JSON.stringify({ password: 'newadminpass' }),
     });
     expect(rotate.status).toBe(200);
 
-    const relogin = await fetch('http://127.0.0.1:39421/login', {
+    const relogin = await fetch(`http://127.0.0.1:${boundPort}/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ username: 'admin', password: 'newadminpass' }),
@@ -750,7 +766,7 @@ describe('DaemonServer', () => {
     expect(relogin.status).toBe(200);
     const reloginBody = await relogin.json() as { token: string };
 
-    const revoke = await fetch(`http://127.0.0.1:39421/api/local-auth/sessions/${reloginBody.token}`, {
+    const revoke = await fetch(`http://127.0.0.1:${boundPort}/api/local-auth/sessions/${reloginBody.token}`, {
       method: 'DELETE',
       headers: {
         Authorization: `Bearer ${reloginBody.token}`,
@@ -764,7 +780,7 @@ describe('DaemonServer', () => {
     daemon.enable({ daemon: true }, TEST_TOKEN);
     await daemon.start();
 
-    const createArtifact = await fetch('http://127.0.0.1:39421/api/artifacts', {
+    const createArtifact = await fetch(`http://127.0.0.1:${boundPort}/api/artifacts`, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${TEST_TOKEN}`,
@@ -779,7 +795,7 @@ describe('DaemonServer', () => {
     expect(createArtifact.status).toBe(201);
     const created = await createArtifact.json() as { artifact: { id: string } };
 
-    const analyze = await fetch('http://127.0.0.1:39421/api/multimodal/analyze', {
+    const analyze = await fetch(`http://127.0.0.1:${boundPort}/api/multimodal/analyze`, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${TEST_TOKEN}`,
@@ -807,7 +823,7 @@ describe('DaemonServer', () => {
   test('GET /status returns 401 with wrong token', async () => {
     daemon.enable({ daemon: true }, TEST_TOKEN);
     await daemon.start();
-    const res = await fetch('http://127.0.0.1:39421/status', {
+    const res = await fetch(`http://127.0.0.1:${boundPort}/status`, {
       headers: { Authorization: 'Bearer wrong-token' },
     });
     expect(res.status).toBe(401);
@@ -816,7 +832,7 @@ describe('DaemonServer', () => {
   test('GET /status returns running status with valid token', async () => {
     daemon.enable({ daemon: true }, TEST_TOKEN);
     await daemon.start();
-    const res = await fetch('http://127.0.0.1:39421/status', {
+    const res = await fetch(`http://127.0.0.1:${boundPort}/status`, {
       headers: { Authorization: `Bearer ${TEST_TOKEN}` },
     });
     expect(res.status).toBe(200);
@@ -828,7 +844,7 @@ describe('DaemonServer', () => {
     daemon.enable({ daemon: true }, TEST_TOKEN);
     await daemon.start();
 
-    const review = await fetch('http://127.0.0.1:39421/api/review', {
+    const review = await fetch(`http://127.0.0.1:${boundPort}/api/review`, {
       headers: { Authorization: `Bearer ${TEST_TOKEN}` },
     });
     expect(review.status).toBe(200);
@@ -837,14 +853,14 @@ describe('DaemonServer', () => {
     expect(Array.isArray(reviewBody.routes)).toBe(true);
     expect((reviewBody.routes as string[]).includes('GET /api/settings')).toBe(true);
 
-    const panels = await fetch('http://127.0.0.1:39421/api/panels', {
+    const panels = await fetch(`http://127.0.0.1:${boundPort}/api/panels`, {
       headers: { Authorization: `Bearer ${TEST_TOKEN}` },
     });
     expect(panels.status).toBe(200);
     const panelsBody = await panels.json() as { panels: Array<{ id: string }> };
     expect(panelsBody.panels.some((panel) => panel.id === 'test-helper-panel')).toBe(true);
 
-    const open = await fetch('http://127.0.0.1:39421/api/panels/open', {
+    const open = await fetch(`http://127.0.0.1:${boundPort}/api/panels/open`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -856,17 +872,17 @@ describe('DaemonServer', () => {
     const openBody = await open.json() as Record<string, unknown>;
     expect(openBody.opened).toBe(true);
 
-    const settings = await fetch('http://127.0.0.1:39421/api/settings', {
+    const settings = await fetch(`http://127.0.0.1:${boundPort}/api/settings`, {
       headers: { Authorization: `Bearer ${TEST_TOKEN}` },
     });
     expect(settings.status).toBe(200);
 
-    const continuity = await fetch('http://127.0.0.1:39421/api/continuity', {
+    const continuity = await fetch(`http://127.0.0.1:${boundPort}/api/continuity`, {
       headers: { Authorization: `Bearer ${TEST_TOKEN}` },
     });
     expect(continuity.status).toBe(200);
 
-    const remote = await fetch('http://127.0.0.1:39421/api/remote', {
+    const remote = await fetch(`http://127.0.0.1:${boundPort}/api/remote`, {
       headers: { Authorization: `Bearer ${TEST_TOKEN}` },
     });
     expect(remote.status).toBe(200);
@@ -878,7 +894,7 @@ describe('DaemonServer', () => {
     daemon.enable({ daemon: true }, TEST_TOKEN);
     await daemon.start();
 
-    const requestPair = await fetch('http://127.0.0.1:39421/api/remote/pair/request', {
+    const requestPair = await fetch(`http://127.0.0.1:${boundPort}/api/remote/pair/request`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -895,7 +911,7 @@ describe('DaemonServer', () => {
       challenge: string;
     };
 
-    const approve = await fetch(`http://127.0.0.1:39421/api/remote/pair/requests/${requested.request.id}/approve`, {
+    const approve = await fetch(`http://127.0.0.1:${boundPort}/api/remote/pair/requests/${requested.request.id}/approve`, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${TEST_TOKEN}`,
@@ -905,7 +921,7 @@ describe('DaemonServer', () => {
     });
     expect(approve.status).toBe(200);
 
-    const verify = await fetch('http://127.0.0.1:39421/api/remote/pair/verify', {
+    const verify = await fetch(`http://127.0.0.1:${boundPort}/api/remote/pair/verify`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -919,7 +935,7 @@ describe('DaemonServer', () => {
       token: { id: string; value: string };
     };
 
-    const heartbeat = await fetch('http://127.0.0.1:39421/api/remote/heartbeat', {
+    const heartbeat = await fetch(`http://127.0.0.1:${boundPort}/api/remote/heartbeat`, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${verified.token.value}`,
@@ -929,7 +945,7 @@ describe('DaemonServer', () => {
     });
     expect(heartbeat.status).toBe(200);
 
-    const invokePromise = fetch(`http://127.0.0.1:39421/api/remote/peers/${verified.peer.id}/invoke`, {
+    const invokePromise = fetch(`http://127.0.0.1:${boundPort}/api/remote/peers/${verified.peer.id}/invoke`, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${TEST_TOKEN}`,
@@ -942,7 +958,7 @@ describe('DaemonServer', () => {
       }),
     });
 
-    const pull = await fetch('http://127.0.0.1:39421/api/remote/work/pull', {
+    const pull = await fetch(`http://127.0.0.1:${boundPort}/api/remote/work/pull`, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${verified.token.value}`,
@@ -955,7 +971,7 @@ describe('DaemonServer', () => {
     expect(pulled.work).toHaveLength(1);
     expect(pulled.work[0]?.status).toBe('claimed');
 
-    const complete = await fetch(`http://127.0.0.1:39421/api/remote/work/${pulled.work[0]!.id}/complete`, {
+    const complete = await fetch(`http://127.0.0.1:${boundPort}/api/remote/work/${pulled.work[0]!.id}/complete`, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${verified.token.value}`,
@@ -973,7 +989,7 @@ describe('DaemonServer', () => {
     expect(invokeBody.completed).toBe(true);
     expect(invokeBody.work.status).toBe('completed');
 
-    const rotate = await fetch(`http://127.0.0.1:39421/api/remote/peers/${verified.peer.id}/token/rotate`, {
+    const rotate = await fetch(`http://127.0.0.1:${boundPort}/api/remote/peers/${verified.peer.id}/token/rotate`, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${TEST_TOKEN}`,
@@ -984,7 +1000,7 @@ describe('DaemonServer', () => {
     expect(rotate.status).toBe(200);
     const rotated = await rotate.json() as { token: { value: string } };
 
-    const oldHeartbeat = await fetch('http://127.0.0.1:39421/api/remote/heartbeat', {
+    const oldHeartbeat = await fetch(`http://127.0.0.1:${boundPort}/api/remote/heartbeat`, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${verified.token.value}`,
@@ -994,7 +1010,7 @@ describe('DaemonServer', () => {
     });
     expect(oldHeartbeat.status).toBe(401);
 
-    const newHeartbeat = await fetch('http://127.0.0.1:39421/api/remote/heartbeat', {
+    const newHeartbeat = await fetch(`http://127.0.0.1:${boundPort}/api/remote/heartbeat`, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${rotated.token.value}`,
@@ -1004,7 +1020,7 @@ describe('DaemonServer', () => {
     });
     expect(newHeartbeat.status).toBe(200);
 
-    const limitedRotate = await fetch(`http://127.0.0.1:39421/api/remote/peers/${verified.peer.id}/token/rotate`, {
+    const limitedRotate = await fetch(`http://127.0.0.1:${boundPort}/api/remote/peers/${verified.peer.id}/token/rotate`, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${TEST_TOKEN}`,
@@ -1015,7 +1031,7 @@ describe('DaemonServer', () => {
     expect(limitedRotate.status).toBe(200);
     const limited = await limitedRotate.json() as { token: { value: string } };
 
-    const limitedHeartbeat = await fetch('http://127.0.0.1:39421/api/remote/heartbeat', {
+    const limitedHeartbeat = await fetch(`http://127.0.0.1:${boundPort}/api/remote/heartbeat`, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${limited.token.value}`,
@@ -1025,7 +1041,7 @@ describe('DaemonServer', () => {
     });
     expect(limitedHeartbeat.status).toBe(200);
 
-    const limitedPull = await fetch('http://127.0.0.1:39421/api/remote/work/pull', {
+    const limitedPull = await fetch(`http://127.0.0.1:${boundPort}/api/remote/work/pull`, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${limited.token.value}`,
@@ -1040,7 +1056,7 @@ describe('DaemonServer', () => {
     daemon.enable({ daemon: true }, TEST_TOKEN);
     await daemon.start();
 
-    const requestPair = await fetch('http://127.0.0.1:39421/api/remote/pair/request', {
+    const requestPair = await fetch(`http://127.0.0.1:${boundPort}/api/remote/pair/request`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -1051,7 +1067,7 @@ describe('DaemonServer', () => {
     });
     const requested = await requestPair.json() as { request: { id: string }; challenge: string };
 
-    await fetch(`http://127.0.0.1:39421/api/remote/pair/requests/${requested.request.id}/approve`, {
+    await fetch(`http://127.0.0.1:${boundPort}/api/remote/pair/requests/${requested.request.id}/approve`, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${TEST_TOKEN}`,
@@ -1060,7 +1076,7 @@ describe('DaemonServer', () => {
       body: JSON.stringify({}),
     });
 
-    const verify = await fetch('http://127.0.0.1:39421/api/remote/pair/verify', {
+    const verify = await fetch(`http://127.0.0.1:${boundPort}/api/remote/pair/verify`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -1070,7 +1086,7 @@ describe('DaemonServer', () => {
     });
     const verified = await verify.json() as { peer: { id: string }; token: { value: string } };
 
-    const invoke = await fetch(`http://127.0.0.1:39421/api/remote/peers/${verified.peer.id}/invoke`, {
+    const invoke = await fetch(`http://127.0.0.1:${boundPort}/api/remote/peers/${verified.peer.id}/invoke`, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${TEST_TOKEN}`,
@@ -1082,7 +1098,7 @@ describe('DaemonServer', () => {
     });
     expect(invoke.status).toBe(202);
 
-    const pull = await fetch('http://127.0.0.1:39421/api/remote/work/pull', {
+    const pull = await fetch(`http://127.0.0.1:${boundPort}/api/remote/work/pull`, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${verified.token.value}`,
@@ -1093,7 +1109,7 @@ describe('DaemonServer', () => {
     const pulled = await pull.json() as { work: Array<{ id: string; status: string }> };
     expect(pulled.work[0]?.status).toBe('claimed');
 
-    const disconnect = await fetch(`http://127.0.0.1:39421/api/remote/peers/${verified.peer.id}/disconnect`, {
+    const disconnect = await fetch(`http://127.0.0.1:${boundPort}/api/remote/peers/${verified.peer.id}/disconnect`, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${TEST_TOKEN}`,
@@ -1103,7 +1119,7 @@ describe('DaemonServer', () => {
     });
     expect(disconnect.status).toBe(200);
 
-    const work = await fetch('http://127.0.0.1:39421/api/remote/work', {
+    const work = await fetch(`http://127.0.0.1:${boundPort}/api/remote/work`, {
       headers: { Authorization: `Bearer ${TEST_TOKEN}` },
     });
     const workBody = await work.json() as { work: Array<{ status: string }> };
@@ -1114,7 +1130,7 @@ describe('DaemonServer', () => {
     daemon.enable({ daemon: true }, TEST_TOKEN);
     await daemon.start();
 
-    const create = await fetch('http://127.0.0.1:39421/api/automation/jobs', {
+    const create = await fetch(`http://127.0.0.1:${boundPort}/api/automation/jobs`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -1131,7 +1147,7 @@ describe('DaemonServer', () => {
     const created = await create.json() as { id: string; name: string };
     expect(created.name).toBe('API Heartbeat');
 
-    const automation = await fetch('http://127.0.0.1:39421/api/automation', {
+    const automation = await fetch(`http://127.0.0.1:${boundPort}/api/automation`, {
       headers: { Authorization: `Bearer ${TEST_TOKEN}` },
     });
     expect(automation.status).toBe(200);
@@ -1144,7 +1160,7 @@ describe('DaemonServer', () => {
     daemon.enable({ daemon: true }, TEST_TOKEN);
     await daemon.start();
 
-    const create = await fetch('http://127.0.0.1:39421/api/automation/jobs', {
+    const create = await fetch(`http://127.0.0.1:${boundPort}/api/automation/jobs`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -1161,7 +1177,7 @@ describe('DaemonServer', () => {
     const created = await create.json() as { id: string; name: string };
     expect(created.name).toBe('API Created Job');
 
-    const run = await fetch(`http://127.0.0.1:39421/api/automation/jobs/${created.id}/run`, {
+    const run = await fetch(`http://127.0.0.1:${boundPort}/api/automation/jobs/${created.id}/run`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${TEST_TOKEN}` },
     });
@@ -1175,7 +1191,7 @@ describe('DaemonServer', () => {
     daemon.enable({ daemon: true }, TEST_TOKEN);
     await daemon.start();
 
-    const create = await fetch('http://127.0.0.1:39421/api/automation/jobs', {
+    const create = await fetch(`http://127.0.0.1:${boundPort}/api/automation/jobs`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -1228,7 +1244,7 @@ describe('DaemonServer', () => {
     daemon.enable({ daemon: true }, TEST_TOKEN);
     await daemon.start();
 
-    const create = await fetch('http://127.0.0.1:39421/api/automation/jobs', {
+    const create = await fetch(`http://127.0.0.1:${boundPort}/api/automation/jobs`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -1243,7 +1259,7 @@ describe('DaemonServer', () => {
     });
     const created = await create.json() as { id: string };
 
-    const patch = await fetch(`http://127.0.0.1:39421/api/automation/jobs/${created.id}`, {
+    const patch = await fetch(`http://127.0.0.1:${boundPort}/api/automation/jobs/${created.id}`, {
       method: 'PATCH',
       headers: {
         'Content-Type': 'application/json',
@@ -1296,7 +1312,7 @@ describe('DaemonServer', () => {
     daemon.enable({ daemon: true }, TEST_TOKEN);
     await daemon.start();
 
-    const stream = await fetch('http://127.0.0.1:39421/api/control-plane/events?domains=control-plane', {
+    const stream = await fetch(`http://127.0.0.1:${boundPort}/api/control-plane/events?domains=control-plane`, {
       headers: { Authorization: `Bearer ${TEST_TOKEN}` },
     });
     expect(stream.status).toBe(200);
@@ -1306,21 +1322,21 @@ describe('DaemonServer', () => {
     const firstChunk = await reader!.read();
     expect(new TextDecoder().decode(firstChunk.value)).toContain('event: ready');
 
-    const snapshot = await fetch('http://127.0.0.1:39421/api/control-plane', {
+    const snapshot = await fetch(`http://127.0.0.1:${boundPort}/api/control-plane`, {
       headers: { Authorization: `Bearer ${TEST_TOKEN}` },
     });
     expect(snapshot.status).toBe(200);
     const snapshotBody = await snapshot.json() as { totals: { clients: number } };
     expect(snapshotBody.totals.clients).toBeGreaterThanOrEqual(1);
 
-    const clients = await fetch('http://127.0.0.1:39421/api/control-plane/clients', {
+    const clients = await fetch(`http://127.0.0.1:${boundPort}/api/control-plane/clients`, {
       headers: { Authorization: `Bearer ${TEST_TOKEN}` },
     });
     expect(clients.status).toBe(200);
     const clientsBody = await clients.json() as { clients: Array<{ surface: string }> };
     expect(clientsBody.clients.some((client) => client.surface === 'web')).toBe(true);
 
-    const web = await fetch('http://127.0.0.1:39421/api/control-plane/web');
+    const web = await fetch(`http://127.0.0.1:${boundPort}/api/control-plane/web`);
     expect(web.status).toBe(200);
     expect(web.headers.get('content-type')).toContain('text/html');
     const html = await web.text();
@@ -1338,7 +1354,7 @@ describe('DaemonServer', () => {
     await daemon.start();
 
     const AuthenticatedWebSocket = createAuthenticatedWebSocket(TEST_TOKEN);
-    const socket = new AuthenticatedWebSocket('ws://127.0.0.1:39421/api/control-plane/ws?clientKind=web&domains=control-plane,automation');
+    const socket = new AuthenticatedWebSocket(`ws://127.0.0.1:${boundPort}/api/control-plane/ws?clientKind=web&domains=control-plane,automation`);
     const ready = await waitForSocketFrame(socket, (frame) => frame.type === 'event' && frame.event === 'ready');
     expect(ready.type).toBe('event');
 
@@ -1408,7 +1424,7 @@ describe('DaemonServer', () => {
     expect(operatorContract.operator.methods.some((method) => method.id === 'telemetry.snapshot')).toBe(true);
     expect(operatorContract.operator.events.some((event) => event.id === 'runtime.automation')).toBe(true);
 
-    const statusInvoke = await fetch('http://127.0.0.1:39421/api/control-plane/methods/control.status/invoke', {
+    const statusInvoke = await fetch(`http://127.0.0.1:${boundPort}/api/control-plane/methods/control.status/invoke`, {
       method: 'POST',
       headers: { ...auth, 'Content-Type': 'application/json' },
       body: JSON.stringify({ body: {} }),
@@ -1416,11 +1432,11 @@ describe('DaemonServer', () => {
     expect(statusInvoke.status).toBe(200);
     expect((await statusInvoke.json() as { status?: string }).status).toBe('running');
 
-    const voice = await fetch('http://127.0.0.1:39421/api/voice', { headers: auth });
+    const voice = await fetch(`http://127.0.0.1:${boundPort}/api/voice`, { headers: auth });
     expect(voice.status).toBe(200);
     expect((await voice.json() as { note?: string }).note).toContain('Voice capture');
 
-    const voiceProviders = await fetch('http://127.0.0.1:39421/api/voice/providers', { headers: auth });
+    const voiceProviders = await fetch(`http://127.0.0.1:${boundPort}/api/voice/providers`, { headers: auth });
     expect(voiceProviders.status).toBe(200);
     const voiceProvidersBody = await voiceProviders.json() as { providers: Array<{ id: string }> };
     expect(voiceProvidersBody.providers.some((provider) => provider.id === 'openai')).toBe(true);
@@ -1430,17 +1446,17 @@ describe('DaemonServer', () => {
     expect(voiceProvidersBody.providers.some((provider) => provider.id === 'microsoft')).toBe(true);
     expect(voiceProvidersBody.providers.some((provider) => provider.id === 'vydra')).toBe(true);
 
-    const webSearch = await fetch('http://127.0.0.1:39421/api/web-search/providers', { headers: auth });
+    const webSearch = await fetch(`http://127.0.0.1:${boundPort}/api/web-search/providers`, { headers: auth });
     expect(webSearch.status).toBe(200);
     const webSearchBody = await webSearch.json() as { providers: Array<{ id: string }> };
     expect(webSearchBody.providers.some((provider) => provider.id === 'duckduckgo')).toBe(true);
     expect(webSearchBody.providers.some((provider) => provider.id === 'perplexity')).toBe(true);
 
-    const artifacts = await fetch('http://127.0.0.1:39421/api/artifacts', { headers: auth });
+    const artifacts = await fetch(`http://127.0.0.1:${boundPort}/api/artifacts`, { headers: auth });
     expect(artifacts.status).toBe(200);
     expect(await artifacts.json()).toHaveProperty('artifacts');
 
-    const media = await fetch('http://127.0.0.1:39421/api/media/providers', { headers: auth });
+    const media = await fetch(`http://127.0.0.1:${boundPort}/api/media/providers`, { headers: auth });
     expect(media.status).toBe(200);
     const mediaBody = await media.json() as { providers: Array<{ id: string }> };
     expect(mediaBody.providers.some((provider) => provider.id === 'builtin:image-understanding')).toBe(true);
@@ -1450,26 +1466,26 @@ describe('DaemonServer', () => {
     expect(mediaBody.providers.some((provider) => provider.id === 'alibaba')).toBe(true);
     expect(mediaBody.providers.some((provider) => provider.id === 'byteplus')).toBe(true);
 
-    const multimodal = await fetch('http://127.0.0.1:39421/api/multimodal', { headers: auth });
+    const multimodal = await fetch(`http://127.0.0.1:${boundPort}/api/multimodal`, { headers: auth });
     expect(multimodal.status).toBe(200);
     expect((await multimodal.json() as { note?: string }).note).toContain('Multimodal analysis');
 
-    const multimodalProviders = await fetch('http://127.0.0.1:39421/api/multimodal/providers', { headers: auth });
+    const multimodalProviders = await fetch(`http://127.0.0.1:${boundPort}/api/multimodal/providers`, { headers: auth });
     expect(multimodalProviders.status).toBe(200);
     const multimodalBody = await multimodalProviders.json() as { providers: Array<{ id: string }> };
     expect(multimodalBody.providers.some((provider) => provider.id === 'knowledge-extractors')).toBe(true);
     expect(multimodalBody.providers.some((provider) => provider.id === 'openai')).toBe(true);
 
-    const memory = await fetch('http://127.0.0.1:39421/api/memory/doctor', { headers: auth });
+    const memory = await fetch(`http://127.0.0.1:${boundPort}/api/memory/doctor`, { headers: auth });
     expect(memory.status).toBe(200);
     const memoryBody = await memory.json() as { embeddings: { activeProviderId: string } };
     expect(memoryBody.embeddings.activeProviderId).toBe('hashed-local');
 
-    const heartbeat = await fetch('http://127.0.0.1:39421/api/automation/heartbeat', { headers: auth });
+    const heartbeat = await fetch(`http://127.0.0.1:${boundPort}/api/automation/heartbeat`, { headers: auth });
     expect(heartbeat.status).toBe(200);
     expect(await heartbeat.json()).toHaveProperty('pending');
 
-    const contract = await fetch('http://127.0.0.1:39421/api/remote/node-host/contract', { headers: auth });
+    const contract = await fetch(`http://127.0.0.1:${boundPort}/api/remote/node-host/contract`, { headers: auth });
     expect(contract.status).toBe(200);
     const contractBody = await contract.json() as { contract: { scopes: string[]; endpoints: Array<{ id: string }> } };
     expect(contractBody.contract.scopes).toContain('remote:heartbeat');
@@ -1485,7 +1501,7 @@ describe('DaemonServer', () => {
     expect(events.some((event) => event.id === 'runtime.automation')).toBe(true);
     expect(events.some((event) => event.id === 'control.ready')).toBe(true);
 
-    const method = await fetch('http://127.0.0.1:39421/api/control-plane/methods/control.methods.get/invoke', {
+    const method = await fetch(`http://127.0.0.1:${boundPort}/api/control-plane/methods/control.methods.get/invoke`, {
       method: 'POST',
       headers: auth,
       body: JSON.stringify({
@@ -1502,7 +1518,7 @@ describe('DaemonServer', () => {
     daemon.enable({ daemon: true });
     await daemon.start();
 
-    const adminLogin = await fetch('http://127.0.0.1:39421/login', {
+    const adminLogin = await fetch(`http://127.0.0.1:${boundPort}/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ username: 'admin', password: 'admin' }),
@@ -1510,7 +1526,7 @@ describe('DaemonServer', () => {
     expect(adminLogin.status).toBe(200);
     const adminToken = (await adminLogin.json() as { token: string }).token;
 
-    const createUser = await fetch('http://127.0.0.1:39421/api/local-auth/users', {
+    const createUser = await fetch(`http://127.0.0.1:${boundPort}/api/local-auth/users`, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${adminToken}`,
@@ -1520,7 +1536,7 @@ describe('DaemonServer', () => {
     });
     expect(createUser.status).toBe(201);
 
-    const operatorLogin = await fetch('http://127.0.0.1:39421/login', {
+    const operatorLogin = await fetch(`http://127.0.0.1:${boundPort}/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ username: 'operator', password: 'operator-pass' }),
@@ -1528,7 +1544,7 @@ describe('DaemonServer', () => {
     expect(operatorLogin.status).toBe(200);
     const operatorToken = (await operatorLogin.json() as { token: string }).token;
 
-    const readInvoke = await fetch('http://127.0.0.1:39421/api/control-plane/methods/control.status/invoke', {
+    const readInvoke = await fetch(`http://127.0.0.1:${boundPort}/api/control-plane/methods/control.status/invoke`, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${operatorToken}`,
@@ -1538,7 +1554,7 @@ describe('DaemonServer', () => {
     });
     expect(readInvoke.status).toBe(200);
 
-    const writeInvoke = await fetch('http://127.0.0.1:39421/api/control-plane/methods/automation.heartbeat.run/invoke', {
+    const writeInvoke = await fetch(`http://127.0.0.1:${boundPort}/api/control-plane/methods/automation.heartbeat.run/invoke`, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${operatorToken}`,
@@ -1552,7 +1568,7 @@ describe('DaemonServer', () => {
     expect(writeInvokeBody.missingScopes).toContain('write:automation');
 
     const AuthenticatedWebSocket = createAuthenticatedWebSocket(operatorToken);
-    const socket = new AuthenticatedWebSocket('ws://127.0.0.1:39421/api/control-plane/ws?clientKind=web&domains=control-plane');
+    const socket = new AuthenticatedWebSocket(`ws://127.0.0.1:${boundPort}/api/control-plane/ws?clientKind=web&domains=control-plane`);
     const ready = await waitForSocketFrame(socket, (frame) => frame.type === 'event' && frame.event === 'ready');
     expect(ready.type).toBe('event');
 
@@ -1581,7 +1597,7 @@ describe('DaemonServer', () => {
     daemon.enable({ daemon: true }, TEST_TOKEN);
     await daemon.start();
 
-    const create = await fetch('http://127.0.0.1:39421/api/sessions', {
+    const create = await fetch(`http://127.0.0.1:${boundPort}/api/sessions`, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${TEST_TOKEN}`,
@@ -1597,7 +1613,7 @@ describe('DaemonServer', () => {
     const created = await create.json() as { session: { id: string } };
     expect(typeof created.session.id).toBe('string');
 
-    const send = await fetch(`http://127.0.0.1:39421/api/sessions/${created.session.id}/messages`, {
+    const send = await fetch(`http://127.0.0.1:${boundPort}/api/sessions/${created.session.id}/messages`, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${TEST_TOKEN}`,
@@ -1615,7 +1631,7 @@ describe('DaemonServer', () => {
     expect(sendBody.routedTo).toBe('conversation');
     expect(typeof sendBody.messageId).toBe('string');
 
-    const task = await fetch(`http://127.0.0.1:39421/api/sessions/${created.session.id}/messages`, {
+    const task = await fetch(`http://127.0.0.1:${boundPort}/api/sessions/${created.session.id}/messages`, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${TEST_TOKEN}`,
@@ -1633,7 +1649,7 @@ describe('DaemonServer', () => {
     expect(taskBody.session.id).toBe(created.session.id);
     expect(typeof taskBody.agentId).toBe('string');
 
-    const inspect = await fetch(`http://127.0.0.1:39421/api/sessions/${created.session.id}`, {
+    const inspect = await fetch(`http://127.0.0.1:${boundPort}/api/sessions/${created.session.id}`, {
       headers: { Authorization: `Bearer ${TEST_TOKEN}` },
     });
     expect(inspect.status).toBe(200);
@@ -1669,7 +1685,7 @@ describe('DaemonServer', () => {
       await new Promise((resolve) => setTimeout(resolve, 10));
     }
 
-    const approvals = await fetch('http://127.0.0.1:39421/api/approvals', {
+    const approvals = await fetch(`http://127.0.0.1:${boundPort}/api/approvals`, {
       headers: { Authorization: `Bearer ${TEST_TOKEN}` },
     });
     expect(approvals.status).toBe(200);
@@ -1678,7 +1694,7 @@ describe('DaemonServer', () => {
     expect(approval).toBeDefined();
     expect(approval?.status).toBe('pending');
 
-    const approve = await fetch(`http://127.0.0.1:39421/api/approvals/${approval!.id}/approve`, {
+    const approve = await fetch(`http://127.0.0.1:${boundPort}/api/approvals/${approval!.id}/approve`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${TEST_TOKEN}` },
     });
@@ -1691,7 +1707,7 @@ describe('DaemonServer', () => {
     daemon.enable({ daemon: true }, TEST_TOKEN);
     await daemon.start();
 
-    const create = await fetch('http://127.0.0.1:39421/api/routes/bindings', {
+    const create = await fetch(`http://127.0.0.1:${boundPort}/api/routes/bindings`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -1710,7 +1726,7 @@ describe('DaemonServer', () => {
     const created = await create.json() as { id: string };
     expect(created.id).toMatch(/^route-/);
 
-    const duplicate = await fetch('http://127.0.0.1:39421/api/routes/bindings', {
+    const duplicate = await fetch(`http://127.0.0.1:${boundPort}/api/routes/bindings`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -1729,7 +1745,7 @@ describe('DaemonServer', () => {
     const duplicated = await duplicate.json() as { id: string };
     expect(duplicated.id).toBe(created.id);
 
-    const list = await fetch('http://127.0.0.1:39421/api/routes/bindings', {
+    const list = await fetch(`http://127.0.0.1:${boundPort}/api/routes/bindings`, {
       headers: { Authorization: `Bearer ${TEST_TOKEN}` },
     });
     expect(list.status).toBe(200);
@@ -1737,7 +1753,7 @@ describe('DaemonServer', () => {
     expect(listBody.bindings.some((binding) => binding.id === created.id && binding.surfaceKind === 'webhook')).toBe(true);
     expect(listBody.bindings.filter((binding) => binding.id === created.id)).toHaveLength(1);
 
-    const remove = await fetch(`http://127.0.0.1:39421/api/routes/bindings/${created.id}`, {
+    const remove = await fetch(`http://127.0.0.1:${boundPort}/api/routes/bindings/${created.id}`, {
       method: 'DELETE',
       headers: { Authorization: `Bearer ${TEST_TOKEN}` },
     });
@@ -1752,7 +1768,7 @@ describe('DaemonServer', () => {
     daemon.enable({ daemon: true }, TEST_TOKEN);
     await daemon.start();
 
-    const policyUpdate = await fetch('http://127.0.0.1:39421/api/channels/policies/webhook', {
+    const policyUpdate = await fetch(`http://127.0.0.1:${boundPort}/api/channels/policies/webhook`, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${TEST_TOKEN}`,
@@ -1775,14 +1791,14 @@ describe('DaemonServer', () => {
     expect(updatedPolicy.allowDirectMessages).toBe(false);
     expect(updatedPolicy.groupPolicies[0]?.id).toBe('policy-group');
 
-    const policies = await fetch('http://127.0.0.1:39421/api/channels/policies', {
+    const policies = await fetch(`http://127.0.0.1:${boundPort}/api/channels/policies`, {
       headers: { Authorization: `Bearer ${TEST_TOKEN}` },
     });
     expect(policies.status).toBe(200);
     const policyBody = await policies.json() as { policies: Array<{ surface: string }> };
     expect(policyBody.policies.some((policy) => policy.surface === 'webhook')).toBe(true);
 
-    const blocked = await fetch('http://127.0.0.1:39421/webhook/generic', {
+    const blocked = await fetch(`http://127.0.0.1:${boundPort}/webhook/generic`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -1797,7 +1813,7 @@ describe('DaemonServer', () => {
     });
     expect(blocked.status).toBe(403);
 
-    const blockedCommand = await fetch('http://127.0.0.1:39421/webhook/generic', {
+    const blockedCommand = await fetch(`http://127.0.0.1:${boundPort}/webhook/generic`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -1814,7 +1830,7 @@ describe('DaemonServer', () => {
     });
     expect(blockedCommand.status).toBe(403);
 
-    const allowed = await fetch('http://127.0.0.1:39421/webhook/generic', {
+    const allowed = await fetch(`http://127.0.0.1:${boundPort}/webhook/generic`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -1837,7 +1853,7 @@ describe('DaemonServer', () => {
     });
     expect(allowed.status).toBe(200);
 
-    const directory = await fetch('http://127.0.0.1:39421/api/channels/directory/webhook?q=policy&scope=groups&groupId=policy-channel&limit=1', {
+    const directory = await fetch(`http://127.0.0.1:${boundPort}/api/channels/directory/webhook?q=policy&scope=groups&groupId=policy-channel&limit=1`, {
       headers: { Authorization: `Bearer ${TEST_TOKEN}` },
     });
     expect(directory.status).toBe(200);
@@ -1846,21 +1862,21 @@ describe('DaemonServer', () => {
     expect(directoryBody.entries[0]?.groupId).toBe('policy-channel');
     expect(directoryBody.entries[0]?.isGroupConversation).toBe(true);
 
-    const members = await fetch('http://127.0.0.1:39421/api/channels/directory/webhook?scope=members&groupId=policy-channel', {
+    const members = await fetch(`http://127.0.0.1:${boundPort}/api/channels/directory/webhook?scope=members&groupId=policy-channel`, {
       headers: { Authorization: `Bearer ${TEST_TOKEN}` },
     });
     expect(members.status).toBe(200);
     const membersBody = await members.json() as { entries: Array<{ kind: string; label: string }> };
     expect(membersBody.entries.some((entry) => entry.kind === 'member' && entry.label === 'Alice Example')).toBe(true);
 
-    const status = await fetch('http://127.0.0.1:39421/api/channels/status', {
+    const status = await fetch(`http://127.0.0.1:${boundPort}/api/channels/status`, {
       headers: { Authorization: `Bearer ${TEST_TOKEN}` },
     });
     expect(status.status).toBe(200);
     const statusBody = await status.json() as { channels: Array<{ surface: string }> };
     expect(statusBody.channels.some((channel) => channel.surface === 'webhook')).toBe(true);
 
-    const audit = await fetch('http://127.0.0.1:39421/api/channels/policies/audit', {
+    const audit = await fetch(`http://127.0.0.1:${boundPort}/api/channels/policies/audit`, {
       headers: { Authorization: `Bearer ${TEST_TOKEN}` },
     });
     expect(audit.status).toBe(200);
@@ -1877,7 +1893,7 @@ describe('DaemonServer', () => {
     daemon.enable({ daemon: true }, TEST_TOKEN);
     await daemon.start();
 
-    const policyUpdate = await fetch('http://127.0.0.1:39421/api/channels/policies/webhook', {
+    const policyUpdate = await fetch(`http://127.0.0.1:${boundPort}/api/channels/policies/webhook`, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${TEST_TOKEN}`,
@@ -1891,7 +1907,7 @@ describe('DaemonServer', () => {
     });
     expect(policyUpdate.status).toBe(200);
 
-    const allowed = await fetch('http://127.0.0.1:39421/webhook/generic', {
+    const allowed = await fetch(`http://127.0.0.1:${boundPort}/webhook/generic`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -1910,7 +1926,7 @@ describe('DaemonServer', () => {
     });
     expect(allowed.status).toBe(200);
 
-    const blocked = await fetch('http://127.0.0.1:39421/webhook/generic', {
+    const blocked = await fetch(`http://127.0.0.1:${boundPort}/webhook/generic`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -1944,7 +1960,7 @@ describe('DaemonServer', () => {
     daemon.enable({ daemon: true }, TEST_TOKEN);
     await daemon.start();
 
-    const accounts = await fetch('http://127.0.0.1:39421/api/channels/accounts', {
+    const accounts = await fetch(`http://127.0.0.1:${boundPort}/api/channels/accounts`, {
       headers: { Authorization: `Bearer ${TEST_TOKEN}` },
     });
     expect(accounts.status).toBe(200);
@@ -1957,14 +1973,14 @@ describe('DaemonServer', () => {
     expect(slackAccount?.authState).toBe('linked');
     expect(slackAccount?.secrets.some((entry) => entry.field === 'primary' && entry.source === 'config')).toBe(true);
 
-    const slackAccounts = await fetch('http://127.0.0.1:39421/api/channels/accounts/slack', {
+    const slackAccounts = await fetch(`http://127.0.0.1:${boundPort}/api/channels/accounts/slack`, {
       headers: { Authorization: `Bearer ${TEST_TOKEN}` },
     });
     expect(slackAccounts.status).toBe(200);
     const slackAccountsBody = await slackAccounts.json() as { accounts: Array<{ accountId?: string }> };
     expect(slackAccountsBody.accounts[0]?.accountId).toBe('workspace-1');
 
-    const slackSingle = await fetch('http://127.0.0.1:39421/api/channels/accounts/slack/workspace-1', {
+    const slackSingle = await fetch(`http://127.0.0.1:${boundPort}/api/channels/accounts/slack/workspace-1`, {
       headers: { Authorization: `Bearer ${TEST_TOKEN}` },
     });
     expect(slackSingle.status).toBe(200);
@@ -1979,21 +1995,21 @@ describe('DaemonServer', () => {
     expect(slackSingleBody.actions.some((action) => action.id === 'inspect' && action.available)).toBe(true);
     expect(slackSingleBody.metadata.defaultChannel).toBe('ops-alerts');
 
-    const capabilities = await fetch('http://127.0.0.1:39421/api/channels/capabilities/slack', {
+    const capabilities = await fetch(`http://127.0.0.1:${boundPort}/api/channels/capabilities/slack`, {
       headers: { Authorization: `Bearer ${TEST_TOKEN}` },
     });
     expect(capabilities.status).toBe(200);
     const capabilitiesBody = await capabilities.json() as { capabilities: Array<{ id: string; supported: boolean }> };
     expect(capabilitiesBody.capabilities.some((entry) => entry.id === 'tooling' && entry.supported)).toBe(true);
 
-    const tools = await fetch('http://127.0.0.1:39421/api/channels/tools/slack', {
+    const tools = await fetch(`http://127.0.0.1:${boundPort}/api/channels/tools/slack`, {
       headers: { Authorization: `Bearer ${TEST_TOKEN}` },
     });
     expect(tools.status).toBe(200);
     const toolsBody = await tools.json() as { tools: Array<{ name: string; id: string }> };
     expect(toolsBody.tools.some((entry) => entry.name === 'slack_account' && entry.id === 'slack:account')).toBe(true);
 
-    const toolRun = await fetch('http://127.0.0.1:39421/api/channels/tools/slack/slack%3Aaccount', {
+    const toolRun = await fetch(`http://127.0.0.1:${boundPort}/api/channels/tools/slack/slack%3Aaccount`, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${TEST_TOKEN}`,
@@ -2005,14 +2021,14 @@ describe('DaemonServer', () => {
     const toolRunBody = await toolRun.json() as { result: { accountId?: string } };
     expect(toolRunBody.result.accountId).toBe('workspace-1');
 
-    const actions = await fetch('http://127.0.0.1:39421/api/channels/actions/slack', {
+    const actions = await fetch(`http://127.0.0.1:${boundPort}/api/channels/actions/slack`, {
       headers: { Authorization: `Bearer ${TEST_TOKEN}` },
     });
     expect(actions.status).toBe(200);
     const actionsBody = await actions.json() as { actions: Array<{ id: string }> };
     expect(actionsBody.actions.some((entry) => entry.id === 'inspect-account')).toBe(true);
 
-    const actionRun = await fetch('http://127.0.0.1:39421/api/channels/actions/slack/inspect-account', {
+    const actionRun = await fetch(`http://127.0.0.1:${boundPort}/api/channels/actions/slack/inspect-account`, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${TEST_TOKEN}`,
@@ -2024,7 +2040,7 @@ describe('DaemonServer', () => {
     const actionRunBody = await actionRun.json() as { result: { accountId?: string } };
     expect(actionRunBody.result.accountId).toBe('workspace-1');
 
-    const accountAction = await fetch('http://127.0.0.1:39421/api/channels/accounts/slack/workspace-1/actions/retest', {
+    const accountAction = await fetch(`http://127.0.0.1:${boundPort}/api/channels/accounts/slack/workspace-1/actions/retest`, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${TEST_TOKEN}`,
@@ -2037,7 +2053,7 @@ describe('DaemonServer', () => {
     expect(accountActionBody.result.action).toBe('retest');
     expect(accountActionBody.result.ok).toBe(true);
 
-    const setupAction = await fetch('http://127.0.0.1:39421/api/channels/accounts/slack/workspace-1/actions/login', {
+    const setupAction = await fetch(`http://127.0.0.1:${boundPort}/api/channels/accounts/slack/workspace-1/actions/login`, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${TEST_TOKEN}`,
@@ -2051,7 +2067,7 @@ describe('DaemonServer', () => {
     expect(setupActionBody.result.login?.kind).toBe('browser');
     expect(setupActionBody.result.login?.url).toContain('slack.com/oauth/v2/authorize');
 
-    const targetResolve = await fetch('http://127.0.0.1:39421/api/channels/targets/slack/resolve', {
+    const targetResolve = await fetch(`http://127.0.0.1:${boundPort}/api/channels/targets/slack/resolve`, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${TEST_TOKEN}`,
@@ -2065,14 +2081,14 @@ describe('DaemonServer', () => {
     expect(targetResolveBody.target.to).toBe('ops-alerts');
     expect(targetResolveBody.target.sessionTarget).toBe('channel:slack:ops-alerts');
 
-    const agentTools = await fetch('http://127.0.0.1:39421/api/channels/agent-tools/slack', {
+    const agentTools = await fetch(`http://127.0.0.1:${boundPort}/api/channels/agent-tools/slack`, {
       headers: { Authorization: `Bearer ${TEST_TOKEN}` },
     });
     expect(agentTools.status).toBe(200);
     const agentToolsBody = await agentTools.json() as { tools: Array<{ name: string }> };
     expect(agentToolsBody.tools.some((entry) => entry.name === 'slack_target')).toBe(true);
 
-    const authorize = await fetch('http://127.0.0.1:39421/api/channels/authorize/slack', {
+    const authorize = await fetch(`http://127.0.0.1:${boundPort}/api/channels/authorize/slack`, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${TEST_TOKEN}`,
@@ -2085,7 +2101,7 @@ describe('DaemonServer', () => {
     expect(authorizeBody.result.allowed).toBe(true);
     expect(authorizeBody.result.actionAvailable).toBe(true);
 
-    const providerApi = await fetch('http://127.0.0.1:39421/api/channels/actions/slack/provider-api', {
+    const providerApi = await fetch(`http://127.0.0.1:${boundPort}/api/channels/actions/slack/provider-api`, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${TEST_TOKEN}`,
@@ -2098,7 +2114,7 @@ describe('DaemonServer', () => {
     expect(providerApiBody.result.ok).toBe(true);
     expect(providerApiBody.result.url).toContain('slack.com/oauth/v2/authorize');
 
-    const integratedAccounts = await fetch('http://127.0.0.1:39421/api/accounts', {
+    const integratedAccounts = await fetch(`http://127.0.0.1:${boundPort}/api/accounts`, {
       headers: { Authorization: `Bearer ${TEST_TOKEN}` },
     });
     expect(integratedAccounts.status).toBe(200);
@@ -2122,7 +2138,7 @@ describe('DaemonServer', () => {
     expect(Array.isArray(openaiAccount?.routeRecords)).toBe(true);
     expect(openaiAccount?.routeRecords.every((entry) => typeof entry.route === 'string' && typeof entry.detail === 'string')).toBe(true);
 
-    const providers = await fetch('http://127.0.0.1:39421/api/providers', {
+    const providers = await fetch(`http://127.0.0.1:${boundPort}/api/providers`, {
       headers: { Authorization: `Bearer ${TEST_TOKEN}` },
     });
     expect(providers.status).toBe(200);
@@ -2131,7 +2147,7 @@ describe('DaemonServer', () => {
     };
     expect(Array.isArray(providersBody.providers)).toBe(true);
 
-    const provider = await fetch('http://127.0.0.1:39421/api/providers/openai', {
+    const provider = await fetch(`http://127.0.0.1:${boundPort}/api/providers/openai`, {
       headers: { Authorization: `Bearer ${TEST_TOKEN}` },
     });
     expect(provider.status).toBe(200);
@@ -2139,7 +2155,7 @@ describe('DaemonServer', () => {
     expect(providerBody.providerId).toBe('openai');
     expect(Array.isArray(providerBody.models)).toBe(true);
 
-    const usage = await fetch('http://127.0.0.1:39421/api/providers/openai/usage', {
+    const usage = await fetch(`http://127.0.0.1:${boundPort}/api/providers/openai/usage`, {
       headers: { Authorization: `Bearer ${TEST_TOKEN}` },
     });
     expect(usage.status).toBe(200);
@@ -2152,7 +2168,7 @@ describe('DaemonServer', () => {
     daemon.enable({ daemon: true }, TEST_TOKEN);
     await daemon.start();
 
-    const surfaces = await fetch('http://127.0.0.1:39421/api/surfaces', {
+    const surfaces = await fetch(`http://127.0.0.1:${boundPort}/api/surfaces`, {
       headers: { Authorization: `Bearer ${TEST_TOKEN}` },
     });
     expect(surfaces.status).toBe(200);
@@ -2160,14 +2176,14 @@ describe('DaemonServer', () => {
     expect(surfacesBody.surfaces.some((surface) => surface.kind === 'tui')).toBe(true);
     expect(surfacesBody.surfaces.some((surface) => surface.kind === 'web')).toBe(true);
 
-    const watchers = await fetch('http://127.0.0.1:39421/api/watchers', {
+    const watchers = await fetch(`http://127.0.0.1:${boundPort}/api/watchers`, {
       headers: { Authorization: `Bearer ${TEST_TOKEN}` },
     });
     expect(watchers.status).toBe(200);
     const watchersBody = await watchers.json() as { watchers: unknown[] };
     expect(Array.isArray(watchersBody.watchers)).toBe(true);
 
-    const service = await fetch('http://127.0.0.1:39421/api/service/status', {
+    const service = await fetch(`http://127.0.0.1:${boundPort}/api/service/status`, {
       headers: { Authorization: `Bearer ${TEST_TOKEN}` },
     });
     expect(service.status).toBe(200);
@@ -2191,7 +2207,7 @@ describe('DaemonServer', () => {
 
     const auth = { Authorization: `Bearer ${TEST_TOKEN}`, 'Content-Type': 'application/json' };
 
-    const setup = await fetch('http://127.0.0.1:39421/api/channels/setup/telegram', { headers: auth });
+    const setup = await fetch(`http://127.0.0.1:${boundPort}/api/channels/setup/telegram`, { headers: auth });
     expect(setup.status).toBe(200);
     const setupBody = await setup.json() as {
       surface: string;
@@ -2204,7 +2220,7 @@ describe('DaemonServer', () => {
     expect(setupBody.fields.some((field) => field.id === 'mode')).toBe(true);
     expect(setupBody.secretTargets.some((target) => target.id === 'primary' && target.required)).toBe(true);
 
-    const doctor = await fetch('http://127.0.0.1:39421/api/channels/doctor/signal', { headers: auth });
+    const doctor = await fetch(`http://127.0.0.1:${boundPort}/api/channels/doctor/signal`, { headers: auth });
     expect(doctor.status).toBe(200);
     const doctorBody = await doctor.json() as {
       surface: string;
@@ -2215,18 +2231,18 @@ describe('DaemonServer', () => {
     expect(doctorBody.checks.some((check) => check.id === 'configured')).toBe(true);
     expect(doctorBody.repairActions.some((action) => action.id === 'inspect')).toBe(true);
 
-    const repairs = await fetch('http://127.0.0.1:39421/api/channels/repair-actions/telegram', { headers: auth });
+    const repairs = await fetch(`http://127.0.0.1:${boundPort}/api/channels/repair-actions/telegram`, { headers: auth });
     expect(repairs.status).toBe(200);
     const repairsBody = await repairs.json() as { actions: Array<{ id: string }> };
     expect(repairsBody.actions.some((action) => action.id === 'inspect')).toBe(true);
 
-    const lifecycleBefore = await fetch('http://127.0.0.1:39421/api/channels/lifecycle/telegram', { headers: auth });
+    const lifecycleBefore = await fetch(`http://127.0.0.1:${boundPort}/api/channels/lifecycle/telegram`, { headers: auth });
     expect(lifecycleBefore.status).toBe(200);
     const lifecycleBeforeBody = await lifecycleBefore.json() as { currentVersion: number; targetVersion: number };
     expect(lifecycleBeforeBody.currentVersion).toBe(0);
     expect(lifecycleBeforeBody.targetVersion).toBe(1);
 
-    const inspectAction = await fetch('http://127.0.0.1:39421/api/channels/accounts/telegram/actions/inspect', {
+    const inspectAction = await fetch(`http://127.0.0.1:${boundPort}/api/channels/accounts/telegram/actions/inspect`, {
       method: 'POST',
       headers: auth,
       body: JSON.stringify({}),
@@ -2236,7 +2252,7 @@ describe('DaemonServer', () => {
     expect(inspectActionBody.action).toBe('inspect');
     expect(inspectActionBody.result.action).toBe('inspect');
 
-    const allowlistResolve = await fetch('http://127.0.0.1:39421/api/channels/allowlist/telegram/resolve', {
+    const allowlistResolve = await fetch(`http://127.0.0.1:${boundPort}/api/channels/allowlist/telegram/resolve`, {
       method: 'POST',
       headers: auth,
       body: JSON.stringify({ add: ['@alice', '#ops-room'] }),
@@ -2246,7 +2262,7 @@ describe('DaemonServer', () => {
     expect(allowlistResolveBody.resolved.some((entry) => entry.kind === 'user' && entry.id === 'alice')).toBe(true);
     expect(allowlistResolveBody.resolved.some((entry) => entry.kind === 'channel' && entry.id === 'ops-room')).toBe(true);
 
-    const allowlistEdit = await fetch('http://127.0.0.1:39421/api/channels/allowlist/telegram/edit', {
+    const allowlistEdit = await fetch(`http://127.0.0.1:${boundPort}/api/channels/allowlist/telegram/edit`, {
       method: 'POST',
       headers: auth,
       body: JSON.stringify({ add: ['@alice', '#ops-room'] }),
@@ -2264,7 +2280,7 @@ describe('DaemonServer', () => {
     daemon.enable({ daemon: true }, TEST_TOKEN);
     await daemon.start();
 
-    const create = await fetch('http://127.0.0.1:39421/api/watchers', {
+    const create = await fetch(`http://127.0.0.1:${boundPort}/api/watchers`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -2278,7 +2294,7 @@ describe('DaemonServer', () => {
     });
     expect(create.status).toBe(201);
 
-    const update = await fetch('http://127.0.0.1:39421/api/watchers/watcher-api-test', {
+    const update = await fetch(`http://127.0.0.1:${boundPort}/api/watchers/watcher-api-test`, {
       method: 'PATCH',
       headers: {
         'Content-Type': 'application/json',
@@ -2295,7 +2311,7 @@ describe('DaemonServer', () => {
     expect(updated.label).toBe('API watcher updated');
     expect(updated.kind).toBe('integration');
 
-    const start = await fetch('http://127.0.0.1:39421/api/watchers/watcher-api-test/start', {
+    const start = await fetch(`http://127.0.0.1:${boundPort}/api/watchers/watcher-api-test/start`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${TEST_TOKEN}` },
     });
@@ -2303,7 +2319,7 @@ describe('DaemonServer', () => {
     const started = await start.json() as { state: string };
     expect(started.state).toBe('running');
 
-    const run = await fetch('http://127.0.0.1:39421/api/watchers/watcher-api-test/run', {
+    const run = await fetch(`http://127.0.0.1:${boundPort}/api/watchers/watcher-api-test/run`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${TEST_TOKEN}` },
     });
@@ -2311,13 +2327,13 @@ describe('DaemonServer', () => {
     const ran = await run.json() as { lastCheckpoint?: string };
     expect(typeof ran.lastCheckpoint).toBe('string');
 
-    const stop = await fetch('http://127.0.0.1:39421/api/watchers/watcher-api-test/stop', {
+    const stop = await fetch(`http://127.0.0.1:${boundPort}/api/watchers/watcher-api-test/stop`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${TEST_TOKEN}` },
     });
     expect(stop.status).toBe(200);
 
-    const remove = await fetch('http://127.0.0.1:39421/api/watchers/watcher-api-test', {
+    const remove = await fetch(`http://127.0.0.1:${boundPort}/api/watchers/watcher-api-test`, {
       method: 'DELETE',
       headers: { Authorization: `Bearer ${TEST_TOKEN}` },
     });
@@ -2331,7 +2347,7 @@ describe('DaemonServer', () => {
     daemon = createTestDaemon({ configManager: config, userAuth: makeUserAuth() });
     daemon.enable({ daemon: true }, TEST_TOKEN);
     await daemon.start();
-    await fetch('http://127.0.0.1:39421/api/channels/policies/webhook', {
+    await fetch(`http://127.0.0.1:${boundPort}/api/channels/policies/webhook`, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${TEST_TOKEN}`,
@@ -2340,7 +2356,7 @@ describe('DaemonServer', () => {
       body: JSON.stringify({ allowlistUserIds: [] }),
     });
 
-    const generic = await fetch('http://127.0.0.1:39421/webhook/generic', {
+    const generic = await fetch(`http://127.0.0.1:${boundPort}/webhook/generic`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -2361,7 +2377,7 @@ describe('DaemonServer', () => {
     expect(typeof genericBody.bindingId).toBe('string');
     expect(typeof genericBody.agentId).toBe('string');
 
-    const list = await fetch('http://127.0.0.1:39421/api/routes/bindings', {
+    const list = await fetch(`http://127.0.0.1:${boundPort}/api/routes/bindings`, {
       headers: { Authorization: `Bearer ${TEST_TOKEN}` },
     });
     const listBody = await list.json() as { bindings: Array<{ id: string; surfaceKind: string; externalId: string }> };
@@ -2376,7 +2392,7 @@ describe('DaemonServer', () => {
     daemon.enable({ daemon: true }, TEST_TOKEN);
     await daemon.start();
 
-    const generic = await fetch('http://127.0.0.1:39421/webhook/generic', {
+    const generic = await fetch(`http://127.0.0.1:${boundPort}/webhook/generic`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -2396,7 +2412,7 @@ describe('DaemonServer', () => {
     daemon.enable({ daemon: true }, TEST_TOKEN);
     await daemon.start();
 
-    const generic = await fetch('http://127.0.0.1:39421/webhook/generic', {
+    const generic = await fetch(`http://127.0.0.1:${boundPort}/webhook/generic`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -2419,7 +2435,7 @@ describe('DaemonServer', () => {
     daemon = createTestDaemon({ configManager: config, userAuth: makeUserAuth() });
     daemon.enable({ daemon: true }, TEST_TOKEN);
     await daemon.start();
-    await fetch('http://127.0.0.1:39421/api/channels/policies/webhook', {
+    await fetch(`http://127.0.0.1:${boundPort}/api/channels/policies/webhook`, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${TEST_TOKEN}`,
@@ -2440,7 +2456,7 @@ describe('DaemonServer', () => {
       signWebhookPayload: (body: string, secret: string) => string;
     }).signWebhookPayload(payload, 'webhook-hmac-secret');
 
-    const res = await fetch('http://127.0.0.1:39421/webhook/generic', {
+    const res = await fetch(`http://127.0.0.1:${boundPort}/webhook/generic`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -2463,7 +2479,7 @@ describe('DaemonServer', () => {
     daemon.enable({ daemon: true }, TEST_TOKEN);
     await daemon.start();
 
-    const res = await fetch('http://127.0.0.1:39421/webhook/generic', {
+    const res = await fetch(`http://127.0.0.1:${boundPort}/webhook/generic`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -2482,7 +2498,7 @@ describe('DaemonServer', () => {
     daemon.enable({ daemon: true }, TEST_TOKEN);
     await daemon.start();
 
-    const messages = await fetch('http://127.0.0.1:39421/api/control-plane/messages', {
+    const messages = await fetch(`http://127.0.0.1:${boundPort}/api/control-plane/messages`, {
       headers: { Authorization: `Bearer ${TEST_TOKEN}` },
     });
     expect(messages.status).toBe(200);
@@ -2494,7 +2510,7 @@ describe('DaemonServer', () => {
     daemon.enable({ daemon: true }, TEST_TOKEN);
     await daemon.start();
 
-    const create = await fetch('http://127.0.0.1:39421/api/artifacts', {
+    const create = await fetch(`http://127.0.0.1:${boundPort}/api/artifacts`, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${TEST_TOKEN}`,
@@ -2510,20 +2526,20 @@ describe('DaemonServer', () => {
     const createBody = await create.json() as { artifact: { id: string; filename?: string } };
     expect(createBody.artifact.filename).toBe('notes.md');
 
-    const inspect = await fetch(`http://127.0.0.1:39421/api/artifacts/${createBody.artifact.id}`, {
+    const inspect = await fetch(`http://127.0.0.1:${boundPort}/api/artifacts/${createBody.artifact.id}`, {
       headers: { Authorization: `Bearer ${TEST_TOKEN}` },
     });
     expect(inspect.status).toBe(200);
     expect((await inspect.json() as { artifact: { metadata: { ticket: string } } }).artifact.metadata.ticket).toBe('GV-1');
 
-    const content = await fetch(`http://127.0.0.1:39421/api/artifacts/${createBody.artifact.id}/content?download=0`, {
+    const content = await fetch(`http://127.0.0.1:${boundPort}/api/artifacts/${createBody.artifact.id}/content?download=0`, {
       headers: { Authorization: `Bearer ${TEST_TOKEN}` },
     });
     expect(content.status).toBe(200);
     expect(content.headers.get('content-type')).toContain('text/markdown');
     expect(await content.text()).toBe('# shipped\n');
 
-    const rawCreate = await fetch('http://127.0.0.1:39421/api/artifacts?filename=raw-notes.txt', {
+    const rawCreate = await fetch(`http://127.0.0.1:${boundPort}/api/artifacts?filename=raw-notes.txt`, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${TEST_TOKEN}`,
@@ -2536,7 +2552,7 @@ describe('DaemonServer', () => {
     const rawCreateBody = await rawCreate.json() as { artifact: { id: string; filename?: string } };
     expect(rawCreateBody.artifact.filename).toBe('raw-notes.txt');
 
-    const rawContent = await fetch(`http://127.0.0.1:39421/api/artifacts/${rawCreateBody.artifact.id}/content?download=0`, {
+    const rawContent = await fetch(`http://127.0.0.1:${boundPort}/api/artifacts/${rawCreateBody.artifact.id}/content?download=0`, {
       headers: { Authorization: `Bearer ${TEST_TOKEN}` },
     });
     expect(rawContent.status).toBe(200);
@@ -2554,7 +2570,7 @@ describe('DaemonServer', () => {
     form.append('title', 'Dishwasher manual');
     form.append('tags', 'manual,appliance');
 
-    const response = await fetch('http://127.0.0.1:39421/api/homeassistant/home-graph/ingest/artifact', {
+    const response = await fetch(`http://127.0.0.1:${boundPort}/api/homeassistant/home-graph/ingest/artifact`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${TEST_TOKEN}` },
       body: form,
@@ -2581,7 +2597,7 @@ describe('DaemonServer', () => {
     daemon.enable({ daemon: true }, TEST_TOKEN);
     await daemon.start();
 
-    const ntfy = await fetch(`http://127.0.0.1:39421/webhook/ntfy?topic=${GOODVIBES_NTFY_AGENT_TOPIC}`, {
+    const ntfy = await fetch(`http://127.0.0.1:${boundPort}/webhook/ntfy?topic=${GOODVIBES_NTFY_AGENT_TOPIC}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -2599,7 +2615,7 @@ describe('DaemonServer', () => {
     expect(ntfyBody.queued).toBe(true);
     expect(typeof ntfyBody.bindingId).toBe('string');
 
-    const list = await fetch('http://127.0.0.1:39421/api/routes/bindings', {
+    const list = await fetch(`http://127.0.0.1:${boundPort}/api/routes/bindings`, {
       headers: { Authorization: `Bearer ${TEST_TOKEN}` },
     });
     const listBody = await list.json() as { bindings: Array<{ id: string; surfaceKind: string; externalId: string }> };
@@ -2614,7 +2630,7 @@ describe('DaemonServer', () => {
     daemon.enable({ daemon: true }, TEST_TOKEN);
     await daemon.start();
 
-    const ntfy = await fetch('http://127.0.0.1:39421/webhook/ntfy?topic=ops-alerts', {
+    const ntfy = await fetch(`http://127.0.0.1:${boundPort}/webhook/ntfy?topic=ops-alerts`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -2639,7 +2655,7 @@ describe('DaemonServer', () => {
     daemon.enable({ daemon: true }, TEST_TOKEN);
     await daemon.start();
 
-    const telegram = await fetch('http://127.0.0.1:39421/webhook/telegram', {
+    const telegram = await fetch(`http://127.0.0.1:${boundPort}/webhook/telegram`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -2657,7 +2673,7 @@ describe('DaemonServer', () => {
     const telegramBody = await telegram.json() as { queued: boolean; bindingId: string };
     expect(telegramBody.queued).toBe(true);
 
-    const googleChat = await fetch('http://127.0.0.1:39421/webhook/google-chat', {
+    const googleChat = await fetch(`http://127.0.0.1:${boundPort}/webhook/google-chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -2676,7 +2692,7 @@ describe('DaemonServer', () => {
     const googleChatBody = await googleChat.json() as { text: string };
     expect(googleChatBody.text).toContain('Running');
 
-    const list = await fetch('http://127.0.0.1:39421/api/routes/bindings', {
+    const list = await fetch(`http://127.0.0.1:${boundPort}/api/routes/bindings`, {
       headers: { Authorization: `Bearer ${TEST_TOKEN}` },
     });
     const listBody = await list.json() as {
@@ -2702,11 +2718,11 @@ describe('DaemonServer', () => {
     daemon.enable({ daemon: true }, TEST_TOKEN);
     await daemon.start();
 
-    const challenge = await fetch('http://127.0.0.1:39421/webhook/whatsapp?hub.mode=subscribe&hub.verify_token=whatsapp-verify-token&hub.challenge=abc123');
+    const challenge = await fetch(`http://127.0.0.1:${boundPort}/webhook/whatsapp?hub.mode=subscribe&hub.verify_token=whatsapp-verify-token&hub.challenge=abc123`);
     expect(challenge.status).toBe(200);
     expect(await challenge.text()).toBe('abc123');
 
-    const signal = await fetch('http://127.0.0.1:39421/webhook/signal', {
+    const signal = await fetch(`http://127.0.0.1:${boundPort}/webhook/signal`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -2737,7 +2753,7 @@ describe('DaemonServer', () => {
       }],
     };
     const whatsappBodyRaw = JSON.stringify(whatsappPayload);
-    const whatsapp = await fetch('http://127.0.0.1:39421/webhook/whatsapp', {
+    const whatsapp = await fetch(`http://127.0.0.1:${boundPort}/webhook/whatsapp`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -2749,7 +2765,7 @@ describe('DaemonServer', () => {
     const whatsappBody = await whatsapp.json() as { queued: boolean; bindingId: string };
     expect(whatsappBody.queued).toBe(true);
 
-    const imessage = await fetch('http://127.0.0.1:39421/webhook/imessage', {
+    const imessage = await fetch(`http://127.0.0.1:${boundPort}/webhook/imessage`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -2764,7 +2780,7 @@ describe('DaemonServer', () => {
     const imessageBody = await imessage.json() as { queued: boolean; bindingId: string };
     expect(imessageBody.queued).toBe(true);
 
-    const list = await fetch('http://127.0.0.1:39421/api/routes/bindings', {
+    const list = await fetch(`http://127.0.0.1:${boundPort}/api/routes/bindings`, {
       headers: { Authorization: `Bearer ${TEST_TOKEN}` },
     });
     const listBody = await list.json() as {
@@ -2793,7 +2809,7 @@ describe('DaemonServer', () => {
     daemon.enable({ daemon: true }, TEST_TOKEN);
     await daemon.start();
 
-    const teams = await fetch('http://127.0.0.1:39421/webhook/msteams', {
+    const teams = await fetch(`http://127.0.0.1:${boundPort}/webhook/msteams`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -2811,7 +2827,7 @@ describe('DaemonServer', () => {
     const teamsBody = await teams.json() as { queued: boolean; bindingId: string };
     expect(teamsBody.queued).toBe(true);
 
-    const bluebubbles = await fetch('http://127.0.0.1:39421/webhook/bluebubbles?password=bb-pass', {
+    const bluebubbles = await fetch(`http://127.0.0.1:${boundPort}/webhook/bluebubbles?password=bb-pass`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -2824,7 +2840,7 @@ describe('DaemonServer', () => {
     const bluebubblesBody = await bluebubbles.json() as { queued: boolean; bindingId: string };
     expect(bluebubblesBody.queued).toBe(true);
 
-    const mattermost = await fetch('http://127.0.0.1:39421/webhook/mattermost', {
+    const mattermost = await fetch(`http://127.0.0.1:${boundPort}/webhook/mattermost`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -2841,7 +2857,7 @@ describe('DaemonServer', () => {
     const mattermostBody = await mattermost.json() as { queued: boolean; bindingId: string };
     expect(mattermostBody.queued).toBe(true);
 
-    const matrix = await fetch('http://127.0.0.1:39421/webhook/matrix', {
+    const matrix = await fetch(`http://127.0.0.1:${boundPort}/webhook/matrix`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -2860,7 +2876,7 @@ describe('DaemonServer', () => {
     const matrixBody = await matrix.json() as { queued: boolean; bindingId: string };
     expect(matrixBody.queued).toBe(true);
 
-    const list = await fetch('http://127.0.0.1:39421/api/routes/bindings', {
+    const list = await fetch(`http://127.0.0.1:${boundPort}/api/routes/bindings`, {
       headers: { Authorization: `Bearer ${TEST_TOKEN}` },
     });
     const listBody = await list.json() as {
@@ -2919,7 +2935,7 @@ describe('DaemonServer', () => {
       const timestamp = String(Math.floor(Date.now() / 1000));
       const signature = `v0=${createHmac('sha256', process.env.SLACK_SIGNING_SECRET!).update(`v0:${timestamp}:${rawBody}`).digest('hex')}`;
 
-      const res = await fetch('http://127.0.0.1:39421/webhook/slack', {
+      const res = await fetch(`http://127.0.0.1:${boundPort}/webhook/slack`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded',
@@ -2948,7 +2964,7 @@ describe('DaemonServer', () => {
   test('POST /task returns 401 without token', async () => {
     daemon.enable({ daemon: true }, TEST_TOKEN);
     await daemon.start();
-    const res = await fetch('http://127.0.0.1:39421/task', {
+    const res = await fetch(`http://127.0.0.1:${boundPort}/task`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ task: 'do something' }),
@@ -2959,7 +2975,7 @@ describe('DaemonServer', () => {
   test('POST /task returns 202 acknowledgement with valid token', async () => {
     daemon.enable({ daemon: true }, TEST_TOKEN);
     await daemon.start();
-    const res = await fetch('http://127.0.0.1:39421/task', {
+    const res = await fetch(`http://127.0.0.1:${boundPort}/task`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -2976,7 +2992,7 @@ describe('DaemonServer', () => {
     daemon.enable({ daemon: true }, TEST_TOKEN);
     await daemon.start();
 
-    const submit = await fetch('http://127.0.0.1:39421/task', {
+    const submit = await fetch(`http://127.0.0.1:${boundPort}/task`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -2988,7 +3004,7 @@ describe('DaemonServer', () => {
     const submitBody = await submit.json() as { agentId: string };
     expect(typeof submitBody.agentId).toBe('string');
 
-    const detail = await fetch(`http://127.0.0.1:39421/api/tasks/${submitBody.agentId}`, {
+    const detail = await fetch(`http://127.0.0.1:${boundPort}/api/tasks/${submitBody.agentId}`, {
       headers: { Authorization: `Bearer ${TEST_TOKEN}` },
     });
     expect(detail.status).toBe(200);
@@ -3000,7 +3016,7 @@ describe('DaemonServer', () => {
   test('unknown route returns 404 with valid token', async () => {
     daemon.enable({ daemon: true }, TEST_TOKEN);
     await daemon.start();
-    const res = await fetch('http://127.0.0.1:39421/does-not-exist', {
+    const res = await fetch(`http://127.0.0.1:${boundPort}/does-not-exist`, {
       headers: { Authorization: `Bearer ${TEST_TOKEN}` },
     });
     expect(res.status).toBe(404);
@@ -3019,6 +3035,15 @@ describe('HttpListener', () => {
   let homeDir: string;
   let configDir: string;
   const makeConfig = () => new ConfigManager({ surfaceRoot: 'tui',  configDir, workingDir, homeDir });
+  // Ephemeral-port harness (see the DaemonServer describe for rationale): bind
+  // on port 0, capture the OS-assigned port, and skip HttpListener's pre-bind
+  // OS port probe by injecting a serveFactory.
+  let boundPort = 0;
+  const capturingServe = ((options) => {
+    const server = Bun.serve(options);
+    boundPort = server.port;
+    return server;
+  }) as typeof Bun.serve;
   const createTestListener = (options: {
     readonly configManager?: ConfigManager;
     readonly userAuth?: UserAuthManager;
@@ -3026,11 +3051,11 @@ describe('HttpListener', () => {
     readonly port?: number;
     readonly host?: string;
   } = {}): HttpListener => new HttpListener({
-    port: options.port ?? 39422,
+    port: options.port ?? 0,
     host: options.host ?? '127.0.0.1',
     configManager: options.configManager ?? makeConfig(),
     userAuth: options.userAuth ?? userAuth,
-    ...(options.serveFactory ? { serveFactory: options.serveFactory } : {}),
+    serveFactory: options.serveFactory ?? capturingServe,
   });
 
   beforeEach(() => {
@@ -3106,7 +3131,7 @@ describe('HttpListener', () => {
 
     expect(serveFactory).toHaveBeenCalledTimes(1);
     expect(capturedOptions).toMatchObject({
-      port: 39422,
+      port: 0,
       hostname: '127.0.0.1',
       tls: {
         cert: Bun.file(certFile),
@@ -3130,7 +3155,7 @@ describe('HttpListener', () => {
   test('POST /webhook returns 401 without token', async () => {
     listener.enable({ httpListener: true }, TEST_TOKEN);
     await listener.start();
-    const res = await fetch('http://127.0.0.1:39422/webhook', {
+    const res = await fetch(`http://127.0.0.1:${boundPort}/webhook`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ event: 'push' }),
@@ -3141,7 +3166,7 @@ describe('HttpListener', () => {
   test('POST /login returns session token for valid credentials', async () => {
     listener.enable({ httpListener: true });
     await listener.start();
-    const res = await fetch('http://127.0.0.1:39422/login', {
+    const res = await fetch(`http://127.0.0.1:${boundPort}/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ username: 'admin', password: 'admin' }),
@@ -3156,7 +3181,7 @@ describe('HttpListener', () => {
   test('POST /webhook returns 401 with wrong token', async () => {
     listener.enable({ httpListener: true }, TEST_TOKEN);
     await listener.start();
-    const res = await fetch('http://127.0.0.1:39422/webhook', {
+    const res = await fetch(`http://127.0.0.1:${boundPort}/webhook`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -3170,7 +3195,7 @@ describe('HttpListener', () => {
   test('POST /webhook returns 202 acknowledgement with valid token', async () => {
     listener.enable({ httpListener: true }, TEST_TOKEN);
     await listener.start();
-    const res = await fetch('http://127.0.0.1:39422/webhook', {
+    const res = await fetch(`http://127.0.0.1:${boundPort}/webhook`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -3186,7 +3211,7 @@ describe('HttpListener', () => {
   test('GET /health returns 200 with valid token', async () => {
     listener.enable({ httpListener: true }, TEST_TOKEN);
     await listener.start();
-    const res = await fetch('http://127.0.0.1:39422/health', {
+    const res = await fetch(`http://127.0.0.1:${boundPort}/health`, {
       headers: { Authorization: `Bearer ${TEST_TOKEN}` },
     });
     expect(res.status).toBe(200);
@@ -3197,23 +3222,24 @@ describe('HttpListener', () => {
   test('GET /health returns 401 without token', async () => {
     listener.enable({ httpListener: true }, TEST_TOKEN);
     await listener.start();
-    const res = await fetch('http://127.0.0.1:39422/health');
+    const res = await fetch(`http://127.0.0.1:${boundPort}/health`);
     expect(res.status).toBe(401);
   });
 
   test('unknown route returns 404 with valid token', async () => {
     listener.enable({ httpListener: true }, TEST_TOKEN);
     await listener.start();
-    const res = await fetch('http://127.0.0.1:39422/unknown-path', {
+    const res = await fetch(`http://127.0.0.1:${boundPort}/unknown-path`, {
       headers: { Authorization: `Bearer ${TEST_TOKEN}` },
     });
     expect(res.status).toBe(404);
   });
 
   test('rate limit: 61st request within window returns 429', async () => {
-    // Use a fresh instance to get a clean rate-limit counter
+    // Use a fresh instance to get a clean rate-limit counter. Ephemeral bind
+    // via the capturing factory (port 0) so concurrent runs never collide.
     const rl = new HttpListener({
-      port: 39423,
+      port: 0,
       host: '127.0.0.1',
       configManager: makeConfig(),
       userAuth: new UserAuthManager({
@@ -3221,18 +3247,19 @@ describe('HttpListener', () => {
         bootstrapCredentialPath: join(configDir, 'auth-bootstrap.txt'),
         users: [{ username: 'admin', passwordHash: UserAuthManager.hashPassword('admin'), roles: ['admin'] }],
       }),
+      serveFactory: capturingServe,
     });
     rl.enable({ httpListener: true }, TEST_TOKEN);
     await rl.start();
     try {
       // Send 60 requests — all should succeed (or 404, not 429)
       for (let i = 0; i < 60; i++) {
-        await fetch('http://127.0.0.1:39423/health', {
+        await fetch(`http://127.0.0.1:${boundPort}/health`, {
           headers: { Authorization: `Bearer ${TEST_TOKEN}` },
         });
       }
       // 61st request should be throttled
-      const res = await fetch('http://127.0.0.1:39423/health', {
+      const res = await fetch(`http://127.0.0.1:${boundPort}/health`, {
         headers: { Authorization: `Bearer ${TEST_TOKEN}` },
       });
       expect(res.status).toBe(429);

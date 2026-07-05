@@ -2,6 +2,7 @@ import { type Line } from '../types/grid.ts';
 import { UIFactory } from './ui-factory.ts';
 import { truncateDisplay } from '../utils/terminal-width.ts';
 import { GLYPHS, UI_TONES } from './ui-primitives.ts';
+import { activeUiTones } from './theme.ts';
 import { formatHints } from './hint-grammar.ts';
 
 /**
@@ -92,5 +93,5 @@ export function renderProcessIndicator(
     : '';
   const label = `${parts.join(` ${GLYPHS.navigation.pipeSeparator} `)}${progressSuffix}`;
   const hint = `  ${formatHints([{ key: 'Enter', verb: 'View' }])}`;
-  return renderPlainStatus(`${label}${hint}`, { fg: UI_TONES.accent.brand, bold: true });
+  return renderPlainStatus(`${label}${hint}`, { fg: activeUiTones().accent.brand, bold: true });
 }
