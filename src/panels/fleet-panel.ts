@@ -511,6 +511,13 @@ export class FleetPanel extends ScrollableListPanel<FleetTreeRow> {
       // one press for a steerable node; honest refusal otherwise.
       if (!selected) return false;
       const node = selected.node;
+      // Closure replay note: a node that FINISHED in the hint→keypress race
+      // window must say so — "does not support steer" is misleading for an
+      // agent whose only problem is being done.
+      if (isTerminalProcessState(node.state)) {
+        this.setError(`${node.kind} already finished — nothing to steer.`);
+        return true;
+      }
       if (!node.capabilities.steerable || !isAttachableFleetKind(node.kind)) {
         this.setError(`${node.kind} does not support steer.`);
         return true;
@@ -532,8 +539,12 @@ export class FleetPanel extends ScrollableListPanel<FleetTreeRow> {
    */
   private tryOpenSteerDraft(tab: FleetTab): boolean {
     const node = this.findLiveNode(tab.nodeId);
-    if (!node || isTerminalProcessState(node.state) || !node.capabilities.steerable) {
-      this.setError(`${node?.kind ?? tab.kind} does not support steering.`);
+    if (!node || isTerminalProcessState(node.state)) {
+      this.setError(`${node?.kind ?? tab.kind} already finished — nothing to steer.`);
+      return true;
+    }
+    if (!node.capabilities.steerable) {
+      this.setError(`${node.kind} does not support steering.`);
       return true;
     }
     tab.steerDraft = '';
