@@ -238,12 +238,14 @@ describe('tool preview truncation', () => {
     expect(text).not.toContain('Stalled');
   });
 
-  it('freezes the phrase rotation and shows "Stalled Ns" once msSinceLastDelta crosses the freeze threshold', () => {
+  it('freezes the phrase rotation and shows "Stalled Ns" once msSinceLastDelta crosses the freeze threshold (mid-stream)', () => {
     const width = 80;
     // frame=1000 would normally rotate past "Thinking..." (PHRASE_ROTATION_FRAMES=375);
     // with a stall in effect, the rotated phrase must NOT appear at all.
+    // outputTokens > 0: "Stalled" is the MID-STREAM label — pre-first-token
+    // silence renders "Waiting for model" instead (batch replay D1).
     const lines = UIFactory.createThinkingFragment(
-      width, '-', 1000, undefined, undefined, undefined, undefined, undefined, undefined,
+      width, '-', 1000, undefined, undefined, 40, 200, undefined, undefined,
       { msSinceLastDelta: 12_000 },
     );
     const text = lines[1].map(c => c.char).join('');
@@ -251,6 +253,17 @@ describe('tool preview truncation', () => {
     for (const p of ['Thinking...', 'Vibing...', 'Manifesting...']) {
       expect(text).not.toContain(p);
     }
+  });
+
+  it('pre-first-token silence renders "Waiting for model", never "Stalled" (batch replay D1)', () => {
+    const width = 80;
+    const lines = UIFactory.createThinkingFragment(
+      width, '-', 1000, undefined, undefined, 40, 0, undefined, undefined,
+      { msSinceLastDelta: 12_000 },
+    );
+    const text = lines[1].map(c => c.char).join('');
+    expect(text).toContain('Waiting for model 12s');
+    expect(text).not.toContain('Stalled');
   });
 
   it('shows "Reconnecting (attempt k/n)" instead of "Stalled Ns" when reconnect info is present', () => {
@@ -304,11 +317,13 @@ describe('tool preview truncation', () => {
     expect(text).not.toContain('Reconnecting');
   });
 
-  it('a genuine stall is unchanged when no approval is pending', () => {
-    // Regression guard: the honest stall label must still appear for a real provider silence.
+  it('a genuine mid-stream stall is unchanged when no approval is pending', () => {
+    // Regression guard: the honest stall label must still appear for a real
+    // provider silence AFTER tokens started flowing (out>0; pre-first-token
+    // silence is "Waiting for model" per batch replay D1).
     const width = 80;
     const lines = UIFactory.createThinkingFragment(
-      width, '-', 1000, undefined, undefined, undefined, undefined, undefined, undefined,
+      width, '-', 1000, undefined, undefined, 40, 200, undefined, undefined,
       { msSinceLastDelta: 12_000 }, false,
     );
     const text = lines[1].map(c => c.char).join('');
