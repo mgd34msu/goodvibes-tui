@@ -268,6 +268,122 @@ describe('SessionUnionCache — honest cross-surface read facade', () => {
     expect(transitions).toEqual([true, false]); // and the flip was reported to the subscriber (-> requestRender)
   });
 
+  describe('generation guard (D7): a superseded reader can never write back after activate()/deactivate() moves on', () => {
+    /**
+     * Let every pending microtask (the .then chain inside raceWithProbeTimeout
+     * plus the awaiting performRefresh) drain before asserting on state that a
+     * late, manually-released promise settlement would (or, post-fix, would
+     * not) have written. A macrotask boundary (real setTimeout) is used rather
+     * than counting `await Promise.resolve()` hops, since the exact microtask
+     * depth of a manually-driven Promise chain is an implementation detail.
+     */
+    function flushMicrotasks(): Promise<void> {
+      return new Promise((resolve) => setTimeout(resolve, 0));
+    }
+
+    /** A wire reader whose list() call hangs until release() is invoked. */
+    function heldReader(): { reader: WireSessionReader; release: (result: { rows?: readonly SharedSessionRecord[]; reject?: boolean }) => void } {
+      let settle: ((result: { rows?: readonly SharedSessionRecord[]; reject?: boolean }) => void) | null = null;
+      return {
+        reader: {
+          list: () =>
+            new Promise<readonly SharedSessionRecord[]>((resolve, reject) => {
+              settle = (result) => (result.reject ? reject(new Error('daemon unreachable')) : resolve(result.rows ?? []));
+            }),
+        },
+        release: (result) => settle!(result),
+      };
+    }
+
+    test('late timeout from a pre-activate() probe writes nothing and fires no transition, even though readerB already went online', async () => {
+      const readerA = heldReader();
+      const readerB = wireReader({ rows: [record('b-1')] });
+      const cache = new SessionUnionCache({ local: localReader([]), scheduler: noopScheduler, log: silent });
+      const transitions: boolean[] = [];
+      cache.setOnTransition((online) => transitions.push(online));
+
+      cache.activate(readerA.reader); // kicks readerA's probe (gen 1), left hanging
+      cache.activate(readerB.reader); // external baseUrl change: gen 2, readerB adopted while A still in flight
+      await cache.refresh(); // collapses into (or observes) readerB's own probe: false -> true
+      expect(cache.crossSurfaceView.online).toBe(true);
+      expect(cache.crossSurfaceView.lastSyncAt).not.toBeNull();
+      expect(transitions).toEqual([true]);
+
+      // readerA's stale probe finally times out (simulated as a rejection settling late).
+      readerA.release({ reject: true });
+      await flushMicrotasks(); // let readerA's stale settlement (post-fix: a no-op) drain
+
+      // Nothing from readerA's late settlement should have been written back:
+      // still online, still readerB's rows, no extra transition fired.
+      expect(cache.crossSurfaceView.online).toBe(true);
+      expect(cache.listSessions().map((r) => r.id)).toEqual(['b-1']);
+      expect(transitions).toEqual([true]); // no phantom false flip
+    });
+
+    test('late success with stale rows from a pre-activate() probe does not overwrite readerB\'s fresh cache', async () => {
+      const readerA = heldReader();
+      const readerB = wireReader({ rows: [record('b-1')] });
+      const cache = new SessionUnionCache({ local: localReader([]), scheduler: noopScheduler, log: silent });
+      const transitions: boolean[] = [];
+      cache.setOnTransition((online) => transitions.push(online));
+
+      cache.activate(readerA.reader); // gen 1, left hanging
+      cache.activate(readerB.reader); // gen 2, adopted while A still in flight
+      await cache.refresh(); // readerB's probe: false -> true
+      expect(cache.listSessions().map((r) => r.id)).toEqual(['b-1']);
+      expect(transitions).toEqual([true]);
+
+      // readerA's stale probe finally resolves successfully with OLD rows.
+      readerA.release({ rows: [record('a-1', { title: 'stale' })] });
+      await flushMicrotasks();
+
+      // readerB's fresh cache must survive untouched; readerA's stale row must never appear.
+      expect(cache.listSessions().map((r) => r.id)).toEqual(['b-1']);
+      expect(transitions).toEqual([true]); // no repeat/extra transition from the discarded settlement
+    });
+
+    test('deactivate() mid-probe invalidates the write-back: a late-resolving probe from before deactivation writes nothing', async () => {
+      const readerA = heldReader();
+      const cache = new SessionUnionCache({ local: localReader([record('local-1')]), scheduler: noopScheduler, log: silent });
+      const transitions: boolean[] = [];
+      cache.setOnTransition((online) => transitions.push(online));
+
+      cache.activate(readerA.reader); // gen 1, probe left hanging
+      cache.deactivate('daemon mode changed'); // gen 2, back to local before the probe ever settled
+      expect(cache.getMode()).toBe('local');
+
+      readerA.release({ rows: [record('wire-1')] }); // the stale probe resolves after the fact
+      await flushMicrotasks();
+
+      // Still local/dormant, no cross-surface claim, no phantom transition.
+      expect(cache.getMode()).toBe('local');
+      expect(cache.listSessions().map((r) => r.id)).toEqual(['local-1']);
+      expect(cache.crossSurfaceView).toEqual({ mode: 'local', online: false, stale: false, lastSyncAt: null, offlineNote: null });
+      expect(transitions).toEqual([]);
+    });
+
+    test('normal single-adoption refresh is unaffected by the generation guard', async () => {
+      const local = localReader([record('local-1')]);
+      const wire = wireReader({ rows: [record('wire-1')] });
+      let clock = 1_000;
+      const cache = new SessionUnionCache({ local, now: () => clock, scheduler: noopScheduler, log: silent });
+      const transitions: boolean[] = [];
+      cache.setOnTransition((online) => transitions.push(online));
+
+      cache.activate(wire.reader);
+      await cache.refresh();
+      expect(cache.crossSurfaceView).toMatchObject({ mode: 'adopted', online: true, stale: false, lastSyncAt: 1_000 });
+      expect(cache.listSessions().map((r) => r.id).sort()).toEqual(['local-1', 'wire-1']);
+      expect(transitions).toEqual([true]);
+
+      clock = 2_000;
+      wire.set({ reject: true });
+      await cache.refresh();
+      expect(cache.crossSurfaceView.online).toBe(false);
+      expect(transitions).toEqual([true, false]);
+    });
+  });
+
   test('panel-consumer stand-in: renders union rows online, and local rows + offline note when down', async () => {
     // A minimal render exactly as a control-plane panel would: read the sync
     // listSessions() surface + the crossSurfaceView note off the facade type.

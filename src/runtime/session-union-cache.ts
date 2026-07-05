@@ -168,6 +168,17 @@ export class SessionUnionCache implements SessionReadFacade {
   /** D4b: guards against overlapping refresh() calls racing the same wire. */
   private refreshInFlight: Promise<void> | null = null;
   /**
+   * D7: bumped on every activate()/markEmbedded()/deactivate() — stamps which
+   * adoption is CURRENT. A performRefresh() call captures this at start and
+   * checks it again once its wire promise settles; if it has moved on, the
+   * whole write-back (cache, online, lastSyncAt, onTransition) is dropped, so
+   * a probe started under a superseded reader can never overwrite a newer
+   * reader's state or paint a phantom liveness flip for a UI that has already
+   * moved on (bootstrap.ts's syncSessionSpineToHostStatus can call activate()
+   * again — external baseUrl change — while a prior probe is still in flight).
+   */
+  private generation = 0;
+  /**
    * D4b: fired whenever a refresh() flips `online` (either direction). bootstrap.ts
    * wires this to requestRender() so a liveness change is never just correct
    * DATA sitting uncomposited — the footer segment reads straight off
@@ -216,6 +227,7 @@ export class SessionUnionCache implements SessionReadFacade {
    */
   activate(wireReader: WireSessionReader): void {
     this.stopTimer();
+    this.generation += 1; // supersede any probe still in flight under the prior reader
     this.wireReader = wireReader;
     this.mode = 'adopted';
     this.online = false; // unconfirmed until the first successful refresh
@@ -232,6 +244,7 @@ export class SessionUnionCache implements SessionReadFacade {
    */
   markEmbedded(): void {
     this.stopTimer();
+    this.generation += 1; // supersede any adopted-mode probe still in flight
     this.mode = 'embedded';
     this.resetWireState();
   }
@@ -242,6 +255,7 @@ export class SessionUnionCache implements SessionReadFacade {
       this.log.debug('[session-union] deactivating adopted read facade', { reason });
     }
     this.stopTimer();
+    this.generation += 1; // supersede any probe still in flight from before deactivation
     this.mode = 'local';
     this.resetWireState();
   }
@@ -270,26 +284,46 @@ export class SessionUnionCache implements SessionReadFacade {
   async refresh(): Promise<void> {
     if (this.mode !== 'adopted' || !this.wireReader) return;
     if (this.refreshInFlight) return this.refreshInFlight;
-    const run = this.performRefresh();
+    const generation = this.generation;
+    const run = this.performRefresh(generation);
     this.refreshInFlight = run;
     try {
       await run;
     } finally {
-      this.refreshInFlight = null;
+      // Only clear OUR OWN in-flight slot: if a newer activate()/deactivate()
+      // already replaced it with a fresher reader's in-flight promise, clearing
+      // unconditionally here would null out that fresher guard and let a second
+      // concurrent wire call slip through against the new reader.
+      if (this.refreshInFlight === run) this.refreshInFlight = null;
     }
   }
 
-  private async performRefresh(): Promise<void> {
+  private async performRefresh(generation: number): Promise<void> {
     const wasOnline = this.online;
+    let rows: readonly SharedSessionRecord[] | undefined;
+    let succeeded = false;
     try {
-      const rows = await this.raceWithProbeTimeout(this.wireReader!.list(this.wireLimit));
-      this.wireCache = rows;
+      rows = await this.raceWithProbeTimeout(this.wireReader!.list(this.wireLimit));
+      succeeded = true;
+    } catch (err) {
+      this.log.debug('[session-union] wire refresh failed; serving local-only', { error: String(err) });
+    }
+    // D7: this probe's reader may have been superseded by a newer
+    // activate()/markEmbedded()/deactivate() while the wire call was pending
+    // (an external baseUrl change adopting a new daemon, for instance). If so,
+    // this settlement — success or failure — belongs to a reader nobody is
+    // reading through anymore: drop the ENTIRE write-back rather than let a
+    // late timeout flip `online` false out from under an already-healthy new
+    // reader, or let stale rows from the old reader overwrite the new one's
+    // fresh cache.
+    if (generation !== this.generation) return;
+    if (succeeded) {
+      this.wireCache = rows!;
       this.lastSyncAt = this.now();
       this.online = true;
-    } catch (err) {
+    } else {
       // Degrade honestly: keep the last rows but stop serving them as live.
       this.online = false;
-      this.log.debug('[session-union] wire refresh failed; serving local-only', { error: String(err) });
     }
     if (this.online !== wasOnline) {
       this.onTransition?.(this.online);
