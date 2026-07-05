@@ -39,9 +39,9 @@ export const THEME_MODE_DESCRIPTION =
   + 'startup (OSC 11) and picks light or dark; dark/light force a fixed theme. '
   + 'Forced modes take effect immediately; auto is only evaluated at startup, so '
   + 'selecting auto takes effect on the next launch. Unreadable/unsupported '
-  + 'terminals fall back to dark. Scope today (honest): transcript markdown and '
-  + 'modal accents flip; header/footer chrome and the background colour follow '
-  + 'your terminal, not this setting.';
+  + 'terminals fall back to dark. Scope (honest): transcript markdown, modal '
+  + 'accents, and the header/footer/thinking chrome all flip with this setting; '
+  + 'only the background colour itself follows your terminal.';
 
 /** Narrow an unknown config value to a valid ThemeModeSetting, else the default. */
 export function coerceThemeModeSetting(raw: unknown): ThemeModeSetting {

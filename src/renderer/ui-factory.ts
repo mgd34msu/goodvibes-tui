@@ -4,7 +4,8 @@ import { VERSION } from '../version.ts';
 import { fitDisplay, getDisplayWidth, truncateDisplay, wrapText, interpolateColor } from '../utils/terminal-width.ts';
 import type { GitHeaderInfo } from './git-status.ts';
 import { renderConversationFragment, renderConversationStatusLine, type ConversationStatusSegment } from './conversation-surface.ts';
-import { GLYPHS, UI_TONES } from './ui-primitives.ts';
+import { GLYPHS } from './ui-primitives.ts';
+import { activeUiTones } from './theme.ts';
 import { formatElapsed } from '../utils/format-elapsed.ts';
 import { abbreviateCount } from '../utils/format-number.ts';
 import { computeContextUsage } from '../core/context-usage.ts';
@@ -74,9 +75,14 @@ function fmtCost(usd: number): string {
 export class UIFactory {
   public static createHeader(width: number, model: string, provider: string, title?: string, gitInfo?: GitHeaderInfo): Line[] {
     const lines: Line[] = [];
-    const CYAN = UI_TONES.accent.brand;
-    const GREY = UI_TONES.fg.dim;
-    const TITLE_COLOR = UI_TONES.fg.muted;
+    // Header/footer/thinking paint on the transparent terminal background, so
+    // they read chrome.* (light-terminal-aware) — NOT fg.*/state.*, which stay
+    // tuned for the opaque dark modal/panel boxes. Read live per render so a
+    // mode flip re-resolves without any module reload (see theme.ts).
+    const t = activeUiTones();
+    const CYAN = t.accent.brand;
+    const GREY = t.chrome.faint;
+    const TITLE_COLOR = t.chrome.label;
     const brand = ` GoodVibes `;
     const ver = `v${VERSION} `;
     const stats = ` ${model} `;
@@ -110,11 +116,11 @@ export class UIFactory {
     }
     // Build git info segment
     let gitStr = '';
-    let gitFg: string = UI_TONES.fg.dim;
+    let gitFg: string = t.chrome.faint;
     if (gitInfo) {
       gitStr = buildGitSegment(gitInfo).text;
       if (gitInfo.dirty || gitInfo.ahead > 0 || gitInfo.behind > 0) {
-        gitFg = UI_TONES.state.warn; // yellow when dirty or out-of-sync
+        gitFg = t.chrome.warn; // yellow when dirty or out-of-sync
       }
     }
     const rightSideText = stats + prov;
@@ -124,7 +130,7 @@ export class UIFactory {
     for (const char of stats) { if (rightX < width) line[rightX++] = { char, fg: CYAN, bg: '', bold: true, dim: false, underline: false, italic: false, strikethrough: false }; }
     for (const char of prov) { if (rightX < width) line[rightX++] = { char, fg: GREY, bg: '', bold: false, dim: true, underline: false, italic: false, strikethrough: false }; }
     lines.push(line);
-    lines.push(this.stringToLine('━'.repeat(width), width, { fg: UI_TONES.fg.dim }));
+    lines.push(this.stringToLine('━'.repeat(width), width, { fg: t.chrome.faint }));
     return lines;
   }
 
@@ -134,12 +140,16 @@ export class UIFactory {
    */
   public static createMessageBar(
     width: number, text: string,
-    bgColor: string = '#2a2a2a', textColor: string = UI_TONES.fg.secondary, prefixStr: string = ' › ',
+    bgColor: string = '#2a2a2a', textColor: string = activeUiTones().fg.secondary, prefixStr: string = ' › ',
     strikethrough = false
   ): Line[] {
+    // A historical user-message pill: it carries its own dark bodyBg, so its fg
+    // reads fg.secondary/state.reasoning (light-on-dark) — this is conversation
+    // content, not the transparent-terminal chrome, so it is not part of the
+    // light-terminal chrome flip.
     return renderConversationFragment(text, width, {
       prefix: prefixStr,
-      prefixFg: UI_TONES.state.reasoning,
+      prefixFg: activeUiTones().state.reasoning,
       text: textColor,
       bodyBg: bgColor,
       strikethrough,
@@ -150,10 +160,11 @@ export class UIFactory {
    * createQueuedMessageFragment - Renders a dimmed message bar for queued prompts.
    */
   public static createQueuedMessageFragment(width: number, text: string): Line[] {
+    const t = activeUiTones();
     return renderConversationFragment(text, width, {
       prefix: ' (...) ',
-      prefixFg: UI_TONES.state.reasoning,
-      text: UI_TONES.fg.dim,
+      prefixFg: t.state.reasoning,
+      text: t.fg.dim,
       bodyBg: '#1a1a1a',
       dim: true,
     });
@@ -312,16 +323,19 @@ export class UIFactory {
     // --- Composer posture block (mode / risk / status / flags) ------------
     // Suppressed in compact mode; the ctx-info line no longer duplicates these
     // tokens, so this block is the single home for mode/status/flags.
+    // Footer chrome paints on the transparent terminal bg → chrome.* accents
+    // (light-terminal-aware); state.info reads on both light and dark terminals.
+    const t = activeUiTones();
     const composerTokens: Array<{ text: string; fg: string; bold?: boolean; dim?: boolean }> = [];
-    if (composerMode) composerTokens.push({ text: ` ${GLYPHS.status.active} ${composerMode} `, fg: UI_TONES.state.info, bold: true });
+    if (composerMode) composerTokens.push({ text: ` ${GLYPHS.status.active} ${composerMode} `, fg: t.state.info, bold: true });
     if (composerPendingRisk && composerPendingRisk !== 'none') {
       const riskColor = composerPendingRisk === 'approval-wait'
-        ? UI_TONES.state.warn
+        ? t.chrome.warn
         : composerPendingRisk === 'shell'
-          ? UI_TONES.state.bad
+          ? t.chrome.bad
           : composerPendingRisk === 'remote'
-            ? '#a78bfa'
-            : UI_TONES.state.warn;
+            ? t.chrome.remote
+            : t.chrome.warn;
       composerTokens.push({ text: ` risk:${composerPendingRisk} `, fg: riskColor, bold: true });
     }
     if (composerStatus && composerStatus !== 'idle') composerTokens.push({ text: ` state:${composerStatus} `, fg: '244', dim: true });
@@ -444,7 +458,7 @@ export class UIFactory {
         for (const ch of dangerWarn) {
           if (col >= width) break;
           const cw = getDisplayWidth(ch);
-          line[col] = { char: ch, fg: UI_TONES.state.bad, bg: '', bold: true, dim: false, underline: false, italic: false, strikethrough: false };
+          line[col] = { char: ch, fg: t.chrome.bad, bg: '', bold: true, dim: false, underline: false, italic: false, strikethrough: false };
           if (cw === 2 && col + 1 < width) line[col + 1] = { ...line[col], char: '' };
           col += cw;
         }
@@ -478,9 +492,10 @@ export class UIFactory {
     'In the zone...',
   ];
 
-  /** Gradient colors for thinking text — cyan to purple (matches splash). */
-  private static readonly THINK_GRADIENT_START = UI_TONES.accent.gradientStart;
-  private static readonly THINK_GRADIENT_END = UI_TONES.accent.gradientEnd;
+  // Gradient colors for thinking text — cyan→purple in dark, teal→purple in
+  // light (matches splash/brand). Read live per render inside
+  // createThinkingFragment via activeUiTones() rather than baked into a static
+  // field, so a mode flip re-resolves without a module reload.
 
   /**
    * Per-frame stall info from stream metrics — computed from lastDeltaAtMs every render (not
@@ -520,6 +535,9 @@ export class UIFactory {
   }
 
   public static createThinkingFragment(width: number, spinner: string, frame: number = 0, tokenSpeed?: number, toolPreview?: string, inputTokens?: number, outputTokens?: number, elapsedMs?: number, ttftMs?: number, stallInfo?: ThinkingStallInfo, approvalPending?: boolean): Line[] {
+    // Live thinking row paints on the transparent terminal bg → read the
+    // mode-resolved chrome tones per render (gradient/brand/tool accents flip).
+    const tones = activeUiTones();
     // Freeze the whimsical phrase rotation once real silence has gone on
     // long enough to be misleading (THINKING_STALL_FREEZE_MS), and show an
     // honest label instead: the SDK's reconnect attempt/maxAttempts once
@@ -562,7 +580,7 @@ export class UIFactory {
       const gradientPos = raw <= 0.5 ? raw * 2 : (1 - raw) * 2;
       return {
         text: char,
-        fg: interpolateColor(this.THINK_GRADIENT_START, this.THINK_GRADIENT_END, gradientPos),
+        fg: interpolateColor(tones.accent.gradientStart, tones.accent.gradientEnd, gradientPos),
         bold: true,
       };
     });
@@ -570,7 +588,7 @@ export class UIFactory {
       const inTok = inputTokens ?? 0;
       const outTok = outputTokens ?? 0;
       segments.push({ text: ` in ${fmtNum(inTok)} `, fg: '243', dim: true });
-      segments.push({ text: `out ${fmtNum(outTok)}`, fg: UI_TONES.accent.brand });
+      segments.push({ text: `out ${fmtNum(outTok)}`, fg: tones.accent.brand });
     }
     const line = createEmptyLine(width);
     let col = 1;
@@ -610,7 +628,7 @@ export class UIFactory {
         if (px >= width) break;
         previewLine[px] = {
           char: ch,
-          fg: UI_TONES.state.info,
+          fg: tones.state.info,
           bg: '',
           bold: true,
           dim: false,

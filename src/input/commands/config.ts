@@ -30,7 +30,7 @@ export function registerConfigCommand(registry: CommandRegistry): void {
           if (key === 'display.themeMode') {
             if (after === 'dark' || after === 'light') {
               setActiveThemeMode(after as ThemeMode);
-              ctx.print('Theme applied. Note: transcript + modal accents flip; chrome and background follow your terminal.');
+              ctx.print('Theme applied. Note: transcript, modal, and header/footer/thinking chrome all flip; only the background colour follows your terminal.');
             } else {
               ctx.print('Theme mode "auto" probes the terminal background on the next launch.');
             }

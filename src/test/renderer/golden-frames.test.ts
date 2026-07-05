@@ -1628,3 +1628,108 @@ describe('golden-frames — light theme (DEBT-2)', () => {
     expect(a).not.toBe(dark);
   });
 });
+
+// ─── ux/light-chrome — header/footer/thinking chrome flips with themeMode ──
+//
+// The persistent chrome (header + footer + live-thinking row) paints on the
+// TRANSPARENT terminal background, so in light mode its foregrounds must invert
+// toward dark to read on a light terminal. ui-factory.ts now reads the
+// mode-resolved chrome tones (activeUiTones().chrome / .accent / .state) per
+// render instead of the static dark UI_TONES. These fixtures pin the LIGHT
+// rendering (chrome-light golden) and assert the flip is real while the DARK
+// output is byte-identical to the pre-change dark path (proven both by the
+// unchanged shell-footer/context-meter goldens above and by the dark-stability
+// assertions here).
+const CHROME_GIT: GitHeaderInfo = { branch: 'main', dirty: true, ahead: 0, behind: 0 };
+
+function renderChromeHeaderFooterSurface(): Line[] {
+  const header = UIFactory.createHeader(W, 'claude-opus-4', 'anthropic', 'Chrome golden', CHROME_GIT);
+  const footer = UIFactory.createFooter(
+    W,
+    '> Ask me anything',
+    { up: 1024, down: 512 },
+    false,          // showExitNotice
+    0,              // lastCopyTime — frozen
+    'claude-opus-4',
+    7,              // toolCount
+    undefined,      // cursorPos
+    '/workspace/my-project',
+    'anthropic',
+    100_000,        // contextWindow
+    0.80,           // compactThreshold
+    true,           // dangerMode → chrome.bad banner
+    60_000,         // lastInputTokens → 60% fill
+    undefined,      // commandArgsHint
+    undefined,      // hitlMode
+    true,           // promptFocused
+    'plan',         // composerMode → state.info
+    'idle',         // composerStatus
+    undefined,      // composerFlags
+    'approval-wait',// composerPendingRisk → chrome.warn
+    false,          // compact
+  );
+  return [...header, ...footer];
+}
+
+function renderChromeThinkingSurface(): Line[] {
+  // frame=0 → phrase 'Thinking...' (no rotation); no elapsedMs/tokenSpeed so no
+  // dynamic suffixes. inputTokens/outputTokens present → the 'out' segment
+  // exercises accent.brand; the phrase gradient exercises accent.gradient*.
+  return UIFactory.createThinkingFragment(W, '⠋', 0, undefined, undefined, 1000, 2000);
+}
+
+describe('golden-frames — chrome light/dark flip (ux/light-chrome)', () => {
+  test('chrome (light) matches committed golden snapshot', () => {
+    const lines = underLight(() => renderChromeHeaderFooterSurface());
+    expect(lines.length).toBeGreaterThan(0);
+    assertGolden('chrome-light', lines);
+  });
+
+  test('chrome (light) is deterministic and differs from dark', () => {
+    const a = snapshotEncode('chrome-light', underLight(() => renderChromeHeaderFooterSurface()));
+    const b = snapshotEncode('chrome-light', underLight(() => renderChromeHeaderFooterSurface()));
+    expect(a).toBe(b);
+    const dark = snapshotEncode('chrome-light', renderChromeHeaderFooterSurface());
+    expect(a).not.toBe(dark); // light chrome tones actually changed the styles
+  });
+
+  test('dark chrome is byte-identical across renders and unmoved by the wiring', () => {
+    // The default active mode in the shared test process is dark; activeUiTones()
+    // resolves to the UI_TONES constant the old static reads used, so the dark
+    // output must be render-stable AND equal to the committed dark chrome golden.
+    const a = snapshotEncode('chrome-dark', renderChromeHeaderFooterSurface());
+    const b = snapshotEncode('chrome-dark', renderChromeHeaderFooterSurface());
+    expect(a).toBe(b);
+    assertGolden('chrome-dark', renderChromeHeaderFooterSurface());
+  });
+
+  test('each chrome surface (header/footer/thinking) flips its roles under light', () => {
+    // Header: separator + version = chrome.faint (#475569 dark → #94a3b8 light);
+    //         dirty git = chrome.warn (#f59e0b dark → #b45309 light).
+    // Footer: DANGER banner = chrome.bad (#ef4444 dark → #dc2626 light);
+    //         approval-wait risk = chrome.warn.
+    // Thinking: 'out' token = accent.brand (#00ffff dark → #0077aa light).
+    const headerDark = snapshotEncode('c-h', renderChromeHeaderFooterSurface());
+    const thinkDark = snapshotEncode('c-t', renderChromeThinkingSurface());
+    const headerLight = snapshotEncode('c-h', underLight(() => renderChromeHeaderFooterSurface()));
+    const thinkLight = snapshotEncode('c-t', underLight(() => renderChromeThinkingSurface()));
+
+    // Dark carries the pre-change dark tokens; light must differ everywhere.
+    expect(headerLight).not.toBe(headerDark);
+    expect(thinkLight).not.toBe(thinkDark);
+
+    // Concrete role assertions — the exact hex must appear/disappear per mode.
+    expect(headerDark).toContain('fg=#475569'); // chrome.faint (dark)
+    expect(headerLight).toContain('fg=#94a3b8'); // chrome.faint (light)
+    expect(headerDark).toContain('fg=#f59e0b'); // chrome.warn (dark, dirty git)
+    expect(headerLight).toContain('fg=#b45309'); // chrome.warn (light)
+    expect(headerDark).toContain('fg=#ef4444'); // chrome.bad (dark, DANGER)
+    expect(headerLight).toContain('fg=#dc2626'); // chrome.bad (light)
+    expect(thinkDark).toContain('fg=#00ffff'); // accent.brand (dark)
+    expect(thinkLight).toContain('fg=#0077aa'); // accent.brand (light)
+
+    // Restore is handled by underLight(); confirm the shared default is dark.
+    const headerDarkAgain = snapshotEncode('c-h', renderChromeHeaderFooterSurface());
+    expect(headerDarkAgain).toBe(headerDark);
+  });
+});

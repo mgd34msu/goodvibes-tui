@@ -1,6 +1,7 @@
 import { type Line } from '../types/grid.ts';
-import { BORDERS, COLORS } from './layout.ts';
+import { BORDERS } from './layout.ts';
 import { renderConversationNotice } from './conversation-surface.ts';
+import { activeUiTones } from './theme.ts';
 
 /** Exported for use by typeOverride callers and tests. */
 export type SystemMessageType = 'error' | 'warning' | 'info';
@@ -71,12 +72,23 @@ export function renderSystemMessage(
   typeOverride?: SystemMessageType,
 ): Line[] {
   const msgType = typeOverride ?? classifySystemMessage(content);
+  // System-message notices paint the ▌ marker and body text on the TRANSPARENT
+  // terminal background (renderConversationNotice passes no bodyBg), so the
+  // accent and dim text resolve per-render through activeUiTones() to stay
+  // legible on a light terminal. Dark values are byte-identical to the prior
+  // static reads (chrome.bad == state.bad, chrome.warn == state.warn,
+  // state.info unchanged, chrome.faint == fg.dim). The ▌ marker glyph is still
+  // sourced from the BORDERS table.
+  const t = activeUiTones();
   const border = msgType === 'error' ? BORDERS.ERROR
     : msgType === 'warning' ? BORDERS.WARNING
     : BORDERS.INFO;
-  const textColor = msgType === 'info' ? COLORS.DIM_TEXT : border.color;
+  const accent = msgType === 'error' ? t.chrome.bad
+    : msgType === 'warning' ? t.chrome.warn
+    : t.state.info;
+  const textColor = msgType === 'info' ? t.chrome.faint : accent;
   return renderConversationNotice(content, width, {
-    accent: border.color,
+    accent,
     text: textColor,
     dim: msgType === 'info',
   }, border.char);
