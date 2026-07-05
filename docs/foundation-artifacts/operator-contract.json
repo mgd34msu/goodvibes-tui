@@ -66303,7 +66303,6 @@
               "required": [
                 "id",
                 "kind",
-                "project",
                 "title",
                 "status",
                 "createdAt",
@@ -66510,7 +66509,6 @@
               "required": [
                 "id",
                 "kind",
-                "project",
                 "title",
                 "status",
                 "createdAt",
@@ -66821,7 +66819,6 @@
                   "required": [
                     "id",
                     "kind",
-                    "project",
                     "title",
                     "status",
                     "createdAt",
@@ -67348,7 +67345,6 @@
               "required": [
                 "id",
                 "kind",
-                "project",
                 "title",
                 "status",
                 "createdAt",
@@ -67902,7 +67898,6 @@
               "required": [
                 "id",
                 "kind",
-                "project",
                 "title",
                 "status",
                 "createdAt",
@@ -68414,7 +68409,6 @@
                 "required": [
                   "id",
                   "kind",
-                  "project",
                   "title",
                   "status",
                   "createdAt",
@@ -68752,7 +68746,6 @@
                       "required": [
                         "id",
                         "kind",
-                        "project",
                         "title",
                         "status",
                         "createdAt",
@@ -69287,7 +69280,6 @@
               "required": [
                 "id",
                 "kind",
-                "project",
                 "title",
                 "status",
                 "createdAt",
@@ -69631,7 +69623,6 @@
               "required": [
                 "id",
                 "kind",
-                "project",
                 "title",
                 "status",
                 "createdAt",
@@ -69854,7 +69845,6 @@
               "required": [
                 "id",
                 "kind",
-                "project",
                 "title",
                 "status",
                 "createdAt",
@@ -70168,7 +70158,6 @@
                   "required": [
                     "id",
                     "kind",
-                    "project",
                     "title",
                     "status",
                     "createdAt",
