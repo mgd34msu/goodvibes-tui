@@ -34,6 +34,7 @@ import { installWrfcAgentToolGuard } from '../tools/wrfc-agent-guard.ts';
 import { createWrfcPersistence, type WrfcPersistence } from './wrfc-persistence.ts';
 import type { SystemMessagePriority } from '../core/system-message-router.ts';
 import { SessionSpineClient } from './session-spine-client.ts';
+import { SessionUnionCache } from './session-union-cache.ts';
 
 // ---------------------------------------------------------------------------
 // Pre-router buffer
@@ -117,6 +118,8 @@ export interface BootstrapCoreState {
   readonly runtimeSessionIdRef: { value: string };
   /** S3c: dormant until bootstrap.ts activates it for an adopted 'external' daemon. */
   readonly sessionSpine: SessionSpineClient;
+  /** S3d: cache-backed session read facade; bootstrap.ts drives its mode from the same HostServiceMode. */
+  readonly sessionUnionCache: SessionUnionCache;
   /**
    * WRFC chain persistence — call `rehydrate()` once after the SystemMessageRouter
    * is wired so interrupted chains from a previous process are surfaced to the operator.
@@ -298,6 +301,8 @@ export async function initializeBootstrapCore(
   } = services;
   // S3c: dormant until bootstrap.ts activates it for an adopted 'external' daemon.
   const sessionSpine = new SessionSpineClient();
+  // S3d: cache-backed read facade over the local broker (passthrough until bootstrap.ts marks it embedded or activates the adopted-daemon wire union).
+  const sessionUnionCache = new SessionUnionCache({ local: sharedSessionBroker });
 
   routeBindings.attachRuntime({ runtimeBus, runtimeStore: store });
   surfaceRegistry.attachRuntime(store);
@@ -329,6 +334,7 @@ export async function initializeBootstrapCore(
   const uiServices = createUiRuntimeServices(services, {
     forensicsRegistry,
     getControlPlaneRecentEvents,
+    sessionUnionCache,
   });
 
   const conversation = new ConversationManager(() => {
@@ -789,5 +795,6 @@ export async function initializeBootstrapCore(
     runtimeSessionIdRef,
     wrfcPersistence,
     sessionSpine,
+    sessionUnionCache,
   };
 }

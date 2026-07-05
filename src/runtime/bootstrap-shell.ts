@@ -181,7 +181,8 @@ export function createBootstrapShell(options: BootstrapShellOptions): BootstrapS
     forensicsRegistry,
     policyRuntimeState,
     approvalBroker: services.approvalBroker,
-    sessionBroker: services.sessionBroker,
+    // S3d: panels read the cross-surface union facade, not the raw local broker.
+    sessionBroker: uiServices.sessions.sessionBroker,
     automationManager: services.automationManager,
     getControlPlaneRecentEvents,
     tokenAuditor: services.tokenAuditor,

@@ -389,7 +389,7 @@ async function main() {
       },
       sessions: {
         sessionManager: ctx.services.sessionManager,
-        sessionBroker: ctx.services.sessionBroker,
+        sessionBroker: uiServices.sessions.sessionBroker,
         sessionOrchestration: ctx.services.sessionOrchestration,
         sessionMemoryStore: ctx.services.sessionMemoryStore,
       },
@@ -501,8 +501,8 @@ async function main() {
       lastInputTokens: orchestrator.lastInputTokens,
       commandArgsHint,
       hitlMode: modeManager.getHITLMode(),
-      runningAgentCount,
-      runningProcessCount,
+      // S3d: cross-surface spine posture segment (adopted-daemon mode only).
+      sessionSpineStatus: (() => { const s = uiServices.platform.externalServices?.inspect(); return s?.sessionSpineActive && s.sessionSpineStatus && s.sessionSpineStatus !== 'unknown' ? s.sessionSpineStatus : undefined; })(), runningAgentCount, runningProcessCount,
       // Composer must not read as focused while the panel/process indicator owns keyboard focus.
       promptFocused: !input.panelFocused && !input.indicatorFocused,
       indicatorFocused: input.indicatorFocused,
