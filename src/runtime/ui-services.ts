@@ -6,7 +6,7 @@ import { createUiReadModels, type UiReadModels, type UiReadModelOptions } from '
 import type { ForensicsRegistry } from '@/runtime/index.ts';
 import type { ControlPlaneRecentEvent } from '@pellux/goodvibes-sdk/platform/control-plane';
 import type { ApprovalBroker } from '@pellux/goodvibes-sdk/platform/control-plane';
-import type { SharedSessionBroker } from '@pellux/goodvibes-sdk/platform/control-plane';
+import { SessionUnionCache, type SessionReadFacade } from './session-union-cache.ts';
 import type { ShellPathService } from '@/runtime/index.ts';
 import type { HostServiceStatus } from '@/runtime/index.ts';
 import type { SecretsManager } from '../config/secrets.ts';
@@ -39,7 +39,13 @@ export interface UiProviderServices {
 
 export interface UiSessionServices {
   readonly sessionManager: RuntimeServices['sessionManager'];
-  readonly sessionBroker: SharedSessionBroker;
+  /**
+   * S3d: the panel-facing session READ source is the cross-surface union
+   * facade, not the raw local broker — in adopted-daemon mode the local broker
+   * misses sessions hosted for other surfaces. Sync signature preserved; the
+   * facade's cache makes that honest (see session-union-cache.ts).
+   */
+  readonly sessionBroker: SessionReadFacade;
   readonly sessionOrchestration: RuntimeServices['sessionOrchestration'];
   readonly sessionMemoryStore: RuntimeServices['sessionMemoryStore'];
 }
@@ -65,6 +71,10 @@ export interface UiPlatformServices {
       readonly httpListenerPortInUse?: boolean;
       readonly daemonStatus?: HostServiceStatus;
       readonly httpListenerStatus?: HostServiceStatus;
+      // S3c/S3d: honest session-spine posture for the footer segment, driven by
+      // the spine client's own live wire attempts (not the one-shot adopt probe).
+      readonly sessionSpineActive?: boolean;
+      readonly sessionSpineStatus?: 'unknown' | 'online' | 'offline';
     };
     restart(): Promise<{
       readonly daemonRunning: boolean;
@@ -126,6 +136,12 @@ export interface UiRuntimeServices {
 export interface UiRuntimeServicesOptions extends UiReadModelOptions {
   readonly forensicsRegistry?: ForensicsRegistry;
   readonly getControlPlaneRecentEvents?: (limit: number) => readonly ControlPlaneRecentEvent[];
+  /**
+   * S3d: the shared session read facade constructed in bootstrap-core (so
+   * bootstrap.ts can drive its adopted/embedded/local mode). When omitted (test
+   * callers), a local-only passthrough facade over the broker is auto-created.
+   */
+  readonly sessionUnionCache?: SessionUnionCache;
 }
 
 export function createUiRuntimeServices(
@@ -157,7 +173,7 @@ export function createUiRuntimeServices(
     },
     sessions: {
       sessionManager: runtimeServices.sessionManager,
-      sessionBroker: runtimeServices.sessionBroker,
+      sessionBroker: options.sessionUnionCache ?? new SessionUnionCache({ local: runtimeServices.sessionBroker }),
       sessionOrchestration: runtimeServices.sessionOrchestration,
       sessionMemoryStore: runtimeServices.sessionMemoryStore,
     },

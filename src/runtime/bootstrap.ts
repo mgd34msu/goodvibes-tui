@@ -187,6 +187,7 @@ export async function bootstrapRuntime(
     runtimeSessionIdRef,
     wrfcPersistence,
     sessionSpine,
+    sessionUnionCache,
   } = await initializeBootstrapCore(stdout, options, (limit) => controlPlaneRecentEventsRef.value(limit));
   const providerRegistry = services.providerRegistry;
   const {
@@ -388,6 +389,11 @@ export async function bootstrapRuntime(
         sessionSpine.deactivate(`daemon mode changed to '${daemonStatus.mode}'`);
         spineActiveForBaseUrl = null;
       }
+      // S3d: keep the read facade honest per mode. 'embedded' means this
+      // process's broker IS the daemon's broker (local reads are the whole
+      // truth); every other non-external mode is local-only/dormant.
+      if (daemonStatus.mode === 'embedded') sessionUnionCache.markEmbedded();
+      else sessionUnionCache.deactivate(`daemon mode '${daemonStatus.mode}'`);
       logger.info(`[bootstrap] session spine: daemon mode '${daemonStatus.mode}' — local-only (no spine mirror)`);
       return;
     }
@@ -399,6 +405,9 @@ export async function bootstrapRuntime(
       close: (sessionId) => httpTransport.operator.sessions.close(sessionId),
     };
     sessionSpine.activate(sessionsClient);
+    // S3d: adopt the same daemon's wire as the read facade's cross-surface union
+    // source (interval-refreshed; served synchronously to panels).
+    sessionUnionCache.activate({ list: (limit) => httpTransport.operator.sessions.list(limit) });
     spineActiveForBaseUrl = baseUrl;
     logger.info(`[bootstrap] session spine: adopted external daemon at ${baseUrl} — mirroring session identity`);
     // Legacy fold: one-time (marker-guarded) import of this project's own
@@ -712,6 +721,7 @@ export async function bootstrapRuntime(
       // a no-op when the spine was never activated (embedded/local-only).
       sessionSpine.close(runtime.sessionId);
       sessionSpine.dispose();
+      sessionUnionCache.dispose(); // S3d: stop the wire-refresh interval on exit
       await deferredStartup.drain(100);
       if (externalServicesPromise) {
         try {
