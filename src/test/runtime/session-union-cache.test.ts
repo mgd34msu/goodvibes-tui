@@ -14,10 +14,29 @@ import { describe, expect, test } from 'bun:test';
 import type { SharedSessionRecord } from '@pellux/goodvibes-sdk/platform/control-plane';
 import {
   SessionUnionCache,
+  deriveSpineFooterStatus,
   type LocalSessionReader,
   type SessionReadFacade,
   type WireSessionReader,
 } from '../../runtime/session-union-cache.ts';
+
+describe('deriveSpineFooterStatus (D4 — offline within one union-probe interval)', () => {
+  test('not adopted: falls back to the spine client status', () => {
+    expect(deriveSpineFooterStatus('online', { mode: 'local', online: false, lastSyncAt: null })).toBe('online');
+    expect(deriveSpineFooterStatus('unknown', { mode: 'embedded', online: false, lastSyncAt: null })).toBe('unknown');
+  });
+  test('adopted, never synced yet: falls back to the spine client status', () => {
+    expect(deriveSpineFooterStatus('online', { mode: 'adopted', online: false, lastSyncAt: null })).toBe('online');
+  });
+  test('adopted + confirmed once + probe now failing: reads offline even if the spine client still says online', () => {
+    // The exact D4 bug: daemon died mid-idle, spine client is activity-gated 'online',
+    // but the 5s union probe has failed -> footer must say offline.
+    expect(deriveSpineFooterStatus('online', { mode: 'adopted', online: false, lastSyncAt: 1_000 })).toBe('offline');
+  });
+  test('adopted + probe succeeding: reads online (and recovers from a prior offline)', () => {
+    expect(deriveSpineFooterStatus('offline', { mode: 'adopted', online: true, lastSyncAt: 2_000 })).toBe('online');
+  });
+});
 
 function record(id: string, over: Partial<SharedSessionRecord> = {}): SharedSessionRecord {
   return {

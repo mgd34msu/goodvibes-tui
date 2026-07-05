@@ -108,6 +108,30 @@ const OFFLINE_NOTE = 'cross-surface view offline';
  * deactivate) from the SAME authoritative HostServiceMode the adopt-or-start
  * probe computes for the session spine, so the two stay in lockstep.
  */
+/**
+ * D4: derive the footer's spine online/offline segment from the FRESHEST liveness
+ * signal. The spine client's own status() is ACTIVITY-gated — it only flips on a
+ * register/heartbeat/close wire call — so after the daemon dies mid-idle the footer
+ * keeps reading 'online' until the next activity (seconds to minutes). The union
+ * cache, by contrast, probes the wire every refreshIntervalMs (5s) in adopted mode,
+ * so ITS `online` flag is a genuine liveness heartbeat with a bounded staleness.
+ *
+ * Rule (one signal, no new timer): once the wire has been confirmed reachable at
+ * least once (`lastSyncAt !== null`), the union probe is authoritative for the
+ * footer — a failed 5s probe reads 'offline' within one interval of the daemon
+ * dying, and recovers on the next success. Before any confirmation (or when not
+ * adopted), fall back to the spine client's own status.
+ */
+export function deriveSpineFooterStatus(
+  spineStatus: 'unknown' | 'online' | 'offline',
+  view: Pick<CrossSurfaceView, 'mode' | 'online' | 'lastSyncAt'>,
+): 'unknown' | 'online' | 'offline' {
+  if (view.mode === 'adopted' && view.lastSyncAt !== null) {
+    return view.online ? 'online' : 'offline';
+  }
+  return spineStatus;
+}
+
 export class SessionUnionCache implements SessionReadFacade {
   private readonly local: LocalSessionReader;
   private readonly now: () => number;
