@@ -106,7 +106,7 @@ function extractIsolationFlag(args: readonly string[]): { isolation?: Workstream
 function formatItemMergeState(item: WorkItem): string {
   switch (item.mergeState) {
     case 'merged':
-      return item.mergeHash ? `merged ${shortId(item.mergeHash)}` : 'merged (nothing to merge)';
+      return item.mergeHash ? `merged ${shortId(item.mergeHash)}` : 'merged (no changes)';
     case 'conflict':
       return 'merge-conflict (worktree kept for inspection)';
     case 'pending':
