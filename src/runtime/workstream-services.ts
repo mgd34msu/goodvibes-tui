@@ -31,6 +31,7 @@
 import {
   createOrchestrationEngine,
   fromChainSpec,
+  fromPlanProposal,
   type CreateWorkstreamInput,
   type OrchestrationEngine,
   type WorkstreamIsolation,
@@ -207,21 +208,33 @@ function createWorkstreamCommandService(
   }
 
   /**
-   * fromChainSpec is the SDK's own bridge from "a task string" to a real,
-   * launchable engineer -> review CreateWorkstreamInput — the same two-phase
-   * shape WrfcController.createChain would otherwise start (see
-   * controller-compat.ts). AdaptivePlanner.proposeWorkstream's own
-   * PlanProposal is deliberately NOT used for the rendered shape: it always
-   * degrades to a fictional single-phase fallback in this wave (nothing yet
-   * supplies it a `raw` LLM decomposition — no planning-agent-spawn pipeline
-   * exists in the shipped SDK surface this item compiles against), which
-   * would silently disagree with what launchDraft actually creates. Showing
-   * the real fromChainSpec shape keeps the proposal and the launch
-   * byte-for-byte the same plan. proposeWorkstream is still called (below)
-   * for its `gate` — the real strategy/reason-code rationale — which stays
-   * meaningful even without a raw decomposition.
+   * Derive the launchable CreateWorkstreamInput from the decomposition
+   * proposal (BIG-3 — the final stage of the WRFC→orchestration migration).
+   *
+   * THE BOUNDARY, stated honestly (and in the /workstream help + draft render):
+   *  - A genuinely MULTI-ITEM proposal (the planning agent decomposed the goal
+   *    into >1 work item) is assembled by the SDK's fromPlanProposal into the
+   *    REAL multi-item workstream: one engineer→review-phased item per proposal
+   *    item, inter-item dependencies preserved as scheduling constraints, and
+   *    workstream-level provenance carried. This is the plan the engine runs —
+   *    no flattening.
+   *  - A SINGLE-ITEM proposal (the heuristic single-item path, a gate-decline,
+   *    or an agent that honestly returned one item) keeps the fromChainSpec
+   *    COMPAT path: byte-for-byte the same engineer→review chain
+   *    WrfcController.createChain would start. A single item carries no
+   *    dependencies and no multi-item structure, so the proposal mapping would
+   *    add nothing — the compat path is the honest, unchanged choice.
+   *
+   * Earlier waves always took the compat path because no planning-agent-spawn
+   * pipeline existed to produce a real multi-item decomposition; BIG-2 landed
+   * that pipeline, so `result.proposal` can now be a real multi-item plan and
+   * this maps it faithfully. The rendered draft shows THIS spec, so the
+   * proposal preview and the launch are always the same plan.
    */
-  function buildSpec(task: string): CreateWorkstreamInput {
+  function buildSpec(task: string, proposal: PlanProposal): CreateWorkstreamInput {
+    if (proposal.workItems.length > 1) {
+      return fromPlanProposal(proposal, configManager);
+    }
     return fromChainSpec({ id: `item-${crypto.randomUUID().slice(0, 8)}`, task }, configManager);
   }
 
@@ -229,7 +242,7 @@ function createWorkstreamCommandService(
     engine,
     async proposeDraft(task: string, isolation?: WorkstreamIsolation): Promise<WorkstreamDraft> {
       const result = await decompose(task);
-      const spec = buildSpec(task);
+      const spec = buildSpec(task, result.proposal);
       const draft: WorkstreamDraft = {
         id: `wsd_${crypto.randomUUID().slice(0, 8)}`,
         task,
@@ -251,7 +264,7 @@ function createWorkstreamCommandService(
       const result = await decompose(task);
       const nextIsolation = isolation ?? draft.spec.isolation;
       draft.task = task;
-      draft.spec = { ...buildSpec(task), isolation: nextIsolation };
+      draft.spec = { ...buildSpec(task, result.proposal), isolation: nextIsolation };
       draft.proposal = result.proposal;
       draft.provenance = toProvenance(result);
       draft.approved = false;

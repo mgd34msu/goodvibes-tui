@@ -20,7 +20,7 @@
 // ---------------------------------------------------------------------------
 
 import { AdaptivePlanner } from '@pellux/goodvibes-sdk/platform/core';
-import type { PhaseKind, PhaseRole, WorkItem, WorkItemState, Workstream, WorkstreamIsolation } from '@pellux/goodvibes-sdk/platform/orchestration';
+import type { CreateWorkstreamInput, PhaseKind, PhaseRole, WorkItem, WorkItemState, Workstream, WorkstreamIsolation } from '@pellux/goodvibes-sdk/platform/orchestration';
 import type { WorkstreamCommandService, WorkstreamDraft, WorkstreamDraftProvenance } from '../../runtime/workstream-services.ts';
 import type { CommandContext, CommandRegistry } from '../command-registry.ts';
 
@@ -106,7 +106,7 @@ function extractIsolationFlag(args: readonly string[]): { isolation?: Workstream
 function formatItemMergeState(item: WorkItem): string {
   switch (item.mergeState) {
     case 'merged':
-      return item.mergeHash ? `merged ${shortId(item.mergeHash)}` : 'merged (nothing to merge)';
+      return item.mergeHash ? `merged ${shortId(item.mergeHash)}` : 'merged (no changes)';
     case 'conflict':
       return 'merge-conflict (worktree kept for inspection)';
     case 'pending':
@@ -115,6 +115,38 @@ function formatItemMergeState(item: WorkItem): string {
     default:
       return item.worktreeKept ? 'worktree kept' : 'not yet integrated';
   }
+}
+
+/**
+ * Per-item dependency truth for `/workstream status` (BIG-3 item 2). A
+ * dependency-blocked item shows its honest, engine-set reason verbatim
+ * ('waiting on: X' or 'dependency failed: X'); an item that HAS dependencies
+ * but is no longer blocked shows the static 'after: X, Y' provenance so the
+ * ordering constraint stays visible even once satisfied. An item with no
+ * dependencies contributes nothing.
+ */
+function formatItemDependencyNote(item: WorkItem, ws: Workstream): string {
+  if (item.state === 'blocked-dependency' && item.blockedReason) return `  — ${item.blockedReason}`;
+  if (item.dependsOn && item.dependsOn.length > 0) {
+    const titleById = new Map(ws.items.map((i) => [i.id, i.title]));
+    return `  — after: ${item.dependsOn.map((d) => titleById.get(d) ?? shortId(d)).join(', ')}`;
+  }
+  return '';
+}
+
+/**
+ * Compact item + dependency graph for the draft-approval view (BIG-3 item 4):
+ * items in ordinal order (the spec preserves the proposal's order), each with
+ * an honest text 'after: X, Y' clause when it depends on siblings — no fake DAG
+ * art. Dependency ids are resolved back to titles from the spec itself.
+ */
+function formatDraftItems(spec: CreateWorkstreamInput): string[] {
+  const titleById = new Map(spec.items.map((it) => [it.id ?? it.title, it.title] as const));
+  return spec.items.map((it, i) => {
+    const deps = it.dependsOn ?? [];
+    const after = deps.length > 0 ? ` (after: ${deps.map((d) => titleById.get(d) ?? d).join(', ')})` : '';
+    return `  ${i + 1}. ${it.title}${after}`;
+  });
 }
 
 function summarizeItemStates(ws: Workstream): string {
@@ -156,14 +188,22 @@ function renderDraftProposal(draft: WorkstreamDraft): string {
     `Planner: strategy=${draft.gate.strategy} (${draft.gate.reasonCode}) — ${AdaptivePlanner.explainReasonCode(draft.gate.reasonCode)}`,
   );
   lines.push(formatProvenance(draft.provenance));
+  // Honest mapping boundary (BIG-3 item 4): a multi-item proposal launches as
+  // the REAL dependency-scheduled workstream (fromPlanProposal); a single-item
+  // one launches as the compat engineer→review chain (fromChainSpec). State
+  // which, so the preview never overstates what launch will do.
+  const multiItem = draft.spec.items.length > 1;
+  lines.push(
+    multiItem
+      ? `Mapping: multi-item plan — ${draft.spec.items.length} items run the engineer→review pipeline, dependency-scheduled.`
+      : 'Mapping: single-item compat chain (engineer→review) — no multi-item structure to schedule.',
+  );
   lines.push('Phases:');
   draft.spec.phases.forEach((phase, i) => {
     lines.push(`  ${i + 1}. ${formatPhaseLabel(phase)} (capacity ${phase.capacity})`);
   });
-  lines.push('Work items:');
-  for (const item of draft.spec.items) {
-    lines.push(`  - ${item.title}`);
-  }
+  lines.push('Work items (ordinal order):');
+  lines.push(...formatDraftItems(draft.spec));
   lines.push(
     draft.approved
       ? `Approved. Launch with: /workstream launch ${draft.id}`
@@ -184,6 +224,16 @@ function renderWorkstreamStatus(ws: Workstream): string {
   const lines: string[] = [];
   lines.push(`Workstream ${ws.id} — "${ws.title}"`);
   lines.push(`Isolation: ${ws.isolation ?? 'shared'}`);
+  // Origin provenance (BIG-3 item 1) — only present on workstreams assembled
+  // from a decomposition proposal; absent for compat/authored ones.
+  if (ws.provenance) {
+    const pv = ws.provenance;
+    const bits: string[] = [];
+    if (pv.decomposedBy) bits.push(`${pv.decomposedBy}-decomposed`);
+    if (pv.proposalId) bits.push(`plan ${pv.proposalId}`);
+    if (pv.strategy) bits.push(pv.strategy);
+    if (bits.length > 0) lines.push(`Origin: ${bits.join(', ')}`);
+  }
   lines.push('Phases:');
   for (const phase of ws.phases) {
     lines.push(`  [${phase.ordinal}] ${formatPhaseLabel(phase)} (capacity ${phase.capacity})`);
@@ -191,7 +241,8 @@ function renderWorkstreamStatus(ws: Workstream): string {
   lines.push('Items:');
   for (const item of ws.items) {
     const mergeNote = isolated ? `  — ${formatItemMergeState(item)}` : '';
-    lines.push(`  ${shortId(item.id)}  [${item.state}]  ${item.title}  — phase: ${item.currentPhaseId ?? '—'}${mergeNote}`);
+    const depNote = formatItemDependencyNote(item, ws);
+    lines.push(`  ${shortId(item.id)}  [${item.state}]  ${item.title}  — phase: ${item.currentPhaseId ?? '—'}${depNote}${mergeNote}`);
   }
   if (isolated) {
     // Honest terminal-summary truth (never inferred from item.state alone —
