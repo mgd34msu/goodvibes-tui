@@ -15,8 +15,8 @@
 |│     TTS (6)  │───────────│|
 |│ SERVICE & N  │   Setting  |
 |│     Service  │ • stream   |
-|│     Network  │   lineNumbe|
-|│     Control  │ ▼ 7 more se|
+|│     Daemon   │   lineNumbe|
+|│     Network  │ ▼ 7 more se|
 |│ Focus categories · [Up/D │|
 |└──────────────────────────┘|
 @STYLES

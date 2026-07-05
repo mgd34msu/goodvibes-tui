@@ -1642,8 +1642,16 @@ describe('golden-frames — light theme (DEBT-2)', () => {
 // assertions here).
 const CHROME_GIT: GitHeaderInfo = { branch: 'main', dirty: true, ahead: 0, behind: 0 };
 
+// Version-decoupled goldens: the header embeds `v${VERSION}`, whose display width
+// shifts the chrome layout, so a golden tied to the LIVE build VERSION breaks on
+// every release bump (the documented version-fixture failure class — see the
+// splash goldens' pinned `version` at the top of this file). Pin a fixture here
+// so the chrome goldens are stable across bumps; the live header still renders
+// the real VERSION in production (createHeader defaults to it).
+const CHROME_FIXTURE_VERSION = '0.29.0';
+
 function renderChromeHeaderFooterSurface(): Line[] {
-  const header = UIFactory.createHeader(W, 'claude-opus-4', 'anthropic', 'Chrome golden', CHROME_GIT);
+  const header = UIFactory.createHeader(W, 'claude-opus-4', 'anthropic', 'Chrome golden', CHROME_GIT, CHROME_FIXTURE_VERSION);
   const footer = UIFactory.createFooter(
     W,
     '> Ask me anything',

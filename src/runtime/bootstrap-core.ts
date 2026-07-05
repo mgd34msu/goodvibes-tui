@@ -33,6 +33,8 @@ import { join } from 'node:path';
 import { installWrfcAgentToolGuard } from '../tools/wrfc-agent-guard.ts';
 import { createWrfcPersistence, type WrfcPersistence } from './wrfc-persistence.ts';
 import type { SystemMessagePriority } from '../core/system-message-router.ts';
+import { SessionSpineClient } from './session-spine-client.ts';
+import { SessionUnionCache } from './session-union-cache.ts';
 
 // ---------------------------------------------------------------------------
 // Pre-router buffer
@@ -114,6 +116,10 @@ export interface BootstrapCoreState {
   readonly requestRender: () => void;
   readonly setRenderRequest: (fn: () => void) => void;
   readonly runtimeSessionIdRef: { value: string };
+  /** S3c: dormant until bootstrap.ts activates it for an adopted 'external' daemon. */
+  readonly sessionSpine: SessionSpineClient;
+  /** S3d: cache-backed session read facade; bootstrap.ts drives its mode from the same HostServiceMode. */
+  readonly sessionUnionCache: SessionUnionCache;
   /**
    * WRFC chain persistence — call `rehydrate()` once after the SystemMessageRouter
    * is wired so interrupted chains from a previous process are surfaced to the operator.
@@ -293,6 +299,10 @@ export async function initializeBootstrapCore(
     surfaceRegistry,
     watcherRegistry,
   } = services;
+  // S3c: dormant until bootstrap.ts activates it for an adopted 'external' daemon.
+  const sessionSpine = new SessionSpineClient();
+  // S3d: cache-backed read facade over the local broker (passthrough until bootstrap.ts marks it embedded or activates the adopted-daemon wire union).
+  const sessionUnionCache = new SessionUnionCache({ local: sharedSessionBroker });
 
   routeBindings.attachRuntime({ runtimeBus, runtimeStore: store });
   surfaceRegistry.attachRuntime(store);
@@ -324,6 +334,7 @@ export async function initializeBootstrapCore(
   const uiServices = createUiRuntimeServices(services, {
     forensicsRegistry,
     getControlPlaneRecentEvents,
+    sessionUnionCache,
   });
 
   const conversation = new ConversationManager(() => {
@@ -427,6 +438,11 @@ export async function initializeBootstrapCore(
     } catch (err) {
       logger.error('Render threw; next requestRender will reschedule', { error: String(err) });
     }
+    // S3c: debounced spine heartbeat on turn/render activity. heartbeat() is a
+    // cheap synchronous no-op unless its own internal window has elapsed (at
+    // most one wire call per heartbeatMinIntervalMs) — safe to call from the
+    // render hot path with zero interactive-latency cost (never awaited here).
+    sessionSpine.heartbeat(runtimeSessionIdRef.value);
   };
   const requestRender = (): void => {
     if (renderScheduled) return;
@@ -724,6 +740,10 @@ export async function initializeBootstrapCore(
       lastSeenAt: Date.now(),
     },
   }).catch((err) => { logger.debug('session broker create session failed at bootstrap', { err }); });
+  // S3c: fire-and-forget spine mirror (Stage-2 parallel-write). Dormant/queued
+  // until bootstrap.ts's deferred external-services task calls activate() —
+  // see session-spine-client.ts. Never awaited: register() returns void.
+  sessionSpine.register({ sessionId: runtime.sessionId, project: services.workingDirectory, title: 'Terminal UI session' });
 
   domainDispatch.syncSessionState({
     id: userSessionId,
@@ -774,5 +794,7 @@ export async function initializeBootstrapCore(
     },
     runtimeSessionIdRef,
     wrfcPersistence,
+    sessionSpine,
+    sessionUnionCache,
   };
 }
