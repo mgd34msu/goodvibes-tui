@@ -142,6 +142,51 @@ describe('command modal handoff', () => {
     expect(resetCount).toBe(1);
   });
 
+  test('escape on a slash command with typed text closes the menu but keeps the text', async () => {
+    let resetCount = 0;
+    const { handleEscape } = await import('../../input/handler-modal-stack.ts');
+    const modalStack = ['command'];
+    const result = handleEscape({
+      helpOverlayActive: false,
+      shortcutsOverlayActive: false,
+      commandMode: true,
+      modalStack,
+      modalReturnFocus: 'prompt',
+      panelFocused: false,
+      indicatorFocused: false,
+      prompt: '/pro',
+      cursorPos: 4,
+      helpScrollOffset: 0,
+      shortcutsScrollOffset: 0,
+      requestRender: () => {},
+      saveUndoState: () => {},
+      saveUndoStateForText: () => {},
+      cancelGeneration: undefined,
+      selectionCallback: null,
+      bookmarkModal: { active: false, close: () => {} } as never,
+      agentDetailModal: { active: false, close: () => {} } as never,
+      liveTailModal: { active: false, close: () => {} } as never,
+      settingsModal: { active: false, editingMode: false, cancelEdit: () => {}, close: () => {} } as never,
+      sessionPickerModal: { active: false, close: () => {} } as never,
+      profilePickerModal: { active: false, close: () => {} } as never,
+      configModal: { active: false, close: () => {}, reopen: () => {} } as never,
+      contextInspectorModal: { active: false, close: () => {} } as never,
+      processModal: { active: false, close: () => {} } as never,
+      modelPicker: { active: false, close: () => {} } as never,
+      filePicker: { active: false, close: () => {} } as never,
+      blockActionsMenu: { active: false, close: () => {} } as never,
+      selectionModal: { active: false, close: () => {} } as never,
+      autocompleteReset: () => { resetCount++; },
+      autocompleteUpdate: () => {},
+    });
+
+    expect(result.commandMode).toBe(false);
+    expect(result.prompt).toBe('/pro');
+    expect(result.cursorPos).toBe(4);
+    expect(modalStack).toEqual([]);
+    expect(resetCount).toBe(1);
+  });
+
   test('reopens the previous modal when a stacked modal closes', async () => {
     const modalStack = ['command', 'modelPicker'];
     let activeName = 'modelPicker';
@@ -732,5 +777,82 @@ describe('command modal handoff', () => {
     input.feed('\x1b');
     expect(input.helpOverlayActive).toBe(false);
     expect(input.modalStack).toEqual([]);
+  });
+
+  // Papercut sweep item 1: the same stale-snapshot write-back class of bug as
+  // WO-160 above, but at the per-token dispatch layer (handler-feed.ts)
+  // rather than the per-feed layer (handler.ts). handleGlobalShortcutToken's
+  // 'escape' branch calls context.handleEscape(), which mutates the handler
+  // AND immediately syncs the live context (see handler.ts's
+  // syncFeedContextMutableFields comment) — but the caller in handler-feed.ts
+  // used to unconditionally copy back a `shortcutState` snapshot taken
+  // *before* that call, stomping the just-cleared prompt/commandMode back to
+  // their stale pre-escape values and even re-arming the autocomplete query.
+  // Net effect: pressing Esc with the slash palette open did nothing visible
+  // and the user had to backspace the '/' out by hand.
+  test('Esc on a bare "/" closes the palette and clears the composer in one press', async () => {
+    const history = new InfiniteBuffer();
+    const input = new InputHandler(
+      () => {},
+      new SelectionManager(),
+      () => 0,
+      () => 20,
+      () => history,
+      () => {},
+      () => {},
+      createDefaultUiRuntimeServices(),
+    );
+    input.setContentWidth(80);
+    const registry = new CommandRegistry();
+    registry.register({ name: 'help', description: 'Help', handler: () => {} });
+    input.setCommandRegistry(registry, makeCommandContext());
+
+    input.feed('/');
+    expect(input.commandMode).toBe(true);
+    expect(input.prompt).toBe('/');
+    expect(input.autocomplete?.isActive).toBe(true);
+
+    input.feed('\x1b');
+
+    expect(input.commandMode).toBe(false);
+    expect(input.prompt).toBe('');
+    expect(input.cursorPos).toBe(0);
+    expect(input.modalStack).toEqual([]);
+    expect(input.autocomplete?.isActive).toBe(false);
+  });
+
+  // Convention for the "typed past the slash" case (fzf-style): once there's
+  // real content beyond the bare '/', Esc's job is only to dismiss the ghost-
+  // suggestion overlay — the typed text is real composer content the user
+  // asked for and is kept, just no longer treated as an in-progress command.
+  test('Esc on "/help" (typed past the slash) closes the palette but keeps the typed text', async () => {
+    const history = new InfiniteBuffer();
+    const input = new InputHandler(
+      () => {},
+      new SelectionManager(),
+      () => 0,
+      () => 20,
+      () => history,
+      () => {},
+      () => {},
+      createDefaultUiRuntimeServices(),
+    );
+    input.setContentWidth(80);
+    const registry = new CommandRegistry();
+    registry.register({ name: 'help', description: 'Help', handler: () => {} });
+    input.setCommandRegistry(registry, makeCommandContext());
+
+    input.feed('/help');
+    expect(input.commandMode).toBe(true);
+    expect(input.prompt).toBe('/help');
+    expect(input.autocomplete?.isActive).toBe(true);
+
+    input.feed('\x1b');
+
+    expect(input.commandMode).toBe(false);
+    expect(input.prompt).toBe('/help');
+    expect(input.cursorPos).toBe('/help'.length);
+    expect(input.modalStack).toEqual([]);
+    expect(input.autocomplete?.isActive).toBe(false);
   });
 });
