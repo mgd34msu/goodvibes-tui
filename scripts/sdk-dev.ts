@@ -53,6 +53,12 @@ function link(): void {
   rmSync(join(INSTALLED_PKG, 'dist'), { recursive: true, force: true });
   cpSync(SDK_PKG_DIST, join(INSTALLED_PKG, 'dist'), { recursive: true });
   // package.json too, so new subpath exports added in the local SDK resolve.
+  // MUST unlink before copying: bun hardlinks node_modules files to its global
+  // cache, and an in-place overwrite writes THROUGH the hardlink — silently
+  // poisoning the machine-wide cache entry for the pinned version (found by
+  // WO-0B when porting this script; the dist copy above is safe because rmSync
+  // breaks the links first).
+  rmSync(join(INSTALLED_PKG, 'package.json'), { force: true });
   cpSync(SDK_PKG_JSON, join(INSTALLED_PKG, 'package.json'));
 
   writeFileSync(MARKER, JSON.stringify({
