@@ -5,7 +5,7 @@ import type { ProviderRegistry } from '@pellux/goodvibes-sdk/platform/providers'
 import type { Orchestrator } from '../../core/orchestrator';
 import type { MemoryRegistry } from '@pellux/goodvibes-sdk/platform/state';
 import type { ApprovalBroker } from '@pellux/goodvibes-sdk/platform/control-plane';
-import type { SessionReadFacade } from '../../runtime/session-union-cache.ts';
+import type { SessionReadFacade } from '@pellux/goodvibes-sdk/platform/runtime/session-spine';
 import type { AutomationManager } from '@pellux/goodvibes-sdk/platform/automation';
 import type { ControlPlaneRecentEvent } from '@pellux/goodvibes-sdk/platform/control-plane';
 import type { UiRuntimeServices } from '../../runtime/ui-services.ts';

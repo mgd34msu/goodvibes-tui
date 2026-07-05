@@ -14,7 +14,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { bootDaemon, type BootedDaemon } from '@pellux/goodvibes-sdk/platform/daemon';
 import { createHttpTransport } from '@/runtime/index.ts';
-import { foldLegacySpineStore, SessionSpineClient, type SpineSessionsClient } from '../../runtime/session-spine-client.ts';
+import { foldLegacySpineStore, SessionSpineClient, TUI_SPINE_PARTICIPANT } from '@pellux/goodvibes-sdk/platform/runtime/session-spine';
+import { createTuiSpineTransport, type SpineSessionsClient } from '../../runtime/session-spine-transport.ts';
 
 const TOKEN = 'spine-integration-token';
 
@@ -72,8 +73,8 @@ describe('SessionSpineClient against a real bootDaemon (isolated home, ephemeral
 
   test('register-on-create is visible in sessions.list with kind tui and the right project', async () => {
     harness = await startHarness();
-    const client = new SessionSpineClient({ log: { debug: () => {}, info: () => {} } });
-    client.activate(harness.sessionsClient);
+    const client = new SessionSpineClient({ participant: TUI_SPINE_PARTICIPANT, recordKind: 'tui',log: { debug: () => {}, info: () => {} } });
+    client.activate(createTuiSpineTransport(harness.sessionsClient));
 
     client.register({ sessionId: 'tui-create-1', project: harness.workingDir, title: 'Terminal UI session' });
 
@@ -91,8 +92,8 @@ describe('SessionSpineClient against a real bootDaemon (isolated home, ephemeral
   test('heartbeat advances the participant lastSeenAt on the daemon record', async () => {
     harness = await startHarness();
     let clock = 1_000_000;
-    const client = new SessionSpineClient({ now: () => clock, heartbeatMinIntervalMs: 500, log: { debug: () => {}, info: () => {} } });
-    client.activate(harness.sessionsClient);
+    const client = new SessionSpineClient({ participant: TUI_SPINE_PARTICIPANT, recordKind: 'tui',now: () => clock, heartbeatMinIntervalMs: 500, log: { debug: () => {}, info: () => {} } });
+    client.activate(createTuiSpineTransport(harness.sessionsClient));
 
     client.register({ sessionId: 'tui-heartbeat-1', project: harness.workingDir, title: 'T' });
     const initial = await waitFor(async () => {
@@ -117,8 +118,8 @@ describe('SessionSpineClient against a real bootDaemon (isolated home, ephemeral
 
   test('close is honest: the daemon record flips to status closed', async () => {
     harness = await startHarness();
-    const client = new SessionSpineClient({ log: { debug: () => {}, info: () => {} } });
-    client.activate(harness.sessionsClient);
+    const client = new SessionSpineClient({ participant: TUI_SPINE_PARTICIPANT, recordKind: 'tui',log: { debug: () => {}, info: () => {} } });
+    client.activate(createTuiSpineTransport(harness.sessionsClient));
 
     client.register({ sessionId: 'tui-close-1', project: harness.workingDir, title: 'T' });
     await waitFor(async () => {
@@ -139,8 +140,8 @@ describe('SessionSpineClient against a real bootDaemon (isolated home, ephemeral
 
   test('legacy fold: a fixture store is imported into the daemon (open session active, closed session stays closed)', async () => {
     harness = await startHarness();
-    const client = new SessionSpineClient({ log: { debug: () => {}, info: () => {} } });
-    client.activate(harness.sessionsClient);
+    const client = new SessionSpineClient({ participant: TUI_SPINE_PARTICIPANT, recordKind: 'tui',log: { debug: () => {}, info: () => {} } });
+    client.activate(createTuiSpineTransport(harness.sessionsClient));
 
     const storePath = join(harness.workingDir, 'legacy-sessions.json');
     writeFileSync(storePath, JSON.stringify({

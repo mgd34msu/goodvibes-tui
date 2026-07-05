@@ -37,8 +37,8 @@ import { scheduleBackgroundMcpDiscovery, startBackgroundProviderRegistration } f
 import { restoreSavedModel } from '@/runtime/index.ts';
 import { startExternalServices, type ExternalServicesHandle, type HostServiceStatus } from '@/runtime/index.ts';
 import { createHttpTransport } from '@/runtime/index.ts';
-import { foldLegacySpineStore, type SpineSessionsClient } from './session-spine-client.ts';
-import { deriveSpineFooterStatus } from './session-union-cache.ts';
+import { foldLegacySpineStore, deriveSpineFooterStatus } from '@pellux/goodvibes-sdk/platform/runtime/session-spine';
+import { createTuiSpineTransport, type SpineSessionsClient } from './session-spine-transport.ts';
 import { pruneStaleOperatorTokens } from '@pellux/goodvibes-sdk/platform/pairing';
 import { resolveDaemonCompanionToken, workspaceOperatorTokenCandidates } from './operator-token-cleanup.ts';
 import type { UiRuntimeServices } from './ui-services.ts';
@@ -412,7 +412,7 @@ export async function bootstrapRuntime(
       register: (input) => httpTransport.operator.sessions.register(input),
       close: (sessionId) => httpTransport.operator.sessions.close(sessionId),
     };
-    sessionSpine.activate(sessionsClient);
+    sessionSpine.activate(createTuiSpineTransport(sessionsClient));
     // D3: adopt the same daemon's wire for the INBOUND steer path — collect
     // steer/follow-up inputs another live surface queued for this session and
     // inject them into the turn machinery (acking delivery on the wire).

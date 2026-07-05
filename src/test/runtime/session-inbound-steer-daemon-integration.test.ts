@@ -17,7 +17,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { bootDaemon, type BootedDaemon } from '@pellux/goodvibes-sdk/platform/daemon';
 import { createHttpTransport } from '@/runtime/index.ts';
-import { SessionSpineClient, type SpineSessionsClient } from '../../runtime/session-spine-client.ts';
+import { SessionSpineClient, TUI_SPINE_PARTICIPANT } from '@pellux/goodvibes-sdk/platform/runtime/session-spine';
+import { createTuiSpineTransport, type SpineSessionsClient } from '../../runtime/session-spine-transport.ts';
 import {
   SessionInboundInputPoller,
   type InboundSteer,
@@ -75,8 +76,8 @@ async function stopHarness(harness: Harness): Promise<void> {
 
 /** Register a live TUI session and wait until the daemon lists it active. */
 async function registerLiveTuiSession(harness: Harness, sessionId: string): Promise<void> {
-  const client = new SessionSpineClient({ log: SILENT });
-  client.activate(harness.spineClient);
+  const client = new SessionSpineClient({ participant: TUI_SPINE_PARTICIPANT, recordKind: 'tui', log: SILENT });
+  client.activate(createTuiSpineTransport(harness.spineClient));
   client.register({ sessionId, project: harness.workingDir, title: `TUI ${sessionId}` });
   await waitFor(async () => {
     const sessions = await harness.transport.operator.sessions.list(200) as unknown as readonly { id: string; status: string }[];

@@ -3,11 +3,8 @@ import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { RegisterSharedSessionInput, SharedSessionRecord, SharedSessionRegisterResult } from '@pellux/goodvibes-sdk/platform/control-plane';
-import {
-  foldLegacySpineStore,
-  SessionSpineClient,
-  type SpineSessionsClient,
-} from '../../runtime/session-spine-client.ts';
+import { foldLegacySpineStore, SessionSpineClient, TUI_SPINE_PARTICIPANT } from '@pellux/goodvibes-sdk/platform/runtime/session-spine';
+import { createTuiSpineTransport, type SpineSessionsClient } from '../../runtime/session-spine-transport.ts';
 
 const settle = async (): Promise<void> => {
   for (let i = 0; i < 5; i += 1) await new Promise<void>((r) => setTimeout(r, 0));
@@ -73,7 +70,7 @@ function makeFakeSessionsClient(): {
 
 describe('SessionSpineClient dormant-until-activated', () => {
   test('register/reopen/heartbeat/close before activate() are all synchronous no-throw no-ops queued for later', () => {
-    const client = new SessionSpineClient({ log: { debug: () => {}, info: () => {} } });
+    const client = new SessionSpineClient({ participant: TUI_SPINE_PARTICIPANT, recordKind: 'tui', log: { debug: () => {}, info: () => {} } });
     expect(client.active).toBe(false);
     expect(() => client.register({ sessionId: 's1', project: '/p', title: 'T' })).not.toThrow();
     expect(() => client.reopen({ sessionId: 's2', project: '/p' })).not.toThrow();
@@ -88,12 +85,12 @@ describe('SessionSpineClient dormant-until-activated', () => {
 
   test('activate() flushes everything queued while dormant, exactly once each', async () => {
     const fake = makeFakeSessionsClient();
-    const client = new SessionSpineClient({ log: { debug: () => {}, info: () => {} } });
+    const client = new SessionSpineClient({ participant: TUI_SPINE_PARTICIPANT, recordKind: 'tui', log: { debug: () => {}, info: () => {} } });
     client.register({ sessionId: 's1', project: '/p', title: 'T' });
     client.close('s1');
     expect(client.pendingOps).toBe(2);
 
-    client.activate(fake.client);
+    client.activate(createTuiSpineTransport(fake.client));
     await settle();
 
     expect(client.active).toBe(true);
@@ -109,8 +106,8 @@ describe('SessionSpineClient fire-and-forget latency contract', () => {
   test('register/reopen/heartbeat/close return synchronously even with a slow-resolving backend (no interactive stall)', () => {
     const fake = makeFakeSessionsClient();
     fake.mode = 'pending'; // never resolves during this test — proves no await on the call site
-    const client = new SessionSpineClient({ log: { debug: () => {}, info: () => {} } });
-    client.activate(fake.client);
+    const client = new SessionSpineClient({ participant: TUI_SPINE_PARTICIPANT, recordKind: 'tui', log: { debug: () => {}, info: () => {} } });
+    client.activate(createTuiSpineTransport(fake.client));
 
     const start = Date.now();
     client.register({ sessionId: 's1', project: '/p', title: 'T' });
@@ -129,8 +126,8 @@ describe('SessionSpineClient fire-and-forget latency contract', () => {
   test('a rejecting backend never throws into the caller and degrades to offline, queued for reconnect', async () => {
     const fake = makeFakeSessionsClient();
     fake.mode = 'fail';
-    const client = new SessionSpineClient({ log: { debug: () => {}, info: () => {} } });
-    client.activate(fake.client);
+    const client = new SessionSpineClient({ participant: TUI_SPINE_PARTICIPANT, recordKind: 'tui', log: { debug: () => {}, info: () => {} } });
+    client.activate(createTuiSpineTransport(fake.client));
     expect(() => client.register({ sessionId: 's1', project: '/p' })).not.toThrow();
     await settle();
     expect(client.status()).toBe('offline');
@@ -143,8 +140,8 @@ describe('SessionSpineClient offline queue / reconnect', () => {
   test('offline register queues; recovering the backend flushes it exactly once (idempotent replay)', async () => {
     const fake = makeFakeSessionsClient();
     fake.mode = 'fail';
-    const client = new SessionSpineClient({ log: { debug: () => {}, info: () => {} } });
-    client.activate(fake.client);
+    const client = new SessionSpineClient({ participant: TUI_SPINE_PARTICIPANT, recordKind: 'tui', log: { debug: () => {}, info: () => {} } });
+    client.activate(createTuiSpineTransport(fake.client));
     client.register({ sessionId: 's1', project: '/p', title: 'T' });
     await settle();
     expect(client.status()).toBe('offline');
@@ -167,7 +164,7 @@ describe('SessionSpineClient offline queue / reconnect', () => {
   });
 
   test('bounded ring drops the oldest op past the cap', () => {
-    const client = new SessionSpineClient({ queueLimit: 2, log: { debug: () => {}, info: () => {} } });
+    const client = new SessionSpineClient({ participant: TUI_SPINE_PARTICIPANT, recordKind: 'tui',queueLimit: 2, log: { debug: () => {}, info: () => {} } });
     for (const id of ['a', 'b', 'c']) client.register({ sessionId: id, project: '/p' });
     expect(client.pendingOps).toBe(2); // 'a' dropped
     client.dispose();
@@ -175,8 +172,8 @@ describe('SessionSpineClient offline queue / reconnect', () => {
 
   test('deactivate() stops attempting the wire but keeps queuing (bounded)', async () => {
     const fake = makeFakeSessionsClient();
-    const client = new SessionSpineClient({ log: { debug: () => {}, info: () => {} } });
-    client.activate(fake.client);
+    const client = new SessionSpineClient({ participant: TUI_SPINE_PARTICIPANT, recordKind: 'tui', log: { debug: () => {}, info: () => {} } });
+    client.activate(createTuiSpineTransport(fake.client));
     client.register({ sessionId: 's1', project: '/p' });
     await settle();
     expect(fake.calls).toHaveLength(1);
@@ -196,8 +193,8 @@ describe('SessionSpineClient heartbeat debounce', () => {
   test('coalesces bursty turn activity to at most one leading wire call per window', async () => {
     let clock = 100_000;
     const fake = makeFakeSessionsClient();
-    const client = new SessionSpineClient({ now: () => clock, heartbeatMinIntervalMs: 1_000, log: { debug: () => {}, info: () => {} } });
-    client.activate(fake.client);
+    const client = new SessionSpineClient({ participant: TUI_SPINE_PARTICIPANT, recordKind: 'tui',now: () => clock, heartbeatMinIntervalMs: 1_000, log: { debug: () => {}, info: () => {} } });
+    client.activate(createTuiSpineTransport(fake.client));
 
     client.register({ sessionId: 's1', project: '/p', title: 'T' });
     await settle();
@@ -230,8 +227,8 @@ describe('SessionSpineClient heartbeat debounce', () => {
 
   test('heartbeat for an unknown session id is a no-op', async () => {
     const fake = makeFakeSessionsClient();
-    const client = new SessionSpineClient({ log: { debug: () => {}, info: () => {} } });
-    client.activate(fake.client);
+    const client = new SessionSpineClient({ participant: TUI_SPINE_PARTICIPANT, recordKind: 'tui', log: { debug: () => {}, info: () => {} } });
+    client.activate(createTuiSpineTransport(fake.client));
     client.heartbeat('never-registered');
     await settle();
     expect(fake.calls.filter((c) => c.kind === 'register')).toHaveLength(0);
@@ -242,8 +239,8 @@ describe('SessionSpineClient heartbeat debounce', () => {
 describe('SessionSpineClient reopen semantics', () => {
   test('reopen sends reopen:true and omits title; register (create) includes title', async () => {
     const fake = makeFakeSessionsClient();
-    const client = new SessionSpineClient({ log: { debug: () => {}, info: () => {} } });
-    client.activate(fake.client);
+    const client = new SessionSpineClient({ participant: TUI_SPINE_PARTICIPANT, recordKind: 'tui', log: { debug: () => {}, info: () => {} } });
+    client.activate(createTuiSpineTransport(fake.client));
     client.register({ sessionId: 's1', project: '/p', title: 'Created' });
     client.reopen({ sessionId: 's2', project: '/p', title: 'Should not be sent' });
     await settle();
@@ -261,8 +258,8 @@ describe('SessionSpineClient reopen semantics', () => {
 describe('SessionSpineClient legacy fold', () => {
   test('registers each record and closes locally-closed records', async () => {
     const fake = makeFakeSessionsClient();
-    const client = new SessionSpineClient({ log: { debug: () => {}, info: () => {} } });
-    client.activate(fake.client);
+    const client = new SessionSpineClient({ participant: TUI_SPINE_PARTICIPANT, recordKind: 'tui', log: { debug: () => {}, info: () => {} } });
+    client.activate(createTuiSpineTransport(fake.client));
     client.foldLegacyRecords(
       [
         { sessionId: 'open-1', project: '/p', title: 'Open one' },
@@ -351,8 +348,8 @@ describe('SessionSpineClient timer-driven keepalive (D3/#4 — surface never goe
   test('keepalive re-heartbeats on its own cadence with NO render/turn activity', async () => {
     const fake = makeFakeSessionsClient();
     // Small window so the interval fires quickly in the test.
-    const client = new SessionSpineClient({ heartbeatMinIntervalMs: 15, log: { debug: () => {}, info: () => {} } });
-    client.activate(fake.client);
+    const client = new SessionSpineClient({ participant: TUI_SPINE_PARTICIPANT, recordKind: 'tui',heartbeatMinIntervalMs: 15, log: { debug: () => {}, info: () => {} } });
+    client.activate(createTuiSpineTransport(fake.client));
     client.register({ sessionId: 'keepalive-1', project: '/p', title: 'T' });
     await settle();
     expect(client.keepaliveSessionId).toBe('keepalive-1');
@@ -371,8 +368,8 @@ describe('SessionSpineClient timer-driven keepalive (D3/#4 — surface never goe
 
   test('dispose() stops the keepalive (no beats after teardown)', async () => {
     const fake = makeFakeSessionsClient();
-    const client = new SessionSpineClient({ heartbeatMinIntervalMs: 15, log: { debug: () => {}, info: () => {} } });
-    client.activate(fake.client);
+    const client = new SessionSpineClient({ participant: TUI_SPINE_PARTICIPANT, recordKind: 'tui',heartbeatMinIntervalMs: 15, log: { debug: () => {}, info: () => {} } });
+    client.activate(createTuiSpineTransport(fake.client));
     client.register({ sessionId: 'keepalive-2', project: '/p', title: 'T' });
     await settle();
     client.dispose();

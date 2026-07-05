@@ -32,7 +32,7 @@ import type { PolicyRuntimeState } from '@/runtime/index.ts';
 import type { TaskManager } from '@/runtime/index.ts';
 import type { UiRuntimeServices } from './ui-services.ts';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
-import type { SessionSpineClient } from './session-spine-client.ts';
+import type { SessionSpineClient } from '@pellux/goodvibes-sdk/platform/runtime/session-spine';
 
 export interface BootstrapShellState {
   readonly commandRegistry: CommandRegistry;

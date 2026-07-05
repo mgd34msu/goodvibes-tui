@@ -18,7 +18,7 @@ import {
   type LocalSessionReader,
   type SessionReadFacade,
   type WireSessionReader,
-} from '../../runtime/session-union-cache.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/session-spine';
 
 describe('deriveSpineFooterStatus (D4 — offline within one union-probe interval)', () => {
   test('not adopted: falls back to the spine client status', () => {
