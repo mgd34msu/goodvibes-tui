@@ -116,6 +116,7 @@ describe('foundation surface stability gate', () => {
       'inputs',
       'list',
       'messages',
+      'register',
       'reopen',
       'steerMessage',
       'submitMessage',
