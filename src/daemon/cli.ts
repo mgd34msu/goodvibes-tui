@@ -27,6 +27,7 @@ import {
   persistProviders,
 } from '@pellux/goodvibes-sdk/platform/discovery';
 import { createSafeHostServeFactory } from './safe-serve.ts';
+import { isDaemonServiceSubcommand, resolveInstalledDaemonBinary, runDaemonServiceCli } from './service-commands.ts';
 
 import {
   parseGoodVibesCli,
@@ -161,6 +162,29 @@ async function main(): Promise<void> {
     process.env['GOODVIBES_DAEMON_HOST'] = cliFlags.hostname;
     logger.info('daemon: --hostname flag applied', { hostname: cliFlags.hostname });
   }
+
+  // D7a Layer 1: `install-service` / `uninstall-service` / `service-status` manage
+  // the systemd USER unit for the shared daemon. They run BEFORE the daemon boots —
+  // no runtime/services are constructed — and exit with the honest result code.
+  const serviceSubcommand = cli.positionals[0];
+  if (isDaemonServiceSubcommand(serviceSubcommand)) {
+    const host = String(process.env.GOODVIBES_DAEMON_HOST ?? config.get('controlPlane.host') ?? '127.0.0.1');
+    const port = Number(config.get('controlPlane.port'));
+    const binaryPath = resolveInstalledDaemonBinary({ moduleUrl: import.meta.url });
+    const result = runDaemonServiceCli({
+      subcommand: serviceSubcommand,
+      binaryPath,
+      homeDir: homeDirectory,
+      host,
+      port,
+    });
+    for (const line of result.lines) {
+      // eslint-disable-next-line no-console
+      console.log(line);
+    }
+    process.exit(result.exitCode);
+  }
+
   const runtimeBus = new RuntimeEventBus();
   const runtimeStore = createRuntimeStore();
   const featureFlags = createFeatureFlagManager();
