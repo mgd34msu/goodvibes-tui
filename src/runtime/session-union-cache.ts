@@ -89,10 +89,21 @@ export interface SessionUnionCacheOptions {
   readonly staleAfterMs?: number;
   /** Upper bound on rows pulled from the wire per refresh (default 200). */
   readonly wireLimit?: number;
+  /**
+   * D4b: bound how long a single refresh() will wait on the wire before treating
+   * it as a failed probe (default 4s, under the 5s refresh cadence). A dead
+   * daemon usually rejects the fetch promptly (ECONNREFUSED), but a process that
+   * dies mid-connection can leave a stale keep-alive socket that the runtime/OS
+   * doesn't notice for a long time (well past any acceptable UI latency) — this
+   * timeout caps the wait so the probe can never hang past ~1 refresh interval.
+   */
+  readonly probeTimeoutMs?: number;
   /** Injectable timer seam for deterministic tests. */
   readonly scheduler?: {
-    setInterval: (fn: () => void, ms: number) => ReturnType<typeof setInterval>;
-    clearInterval: (handle: ReturnType<typeof setInterval>) => void;
+    setInterval?: (fn: () => void, ms: number) => ReturnType<typeof setInterval>;
+    clearInterval?: (handle: ReturnType<typeof setInterval>) => void;
+    setTimeout?: (fn: () => void, ms: number) => ReturnType<typeof setTimeout>;
+    clearTimeout?: (handle: ReturnType<typeof setTimeout>) => void;
   };
   readonly log?: Pick<typeof logger, 'debug'>;
 }
@@ -100,6 +111,7 @@ export interface SessionUnionCacheOptions {
 const DEFAULT_REFRESH_INTERVAL_MS = 5_000;
 const DEFAULT_STALE_AFTER_MS = 20_000;
 const DEFAULT_WIRE_LIMIT = 200;
+const DEFAULT_PROBE_TIMEOUT_MS = 4_000;
 const OFFLINE_NOTE = 'cross-surface view offline';
 
 /**
@@ -138,7 +150,13 @@ export class SessionUnionCache implements SessionReadFacade {
   private readonly refreshIntervalMs: number;
   private readonly staleAfterMs: number;
   private readonly wireLimit: number;
-  private readonly scheduler: NonNullable<SessionUnionCacheOptions['scheduler']>;
+  private readonly probeTimeoutMs: number;
+  private readonly scheduler: {
+    setInterval: (fn: () => void, ms: number) => ReturnType<typeof setInterval>;
+    clearInterval: (handle: ReturnType<typeof setInterval>) => void;
+    setTimeout: (fn: () => void, ms: number) => ReturnType<typeof setTimeout>;
+    clearTimeout: (handle: ReturnType<typeof setTimeout>) => void;
+  };
   private readonly log: Pick<typeof logger, 'debug'>;
 
   private mode: SessionUnionMode = 'local';
@@ -147,6 +165,18 @@ export class SessionUnionCache implements SessionReadFacade {
   private online = false;
   private lastSyncAt: number | null = null;
   private timer: ReturnType<typeof setInterval> | null = null;
+  /** D4b: guards against overlapping refresh() calls racing the same wire. */
+  private refreshInFlight: Promise<void> | null = null;
+  /**
+   * D4b: fired whenever a refresh() flips `online` (either direction). bootstrap.ts
+   * wires this to requestRender() so a liveness change is never just correct
+   * DATA sitting uncomposited — the footer segment reads straight off
+   * crossSurfaceView (via deriveSpineFooterStatus), but nothing else in this
+   * class's own timer loop asks the renderer to draw a new frame. Without this,
+   * the flip is only PAINTED whenever some unrelated activity happens to trigger
+   * the next render, which during an idle stretch can be minutes away.
+   */
+  private onTransition: ((online: boolean) => void) | null = null;
 
   constructor(options: SessionUnionCacheOptions) {
     this.local = options.local;
@@ -154,9 +184,12 @@ export class SessionUnionCache implements SessionReadFacade {
     this.refreshIntervalMs = options.refreshIntervalMs ?? DEFAULT_REFRESH_INTERVAL_MS;
     this.staleAfterMs = options.staleAfterMs ?? DEFAULT_STALE_AFTER_MS;
     this.wireLimit = options.wireLimit ?? DEFAULT_WIRE_LIMIT;
-    this.scheduler = options.scheduler ?? {
-      setInterval: (fn, ms) => setInterval(fn, ms),
-      clearInterval: (handle) => clearInterval(handle),
+    this.probeTimeoutMs = options.probeTimeoutMs ?? DEFAULT_PROBE_TIMEOUT_MS;
+    this.scheduler = {
+      setInterval: options.scheduler?.setInterval ?? ((fn, ms) => setInterval(fn, ms)),
+      clearInterval: options.scheduler?.clearInterval ?? ((handle) => clearInterval(handle)),
+      setTimeout: options.scheduler?.setTimeout ?? ((fn, ms) => setTimeout(fn, ms)),
+      clearTimeout: options.scheduler?.clearTimeout ?? ((handle) => clearTimeout(handle)),
     };
     this.log = options.log ?? logger;
   }
@@ -164,6 +197,16 @@ export class SessionUnionCache implements SessionReadFacade {
   /** Current facade mode — for diagnostics/tests. */
   getMode(): SessionUnionMode {
     return this.mode;
+  }
+
+  /**
+   * D4b: register a callback fired whenever a refresh() flips the online/offline
+   * liveness state. bootstrap.ts wires this to requestRender() so the footer's
+   * spine segment repaints promptly on a real transition instead of waiting for
+   * incidental render activity. Pass null to clear.
+   */
+  setOnTransition(callback: ((online: boolean) => void) | null): void {
+    this.onTransition = callback;
   }
 
   /**
@@ -178,6 +221,7 @@ export class SessionUnionCache implements SessionReadFacade {
     this.online = false; // unconfirmed until the first successful refresh
     this.lastSyncAt = null;
     this.wireCache = [];
+    this.refreshInFlight = null; // a new adoption starts a fresh probe, not a stale prior reader's
     this.timer = this.scheduler.setInterval(() => void this.refresh(), this.refreshIntervalMs);
     void this.refresh();
   }
@@ -206,11 +250,39 @@ export class SessionUnionCache implements SessionReadFacade {
    * Pull the wire union once and update the cache. Awaitable so tests drive it
    * deterministically. A rejecting wire degrades to offline WITHOUT dropping to
    * a lie: `online` flips false so listSessions() serves local-only rows.
+   *
+   * D4b: the wire call is raced against probeTimeoutMs so a stale/hung
+   * connection (the daemon process died non-gracefully, leaving a keep-alive
+   * socket the runtime hasn't reaped yet) can't hold `online` at a stale `true`
+   * indefinitely — the probe degrades to offline within one bounded wait, not
+   * whenever the OS/runtime eventually notices the dead peer.
+   *
+   * D4b: an in-flight guard collapses overlapping calls (the 5s interval firing
+   * again before a bounded-but-slow probe has settled, or a caller-driven
+   * refresh() racing the interval's own) into the SAME pending probe, rather
+   * than starting a second concurrent wire call that could double-fire
+   * onTransition or pile up hung connections against a dead daemon.
+   *
+   * Fires onTransition exactly when `online` actually flips (not on every
+   * tick), so a subscriber (bootstrap.ts -> requestRender()) repaints on the
+   * real state change instead of every 5s poll.
    */
   async refresh(): Promise<void> {
     if (this.mode !== 'adopted' || !this.wireReader) return;
+    if (this.refreshInFlight) return this.refreshInFlight;
+    const run = this.performRefresh();
+    this.refreshInFlight = run;
     try {
-      const rows = await this.wireReader.list(this.wireLimit);
+      await run;
+    } finally {
+      this.refreshInFlight = null;
+    }
+  }
+
+  private async performRefresh(): Promise<void> {
+    const wasOnline = this.online;
+    try {
+      const rows = await this.raceWithProbeTimeout(this.wireReader!.list(this.wireLimit));
       this.wireCache = rows;
       this.lastSyncAt = this.now();
       this.online = true;
@@ -219,6 +291,42 @@ export class SessionUnionCache implements SessionReadFacade {
       this.online = false;
       this.log.debug('[session-union] wire refresh failed; serving local-only', { error: String(err) });
     }
+    if (this.online !== wasOnline) {
+      this.onTransition?.(this.online);
+    }
+  }
+
+  /**
+   * Bound how long refresh() will wait on the wire promise. The underlying
+   * promise is NOT cancelled (no AbortSignal reaches this layer today) — it may
+   * still settle later in the background and its result is simply ignored —
+   * but refresh() itself never waits past probeTimeoutMs, which is what keeps
+   * the liveness probe honest under a hung connection.
+   */
+  private raceWithProbeTimeout<T>(promise: Promise<T>): Promise<T> {
+    if (!(this.probeTimeoutMs > 0)) return promise;
+    return new Promise<T>((resolve, reject) => {
+      let settled = false;
+      const timer = this.scheduler.setTimeout(() => {
+        if (settled) return;
+        settled = true;
+        reject(new Error(`wire probe timed out after ${this.probeTimeoutMs}ms`));
+      }, this.probeTimeoutMs);
+      promise.then(
+        (value) => {
+          if (settled) return;
+          settled = true;
+          this.scheduler.clearTimeout(timer);
+          resolve(value);
+        },
+        (err) => {
+          if (settled) return;
+          settled = true;
+          this.scheduler.clearTimeout(timer);
+          reject(err);
+        },
+      );
+    });
   }
 
   listSessions(limit?: number): readonly SharedSessionRecord[] {
@@ -267,6 +375,7 @@ export class SessionUnionCache implements SessionReadFacade {
     this.wireCache = [];
     this.online = false;
     this.lastSyncAt = null;
+    this.refreshInFlight = null;
   }
 
   private stopTimer(): void {

@@ -181,6 +181,93 @@ describe('SessionUnionCache — honest cross-surface read facade', () => {
     expect(cache.crossSurfaceView.offlineNote).toBeNull();
   });
 
+  test('onTransition (D4b): fires exactly on a genuine online/offline flip, never on a repeat of the same state', async () => {
+    const wire = wireReader({ rows: [record('wire-1')] });
+    const cache = new SessionUnionCache({ local: localReader([]), scheduler: noopScheduler, log: silent });
+    const transitions: boolean[] = [];
+    cache.setOnTransition((online) => transitions.push(online));
+
+    cache.activate(wire.reader); // kicks the first probe internally
+    await cache.refresh(); // the in-flight guard collapses this into that SAME first probe: false -> true
+    expect(transitions).toEqual([true]);
+
+    await cache.refresh(); // still online: no repeat firing
+    expect(transitions).toEqual([true]);
+
+    wire.set({ reject: true });
+    await cache.refresh(); // daemon dies mid-idle: true -> false
+    expect(transitions).toEqual([true, false]);
+
+    await cache.refresh(); // still offline: no repeat firing
+    expect(transitions).toEqual([true, false]);
+
+    wire.set({ rows: [record('wire-1')] });
+    await cache.refresh(); // reconnect: false -> true again, stays prompt
+    expect(transitions).toEqual([true, false, true]);
+  });
+
+  test('refresh() in-flight guard: overlapping calls collapse into the same pending probe (no double-fire)', async () => {
+    let listCalls = 0;
+    let releaseFirst: (() => void) | null = null;
+    const held: WireSessionReader = {
+      list: () => new Promise<readonly SharedSessionRecord[]>((resolve) => {
+        listCalls += 1;
+        releaseFirst = () => resolve([record('wire-1')]);
+      }),
+    };
+    const cache = new SessionUnionCache({ local: localReader([]), scheduler: noopScheduler, log: silent });
+    const transitions: boolean[] = [];
+    cache.setOnTransition((online) => transitions.push(online));
+
+    cache.activate(held); // kicks refresh() #1, which hangs on the wire until released
+    const overlap = cache.refresh(); // refresh() #2, fired while #1 is still pending
+    expect(listCalls).toBe(1); // the guard collapsed #2 into #1's SAME in-flight wire call
+
+    releaseFirst!();
+    await overlap;
+    expect(transitions).toEqual([true]); // exactly one transition, not two
+  });
+
+  test('probeTimeoutMs (D4b): a hung wire call bounds refresh() to ~1 probe interval instead of an indefinite wait', async () => {
+    let capturedTimeoutFn: (() => void) | null = null;
+    const scheduler = {
+      setInterval: () => 0 as unknown as ReturnType<typeof setInterval>,
+      clearInterval: () => {},
+      setTimeout: (fn: () => void) => {
+        capturedTimeoutFn = fn;
+        return 0 as unknown as ReturnType<typeof setTimeout>;
+      },
+      clearTimeout: () => {},
+    };
+    // Confirmed online first (an already-adopted, healthy daemon), THEN the wire
+    // goes silent — the exact "daemon died mid-idle, socket never errors" case.
+    let hang = false;
+    const wire: WireSessionReader = {
+      list: () => (hang ? new Promise<readonly SharedSessionRecord[]>(() => {}) : Promise.resolve([record('wire-1')])),
+    };
+    const cache = new SessionUnionCache({ local: localReader([record('local-1')]), scheduler, log: silent });
+    const transitions: boolean[] = [];
+    cache.setOnTransition((online) => transitions.push(online));
+
+    cache.activate(wire); // first probe resolves promptly: false -> true
+    await cache.refresh(); // collapses into (or observes the completion of) that same probe
+    expect(cache.crossSurfaceView.online).toBe(true);
+    expect(transitions).toEqual([true]);
+
+    hang = true; // the daemon "dies" leaving a stale connection that never responds
+    const pending = cache.refresh();
+    expect(capturedTimeoutFn).not.toBeNull(); // the bounded probe registered its timeout
+
+    // Simulate the probe-timeout elapsing before the wire ever responds — this is
+    // the one-to-two-probe-interval bound, not a real multi-minute OS-level wait.
+    capturedTimeoutFn!();
+    await pending;
+
+    expect(cache.crossSurfaceView.online).toBe(false); // degraded honestly, no indefinite hang
+    expect(cache.crossSurfaceView.offlineNote).toBe('cross-surface view offline');
+    expect(transitions).toEqual([true, false]); // and the flip was reported to the subscriber (-> requestRender)
+  });
+
   test('panel-consumer stand-in: renders union rows online, and local rows + offline note when down', async () => {
     // A minimal render exactly as a control-plane panel would: read the sync
     // listSessions() surface + the crossSurfaceView note off the facade type.
