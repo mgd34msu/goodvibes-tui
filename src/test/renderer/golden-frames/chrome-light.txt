@@ -1,5 +1,5 @@
 # GV_GOLDEN surface=chrome-light width=100 height=10
-| GoodVibes v1.8.0 │ Chrome golden                             git:main *  claude-opus-4 (anthropic) |
+| GoodVibes v0.29.0 │ Chrome golden                            git:main *  claude-opus-4 (anthropic) |
 |━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━|
 |  ▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄  |
 |     › > Ask me anything█                                                                           |
@@ -46,7 +46,7 @@
 0 16 dim=1
 0 17 fg=#94a3b8
 0 17 dim=1
-0 18 fg=#64748b
+0 18 fg=#94a3b8
 0 18 dim=1
 0 19 fg=#64748b
 0 19 dim=1
@@ -78,6 +78,8 @@
 0 32 dim=1
 0 33 fg=#64748b
 0 33 dim=1
+0 34 fg=#64748b
+0 34 dim=1
 0 61 fg=#b45309
 0 62 fg=#b45309
 0 63 fg=#b45309

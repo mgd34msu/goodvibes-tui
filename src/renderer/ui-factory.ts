@@ -73,7 +73,10 @@ function fmtCost(usd: number): string {
  * UIFactory - Generates standard UI fragments without needing Ink/React overhead.
  */
 export class UIFactory {
-  public static createHeader(width: number, model: string, provider: string, title?: string, gitInfo?: GitHeaderInfo): Line[] {
+  // `version` defaults to the live build VERSION; tests pass a pinned fixture so
+  // golden snapshots don't break on every release bump (version-decoupled goldens,
+  // mirroring the splash fixture-version pattern).
+  public static createHeader(width: number, model: string, provider: string, title?: string, gitInfo?: GitHeaderInfo, version: string = VERSION): Line[] {
     const lines: Line[] = [];
     // Header/footer/thinking paint on the transparent terminal background, so
     // they read chrome.* (light-terminal-aware) — NOT fg.*/state.*, which stay
@@ -84,7 +87,7 @@ export class UIFactory {
     const GREY = t.chrome.faint;
     const TITLE_COLOR = t.chrome.label;
     const brand = ` GoodVibes `;
-    const ver = `v${VERSION} `;
+    const ver = `v${version} `;
     const stats = ` ${model} `;
     const prov = `(${provider}) `;
     const line = createEmptyLine(width);
