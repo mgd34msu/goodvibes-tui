@@ -287,6 +287,12 @@ export function feedInputTokens(context: InputFeedContext, tokens: readonly Inpu
       // focusTarget and self-heals it, and context.panelFocused was seeded from
       // it at feed entry — so no manual "unfocus if panels vanished" patch is
       // needed here anymore.
+      // Snapshot these four BEFORE dispatch so the write-back below can tell
+      // a pipeline-driven change (see comment there) from a stale copy.
+      const promptBefore = context.prompt;
+      const cursorPosBefore = context.cursorPos;
+      const commandModeBefore = context.commandMode;
+      const panelFocusedBefore = context.panelFocused;
       const shortcutState = {
         panelFocused: context.panelFocused,
         prompt: context.prompt,
@@ -320,10 +326,22 @@ export function feedInputTokens(context: InputFeedContext, tokens: readonly Inpu
         killRing: context.killRing,
       };
       if (handleGlobalShortcutToken(shortcutState, token, viewportHeight)) {
-        context.prompt = shortcutState.prompt;
-        context.cursorPos = shortcutState.cursorPos;
-        context.commandMode = shortcutState.commandMode;
-        context.panelFocused = shortcutState.panelFocused;
+        // Some branches (handleEscape, handleCtrlC, handleUndo, handleRedo,
+        // handlePaste) mutate handler state directly and immediately sync it
+        // into this same `context` via syncFeedContextMutableFields — e.g.
+        // Escape closing the slash-command palette clears context.prompt and
+        // context.commandMode on the live handler mid-call. `shortcutState`
+        // above is a snapshot taken BEFORE that call, so applying it
+        // unconditionally would stomp the live update right back to its
+        // stale pre-action value (undoing the very close it just performed,
+        // and even re-arming the palette below). This is the same class of
+        // bug as the overlay-flag write-back guard in handler.ts's feed().
+        // Only apply the snapshot for a field the dispatched action did NOT
+        // already update out from under us.
+        context.prompt = context.prompt === promptBefore ? shortcutState.prompt : context.prompt;
+        context.cursorPos = context.cursorPos === cursorPosBefore ? shortcutState.cursorPos : context.cursorPos;
+        context.commandMode = context.commandMode === commandModeBefore ? shortcutState.commandMode : context.commandMode;
+        context.panelFocused = context.panelFocused === panelFocusedBefore ? shortcutState.panelFocused : context.panelFocused;
         if (context.commandMode) {
           if (!context.prompt.startsWith('/')) {
             context.commandMode = false;
