@@ -47,6 +47,12 @@ export interface ShellFooterBuildOptions {
    * the process indicator, context bar, context-info line and posture block.
    */
   readonly compact?: boolean;
+  /**
+   * S3d: cross-surface session-spine posture for the context-info segment.
+   * Set ONLY in adopted-daemon mode ('online'/'offline'); left undefined in
+   * embedded/local mode so no segment renders.
+   */
+  readonly sessionSpineStatus?: 'online' | 'offline';
 }
 
 export interface ShellFooterBuildResult {
@@ -120,6 +126,7 @@ export function buildShellFooter(
     options.composerFlags,
     options.composerPendingRisk,
     options.compact ?? false,
+    options.sessionSpineStatus,
   );
   // Compact posture drops the process indicator and context hint entirely so
   // the footer fits within ~5 rows on short terminals.
