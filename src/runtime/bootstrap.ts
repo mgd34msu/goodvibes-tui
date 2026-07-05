@@ -36,6 +36,8 @@ import {
 import { scheduleBackgroundMcpDiscovery, startBackgroundProviderRegistration } from '@/runtime/index.ts';
 import { restoreSavedModel } from '@/runtime/index.ts';
 import { startExternalServices, type ExternalServicesHandle, type HostServiceStatus } from '@/runtime/index.ts';
+import { createHttpTransport } from '@/runtime/index.ts';
+import { foldLegacySpineStore, type SpineSessionsClient } from './session-spine-client.ts';
 import { getOrCreateCompanionToken, pruneStaleOperatorTokens } from '@pellux/goodvibes-sdk/platform/pairing';
 import { workspaceOperatorTokenCandidates } from './operator-token-cleanup.ts';
 import type { UiRuntimeServices } from './ui-services.ts';
@@ -184,6 +186,8 @@ export async function bootstrapRuntime(
     setRenderRequest,
     runtimeSessionIdRef,
     wrfcPersistence,
+    sessionSpine,
+    sessionUnionCache,
   } = await initializeBootstrapCore(stdout, options, (limit) => controlPlaneRecentEventsRef.value(limit));
   const providerRegistry = services.providerRegistry;
   const {
@@ -263,6 +267,7 @@ export async function bootstrapRuntime(
     runtimeBus,
     runtimeStore: store,
     services,
+    sessionSpine,
     conversation,
     runtime,
     orchestrator,
@@ -363,7 +368,60 @@ export async function bootstrapRuntime(
 
   const hostServiceIsActive = (status: HostServiceStatus): boolean => status.mode === 'embedded' || status.mode === 'external';
 
-  const hostServiceIsBlocked = (status: HostServiceStatus): boolean => status.mode === 'blocked';
+  // 'blocked' (occupied by an unverified process) and 'incompatible' (occupied
+  // by a GoodVibes daemon we refused to adopt on a wire-version mismatch) both
+  // mean the configured port is held and unusable by this TUI instance.
+  const hostServiceIsBlocked = (status: HostServiceStatus): boolean => status.mode === 'blocked' || status.mode === 'incompatible';
+
+  // S3c (One-Platform Wave 2): ONE client-selection point for the session
+  // spine, driven by the SAME authoritative HostServiceMode adopt-or-start
+  // already computed above (no separate probe). 'embedded' means THIS
+  // process's own SharedSessionBroker already IS the daemon's broker (they
+  // share runtimeServices) — nothing to mirror, so the spine stays dormant,
+  // which is today's exact behavior. Every other mode ('disabled', 'blocked',
+  // 'incompatible', 'unavailable') also stays local-only and honest — no
+  // daemon this TUI trusts is reachable. Only 'external' (a compatible daemon
+  // this TUI adopted rather than started) activates the wire mirror.
+  let spineActiveForBaseUrl: string | null = null;
+  const syncSessionSpineToHostStatus = (daemonStatus: HostServiceStatus, sharedDaemonToken: string): void => {
+    if (daemonStatus.mode !== 'external') {
+      if (spineActiveForBaseUrl !== null) {
+        sessionSpine.deactivate(`daemon mode changed to '${daemonStatus.mode}'`);
+        spineActiveForBaseUrl = null;
+      }
+      // S3d: keep the read facade honest per mode. 'embedded' means this
+      // process's broker IS the daemon's broker (local reads are the whole
+      // truth); every other non-external mode is local-only/dormant.
+      if (daemonStatus.mode === 'embedded') sessionUnionCache.markEmbedded();
+      else sessionUnionCache.deactivate(`daemon mode '${daemonStatus.mode}'`);
+      logger.info(`[bootstrap] session spine: daemon mode '${daemonStatus.mode}' — local-only (no spine mirror)`);
+      return;
+    }
+    const baseUrl = daemonStatus.baseUrl;
+    if (spineActiveForBaseUrl === baseUrl) return; // already wired to this exact adopted daemon
+    const httpTransport = createHttpTransport({ baseUrl, authToken: sharedDaemonToken });
+    const sessionsClient: SpineSessionsClient = {
+      register: (input) => httpTransport.operator.sessions.register(input),
+      close: (sessionId) => httpTransport.operator.sessions.close(sessionId),
+    };
+    sessionSpine.activate(sessionsClient);
+    // S3d: adopt the same daemon's wire as the read facade's cross-surface union
+    // source (interval-refreshed; served synchronously to panels).
+    sessionUnionCache.activate({ list: (limit) => httpTransport.operator.sessions.list(limit) });
+    spineActiveForBaseUrl = baseUrl;
+    logger.info(`[bootstrap] session spine: adopted external daemon at ${baseUrl} — mirroring session identity`);
+    // Legacy fold: one-time (marker-guarded) import of this project's own
+    // pre-spine control-plane sessions.json into the now-adopted daemon.
+    const legacyStorePath = services.shellPaths.resolveProjectPath('tui', 'control-plane', 'sessions.json');
+    const fold = foldLegacySpineStore(sessionSpine, {
+      storePath: legacyStorePath,
+      markerPath: `${legacyStorePath}.spine-migrated`,
+      project: services.workingDirectory,
+    });
+    if (fold.folded > 0) {
+      logger.info(`[bootstrap] session spine: folded ${fold.folded} legacy local session(s) into the adopted daemon`);
+    }
+  };
 
   const inspectExternalServices = () => {
     const daemonStatus = externalServices.daemonStatus;
@@ -375,6 +433,13 @@ export async function bootstrapRuntime(
       httpListenerPortInUse: hostServiceIsBlocked(httpListenerStatus),
       daemonStatus,
       httpListenerStatus,
+      // S3c: honest session-spine posture, independent of daemonRunning —
+      // 'external'-adopted-but-currently-unreachable degrades to 'offline'
+      // here even though daemonRunning might still read true from a stale
+      // handle, because sessionSpine.status() is driven by this client's OWN
+      // live wire attempts, not the one-shot adopt probe.
+      sessionSpineActive: sessionSpine.active,
+      sessionSpineStatus: sessionSpine.status(),
     };
   };
 
@@ -443,6 +508,7 @@ export async function bootstrapRuntime(
       );
       externalServices = await externalServicesPromise;
       controlPlaneRecentEventsRef.value = (limit) => externalServices.listRecentControlPlaneEvents(limit);
+      syncSessionSpineToHostStatus(externalServices.daemonStatus, companionTokenRecord.token);
       requestRender();
       return inspectExternalServices();
     },
@@ -506,6 +572,7 @@ export async function bootstrapRuntime(
       );
       externalServices = await externalServicesPromise;
       controlPlaneRecentEventsRef.value = (limit) => externalServices.listRecentControlPlaneEvents(limit);
+      syncSessionSpineToHostStatus(externalServices.daemonStatus, companionTokenRecord.token);
       requestRender();
     },
     onError: (error) => {
@@ -650,6 +717,11 @@ export async function bootstrapRuntime(
       runtimeUnsubs.forEach((fn) => fn());
       runtimeUnsubs.length = 0;
       forensicsCollector.dispose();
+      // S3c: honest close on exit — fire-and-forget (never blocks shutdown);
+      // a no-op when the spine was never activated (embedded/local-only).
+      sessionSpine.close(runtime.sessionId);
+      sessionSpine.dispose();
+      sessionUnionCache.dispose(); // S3d: stop the wire-refresh interval on exit
       await deferredStartup.drain(100);
       if (externalServicesPromise) {
         try {

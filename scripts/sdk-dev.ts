@@ -23,10 +23,47 @@ import { homedir } from 'node:os';
 
 const TUI_ROOT = process.cwd();
 const SDK_ROOT = process.env.GOODVIBES_SDK_PATH ?? resolve(homedir(), 'Projects/goodvibes-sdk');
-const SDK_PKG_DIST = join(SDK_ROOT, 'packages/sdk/dist');
-const SDK_PKG_JSON = join(SDK_ROOT, 'packages/sdk/package.json');
 const INSTALLED_PKG = join(TUI_ROOT, 'node_modules/@pellux/goodvibes-sdk');
 const MARKER = join(INSTALLED_PKG, '.local-sdk-overlay.json');
+
+// The local SDK is a monorepo; the TUI consumes the main package AND several
+// sibling contract/transport packages. The overlay MUST refresh ALL of them
+// together. Refreshing only goodvibes-sdk leaves the sibling packages at their
+// stale published build — so any test that drives the REAL HTTP client
+// (@pellux/goodvibes-operator-sdk, whose JSON-schema validator reads the
+// generated contract from @pellux/goodvibes-contracts) validates the local
+// SDK's records against an OLD wire schema. Found in S3b: transport-parity
+// rejected the Wave-1 `project` field because only goodvibes-sdk was overlaid.
+// Each entry maps a node_modules basename to its packages/<dir> in the SDK.
+const OVERLAY_PACKAGES: ReadonlyArray<{ readonly nm: string; readonly dir: string }> = [
+  { nm: 'goodvibes-sdk', dir: 'sdk' },
+  { nm: 'goodvibes-contracts', dir: 'contracts' },
+  { nm: 'goodvibes-errors', dir: 'errors' },
+  { nm: 'goodvibes-operator-sdk', dir: 'operator-sdk' },
+  { nm: 'goodvibes-peer-sdk', dir: 'peer-sdk' },
+  { nm: 'goodvibes-daemon-sdk', dir: 'daemon-sdk' },
+  { nm: 'goodvibes-transport-core', dir: 'transport-core' },
+  { nm: 'goodvibes-transport-http', dir: 'transport-http' },
+  { nm: 'goodvibes-transport-realtime', dir: 'transport-realtime' },
+];
+
+// Overlay one monorepo package's dist + package.json into node_modules.
+// MUST unlink package.json before copying: bun hardlinks node_modules files to
+// its global cache, and an in-place overwrite writes THROUGH the hardlink —
+// silently poisoning the machine-wide cache entry for the pinned version (found
+// by WO-0B). The dist rmSync above breaks those links first, so the dist copy
+// is safe. Returns false when the package is not installed / not built (skip).
+function overlayPackage(pkg: { readonly nm: string; readonly dir: string }): boolean {
+  const installed = join(TUI_ROOT, 'node_modules/@pellux', pkg.nm);
+  const dist = join(SDK_ROOT, 'packages', pkg.dir, 'dist');
+  const pkgJson = join(SDK_ROOT, 'packages', pkg.dir, 'package.json');
+  if (!existsSync(installed) || !existsSync(dist)) return false;
+  rmSync(join(installed, 'dist'), { recursive: true, force: true });
+  cpSync(dist, join(installed, 'dist'), { recursive: true });
+  rmSync(join(installed, 'package.json'), { force: true });
+  cpSync(pkgJson, join(installed, 'package.json'));
+  return true;
+}
 
 function sh(cmd: string, cwd: string): string {
   return execSync(cmd, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'inherit'] }).trim();
@@ -47,24 +84,20 @@ function link(): void {
 
   console.log(`sdk-dev: building local SDK (${branch}@${sha}, ${dirty} tree)...`);
   execSync('bun run build && bun run prepare:sdk', { cwd: SDK_ROOT, stdio: 'inherit' });
-  if (!existsSync(SDK_PKG_DIST)) fail(`SDK build produced no dist at ${SDK_PKG_DIST}`);
+  if (!existsSync(join(SDK_ROOT, 'packages/sdk/dist'))) fail('SDK build produced no dist at packages/sdk/dist');
 
-  console.log('sdk-dev: overlaying dist into node_modules/@pellux/goodvibes-sdk...');
-  rmSync(join(INSTALLED_PKG, 'dist'), { recursive: true, force: true });
-  cpSync(SDK_PKG_DIST, join(INSTALLED_PKG, 'dist'), { recursive: true });
-  // package.json too, so new subpath exports added in the local SDK resolve.
-  // MUST unlink before copying: bun hardlinks node_modules files to its global
-  // cache, and an in-place overwrite writes THROUGH the hardlink — silently
-  // poisoning the machine-wide cache entry for the pinned version (found by
-  // WO-0B when porting this script; the dist copy above is safe because rmSync
-  // breaks the links first).
-  rmSync(join(INSTALLED_PKG, 'package.json'), { force: true });
-  cpSync(SDK_PKG_JSON, join(INSTALLED_PKG, 'package.json'));
+  const overlaid: string[] = [];
+  for (const pkg of OVERLAY_PACKAGES) {
+    if (overlayPackage(pkg)) overlaid.push(pkg.nm);
+  }
+  if (!overlaid.includes('goodvibes-sdk')) fail('goodvibes-sdk overlay failed — is node_modules populated?');
+  console.log(`sdk-dev: overlaid ${overlaid.length} package(s): ${overlaid.join(', ')}`);
 
   writeFileSync(MARKER, JSON.stringify({
     sourcePath: SDK_ROOT,
     sdkGit: `${branch}@${sha} (${dirty})`,
     overlaidAt: new Date().toISOString(),
+    overlaidPackages: overlaid,
     note: 'Local SDK overlay active. Run `bun scripts/sdk-dev.ts restore` before releasing; release gates fail while this file exists.',
   }, null, 2));
 
@@ -88,7 +121,21 @@ function restore(): void {
     return;
   }
   console.log('sdk-dev: removing overlay and reinstalling from lockfile...');
-  rmSync(INSTALLED_PKG, { recursive: true, force: true });
+  // Remove every package the overlay may have touched (the marker records what
+  // was overlaid; fall back to the full set for markers written before this
+  // field existed) so no sibling is left at the local build after restore.
+  let overlaidPackages: string[];
+  try {
+    const parsed = JSON.parse(readFileSync(MARKER, 'utf8')) as { overlaidPackages?: unknown };
+    overlaidPackages = Array.isArray(parsed.overlaidPackages)
+      ? parsed.overlaidPackages.filter((v): v is string => typeof v === 'string')
+      : OVERLAY_PACKAGES.map((p) => p.nm);
+  } catch {
+    overlaidPackages = OVERLAY_PACKAGES.map((p) => p.nm);
+  }
+  for (const nm of overlaidPackages) {
+    rmSync(join(TUI_ROOT, 'node_modules/@pellux', nm), { recursive: true, force: true });
+  }
   execSync('bun install', { cwd: TUI_ROOT, stdio: 'inherit' });
   if (existsSync(MARKER)) fail('marker still present after reinstall — restore failed');
   const pkg = JSON.parse(readFileSync(join(INSTALLED_PKG, 'package.json'), 'utf8'));

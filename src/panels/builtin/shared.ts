@@ -4,7 +4,8 @@ import type { ToolRegistry } from '@pellux/goodvibes-sdk/platform/tools';
 import type { ProviderRegistry } from '@pellux/goodvibes-sdk/platform/providers';
 import type { Orchestrator } from '../../core/orchestrator';
 import type { MemoryRegistry } from '@pellux/goodvibes-sdk/platform/state';
-import type { ApprovalBroker, SharedSessionBroker } from '@pellux/goodvibes-sdk/platform/control-plane';
+import type { ApprovalBroker } from '@pellux/goodvibes-sdk/platform/control-plane';
+import type { SessionReadFacade } from '../../runtime/session-union-cache.ts';
 import type { AutomationManager } from '@pellux/goodvibes-sdk/platform/automation';
 import type { ControlPlaneRecentEvent } from '@pellux/goodvibes-sdk/platform/control-plane';
 import type { UiRuntimeServices } from '../../runtime/ui-services.ts';
@@ -84,8 +85,13 @@ export interface BuiltinPanelDeps {
   policyRuntimeState?: import('@/runtime/index.ts').PolicyRuntimeState;
   /** Approval broker for control-plane/operator panels. */
   approvalBroker?: ApprovalBroker;
-  /** Shared session broker for control-plane/operator panels. */
-  sessionBroker?: SharedSessionBroker;
+  /**
+   * S3d: cross-surface session READ facade for control-plane/operator panels.
+   * Sync listSessions()/getSession() shape preserved; in adopted-daemon mode it
+   * serves the daemon-hosted union (with an honest offline note when the wire is
+   * down) instead of only this process's local broker. See session-union-cache.ts.
+   */
+  sessionBroker?: SessionReadFacade;
   /** Automation manager for schedule/operator panels. */
   automationManager?: AutomationManager;
   /** Recent control-plane events provider for control-plane/operator panels. */

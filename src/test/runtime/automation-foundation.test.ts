@@ -60,7 +60,10 @@ describe('automation/control-plane foundation', () => {
     const flags = createFeatureFlagManager();
 
     expect(flags.isEnabled('automation-domain')).toBe(false);
-    expect(flags.isEnabled('control-plane-gateway')).toBe(false);
+    // One-Platform Wave 1: control-plane-gateway is the one tier-10 flag that
+    // defaults ON so a stock daemon can serve its auth-gated streams (see the
+    // flag's HONEST SURFACE STATEMENT in the SDK). It stays runtimeToggleable.
+    expect(flags.isEnabled('control-plane-gateway')).toBe(true);
 
     flags.loadFromConfig({
       flags: {

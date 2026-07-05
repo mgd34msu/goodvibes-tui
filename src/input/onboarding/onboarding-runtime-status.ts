@@ -27,6 +27,13 @@ export function runtimePortDiagnostic(
     if (status.mode === 'unavailable') {
       return `The configured endpoint ${status.baseUrl} is unavailable after startup or restart.${reason}`;
     }
+    if (status.mode === 'incompatible') {
+      // A GoodVibes daemon IS on the port, but it speaks an incompatible wire
+      // version, so this TUI neither adopted it nor started a competing daemon.
+      // status.reason already names the port and both versions (SDK side).
+      const version = status.version ? ` version ${status.version}` : '';
+      return `A GoodVibes service${version} is running at ${status.baseUrl} but is not wire-compatible with this TUI, so it was not adopted.${reason}`;
+    }
     if (status.mode === 'external') {
       const version = status.version ? ` version ${status.version}` : '';
       return `An existing GoodVibes service was verified at ${status.baseUrl}${version}.`;
@@ -62,7 +69,9 @@ export function isRuntimeEndpointOccupyingConfiguredPort(
   endpoint: OnboardingRuntimeEndpoint,
 ): boolean {
   const status = getRuntimeEndpointStatus(state, endpoint);
-  if (status) return status.mode === 'embedded' || status.mode === 'external' || status.mode === 'blocked';
+  // 'incompatible' means a GoodVibes daemon holds the configured port (we just
+  // did not adopt it) — the port IS occupied, so report it as such.
+  if (status) return status.mode === 'embedded' || status.mode === 'external' || status.mode === 'blocked' || status.mode === 'incompatible';
   return endpoint === 'daemon'
     ? state?.daemonRunning === true || state?.daemonPortInUse === true
     : state?.httpListenerRunning === true || state?.httpListenerPortInUse === true;

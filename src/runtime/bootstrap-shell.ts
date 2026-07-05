@@ -32,6 +32,7 @@ import type { PolicyRuntimeState } from '@/runtime/index.ts';
 import type { TaskManager } from '@/runtime/index.ts';
 import type { UiRuntimeServices } from './ui-services.ts';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
+import type { SessionSpineClient } from './session-spine-client.ts';
 
 export interface BootstrapShellState {
   readonly commandRegistry: CommandRegistry;
@@ -47,6 +48,8 @@ export interface BootstrapShellOptions {
   readonly runtimeBus: RuntimeEventBus;
   readonly runtimeStore: RuntimeStore;
   readonly services: RuntimeServices;
+  /** S3c: dormant until bootstrap.ts activates it for an adopted 'external' daemon. */
+  readonly sessionSpine: SessionSpineClient;
   readonly conversation: ConversationManager;
   readonly runtime: MutableRuntimeState;
   readonly orchestrator: Orchestrator;
@@ -70,6 +73,7 @@ export function createBootstrapShell(options: BootstrapShellOptions): BootstrapS
     runtimeBus,
     runtimeStore,
     services,
+    sessionSpine,
     conversation,
     runtime,
     orchestrator,
@@ -103,6 +107,8 @@ export function createBootstrapShell(options: BootstrapShellOptions): BootstrapS
     requestRender,
     onSessionIdChanged,
     sharedSessionBroker: services.sessionBroker,
+    sessionSpine,
+    project: services.workingDirectory,
     writeLastSessionPointer,
     hookDispatcher: services.hookDispatcher,
     sessionManager: services.sessionManager,
@@ -175,7 +181,8 @@ export function createBootstrapShell(options: BootstrapShellOptions): BootstrapS
     forensicsRegistry,
     policyRuntimeState,
     approvalBroker: services.approvalBroker,
-    sessionBroker: services.sessionBroker,
+    // S3d: panels read the cross-surface union facade, not the raw local broker.
+    sessionBroker: uiServices.sessions.sessionBroker,
     automationManager: services.automationManager,
     getControlPlaneRecentEvents,
     tokenAuditor: services.tokenAuditor,

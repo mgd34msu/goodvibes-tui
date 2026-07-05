@@ -127,7 +127,15 @@ describe('new runtime event domains', () => {
       'matrix',
       'service',
     ]);
-    expect([...SURFACE_KINDS]).toEqual([...ROUTE_SURFACE_KINDS]);
+    // SDK One-Platform: SURFACE_KINDS is now a SUPERSET of the route surfaces —
+    // it adds the first-class PRODUCT surfaces (agent/webui/companion/automation)
+    // that are not message-route bindings. Assert the superset relationship plus
+    // the product kinds rather than strict equality.
+    const surfaceKindSet = new Set<string>([...SURFACE_KINDS]);
+    for (const routeKind of ROUTE_SURFACE_KINDS) expect(surfaceKindSet.has(routeKind)).toBe(true);
+    for (const productKind of ['agent', 'webui', 'companion', 'automation']) {
+      expect(surfaceKindSet.has(productKind)).toBe(true);
+    }
     expect([...CONTROL_PLANE_CLIENT_KINDS]).toContain('daemon');
     expect([...CONTROL_PLANE_CLIENT_KINDS]).toContain('service');
     expect([...CONTROL_PLANE_CLIENT_KINDS]).toContain('telegram');
