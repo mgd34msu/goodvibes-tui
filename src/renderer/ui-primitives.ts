@@ -109,6 +109,28 @@ export const UI_TONES = {
   },
   /** Canonical border stroke color for fullscreen/panel chrome. */
   border: '#64748b',
+  /**
+   * Persistent-chrome foregrounds — the header / footer / live-thinking rows
+   * (ui-factory.ts) that paint onto the TRANSPARENT terminal background
+   * (bg:''), NOT onto the opaque dark modal/panel surfaces that fg.* and
+   * state.* serve. This distinction is why these need their own roles: the
+   * neutral fg.muted/fg.dim ramp is tuned light-on-dark for the dark boxes and
+   * cannot be reused here, because in light mode this chrome sits on a light
+   * terminal and must invert toward dark to stay legible. The dark values below
+   * are byte-identical to the shared tokens they replace (fg.muted, fg.dim,
+   * state.warn, state.bad), so dark-mode chrome is unchanged; theme.ts's
+   * UI_TONES_LIGHT gives the light-terminal variants.
+   */
+  chrome: {
+    /** Secondary chrome text (header conversation title). == fg.muted (dark). */
+    label: '#94a3b8',
+    /** Faint chrome text (version, provider, header rule, clean git). == fg.dim (dark). */
+    faint: '#475569',
+    /** Warn accent on terminal bg (dirty git, pending risk). == state.warn (dark). */
+    warn: '#f59e0b',
+    /** Alert accent on terminal bg (DANGER banner, shell risk). == state.bad (dark). */
+    bad: '#ef4444',
+  },
 } as const;
 
 /**
