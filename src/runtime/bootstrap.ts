@@ -363,7 +363,10 @@ export async function bootstrapRuntime(
 
   const hostServiceIsActive = (status: HostServiceStatus): boolean => status.mode === 'embedded' || status.mode === 'external';
 
-  const hostServiceIsBlocked = (status: HostServiceStatus): boolean => status.mode === 'blocked';
+  // 'blocked' (occupied by an unverified process) and 'incompatible' (occupied
+  // by a GoodVibes daemon we refused to adopt on a wire-version mismatch) both
+  // mean the configured port is held and unusable by this TUI instance.
+  const hostServiceIsBlocked = (status: HostServiceStatus): boolean => status.mode === 'blocked' || status.mode === 'incompatible';
 
   const inspectExternalServices = () => {
     const daemonStatus = externalServices.daemonStatus;
