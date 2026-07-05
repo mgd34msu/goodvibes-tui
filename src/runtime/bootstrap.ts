@@ -199,6 +199,11 @@ export async function bootstrapRuntime(
     pluginManager,
   } = services;
 
+  // D4b: a liveness flip is only PAINTED once something calls requestRender();
+  // without this, the footer's spine segment sat correct-but-undrawn until
+  // incidental activity redrew it (minutes, during an idle stretch).
+  sessionUnionCache.setOnTransition(() => requestRender());
+
   // ── Phase 6: Orchestrator + AcpManager ───────────────────────────────────
 
   // Mutable function refs so main.ts can patch these after constructing the scroll/viewport state.
