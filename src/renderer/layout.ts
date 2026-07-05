@@ -20,10 +20,6 @@ export const TOOL_STATUS = {
   TOOL_NAME_PAD: 8,
 } as const;
 
-export const COLORS = {
-  DIM_TEXT: UI_TONES.fg.dim,
-} as const;
-
 export const BORDERS = {
   THINKING: { char: '▌', color: UI_TONES.state.reasoning },
   ERROR:    { char: '▌', color: UI_TONES.state.bad },

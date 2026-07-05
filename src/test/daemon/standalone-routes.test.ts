@@ -24,13 +24,6 @@ import { resetTestRuntimeServices } from '../helpers/runtime-services.ts';
 import { buildTestModelDefinition } from '../helpers/test-managers.ts';
 
 const TEST_TOKEN = 'standalone-test-token-abc123';
-const TEST_PORT_BASE = 39600;
-
-// Spread port assignments across tests to avoid conflicts
-let portOffset = 0;
-function nextPort(): number {
-  return TEST_PORT_BASE + portOffset++;
-}
 
 function makeTempDir(): string {
   return mkdtempSync(join(tmpdir(), 'gv-standalone-'));
@@ -59,8 +52,7 @@ function makeEnv(tempRoot: string): {
 
 async function startDaemon(
   env: ReturnType<typeof makeEnv>,
-  port: number,
-): Promise<{ daemon: DaemonServer; runtimeServices: ReturnType<typeof createRuntimeServices> }> {
+): Promise<{ daemon: DaemonServer; runtimeServices: ReturnType<typeof createRuntimeServices>; port: number }> {
   const runtimeBus = new RuntimeEventBus();
   const runtimeStore = createRuntimeStore();
   const featureFlags = createFeatureFlagManager();
@@ -78,15 +70,26 @@ async function startDaemon(
     homeDirectory: env.homeDir,
     getConversationTitle: () => 'standalone test',
   });
+  // Ephemeral-port harness: bind on port 0 and capture the OS-assigned port so
+  // two concurrent `bun test` processes never collide on a fixed base port.
+  // Injecting a serveFactory also makes DaemonServer skip its pre-bind OS port
+  // probe (the facade only probes when serveFactory === Bun.serve).
+  let boundPort = 0;
+  const capturingServe = ((options) => {
+    const server = Bun.serve(options);
+    boundPort = server.port;
+    return server;
+  }) as typeof Bun.serve;
   const daemon = new DaemonServer({
-    port,
+    port: 0,
     host: '127.0.0.1',
     userAuth: env.userAuth,
     runtimeServices,
+    serveFactory: capturingServe,
   });
   daemon.enable({ daemon: true }, TEST_TOKEN);
   await daemon.start();
-  return { daemon, runtimeServices };
+  return { daemon, runtimeServices, port: boundPort };
 }
 
 function bearerHeaders(): HeadersInit {
@@ -159,9 +162,8 @@ describe('F1 — companion-chat routes on standalone DaemonServer', () => {
   beforeEach(async () => {
     resetTestRuntimeServices();
     tempRoot = makeTempDir();
-    port = nextPort();
     const env = makeEnv(tempRoot);
-    ({ daemon } = await startDaemon(env, port));
+    ({ daemon, port } = await startDaemon(env));
   });
 
   afterEach(async () => {
@@ -383,9 +385,8 @@ describe('F2 — provider state on standalone daemon', () => {
   beforeEach(async () => {
     resetTestRuntimeServices();
     tempRoot = makeTempDir();
-    port = nextPort();
     const env = makeEnv(tempRoot);
-    ({ daemon, runtimeServices } = await startDaemon(env, port));
+    ({ daemon, runtimeServices, port } = await startDaemon(env));
   });
 
   afterEach(async () => {
@@ -445,9 +446,8 @@ describe('F4 — panel registry on standalone daemon', () => {
   beforeEach(async () => {
     resetTestRuntimeServices();
     tempRoot = makeTempDir();
-    port = nextPort();
     const env = makeEnv(tempRoot);
-    ({ daemon, runtimeServices } = await startDaemon(env, port));
+    ({ daemon, runtimeServices, port } = await startDaemon(env));
   });
 
   afterEach(async () => {
@@ -521,9 +521,8 @@ describe('F14 — control-plane SSE default domains', () => {
   beforeEach(async () => {
     resetTestRuntimeServices();
     tempRoot = makeTempDir();
-    port = nextPort();
     const env = makeEnv(tempRoot);
-    ({ daemon } = await startDaemon(env, port));
+    ({ daemon, port } = await startDaemon(env));
   });
 
   afterEach(async () => {

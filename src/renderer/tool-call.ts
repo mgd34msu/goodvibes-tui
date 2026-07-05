@@ -4,7 +4,8 @@ import { getDisplayWidth, truncateDisplay } from '../utils/terminal-width.ts';
 import type { ToolCall } from '@pellux/goodvibes-sdk/platform/types';
 import { stripDangerousAnsi } from './ansi-sanitize.ts';
 import { formatElapsed } from '../utils/format-elapsed.ts';
-import { UI_TONES, GLYPHS } from './ui-primitives.ts';
+import { GLYPHS } from './ui-primitives.ts';
+import { activeUiTones } from './theme.ts';
 
 const TOOL_NAME_MIN_WIDTH = 8;
 const TOOL_NAME_MAX_WIDTH = 20;
@@ -46,6 +47,7 @@ function buildLeftSegments(
 ): Array<{ text: string; fg: string; bold?: boolean; dim?: boolean }> {
   if (leftBudget <= 0) return [];
 
+  const t = activeUiTones();
   const segments: Array<{ text: string; fg: string; bold?: boolean; dim?: boolean }> = [];
   const suffixBudget = suffixText ? Math.min(Math.max(12, Math.floor(leftBudget * 0.3)), 20) : 0;
   const suffixDisplay = suffixBudget > 0 ? truncateDisplay(suffixText, suffixBudget) : '';
@@ -74,14 +76,14 @@ function buildLeftSegments(
     segments.push({ text: toolNameDisplay, fg: '#00ffcc', bold: true });
   }
   if (keyArgDisplay) {
-    segments.push({ text: '  ', fg: UI_TONES.fg.primary });
+    segments.push({ text: '  ', fg: t.fg.primary });
     segments.push({ text: keyArgDisplay, fg: '252' });
   }
   if (suffixDisplay) {
-    segments.push({ text: '  ', fg: UI_TONES.fg.primary });
+    segments.push({ text: '  ', fg: t.fg.primary });
     segments.push({
       text: suffixDisplay,
-      fg: suffixText.startsWith('- ') ? UI_TONES.state.bad : '244',
+      fg: suffixText.startsWith('- ') ? t.chrome.bad : '244',
       dim: true,
     });
   }
@@ -164,6 +166,7 @@ export function renderToolCallBlock(
   startedAtMs?: number,
 ): Line[] {
   const line = createEmptyLine(width);
+  const t = activeUiTones();
   const margin = LAYOUT.LEFT_MARGIN;
   const rightMargin = LAYOUT.RIGHT_MARGIN;
   const contentEnd = width - rightMargin;
@@ -175,8 +178,8 @@ export function renderToolCallBlock(
     : status === 'error' ? TOOL_STATUS.FAIL_ICON
     : status === 'pending' ? GLYPHS.status.idle
     : TOOL_STATUS.SPINNER_FRAMES[(frameIndex ?? 0) % TOOL_STATUS.SPINNER_FRAMES.length];
-  const iconColor = status === 'done' ? UI_TONES.state.good
-    : status === 'error' ? UI_TONES.state.bad
+  const iconColor = status === 'done' ? t.chrome.good
+    : status === 'error' ? t.chrome.bad
     : '244';
   const rightText = (() => {
     if (durationMs !== undefined && status === 'done') {
