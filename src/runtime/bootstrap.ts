@@ -38,6 +38,7 @@ import { restoreSavedModel } from '@/runtime/index.ts';
 import { startExternalServices, type ExternalServicesHandle, type HostServiceStatus } from '@/runtime/index.ts';
 import { createHttpTransport } from '@/runtime/index.ts';
 import { foldLegacySpineStore, type SpineSessionsClient } from './session-spine-client.ts';
+import { deriveSpineFooterStatus } from './session-union-cache.ts';
 import { pruneStaleOperatorTokens } from '@pellux/goodvibes-sdk/platform/pairing';
 import { resolveDaemonCompanionToken, workspaceOperatorTokenCandidates } from './operator-token-cleanup.ts';
 import type { UiRuntimeServices } from './ui-services.ts';
@@ -442,13 +443,16 @@ export async function bootstrapRuntime(
       httpListenerPortInUse: hostServiceIsBlocked(httpListenerStatus),
       daemonStatus,
       httpListenerStatus,
-      // S3c: honest session-spine posture, independent of daemonRunning —
-      // 'external'-adopted-but-currently-unreachable degrades to 'offline'
-      // here even though daemonRunning might still read true from a stale
-      // handle, because sessionSpine.status() is driven by this client's OWN
-      // live wire attempts, not the one-shot adopt probe.
+      // S3c/D4: honest session-spine posture, independent of daemonRunning —
+      // 'external'-adopted-but-currently-unreachable degrades to 'offline' here
+      // even though daemonRunning might still read true from a stale handle.
+      // D4: sessionSpine.status() alone is ACTIVITY-gated (only updates on a
+      // register/heartbeat/close), so after the daemon dies mid-idle it would
+      // keep reading 'online'. Derive the footer status from the union cache's
+      // 5s liveness probe too — one signal, no new timer — so offline surfaces
+      // within one refresh interval of the daemon dying.
       sessionSpineActive: sessionSpine.active,
-      sessionSpineStatus: sessionSpine.status(),
+      sessionSpineStatus: deriveSpineFooterStatus(sessionSpine.status(), sessionUnionCache.crossSurfaceView),
     };
   };
 
