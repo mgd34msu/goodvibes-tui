@@ -15,7 +15,7 @@
 |│     TTS (6)            │─────────────────────────────────────────────────────────────────────────│|
 |│ SERVICE & NETWORK      │   Setting             Value       Type       Source        Default      │|
 |│     Service (6)        │ • stream              true        boolean    default       true         │|
-|│     Daemon (1)         │   lineNumbers         off         enum       default       off          │|
+|│     Daemon (2)         │   lineNumbers         off         enum       default       off          │|
 |│     Network (31)       │   collapseThreshold   30          number     default       30           │|
 |│     Control Plane (13  │   theme               vaporwave   string     default       vaporwave    │|
 |│     HTTP Listener (7)  │   showThinking        false       boolean    default       false        │|

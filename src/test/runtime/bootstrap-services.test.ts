@@ -16,6 +16,7 @@ function createConfig(overrides: {
     get(
       key:
         | 'danger.daemon'
+        | 'daemon.embedInProcess'
         | 'danger.httpListener'
         | 'controlPlane.host'
         | 'controlPlane.port'
@@ -23,6 +24,12 @@ function createConfig(overrides: {
         | 'httpListener.port',
     ): boolean | string | number {
       if (key === 'danger.daemon') return overrides.daemon ?? false;
+      // D7a: these tests exercise the EMBEDDED daemon/listener path via the
+      // createDaemonServer/createHttpListener factories directly — force
+      // daemon.embedInProcess so startHostServices never attempts the new
+      // default detached-spawn path (which would really try to spawn a
+      // goodvibes-daemon subprocess and blow the test's timeout budget).
+      if (key === 'daemon.embedInProcess') return true;
       if (key === 'danger.httpListener') return overrides.httpListener ?? false;
       if (key === 'controlPlane.host') return overrides.controlPlaneHost ?? '127.0.0.1';
       if (key === 'controlPlane.port') return overrides.controlPlanePort ?? 3421;
