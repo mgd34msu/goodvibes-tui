@@ -9,6 +9,7 @@ import { HelperModel } from '@pellux/goodvibes-sdk/platform/config';
 import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import { formatReturnContextForDisplay, getReturnContextMode, maybeAssistReturnContextSummary } from '@/runtime/index.ts';
 import type { SharedSessionBroker } from '@pellux/goodvibes-sdk/platform/control-plane';
+import type { SessionSpineClient } from './session-spine-client.ts';
 import type { SessionManager } from '@pellux/goodvibes-sdk/platform/sessions';
 import type { PanelManager } from '../panels/panel-manager.ts';
 import type { ProviderRegistry } from '@pellux/goodvibes-sdk/platform/providers';
@@ -22,6 +23,10 @@ export interface ResumeSessionOptions {
   readonly requestRender: () => void;
   readonly onSessionIdChanged?: (sessionId: string) => void;
   readonly sharedSessionBroker: Pick<SharedSessionBroker, 'reopenSession'>;
+  /** S3c: fire-and-forget daemon-spine mirror. Reopen (not register) is the
+   * ONLY resume-time verb — see session-spine-client.ts's header doc. */
+  readonly sessionSpine: Pick<SessionSpineClient, 'reopen'>;
+  readonly project: string;
   readonly writeLastSessionPointer: (sessionId: string) => void;
   readonly hookDispatcher: HookDispatcher;
   readonly sessionManager: SessionManager;
@@ -75,6 +80,8 @@ export function createResumeSessionHandler(options: ResumeSessionOptions): (sess
       if (meta?.provider) options.runtime.provider = meta.provider;
       options.writeLastSessionPointer(sessionId);
       void options.sharedSessionBroker.reopenSession(sessionId).catch((err) => { logger.debug('session broker reopen session failed', { err }); });
+      // S3c: fire-and-forget spine mirror (reopen:true — the user resume verb).
+      options.sessionSpine.reopen({ sessionId, project: options.project, title: options.conversation.title || meta.title });
       options.conversation.log(`Resumed session: ${sessionId}`, { fg: '135' });
       const reopenedPanels: string[] = [];
       if (meta.returnContext?.openPanels?.length) {
