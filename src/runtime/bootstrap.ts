@@ -38,8 +38,8 @@ import { restoreSavedModel } from '@/runtime/index.ts';
 import { startExternalServices, type ExternalServicesHandle, type HostServiceStatus } from '@/runtime/index.ts';
 import { createHttpTransport } from '@/runtime/index.ts';
 import { foldLegacySpineStore, type SpineSessionsClient } from './session-spine-client.ts';
-import { getOrCreateCompanionToken, pruneStaleOperatorTokens } from '@pellux/goodvibes-sdk/platform/pairing';
-import { workspaceOperatorTokenCandidates } from './operator-token-cleanup.ts';
+import { pruneStaleOperatorTokens } from '@pellux/goodvibes-sdk/platform/pairing';
+import { resolveDaemonCompanionToken, workspaceOperatorTokenCandidates } from './operator-token-cleanup.ts';
 import type { UiRuntimeServices } from './ui-services.ts';
 import { createDeferredStartupCoordinator } from '@/runtime/index.ts';
 import { initializeBootstrapCore } from './bootstrap-core.ts';
@@ -187,6 +187,7 @@ export async function bootstrapRuntime(
     runtimeSessionIdRef,
     wrfcPersistence,
     sessionSpine,
+    sessionInboundInputs,
     sessionUnionCache,
   } = await initializeBootstrapCore(stdout, options, (limit) => controlPlaneRecentEventsRef.value(limit));
   const providerRegistry = services.providerRegistry;
@@ -387,6 +388,7 @@ export async function bootstrapRuntime(
     if (daemonStatus.mode !== 'external') {
       if (spineActiveForBaseUrl !== null) {
         sessionSpine.deactivate(`daemon mode changed to '${daemonStatus.mode}'`);
+        sessionInboundInputs.deactivate(`daemon mode changed to '${daemonStatus.mode}'`);
         spineActiveForBaseUrl = null;
       }
       // S3d: keep the read facade honest per mode. 'embedded' means this
@@ -405,6 +407,13 @@ export async function bootstrapRuntime(
       close: (sessionId) => httpTransport.operator.sessions.close(sessionId),
     };
     sessionSpine.activate(sessionsClient);
+    // D3: adopt the same daemon's wire for the INBOUND steer path — collect
+    // steer/follow-up inputs another live surface queued for this session and
+    // inject them into the turn machinery (acking delivery on the wire).
+    sessionInboundInputs.activate({
+      listInputs: (sessionId, opts) => httpTransport.operator.sessions.inputs.list(sessionId, opts),
+      deliverInput: (sessionId, inputId, opts) => httpTransport.operator.sessions.inputs.deliver(sessionId, inputId, opts),
+    });
     // S3d: adopt the same daemon's wire as the read facade's cross-surface union
     // source (interval-refreshed; served synchronously to panels).
     sessionUnionCache.activate({ list: (limit) => httpTransport.operator.sessions.list(limit) });
@@ -498,7 +507,7 @@ export async function bootstrapRuntime(
       await waitForConfigDrivenRestarts(externalServices);
       await externalServices.stop();
       const daemonHomeDir = join(services.homeDirectory, '.goodvibes', 'daemon');
-      const companionTokenRecord = getOrCreateCompanionToken('tui', { daemonHomeDir });
+      const companionTokenRecord = resolveDaemonCompanionToken(daemonHomeDir);
       externalServicesPromise = startExternalServices(
         configManager,
         runtimeBus,
@@ -547,7 +556,7 @@ export async function bootstrapRuntime(
       // bearer, so tokens scanned from the /qrcode panel's QR actually
       // authenticate against the embedded daemon this surface starts.
       const daemonHomeDir = join(services.homeDirectory, '.goodvibes', 'daemon');
-      const companionTokenRecord = getOrCreateCompanionToken('tui', { daemonHomeDir });
+      const companionTokenRecord = resolveDaemonCompanionToken(daemonHomeDir);
       // F3 resolution (TUI 0.19.20): remove stale pre-0.21.28 workspace-scoped operator
       // token files so only the canonical <daemonHomeDir>/operator-tokens.json survives.
       // The prune is best-effort — it silently skips missing files, no-ops when tokens
@@ -721,6 +730,7 @@ export async function bootstrapRuntime(
       // a no-op when the spine was never activated (embedded/local-only).
       sessionSpine.close(runtime.sessionId);
       sessionSpine.dispose();
+      sessionInboundInputs.dispose(); // D3: stop the inbound steer poll interval on exit
       sessionUnionCache.dispose(); // S3d: stop the wire-refresh interval on exit
       await deferredStartup.drain(100);
       if (externalServicesPromise) {

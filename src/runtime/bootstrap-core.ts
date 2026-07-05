@@ -34,6 +34,7 @@ import { installWrfcAgentToolGuard } from '../tools/wrfc-agent-guard.ts';
 import { createWrfcPersistence, type WrfcPersistence } from './wrfc-persistence.ts';
 import type { SystemMessagePriority } from '../core/system-message-router.ts';
 import { SessionSpineClient } from './session-spine-client.ts';
+import { SessionInboundInputPoller, narrateInboundSteer } from './session-inbound-inputs.ts';
 import { SessionUnionCache } from './session-union-cache.ts';
 
 // ---------------------------------------------------------------------------
@@ -118,6 +119,9 @@ export interface BootstrapCoreState {
   readonly runtimeSessionIdRef: { value: string };
   /** S3c: dormant until bootstrap.ts activates it for an adopted 'external' daemon. */
   readonly sessionSpine: SessionSpineClient;
+  /** D3: inbound steer/follow-up delivery to THIS live surface; dormant until
+   * bootstrap.ts activates it for an adopted 'external' daemon. */
+  readonly sessionInboundInputs: SessionInboundInputPoller;
   /** S3d: cache-backed session read facade; bootstrap.ts drives its mode from the same HostServiceMode. */
   readonly sessionUnionCache: SessionUnionCache;
   /**
@@ -650,6 +654,29 @@ export async function initializeBootstrapCore(
     },
   ));
 
+  // D3 (One-Platform Wave 2): INBOUND steer delivery to THIS live surface. Once
+  // the TUI has adopted an external daemon, another surface's steer/follow-up to
+  // this session QUEUES on the daemon (mode 'queued-for-surface') rather than
+  // spawning a daemon-side executor (which would fail on the daemon's empty model
+  // registry). This poller collects the queued inputs for THIS sessionId, narrates
+  // each to the operator, and injects it into the turn machinery via the SAME path
+  // COMPANION_MESSAGE_RECEIVED uses (orchestrator.handleUserInput — main session's
+  // next-turn boundary), then acknowledges delivery on the wire. Scoped by
+  // sessionId, so a steer for another session can never land here (per-session
+  // isolation). Dormant until bootstrap.ts activates it for the adopted daemon.
+  const sessionInboundInputs = new SessionInboundInputPoller({
+    sessionId: () => runtimeSessionIdRef.value || null,
+    onSteer: (steer) => {
+      routeOrBuffer(narrateInboundSteer(steer), 'low');
+      if (orchestratorHandleUserInputRef.value) {
+        orchestratorHandleUserInputRef.value(steer.body);
+      } else {
+        conversation.addUserMessage(steer.body);
+        requestRender();
+      }
+    },
+  });
+
   providerRegistry.startWatching(runtimeBus);
 
   // W2.3: attach the SAME WebhookNotifier instance that `/notify add|remove|clear`
@@ -795,6 +822,7 @@ export async function initializeBootstrapCore(
     runtimeSessionIdRef,
     wrfcPersistence,
     sessionSpine,
+    sessionInboundInputs,
     sessionUnionCache,
   };
 }
