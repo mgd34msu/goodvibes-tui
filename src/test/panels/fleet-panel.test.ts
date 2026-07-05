@@ -781,7 +781,9 @@ describe('FleetPanel — s opens the steer composer on an active, steerable tab'
     expect(panel.handleInput('s')).toBe(true);
     expect(panel.isCapturingTextBurst()).toBe(false);
     const text = linesText(panel.render(100, 24));
-    expect(text).toContain('does not support steering');
+    // Closure replay wording fix: a finished node's refusal names the REAL
+    // reason — "does not support" is reserved for capability refusals.
+    expect(text).toContain('already finished — nothing to steer');
   });
 
   test('the s hint appears in the tab footer only when the live node is steerable', () => {
