@@ -412,8 +412,10 @@ export async function bootstrapRuntime(
     // steer/follow-up inputs another live surface queued for this session and
     // inject them into the turn machinery (acking delivery on the wire).
     sessionInboundInputs.activate({
-      listInputs: (sessionId, opts) => httpTransport.operator.sessions.inputs.list(sessionId, opts),
-      deliverInput: (sessionId, inputId, opts) => httpTransport.operator.sessions.inputs.deliver(sessionId, inputId, opts),
+      listInputs: async (sessionId, opts) => ({
+        inputs: await httpTransport.operator.sessions.inputs(sessionId, opts.limit, { state: opts.state, since: opts.since }),
+      }),
+      deliverInput: (sessionId, inputId, opts) => httpTransport.operator.sessions.deliverInput(sessionId, inputId, opts),
     });
     // S3d: adopt the same daemon's wire as the read facade's cross-surface union
     // source (interval-refreshed; served synchronously to panels).
