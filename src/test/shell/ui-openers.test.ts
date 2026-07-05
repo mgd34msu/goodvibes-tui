@@ -299,4 +299,71 @@ describe('wireShellUiOpeners', () => {
       expect(print).toHaveBeenCalledWith(expect.stringContaining('Failed to set embedding provider'));
     });
   });
+
+  // D5: providerRegistry.getSelectableModels()/listModels() are catalog-driven —
+  // they include every provider id present in the fetched pricing catalog (e.g.
+  // 'google', from Gemini catalog entries) regardless of whether that provider
+  // id was ever handed to providerRegistry.register()/registerRuntimeProvider().
+  // Selecting one of those models used to fail at turn time with
+  // ProviderNotFoundError ("Provider 'google' is not registered."). The picker
+  // must intersect against providerRegistry.has() so it never offers a model or
+  // provider that cannot work.
+  describe('unregistered-provider filtering (D5)', () => {
+    const registeredModel = { id: 'gemini-pro', provider: 'gemini', displayName: 'Gemini Pro' };
+    const unregisteredModel = { id: 'gemini-2.5-pro', provider: 'google', displayName: 'Gemini 2.5 Pro (catalog)' };
+
+    function wireWithCatalogMismatch(): void {
+      wireShellUiOpeners({
+        commandContext: commandContext as never,
+        input: input as never,
+        panelManager: panelManager as never,
+        conversation: conversation as never,
+        configManager: testManagers.configManager,
+        providerRegistry: {
+          getSelectableModels: () => [registeredModel, unregisteredModel],
+          listModels: () => [registeredModel, unregisteredModel],
+          // Only 'gemini' was ever registered; 'google' is catalog-only —
+          // proves the mismatch this test guards against.
+          has: (id: string) => id === 'gemini',
+        } as never,
+        runtime: { model: 'm', provider: 'p' } as never,
+        featureFlags: {} as never,
+        mcpRegistry: {} as never,
+        subscriptionManager: testManagers.subscriptionManager,
+        serviceRegistry: testManagers.serviceRegistry,
+        memoryEmbeddingRegistry: fakeEmbeddingRegistry as never,
+        getConfiguredProviderIds: () => [],
+        getPinned: async () => [],
+        render,
+      });
+    }
+
+    async function flush(): Promise<void> {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+
+    test('openModelPicker never hands the flat model list an unregistered provider\'s model', async () => {
+      wireWithCatalogMismatch();
+      (commandContext.openModelPicker as () => void)();
+      await flush();
+
+      const openAllModels = (input.modelPicker as Record<string, unknown>).openAllModels as ReturnType<typeof mock>;
+      expect(openAllModels).toHaveBeenCalledTimes(1);
+      const passedModels = openAllModels.mock.calls[0]![0] as Array<{ provider: string }>;
+      expect(passedModels.map((m) => m.provider)).toEqual(['gemini']);
+      expect(passedModels.some((m) => m.provider === 'google')).toBe(false);
+    });
+
+    test('openProviderPicker never lists a provider id the runtime has not registered', async () => {
+      wireWithCatalogMismatch();
+      (commandContext.openProviderPicker as () => void)();
+      await flush();
+
+      const openProviders = (input.modelPicker as Record<string, unknown>).openProviders as ReturnType<typeof mock>;
+      expect(openProviders).toHaveBeenCalledTimes(1);
+      const passedProviders = openProviders.mock.calls[0]![0] as string[];
+      expect(passedProviders).toEqual(['gemini']);
+      expect(passedProviders).not.toContain('google');
+    });
+  });
 });
