@@ -25,7 +25,12 @@ export function formatWorkItemIsolationDetail(item: WorkItem): string | null {
   if (!isolated) return null;
   switch (item.mergeState) {
     case 'merged':
-      return item.mergeHash ? `worktree — merged ${item.mergeHash.slice(0, 12)}` : 'worktree — merged (nothing to merge)';
+      // Papercut sweep item 3: worktree-isolation items whose integration had
+      // no changes to merge (mergeState 'merged', mergeHash undefined — a
+      // documented cosmetic case, not an error) used to read as a bare/awkward
+      // "merged (nothing to merge)". "merged (no changes)" says the same thing
+      // in the same shape as the other merge-state phrases below.
+      return item.mergeHash ? `worktree — merged ${item.mergeHash.slice(0, 12)}` : 'worktree — merged (no changes)';
     case 'conflict':
       return 'worktree — merge-conflict (kept for inspection)';
     case 'pending':
