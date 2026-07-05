@@ -37,6 +37,7 @@ const CATEGORY_INFO: Record<SettingsCategory, string> = {
   helper: 'Helper model defaults used by helper subsystems when they do not use the main chat route.',
   tts: 'Text-to-speech provider, voice, and optional spoken-turn LLM overrides.',
   service: 'Background service posture: enabled state, autostart, restart behavior, service name, platform, and logs.',
+  daemon: 'Local session daemon. It hosts the shared session broker and companion chat so a session started here is visible and steerable from other surfaces. On by default, bound to loopback (127.0.0.1) only.',
   controlPlane: 'Daemon control-plane settings for local admin/API access.',
   httpListener: 'HTTP listener settings for webhook and integration ingress.',
   web: 'Browser surface settings for the local or network web UI.',
