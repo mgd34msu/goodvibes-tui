@@ -346,3 +346,38 @@ describe('foldLegacySpineStore', () => {
     expect(existsSync(markerPath)).toBe(false);
   });
 });
+
+describe('SessionSpineClient timer-driven keepalive (D3/#4 — surface never goes stale mid-idle)', () => {
+  test('keepalive re-heartbeats on its own cadence with NO render/turn activity', async () => {
+    const fake = makeFakeSessionsClient();
+    // Small window so the interval fires quickly in the test.
+    const client = new SessionSpineClient({ heartbeatMinIntervalMs: 15, log: { debug: () => {}, info: () => {} } });
+    client.activate(fake.client);
+    client.register({ sessionId: 'keepalive-1', project: '/p', title: 'T' });
+    await settle();
+    expect(client.keepaliveSessionId).toBe('keepalive-1');
+    const afterRegister = fake.calls.filter((c) => c.kind === 'register').length;
+
+    // Without touching the client again (no renders, no activity), the keepalive
+    // timer must produce further heartbeats.
+    await new Promise((r) => setTimeout(r, 70));
+    await settle();
+    const afterIdle = fake.calls.filter((c) => c.kind === 'register').length;
+    expect(afterIdle).toBeGreaterThan(afterRegister);
+    // Every keepalive beat targets the live session id.
+    expect(fake.calls.every((c) => c.sessionId === 'keepalive-1')).toBe(true);
+    client.dispose();
+  });
+
+  test('dispose() stops the keepalive (no beats after teardown)', async () => {
+    const fake = makeFakeSessionsClient();
+    const client = new SessionSpineClient({ heartbeatMinIntervalMs: 15, log: { debug: () => {}, info: () => {} } });
+    client.activate(fake.client);
+    client.register({ sessionId: 'keepalive-2', project: '/p', title: 'T' });
+    await settle();
+    client.dispose();
+    const afterDispose = fake.calls.length;
+    await new Promise((r) => setTimeout(r, 70));
+    expect(fake.calls.length).toBe(afterDispose);
+  });
+});

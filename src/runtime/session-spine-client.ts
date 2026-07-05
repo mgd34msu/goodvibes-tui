@@ -113,6 +113,14 @@ export class SessionSpineClient {
   private lastHeartbeatAt = 0;
   private heartbeatTimer: ReturnType<typeof setTimeout> | null = null;
   private flushing = false;
+  /** The most recently registered/reopened session — the target of the timer-driven
+   * keepalive heartbeat below. */
+  private lastSessionId: string | null = null;
+  /** Timer-driven keepalive: fires the heartbeat on a fixed cadence INDEPENDENT of
+   * render/turn activity, so a live-but-render-silent surface (idle, or mid long
+   * model call) keeps its participant lastSeenAt fresh and never falls outside the
+   * daemon's steer-to-surface routing window (SURFACE_ROUTE_FRESHNESS_MS). D3/#4. */
+  private keepaliveTimer: ReturnType<typeof setInterval> | null = null;
 
   constructor(options: SessionSpineClientOptions = {}) {
     this.now = options.now ?? (() => Date.now());
@@ -146,7 +154,26 @@ export class SessionSpineClient {
   activate(sessionsClient: SpineSessionsClient): void {
     this.sessionsClient = sessionsClient;
     this.log.info('session spine activated — mirroring session identity to the adopted external daemon', {});
+    this.startKeepalive();
     void this.flush();
+  }
+
+  /** Start the timer-driven keepalive heartbeat (idempotent). Fires at the same
+   * cadence as the debounce window so it coalesces with render-driven beats — at
+   * most one wire call per window either way. */
+  private startKeepalive(): void {
+    if (this.keepaliveTimer !== null || this.heartbeatMinIntervalMs <= 0) return;
+    this.keepaliveTimer = setInterval(() => {
+      if (this.lastSessionId) this.heartbeat(this.lastSessionId);
+    }, this.heartbeatMinIntervalMs);
+    this.keepaliveTimer.unref?.();
+  }
+
+  private stopKeepalive(): void {
+    if (this.keepaliveTimer !== null) {
+      clearInterval(this.keepaliveTimer);
+      this.keepaliveTimer = null;
+    }
   }
 
   /** Detach the backend (daemon mode resolved to non-external, or was lost).
@@ -155,6 +182,7 @@ export class SessionSpineClient {
     if (this.sessionsClient === null) return;
     this.sessionsClient = null;
     this.reachability = 'unknown';
+    this.stopKeepalive();
     this.log.info('session spine deactivated', { reason });
   }
 
@@ -224,11 +252,19 @@ export class SessionSpineClient {
       clearTimeout(this.heartbeatTimer);
       this.heartbeatTimer = null;
     }
+    this.stopKeepalive();
+  }
+
+  /** The session the keepalive heartbeat currently targets (diagnostics/tests). */
+  get keepaliveSessionId(): string | null {
+    return this.lastSessionId;
   }
 
   private cacheHeartbeatRecord(record: SessionSpineRecord): void {
     // Cache the title-less form so heartbeats never rename a titled session.
     this.records.set(record.sessionId, this.buildInput(record, { includeTitle: false }));
+    // Track the newest session as the keepalive-heartbeat target.
+    this.lastSessionId = record.sessionId;
   }
 
   private buildInput(
