@@ -231,7 +231,13 @@ export function wireShellUiOpeners(options: WireShellUiOpenersOptions): void {
 
   commandContext.openModelPicker = () => {
     void (async () => {
-      const models = providerRegistry.getSelectableModels();
+      // D5: getSelectableModels() is catalog-driven and can list models whose
+      // `provider` id (e.g. 'google', sourced from the pricing catalog) was never
+      // handed to providerRegistry.register()/registerRuntimeProvider(). Selecting
+      // such a model fails hard at turn time with ProviderNotFoundError
+      // ("Provider 'X' is not registered."). Filter to runtime-registered
+      // providers only, so the picker never offers a model that cannot work.
+      const models = providerRegistry.getSelectableModels().filter((m) => providerRegistry.has(m.provider));
       const configuredIds = new Set(getConfiguredProviderIds());
       input.modelPicker.configuredProviders = configuredIds;
       const providerIds = [...new Set(models.map((m) => m.provider))];
@@ -258,7 +264,13 @@ export function wireShellUiOpeners(options: WireShellUiOpenersOptions): void {
 
   commandContext.openProviderPicker = () => {
     void (async () => {
-      const providers = [...new Set(providerRegistry.listModels().map((model) => model.provider))];
+      // D5: listModels() surfaces every catalog provider id, not just the ones
+      // actually registered on this runtime (see openModelPicker above for the
+      // same class of bug). Intersect against providerRegistry.has() so the
+      // provider picker never offers a provider that will fail with
+      // "Provider not registered" once a model under it is selected.
+      const providers = [...new Set(providerRegistry.listModels().map((model) => model.provider))]
+        .filter((providerId) => providerRegistry.has(providerId));
       const configuredIds = new Set(getConfiguredProviderIds());
       input.modelPicker.configuredProviders = configuredIds;
       const secretProviderIds = await resolveSecretProviderIds();
