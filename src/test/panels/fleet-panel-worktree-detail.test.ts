@@ -42,7 +42,7 @@ describe('formatWorkItemIsolationDetail', () => {
 
   test('merged with no hash (the "empty" integration no-op) reads honestly', () => {
     const item = makeItem({ mergeState: 'merged', mergeHash: undefined });
-    expect(formatWorkItemIsolationDetail(item)).toBe('worktree — merged (nothing to merge)');
+    expect(formatWorkItemIsolationDetail(item)).toBe('worktree — merged (no changes)');
   });
 
   test('conflict names the kept worktree', () => {
