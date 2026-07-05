@@ -196,6 +196,9 @@ export class UIFactory {
     composerFlags?: readonly string[],
     composerPendingRisk?: 'none' | 'approval-wait' | 'shell' | 'command' | 'remote',
     compact: boolean = false,
+    // S3d: honest cross-surface spine posture. Defined ONLY in adopted-daemon
+    // mode (undefined in embedded/local), so the segment is absent otherwise.
+    sessionSpineStatus?: 'online' | 'offline',
   ): Line[] {
     const lines: Line[] = [];
     const promptLines = prompt.split('\n');
@@ -439,6 +442,8 @@ export class UIFactory {
       // auto-approval, so it must not share vocabulary with the DANGER MODE
       // risk banner rendered a few lines below.
       if (hitlMode) ctxParts.push(`notify:${hitlMode}`);
+      // S3d: cross-surface spine posture — plain words, no blame. Adopted mode only.
+      if (sessionSpineStatus) ctxParts.push(`spine:${sessionSpineStatus}`);
       const ctxLine = '   ' + ctxParts.join(`  ${GLYPHS.navigation.pipeSeparator}  `);
       lines.push(this.stringToLine(truncateDisplay(ctxLine, width), width, { fg: '240', dim: true }));
     }
