@@ -1,6 +1,7 @@
-import { describe, test, expect, beforeEach, mock } from 'bun:test';
+import { describe, test, expect, beforeEach, mock, spyOn } from 'bun:test';
 import { SystemMessageRouter, createSystemMessageRouter, type SystemMessageKind, type SystemMessageTarget } from '../../core/system-message-router.ts';
 import type { ConversationManager } from '../../core/conversation';
+import { logger } from '@pellux/goodvibes-sdk/platform/utils';
 
 // ---------------------------------------------------------------------------
 // Minimal stubs
@@ -241,17 +242,33 @@ describe('routeAuto classification', () => {
 // ---------------------------------------------------------------------------
 
 describe('router noise gate', () => {
-  test('1b — a provider-replay burst folds to a single line on the next microtask', async () => {
+  // Papercut sweep item 2: this used to assert the folded line landed in the
+  // transcript (conv._messages). The first-run evaluation wanted this boot
+  // plumbing OUT of the transcript entirely — it now goes to the activity
+  // log only, and stays reachable live via /health provider and /model.
+  test('1b — a provider-replay burst folds to one activity-log entry and never reaches the transcript', async () => {
     const conv = makeConversation();
     const router = createSystemMessageRouter(conv as unknown as ConversationManager, makeTargetResolver());
-    router.low('[Local] ollama at localhost:11434 (2 models) — from last session');
-    router.low('[Local] lmstudio at localhost:1234 (5 models) — from last session');
-    // Nothing emitted synchronously — the burst is buffered.
-    expect(conv.addTypedSystemMessage).not.toHaveBeenCalled();
-    await Promise.resolve();
-    expect(conv._messages).toEqual([
-      '[Local] Restored 2 providers from last session (ollama, lmstudio)',
-    ]);
+    const logSpy = spyOn(logger, 'info').mockImplementation(() => {});
+    try {
+      router.low('[Local] ollama at localhost:11434 (2 models) — from last session');
+      router.low('[Local] lmstudio at localhost:1234 (5 models) — from last session');
+      // Nothing emitted synchronously — the burst is buffered.
+      expect(conv.addTypedSystemMessage).not.toHaveBeenCalled();
+      expect(logSpy).not.toHaveBeenCalled();
+      await Promise.resolve();
+      // Never reaches the transcript, folded or otherwise.
+      expect(conv._messages).toEqual([]);
+      expect(conv.addTypedSystemMessage).not.toHaveBeenCalled();
+      // Reaches the activity log exactly once, folded, with structured data.
+      expect(logSpy).toHaveBeenCalledTimes(1);
+      expect(logSpy).toHaveBeenCalledWith(
+        '[Local] Restored 2 providers from last session (ollama, lmstudio)',
+        { count: 2, providers: ['ollama', 'lmstudio'] },
+      );
+    } finally {
+      logSpy.mockRestore();
+    }
   });
 
   test('1c — replay lines for a terminal chain are dropped, active ones pass', () => {

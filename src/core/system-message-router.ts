@@ -40,6 +40,7 @@
  */
 
 import type { ConversationManager } from './conversation';
+import { logger } from '@pellux/goodvibes-sdk/platform/utils';
 import {
   classifySystemMessageKind,
   classifySystemMessagePriority,
@@ -51,6 +52,7 @@ import {
 import {
   classifyNoise,
   foldProviderReplayLines,
+  providerNameFromReplay,
   type NoiseGateDeps,
 } from './system-message-noise.ts';
 
@@ -160,15 +162,30 @@ export class SystemMessageRouter {
     queueMicrotask(() => this.flushProviderReplay());
   }
 
-  /** Emit the single folded provider-replay summary and reset the buffer. */
+  /**
+   * Record the folded provider-replay summary and reset the buffer.
+   *
+   * Papercut sweep item 2: this used to `deliver()` the folded line into the
+   * transcript — one line instead of a burst, but still boot plumbing the
+   * user never asked to see there ("the transcript at boot shows product
+   * signal only"). The persisted-provider set this summarizes is reachable
+   * on demand via `/health provider` (providers-modal lists every registered
+   * provider, discovered/local ones included) and `/model` (lists every
+   * selectable model, discovered ones included) — so nothing is lost by
+   * keeping it out of the transcript. It still goes to the activity log
+   * (.goodvibes/logs/activity.md) for diagnosis. Only this boot-only "— from
+   * last session" burst moves; unrelated provider-discovery lines emitted
+   * mid-session (e.g. "[Scan] Found …", "[Scan] … no longer reachable") are
+   * untouched — they never match PROVIDER_REPLAY_RE, so they never enter this
+   * buffer/fold path and keep reaching the transcript as live product signal.
+   */
   flushProviderReplay(): void {
     this.providerReplayScheduled = false;
     if (this.providerReplayBuffer.length === 0) return;
     const summary = foldProviderReplayLines(this.providerReplayBuffer);
+    const providerNames = this.providerReplayBuffer.map(providerNameFromReplay);
     this.providerReplayBuffer = [];
-    // Deliver directly (the summary is not itself a replay line, so it does not
-    // re-enter the fold path).
-    this.deliver(summary, classifySystemMessageKind(summary));
+    logger.info(summary, { count: providerNames.length, providers: providerNames });
   }
 
   routeSystemMessage(message: string, priority: SystemMessagePriority): void {
