@@ -1,0 +1,348 @@
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import type { RegisterSharedSessionInput, SharedSessionRecord, SharedSessionRegisterResult } from '@pellux/goodvibes-sdk/platform/control-plane';
+import {
+  foldLegacySpineStore,
+  SessionSpineClient,
+  type SpineSessionsClient,
+} from '../../runtime/session-spine-client.ts';
+
+const settle = async (): Promise<void> => {
+  for (let i = 0; i < 5; i += 1) await new Promise<void>((r) => setTimeout(r, 0));
+};
+
+interface CapturedCall {
+  readonly kind: 'register' | 'close';
+  readonly sessionId: string;
+  readonly input?: RegisterSharedSessionInput;
+}
+
+function makeSessionRecord(id: string, overrides: Partial<SharedSessionRecord> = {}): SharedSessionRecord {
+  return {
+    id,
+    kind: 'tui',
+    project: '/p',
+    title: '',
+    status: 'active',
+    createdAt: 0,
+    updatedAt: 0,
+    lastActivityAt: 0,
+    messageCount: 0,
+    pendingInputCount: 0,
+    routeIds: [],
+    surfaceKinds: [],
+    participants: [],
+    metadata: {},
+    ...overrides,
+  };
+}
+
+/** A controllable fake SpineSessionsClient — resolves/rejects on command. */
+function makeFakeSessionsClient(): {
+  readonly client: SpineSessionsClient;
+  readonly calls: CapturedCall[];
+  mode: 'succeed' | 'fail' | 'pending';
+  pendingResolvers: Array<() => void>;
+} {
+  const calls: CapturedCall[] = [];
+  const state: { mode: 'succeed' | 'fail' | 'pending'; pendingResolvers: Array<() => void> } = {
+    mode: 'succeed',
+    pendingResolvers: [],
+  };
+  const client: SpineSessionsClient = {
+    register: (input) => {
+      calls.push({ kind: 'register', sessionId: input.sessionId, input });
+      if (state.mode === 'fail') return Promise.reject(new Error('ECONNREFUSED'));
+      if (state.mode === 'pending') {
+        return new Promise<SharedSessionRegisterResult>((resolve) => {
+          state.pendingResolvers.push(() => resolve({ record: makeSessionRecord(input.sessionId), reopened: input.reopen === true }));
+        });
+      }
+      return Promise.resolve({ record: makeSessionRecord(input.sessionId), reopened: input.reopen === true });
+    },
+    close: (sessionId) => {
+      calls.push({ kind: 'close', sessionId });
+      if (state.mode === 'fail') return Promise.reject(new Error('ECONNREFUSED'));
+      return Promise.resolve(makeSessionRecord(sessionId, { status: 'closed' }));
+    },
+  };
+  return { client, calls, get mode() { return state.mode; }, set mode(v) { state.mode = v; }, pendingResolvers: state.pendingResolvers };
+}
+
+describe('SessionSpineClient dormant-until-activated', () => {
+  test('register/reopen/heartbeat/close before activate() are all synchronous no-throw no-ops queued for later', () => {
+    const client = new SessionSpineClient({ log: { debug: () => {}, info: () => {} } });
+    expect(client.active).toBe(false);
+    expect(() => client.register({ sessionId: 's1', project: '/p', title: 'T' })).not.toThrow();
+    expect(() => client.reopen({ sessionId: 's2', project: '/p' })).not.toThrow();
+    expect(() => client.heartbeat('s1')).not.toThrow();
+    expect(() => client.close('s1')).not.toThrow();
+    expect(client.status()).toBe('unknown');
+    // register (s1), reopen (s2) queued; close(s1) removes s1's cached heartbeat
+    // record but still enqueues its own close op — both survive as queued ops.
+    expect(client.pendingOps).toBeGreaterThan(0);
+    client.dispose();
+  });
+
+  test('activate() flushes everything queued while dormant, exactly once each', async () => {
+    const fake = makeFakeSessionsClient();
+    const client = new SessionSpineClient({ log: { debug: () => {}, info: () => {} } });
+    client.register({ sessionId: 's1', project: '/p', title: 'T' });
+    client.close('s1');
+    expect(client.pendingOps).toBe(2);
+
+    client.activate(fake.client);
+    await settle();
+
+    expect(client.active).toBe(true);
+    expect(client.pendingOps).toBe(0);
+    expect(client.status()).toBe('online');
+    expect(fake.calls.filter((c) => c.kind === 'register')).toHaveLength(1);
+    expect(fake.calls.filter((c) => c.kind === 'close')).toHaveLength(1);
+    client.dispose();
+  });
+});
+
+describe('SessionSpineClient fire-and-forget latency contract', () => {
+  test('register/reopen/heartbeat/close return synchronously even with a slow-resolving backend (no interactive stall)', () => {
+    const fake = makeFakeSessionsClient();
+    fake.mode = 'pending'; // never resolves during this test — proves no await on the call site
+    const client = new SessionSpineClient({ log: { debug: () => {}, info: () => {} } });
+    client.activate(fake.client);
+
+    const start = Date.now();
+    client.register({ sessionId: 's1', project: '/p', title: 'T' });
+    client.heartbeat('s1');
+    client.reopen({ sessionId: 's2', project: '/p' });
+    client.close('s3');
+    const elapsedMs = Date.now() - start;
+
+    // All four calls must return well under a millisecond-scale budget —
+    // there is structurally no `await` on the call site (methods return void).
+    expect(elapsedMs).toBeLessThan(20);
+    expect(client.status()).toBe('unknown'); // network has not settled — no premature 'online'
+    client.dispose();
+  });
+
+  test('a rejecting backend never throws into the caller and degrades to offline, queued for reconnect', async () => {
+    const fake = makeFakeSessionsClient();
+    fake.mode = 'fail';
+    const client = new SessionSpineClient({ log: { debug: () => {}, info: () => {} } });
+    client.activate(fake.client);
+    expect(() => client.register({ sessionId: 's1', project: '/p' })).not.toThrow();
+    await settle();
+    expect(client.status()).toBe('offline');
+    expect(client.pendingOps).toBe(1);
+    client.dispose();
+  });
+});
+
+describe('SessionSpineClient offline queue / reconnect', () => {
+  test('offline register queues; recovering the backend flushes it exactly once (idempotent replay)', async () => {
+    const fake = makeFakeSessionsClient();
+    fake.mode = 'fail';
+    const client = new SessionSpineClient({ log: { debug: () => {}, info: () => {} } });
+    client.activate(fake.client);
+    client.register({ sessionId: 's1', project: '/p', title: 'T' });
+    await settle();
+    expect(client.status()).toBe('offline');
+    expect(client.pendingOps).toBe(1);
+
+    fake.mode = 'succeed';
+    // Any further op triggers a flush attempt (this test exercises heartbeat as
+    // the trigger — bootstrap.ts's render-tick heartbeat is the real trigger).
+    // heartbeat() itself dispatches ITS OWN register call (fresh lastSeenAt)
+    // AND, on success, flushes the queue — so the originally-queued register
+    // replays once more alongside it. Net: 1 failed (queued) + 1 heartbeat +
+    // 1 flushed replay of the queued op = 3, and critically the queue drains
+    // to zero with no duplicate flood on subsequent flushes.
+    client.heartbeat('s1');
+    await settle();
+    expect(client.status()).toBe('online');
+    expect(client.pendingOps).toBe(0);
+    expect(fake.calls.filter((c) => c.kind === 'register')).toHaveLength(3);
+    client.dispose();
+  });
+
+  test('bounded ring drops the oldest op past the cap', () => {
+    const client = new SessionSpineClient({ queueLimit: 2, log: { debug: () => {}, info: () => {} } });
+    for (const id of ['a', 'b', 'c']) client.register({ sessionId: id, project: '/p' });
+    expect(client.pendingOps).toBe(2); // 'a' dropped
+    client.dispose();
+  });
+
+  test('deactivate() stops attempting the wire but keeps queuing (bounded)', async () => {
+    const fake = makeFakeSessionsClient();
+    const client = new SessionSpineClient({ log: { debug: () => {}, info: () => {} } });
+    client.activate(fake.client);
+    client.register({ sessionId: 's1', project: '/p' });
+    await settle();
+    expect(fake.calls).toHaveLength(1);
+
+    client.deactivate('daemon mode changed');
+    expect(client.active).toBe(false);
+    expect(client.status()).toBe('unknown');
+    client.register({ sessionId: 's2', project: '/p' });
+    await settle();
+    expect(fake.calls).toHaveLength(1); // no new wire attempt while dormant
+    expect(client.pendingOps).toBe(1); // s2 queued honestly instead
+    client.dispose();
+  });
+});
+
+describe('SessionSpineClient heartbeat debounce', () => {
+  test('coalesces bursty turn activity to at most one leading wire call per window', async () => {
+    let clock = 100_000;
+    const fake = makeFakeSessionsClient();
+    const client = new SessionSpineClient({ now: () => clock, heartbeatMinIntervalMs: 1_000, log: { debug: () => {}, info: () => {} } });
+    client.activate(fake.client);
+
+    client.register({ sessionId: 's1', project: '/p', title: 'T' });
+    await settle();
+    const afterCreate = fake.calls.filter((c) => c.kind === 'register').length;
+
+    client.heartbeat('s1'); // first beat past the window -> immediate
+    await settle();
+    let beats = fake.calls.filter((c) => c.kind === 'register').length - afterCreate;
+    expect(beats).toBe(1);
+
+    clock = 100_200;
+    client.heartbeat('s1');
+    clock = 100_400;
+    client.heartbeat('s1'); // bursty, within window -> coalesced
+    await settle();
+    beats = fake.calls.filter((c) => c.kind === 'register').length - afterCreate;
+    expect(beats).toBe(1);
+
+    clock = 101_500;
+    client.heartbeat('s1'); // new window -> one more leading beat
+    await settle();
+    beats = fake.calls.filter((c) => c.kind === 'register').length - afterCreate;
+    expect(beats).toBe(2);
+
+    // Heartbeat bodies never carry a title (never renames a titled session).
+    const heartbeatCalls = fake.calls.filter((c) => c.kind === 'register').slice(afterCreate);
+    for (const call of heartbeatCalls) expect(call.input && 'title' in call.input).toBe(false);
+    client.dispose();
+  });
+
+  test('heartbeat for an unknown session id is a no-op', async () => {
+    const fake = makeFakeSessionsClient();
+    const client = new SessionSpineClient({ log: { debug: () => {}, info: () => {} } });
+    client.activate(fake.client);
+    client.heartbeat('never-registered');
+    await settle();
+    expect(fake.calls.filter((c) => c.kind === 'register')).toHaveLength(0);
+    client.dispose();
+  });
+});
+
+describe('SessionSpineClient reopen semantics', () => {
+  test('reopen sends reopen:true and omits title; register (create) includes title', async () => {
+    const fake = makeFakeSessionsClient();
+    const client = new SessionSpineClient({ log: { debug: () => {}, info: () => {} } });
+    client.activate(fake.client);
+    client.register({ sessionId: 's1', project: '/p', title: 'Created' });
+    client.reopen({ sessionId: 's2', project: '/p', title: 'Should not be sent' });
+    await settle();
+
+    const create = fake.calls.find((c) => c.sessionId === 's1');
+    const reopen = fake.calls.find((c) => c.sessionId === 's2');
+    expect(create?.input?.title).toBe('Created');
+    expect(create?.input?.reopen).toBeUndefined();
+    expect(reopen?.input?.reopen).toBe(true);
+    expect(reopen?.input && 'title' in reopen.input).toBe(false);
+    client.dispose();
+  });
+});
+
+describe('SessionSpineClient legacy fold', () => {
+  test('registers each record and closes locally-closed records', async () => {
+    const fake = makeFakeSessionsClient();
+    const client = new SessionSpineClient({ log: { debug: () => {}, info: () => {} } });
+    client.activate(fake.client);
+    client.foldLegacyRecords(
+      [
+        { sessionId: 'open-1', project: '/p', title: 'Open one' },
+        { sessionId: 'closed-1', project: '/p', title: 'Closed one' },
+      ],
+      new Set(['closed-1']),
+    );
+    await settle();
+
+    const registers = fake.calls.filter((c) => c.kind === 'register');
+    const closes = fake.calls.filter((c) => c.kind === 'close');
+    expect(registers).toHaveLength(2);
+    for (const r of registers) expect(r.input?.kind).toBe('tui');
+    expect(closes).toHaveLength(1);
+    expect(closes[0]?.sessionId).toBe('closed-1');
+    client.dispose();
+  });
+});
+
+describe('foldLegacySpineStore', () => {
+  let root: string;
+
+  beforeEach(() => {
+    root = mkdtempSync(join(tmpdir(), 'goodvibes-tui-spine-fold-'));
+  });
+
+  afterEach(() => {
+    // best-effort cleanup, not load-bearing for the assertions above
+  });
+
+  test('reads the project-scoped store, folds records, and writes a migration marker', () => {
+    const storePath = join(root, 'sessions.json');
+    const markerPath = join(root, 'sessions.json.spine-migrated');
+    writeFileSync(storePath, JSON.stringify({
+      sessions: {
+        'sess-1': { id: 'sess-1', kind: 'tui', title: 'One', status: 'active' },
+        'sess-2': { id: 'sess-2', kind: 'tui', title: 'Two', status: 'closed' },
+      },
+    }));
+
+    const folded: Array<{ ids: string[]; closed: string[] }> = [];
+    const stub = {
+      foldLegacyRecords: (records: readonly { sessionId: string }[], closedIds: ReadonlySet<string>) => {
+        folded.push({ ids: records.map((r) => r.sessionId), closed: [...closedIds] });
+      },
+    };
+
+    const result = foldLegacySpineStore(stub, { storePath, markerPath, project: '/p', now: () => 42, log: { debug: () => {}, info: () => {} } });
+    expect(result).toEqual({ folded: 2, skipped: false });
+    expect(folded).toHaveLength(1);
+    expect(folded[0]?.ids.sort()).toEqual(['sess-1', 'sess-2']);
+    expect(folded[0]?.closed).toEqual(['sess-2']);
+    expect(existsSync(markerPath)).toBe(true);
+    expect((JSON.parse(readFileSync(markerPath, 'utf-8')) as { count: number }).count).toBe(2);
+  });
+
+  test('skips when the marker already exists (idempotent, marked migrated)', () => {
+    const storePath = join(root, 'sessions.json');
+    const markerPath = join(root, 'sessions.json.spine-migrated');
+    writeFileSync(storePath, JSON.stringify({ sessions: { 'sess-1': { id: 'sess-1', status: 'active' } } }));
+    writeFileSync(markerPath, JSON.stringify({ migratedAt: 1, count: 1 }));
+
+    let called = 0;
+    const result = foldLegacySpineStore(
+      { foldLegacyRecords: () => { called += 1; } },
+      { storePath, markerPath, project: '/p', log: { debug: () => {}, info: () => {} } },
+    );
+    expect(result.skipped).toBe(true);
+    expect(called).toBe(0);
+  });
+
+  test('a missing store folds nothing and writes no marker', () => {
+    const markerPath = join(root, 'sessions.json.spine-migrated');
+    let called = 0;
+    const result = foldLegacySpineStore(
+      { foldLegacyRecords: () => { called += 1; } },
+      { storePath: join(root, 'does-not-exist.json'), markerPath, project: '/p', log: { debug: () => {}, info: () => {} } },
+    );
+    expect(result).toEqual({ folded: 0, skipped: false });
+    expect(called).toBe(0);
+    expect(existsSync(markerPath)).toBe(false);
+  });
+});
