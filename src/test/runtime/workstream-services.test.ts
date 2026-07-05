@@ -316,8 +316,60 @@ describe('createWorkstreamServices — real engine wiring', () => {
     expect(draft.provenance.kind).toBe('agent');
     expect(draft.provenance.itemCount).toBe(2);
     expect(draft.provenance.agentTokens).toBe(420);
-    // Launch path is unchanged: still the fromChainSpec engineer -> review pipeline.
+
+    // BIG-3: a genuine MULTI-item proposal maps to the REAL multi-item
+    // workstream (fromPlanProposal), NOT a flattened single compat chain. The
+    // phase template is still engineer→review, but there are now two items and
+    // the inter-item dependency is preserved.
     expect(draft.spec.phases.map((p) => p.role)).toEqual(['engineer', 'reviewer']);
+    expect(draft.spec.items).toHaveLength(2);
+    expect(draft.spec.items.map((i) => i.title)).toEqual(['First item', 'Second item']);
+    expect(draft.spec.items.map((i) => i.task)).toEqual(['do the first thing', 'do the second thing']);
+    const first = draft.spec.items[0]!;
+    const second = draft.spec.items[1]!;
+    expect(second.dependsOn).toEqual([first.id!]); // "Second item" after "First item"
+    expect(first.dependsOn ?? []).toEqual([]);
+    // Workstream-level provenance carried through the mapping.
+    expect(draft.spec.provenance?.decomposedBy).toBe('agent');
+
+    orchestrationEngine.dispose();
+  });
+
+  test('launch of a multi-item draft passes a dependency-scheduled spec to createWorkstream (spy)', async () => {
+    const projectRoot = makeScratchProjectRoot();
+    const bus = new RuntimeEventBus();
+    const { agentManager } = makeAgentManagerHarness(bus);
+    const configManager = {
+      get: (key: string) => (key === 'wrfc.commitScope' ? 'off' : key === 'planner.decomposition' ? 'agent' : undefined),
+      getCategory: (category: string) => (category === 'wrfc'
+        ? { scoreThreshold: 9.9, maxFixAttempts: 3, autoCommit: false, transportRetryLimit: 0, transportRetryDelayMs: 0, commitScope: 'off' as const, gates: [] }
+        : undefined),
+    };
+    const { orchestrationEngine, workstreamCommands } = createWorkstreamServices({
+      agentManager, configManager, adaptivePlanner: new AdaptivePlanner(), runtimeBus: bus, projectRoot,
+    });
+
+    // Spy on the exact input launch hands the engine.
+    const created: Array<Parameters<typeof orchestrationEngine.createWorkstream>[0]> = [];
+    const orig = orchestrationEngine.createWorkstream.bind(orchestrationEngine);
+    orchestrationEngine.createWorkstream = (input) => { created.push(input); return orig(input); };
+
+    const draft = await workstreamCommands.proposeDraft('build a multi-step feature');
+    workstreamCommands.approveDraft(draft.id);
+    const result = workstreamCommands.launchDraft(draft.id);
+    expect(result).not.toBeNull();
+
+    expect(created).toHaveLength(1);
+    const input = created[0]!;
+    expect(input.items).toHaveLength(2);
+    expect(input.items[1]!.dependsOn).toEqual([input.items[0]!.id!]);
+    expect(input.provenance?.decomposedBy).toBe('agent');
+
+    // And the live engine reflects the dependency: the dependent starts blocked.
+    await flushEngine();
+    const ws = orchestrationEngine.getWorkstream(result!.workstreamId)!;
+    const dependent = ws.items.find((i) => (i.dependsOn?.length ?? 0) > 0)!;
+    expect(dependent.state).toBe('blocked-dependency');
 
     orchestrationEngine.dispose();
   });

@@ -128,6 +128,12 @@ function fakeProposal(task: string): PlanProposal {
 function makeFakeService(
   seed: Workstream[] = [],
   provenance: WorkstreamDraftProvenance = AGENT_PROVENANCE,
+  // Optional override for the spec's work items (BIG-3 render-test support):
+  // omitted preserves the original single seed-item behavior every existing
+  // test relies on; multi-item tests pass their own items (with dependsOn) so
+  // proposeDraft/editDraft produce a real multi-item spec instead of the
+  // single-item default.
+  specItems?: CreateWorkstreamInput['items'],
 ): WorkstreamCommandService & { engine: ReturnType<typeof makeFakeEngine> } {
   const engine = makeFakeEngine(seed);
   const drafts = new Map<string, WorkstreamDraft>();
@@ -144,7 +150,7 @@ function makeFakeService(
             { role: 'engineer', capacity: 1, kind: 'engineer', gate: { scope: 'scoped', gates: [] } },
             { role: 'reviewer', capacity: 1, kind: 'review', gate: { scope: 'scoped', gates: [] } },
           ],
-          items: [{ id: 'seed-item', title: task, task }],
+          items: specItems ?? [{ id: 'seed-item', title: task, task }],
           isolation,
         },
         gate: { decompose: false, strategy: 'single', reasonCode: 'AUTO_FALLBACK_SINGLE' },
@@ -165,7 +171,7 @@ function makeFakeService(
       draft.spec = {
         ...draft.spec,
         title: task,
-        items: [{ id: 'seed-item', title: task, task }],
+        items: specItems ?? [{ id: 'seed-item', title: task, task }],
         isolation: isolation ?? draft.spec.isolation,
       };
       draft.proposal = fakeProposal(task);
@@ -358,6 +364,29 @@ describe('workstream-runtime — create', () => {
     }));
     await registry.execute('workstream', ['create', 'ship', 'it'], ctx);
     expect(printed[0]).toContain('Decomposition: planning agent (2 items, 5000 tok, 3s)');
+  });
+
+  test('multi-item draft view renders the Mapping: boundary line + after: dependency clauses in ordinal order', async () => {
+    const registry = new CommandRegistry();
+    registerWorkstreamRuntimeCommands(registry);
+    const items: CreateWorkstreamInput['items'] = [
+      { id: 'item-a', title: 'set up schema', task: 'set up schema' },
+      { id: 'item-b', title: 'build API', task: 'build API', dependsOn: ['item-a'] },
+      { id: 'item-c', title: 'write docs', task: 'write docs', dependsOn: ['item-a', 'item-b'] },
+    ];
+    const service = makeFakeService([], AGENT_PROVENANCE, items);
+    const { ctx, printed } = makeCtx(service);
+
+    await registry.execute('workstream', ['create', 'ship', 'the', 'feature'], ctx);
+
+    const output = printed[0]!;
+    expect(output).toContain('Mapping: multi-item plan — 3 items run the engineer→review pipeline, dependency-scheduled.');
+    const idxA = output.indexOf('1. set up schema');
+    const idxB = output.indexOf('2. build API (after: set up schema)');
+    const idxC = output.indexOf('3. write docs (after: set up schema, build API)');
+    expect(idxA).toBeGreaterThan(-1);
+    expect(idxB).toBeGreaterThan(idxA);
+    expect(idxC).toBeGreaterThan(idxB);
   });
 });
 
@@ -557,6 +586,48 @@ describe('workstream-runtime — list / status / insert-phase / cancel', () => {
     expect(output).toContain('Isolation: shared');
     expect(output).not.toContain('Unmerged items');
     expect(output).not.toContain('merge');
+  });
+
+  test('/workstream status renders "waiting on: …" for a blocked-dependency item', async () => {
+    const registry = new CommandRegistry();
+    registerWorkstreamRuntimeCommands(registry);
+    const usage = { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, llmCallCount: 0, turnCount: 0, toolCallCount: 0, costUsd: null as number | null, costState: 'unpriced' as const };
+    const live = makeWorkstream({
+      id: 'ws-blocked-dep',
+      title: 'dependency chain',
+      phases: [makePhase({ id: 'p1', ordinal: 0, role: 'engineer' })],
+      items: [
+        { id: 'item-a', title: 'set up schema', task: 't', currentPhaseId: 'p1', state: 'in-phase', allAgentIds: [], visits: new Map(), touchedPaths: [], usage, transportRetryCount: 0, createdAt: Date.now() },
+        {
+          id: 'item-b', title: 'build API', task: 't', currentPhaseId: null, state: 'blocked-dependency',
+          allAgentIds: [], visits: new Map(), touchedPaths: [], usage, transportRetryCount: 0, createdAt: Date.now(),
+          dependsOn: ['item-a'], blockedReason: 'waiting on: set up schema',
+        },
+      ],
+    });
+    const { ctx, printed } = makeCtx(makeFakeService([live]));
+
+    await registry.execute('workstream', ['status', 'ws-blocked-dep'], ctx);
+
+    const output = printed.at(-1)!;
+    expect(output).toContain('waiting on: set up schema');
+  });
+
+  test('status renders the Origin: provenance line', async () => {
+    const registry = new CommandRegistry();
+    registerWorkstreamRuntimeCommands(registry);
+    const live = makeWorkstream({
+      id: 'ws-origin',
+      title: 'origin target',
+      phases: [makePhase({ id: 'p1', ordinal: 0 })],
+      provenance: { decomposedBy: 'agent', proposalId: 'pp-123', strategy: 'parallel' },
+    });
+    const { ctx, printed } = makeCtx(makeFakeService([live]));
+
+    await registry.execute('workstream', ['status', 'ws-origin'], ctx);
+
+    const output = printed.at(-1)!;
+    expect(output).toContain('Origin: agent-decomposed, plan pp-123, parallel');
   });
 
   test('status with an unknown id refuses honestly', async () => {
