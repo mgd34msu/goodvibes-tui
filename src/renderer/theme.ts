@@ -196,6 +196,10 @@ export type UiToneTokens = DeepWidenToString<typeof UI_TONES>;
 //          faint (mirrors the low-contrast intent of the dark fg.dim role)
 //   warn:  Amber-700 (#b45309) — dirty git / pending risk; ~5.0:1 on #fff (matches diffAccent)
 //   bad:   Red-600  (#dc2626) — DANGER banner / shell risk (bold); ~5.3:1 on #fff
+//   good:  Forest-700 (#15803d) — tool-call ✓ status; ~5.02:1 on #fff (matches checkboxChecked)
+//   remote: Violet-700 (#6d28d9) — risk:remote marker / plain status; ~7.10:1 on #fff,
+//          deliberately distinct from reasoningAccent (#7c3aed) so the remote-risk cue
+//          never reads as a reasoning accent on a light terminal
 const UI_TONES_LIGHT: UiToneTokens = {
   ...UI_TONES,
   state: {
@@ -215,6 +219,8 @@ const UI_TONES_LIGHT: UiToneTokens = {
     faint: '#94a3b8',
     warn:  '#b45309',
     bad:   '#dc2626',
+    good:  '#15803d',
+    remote: '#6d28d9',
   },
 };
 

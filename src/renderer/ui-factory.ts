@@ -334,7 +334,7 @@ export class UIFactory {
         : composerPendingRisk === 'shell'
           ? t.chrome.bad
           : composerPendingRisk === 'remote'
-            ? '#a78bfa'
+            ? t.chrome.remote
             : t.chrome.warn;
       composerTokens.push({ text: ` risk:${composerPendingRisk} `, fg: riskColor, bold: true });
     }
