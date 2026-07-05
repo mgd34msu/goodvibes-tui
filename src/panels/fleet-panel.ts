@@ -51,57 +51,9 @@ import { FleetStopTracker, fleetStateDisplay, toggleFleetPause, buildFleetTreeHi
 import { resolveFleetDeepLinkIndex } from './fleet-deep-link.ts';
 import { parseAgentLedger, renderFleetAgentTranscript, renderFleetChainSummary, renderFleetLedgerFallback, renderFleetTranscriptLoading } from './fleet-transcript.ts';
 import { renderFleetTabStrip } from '../renderer/fleet-tab-strip.ts';
+import { planColumns, toneColor, formatFleetTokens, formatFleetCost } from './fleet-panel-format.ts';
 
 const C = DEFAULT_PANEL_PALETTE;
-
-// Column widths for the tree row layout. `label` absorbs whatever width is
-// left over after the fixed columns + gaps; on hostile (narrow) widths the
-// trailing columns simply clip (buildAlignedRow/buildSelectablePanelLine stop
-// writing once a cell would overflow the row) rather than throwing or
-// wrapping — the tree stays readable, just denser.
-const KIND_W = 8;
-const ELAPSED_W = 7;
-const TOKENS_W = 7;
-const COST_W = 8;
-const ACTIVITY_W = 20;
-const GAP = 1;
-const FIXED_W = 1 /* glyph */ + KIND_W + ELAPSED_W + TOKENS_W + COST_W + ACTIVITY_W + GAP * 6;
-
-function planColumns(width: number): ColumnSpec[] {
-  const labelWidth = Math.max(10, width - FIXED_W);
-  return [
-    { width: 1 },
-    { width: KIND_W },
-    { width: labelWidth },
-    { width: ELAPSED_W, align: 'right' },
-    { width: TOKENS_W, align: 'right' },
-    { width: COST_W, align: 'right' },
-    { width: ACTIVITY_W },
-  ];
-}
-
-function toneColor(tone: FleetStateTone, palette: PanelPalette): string {
-  switch (tone) {
-    case 'active': return palette.info ?? DEFAULT_PANEL_PALETTE.info;
-    case 'success': return palette.good ?? DEFAULT_PANEL_PALETTE.good;
-    case 'failure': return palette.bad ?? DEFAULT_PANEL_PALETTE.bad;
-    case 'warn': return palette.warn ?? DEFAULT_PANEL_PALETTE.warn;
-    case 'muted': return palette.dim;
-  }
-}
-
-function formatFleetTokens(usage: ProcessUsage | undefined): string {
-  const total = fleetUsageTokens(usage);
-  if (total === null) return 'n/a';
-  return total >= 1000 ? `${(total / 1000).toFixed(1)}k` : String(total);
-}
-
-/** Honest cost display: never a fabricated $0.00 — 'unpriced' when costState says so. */
-function formatFleetCost(costUsd: number | null | undefined, costState: ProcessCostState): string {
-  if (!hasFleetCost(costUsd, costState)) return 'unpriced';
-  const formatted = formatAgentCost(costUsd as number);
-  return costState === 'estimated' ? `~${formatted}` : formatted;
-}
 
 export interface FleetActionCallbacks {
   /** Graceful interruption (AgentManager.cancel / trigger-schedule disable, via the registry). */
