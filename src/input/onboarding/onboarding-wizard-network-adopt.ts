@@ -107,7 +107,10 @@ export function pushLegacyDaemonMigrationFields(
     kind: 'status',
     id: 'network.migrate-legacy-daemon-detected',
     label: 'Legacy daemon service detected',
-    hint: legacyUnitNote(legacy, MANAGED_SERVICE_NAME),
+    // F2 follow-up: name the unit this host actually resolves (carried on the
+    // snapshot from `resolveConfiguredServiceName` at collection time) — the
+    // MANAGED_SERVICE_NAME fallback only covers snapshots built without it.
+    hint: legacyUnitNote(legacy, legacy.trackedServiceName ?? MANAGED_SERVICE_NAME),
     defaultValue: legacy.active ? 'Installed and running' : 'Installed (not active)',
   });
 

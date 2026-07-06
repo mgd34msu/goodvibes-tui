@@ -2189,6 +2189,40 @@ describe('network step: migrate legacy daemon service (W4-D1)', () => {
     expect(actionField && actionField.kind === 'action' ? actionField.action : null).toBe('migrate-legacy-daemon-service');
   });
 
+  test('custom service.serviceName (snapshot trackedServiceName): the detection note names the custom unit, not the hardcoded default (F2 follow-up)', () => {
+    const snapshot = makeOnboardingSnapshot({
+      legacyDaemon: {
+        present: true,
+        active: false,
+        path: '/home/test/.config/systemd/user/goodvibes-daemon.service',
+        trackedServiceName: 'my-custom-unit',
+      },
+    });
+    const wizard = new OnboardingWizardController();
+    wizard.open('new');
+    wizard.hydrateRuntimeState({ snapshot }, { resetValues: true });
+    wizard.setFieldValue('capabilities.browser-access', true);
+
+    const networkStep = wizard.steps.find((step) => step.id === 'network');
+    const detected = networkStep?.fields.find((field) => field.id === 'network.migrate-legacy-daemon-detected');
+    expect(detected?.hint).toContain('a different unit name (my-custom-unit.service)');
+    expect(detected?.hint).not.toContain('a different unit name (goodvibes.service)');
+  });
+
+  test('snapshot without trackedServiceName (pre-feature fixture): the detection note falls back to the default unit name', () => {
+    const snapshot = makeOnboardingSnapshot({
+      legacyDaemon: { present: true, active: false, path: '/home/test/.config/systemd/user/goodvibes-daemon.service' },
+    });
+    const wizard = new OnboardingWizardController();
+    wizard.open('new');
+    wizard.hydrateRuntimeState({ snapshot }, { resetValues: true });
+    wizard.setFieldValue('capabilities.browser-access', true);
+
+    const networkStep = wizard.steps.find((step) => step.id === 'network');
+    const detected = networkStep?.fields.find((field) => field.id === 'network.migrate-legacy-daemon-detected');
+    expect(detected?.hint).toContain('a different unit name (goodvibes.service)');
+  });
+
   test('reports the active-and-running wording when the legacy unit is currently active', () => {
     const snapshot = makeOnboardingSnapshot({
       legacyDaemon: { present: true, active: true, path: '/home/test/.config/systemd/user/goodvibes-daemon.service' },
