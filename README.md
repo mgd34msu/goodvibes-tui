@@ -1275,10 +1275,10 @@ Those pieces cover conversation-noise routing, panel-health/performance budgets,
 | `/services` | `/svc` | Manage API service configurations |
 | `/accounts [action]` | — | Review provider-account routes, auth posture, and repair actions |
 | `/auth [action]` | — | Review auth posture and manage local service auth users/sessions |
-| `/memory [action]` | — | Session memory management: `list`, `add <text>`, `remove <id>` |
+| `/note [action]` | — | Session note management (pinned across context compaction): `list`, `add <text>`, `remove <id>` |
 | `/keep <text>` | — | Pin text to session memory; survives context compaction |
 | `/memory-sync [action]` | `/memsync` | Durable memory export/import and bundle exchange: `export <path> [scope]`, `import <path>` |
-| `/recall [action]` | `/rc` | Durable knowledge and memory substrate: capture, review, explain, inspect `injections`, export, import, and handoff |
+| `/recall [action]` | `/rc`, `/memory`, `/mem` | Durable knowledge and memory substrate: capture, review, explain, inspect `injections`, export, import, and handoff |
 | `/knowledge [action]` | `/know`, `/kb` | Structured knowledge graph: ingest URLs/bookmarks, inspect issues, build packets, and run consolidation jobs |
 | `/codebase [action]` | — | Repo source-tree code index: `build`, `status`, and `search` |
 | `/context` | `/ctx` | Inspect context window usage (token breakdown per message) |
