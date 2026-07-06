@@ -592,19 +592,6 @@ export async function initializeBootstrapCore(
     ),
   );
 
-  runtimeUnsubs.push(
-    runtimeBus.on<Extract<import('@/runtime/index.ts').WorkflowEvent, { type: 'WORKFLOW_SCORE_REGRESSION' }>>(
-      'WORKFLOW_SCORE_REGRESSION',
-      ({ payload }) => {
-        routeOrBuffer(
-          `[WRFC] ⚠ Chain ${payload.chainId.slice(0, 12)}: review score regressed — ${payload.reason}`,
-          'low',
-        );
-        requestRender();
-      },
-    ),
-  );
-
   // Wire the WRFC agent-guard with the onTrace callback so routing decisions are
   // observable via the same routeOrBuffer path as WORKFLOW_* events.
   // Placed here (after routeOrBuffer is defined) so the closure is fully wired.
