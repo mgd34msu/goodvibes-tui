@@ -6,7 +6,7 @@
  * control-plane session, see below), tracks selected index, and handles
  * load/delete actions.
  *
- * W3-T2 (union-sessions surface): additionally surfaces the cross-surface
+ * Union-sessions surface: additionally surfaces the cross-surface
  * session union from `sessionBroker` (a SessionReadFacade — normally
  * `uiServices.sessions.sessionBroker`, the SessionUnionCache) so a user can
  * SEE what sessions are live/closed across every surface sharing this

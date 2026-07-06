@@ -1,7 +1,7 @@
 /**
  * footer-spine-segment.test.ts
  *
- * S3d: the footer's context-info line carries a `spine:online` / `spine:offline`
+ * The footer's context-info line carries a `spine:online` / `spine:offline`
  * segment ONLY in adopted-daemon mode (when sessionSpineStatus is defined).
  * Embedded/local mode (undefined) renders no segment — plain words, no blame,
  * matching the repo's `notify:`/`N tools` context-segment style.

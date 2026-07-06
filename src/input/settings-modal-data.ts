@@ -156,7 +156,7 @@ export function buildSettingGroups(
     }
   }
 
-  // Wave 5 (wo804): inject the storage.codeIndexEnabled toggle into the
+  // Inject the storage.codeIndexEnabled toggle into the
   // storage category. TUI-local synthetic setting (not in the SDK ConfigKey
   // union — see code-index-services.ts), same rationale as
   // notifyAfterSeconds above: opt-in, default off, states its own bounds.
@@ -342,7 +342,7 @@ export function buildNotifyAlertSyntheticEntries(configManager: Pick<ConfigManag
 }
 
 // ---------------------------------------------------------------------------
-// Wave 5 (wo804) — storage.codeIndexEnabled synthetic setting
+// storage.codeIndexEnabled synthetic setting
 // ---------------------------------------------------------------------------
 
 /**

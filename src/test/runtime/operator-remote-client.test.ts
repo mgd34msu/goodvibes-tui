@@ -29,7 +29,7 @@ describe('OperatorRemoteClient', () => {
           session: {
             id: 'session-1',
             kind: 'tui',
-            // project is a required field on the Wave-1 session record (home-scoped
+            // project is a required field on the session record (home-scoped
             // default 'unknown'); the wire schema now enforces it.
             project: 'unknown',
             title: 'Session 1',

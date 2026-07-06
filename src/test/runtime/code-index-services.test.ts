@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// code-index-services.test.ts — Wave 5 (wo804)
+// code-index-services.test.ts — repo source-tree code index
 //
 // Integration test against a REAL CodeIndexStore (not a fake) on a scratch
 // fixture tree, proving the TUI's OWN wiring (createCodeIndexServices)

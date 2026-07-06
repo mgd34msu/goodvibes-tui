@@ -1,5 +1,5 @@
 /**
- * Compaction quality-score bridging (Wave-5 W5.4 / B28).
+ * Compaction quality-score bridging.
  *
  * Reality check (wo803): the SDK's `computeQualityScore()`
  * (platform/runtime/compaction/quality-score.ts) is only ever called from a

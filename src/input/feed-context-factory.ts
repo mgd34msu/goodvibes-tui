@@ -1,7 +1,7 @@
 /**
  * feed-context-factory.ts — Construction and mutable-field sync for InputFeedContext.
  *
- * Extracted from handler.ts (Wave 4α review, 0.18.23) to keep handler.ts under the
+ * Extracted from handler.ts (review follow-up, 0.18.23) to keep handler.ts under the
  * 800-line architecture cap.
  *
  * Two exported functions:

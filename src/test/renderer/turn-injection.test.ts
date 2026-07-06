@@ -1,5 +1,5 @@
 /**
- * Per-turn knowledge injection record rendering tests (Wave-5 W5.2, wo803).
+ * Per-turn knowledge injection record rendering tests.
  *
  * Covers the honest states TurnInjectionRecord can be in: populated
  * (injected something), empty (nothing cleared the relevance floor, or the
@@ -41,7 +41,7 @@ describe('formatTurnInjectionEntry', () => {
     expect(line).toContain('340');
     expect(line).toContain('800');
     expect(line).not.toContain('nothing injected');
-    // The retrieval query must be traceable on injected lines (Wave-5 replay
+    // The retrieval query must be traceable on injected lines (a replay
     // flagged its omission).
     expect(line).toContain('"fix the flaky retry test"');
   });

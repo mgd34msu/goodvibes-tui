@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------------
 // fleet-transcript.test.ts
-// Wave-3 (W3.1 Part C6) — pure rendering functions for a FleetPanel session
+// Pure rendering functions for a FleetPanel session
 // tab's content: the live/frozen agent transcript, the wrfc-chain member
 // summary, and the on-disk ledger fallback for an evicted/never-registered
 // conversation snapshot. Isolated from FleetPanel/keyboard input — see
@@ -207,7 +207,7 @@ describe('renderFleetLedgerFallback', () => {
     expect(lines.some((l) => l.includes('no activity recorded'))).toBe(true);
   });
 
-  // W5.2 (wo803) — Wave-5 wo801 per-turn knowledge injection ledger entries.
+  // Per-turn knowledge injection ledger entries.
   // Before this case existed, these fell through to the generic 'event'
   // default (just the bare type name), giving no honest signal at all.
   describe('knowledge_injection entries', () => {

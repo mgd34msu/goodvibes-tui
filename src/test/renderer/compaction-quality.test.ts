@@ -1,5 +1,5 @@
 /**
- * Compaction quality-score bridging tests (Wave-5 W5.4/B28).
+ * Compaction quality-score bridging tests.
  *
  * The TUI's real /compact path (ConversationManager.compact(), driven by
  * compactConversation() in runtime-services.ts) never instantiates the SDK's

@@ -1,5 +1,5 @@
 /**
- * credential-availability.ts — W6-C1 client-side credential-status read.
+ * credential-availability.ts — client-side credential-status read.
  *
  * When the TUI acts as a CLIENT of an adopted external daemon (the host-service
  * `mode === 'external'` topology — see runtime/bootstrap.ts), provider/model/secret

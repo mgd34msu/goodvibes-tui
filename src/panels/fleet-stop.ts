@@ -115,7 +115,7 @@ export function buildFleetTreeHints(
     { keys: 'j/k', label: 'navigate' },
     { keys: 'Enter', label: 'attach' },
   ];
-  if (live && selected.capabilities.steerable) hints.push({ keys: 's', label: 'steer' }); // D4: discoverable from the tree (attach-and-steer)
+  if (live && selected.capabilities.steerable) hints.push({ keys: 's', label: 'steer' }); // discoverable from the tree (attach-and-steer)
   if (live && selected.capabilities.interruptible) hints.push({ keys: 'i', label: 'interrupt' });
   if (live && selected.capabilities.killable) hints.push({ keys: 'K', label: 'kill' });
   if (live && !isPaused && selected.capabilities.pausable) hints.push({ keys: 'p', label: 'pause' });
@@ -125,7 +125,7 @@ export function buildFleetTreeHints(
   return hints;
 }
 
-/** K-confirm descendant stats (UX-C item 6): total = every non-terminal descendant (what a cascade kill takes down); active = the individually-killable subset. Was "active only" (Wave-3 C7), undercounting a mixed subtree. */
+/** K-confirm descendant stats (UX-C item 6): total = every non-terminal descendant (what a cascade kill takes down); active = the individually-killable subset. Was "active only" in an earlier version, undercounting a mixed subtree. */
 export function countDescendantStats(rows: readonly FleetTreeRow[], nodeId: string): { total: number; active: number } {
   const byParent = new Map<string, string[]>();
   for (const row of rows) {

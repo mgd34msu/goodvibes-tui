@@ -19,7 +19,7 @@
  *    additionally exposes the recovered set for inspection.
  *
  *    A chain that looked interrupted (non-terminal) in the old snapshot can be
- *    reaped to terminal IN PLACE by `WrfcController.importChain` (Wave 6, wo-F:
+ *    reaped to terminal IN PLACE by `WrfcController.importChain` (the zombie-reap pass:
  *    no member agent survived the restart — see wrfc-controller.ts). This
  *    module always re-checks `chain.state` AFTER the import call, never the
  *    pre-import classification, so a reaped chain is treated as history, not
@@ -209,7 +209,7 @@ class WrfcPersistenceImpl implements WrfcPersistence {
       // chain. The accessor is optional for read-only test doubles.
       //
       // NOTE: importChain may reap this chain to a terminal state IN PLACE
-      // (Wave 6, wo-F zombie-reap: no member agent survived the restart) —
+      // (zombie reap: no member agent survived the restart) —
       // always read chain.state AFTER this call below, never the pre-import
       // classification captured by candidateInterrupted.
       this.controller.importChain?.(chain);

@@ -7,7 +7,7 @@
  *
  * Dark mode values are the historically used colours.
  * Light mode values are defined now for correctness parity; they are consumed
- * when background-detection (F5 / terminal-bg-probe) lands and passes the
+ * when background-detection (terminal-bg-probe) lands and passes the
  * resolved mode down. Callers that do not yet have mode detection MUST call
  * resolveTheme('dark') as the safe default.
  *
@@ -242,7 +242,7 @@ export function resolveUiTones(mode: ThemeMode): Readonly<UiToneTokens> {
 }
 
 // ===========================================================================
-// Active-mode runtime (DEBT-2 / F5 terminal-bg-probe landing).
+// Active-mode runtime (DEBT-2 terminal-bg-probe landing).
 //
 // The mode is decided ONCE at startup — from appearance config (display.themeMode
 // forced dark/light) or the terminal-background probe (auto) — and is then stable

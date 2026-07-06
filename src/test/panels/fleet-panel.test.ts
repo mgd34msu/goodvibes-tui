@@ -744,7 +744,7 @@ describe('FleetPanel — s opens the steer composer on an active, steerable tab'
   });
 
   test('s IS available from the root tree for a steerable node (batch replay D4 superseded the Wave-3 tab-only contract)', () => {
-    // Pre-D4 this asserted 's' was hidden/dead on the tree; steering required
+    // Before that fix, this asserted 's' was hidden/dead on the tree; steering required
     // an undiscoverable Enter-attach first. Now the tree hints advertise it
     // and 's' attaches-and-steers in one press (see the D4 describe block).
     const node = makeNode({ id: 'agent-1', state: 'streaming', capabilities: { interruptible: true, killable: true, pausable: false, steerable: true } });

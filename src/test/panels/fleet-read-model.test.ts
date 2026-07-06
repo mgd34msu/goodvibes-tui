@@ -379,7 +379,7 @@ describe('fleetStateGlyph / fleetStateTone / isTerminalProcessState / isRunningP
     expect(['active', 'warn']).toContain(fleetStateTone('executing-tool'));
   });
 
-  // Wave-3 verb formalization: 'interrupted' is a distinct terminal outcome
+  // 'interrupted' is a distinct terminal outcome
   // from 'killed' — both come from AgentManager.cancel(), but a graceful
   // interrupt is display-distinguishable from a hard kill (the replay-found
   // defect this item fixes: before this, both landed on 'killed'/⊘).
@@ -394,9 +394,9 @@ describe('fleetStateGlyph / fleetStateTone / isTerminalProcessState / isRunningP
   test('fleetKindTag returns a short tag for every ProcessKind', () => {
     const kinds = [
       'agent', 'wrfc-chain', 'wrfc-subtask', 'workflow', 'trigger', 'schedule', 'watcher', 'background-process',
-      // Wave 4 (wo703): orchestration-engine kinds.
+      // Orchestration-engine kinds.
       'workstream', 'phase', 'work-item',
-      // Wave 5 (wo804): the repo source-tree code index.
+      // The repo source-tree code index.
       'code-index',
     ] as const;
     for (const k of kinds) {
@@ -414,7 +414,7 @@ describe('fleetStateGlyph / fleetStateTone / isTerminalProcessState / isRunningP
 });
 
 // ---------------------------------------------------------------------------
-// Wave 5 (wo804) — 'code-index' is a leaf node, not a rollup: it has no
+// 'code-index' is a leaf node, not a rollup: it has no
 // children in the flat list, reports no usage/cost (an index build has no
 // LLM turn), but DOES count toward runningCount while building — it is a
 // real, distinct unit of work, not an arithmetic sum of other rows.
@@ -453,7 +453,7 @@ describe("buildFleetSnapshot — 'code-index' leaf node (wo804)", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Wave 4 (wo703) — orchestration-engine kinds: workstream/phase double-count
+// orchestration-engine kinds: workstream/phase double-count
 // exclusion (adaptWorkstream sums every work-item once; adaptPhase reports
 // nothing), work-item leaf inclusion (it carries its own direct usage/cost),
 // and buildFleetRows nesting workstream -> phase -> work-item -> agent.

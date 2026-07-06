@@ -1,10 +1,10 @@
 /**
  * session-spine-transport.ts
  *
- * W3-T1 (One-Platform Wave 3, TUI session-spine cutover): the thin typed-client
+ * The TUI session-spine cutover: the thin typed-client
  * adapter that lets the TUI's bootstrap drive the SDK's
  * `@pellux/goodvibes-sdk/platform/runtime/session-spine` `SessionSpineClient`
- * (extracted in W3-S4) via its injected `SpineTransport` seam.
+ * via its injected `SpineTransport` seam.
  *
  * The TUI is SDK-clean here: `SpineSessionsClient` is exactly the narrow wire
  * surface the old TUI-local `session-spine-client.ts` declared (structurally

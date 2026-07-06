@@ -498,7 +498,7 @@ async function main() {
       lastInputTokens: orchestrator.lastInputTokens,
       commandArgsHint,
       hitlMode: modeManager.getHITLMode(),
-      // S3d: cross-surface spine posture segment (adopted-daemon mode only).
+      // Cross-surface spine posture segment (adopted-daemon mode only).
       sessionSpineStatus: (() => { const s = uiServices.platform.externalServices?.inspect(); return s?.sessionSpineActive && s.sessionSpineStatus && s.sessionSpineStatus !== 'unknown' ? s.sessionSpineStatus : undefined; })(), runningAgentCount, runningProcessCount,
       // Composer must not read as focused while the panel/process indicator owns keyboard focus.
       promptFocused: !input.panelFocused && !input.indicatorFocused,
@@ -647,7 +647,7 @@ async function main() {
   const terminalOutputGuard = installTuiTerminalOutputGuard({ stdout, stderr: process.stderr, onCapture: (total) => { commandContext.session.runtime.terminalWritesIntercepted = total; render(); } });
 
   setRenderRequest(renderNow); // bootstrap's 16ms coalescer calls the composite directly
-  setPanelFrameRequester(render); // live panels repaint when idle (Wave-6 replay: fleet sat stale until keypress)
+  setPanelFrameRequester(render); // live panels repaint when idle (a replay finding: fleet sat stale until keypress)
   orchestratorRefs.requestRender = render;
   commandContext.renderRequest = render;
   wireShellUiOpeners({

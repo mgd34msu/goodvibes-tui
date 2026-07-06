@@ -7,7 +7,7 @@ import { MemoryStore, MemoryEmbeddingProviderRegistry } from '@pellux/goodvibes-
 import { ConfigManager } from '../../config/index.ts';
 import { foldTuiLegacyMemory } from '../../runtime/memory-fold.ts';
 
-// W6-C2 (E6): foldTuiLegacyMemory folds a project's legacy per-project TUI memory
+// foldTuiLegacyMemory folds a project's legacy per-project TUI memory
 // store into the home-scoped canonical store at boot. Hermetic: an ephemeral temp
 // canonical store, no daemon. Cleaned up in afterEach so no sqlite files leak.
 

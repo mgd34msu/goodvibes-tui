@@ -295,7 +295,7 @@ function makeRecoveryHarness() {
 }
 
 describe('ux:recovery-prompt — blocking-input handler contract', () => {
-  // W3-T2: a stray key now DISMISSES the banner (recoveryPending clears)
+  // A stray key now DISMISSES the banner (recoveryPending clears)
   // instead of re-asserting it forever — see blocking-input.ts. Dismiss is
   // not discard: the recovery file stays intact either way.
   test('stray key dismisses the recovery prompt (once) but leaves the recovery file intact', () => {

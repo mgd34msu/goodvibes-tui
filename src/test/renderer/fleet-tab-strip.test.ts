@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------------
 // fleet-tab-strip.test.ts
-// Wave-3 (W3.1 Part C3) — renderFleetTabStrip: the fleet session-tab strip
+// renderFleetTabStrip: the fleet session-tab strip
 // wrapper around the shared renderTabStrip primitive.
 // ---------------------------------------------------------------------------
 

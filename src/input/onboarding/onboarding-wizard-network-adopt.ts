@@ -1,5 +1,5 @@
 /**
- * F1 (One-Platform Wave 2 friction fix): the Network step's daemon-source choice
+ * Friction fix: the Network step's daemon-source choice
  * — start a new daemon owned by this TUI (default) vs connect to one that is
  * already running elsewhere with a known token. Extracted from
  * onboarding-wizard-steps.ts to keep that file under the architecture line cap.
@@ -78,7 +78,7 @@ export function pushDaemonAdoptionFields(
 }
 
 /**
- * W4-D1: the guided, visible entry point for migrating a detected legacy
+ * The guided, visible entry point for migrating a detected legacy
  * `goodvibes-daemon.service` unit — closes the fast-follow-up flagged when
  * `handleMigrateLegacyDaemonServiceForHandler` (handler-onboarding-daemon-adopt.ts)
  * shipped fully built but not wired to any onboarding control. Independent of
@@ -107,7 +107,7 @@ export function pushLegacyDaemonMigrationFields(
     kind: 'status',
     id: 'network.migrate-legacy-daemon-detected',
     label: 'Legacy daemon service detected',
-    // F2 follow-up: name the unit this host actually resolves (carried on the
+    // Follow-up: name the unit this host actually resolves (carried on the
     // snapshot from `resolveConfiguredServiceName` at collection time) — the
     // MANAGED_SERVICE_NAME fallback only covers snapshots built without it.
     hint: legacyUnitNote(legacy, legacy.trackedServiceName ?? MANAGED_SERVICE_NAME),

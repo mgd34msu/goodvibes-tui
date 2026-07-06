@@ -231,7 +231,7 @@ export function wireShellUiOpeners(options: WireShellUiOpenersOptions): void {
 
   commandContext.openModelPicker = () => {
     void (async () => {
-      // D5: getSelectableModels() is catalog-driven and can list models whose
+      // getSelectableModels() is catalog-driven and can list models whose
       // `provider` id (e.g. 'google', sourced from the pricing catalog) was never
       // handed to providerRegistry.register()/registerRuntimeProvider(). Selecting
       // such a model fails hard at turn time with ProviderNotFoundError
@@ -264,7 +264,7 @@ export function wireShellUiOpeners(options: WireShellUiOpenersOptions): void {
 
   commandContext.openProviderPicker = () => {
     void (async () => {
-      // D5: listModels() surfaces every catalog provider id, not just the ones
+      // listModels() surfaces every catalog provider id, not just the ones
       // actually registered on this runtime (see openModelPicker above for the
       // same class of bug). Intersect against providerRegistry.has() so the
       // provider picker never offers a provider that will fail with

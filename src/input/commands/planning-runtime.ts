@@ -262,7 +262,7 @@ export function registerPlanningRuntimeCommands(registry: CommandRegistry): void
         return;
       }
 
-      // Defense (Wave 6 review): a single verb-looking token is almost never a
+      // Defense (review finding): a single verb-looking token is almost never a
       // real planning goal — it is a mistyped or removed subcommand. The
       // Planning modal used to dispatch `/plan dismiss`, which has no
       // subcommand and silently fell through to this free-form branch, seeding

@@ -1,5 +1,5 @@
 /**
- * Tests for the Wave-5 (wo804) storage.codeIndexEnabled synthetic setting
+ * Tests for the storage.codeIndexEnabled synthetic setting
  * (src/input/settings-modal-data.ts: buildCodeIndexEnabledSyntheticEntry,
  * and its injection into buildSettingGroups's 'storage' category), and for
  * the shared read isCodeIndexAutoStartEnabled (code-index-services.ts) that

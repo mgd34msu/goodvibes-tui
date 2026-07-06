@@ -10,7 +10,7 @@ export function registerConfigCommand(registry: CommandRegistry): void {
     usage: '[category|key] | set <key> <value>',
     argsHint: '[category|key] | set <key> <value>',
     handler(args, ctx) {
-      // Batch replay D2: `/config set <key> <value>` used to fall through to
+      // An earlier replay fix: `/config set <key> <value>` used to fall through to
       // the workspace with the assignment silently ignored — the dishonest-
       // fallthrough class. `set` is now a real verb.
       if (args[0] === 'set') {

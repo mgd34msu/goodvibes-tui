@@ -14,7 +14,7 @@ describe('workspaceOperatorTokenCandidates', () => {
   });
 });
 
-// F1 (external-daemon adoption): resolveDaemonCompanionToken is the single
+// External-daemon adoption: resolveDaemonCompanionToken is the single
 // place that both the GOODVIBES_DAEMON_TOKEN env-var override (bootstrap.ts)
 // and the onboarding wizard's "connect to an existing daemon" paste action
 // (handler-onboarding.ts) go through to install a token into

@@ -24,7 +24,7 @@ function createConfig(overrides: {
         | 'httpListener.port',
     ): boolean | string | number {
       if (key === 'daemon.enabled') return overrides.daemon ?? false;
-      // D7a: these tests exercise the EMBEDDED daemon/listener path via the
+      // These tests exercise the EMBEDDED daemon/listener path via the
       // createDaemonServer/createHttpListener factories directly — force
       // daemon.embedInProcess so startHostServices never attempts the new
       // default detached-spawn path (which would really try to spawn a

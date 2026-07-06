@@ -199,7 +199,7 @@ describe('CLI service posture', () => {
   });
 
   test('posture honors a legacy on-disk danger.daemon=false through the Wave-6 removal migration', async () => {
-    // The deprecated danger.daemon alias was removed from the schema (Wave 6,
+    // The deprecated danger.daemon alias was removed from the schema (see
     // docs/decisions/2026-07-05-daemon-by-default.md). A user's existing
     // explicit off-switch on disk is preserved by the SDK's config migration
     // (ConfigManager.load -> migrateDangerDaemonAlias), which rewrites it onto

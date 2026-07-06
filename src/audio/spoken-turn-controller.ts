@@ -64,8 +64,8 @@ export class SpokenTurnController {
   /**
    * Returns whether speech was actually ACTIVE when stopped. The notice only
    * prints in that case — stop() on an idle controller used to notify anyway,
-   * spamming "[TTS] Spoken output stopped." on every Ctrl+C (batch replay
-   * D5/N-noise); callers use the return to decide whether the press "did a
+   * spamming "[TTS] Spoken output stopped." on every Ctrl+C (an earlier replay
+   * fix); callers use the return to decide whether the press "did a
    * job" (see handleCtrlC's consume-on-speech-stop).
    */
   stop(message?: string): boolean {

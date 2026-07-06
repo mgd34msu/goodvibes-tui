@@ -1,5 +1,5 @@
 /**
- * Wave-5 Stage B — the `agent-passive-code-injection` feature flag surfaces in the
+ * The `agent-passive-code-injection` feature flag surfaces in the
  * settings modal flags section. buildFlagEntries maps every flag the FeatureFlagManager
  * knows about, so this pins that the SDK flag reaches the TUI's flags list (default off).
  */

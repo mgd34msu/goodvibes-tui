@@ -93,7 +93,7 @@ Alias: `/sess`. Run `/session` with no arguments to see current session info.
 
 ## Navigation and keyboard chords
 
-- **F2** opens **and focuses the Fleet panel** (the live unified process tree). It previously opened a standalone process monitor; that modal was retired in W6.1 and Fleet subsumes it.
+- **F2** opens **and focuses the Fleet panel** (the live unified process tree). It previously opened a standalone process monitor; that modal was retired in an earlier release and Fleet subsumes it.
 - **Ctrl+O** also opens and focuses **Fleet** (the retired Ops Control panel now aliases to it).
 - **Ctrl+PageUp** / **Ctrl+PageDown** move to the previous / next panel tab. (Ctrl+] remains a second binding for next; the old Ctrl+[ binding was removed because it collided with Escape.)
 - **Ctrl+C twice** quits — a single Ctrl+C on an empty composer only arms a ~1s "press again to exit" confirm; the footer advertises this as `Ctrl+C x2 quit`.

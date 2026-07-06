@@ -533,7 +533,7 @@ export function buildNetworkStep(controller: OnboardingWizardControllerLike): On
       },
     ];
 
-    // F1: recognize an adoptable already-running daemon (see onboarding-wizard-network-adopt.ts).
+    // Recognize an adoptable already-running daemon (see onboarding-wizard-network-adopt.ts).
     const daemonSource = getDaemonSource(controller);
     pushDaemonAdoptionFields(fields, controller, daemonSource, bindSettings);
     pushLegacyDaemonMigrationFields(fields, controller);

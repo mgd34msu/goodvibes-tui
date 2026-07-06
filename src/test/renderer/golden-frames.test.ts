@@ -1158,7 +1158,7 @@ function buildFleetGoldenNodes(): ProcessNode[] {
       costState: 'priced',
       capabilities: { interruptible: false, killable: false, pausable: false, steerable: false },
     },
-    // Wave-3 verb formalization: 'interrupted' fixture row so the new
+    // 'interrupted' fixture row so the new
     // glyph/tone gets golden coverage (distinct from 'killed'/⊘ above).
     // startedAt is deliberately the MOST RECENT of all roots so this row
     // sorts last and simply appends — it must not reorder or disturb any
@@ -1192,7 +1192,7 @@ function renderFleetSurface(width: number, height: number): Line[] {
 
 describeOverlayGolden('fleet-panel', renderFleetSurface);
 
-// Wave-3 (W3.1 Part C) — one attached agent session tab, deterministic
+// One attached agent session tab, deterministic
 // transcript content via a stub getConversationSnapshot. Separate golden
 // surface (not folded into 'fleet-panel' above) so the root-tab-only
 // fixture's bytes stay stable independent of tab-view layout changes.
@@ -1215,7 +1215,7 @@ function renderFleetTabSurface(width: number, height: number): Line[] {
 
 describeOverlayGolden('fleet-panel-tab', renderFleetTabSurface);
 
-// Wave-3 (W3.2) — a steerable agent's attached tab. Two separate surfaces
+// A steerable agent's attached tab. Two separate surfaces
 // (not folded into 'fleet-panel-tab' above) since the composer and the
 // queued badge are mutually-exclusive views (the composer input line
 // replaces the badge line while open; the badge reappears once the draft

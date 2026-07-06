@@ -1,5 +1,5 @@
 /**
- * /recall injections command tests (Wave-5 W5.2 wo803, main-session default wo805).
+ * /recall injections command tests.
  *
  * Exercises the actual registered `/recall injections` subcommand (not just
  * the pure renderer in turn-injection.test.ts) against a fake

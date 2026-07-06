@@ -1,7 +1,7 @@
 /**
  * session-spine-daemon-integration.test.ts
  *
- * S3c acceptance evidence: drives the TUI's SessionSpineClient against a REAL
+ * Acceptance evidence: drives the TUI's SessionSpineClient against a REAL
  * bootDaemon instance (isolated home directory, ephemeral port) over a real
  * HttpTransport — no mocked wire. Proves: register-on-create is visible in
  * `sessions.list` with kind 'tui' and the right project; heartbeat advances

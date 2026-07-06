@@ -189,7 +189,7 @@ function detailLines(picker: ModelPickerModal, width: number): string[] {
   } else {
     lines.push(`Context cap overrides the detected local-model context window for this selection.`);
   }
-  // W3-T2: a visible cursor glyph on the query itself when search is focused —
+  // A visible cursor glyph on the query itself when search is focused —
   // the only prior affordance was a footer-hint text swap ('/ search' vs.
   // 'Typing filters search...'), buried at the end of a long hint line and
   // easy to miss (confirmed via live tmux repro). This puts the "you are

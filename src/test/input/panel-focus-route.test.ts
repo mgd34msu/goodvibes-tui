@@ -253,7 +253,7 @@ describe('handlePanelFocusToken', () => {
   });
 
   // UX-C item 1d: '/' is a new, explicit transfer verb — consistent with the
-  // Wave-6 invariant (focus only ever moves on an explicit verb, never
+  // Invariant (focus only ever moves on an explicit verb, never
   // implicitly) — that returns focus to the composer AND lets the '/' land
   // there to start a command, from any focused panel that isn't itself
   // capturing free text.

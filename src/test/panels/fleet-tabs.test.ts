@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------------
 // fleet-tabs.test.ts
-// Wave-3 (W3.1 Part C1/C2) — pure tab-state transitions: attach/detach/switch,
+// Pure tab-state transitions: attach/detach/switch,
 // independent of FleetPanel/rendering. Integration coverage (keyboard-driven
 // attach/detach/switch through FleetPanel.handleInput) lives in
 // fleet-panel.test.ts; this file isolates the state machine itself.
@@ -45,7 +45,7 @@ describe('isAttachableFleetKind', () => {
     }
   });
 
-  // Wave 4 (wo703): workstream/phase/work-item are aggregates (workstream,
+  // workstream/phase/work-item are aggregates (workstream,
   // phase) or delegate-to-their-agent leaves (work-item) — none carry their
   // own transcript, mirroring wrfc-subtask. Users attach the live 'agent'
   // leaf directly; no default change here, verified explicitly per the brief.
@@ -173,7 +173,7 @@ describe('switchFleetTab / stepFleetTab / activeFleetTab', () => {
 });
 
 // ---------------------------------------------------------------------------
-// appendSteerText — Wave-3 (W3.2) steer-composer paste normalization. A
+// appendSteerText — steer-composer paste normalization. A
 // pasted multi-line block arrives as literal \r/\n characters, one at a time
 // (see fleet-panel.ts's isCapturingTextBurst contract); this must collapse
 // each line break to a single space rather than corrupting the one-line

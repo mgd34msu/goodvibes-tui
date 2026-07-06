@@ -6,7 +6,7 @@
  *   - name, timestamp (formatted), message count
  * Footer hints: [Enter] Load  [d] Delete  [Esc] Close
  *
- * W3-T2: when the modal was wired with a cross-surface session union
+ * When the modal was wired with a cross-surface session union
  * (`modal.crossSurfaceView.mode !== 'local'`), an additional read-only
  * "Cross-surface sessions" section is appended, badged kind/status/project
  * (parity with the webui SessionsView) with one of three honest states —
@@ -66,7 +66,7 @@ function isReapedRecord(record: SharedSessionRecord): boolean {
 }
 
 /**
- * Wave-4 UX-lens note: 'reaped' names a mechanism (the idle-session sweep),
+ * UX-lens note: 'reaped' names a mechanism (the idle-session sweep),
  * not a state a first-time reader can guess — the webui pairs its own
  * 'reaped' badge with a tooltip explaining it
  * (SessionsView.tsx: "Closed by the idle-session sweep — reopens
@@ -96,7 +96,7 @@ const MAX_CROSS_SURFACE_ROWS = 5;
 /**
  * The exact honest note for the current state, or null when the union view
  * needs no caveat (fresh/embedded with rows). Precedence: offline > stale >
- * true-empty — the three states from the W3-T2 brief, never collapsed into
+ * true-empty — the three designed states, never collapsed into
  * each other (an offline view never silently renders as "no sessions yet").
  */
 function crossSurfaceNote(view: SessionPickerModal['crossSurfaceView'], rowCount: number): string | null {
@@ -238,7 +238,7 @@ export function renderSessionPickerModal(
     }
   }
 
-  // W3-T2: cross-surface session union — visible only when a sessionBroker
+  // Cross-surface session union — visible only when a sessionBroker
   // was wired (mode !== 'local'); absent entirely otherwise, so the box size
   // and content of every pre-existing (local-only) caller is unaffected.
   if (modal.crossSurfaceView.mode !== 'local') {

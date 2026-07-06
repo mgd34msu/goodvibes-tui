@@ -205,7 +205,7 @@ describe('BasePanel.handleScroll default', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Wave-6 replay fix: markDirty requests a compositor frame via the wired
+// A replay fix: markDirty requests a compositor frame via the wired
 // requester — without it, live panels (fleet ticks/subscriptions) sat stale
 // while the app was idle until the next keypress produced a frame.
 // ---------------------------------------------------------------------------

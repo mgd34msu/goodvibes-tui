@@ -189,7 +189,7 @@ export function handlePanelFocusToken(state: PanelFocusRouteState, token: InputT
 export type IndicatorFocusRouteState = {
   indicatorFocused: boolean;
   modalOpened: (name: string) => void;
-  /** W2.2: the footer process indicator's [Enter] opens the Fleet panel (F2 also opens the Fleet panel; the retired process modal was removed in W6.2). */
+  /** The footer process indicator's [Enter] opens the Fleet panel (F2 also opens it; the process modal was retired). */
   openFleetPanel: () => void;
   requestRender: () => void;
 };
@@ -337,7 +337,7 @@ export type KeyRouteState = {
   commandRegistry?: CommandRegistry | null;
   autocomplete: AutocompleteEngine | null;
   blockActionsMenu: { open: (block: BlockMeta) => void };
-  /** W6.2 e: F2 opens+focuses the Fleet panel (which subsumes the retired process modal). */
+  /** F2 opens+focuses the Fleet panel (which subsumes the retired process modal). */
   openFleetPanel: () => void;
   modalOpened: (name: string) => void;
   saveUndoState: () => void;

@@ -300,7 +300,7 @@ describe('wireShellUiOpeners', () => {
     });
   });
 
-  // D5: providerRegistry.getSelectableModels()/listModels() are catalog-driven —
+  // providerRegistry.getSelectableModels()/listModels() are catalog-driven —
   // they include every provider id present in the fetched pricing catalog (e.g.
   // 'google', from Gemini catalog entries) regardless of whether that provider
   // id was ever handed to providerRegistry.register()/registerRuntimeProvider().

@@ -48,7 +48,7 @@ export interface BootstrapShellOptions {
   readonly runtimeBus: RuntimeEventBus;
   readonly runtimeStore: RuntimeStore;
   readonly services: RuntimeServices;
-  /** S3c: dormant until bootstrap.ts activates it for an adopted 'external' daemon. */
+  /** Dormant until bootstrap.ts activates it for an adopted 'external' daemon. */
   readonly sessionSpine: SessionSpineClient;
   readonly conversation: ConversationManager;
   readonly runtime: MutableRuntimeState;
@@ -181,7 +181,7 @@ export function createBootstrapShell(options: BootstrapShellOptions): BootstrapS
     forensicsRegistry,
     policyRuntimeState,
     approvalBroker: services.approvalBroker,
-    // S3d: panels read the cross-surface union facade, not the raw local broker.
+    // Panels read the cross-surface union facade, not the raw local broker.
     sessionBroker: uiServices.sessions.sessionBroker,
     automationManager: services.automationManager,
     getControlPlaneRecentEvents,
@@ -289,7 +289,7 @@ export function createBootstrapShell(options: BootstrapShellOptions): BootstrapS
     codeIndexStore: services.codeIndexStore,
     codeIndexReindexScheduler: services.codeIndexReindexScheduler,
     isPassiveCodeInjectionFlagEnabled: () => services.featureFlags.isEnabled('agent-passive-code-injection'),
-    // Wave 5 (wo805): expose the MAIN session's per-turn passive-injection ring
+    // Expose the MAIN session's per-turn passive-injection ring
     // so `/recall injections` (no agent id) renders it — see recall-review.ts.
     getMainSessionTurnInjections: () => orchestrator.getTurnInjections(),
     changeTracker: services.sessionChangeTracker,

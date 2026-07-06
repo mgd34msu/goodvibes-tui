@@ -1,14 +1,14 @@
 /**
  * session-inbound-steer-daemon-integration.test.ts
  *
- * D3 acceptance evidence (the substantive one): drives the FULL live-surface
+ * Acceptance evidence (the substantive one): drives the FULL live-surface
  * steer path against a REAL bootDaemon over a real HttpTransport — no mocked wire.
  *
  * Proves the charter end-to-end: a TUI registers a session (surface-managed, live
  * participant); a webui surface steers that session over the wire; the daemon
  * QUEUES the steer for the surface (not a daemon executor); the TUI's inbound
  * poller collects it, fires the surface-side injection callback, and ACKS delivery
- * on the wire (queued -> delivered). Plus D7b: with two live TUI sessions from
+ * on the wire (queued -> delivered). Plus, with two live TUI sessions from
  * different projects, a steer to each lands only in the owning session's poller.
  */
 import { describe, expect, test } from 'bun:test';

@@ -23,7 +23,7 @@ export interface ResumeSessionOptions {
   readonly requestRender: () => void;
   readonly onSessionIdChanged?: (sessionId: string) => void;
   readonly sharedSessionBroker: Pick<SharedSessionBroker, 'reopenSession'>;
-  /** S3c: fire-and-forget daemon-spine mirror. Reopen (not register) is the
+  /** Fire-and-forget daemon-spine mirror. Reopen (not register) is the
    * ONLY resume-time verb — see the SDK session-spine client.ts header doc. */
   readonly sessionSpine: Pick<SessionSpineClient, 'reopen'>;
   readonly project: string;
@@ -80,7 +80,7 @@ export function createResumeSessionHandler(options: ResumeSessionOptions): (sess
       if (meta?.provider) options.runtime.provider = meta.provider;
       options.writeLastSessionPointer(sessionId);
       void options.sharedSessionBroker.reopenSession(sessionId).catch((err) => { logger.debug('session broker reopen session failed', { err }); });
-      // S3c: fire-and-forget spine mirror (reopen:true — the user resume verb).
+      // Fire-and-forget spine mirror (reopen:true — the user resume verb).
       options.sessionSpine.reopen({ sessionId, project: options.project, title: options.conversation.title || meta.title });
       options.conversation.log(`Resumed session: ${sessionId}`, { fg: '135' });
       const reopenedPanels: string[] = [];

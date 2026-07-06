@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------------
 // fleet-steer.test.ts
-// Wave-3 (W3.2) — pure steer-badge rendering helpers and the "dropped
+// Pure steer-badge rendering helpers and the "dropped
 // inference" reconciliation pass, independent of FleetPanel/rendering.
 // Integration coverage (keyboard-driven steer -> badge -> consumed/dropped,
 // end to end through FleetPanel.handleInput) lives in fleet-panel.test.ts;

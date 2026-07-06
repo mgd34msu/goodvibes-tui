@@ -222,12 +222,12 @@ export interface RuntimeServices {
   readonly agentOrchestrator: AgentOrchestrator;
   readonly wrfcController: WrfcController;
   readonly processManager: ProcessManager;
-  /** Wave 4 (wo703): the phase/work-item orchestration engine — see runtime/workstream-services.ts. */
+  /** The phase/work-item orchestration engine — see runtime/workstream-services.ts. */
   readonly orchestrationEngine: OrchestrationEngine;
   readonly workstreamCommands: WorkstreamCommandService;
-  /** Wave 5 (wo804): the repo source-tree code index — see runtime/code-index-services.ts. */
+  /** The repo source-tree code index — see runtime/code-index-services.ts. */
   readonly codeIndexStore: CodeIndexStore;
-  readonly codeIndexReindexScheduler: CodeIndexReindexScheduler; // Wave-5 Stage B tool-site reindex
+  readonly codeIndexReindexScheduler: CodeIndexReindexScheduler; // tool-site reindex
   /** W2.1/W2.2: unified live process registry (agents, WRFC chains, workflows, watchers, background processes) backing the Fleet panel. */
   readonly processRegistry: ProcessRegistry;
   readonly modeManager: ModeManager;
@@ -338,7 +338,7 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
     executor: agentOrchestrator,
     configManager,
   });
-  agentOrchestrator.setConversationSink({ // Wave-3 Part C6 bridge (mirrors the SDK's own createRuntimeServices)
+  agentOrchestrator.setConversationSink({ // Conversation-snapshot bridge (mirrors the SDK's own createRuntimeServices)
     register: (agentId, source) => agentManager.registerConversationSource(agentId, source),
     release: (agentId) => agentManager.releaseConversationSource(agentId),
   });
@@ -387,7 +387,7 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
   });
   const artifactStore = new ArtifactStore({ configManager });
   const memoryEmbeddingRegistry = new MemoryEmbeddingProviderRegistry({ configManager });
-  // W6-C2 (E6): open the ONE home-scoped canonical store; legacy per-project TUI memory folds in at boot (foldTuiLegacyMemory).
+  // Open the ONE home-scoped canonical store; legacy per-project TUI memory folds in at boot (foldTuiLegacyMemory).
   const memoryDbPath = resolveCanonicalMemoryDbPath(homeDirectory);
   const memoryStore = new MemoryStore(memoryDbPath, {
     embeddingRegistry: memoryEmbeddingRegistry,
@@ -595,18 +595,18 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
     artifactStore,
   });
   const processManager = new ProcessManager();
-  // Wave 4 (wo703): the phase/work-item orchestration engine, constructed
+  // The phase/work-item orchestration engine, constructed
   // before the process registry so its fleet nodes (workstream/phase/
   // work-item) can be folded in below via the registry's optional
   // orchestrationEngine dep.
   const { orchestrationEngine, workstreamCommands } = createWorkstreamServices({
     agentManager, configManager, adaptivePlanner, runtimeBus: options.runtimeBus, projectRoot: workingDirectory,
   });
-  // Wave 5 (wo804): repo source-tree code index, sharing memoryEmbeddingRegistry
+  // Repo source-tree code index, sharing memoryEmbeddingRegistry
   // with MemoryStore above. Auto-build is config-gated (default off) — see
   // code-index-services.ts's header doc.
   const { codeIndexStore, codeIndexReindexScheduler } = createCodeIndexServices({ workingDirectory, configManager, memoryEmbeddingRegistry });
-  const codeInjectionOrchestratorDeps = { codeIndex: codeIndexStore, isCodeInjectionSettingEnabled: () => isCodeInjectionSettingEnabled(configManager), codeIndexReindexScheduler }; // Wave-5 Stage B seam (agent here; main via orchestrator-core-services.ts)
+  const codeInjectionOrchestratorDeps = { codeIndex: codeIndexStore, isCodeInjectionSettingEnabled: () => isCodeInjectionSettingEnabled(configManager), codeIndexReindexScheduler }; // Code-injection seam (agent here; main via orchestrator-core-services.ts)
   // W2.1/W2.2: one shared process registry aggregating the managers above —
   // the Fleet panel (panels/fleet-read-model.ts) is its first consumer.
   // Constructed once here (not per-consumer) so the coalesced tick and the
@@ -614,15 +614,15 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
   const processRegistry = createProcessRegistry({
     agentManager,
     wrfcController,
-    orchestrationEngine, // Wave 4 (wo703): folds workstream/phase/work-item nodes into the fleet
-    codeIndexService: codeIndexStore, // Wave 5 (wo804): folds a single 'code-index' node into the fleet
+    orchestrationEngine, // Folds workstream/phase/work-item nodes into the fleet
+    codeIndexService: codeIndexStore, // Folds a single 'code-index' node into the fleet
     processManager,
     watcherRegistry,
     workflow,
     approvalBroker,
     sessionBroker,
-    messageBus: agentMessageBus, // Wave-3: backs steer()/`steerable` (wo612 builds the composer UI on top)
-    automationManager, // Wave 6 (wo-F item d4): folds /schedule AutomationJobs into the fleet as 'schedule' nodes
+    messageBus: agentMessageBus, // Backs steer()/`steerable` (the Fleet steer composer builds on top)
+    automationManager, // Folds /schedule AutomationJobs into the fleet as 'schedule' nodes
     runtimeBus: options.runtimeBus,
     // Honest pricing: never fabricate a cost for an unrecognized model.
     priceUsage: (model, usage) => {
@@ -681,7 +681,7 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
     remoteRunnerRegistry,
     knowledgeService,
     memoryRegistry,
-    ...codeInjectionOrchestratorDeps, // Wave-5 Stage B: agent-run code injection + tool-site reindex
+    ...codeInjectionOrchestratorDeps, // Agent-run code injection + tool-site reindex
     archetypeLoader,
     configManager,
     providerRegistry,
@@ -790,7 +790,7 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
     workspaceCheckpointManager,
     integrationHelpers,
     async rerootStores(newWorkingDir: string): Promise<void> {
-      // W6-C2 (E6): the memory store is the home-scoped canonical cross-surface store and
+      // The memory store is the home-scoped canonical cross-surface store and
       // deliberately does NOT reroot per-project (that would re-silo memory, the E6
       // regression). Only working-tree-bound stores (code index, project index) reroot.
       await codeIndexStore.reroot(newWorkingDir, codeIndexDbPath(newWorkingDir));

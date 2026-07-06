@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// diff-runtime.test.ts — Wave 0 (W0.4 cluster) regression coverage:
+// diff-runtime.test.ts — regression coverage:
 //   (a) every Bun.spawn() call reachable from /diff captures stderr instead
 //       of letting git's `fatal: ...` write straight to the real tty.
 //   (b) /diff short-circuits with a friendly message in a non-git directory

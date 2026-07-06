@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// render-perf.test.ts — Unit tests for Wave 2 / Tier 1 render performance fixes
+// render-perf.test.ts — Unit tests for render performance fixes
 //
 // R1: Render coalescing — burst of requestRender() calls produces one render
 // R2: Panel dirty flag — panels skip re-render when needsRender is false

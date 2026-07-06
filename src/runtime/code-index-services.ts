@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// code-index-services.ts — Wave 5 (wo804, W5.3 Stage A TUI wiring)
+// code-index-services.ts — repo source-tree code index (TUI wiring)
 //
 // Constructs the TUI's repo source-tree code index: CodeIndexStore
 // (@pellux/goodvibes-sdk/platform/state, landed on SDK main as wo802/W5.3
@@ -81,7 +81,7 @@ export function isCodeInjectionSettingEnabled(configManager: Pick<ConfigManager,
 export interface CodeIndexServices {
   readonly codeIndexStore: CodeIndexStore;
   /**
-   * Wave-5 Stage B tool-site incremental reindex scheduler, bound to codeIndexStore and
+   * Tool-site incremental reindex scheduler, bound to codeIndexStore and
    * gated live on storage.codeIndexEnabled. Threaded into both SDK orchestrators (main +
    * agent) so a successful write/edit debounces an incremental reindex, and into the command
    * context so /codebase status can report the last reindex activity honestly.

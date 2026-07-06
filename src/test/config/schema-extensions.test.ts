@@ -56,7 +56,7 @@ describe('Config schema extensions: orchestration, storage, sandbox, danger, and
     test('daemon + danger category fields have correct types when no project config exists', () => {
       const mgr = createConfigManager(tmpDir);
       // daemon.enabled is the honestly-named key: default true (daemon runs by default).
-      // The deprecated danger.daemon alias was removed from the schema in Wave 6
+      // The deprecated danger.daemon alias was removed from the schema
       // (docs/decisions/2026-07-05-daemon-by-default.md) — see config-migrations.test.ts
       // in the SDK for the removal migration's contract.
       expect(typeof mgr.get('daemon.enabled')).toBe('boolean');
@@ -96,7 +96,7 @@ describe('Config schema extensions: orchestration, storage, sandbox, danger, and
 
     test('DEFAULT_CONFIG.daemon/danger have correct default values', () => {
       // Daemon on by default via the honest key. The deprecated danger.daemon
-      // alias was removed from the schema in Wave 6.
+      // alias was removed from the schema.
       expect(DEFAULT_CONFIG.daemon.enabled).toBe(true);
       expect(DEFAULT_CONFIG.danger.httpListener).toBe(false);
     });
@@ -455,7 +455,7 @@ describe('Config schema extensions: orchestration, storage, sandbox, danger, and
       expect(typeof DEFAULT_CONFIG.orchestration.maxActiveAgents).toBe('number');
       expect(typeof DEFAULT_CONFIG.orchestration.maxDepth).toBe('number');
       // daemon.enabled is the honest key (default true). The deprecated
-      // danger.daemon alias was removed from the schema in Wave 6.
+      // danger.daemon alias was removed from the schema.
       expect(DEFAULT_CONFIG.daemon).toBeDefined();
       expect(DEFAULT_CONFIG.daemon.enabled).toBe(true);
       expect(DEFAULT_CONFIG.danger).toBeDefined();
