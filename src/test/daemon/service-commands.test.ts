@@ -11,6 +11,27 @@ import {
   runDaemonServiceCli,
   type ManagedServiceActionRunner,
 } from '../../daemon/service-commands.ts';
+import { resolveConfiguredServiceName } from '../../runtime/legacy-daemon-migration.ts';
+
+describe('resolveConfiguredServiceName (F2 follow-up: config-honest name for pre-manager callers)', () => {
+  function config(value: unknown): { get(key: string): unknown } {
+    return { get: (key: string) => (key === 'service.serviceName' ? value : undefined) };
+  }
+
+  test('returns the service.serviceName config value when set', () => {
+    expect(resolveConfiguredServiceName(config('my-custom-unit'))).toBe('my-custom-unit');
+  });
+
+  test('trims whitespace around a configured value', () => {
+    expect(resolveConfiguredServiceName(config('  my-custom-unit  '))).toBe('my-custom-unit');
+  });
+
+  test('falls back to the managed default when unset, null, or blank', () => {
+    expect(resolveConfiguredServiceName(config(undefined))).toBe('goodvibes');
+    expect(resolveConfiguredServiceName(config(null))).toBe('goodvibes');
+    expect(resolveConfiguredServiceName(config('   '))).toBe('goodvibes');
+  });
+});
 
 describe('isDaemonServiceSubcommand', () => {
   test('recognizes the four service verbs and nothing else', () => {

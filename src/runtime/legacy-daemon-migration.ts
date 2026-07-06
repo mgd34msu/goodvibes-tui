@@ -62,6 +62,26 @@ type ManagedServiceActionResult = ReturnType<ManagedServiceActionRunner>;
 export const MANAGED_SERVICE_NAME = 'goodvibes';
 export const MANAGED_SERVICE_DESCRIPTION = 'GoodVibes daemon (shared session broker + companion host)';
 
+/**
+ * F2 follow-up: resolve the unit name the SDK's `PlatformServiceManager`
+ * would actually manage, from config alone — for callers that need the
+ * honest display name BEFORE any manager/status exists (the onboarding
+ * wizard's detection banner resolves this at snapshot-collection time and
+ * carries it on `OnboardingLegacyDaemonSnapshot.trackedServiceName`).
+ * Mirrors the SDK's own internal `resolveServiceName()` precedence exactly:
+ * the `service.serviceName` config key first, trimmed, falling back to the
+ * default (`MANAGED_SERVICE_NAME`, which `buildManagedDaemonServiceManager`
+ * passes as `defaultServiceName`) when the key is unset or blank. Takes a
+ * minimal `{ get }` shape rather than the full ConfigManager class so
+ * snapshot code and tests can pass whatever config accessor they already
+ * hold.
+ */
+export function resolveConfiguredServiceName(config: { get(key: string): unknown }): string {
+  const raw = config.get('service.serviceName');
+  const configured = raw === undefined || raw === null ? '' : String(raw).trim();
+  return configured || MANAGED_SERVICE_NAME;
+}
+
 export interface BuildManagedDaemonServiceManagerParams {
   readonly binaryPath: string;
   readonly homeDir: string;

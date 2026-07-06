@@ -4,7 +4,7 @@ import { summarizeError, openExternalUrl } from '@pellux/goodvibes-sdk/platform/
 import { getProviderIdFromModel } from '../config/provider-model.ts';
 import { buildProviderAccountSnapshot } from '@/runtime/index.ts';
 import { handleConnectExistingDaemonForHandler, handleMigrateLegacyDaemonServiceForHandler } from './handler-onboarding-daemon-adopt.ts';
-import { detectLegacyUnit } from '../runtime/legacy-daemon-migration.ts';
+import { detectLegacyUnit, resolveConfiguredServiceName } from '../runtime/legacy-daemon-migration.ts';
 import { OnboardingWizardController, type OnboardingWizardAction, type OnboardingWizardApplyFeedback } from './onboarding/onboarding-wizard.ts';
 import { handleCloudflareOnboardingActionForHandler, maybeProvisionCloudflareOnFinalApplyForHandler } from './handler-onboarding-cloudflare.ts';
 import { applyOnboardingRequest, collectOnboardingSnapshot, deleteWizardProgress, verifyOnboardingRequest, writeOnboardingCheckMarker, writeWizardProgress } from '../runtime/onboarding/index.ts';
@@ -349,7 +349,7 @@ export async function refreshOnboardingHydrationForHandler(handler: InputHandler
           }),
         },
         legacyDaemon: {
-          detect: () => detectLegacyUnit({ homeDir: handler.uiServices.environment.homeDirectory }),
+          detect: () => ({ ...detectLegacyUnit({ homeDir: handler.uiServices.environment.homeDirectory }), trackedServiceName: resolveConfiguredServiceName(handler.uiServices.platform.configManager) }),
         },
       });
       if (!handler.onboardingWizard.active || hydrationSerial !== handler.onboardingHydrationSerial) return;

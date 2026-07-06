@@ -136,6 +136,16 @@ export interface OnboardingLegacyDaemonSnapshot {
   readonly present: boolean;
   readonly active: boolean;
   readonly path: string;
+  /**
+   * F2 follow-up: the unit name this tool actually manages on this host,
+   * resolved from the `service.serviceName` config key at snapshot-collection
+   * time (`resolveConfiguredServiceName`, `../legacy-daemon-migration.ts`) —
+   * so the wizard's detection banner names the real unit instead of the
+   * hardcoded default. Optional so snapshots built without config access
+   * (fallbacks, older fixtures) stay valid; readers fall back to
+   * `MANAGED_SERVICE_NAME`.
+   */
+  readonly trackedServiceName?: string;
 }
 
 export interface OnboardingProviderAccountRecord {
