@@ -1,160 +1,35 @@
-export const GLYPHS = {
-  frame: {
-    topLeft: '┌',
-    topRight: '┐',
-    bottomLeft: '└',
-    bottomRight: '┘',
-    horizontal: '─',
-    vertical: '│',
-    teeLeft: '├',
-    teeRight: '┤',
-    teeTop: '┬',
-    teeBottom: '┴',
-    cross: '┼',
-  },
-  surface: {
-    top: '▄',
-    bottom: '▀',
-    cursor: '█',
-    altCursor: '▌',
-  },
-  navigation: {
-    selected: '▸',
-    collapsed: '▸',
-    expanded: '▾',
-    up: '↑',
-    down: '↓',
-    moreAbove: '▲',
-    moreBelow: '▼',
-    next: '→',
-    back: '←',
-    pipeSeparator: '│',
-  },
-  status: {
-    success: '✓',
-    failure: '✕',
-    pending: '•',
-    active: '●',
-    idle: '◌',
-    info: '○',
-    warn: '⚠',
-    blocked: '⊘',
-    skipped: '◇',
-    review: '◈',
-    retry: '↻',
-    handoff: '⇢',
-    reference: '↗',
-    partial: '◐',
-    dualPane: '◆',
-    star: '★',
-  },
-  meter: {
-    filled: '█',
-    medium: '▓',
-    light: '▒',
-    empty: '░',
-    spark: ['▁', '▂', '▃', '▄', '▅', '▆', '▇', '█'],
-  },
-} as const;
+// ---------------------------------------------------------------------------
+// ui-primitives.ts — glyph registry + tone-token table.
+//
+// W6-P1: these four tables (GLYPHS, UI_TONES, DIFF_TONES, SPINNER_FRAMES) are
+// no longer minted locally. They are the SDK presentation contract
+// (@pellux/goodvibes-sdk/platform/presentation, landed by W4-S1 and already
+// adopted by the agent in W4-R4), consumed here so the TUI and the agent
+// share ONE source (Mike's move-to-SDK ruling — machinery needed by 2+
+// surfaces => SDK). The TUI was the reference these values were lifted from
+// verbatim, so this swap is byte-identical. See
+// docs/decisions/2026-07-05-presentation-contract-sdk-extraction.md in the SDK.
+//
+// Re-exported under the historical names (GLYPHS, UI_TONES) so every existing
+// importer keeps working with no call-site churn. UI_TONES is the dark-mode
+// tone table (== resolveTones('dark')); light is resolved via theme.ts's
+// activeUiTones() / resolveUiTones(), which composes the mode dimension over
+// this dark constant unchanged.
+// ---------------------------------------------------------------------------
+
+import {
+  GLYPHS,
+  TONE_TOKENS,
+  DIFF_TONES,
+  SPINNER_FRAMES,
+} from '@pellux/goodvibes-sdk/platform/presentation';
+
+export { GLYPHS, DIFF_TONES, SPINNER_FRAMES };
 
 /**
  * UI_TONES — the single chrome/color-token source for src/renderer and
  * src/panels. Concrete (dark-mode) values; resolveUiTones(mode) in theme.ts
- * is the single mode-resolved read path — this object is the 'dark' entry.
+ * is the single mode-resolved read path — this object is the 'dark' entry
+ * (== resolveTones('dark') from the SDK presentation contract).
  */
-export const UI_TONES = {
-  fg: {
-    primary: '#e2e8f0',
-    secondary: '#cbd5e1',
-    muted: '#94a3b8',
-    dim: '#475569',
-    inverse: '#0f172a',
-    /** Empty-state / placeholder foreground (formerly DEFAULT_PANEL_PALETTE.empty literal). */
-    empty: '#334155',
-  },
-  bg: {
-    base: '#11131a',
-    surface: '#161a22',
-    title: '#0f172a',
-    section: '#18202b',
-    summary: '#1b2430',
-    selected: '#223049',
-    input: '#1e293b',
-    warning: '#2b2116',
-    error: '#2a161b',
-    success: '#14241b',
-    /** Fullscreen/shell footer background. */
-    footer: '#111827',
-  },
-  state: {
-    info: '#38bdf8',
-    good: '#22c55e',
-    warn: '#f59e0b',
-    bad: '#ef4444',
-    blocked: '#f97316',
-    active: '#60a5fa',
-    /** Single canonical reasoning/thinking purple (replaces #9945FF and ad-hoc purples). */
-    reasoning: '#a855f7',
-  },
-  accent: {
-    browser: '#7dd3fc',
-    control: '#22d3ee',
-    inspector: '#c4b5fd',
-    workflow: '#fbbf24',
-    conversation: '#93c5fd',
-    /** Neon brand accent — header/splash/thinking gradient only. */
-    brand: '#00ffff',
-    gradientStart: '#00ffff',
-    gradientEnd: '#d000ff',
-  },
-  /** Canonical border stroke color for fullscreen/panel chrome. */
-  border: '#64748b',
-  /**
-   * Persistent-chrome foregrounds — the header / footer / live-thinking rows
-   * (ui-factory.ts) that paint onto the TRANSPARENT terminal background
-   * (bg:''), NOT onto the opaque dark modal/panel surfaces that fg.* and
-   * state.* serve. This distinction is why these need their own roles: the
-   * neutral fg.muted/fg.dim ramp is tuned light-on-dark for the dark boxes and
-   * cannot be reused here, because in light mode this chrome sits on a light
-   * terminal and must invert toward dark to stay legible. The dark values below
-   * are byte-identical to the shared tokens they replace (fg.muted, fg.dim,
-   * state.warn, state.bad), so dark-mode chrome is unchanged; theme.ts's
-   * UI_TONES_LIGHT gives the light-terminal variants.
-   */
-  chrome: {
-    /** Secondary chrome text (header conversation title). == fg.muted (dark). */
-    label: '#94a3b8',
-    /** Faint chrome text (version, provider, header rule, clean git). == fg.dim (dark). */
-    faint: '#475569',
-    /** Warn accent on terminal bg (dirty git, pending risk). == state.warn (dark). */
-    warn: '#f59e0b',
-    /** Alert accent on terminal bg (DANGER banner, shell risk). == state.bad (dark). */
-    bad: '#ef4444',
-    /** Success accent on terminal bg (tool-call ✓ status glyph). == state.good (dark). */
-    good: '#22c55e',
-    /** Remote-risk accent on terminal bg (risk:remote marker, plain status). */
-    remote: '#a78bfa',
-  },
-} as const;
-
-/**
- * Diff surface accent color shared across the three diff-rendering surfaces —
- * the conversation diff view (diff-view.ts), the file diff panel
- * (diff-panel.ts), and the git panel's inline diff (git-panel.ts). Hunk-header
- * blue has no matching UI_TONES.state/accent role, so WO-204 gives it one
- * named token here (value converged on diff-panel.ts's pre-existing hunk
- * color, the only one of the three surfaces that predates this token; add/del
- * on all three surfaces already converge on UI_TONES.state.good/bad).
- */
-export const DIFF_TONES = {
-  // add/del carry diff-panel.ts's shipped colors: the diff panel is the only
-  // diff surface users have ever seen (diff-view.ts was unwired from v0.9.6
-  // until WO-204), so its look is the reference — the conversation surface
-  // adopts it, never the other way around.
-  add: '#00ff88',
-  del: '#ff4444',
-  hunk: '#88aaff',
-} as const;
-
-/** Single spinner-frame source — layout.ts and progress.ts both re-export this. */
-export const SPINNER_FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'] as const;
+export const UI_TONES = TONE_TOKENS;
