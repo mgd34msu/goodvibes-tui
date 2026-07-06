@@ -102,6 +102,31 @@ describe('CLI status and doctor output', () => {
     expect(findings.map((finding) => finding.id)).toContain('network-surface-with-bootstrap-credential');
   });
 
+  test('treats the daemon as enabled by default when neither danger.daemon nor daemon.enabled is set', () => {
+    // Same bug class as the onboarding daemon-default fix: danger.daemon has no
+    // default of its own, so reading it directly (`=== true`) reports "disabled"
+    // for a fresh install even though the daemon actually runs by default via
+    // daemon.enabled. buildCliDoctorFindings must go through resolveDaemonEnabled
+    // so a service-mode-off warning still fires for the daemon-backed surface.
+    const findings = buildCliDoctorFindings(makeOptions({
+      'danger.daemon': undefined,
+      'controlPlane.enabled': false,
+      'service.enabled': false,
+    }));
+
+    expect(findings.map((finding) => finding.id)).toContain('service-disabled-for-server-surfaces');
+  });
+
+  test('honors an explicit danger.daemon=false override even though the alias has no default', () => {
+    const findings = buildCliDoctorFindings(makeOptions({
+      'danger.daemon': false,
+      'controlPlane.enabled': false,
+      'service.enabled': false,
+    }));
+
+    expect(findings.map((finding) => finding.id)).not.toContain('service-disabled-for-server-surfaces');
+  });
+
   test('status can render a stable JSON contract with service lifecycle details', () => {
     const text = renderCliStatus({
       ...makeOptions(),

@@ -1,7 +1,7 @@
 import { homedir, networkInterfaces } from 'node:os';
 import { join } from 'node:path';
 import { readFileSync } from 'node:fs';
-import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
+import { ConfigManager, resolveDaemonEnabled } from '@pellux/goodvibes-sdk/platform/config';
 import { formatProviderModel, getModelIdFromProviderModel, getProviderIdFromModel } from '../config/provider-model.ts';
 import { RuntimeEventBus, GlobalNetworkTransportInstaller } from '@/runtime/index.ts';
 import { createFeatureFlagManager } from '@/runtime/index.ts';
@@ -296,7 +296,7 @@ async function main(): Promise<void> {
   process.on('SIGTERM', handleSignal);
 
   logger.info('goodvibes daemon host started', {
-    daemon: config.get('danger.daemon'),
+    daemon: resolveDaemonEnabled(config),
     httpListener: config.get('danger.httpListener'),
   });
 

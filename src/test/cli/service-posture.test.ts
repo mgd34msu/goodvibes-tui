@@ -178,6 +178,51 @@ describe('CLI service posture', () => {
     }
   });
 
+  test('posture reports the daemon enabled by default when the legacy danger.daemon alias is untouched', async () => {
+    // Same bug class as the onboarding daemon-default fix: danger.daemon has no
+    // default, so reading it directly reported "disabled" for every fresh
+    // config even though daemon.enabled defaults to true. Posture must go
+    // through resolveDaemonEnabled instead.
+    const projectRoot = join(root, 'project');
+    const homeRoot = join(root, 'home');
+    mkdirSync(projectRoot, { recursive: true });
+    mkdirSync(homeRoot, { recursive: true });
+    const config = new ConfigManager({
+      surfaceRoot: 'tui',
+      workingDir: projectRoot,
+      homeDir: homeRoot,
+    });
+
+    const posture = await buildCliServicePosture({
+      configManager: config,
+      workingDirectory: projectRoot,
+      homeDirectory: homeRoot,
+    });
+
+    expect(posture.config.daemonEnabled).toBe(true);
+  });
+
+  test('posture honors an explicit danger.daemon=false override even though daemon.enabled defaults true', async () => {
+    const projectRoot = join(root, 'project');
+    const homeRoot = join(root, 'home');
+    mkdirSync(projectRoot, { recursive: true });
+    mkdirSync(homeRoot, { recursive: true });
+    const config = new ConfigManager({
+      surfaceRoot: 'tui',
+      workingDir: projectRoot,
+      homeDir: homeRoot,
+    });
+    config.setDynamic('danger.daemon', false);
+
+    const posture = await buildCliServicePosture({
+      configManager: config,
+      workingDirectory: projectRoot,
+      homeDirectory: homeRoot,
+    });
+
+    expect(posture.config.daemonEnabled).toBe(false);
+  });
+
   test('service posture reconciles systemd active state instead of trusting stale pid-file status', async () => {
     const projectRoot = join(root, 'project');
     const homeRoot = join(root, 'home');

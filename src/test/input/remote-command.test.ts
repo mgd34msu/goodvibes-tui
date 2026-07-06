@@ -350,6 +350,7 @@ describe('remote command', () => {
       platform: {
         configManager: {
           getCategory: () => ({ daemon: false, httpListener: false }),
+          get: (key: string) => (key === 'danger.daemon' ? false : undefined),
         } as never,
       },
     });
@@ -357,6 +358,7 @@ describe('remote command', () => {
     await remote!.handler(['setup'], ctx);
     expect(out.join('\n')).toContain('Remote Setup Review');
     expect(out.join('\n')).toContain('acp agent command:');
+    expect(out.join('\n')).toContain('daemon enabled: no');
 
     out.length = 0;
     const setupBundle = join(dir, 'remote-setup.json');
@@ -386,6 +388,56 @@ describe('remote command', () => {
     expect(out.join('\n')).toContain('Remote Bootstrap Bundle Review');
   });
 
+  test('/remote setup reports the daemon enabled by default when the legacy alias is untouched, and honors an explicit override', async () => {
+    // Same bug class as the onboarding daemon-default fix: danger.daemon has no
+    // default of its own, so reading it directly reported "disabled" for a
+    // fresh install even though the daemon runs by default via daemon.enabled.
+    resetTestRuntimeServices();
+    const registry = new CommandRegistry();
+    registerBuiltinCommands(registry);
+    const remote = registry.get('remote');
+    expect(remote).toBeDefined();
+
+    const store = createRuntimeStore();
+    const out: string[] = [];
+    const dir = mkdtempSync(join(tmpdir(), 'gv-remote-setup-daemon-'));
+
+    const defaultCtx = createRemoteCommandContext(store, out, {
+      platform: {
+        configManager: {
+          getCategory: () => ({ daemon: undefined, httpListener: false }),
+          get: () => undefined,
+        } as never,
+      },
+    });
+
+    await remote!.handler(['setup'], defaultCtx);
+    expect(out.join('\n')).toContain('daemon enabled: yes');
+
+    out.length = 0;
+    const defaultBundle = join(dir, 'remote-setup-default.json');
+    await remote!.handler(['setup', 'export', defaultBundle], defaultCtx);
+    expect(JSON.parse(readFileSync(defaultBundle, 'utf-8')).daemonEnabled).toBe(true);
+
+    out.length = 0;
+    const overrideCtx = createRemoteCommandContext(store, out, {
+      platform: {
+        configManager: {
+          getCategory: () => ({ daemon: false, httpListener: false }),
+          get: (key: string) => (key === 'danger.daemon' ? false : undefined),
+        } as never,
+      },
+    });
+
+    await remote!.handler(['setup'], overrideCtx);
+    expect(out.join('\n')).toContain('daemon enabled: no');
+
+    out.length = 0;
+    const overrideBundle = join(dir, 'remote-setup-override.json');
+    await remote!.handler(['setup', 'export', overrideBundle], overrideCtx);
+    expect(JSON.parse(readFileSync(overrideBundle, 'utf-8')).daemonEnabled).toBe(false);
+  });
+
   test('manages remote runner pools and pool-aware dispatch from the command surface', async () => {
     resetTestRuntimeServices();
     const registry = new CommandRegistry();
@@ -400,6 +452,7 @@ describe('remote command', () => {
       platform: {
         configManager: {
           getCategory: () => ({ daemon: false, httpListener: false }),
+          get: (key: string) => (key === 'danger.daemon' ? false : undefined),
         } as never,
       },
       session: {
