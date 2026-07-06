@@ -111,7 +111,14 @@ export function registerCatalogHandler<TBody, TResult>(
 ): Unregister {
   const descriptor = catalog.get(methodId);
   if (!descriptor) {
-    throw new HandlerError(`Unknown gateway method: ${methodId}`, 'UNKNOWN_METHOD', 404);
+    // 'METHOD_NOT_FOUND' (not the old locally-coined 'UNKNOWN_METHOD') so this lines
+    // up byte-for-byte with SDKErrorCodes.METHOD_NOT_FOUND — the code the SDK's own
+    // uncataloged-method 404 now carries (method-catalog.ts's GatewayMethodCatalog
+    // .invoke(), daemon/control-plane.ts's invokeGatewayMethodCall, and daemon-sdk's
+    // control-routes.ts getGatewayMethod/invokeGatewayMethod). A literal string, not
+    // an import of SDKErrorCodes: the pinned SDK (0.38.0) predates that constant, and
+    // matching the value this way needs no SDK version bump to stay aligned.
+    throw new HandlerError(`Unknown gateway method: ${methodId}`, 'METHOD_NOT_FOUND', 404);
   }
 
   const wrapped = async (inv: GatewayMethodInvocation): Promise<unknown> => {
