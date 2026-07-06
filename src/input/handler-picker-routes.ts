@@ -22,13 +22,15 @@ export function handleModelPickerToken(state: ModelPickerRouteState, token: Inpu
 
   if (token.type === 'key') {
     if (token.logicalName === 'escape') {
-      if (state.modelPicker.searchFocused && state.modelPicker.mode !== 'contextCap') {
-        if (state.modelPicker.query.length > 0) {
-          state.modelPicker.clearQuery();
-        } else {
-          state.modelPicker.blurSearch();
-        }
-      } else if (state.modelPicker.query.length > 0) {
+      // W3-T2: search now starts focused by default (see
+      // ModelPickerModal.openAllModels() doc comment). Escape with an empty
+      // query used to only blurSearch() here, leaving the picker open and
+      // requiring a SECOND Escape to actually close it — confusing on a
+      // freshly-opened, untouched picker where there is nothing to "clear".
+      // Clearing a non-empty query is still a distinct first Escape (whether
+      // or not search is focused); an empty query falls through to the same
+      // effort/contextCap/previousMode/close cascade as before.
+      if (state.modelPicker.mode !== 'contextCap' && state.modelPicker.query.length > 0) {
         state.modelPicker.clearQuery();
       } else if (state.modelPicker.mode === 'effort') {
         state.modelPicker.mode = 'model';
@@ -129,7 +131,12 @@ export function handleModelPickerToken(state: ModelPickerRouteState, token: Inpu
       }
       if (state.modelPicker.canFocusSearch() && !state.modelPicker.searchFocused && state.modelPicker.selectedIndex === 0) {
         state.modelPicker.focusSearch();
-      } else if (!state.modelPicker.searchFocused) {
+      } else if (state.modelPicker.searchFocused) {
+        // Symmetric with 'down' (below): search now starts focused by default
+        // (W3-T2), so 'up' must have a way out of it too, or it would be a
+        // silent no-op the very first time a user reaches for the list.
+        state.modelPicker.blurSearch();
+      } else {
         const maxVis = Math.max(5, state.getViewportHeight() - MODEL_PICKER_CHROME_LINES - 4);
         state.modelPicker.moveUp(maxVis);
       }

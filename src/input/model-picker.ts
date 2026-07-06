@@ -261,7 +261,22 @@ export class ModelPickerModal {
     }
   }
 
-  /** Open showing all models — entry point for /model */
+  /**
+   * Open showing all models — entry point for /model.
+   *
+   * W3-T2: search starts FOCUSED. Live tmux repro (cc-w3-t2) showed the actual
+   * friction wasn't the filter itself (it already works — fuzzy multi-word
+   * substring over id/displayName/provider) but that with search unfocused by
+   * default, typing a search term went character-by-character into single-key
+   * shortcuts instead (g=group, c=capability, a=available-only, b=benchmark) —
+   * e.g. typing "claude" silently cycled the capability filter (on 'c') and
+   * toggled available-only off (on 'a') while the visible list never
+   * filtered, with no error and no indication anything happened. Reaching
+   * search required already knowing to press '/' or Up at the top row.
+   * Starting focused makes "just start typing" work the way every other
+   * picker in this codebase (and everywhere else) already behaves; Down
+   * still blurs search into list navigation (see handleModelPickerToken).
+   */
   openAllModels(models: ModelDefinition[], currentModelId: string): void {
     this.models = models;
     this.mode = 'model';
@@ -269,6 +284,7 @@ export class ModelPickerModal {
     this.pendingModel = null;
     this.focusPane = 'items';
     this.searchFocused = false;
+    this.focusSearch();
     this.query = '';
     this.categoryFilter = 'all';
     this.capabilityFilter = 'none';
@@ -279,7 +295,7 @@ export class ModelPickerModal {
     this.scrollOffset = 0;
   }
 
-  /** Open showing providers first — entry point for /provider */
+  /** Open showing providers first — entry point for /provider. W3-T2: search starts focused — see openAllModels(). */
   openProviders(providers: string[], currentProvider: string): void {
     this.previousMode = null;
     this.providers = providers;
@@ -288,6 +304,7 @@ export class ModelPickerModal {
     this.pendingModel = null;
     this.focusPane = 'items';
     this.searchFocused = false;
+    this.focusSearch();
     this.query = '';
     this.categoryFilter = 'all';
     this.capabilityFilter = 'none';

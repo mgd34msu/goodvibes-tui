@@ -151,6 +151,10 @@ describe('modal search focus routing', () => {
         tier: 'premium',
       },
     ], 'gpt-1');
+    // W3-T2: search starts focused by default now (see openAllModels() doc
+    // comment) — this test is specifically about hotkey behavior OUTSIDE
+    // search, so set up that precondition explicitly.
+    picker.blurSearch();
 
     const state = {
       modelPicker: picker,
@@ -187,6 +191,9 @@ describe('modal search focus routing', () => {
         tier: 'premium',
       },
     ], 'gpt-1');
+    // W3-T2: Left/Right pane switching is gated on !searchFocused, and search
+    // now starts focused by default (see openAllModels() doc comment).
+    picker.blurSearch();
 
     const state = {
       modelPicker: picker,
@@ -220,6 +227,9 @@ describe('modal search focus routing', () => {
         tier: 'premium',
       },
     ], 'gpt-1');
+    // W3-T2: this test is specifically "outside search" — search now starts
+    // focused by default (see openAllModels() doc comment).
+    picker.blurSearch();
 
     const state = {
       modelPicker: picker,
@@ -272,5 +282,48 @@ describe('modal search focus routing', () => {
     // Space must go to query, not trigger contextCap mode
     expect(picker.mode).toBe('model');
     expect(picker.query).toBe(' ');
+  });
+
+  test('W3-T2: opening /model and immediately typing a search term filters the list, instead of silently hitting hotkeys', () => {
+    // Live tmux repro (session cc-w3-t2) of the exact reported friction: with
+    // search unfocused by default, typing e.g. "claude" went character-by-
+    // character into single-key shortcuts (c=capability, a=available-only)
+    // while the list never filtered and nothing visibly indicated why. This
+    // is the fixed behavior: search starts focused, so every character of a
+    // typed search term reaches the query, not a hotkey.
+    const models: Parameters<typeof ModelPickerModal.prototype.openAllModels>[0] = [
+      {
+        id: 'claude-1', provider: 'anthropic', registryKey: 'anthropic:claude-1', displayName: 'Claude One',
+        description: '', capabilities: { toolCalling: true, codeEditing: true, reasoning: true, multimodal: false },
+        contextWindow: 200_000, selectable: true, tier: 'premium',
+      },
+      {
+        id: 'gpt-1', provider: 'openai', registryKey: 'openai:gpt-1', displayName: 'GPT 1',
+        description: '', capabilities: { toolCalling: true, codeEditing: true, reasoning: false, multimodal: false },
+        contextWindow: 8192, selectable: true, tier: 'premium',
+      },
+    ];
+    const picker = new ModelPickerModal(harness.favoritesStore, harness.benchmarkStore, harness.providerRegistry);
+    picker.openAllModels(models, 'gpt-1');
+
+    const state = {
+      modelPicker: picker,
+      modalStack: [] as string[],
+      commandContext: undefined as never,
+      getViewportHeight: () => 30,
+      requestRender: () => {},
+      handleEscape: () => {},
+    };
+
+    expect(picker.searchFocused).toBe(true);
+    for (const ch of 'claude') {
+      handleModelPickerToken(state, { type: 'text', value: ch });
+    }
+    // The whole word reached the query — none of it was hijacked by the
+    // c/a hotkeys (capabilityFilter/availableOnly must be untouched).
+    expect(picker.query).toBe('claude');
+    expect(picker.capabilityFilter).toBe('none');
+    expect(picker.availableOnly).toBe(true);
+    expect(picker.getFilteredModels().map((m) => m.id)).toEqual(['claude-1']);
   });
 });
