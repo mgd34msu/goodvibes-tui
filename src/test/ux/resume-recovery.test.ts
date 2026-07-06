@@ -295,7 +295,10 @@ function makeRecoveryHarness() {
 }
 
 describe('ux:recovery-prompt — blocking-input handler contract', () => {
-  test('stray key leaves recovery file intact and prompt active', () => {
+  // W3-T2: a stray key now DISMISSES the banner (recoveryPending clears)
+  // instead of re-asserting it forever — see blocking-input.ts. Dismiss is
+  // not discard: the recovery file stays intact either way.
+  test('stray key dismisses the recovery prompt (once) but leaves the recovery file intact', () => {
     const h = makeRecoveryHarness();
     const snapshot = { messages: [{ role: 'user', content: 'hello' }] };
 
@@ -315,12 +318,12 @@ describe('ux:recovery-prompt — blocking-input handler contract', () => {
       persistSnapshot: h.persistSnapshot,
     });
 
-    expect(result.recoveryPending).toBe(true);
+    expect(result.recoveryPending).toBe(false);
     expect(result.handled).toBe(false);
     expect(h.deleteCount).toBe(0);
     expect(h.fromJSONCalls).toHaveLength(0);
     expect(h.reopenedWith).toHaveLength(0);
-    expect(h.routerMessages).toContain('[Recovery] Ctrl+R to restore · Esc to discard');
+    expect(h.routerMessages).toContain('[Recovery] Dismissed — the unsaved session is still on disk; you will be asked again next time GoodVibes starts here.');
   });
 
   test('Esc discards recovery: file deleted, prompt cleared, key absorbed', () => {

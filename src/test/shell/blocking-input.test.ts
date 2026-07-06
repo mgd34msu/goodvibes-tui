@@ -143,7 +143,10 @@ describe('shell/blocking-input', () => {
     expect(rendered).toBe(1);
   });
 
-  test('stray key leaves recovery prompt active and file intact', () => {
+  // W3-T2: a stray (non Ctrl+R / non Esc) key now DISMISSES the recovery
+  // banner instead of re-asserting it forever — see blocking-input.ts's
+  // stray-key branch doc comment. Dismiss must not touch the recovery file.
+  test('stray key dismisses the recovery banner (once), forwards the keystroke, and leaves the file intact', () => {
     const { conversation, restored } = makeConversation();
     const { router, messages } = makeRouter();
     let deleted = 0;
@@ -164,11 +167,12 @@ describe('shell/blocking-input', () => {
       ...JOURNAL_STUBS,
     });
 
-    // Stray key: prompt stays active, file is NOT deleted, key passes through.
+    // Stray key: banner dismisses (recoveryPending clears), key passes
+    // through to normal input (handled: false), file is NOT deleted.
     expect(result.handled).toBe(false);
-    expect(result.recoveryPending).toBe(true);
+    expect(result.recoveryPending).toBe(false);
     expect(restored).toEqual([]);
-    expect(messages).toContain('[Recovery] Ctrl+R to restore · Esc to discard');
+    expect(messages).toContain('[Recovery] Dismissed — the unsaved session is still on disk; you will be asked again next time GoodVibes starts here.');
     expect(deleted).toBe(0);
     expect(rendered).toBe(1);
   });
@@ -268,7 +272,7 @@ describe('shell/blocking-input', () => {
     expect(deleted).toBe(0);
   });
 
-  test('multiple stray keys each re-render hint without deleting file', () => {
+  test('only the FIRST stray key dismisses the banner; later keys are silent (no repeated [Recovery] lines), file stays intact', () => {
     const { conversation } = makeConversation();
     const { router, messages } = makeRouter();
     let deleted = 0;
@@ -286,15 +290,26 @@ describe('shell/blocking-input', () => {
       ...JOURNAL_STUBS,
     };
 
+    // Chain recoveryPending through the sequence like a real caller would
+    // (main.ts assigns `recoveryPending = blocking.recoveryPending` after
+    // every call) — this is the exact regression the brief called out:
+    // typing to ignore the banner must not inject a fresh [Recovery] line
+    // around every subsequent character.
+    let recoveryPending = true;
     for (const key of ['a', 'b', 'c', ' ', '\t']) {
-      const r = handleBlockingShellInput({ ...base, data: key, recoveryPending: true });
-      expect(r.recoveryPending).toBe(true);
+      const r = handleBlockingShellInput({ ...base, data: key, recoveryPending });
+      recoveryPending = r.recoveryPending;
     }
 
-    expect(deleted).toBe(0);
-    expect(rendered).toBe(5);
-    // All stray hint messages present
-    expect(messages.every((m) => m === '[Recovery] Ctrl+R to restore · Esc to discard')).toBe(true);
+    expect(recoveryPending).toBe(false);
+    expect(deleted).toBe(0); // dismiss is not discard — the file is never touched
+    // Only the FIRST key (still recoveryPending=true) takes the dismiss
+    // branch and renders; once dismissed, this handler is a pure pass-through
+    // for the rest (handled:false, no render, no message) — the caller's own
+    // normal input path renders on its own, same as any other keystroke.
+    expect(rendered).toBe(1);
+    // Exactly ONE dismiss message across all five keystrokes, not one per key.
+    expect(messages).toEqual(['[Recovery] Dismissed — the unsaved session is still on disk; you will be asked again next time GoodVibes starts here.']);
   });
 
   /**

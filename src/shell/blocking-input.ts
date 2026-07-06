@@ -168,10 +168,19 @@ export function handleBlockingShellInput(
       return { handled: true, pendingPermission: null, recoveryPending: false };
     }
 
-    // Stray key: leave the recovery prompt active so the user can still Ctrl+R or Esc.
-    systemMessageRouter.high('[Recovery] Ctrl+R to restore · Esc to discard');
+    // Any other key demonstrates the user's intent to ignore the banner and
+    // keep working — the prompt's own text invites exactly this ("start
+    // typing to ignore it"). Previously this branch re-posted the same
+    // '[Recovery] Ctrl+R to restore...' line on EVERY such key and never
+    // cleared recoveryPending, so a user who took that invitation got a
+    // fresh [Recovery] line injected into the transcript around every
+    // character they typed, forever. Dismiss ONCE instead: clear
+    // recoveryPending so it stops re-asserting, but do NOT delete the
+    // recovery file — dismiss is not discard, and the file remains
+    // restorable by the automatic recovery check on the next launch.
+    systemMessageRouter.high('[Recovery] Dismissed — the unsaved session is still on disk; you will be asked again next time GoodVibes starts here.');
     render();
-    return { handled: false, pendingPermission, recoveryPending: true };
+    return { handled: false, pendingPermission, recoveryPending: false };
   }
 
   return { handled: false, pendingPermission, recoveryPending };
