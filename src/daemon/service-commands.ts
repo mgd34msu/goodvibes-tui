@@ -25,36 +25,58 @@
  *     calls `stop()` then `uninstall()`, and honestly tells the caller that a
  *     stray "enabled" symlink may remain until `systemctl --user daemon-reload`
  *     (offered back as a suggested follow-up) or the next login cleans it up.
+ *
+ * W4-D1: a fourth subcommand, `migrate-service`, closes the Wave-3 "detect and
+ * disclose only" inheritance (W3 Finding 4, below) with a GUIDED, CONSENTED
+ * takeover of the legacy `goodvibes-daemon.service` unit. Design constraints,
+ * all load-bearing:
+ *   - NEVER auto-migrate. Without explicit consent (`confirmMigration`, wired
+ *     from the CLI's existing `-y`/`--yes` flag) this prints the exact plan
+ *     and touches nothing.
+ *   - NEW-UP-THEN-OLD-DOWN. The new `goodvibes.service` unit is installed,
+ *     started, and verified healthy (a fresh `status().running` read, which
+ *     honestly queries systemd via the injected actionRunner) BEFORE the
+ *     legacy unit is stopped, disabled, or removed. A failed or unhealthy new
+ *     unit rolls itself back (uninstalled) and never touches the legacy one
+ *     — a botched takeover must never cost the user their working daemon.
+ *   - ADOPT-OR-WARN, NEVER KILL. If the legacy unit file is simply absent but
+ *     something is already listening on the configured host:port (Mike's real
+ *     dev-host case: a manual `nohup`'d daemon with no unit at all), this is
+ *     an unidentified process, not a managed unit — there is nothing to stop
+ *     or disable, and this module will not attempt to kill it. It warns and
+ *     leaves the decision to the operator.
+ *   - Every action (legacy stop/disable, unit-file removal, daemon-reload)
+ *     goes through the SAME injectable `actionRunner`/`legacyUnitFileRemove`
+ *     seams tests already use — this module never has a code path that bypasses
+ *     them, so the migration is exercised deterministically via fakes and never
+ *     touches a real running service in tests.
  */
 
-import { existsSync } from 'node:fs';
-import { spawnSync } from 'node:child_process';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import { PlatformServiceManager, type ManagedServiceStatus } from '@pellux/goodvibes-sdk/platform/daemon';
+import {
+  buildManagedDaemonServiceManager,
+  detectLegacyUnit,
+  legacyUnitNote,
+  runLegacyDaemonMigration,
+  LEGACY_SERVICE_UNIT_NAME,
+  MANAGED_SERVICE_NAME as SERVICE_NAME,
+  MANAGED_SERVICE_DESCRIPTION as SERVICE_DESCRIPTION,
+  type LegacyUnitInfo,
+  type ManagedServiceActionRunner,
+} from '../runtime/legacy-daemon-migration.ts';
 
-/** Structurally derived from `PlatformServiceManager`'s own constructor — the
- * SDK's public `platform/daemon` entry point only re-exports the class and
- * `ManagedServiceStatus`, not the options/definition/action-runner interfaces
- * by name, so we pull their shapes off the class itself rather than reaching
- * past the package's declared export map. */
-type ManagedServiceManagerOptions = ConstructorParameters<typeof PlatformServiceManager>[1];
-type ManagedServiceDefinition = NonNullable<ManagedServiceManagerOptions['definitionOverride']>;
-export type ManagedServiceActionRunner = NonNullable<ManagedServiceManagerOptions['actionRunner']>;
-type ManagedServiceActionResult = ReturnType<ManagedServiceActionRunner>;
-
-// Fallback only: `service.serviceName`/nothing-set config default is 'goodvibes'
-// (schema-domain-runtime.ts), which is what PlatformServiceManager actually
-// resolves to in the common case via `resolveServiceName()`'s `config.get(...)
-// ?? defaultServiceName`. Using the same name here (rather than the old shim's
-// bespoke 'goodvibes-daemon') means this CLI manages the exact same unit the
-// SDK's own facade-composition.ts would manage — one shared service, one name.
-const SERVICE_NAME = 'goodvibes';
-const SERVICE_DESCRIPTION = 'GoodVibes daemon (shared session broker + companion host)';
+// `resolveInstalledDaemonBinary` lives in the runtime module (shared with the
+// onboarding guided UX) — re-exported here so this module stays the CLI's
+// stable public surface (and so existing test imports keep working).
+export {
+  resolveInstalledDaemonBinary,
+  type ResolveDaemonBinaryOptions,
+} from '../runtime/legacy-daemon-migration.ts';
+export type { ManagedServiceActionRunner } from '../runtime/legacy-daemon-migration.ts';
 
 // ---------------------------------------------------------------------------
-// W3 Finding 4: legacy-unit detection.
+// W3 Finding 4: legacy-unit detection. W4-D1: guided migration.
 //
 // The prior D7a-era command installed the daemon's systemd unit under the
 // literal name `goodvibes-daemon.service`. This module (rewired onto
@@ -65,11 +87,16 @@ const SERVICE_DESCRIPTION = 'GoodVibes daemon (shared session broker + companion
 // tracked name while the legacy unit keeps running untouched underneath it,
 // uninstall-service would silently leave the legacy unit orphaned with no
 // mention, and install-service could start a SECOND daemon competing for the
-// same port. Detected via a read-only file-existence check plus a read-only
-// `systemctl --user is-active` query through the SAME injected actionRunner
-// tests already use to fake systemctl/launchctl/schtasks (never a raw exec
-// bypassing it) — so this is exercised deterministically via fakes in tests
-// and never touches, stops, or modifies a real running service.
+// same port.
+//
+// The detection (`detectLegacyUnit`/`legacyUnitNote`) and the guided
+// migration engine (`runLegacyDaemonMigration`) both live in
+// `../runtime/legacy-daemon-migration.ts` rather than here, so the TUI's
+// onboarding UX (`src/input/handler-onboarding-daemon-adopt.ts`) can reuse
+// them directly — the architecture gate forbids `src/input/**` from
+// importing `src/daemon/**` (input must stay entrypoint-agnostic), so the
+// shared engine lives in the entrypoint-agnostic `runtime` layer instead and
+// this CLI module is just one of its two consumers.
 //
 // This detection is entirely independent of PlatformServiceManager's own
 // status() — it does not rely on (or get invalidated by) the parallel SDK
@@ -77,83 +104,10 @@ const SERVICE_DESCRIPTION = 'GoodVibes daemon (shared session broker + companion
 // TRACKED unit name.
 // ---------------------------------------------------------------------------
 
-const LEGACY_SERVICE_UNIT_NAME = 'goodvibes-daemon';
-
-export interface LegacyUnitInfo {
-  readonly present: boolean;
-  readonly active: boolean;
-  readonly path: string;
-}
-
-function legacyUnitPath(homeDir: string): string {
-  return join(homeDir, '.config', 'systemd', 'user', `${LEGACY_SERVICE_UNIT_NAME}.service`);
-}
-
-function detectLegacyUnit(input: DaemonServiceCliInput): LegacyUnitInfo {
-  const path = legacyUnitPath(input.homeDir);
-  const fileExists = input.legacyUnitFileExists ?? existsSync;
-  if (!fileExists(path)) return { present: false, active: false, path };
-  const run: ManagedServiceActionRunner = input.actionRunner
-    ?? ((command, args) => spawnSync(command, args, { stdio: 'pipe', encoding: 'utf-8' }) as ManagedServiceActionResult);
-  const result = run('systemctl', ['--user', 'is-active', `${LEGACY_SERVICE_UNIT_NAME}.service`]);
-  const state = (result.stdout ?? '').trim();
-  const active = (result.status ?? 1) === 0 && state === 'active';
-  return { present: true, active, path };
-}
-
-/** Honest one-line disclosure of the legacy unit's presence/state plus a manual migration hint — never auto-acted-on. */
-function legacyUnitNote(legacy: LegacyUnitInfo): string {
-  const stateWord = legacy.active ? 'installed and RUNNING' : 'installed (not currently active)';
-  return (
-    `note: a service under the legacy name ${LEGACY_SERVICE_UNIT_NAME}.service is ${stateWord} at ${legacy.path} — ` +
-    `this tool manages a different unit name (${SERVICE_NAME}.service) and will not touch the legacy one automatically. ` +
-    `Remove it yourself when ready: systemctl --user disable --now ${LEGACY_SERVICE_UNIT_NAME}.service && rm ${legacy.path} && systemctl --user daemon-reload`
-  );
-}
-
-export type DaemonServiceSubcommand = 'install-service' | 'uninstall-service' | 'service-status';
+export type DaemonServiceSubcommand = 'install-service' | 'uninstall-service' | 'service-status' | 'migrate-service';
 
 export function isDaemonServiceSubcommand(value: string | undefined): value is DaemonServiceSubcommand {
-  return value === 'install-service' || value === 'uninstall-service' || value === 'service-status';
-}
-
-export interface ResolveDaemonBinaryOptions {
-  readonly env?: NodeJS.ProcessEnv | undefined;
-  /** `import.meta.url` of the caller so the packaged `bin/goodvibes-daemon` can be located. */
-  readonly moduleUrl?: string | undefined;
-  readonly execPath?: string | undefined;
-  readonly fileExists?: ((path: string) => boolean) | undefined;
-}
-
-/**
- * Resolve the absolute path to the installed daemon binary used for the unit's
- * `ExecStart`. Preference order:
- *   1. `GOODVIBES_DAEMON_BINARY` env override.
- *   2. The packaged `bin/goodvibes-daemon` launcher next to this checkout.
- *   3. `process.execPath` when this IS the compiled daemon binary.
- *   4. Bare `goodvibes-daemon` (resolved on PATH by systemd's service environment).
- */
-export function resolveInstalledDaemonBinary(options: ResolveDaemonBinaryOptions = {}): string {
-  const env = options.env ?? process.env;
-  const override = env.GOODVIBES_DAEMON_BINARY?.trim();
-  if (override) return override;
-
-  const fileExists = options.fileExists ?? existsSync;
-  if (options.moduleUrl) {
-    try {
-      // src/daemon/service-commands.ts -> package root is two directories up.
-      const here = dirname(fileURLToPath(options.moduleUrl));
-      const launcher = join(here, '..', '..', 'bin', 'goodvibes-daemon');
-      if (fileExists(launcher)) return launcher;
-    } catch {
-      // fall through to execPath / PATH resolution
-    }
-  }
-
-  const execPath = options.execPath ?? process.execPath;
-  if (execPath && /goodvibes-daemon/.test(execPath)) return execPath;
-
-  return 'goodvibes-daemon';
+  return value === 'install-service' || value === 'uninstall-service' || value === 'service-status' || value === 'migrate-service';
 }
 
 export interface DaemonServiceCliInput {
@@ -170,6 +124,24 @@ export interface DaemonServiceCliInput {
   readonly actionRunner?: ManagedServiceActionRunner | undefined;
   /** Injectable existsSync for the legacy-unit file check (W3 Finding 4) so tests never touch the host filesystem. */
   readonly legacyUnitFileExists?: ((path: string) => boolean) | undefined;
+  /**
+   * `migrate-service` only: explicit consent to actually execute the
+   * migration (wired from the CLI's `-y`/`--yes` flag). Without it, the
+   * subcommand prints the exact plan and changes nothing — never auto-migrate.
+   */
+  readonly confirmMigration?: boolean | undefined;
+  /**
+   * `migrate-service` only: injectable port-liveness check for the
+   * legacy-absent branch (never a raw network call in tests). Defaults to a
+   * real, read-only TCP connect attempt.
+   */
+  readonly portProbe?: ((host: string, port: number) => boolean | Promise<boolean>) | undefined;
+  /**
+   * `migrate-service` only: injectable removal of the legacy unit file, so
+   * tests never call a raw fs op against a real path. Defaults to a real
+   * `rmSync`.
+   */
+  readonly legacyUnitFileRemove?: ((path: string) => void) | undefined;
 }
 
 export interface DaemonServiceCliResult {
@@ -180,36 +152,20 @@ export interface DaemonServiceCliResult {
   readonly status: ManagedServiceStatus;
 }
 
-function buildDefinition(input: DaemonServiceCliInput, workingDirectory: string): ManagedServiceDefinition {
-  return {
-    name: SERVICE_NAME,
-    description: SERVICE_DESCRIPTION,
-    workingDirectory,
-    command: input.binaryPath,
-    args: ['--daemon-home', input.homeDir, '--hostname', input.host, '--port', String(input.port)],
-    env: {},
-    restartOnFailure: true,
-  };
-}
-
+/**
+ * The manager's definition (`ExecStart` command/args, name, description) is
+ * built once, in `../runtime/legacy-daemon-migration.ts`, and shared with the
+ * onboarding guided UX — see that module's doc comment for why.
+ */
 function buildManager(input: DaemonServiceCliInput): PlatformServiceManager {
-  const workingDirectory = input.workingDirectory ?? input.homeDir;
-  const configManager = input.configManager ?? new ConfigManager({
-    workingDir: workingDirectory,
+  return buildManagedDaemonServiceManager({
+    binaryPath: input.binaryPath,
     homeDir: input.homeDir,
-    surfaceRoot: 'tui',
-  });
-  return new PlatformServiceManager(configManager, {
-    workingDirectory,
-    homeDirectory: input.homeDir,
-    definitionOverride: buildDefinition(input, workingDirectory),
-    defaultServiceName: SERVICE_NAME,
-    defaultServiceDescription: SERVICE_DESCRIPTION,
+    host: input.host,
+    port: input.port,
+    workingDirectory: input.workingDirectory,
+    configManager: input.configManager,
     actionRunner: input.actionRunner,
-    // No `featureFlags` passed: `isFeatureGateEnabled` treats a missing reader as
-    // always-open. These three subcommands ARE the user's explicit request to
-    // manage the service, unlike the daemon's own HTTP /api/service/* routes
-    // (which gate on the real, config-backed 'service-management' flag).
   });
 }
 
@@ -284,11 +240,41 @@ function failed(action: 'install' | 'uninstall' | 'status', status: ManagedServi
   };
 }
 
+/**
+ * `migrate-service`: the guided, consented takeover of the legacy
+ * `goodvibes-daemon.service` unit (W4-D1). Thin wrapper over
+ * `runLegacyDaemonMigration` (`../runtime/legacy-daemon-migration.ts`) — see
+ * that module for the design constraints (never auto-migrate,
+ * new-up-then-old-down, adopt-or-warn/never kill an unrecognized process,
+ * every action through an injectable seam) and the onboarding UX consumer.
+ */
+function runMigrateService(
+  input: DaemonServiceCliInput,
+  manager: PlatformServiceManager,
+  legacy: LegacyUnitInfo,
+): Promise<DaemonServiceCliResult> {
+  return runLegacyDaemonMigration(
+    {
+      host: input.host,
+      port: input.port,
+      trackedServiceName: SERVICE_NAME,
+      confirmMigration: input.confirmMigration,
+      portProbe: input.portProbe,
+      legacyUnitFileRemove: input.legacyUnitFileRemove,
+      actionRunner: input.actionRunner,
+    },
+    manager,
+    legacy,
+  );
+}
+
 /** Dispatch a daemon service subcommand to the SDK's `PlatformServiceManager`. */
-export function runDaemonServiceCli(input: DaemonServiceCliInput): DaemonServiceCliResult {
+export async function runDaemonServiceCli(input: DaemonServiceCliInput): Promise<DaemonServiceCliResult> {
   const manager = buildManager(input);
   const legacy = detectLegacyUnit(input);
   switch (input.subcommand) {
+    case 'migrate-service':
+      return runMigrateService(input, manager, legacy);
     case 'install-service': {
       // W3 Finding 4: refuse rather than risk starting a second daemon
       // alongside an already-installed legacy unit. Refuses whenever the
@@ -302,7 +288,7 @@ export function runDaemonServiceCli(input: DaemonServiceCliInput): DaemonService
           exitCode: 1,
           lines: [
             `service install refused: a service is already installed under the legacy name ${LEGACY_SERVICE_UNIT_NAME}.service.`,
-            legacyUnitNote(legacy),
+            legacyUnitNote(legacy, SERVICE_NAME),
             `Installing this tool's ${SERVICE_NAME}.service alongside it risks two daemons competing for the same port.`,
           ],
           status: manager.status(),
@@ -327,13 +313,13 @@ export function runDaemonServiceCli(input: DaemonServiceCliInput): DaemonService
       // W3 Finding 4: this command only ever touches the TRACKED unit name
       // (SERVICE_NAME) above — say so explicitly when a legacy unit also
       // exists, so its continued presence is never a silent surprise.
-      if (legacy.present) extra.push(legacyUnitNote(legacy));
+      if (legacy.present) extra.push(legacyUnitNote(legacy, SERVICE_NAME));
       return ok('uninstall', uninstalled, extra);
     }
     case 'service-status': {
       const status = manager.status();
       if (status.actionError) return failed('status', status);
-      return ok('status', status, legacy.present ? [legacyUnitNote(legacy)] : []);
+      return ok('status', status, legacy.present ? [legacyUnitNote(legacy, SERVICE_NAME)] : []);
     }
   }
 }

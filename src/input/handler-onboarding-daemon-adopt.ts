@@ -7,6 +7,13 @@
 import { join } from 'node:path';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 import { resolveDaemonCompanionToken } from '../runtime/operator-token-cleanup.ts';
+import {
+  buildManagedDaemonServiceManager,
+  detectLegacyUnit,
+  resolveInstalledDaemonBinary,
+  runLegacyDaemonMigration,
+  MANAGED_SERVICE_NAME,
+} from '../runtime/legacy-daemon-migration.ts';
 import type { InputHandlerLike as InputHandler } from './handler-types.ts';
 import {
   formatRuntimeActiveSuccessMessage,
@@ -74,6 +81,65 @@ export async function handleConnectExistingDaemonForHandler(handler: InputHandle
     }
   } catch (error) {
     handler.commandContext?.print?.(`Connect to existing daemon failed: ${summarizeError(error)}`);
+  } finally {
+    handler.onboardingApplyPending = false;
+    handler.requestRender();
+  }
+}
+
+/**
+ * W4-D1: the guided UX entry point for migrating a legacy
+ * `goodvibes-daemon.service` unit (Wave 3 shipped detect+disclose only; this
+ * closes that inheritance). This is a thin wrapper over
+ * `detectLegacyUnit` + `runLegacyDaemonMigration`
+ * (`../runtime/legacy-daemon-migration.ts`) — the actual migration mechanics
+ * (never auto-migrate, new-up-then-old-down with a health check before the
+ * legacy unit is touched, adopt-or-warn for an unrecognized process on the
+ * port) live there and are exercised against fakes in
+ * `src/test/daemon/service-commands.test.ts`; this function only builds the
+ * same `PlatformServiceManager` the daemon CLI's `migrate-service` subcommand
+ * builds (via the shared `buildManagedDaemonServiceManager`, so a migration
+ * triggered from either surface installs the identical unit) and prints the
+ * honest result lines to the conversation feed, mirroring
+ * `handleConnectExistingDaemonForHandler`'s pattern above.
+ *
+ * This lives in `src/input/` rather than importing
+ * `../daemon/service-commands.ts` directly because the architecture gate's
+ * `input-no-entrypoints` rule forbids `src/input/**` from depending on
+ * `src/daemon/**` (input must stay a pure event-handling layer) — the shared
+ * engine lives in the entrypoint-agnostic `src/runtime/` layer instead.
+ *
+ * `confirm` is caller-supplied rather than read from a wizard field: this
+ * migration has no dedicated Network-step field yet (that wiring — a visible
+ * button in the onboarding wizard's daemon-source step — is a follow-on to
+ * this brief; see the session report), so today this is called with
+ * `confirm: false` for a dry-run plan and `confirm: true` to execute, from
+ * whatever surface invokes it directly.
+ */
+export async function handleMigrateLegacyDaemonServiceForHandler(handler: InputHandler, confirm: boolean): Promise<void> {
+  if (handler.onboardingApplyPending) return;
+
+  handler.onboardingApplyPending = true;
+  handler.requestRender();
+  try {
+    const homeDirectory = handler.uiServices.environment.homeDirectory;
+    const configManager = handler.uiServices.platform.configManager;
+    const host = String(configManager.get('controlPlane.host') ?? '127.0.0.1');
+    const port = Number(configManager.get('controlPlane.port') ?? 3421);
+    const binaryPath = resolveInstalledDaemonBinary({ moduleUrl: import.meta.url });
+
+    const manager = buildManagedDaemonServiceManager({ binaryPath, homeDir: homeDirectory, host, port });
+    const legacy = detectLegacyUnit({ homeDir: homeDirectory });
+    const result = await runLegacyDaemonMigration(
+      { host, port, trackedServiceName: MANAGED_SERVICE_NAME, confirmMigration: confirm },
+      manager,
+      legacy,
+    );
+    handler.commandContext?.print?.(
+      ['Migrate legacy daemon service:', ...result.lines.map((line: string) => `  ${line}`)].join('\n'),
+    );
+  } catch (error) {
+    handler.commandContext?.print?.(`Migrate legacy daemon service failed: ${summarizeError(error)}`);
   } finally {
     handler.onboardingApplyPending = false;
     handler.requestRender();
