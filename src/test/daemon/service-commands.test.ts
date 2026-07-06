@@ -118,7 +118,13 @@ describe('runDaemonServiceCli (systemd path, real PlatformServiceManager, stubbe
     expect(contents).toContain('--port 3421');
     // install() only writes the file; install-service also calls start() to
     // preserve the old shim's "install implies enabled + running" behavior.
-    expect(calls).toEqual([['systemctl', '--user', 'enable', '--now', 'goodvibes.service']]);
+    // The SDK's status() now also issues read-only `is-active` probes for the
+    // new unit through the same runner — filter those out of the action check.
+    const actions = calls.filter((c) => !c.includes('is-active'));
+    expect(actions).toEqual([['systemctl', '--user', 'enable', '--now', 'goodvibes.service']]);
+    for (const probe of calls.filter((c) => c.includes('is-active'))) {
+      expect(probe).toEqual(['systemctl', '--user', 'is-active', 'goodvibes.service']);
+    }
     expect(result.lines.join('\n')).toContain('installed the systemd service');
   });
 
@@ -143,7 +149,9 @@ describe('runDaemonServiceCli (systemd path, real PlatformServiceManager, stubbe
 
     expect(result.ok).toBe(true);
     expect(existsSync(unitPath)).toBe(false);
-    expect(calls).toEqual([['systemctl', '--user', 'stop', 'goodvibes.service']]);
+    expect(calls.filter((c) => !c.includes('is-active'))).toEqual([
+      ['systemctl', '--user', 'stop', 'goodvibes.service'],
+    ]);
     expect(result.lines.join('\n')).toContain('daemon-reload');
   });
 
@@ -230,7 +238,9 @@ describe('runDaemonServiceCli — legacy unit detection (W3 Finding 4)', () => {
 
       expect(result.ok).toBe(true);
       expect(result.lines.join('\n')).not.toContain('goodvibes-daemon.service');
-      expect(calls).toEqual([]);
+      // The legacy unit must never be probed; the SDK's status() may issue
+      // read-only is-active probes for the NEW unit through the same runner.
+      expect(calls.some((c) => c.includes('goodvibes-daemon.service'))).toBe(false);
     });
 
     test('legacy unit present + active: reports it honestly as RUNNING with a migration hint', () => {
@@ -242,7 +252,11 @@ describe('runDaemonServiceCli — legacy unit detection (W3 Finding 4)', () => {
       expect(text).toContain('legacy name goodvibes-daemon.service');
       expect(text).toContain('installed and RUNNING');
       expect(text).toContain('will not touch the legacy one automatically');
-      expect(calls).toEqual([['systemctl', '--user', 'is-active', 'goodvibes-daemon.service']]);
+      expect(calls).toContainEqual(['systemctl', '--user', 'is-active', 'goodvibes-daemon.service']);
+      // Any other runner traffic must be read-only status probes of the new unit.
+      for (const other of calls.filter((c) => !c.includes('goodvibes-daemon.service'))) {
+        expect(other).toEqual(['systemctl', '--user', 'is-active', 'goodvibes.service']);
+      }
     });
 
     test('legacy unit present + inactive: reports it honestly as not currently active', () => {
@@ -265,8 +279,9 @@ describe('runDaemonServiceCli — legacy unit detection (W3 Finding 4)', () => {
       expect(result.exitCode).toBe(1);
       expect(result.lines.join('\n')).toContain('legacy name goodvibes-daemon.service');
       expect(existsSync(join(dir, '.config', 'systemd', 'user', 'goodvibes.service'))).toBe(false);
-      // Only the read-only is-active query ran — no install/enable dispatched.
-      expect(calls).toEqual([['systemctl', '--user', 'is-active', 'goodvibes-daemon.service']]);
+      // Only read-only is-active queries ran — no install/enable dispatched.
+      expect(calls).toContainEqual(['systemctl', '--user', 'is-active', 'goodvibes-daemon.service']);
+      expect(calls.some((c) => c.includes('enable') || c.includes('start'))).toBe(false);
     });
 
     test('legacy unit present but inactive: still refuses (an inactive unit can still be enabled and collide later)', () => {
