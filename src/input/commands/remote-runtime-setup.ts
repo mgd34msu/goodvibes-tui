@@ -50,7 +50,7 @@ export async function handleRemoteSetupCommand(
       '  guidance:',
       '    - set ACP_AGENT_CMD to override the spawned remote agent command',
       '    - use /remote env to export a reusable shell snippet',
-      '    - enable danger.daemon / danger.httpListener only when you actually need those remote surfaces',
+      '    - the daemon runs by default (daemon.enabled); enable danger.httpListener only when you actually need that remote surface',
     ];
     if (args[1]?.toLowerCase() === 'export') {
       const pathArg = args[2];

@@ -14,7 +14,7 @@ function makeOptions(overrides: ConfigValues = {}): CliStatusOptions {
     'service.enabled': true,
     'service.autostart': true,
     'service.restartOnFailure': true,
-    'danger.daemon': true,
+    'daemon.enabled': true,
     'danger.httpListener': false,
     'web.enabled': false,
     'controlPlane.enabled': true,
@@ -117,9 +117,9 @@ describe('CLI status and doctor output', () => {
     expect(findings.map((finding) => finding.id)).toContain('service-disabled-for-server-surfaces');
   });
 
-  test('honors an explicit danger.daemon=false override even though the alias has no default', () => {
+  test('honors an explicit daemon.enabled=false setting', () => {
     const findings = buildCliDoctorFindings(makeOptions({
-      'danger.daemon': false,
+      'daemon.enabled': false,
       'controlPlane.enabled': false,
       'service.enabled': false,
     }));

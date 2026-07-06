@@ -315,7 +315,7 @@ describe('parseCliFlags', () => {
     expect(configManager.get('controlPlane.enabled')).toBe(true);
     expect(configManager.get('controlPlane.hostMode')).toBe('network');
     expect(configManager.get('controlPlane.allowRemote')).toBe(true);
-    expect(configManager.get('danger.daemon')).toBe(true);
+    expect(configManager.get('daemon.enabled')).toBe(true);
     expect(configManager.get('service.enabled')).toBe(true);
     expect(configManager.get('service.autostart')).toBe(true);
     expect(configManager.get('service.restartOnFailure')).toBe(true);

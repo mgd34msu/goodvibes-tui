@@ -15,7 +15,7 @@ function createConfig(overrides: {
   return {
     get(
       key:
-        | 'danger.daemon'
+        | 'daemon.enabled'
         | 'daemon.embedInProcess'
         | 'danger.httpListener'
         | 'controlPlane.host'
@@ -23,7 +23,7 @@ function createConfig(overrides: {
         | 'httpListener.host'
         | 'httpListener.port',
     ): boolean | string | number {
-      if (key === 'danger.daemon') return overrides.daemon ?? false;
+      if (key === 'daemon.enabled') return overrides.daemon ?? false;
       // D7a: these tests exercise the EMBEDDED daemon/listener path via the
       // createDaemonServer/createHttpListener factories directly — force
       // daemon.embedInProcess so startHostServices never attempts the new

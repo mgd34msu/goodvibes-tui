@@ -48,7 +48,6 @@ function createConfig(overrides: { controlPlanePort: number; httpListenerPort: n
   return {
     get(key: string): boolean | string | number {
       if (key === 'daemon.enabled') return true;
-      if (key === 'danger.daemon') return undefined as unknown as boolean; // deprecated alias, unset -> defers to daemon.enabled
       if (key === 'danger.httpListener') return false;
       if (key === 'controlPlane.host') return '127.0.0.1';
       if (key === 'controlPlane.port') return overrides.controlPlanePort;
