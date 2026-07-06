@@ -93,6 +93,39 @@ describe('SessionUnionCache against a real bootDaemon (adopted-mode union)', () 
     cache.dispose();
   });
 
+  test('bootstrap wiring shape: selfSessionIds drops this surface\'s own wire mirror — no +1 phantom (D-TUI-1)', async () => {
+    harness = await startHarness();
+    // Another surface's session on the daemon.
+    await harness.registerWireSession('companion-session-3');
+    // This surface mirrors its OWN session to the wire under a DIFFERENT id
+    // than the local broker uses — the divergence the replay exposed.
+    await harness.registerWireSession('tui-wire-mirror-3');
+
+    const local: LocalSessionReader = {
+      listSessions: () => [{ id: 'tui-local-3', kind: 'tui', project: harness!.workingDir, title: 'tui-local-3', status: 'active', createdAt: 1, updatedAt: 1, participants: [] } as SharedSessionRecord],
+      getSession: (id) => (id === 'tui-local-3' ? ({ id: 'tui-local-3' } as SharedSessionRecord) : null),
+    };
+    // Same wiring shape as bootstrap-core.ts: the spine client's mirrored ids
+    // feed selfSessionIds so the local record stays authoritative for self.
+    const mirrored = new Set(['tui-wire-mirror-3']);
+    const cache = new SessionUnionCache({
+      local,
+      selfSessionIds: () => mirrored,
+      scheduler: noopScheduler,
+      log: silent,
+    });
+    cache.activate({ list: (limit) => harness!.wireList(limit) });
+    await cache.refresh();
+
+    const ids = cache.listSessions().map((r) => r.id).sort();
+    expect(ids).toContain('tui-local-3'); // self, from the local broker
+    expect(ids).toContain('companion-session-3'); // genuine cross-surface row
+    expect(ids).not.toContain('tui-wire-mirror-3'); // self's wire mirror deduped
+    // Exactly 2 rows: no +1 phantom of ourselves.
+    expect(ids).toHaveLength(2);
+    cache.dispose();
+  });
+
   test('losing the daemon degrades the union to local-only rows + honest offline note', async () => {
     harness = await startHarness();
     await harness.registerWireSession('companion-session-2');
