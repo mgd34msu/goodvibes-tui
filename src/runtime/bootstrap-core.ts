@@ -116,11 +116,11 @@ export interface BootstrapCoreState {
   readonly requestRender: () => void;
   readonly setRenderRequest: (fn: () => void) => void;
   readonly runtimeSessionIdRef: { value: string };
-  /** S3c: dormant until bootstrap.ts activates it for an adopted 'external' daemon. */
+  /** Cross-surface identity mirror; permanently dormant for embedded/local-only (docs/decisions/2026-07-06-session-spine-mode-branch-is-permanent.md), activated by bootstrap.ts only for an adopted 'external' daemon. */
   readonly sessionSpine: SessionSpineClient;
   /** D3: inbound steer/follow-up delivery; dormant until bootstrap.ts activates it. */
   readonly sessionInboundInputs: SessionInboundInputPoller;
-  /** S3d: cache-backed session read facade; bootstrap.ts drives its mode from the same HostServiceMode. */
+  /** Cache-backed read facade; bootstrap.ts drives its mode (embedded/external/local-only) from the same HostServiceMode as the spine above. */
   readonly sessionUnionCache: SessionUnionCache;
   /**
    * WRFC chain persistence — call `rehydrate()` once after the SystemMessageRouter
@@ -292,9 +292,10 @@ export async function initializeBootstrapCore(
     surfaceRegistry,
     watcherRegistry,
   } = services;
-  // S3c: dormant until bootstrap.ts activates it for an adopted 'external' daemon.
+  // Permanently dormant for embedded/local-only (nothing to mirror to); bootstrap.ts activates it only for an adopted 'external' daemon.
   const sessionSpine = new SessionSpineClient({ participant: TUI_SPINE_PARTICIPANT, recordKind: 'tui' });
-  // S3d: cache-backed read facade over the local broker (passthrough until bootstrap.ts marks it embedded or activates the adopted-daemon wire union).
+  // Cache-backed read facade over the local broker (passthrough until bootstrap.ts marks it
+  // embedded, or activates the adopted-daemon wire union for 'external').
   // selfSessionIds keeps local authoritative for our own wire-mirrored session even when local/wire ids diverge (D-TUI-1).
   const sessionUnionCache = new SessionUnionCache({ local: sharedSessionBroker, selfSessionIds: () => sessionSpine.mirroredSessionIds });
 
@@ -432,10 +433,9 @@ export async function initializeBootstrapCore(
     } catch (err) {
       logger.error('Render threw; next requestRender will reschedule', { error: String(err) });
     }
-    // S3c: debounced spine heartbeat on turn/render activity. heartbeat() is a
-    // cheap synchronous no-op unless its own internal window has elapsed (at
-    // most one wire call per heartbeatMinIntervalMs) — safe to call from the
-    // render hot path with zero interactive-latency cost (never awaited here).
+    // Debounced spine heartbeat on turn/render activity (no-op while dormant, i.e.
+    // embedded/local-only): a cheap synchronous no-op unless its own internal window has
+    // elapsed (at most one wire call per heartbeatMinIntervalMs) — safe on the hot path.
     sessionSpine.heartbeat(runtimeSessionIdRef.value);
   };
   const requestRender = (): void => {
@@ -592,6 +592,19 @@ export async function initializeBootstrapCore(
     ),
   );
 
+  runtimeUnsubs.push(
+    runtimeBus.on<Extract<import('@/runtime/index.ts').WorkflowEvent, { type: 'WORKFLOW_SCORE_REGRESSION' }>>(
+      'WORKFLOW_SCORE_REGRESSION',
+      ({ payload }) => {
+        routeOrBuffer(
+          `[WRFC] ⚠ Chain ${payload.chainId.slice(0, 12)}: review score regressed — ${payload.reason}`,
+          'low',
+        );
+        requestRender();
+      },
+    ),
+  );
+
   // Wire the WRFC agent-guard with the onTrace callback so routing decisions are
   // observable via the same routeOrBuffer path as WORKFLOW_* events.
   // Placed here (after routeOrBuffer is defined) so the closure is fully wired.
@@ -739,9 +752,9 @@ export async function initializeBootstrapCore(
       lastSeenAt: Date.now(),
     },
   }).catch((err) => { logger.debug('session broker create session failed at bootstrap', { err }); });
-  // S3c: fire-and-forget spine mirror (Stage-2 parallel-write). Dormant/queued
-  // until bootstrap.ts's deferred external-services task calls activate() —
-  // see session-spine-client.ts. Never awaited: register() returns void.
+  // Fire-and-forget spine mirror — a permanent parallel-write posture alongside (never
+  // instead of) the still-authoritative local SharedSessionBroker above. Dormant/queued
+  // until bootstrap.ts's deferred task activates it for an adopted 'external' daemon.
   sessionSpine.register({ sessionId: runtime.sessionId, project: services.workingDirectory, title: 'Terminal UI session' });
 
   domainDispatch.syncSessionState({

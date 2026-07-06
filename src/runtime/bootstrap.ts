@@ -380,15 +380,15 @@ export async function bootstrapRuntime(
   // mean the configured port is held and unusable by this TUI instance.
   const hostServiceIsBlocked = (status: HostServiceStatus): boolean => status.mode === 'blocked' || status.mode === 'incompatible';
 
-  // S3c (One-Platform Wave 2): ONE client-selection point for the session
-  // spine, driven by the SAME authoritative HostServiceMode adopt-or-start
-  // already computed above (no separate probe). 'embedded' means THIS
-  // process's own SharedSessionBroker already IS the daemon's broker (they
-  // share runtimeServices) — nothing to mirror, so the spine stays dormant,
-  // which is today's exact behavior. Every other mode ('disabled', 'blocked',
-  // 'incompatible', 'unavailable') also stays local-only and honest — no
-  // daemon this TUI trusts is reachable. Only 'external' (a compatible daemon
-  // this TUI adopted rather than started) activates the wire mirror.
+  // PERMANENT DESIGN (docs/decisions/2026-07-06-session-spine-mode-branch-is-permanent.md):
+  // 'embedded'/'external' are two distinct, both-supported daemon topologies, not
+  // migration stages — the ONE client-selection point for the session spine, driven by
+  // the SAME authoritative HostServiceMode adopt-or-start already computed above.
+  // 'embedded' (daemon.embedInProcess=true) means THIS process's own SharedSessionBroker
+  // already IS the daemon's broker — nothing to mirror TO, so the spine stays
+  // permanently dormant. Every other mode ('disabled'/'blocked'/'incompatible'/
+  // 'unavailable') also stays local-only and honest. Only 'external' (a separately-
+  // running daemon this TUI adopted) activates the wire mirror.
   let spineActiveForBaseUrl: string | null = null;
   const syncSessionSpineToHostStatus = (daemonStatus: HostServiceStatus, sharedDaemonToken: string): void => {
     if (daemonStatus.mode !== 'external') {
@@ -397,8 +397,8 @@ export async function bootstrapRuntime(
         sessionInboundInputs.deactivate(`daemon mode changed to '${daemonStatus.mode}'`);
         spineActiveForBaseUrl = null;
       }
-      // S3d: keep the read facade honest per mode. 'embedded' means this
-      // process's broker IS the daemon's broker (local reads are the whole
+      // Keep the read facade honest per topology (permanent, not staged): 'embedded'
+      // means this process's broker IS the daemon's broker (local reads are the whole
       // truth); every other non-external mode is local-only/dormant.
       if (daemonStatus.mode === 'embedded') sessionUnionCache.markEmbedded();
       else sessionUnionCache.deactivate(`daemon mode '${daemonStatus.mode}'`);
@@ -422,8 +422,8 @@ export async function bootstrapRuntime(
       }),
       deliverInput: (sessionId, inputId, opts) => httpTransport.operator.sessions.deliverInput(sessionId, inputId, opts),
     });
-    // S3d: adopt the same daemon's wire as the read facade's cross-surface union
-    // source (interval-refreshed; served synchronously to panels).
+    // 'external' only: adopt the same daemon's wire as the read facade's cross-surface
+    // union source (interval-refreshed; served synchronously to panels).
     sessionUnionCache.activate({ list: (limit) => httpTransport.operator.sessions.list(limit) });
     spineActiveForBaseUrl = baseUrl;
     logger.info(`[bootstrap] session spine: adopted external daemon at ${baseUrl} — mirroring session identity`);
@@ -450,7 +450,7 @@ export async function bootstrapRuntime(
       httpListenerPortInUse: hostServiceIsBlocked(httpListenerStatus),
       daemonStatus,
       httpListenerStatus,
-      // S3c/D4: honest session-spine posture, independent of daemonRunning —
+      // Honest session-spine posture, independent of daemonRunning —
       // 'external'-adopted-but-currently-unreachable degrades to 'offline' here
       // even though daemonRunning might still read true from a stale handle.
       // D4: sessionSpine.status() alone is ACTIVITY-gated (only updates on a
@@ -737,12 +737,12 @@ export async function bootstrapRuntime(
       runtimeUnsubs.forEach((fn) => fn());
       runtimeUnsubs.length = 0;
       forensicsCollector.dispose();
-      // S3c: honest close on exit — fire-and-forget (never blocks shutdown);
-      // a no-op when the spine was never activated (embedded/local-only).
+      // Honest close on exit — fire-and-forget (never blocks shutdown);
+      // a no-op when the spine was never activated (embedded/local-only topology).
       sessionSpine.close(runtime.sessionId);
       sessionSpine.dispose();
       sessionInboundInputs.dispose(); // D3: stop the inbound steer poll interval on exit
-      sessionUnionCache.dispose(); // S3d: stop the wire-refresh interval on exit
+      sessionUnionCache.dispose(); // stop the wire-refresh interval on exit
       await deferredStartup.drain(100);
       if (externalServicesPromise) {
         try {
