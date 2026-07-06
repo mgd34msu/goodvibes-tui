@@ -109,11 +109,19 @@ describe('PlatformServiceManager', () => {
     manager.stop();
     manager.restart();
 
-    expect(calls).toEqual([
+    // The SDK's status() now honestly queries `systemctl --user is-active`
+    // (through the same injected runner), so filter those read-only status
+    // probes out and assert the mutating action sequence separately.
+    const statusQueries = calls.filter((c) => c.args.includes('is-active'));
+    const actions = calls.filter((c) => !c.args.includes('is-active'));
+    expect(actions).toEqual([
       { command: 'systemctl', args: ['--user', 'enable', '--now', 'gv-ops.service'] },
       { command: 'systemctl', args: ['--user', 'stop', 'gv-ops.service'] },
       { command: 'systemctl', args: ['--user', 'restart', 'gv-ops.service'] },
     ]);
+    for (const query of statusQueries) {
+      expect(query).toEqual({ command: 'systemctl', args: ['--user', 'is-active', 'gv-ops.service'] });
+    }
   });
 
   test('renders launchd and windows service artifacts with the configured service name', () => {
@@ -141,7 +149,10 @@ describe('PlatformServiceManager', () => {
     // unload-then-load pair (the unload is best-effort — the agent may not be
     // loaded yet) rather than a bare `load`, matching suggestedCommands()'
     // human-facing `launchctl unload <path> || true` / `launchctl load <path>`.
-    expect(launchdCalls).toEqual([
+    // Filter out the SDK status()'s read-only `launchctl list` probes, same
+    // rationale as the systemd case above.
+    const launchdActions = launchdCalls.filter((c) => c.args[0] !== 'list');
+    expect(launchdActions).toEqual([
       { command: 'launchctl', args: ['load', launchdInstalled.path] },
       { command: 'launchctl', args: ['unload', launchdInstalled.path] },
       { command: 'launchctl', args: ['unload', launchdInstalled.path] },
