@@ -33,10 +33,13 @@ function makeConversation() {
 
 function makeRouter() {
   const messages: string[] = [];
+  const lowMessages: string[] = [];
   return {
     messages,
+    lowMessages,
     router: {
       high: (text: string) => messages.push(text),
+      low: (text: string) => lowMessages.push(text),
     },
   };
 }
@@ -310,6 +313,101 @@ describe('shell/blocking-input', () => {
     expect(rendered).toBe(1);
     // Exactly ONE dismiss message across all five keystrokes, not one per key.
     expect(messages).toEqual(['[Recovery] Dismissed — the unsaved session is still on disk; you will be asked again next time GoodVibes starts here.']);
+  });
+
+  // ---------------------------------------------------------------------------
+  // W3 Finding 3: preserve-on-dismiss. main.ts's 60s autosave overwrites the
+  // shared recovery.jsonl with the CURRENT session's state within a minute,
+  // so the dismiss message's promise used to go false silently. Dismiss now
+  // calls preserveRecoveryFile() (when wired) so the promise stays true.
+  // ---------------------------------------------------------------------------
+  describe('preserve-on-dismiss (W3 Finding 3)', () => {
+    test('dismiss calls preserveRecoveryFile exactly once', () => {
+      const { conversation } = makeConversation();
+      const { router } = makeRouter();
+      let calls = 0;
+
+      handleBlockingShellInput({
+        data: 'x',
+        pendingPermission: null,
+        recoveryPending: true,
+        abortTurn: () => {},
+        conversation: conversation as never,
+        systemMessageRouter: router as never,
+        render: () => {},
+        loadRecoveryConversation: () => null,
+        deleteRecoveryFile: () => {},
+        preserveRecoveryFile: () => { calls += 1; return { preserved: true, replacedPrevious: false }; },
+        ...JOURNAL_STUBS,
+      });
+
+      expect(calls).toBe(1);
+    });
+
+    test('dismiss without a replaced previous snapshot: no extra low-priority note', () => {
+      const { conversation } = makeConversation();
+      const { router, lowMessages } = makeRouter();
+
+      handleBlockingShellInput({
+        data: 'x',
+        pendingPermission: null,
+        recoveryPending: true,
+        abortTurn: () => {},
+        conversation: conversation as never,
+        systemMessageRouter: router as never,
+        render: () => {},
+        loadRecoveryConversation: () => null,
+        deleteRecoveryFile: () => {},
+        preserveRecoveryFile: () => ({ preserved: true, replacedPrevious: false }),
+        ...JOURNAL_STUBS,
+      });
+
+      expect(lowMessages).toEqual([]);
+    });
+
+    test('dismiss that replaces an earlier preserved snapshot: reports it honestly, does not touch the main dismiss line', () => {
+      const { conversation } = makeConversation();
+      const { router, messages, lowMessages } = makeRouter();
+
+      const result = handleBlockingShellInput({
+        data: 'x',
+        pendingPermission: null,
+        recoveryPending: true,
+        abortTurn: () => {},
+        conversation: conversation as never,
+        systemMessageRouter: router as never,
+        render: () => {},
+        loadRecoveryConversation: () => null,
+        deleteRecoveryFile: () => {},
+        preserveRecoveryFile: () => ({ preserved: true, replacedPrevious: true }),
+        ...JOURNAL_STUBS,
+      });
+
+      expect(result.recoveryPending).toBe(false);
+      expect(lowMessages).toEqual(['[Recovery] Replacing the previously preserved (unrestored) snapshot with this one.']);
+      expect(messages).toEqual(['[Recovery] Dismissed — the unsaved session is still on disk; you will be asked again next time GoodVibes starts here.']);
+    });
+
+    test('preserveRecoveryFile omitted (caller does not wire it): dismiss behaves exactly as before, no crash', () => {
+      const { conversation } = makeConversation();
+      const { router, messages } = makeRouter();
+
+      const result = handleBlockingShellInput({
+        data: 'x',
+        pendingPermission: null,
+        recoveryPending: true,
+        abortTurn: () => {},
+        conversation: conversation as never,
+        systemMessageRouter: router as never,
+        render: () => {},
+        loadRecoveryConversation: () => null,
+        deleteRecoveryFile: () => {},
+        ...JOURNAL_STUBS,
+      });
+
+      expect(result.recoveryPending).toBe(false);
+      expect(messages).toEqual(['[Recovery] Dismissed — the unsaved session is still on disk; you will be asked again next time GoodVibes starts here.']);
+    });
   });
 
   /**
