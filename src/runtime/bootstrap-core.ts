@@ -295,13 +295,8 @@ export async function initializeBootstrapCore(
   // S3c: dormant until bootstrap.ts activates it for an adopted 'external' daemon.
   const sessionSpine = new SessionSpineClient({ participant: TUI_SPINE_PARTICIPANT, recordKind: 'tui' });
   // S3d: cache-backed read facade over the local broker (passthrough until bootstrap.ts marks it embedded or activates the adopted-daemon wire union).
-  // selfSessionIds drops this surface's own wire-mirrored rows from the union
-  // so the local broker stays authoritative for them (D-TUI-1: never count
-  // ourselves twice even if the local and wire ids diverge).
-  const sessionUnionCache = new SessionUnionCache({
-    local: sharedSessionBroker,
-    selfSessionIds: () => sessionSpine.mirroredSessionIds,
-  });
+  // selfSessionIds keeps local authoritative for our own wire-mirrored session even when local/wire ids diverge (D-TUI-1).
+  const sessionUnionCache = new SessionUnionCache({ local: sharedSessionBroker, selfSessionIds: () => sessionSpine.mirroredSessionIds });
 
   routeBindings.attachRuntime({ runtimeBus, runtimeStore: store });
   surfaceRegistry.attachRuntime(store);
