@@ -37,7 +37,7 @@ async function allSurfaces(): Promise<ConfigModalSurface[]> {
     securityModalGoldenSurface(),
     policyModalGoldenSurface(),
     knowledgeModalGoldenSurface(),
-    memoryModalGoldenSurface(),
+    await memoryModalGoldenSurface(),
     workPlanModalGoldenSurface(),
     keybindingsModalGoldenSurface(),
     pairingModalGoldenSurface(),

@@ -24,6 +24,7 @@ import { MultimodalService } from '@pellux/goodvibes-sdk/platform/multimodal';
 import { AgentMessageBus, AgentOrchestrator, ArchetypeLoader, WrfcController } from '@pellux/goodvibes-sdk/platform/agents';
 import { AgentManager, OverflowHandler, ProcessManager, createWorkflowServices, type WorkflowServices } from '@pellux/goodvibes-sdk/platform/tools';
 import { FileStateCache, FileUndoManager, MemoryEmbeddingProviderRegistry, MemoryRegistry, MemoryStore, ModeManager, ProjectIndex, resolveCanonicalMemoryDbPath, type CodeIndexStore, type CodeIndexReindexScheduler } from '@pellux/goodvibes-sdk/platform/state';
+import { MemorySpineClient, createLocalMemoryAccess } from '@pellux/goodvibes-sdk/platform/runtime/memory-spine';
 import { WorkspaceCheckpointManager } from '@pellux/goodvibes-sdk/platform/workspace';
 import type { RuntimeEventBus } from '@/runtime/index.ts';
 import { createDomainDispatch } from './store/index.ts';
@@ -166,6 +167,8 @@ export interface RuntimeServices {
   readonly workPlanStore: WorkPlanStore;
   readonly memoryStore: MemoryStore;
   readonly memoryRegistry: MemoryRegistry;
+  /** Host-vs-client memory access: local until bootstrap.ts activates it for an adopted 'external' daemon (mirrors sessionSpine). */
+  readonly memorySpine: MemorySpineClient;
   readonly serviceRegistry: ServiceRegistry;
   readonly secretsManager: SecretsManager;
   readonly subscriptionManager: SubscriptionManager;
@@ -234,12 +237,7 @@ export interface RuntimeServices {
   readonly fileUndoManager: FileUndoManager;
   readonly workspaceCheckpointManager: WorkspaceCheckpointManager;
   readonly integrationHelpers: IntegrationHelperService;
-  /**
-   * Re-root path-bound stores (MemoryStore, ProjectIndex) to a new working directory.
-   * Called by WorkspaceSwapManager after the new directory has been verified.
-   * Stores that require a process restart emit a warn-level log; they continue serving
-   * the old path until the daemon restarts with the new --working-dir.
-   */
+  /** Re-root path-bound stores (MemoryStore, ProjectIndex) to a new working directory, called by WorkspaceSwapManager after verification; stores needing a process restart just warn-log and keep serving the old path until the daemon restarts with the new --working-dir. */
   rerootStores(newWorkingDir: string): Promise<void>;
 }
 
@@ -393,6 +391,10 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
     embeddingRegistry: memoryEmbeddingRegistry,
   });
   const memoryRegistry = new MemoryRegistry(memoryStore);
+  // Local-until-adopted access facade for spine-shaped consumers (the Memory
+  // modal): bootstrap.ts activates the wire transport when a compatible
+  // external daemon is adopted, same signal as the session spine.
+  const memorySpine = new MemorySpineClient({ local: createLocalMemoryAccess(memoryRegistry) });
   const deliveryManager = new AutomationDeliveryManager({
     configManager,
     serviceRegistry,
@@ -526,14 +528,10 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
     automationBridge: automationManager,
   });
 
-  // Daemon handler surfaces: attach HOST handlers to the SDK-auto-registered
-  // builtin gateway descriptors (channels.* / email.* / calendar.*). The SDK
-  // owns every id/descriptor/schema; this only fills the handler slot via
-  // catalog.register(descriptor, handler, { replace: true }). Routing returns
-  // the resolver the inbox surface consumes; triage decorates channels.inbox.list.
-  // The remote surface reuses the SAME DistributedRuntimeManager the SDK facade
-  // injects, so its peer/work methods share one persistent store; remote.peers.*
-  // stay SDK-published routes (not catalog methods).
+  // Daemon handler surfaces: attach HOST handlers to the SDK-auto-registered builtin
+  // gateway descriptors (channels.* / email.* / calendar.*) via catalog.register(descriptor,
+  // handler, { replace: true }) — the SDK owns every id/descriptor/schema. The remote
+  // surface reuses the SAME DistributedRuntimeManager the SDK facade injects.
   const handlerLogger: HandlerLogger = {
     info: (message, meta) => console.info(message, meta ?? ''),
     warn: (message, meta) => console.warn(message, meta ?? ''),
@@ -725,6 +723,7 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
     workPlanStore,
     memoryStore,
     memoryRegistry,
+    memorySpine,
     serviceRegistry,
     secretsManager,
     subscriptionManager,

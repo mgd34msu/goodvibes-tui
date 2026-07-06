@@ -39,6 +39,7 @@ import { startExternalServices, type ExternalServicesHandle, type HostServiceSta
 import { createHttpTransport } from '@/runtime/index.ts';
 import { foldLegacySpineStore, deriveSpineFooterStatus } from '@pellux/goodvibes-sdk/platform/runtime/session-spine';
 import { createTuiSpineTransport, type SpineSessionsClient } from './session-spine-transport.ts';
+import { syncMemorySpineToHostStatus, type MemorySpineActiveRef } from './memory-spine-transport.ts';
 import { pruneStaleOperatorTokens } from '@pellux/goodvibes-sdk/platform/pairing';
 import { resolveDaemonCompanionToken, workspaceOperatorTokenCandidates } from './operator-token-cleanup.ts';
 import type { UiRuntimeServices } from './ui-services.ts';
@@ -300,13 +301,10 @@ export async function bootstrapRuntime(
   wrfcPersistence.rehydrate();
   const commandRegistry = shell.commandRegistry;
   const commandContext = shell.commandContext;
-  // Boot resume notice (UX-D item 1): after rehydrate() so chain history is
-  // ready, before the operator can type anything. Fire-and-forget — the
-  // checkpoint-count lookup is async (WorkspaceCheckpointManager.list() awaits
-  // its own init()), and this must not block the rest of bootstrap the way
-  // main.ts's `void workspaceCheckpointManager.init().catch(() => {})`
-  // deliberately doesn't either. Local file I/O only; resolves well before a
-  // human can react to the first rendered frame.
+  // Boot resume notice (UX-D item 1): after rehydrate() so chain history is ready, before
+  // the operator can type anything. Fire-and-forget, same as main.ts's non-blocking
+  // `void workspaceCheckpointManager.init().catch(() => {})` — local file I/O only,
+  // resolves well before a human can react to the first rendered frame.
   void announceResumeState({
     workingDirectory: services.workingDirectory,
     homeDirectory: services.homeDirectory,
@@ -390,7 +388,13 @@ export async function bootstrapRuntime(
   // 'unavailable') also stays local-only and honest. Only 'external' (a separately-
   // running daemon this TUI adopted) activates the wire mirror.
   let spineActiveForBaseUrl: string | null = null;
+  // Same adoption signal drives the memory spine (WO memory-adopt) — see
+  // memory-spine-transport.ts. 'embedded' (this process hosts its own daemon)
+  // stays local: the daemon's canonical store IS this process's own
+  // memoryRegistry, so there is no wire hop to make.
+  const memorySpineActiveRef: MemorySpineActiveRef = { value: null };
   const syncSessionSpineToHostStatus = (daemonStatus: HostServiceStatus, sharedDaemonToken: string): void => {
+    syncMemorySpineToHostStatus(services.memorySpine, daemonStatus.mode, daemonStatus.baseUrl, sharedDaemonToken, memorySpineActiveRef, logger);
     if (daemonStatus.mode !== 'external') {
       if (spineActiveForBaseUrl !== null) {
         sessionSpine.deactivate(`daemon mode changed to '${daemonStatus.mode}'`);
@@ -450,14 +454,10 @@ export async function bootstrapRuntime(
       httpListenerPortInUse: hostServiceIsBlocked(httpListenerStatus),
       daemonStatus,
       httpListenerStatus,
-      // Honest session-spine posture, independent of daemonRunning —
-      // 'external'-adopted-but-currently-unreachable degrades to 'offline' here
-      // even though daemonRunning might still read true from a stale handle.
-      // sessionSpine.status() alone is ACTIVITY-gated (only updates on a
-      // register/heartbeat/close), so after the daemon dies mid-idle it would
-      // keep reading 'online'. Derive the footer status from the union cache's
-      // 5s liveness probe too — one signal, no new timer — so offline surfaces
-      // within one refresh interval of the daemon dying.
+      // Honest session-spine posture, independent of daemonRunning — degrades to 'offline'
+      // when adopted-but-unreachable even though daemonRunning might still read a stale
+      // handle as true; sessionSpine.status() alone is activity-gated, so it's derived
+      // together with the union cache's 5s liveness probe (one signal, no new timer).
       sessionSpineActive: sessionSpine.active,
       sessionSpineStatus: deriveSpineFooterStatus(sessionSpine.status(), sessionUnionCache.crossSurfaceView),
     };
