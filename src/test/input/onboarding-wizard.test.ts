@@ -158,6 +158,11 @@ function makeOnboardingSnapshot(
       records: [],
     },
     providerAccounts: null,
+    legacyDaemon: {
+      present: false,
+      active: false,
+      path: '',
+    },
     collectionIssues: [],
     ...overrides,
   };
@@ -2138,5 +2143,109 @@ describe('network step: connect to an existing daemon (F1)', () => {
       .handleOnboardingAction('connect-existing-daemon');
 
     expect(prints.join('\n')).toContain('could not verify a connection');
+  });
+});
+
+// W4-D1 wizard wiring: handleMigrateLegacyDaemonServiceForHandler shipped
+// fully built (handler-onboarding-daemon-adopt.ts) but had no visible
+// onboarding control. This closes that gap with a guided action in the
+// Network step, visible only when the runtime snapshot's read-only
+// legacyDaemon detection reports a unit present, confirm-gated by a checklist
+// toggle on top of the engine's own consent requirement.
+describe('network step: migrate legacy daemon service (W4-D1)', () => {
+  test('hides the migration fields when no legacy unit is detected', () => {
+    const snapshot = makeOnboardingSnapshot();
+    const wizard = new OnboardingWizardController();
+    wizard.open('new');
+    wizard.hydrateRuntimeState({ snapshot }, { resetValues: true });
+    wizard.setFieldValue('capabilities.browser-access', true);
+
+    const networkStep = wizard.steps.find((step) => step.id === 'network');
+    expect(networkStep?.fields.find((field) => field.id === 'network.migrate-legacy-daemon-detected')).toBeUndefined();
+    expect(networkStep?.fields.find((field) => field.id === 'network.migrate-legacy-daemon-confirm')).toBeUndefined();
+    expect(networkStep?.fields.find((field) => field.id === 'network.migrate-legacy-daemon')).toBeUndefined();
+  });
+
+  test('shows detection, a confirm checklist, and a preview-mode action when a legacy unit is present but not active', () => {
+    const snapshot = makeOnboardingSnapshot({
+      legacyDaemon: { present: true, active: false, path: '/home/test/.config/systemd/user/goodvibes-daemon.service' },
+    });
+    const wizard = new OnboardingWizardController();
+    wizard.open('new');
+    wizard.hydrateRuntimeState({ snapshot }, { resetValues: true });
+    wizard.setFieldValue('capabilities.browser-access', true);
+
+    const networkStep = wizard.steps.find((step) => step.id === 'network');
+    const detected = networkStep?.fields.find((field) => field.id === 'network.migrate-legacy-daemon-detected');
+    const confirmField = networkStep?.fields.find((field) => field.id === 'network.migrate-legacy-daemon-confirm');
+    const actionField = networkStep?.fields.find((field) => field.id === 'network.migrate-legacy-daemon');
+    expect(detected?.kind).toBe('status');
+    expect(detected?.hint).toContain('installed (not currently active)');
+    expect(detected?.hint).toContain('will not touch the legacy one automatically');
+    expect(confirmField?.kind).toBe('checklist');
+    expect(confirmField && confirmField.kind === 'checklist' ? confirmField.defaultValue : null).toBe(false);
+    expect(actionField?.kind).toBe('action');
+    expect(actionField?.label).toBe('Preview migration plan');
+    expect(actionField && actionField.kind === 'action' ? actionField.action : null).toBe('migrate-legacy-daemon-service');
+  });
+
+  test('reports the active-and-running wording when the legacy unit is currently active', () => {
+    const snapshot = makeOnboardingSnapshot({
+      legacyDaemon: { present: true, active: true, path: '/home/test/.config/systemd/user/goodvibes-daemon.service' },
+    });
+    const wizard = new OnboardingWizardController();
+    wizard.open('new');
+    wizard.hydrateRuntimeState({ snapshot }, { resetValues: true });
+    wizard.setFieldValue('capabilities.browser-access', true);
+
+    const networkStep = wizard.steps.find((step) => step.id === 'network');
+    const detected = networkStep?.fields.find((field) => field.id === 'network.migrate-legacy-daemon-detected');
+    expect(detected?.hint).toContain('installed and RUNNING');
+  });
+
+  test('checking the confirm checklist flips the action to migrate-now wording', () => {
+    const snapshot = makeOnboardingSnapshot({
+      legacyDaemon: { present: true, active: true, path: '/home/test/.config/systemd/user/goodvibes-daemon.service' },
+    });
+    const wizard = new OnboardingWizardController();
+    wizard.open('new');
+    wizard.hydrateRuntimeState({ snapshot }, { resetValues: true });
+    wizard.setFieldValue('capabilities.browser-access', true);
+    wizard.setFieldValue('network.migrate-legacy-daemon-confirm', true);
+
+    const networkStep = wizard.steps.find((step) => step.id === 'network');
+    const actionField = networkStep?.fields.find((field) => field.id === 'network.migrate-legacy-daemon');
+    expect(actionField?.label).toBe('Migrate legacy daemon service now');
+    expect(actionField?.hint).toContain('Executes the migration now');
+  });
+
+  test('migrate-legacy-daemon-service action reads the confirm checklist and dispatches to the handler (legacy absent, port free: safe, deterministic branch)', async () => {
+    resetTestRuntimeServices();
+    const uiServices = createDefaultUiRuntimeServices();
+    ensureLocalAdminAuth(uiServices);
+    // A distinctive, unlikely-to-be-bound high port — never 3421/4444 — so this
+    // exercises the engine's real (uninjected) TCP port probe deterministically
+    // without depending on, or risking interaction with, any real GoodVibes
+    // daemon. The test's homeDirectory is an ephemeral per-test tempdir, so
+    // detectLegacyUnit's unit-file check is guaranteed to report absent.
+    uiServices.platform.configManager.setDynamic('controlPlane.host', '127.0.0.1');
+    uiServices.platform.configManager.setDynamic('controlPlane.port', 58921);
+    const input = makeInput(uiServices);
+    const prints: string[] = [];
+    input.setCommandRegistry(new CommandRegistry(), {
+      session: { runtime: {} },
+      print: (text: string) => prints.push(text),
+    } as unknown as CommandContext);
+    input.openOnboardingWizard({ mode: 'new', preload: () => {} });
+    input.onboardingWizard.setFieldValue('capabilities.browser-access', true);
+
+    await (input as unknown as { handleOnboardingAction(action: 'migrate-legacy-daemon-service'): Promise<void> })
+      .handleOnboardingAction('migrate-legacy-daemon-service');
+
+    const output = prints.join('\n');
+    expect(output).toContain('Migrate legacy daemon service:');
+    expect(output).toContain('no legacy goodvibes-daemon.service unit was found');
+    expect(output).toContain('is free');
+    expect(output).toContain('Run install-service');
   });
 });

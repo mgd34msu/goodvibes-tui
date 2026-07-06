@@ -9,7 +9,7 @@ import {
   type ExternalSurfaceSpec,
 } from './onboarding-wizard-external-surfaces.ts';
 import { countSelected, modelSelectionLabel, normalizeText } from './onboarding-wizard-helpers.ts';
-import { getDaemonSource, pushDaemonAdoptionFields } from './onboarding-wizard-network-adopt.ts';
+import { getDaemonSource, pushDaemonAdoptionFields, pushLegacyDaemonMigrationFields } from './onboarding-wizard-network-adopt.ts';
 import type { OnboardingWizardControllerLike } from './onboarding-wizard-types.ts';
 import type { OnboardingWizardAcknowledgementFieldDefinition, OnboardingWizardActionFieldDefinition, OnboardingWizardChecklistFieldDefinition, OnboardingWizardExternalSurfaceStepId, OnboardingWizardFieldDefinition, OnboardingWizardModelPickerFieldDefinition, OnboardingWizardRadioFieldDefinition, OnboardingWizardRadioOption, OnboardingWizardStepDefinition } from './onboarding-wizard-types.ts';
 
@@ -536,6 +536,7 @@ export function buildNetworkStep(controller: OnboardingWizardControllerLike): On
     // F1: recognize an adoptable already-running daemon (see onboarding-wizard-network-adopt.ts).
     const daemonSource = getDaemonSource(controller);
     pushDaemonAdoptionFields(fields, controller, daemonSource, bindSettings);
+    pushLegacyDaemonMigrationFields(fields, controller);
 
     if (custom) {
       const sharedIpField: OnboardingWizardChecklistFieldDefinition = {

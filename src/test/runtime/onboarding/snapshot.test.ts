@@ -139,9 +139,17 @@ describe('collectOnboardingSnapshot', () => {
           ],
         }),
       },
+      legacyDaemon: {
+        detect: () => ({ present: true, active: true, path: join(root, 'home', '.config/systemd/user/goodvibes-daemon.service') }),
+      },
     });
 
     expect(snapshot.capturedAt).toBe(123);
+    expect(snapshot.legacyDaemon).toEqual({
+      present: true,
+      active: true,
+      path: join(root, 'home', '.config/systemd/user/goodvibes-daemon.service'),
+    });
     expect(snapshot.providerRouting.primaryReasoningEffort).toBe('high');
     expect(snapshot.config.permissions.mode).toBe('custom');
     expect(snapshot.config.behavior.saveHistory).toBe(false);
@@ -207,11 +215,17 @@ describe('collectOnboardingSnapshot', () => {
           throw new Error('provider account query offline');
         },
       },
+      legacyDaemon: {
+        detect: () => {
+          throw new Error('legacy unit detection unavailable');
+        },
+      },
     });
 
     expect(snapshot.capturedAt).toBe(789);
     expect(snapshot.surfaces.records).toEqual([]);
     expect(snapshot.providerAccounts).toBeNull();
+    expect(snapshot.legacyDaemon).toEqual({ present: false, active: false, path: '' });
     expect(snapshot.collectionIssues).toEqual([
       {
         area: 'surfaces',
@@ -221,7 +235,38 @@ describe('collectOnboardingSnapshot', () => {
         area: 'provider-accounts',
         message: 'provider account query offline',
       },
+      {
+        area: 'legacy-daemon',
+        message: 'legacy unit detection unavailable',
+      },
     ]);
+  });
+
+  test('defaults legacyDaemon to absent when no legacyDaemon dependency is supplied', async () => {
+    const snapshot = await collectOnboardingSnapshot({
+      clock: () => 1,
+      config: configManager,
+      shellPaths,
+      subscriptions: { list: () => [], listPending: () => [], get: () => null, getPending: () => null },
+      secrets: {
+        inspect: async () => ({
+          policy: 'preferred_secure',
+          secureAvailable: true,
+          storedKeys: 0,
+          envBackedKeys: 0,
+          secureKeys: 0,
+          plaintextKeys: 0,
+          warnings: [],
+          locations: [],
+        }),
+        listDetailed: async () => [],
+      },
+      auth: { inspect: () => buildLocalAuthSnapshot() },
+      services: { getAll: () => ({}), inspect: async () => null },
+    });
+
+    expect(snapshot.legacyDaemon).toEqual({ present: false, active: false, path: '' });
+    expect(snapshot.collectionIssues.some((issue) => issue.area === 'legacy-daemon')).toBe(false);
   });
 
   test('degrades gracefully when core service and secret inspectors fail', async () => {

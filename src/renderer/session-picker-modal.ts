@@ -16,6 +16,7 @@
  */
 
 import type { Line } from '../types/grid.ts';
+import type { SharedSessionRecord } from '@pellux/goodvibes-sdk/platform/control-plane';
 import { ModalFactory } from './modal-factory.ts';
 import { UI_TONES } from './ui-primitives.ts';
 import type { SessionPickerModal } from '../input/session-picker-modal.ts';
@@ -40,9 +41,35 @@ function isClosedStatus(status: string): boolean {
   return status.trim().toLowerCase() === 'closed';
 }
 
-function statusLabel(status: string): string {
-  const trimmed = status.trim();
-  return trimmed ? (isClosedStatus(trimmed) ? 'closed' : trimmed) : 'active';
+/**
+ * D-TUI/#A2: closed sessions carry an optional, honest reason for WHY they
+ * closed under `metadata.closeReason` (SDK's `SharedSessionCloseReason`,
+ * 'closeReason' key — see `@pellux/goodvibes-sdk` platform/control-plane
+ * session-broker-sessions.ts's `readSessionCloseReason`). `metadata` is an
+ * open record so old readers and records from a build that predates this
+ * field ignore it safely — read it duck-typed here rather than importing the
+ * SDK's helper, and tolerate `metadata` itself being absent or malformed.
+ */
+function readCloseReason(record: SharedSessionRecord): string | undefined {
+  const raw = (record.metadata as Record<string, unknown> | undefined)?.['closeReason'];
+  return typeof raw === 'string' ? raw : undefined;
+}
+
+/**
+ * A GC sweep closing an idle session ('idle-reaped') auto-reopens on the next
+ * heartbeat — it is NOT the same event as a deliberate user/surface close, so
+ * it must never render under the same "closed" badge (W4/#A2). Tolerant of
+ * records without the field (pre-feature builds, or a deliberate close).
+ */
+function isReapedRecord(record: SharedSessionRecord): boolean {
+  return isClosedStatus(record.status) && readCloseReason(record) === 'idle-reaped';
+}
+
+function statusLabel(record: SharedSessionRecord): string {
+  const trimmed = record.status.trim();
+  if (!trimmed) return 'active';
+  if (!isClosedStatus(trimmed)) return trimmed;
+  return isReapedRecord(record) ? 'reaped' : 'closed';
 }
 
 const MAX_CROSS_SURFACE_ROWS = 5;
@@ -209,12 +236,16 @@ export function renderSessionPickerModal(
     if (modal.crossSurfaceSessions.length > 0) {
       const rows = modal.crossSurfaceSessions.slice(0, MAX_CROSS_SURFACE_ROWS);
       const listItems: import('./modal-factory.ts').ModalListItem[] = rows.map((record) => {
+        const reaped = isReapedRecord(record);
         const closed = isClosedStatus(record.status);
         const label = fitDisplay(
-          `${record.title || record.id} · ${kindLabel(record.kind)} · ${statusLabel(record.status)} · ${projectLabel(record.project)}`,
+          `${record.title || record.id} · ${kindLabel(record.kind)} · ${statusLabel(record)} · ${projectLabel(record.project)}`,
           contentW,
         );
-        return { label, style: closed ? { fg: '244', dim: true } : undefined };
+        // Reaped rows get their own tone (not plain dim-closed): the session
+        // will auto-reopen on the next heartbeat, unlike a deliberate close.
+        const style = reaped ? { fg: UI_TONES.state.info } : closed ? { fg: '244', dim: true } : undefined;
+        return { label, style };
       });
       sections.push({ type: 'list', items: listItems });
       if (modal.crossSurfaceSessions.length > MAX_CROSS_SURFACE_ROWS) {

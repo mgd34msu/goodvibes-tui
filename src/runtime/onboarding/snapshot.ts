@@ -5,6 +5,7 @@ import { readOnboardingRuntimeState } from './state.ts';
 import type {
   OnboardingAcknowledgementSnapshot,
   OnboardingConfigSnapshot,
+  OnboardingLegacyDaemonSnapshot,
   OnboardingProviderRoutingSnapshot,
   OnboardingRuntimeDefaultsSnapshot,
   OnboardingServiceState,
@@ -198,6 +199,10 @@ function buildFallbackAuthSnapshot(): LocalAuthSnapshot {
   };
 }
 
+function buildFallbackLegacyDaemonSnapshot(): OnboardingLegacyDaemonSnapshot {
+  return { present: false, active: false, path: '' };
+}
+
 function buildConfiguredSurfaceKinds(
   surfaces: OnboardingConfigSnapshot['surfaces'],
 ): string[] {
@@ -320,6 +325,7 @@ export async function collectOnboardingSnapshot(
     secretRecordsResult,
     surfaceResult,
     providerAccountsResult,
+    legacyDaemonResult,
   ] = await Promise.all([
     loadOptionalSnapshot(
       'subscriptions-active',
@@ -357,6 +363,11 @@ export async function collectOnboardingSnapshot(
       deps.providerAccounts ? () => deps.providerAccounts!.loadSnapshot() : undefined,
       null,
     ),
+    loadOptionalSnapshot(
+      'legacy-daemon',
+      deps.legacyDaemon ? () => Promise.resolve(deps.legacyDaemon!.detect()) : undefined,
+      buildFallbackLegacyDaemonSnapshot(),
+    ),
   ]);
 
   const collectionIssues: OnboardingSnapshotCollectionIssue[] = [];
@@ -369,6 +380,7 @@ export async function collectOnboardingSnapshot(
   if (secretRecordsResult.issue) collectionIssues.push(secretRecordsResult.issue);
   if (surfaceResult.issue) collectionIssues.push(surfaceResult.issue);
   if (providerAccountsResult.issue) collectionIssues.push(providerAccountsResult.issue);
+  if (legacyDaemonResult.issue) collectionIssues.push(legacyDaemonResult.issue);
 
   return {
     capturedAt,
@@ -402,6 +414,7 @@ export async function collectOnboardingSnapshot(
       records: sortSurfaceRecords(surfaceResult.value),
     },
     providerAccounts: providerAccountsResult.value,
+    legacyDaemon: legacyDaemonResult.value,
     collectionIssues,
   };
 }

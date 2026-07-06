@@ -192,6 +192,39 @@ describe('SessionPickerModal — cross-surface union (W3-T2)', () => {
     }
   });
 
+  test('(5) idle-reaped closed session badged "reaped", distinct from a deliberately-closed one badged "closed" (W4/#A2)', async () => {
+    const { sessionManager, dir } = makeSessionManager();
+    try {
+      const local = localReader([
+        record('reaped-1', { status: 'closed', title: 'Reaped session', metadata: { closeReason: 'idle-reaped' } }),
+        record('closed-1', { status: 'closed', title: 'User-closed session', metadata: { closeReason: 'user' } }),
+        record('legacy-1', { status: 'closed', title: 'Legacy closed session' }),
+      ]);
+      const cache = new SessionUnionCache({ local, scheduler: noopScheduler, log: silent });
+      cache.markEmbedded();
+
+      const modal = new SessionPickerModal(sessionManager, cache);
+      modal.open();
+
+      const text = linesToText(renderSessionPickerModal(modal, 100)).join('\n');
+      expect(text).toContain('Reaped session');
+      expect(text).toContain('reaped');
+      expect(text).toContain('User-closed session');
+      expect(text).toContain('Legacy closed session');
+      // Deliberately-closed and pre-feature (no metadata) records still read
+      // "closed" — only the idle-reaped one gets the distinct badge.
+      const reapedLine = linesToText(renderSessionPickerModal(modal, 100)).find((line) => line.includes('Reaped session'));
+      const userClosedLine = linesToText(renderSessionPickerModal(modal, 100)).find((line) => line.includes('User-closed session'));
+      const legacyLine = linesToText(renderSessionPickerModal(modal, 100)).find((line) => line.includes('Legacy closed session'));
+      expect(reapedLine).toContain('reaped');
+      expect(reapedLine).not.toContain('· closed ·');
+      expect(userClosedLine).toContain('· closed ·');
+      expect(legacyLine).toContain('· closed ·');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   test('true-empty state: embedded mode with no sessions reads "No sessions yet.", not a silent blank', () => {
     const { sessionManager, dir } = makeSessionManager();
     try {
