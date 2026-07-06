@@ -1,4 +1,5 @@
 import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
+import { resolveDaemonEnabled } from '@pellux/goodvibes-sdk/platform/config';
 import type { OnboardingCheckMarkersState } from '../runtime/onboarding/index.ts';
 import { resolveRuntimeEndpointBinding } from './endpoints.ts';
 import { isNetworkFacing } from './network-posture.ts';
@@ -98,7 +99,7 @@ export function buildCliDoctorFindings(options: CliStatusOptions): readonly CliD
   const serviceEnabled = config.get('service.enabled') === true;
   const serviceAutostart = config.get('service.autostart') === true;
   const restartOnFailure = config.get('service.restartOnFailure') === true;
-  const daemonEnabled = config.get('danger.daemon') === true;
+  const daemonEnabled = resolveDaemonEnabled(config);
   const listenerEnabled = config.get('danger.httpListener') === true;
   const webEnabled = config.get('web.enabled') === true;
   const controlPlaneEnabled = config.get('controlPlane.enabled') === true;

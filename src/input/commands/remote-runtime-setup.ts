@@ -1,6 +1,7 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { getDefaultAcpAgentCommand } from '@pellux/goodvibes-sdk/platform/acp';
+import { resolveDaemonEnabled } from '@pellux/goodvibes-sdk/platform/config';
 import type { CommandContext, RemoteCommandService } from '../command-registry.ts';
 import type { RemoteSessionBundle } from '@/runtime/index.ts';
 import { requireShellPaths } from './runtime-services.ts';
@@ -37,10 +38,11 @@ export async function handleRemoteSetupCommand(
   if (subcommand === 'setup') {
     const command = getDefaultAcpAgentCommand();
     const danger = ctx.platform.configManager.getCategory('danger');
+    const daemonEnabled = resolveDaemonEnabled(ctx.platform.configManager);
     const lines = [
       'Remote Setup Review',
       `  acp agent command: ${command.join(' ')}`,
-      `  daemon enabled: ${danger.daemon ? 'yes' : 'no'}`,
+      `  daemon enabled: ${daemonEnabled ? 'yes' : 'no'}`,
       `  http listener enabled: ${danger.httpListener ? 'yes' : 'no'}`,
       `  remote runner contracts: ${remoteRegistry.listContracts().length}`,
       `  active acp connections: ${activeConnections.length}`,
@@ -62,7 +64,7 @@ export async function handleRemoteSetupCommand(
       writeFileSync(targetPath, `${JSON.stringify({
         exportedAt: Date.now(),
         acpAgentCommand: command,
-        daemonEnabled: Boolean(danger.daemon),
+        daemonEnabled,
         httpListenerEnabled: Boolean(danger.httpListener),
         remoteRunnerContracts: remoteRegistry.listContracts().length,
       }, null, 2)}\n`, 'utf-8');

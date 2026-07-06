@@ -5,6 +5,7 @@ import { basename, delimiter, dirname, isAbsolute, join, resolve } from 'node:pa
 import { fileURLToPath } from 'node:url';
 import { PlatformServiceManager } from '@pellux/goodvibes-sdk/platform/daemon';
 import type { ManagedServiceStatus } from '@pellux/goodvibes-sdk/platform/daemon';
+import { resolveDaemonEnabled } from '@pellux/goodvibes-sdk/platform/config';
 import type { ConfigManager } from '../config/index.ts';
 import { resolveRuntimeEndpointBinding } from './endpoints.ts';
 import type { RuntimeEndpointBinding, RuntimeEndpointId } from './endpoints.ts';
@@ -392,7 +393,7 @@ export async function buildCliServicePosture(
     enabled: runtime.configManager.get('service.enabled') === true,
     autostart: runtime.configManager.get('service.autostart') === true,
     restartOnFailure: runtime.configManager.get('service.restartOnFailure') === true,
-    daemonEnabled: runtime.configManager.get('danger.daemon') === true,
+    daemonEnabled: resolveDaemonEnabled(runtime.configManager),
   };
   const serverBackedEnabled = config.daemonEnabled || endpoints.some((endpoint) => endpoint.enabled);
   const issues: string[] = [];
