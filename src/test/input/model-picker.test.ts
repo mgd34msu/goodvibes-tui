@@ -423,9 +423,18 @@ describe('ModelPickerModal', () => {
       expect(picker.selectedIndex).toBe(0);
     });
 
-    test('starts with list focus instead of search focus', () => {
+    // W3-T2: flipped. Live tmux repro showed the prior "list focus by default"
+    // behavior meant typing a search term went char-by-char into single-key
+    // shortcuts instead (c=capability, a=available-only, ...) with the list
+    // never filtering and no indication anything happened — see the doc
+    // comment on ModelPickerModal.openAllModels(). Search now starts focused
+    // so "just start typing" filters immediately, matching every other
+    // picker; focusPane stays 'items' (Left/Right pane switching, Down to
+    // blur into list nav, etc. are unaffected).
+    test('starts with search focus so typing filters immediately', () => {
       picker.openAllModels(ALL_MODELS, 'free-1');
-      expect(picker.searchFocused).toBe(false);
+      expect(picker.searchFocused).toBe(true);
+      expect(picker.focusPane).toBe('items');
     });
 
     test('restores availableOnly to true after showModelsForProvider set it to false', () => {

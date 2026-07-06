@@ -189,7 +189,15 @@ function detailLines(picker: ModelPickerModal, width: number): string[] {
   } else {
     lines.push(`Context cap overrides the detected local-model context window for this selection.`);
   }
-  const filterText = `Search: ${picker.query || '(none)'} | Price: ${picker.categoryFilter} | Capability: ${picker.capabilityFilter} | Group: ${picker.groupBy} | Available only: ${picker.availableOnly ? 'yes' : 'no'}`;
+  // W3-T2: a visible cursor glyph on the query itself when search is focused —
+  // the only prior affordance was a footer-hint text swap ('/ search' vs.
+  // 'Typing filters search...'), buried at the end of a long hint line and
+  // easy to miss (confirmed via live tmux repro). This puts the "you are
+  // typing here" signal where the eye already is, on the Search: value.
+  const searchDisplay = picker.query.length > 0
+    ? `${picker.query}${picker.searchFocused ? GLYPHS.surface.cursor : ''}`
+    : (picker.searchFocused ? GLYPHS.surface.cursor : '(none)');
+  const filterText = `Search: ${searchDisplay} | Price: ${picker.categoryFilter} | Capability: ${picker.capabilityFilter} | Group: ${picker.groupBy} | Available only: ${picker.availableOnly ? 'yes' : 'no'}`;
   lines.push(filterText);
   return lines.flatMap((line) => wrapText(line, Math.max(1, width)));
 }
