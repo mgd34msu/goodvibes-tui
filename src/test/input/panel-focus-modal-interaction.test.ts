@@ -21,7 +21,7 @@
  *     handlePanelFocusToken before ever reaching F2's toggle logic — see
  *     global-shortcuts.test.ts's "F2 / Ctrl+O — toggleFleetPanel" suite.
  *   - Ctrl+X detach (FleetPanel session-tab, interceptPanelClose) used to
- *     leave panelFocused untouched — see the Wave-3 interceptPanelClose test
+ *     leave panelFocused untouched — see the interceptPanelClose test
  *     in global-shortcuts.test.ts.
  */
 import { describe, test, expect } from 'bun:test';

@@ -86,13 +86,13 @@ export function buildOnboardingApplyRequest(controller: OnboardingWizardControll
     setConfig('service.autostart', hasServers);
     setConfig('service.restartOnFailure', true);
     // One-Platform daemon-by-default (SDK docs/decisions/2026-07-05-daemon-by-default.md):
-    // the loopback-only cross-surface session daemon is safe-by-design (Wave 1:
-    // loopback bind, auth-gated, rate-limited) and runs regardless of whether
+    // the loopback-only cross-surface session daemon is safe-by-design
+    // (loopback bind, auth-gated, rate-limited) and runs regardless of whether
     // browser/LAN/webhook/external-app capabilities are selected here — it is no
     // longer bundled with those network-exposing surfaces, so onboarding leaves
     // daemon.enabled untouched and lets the SDK's own default-true (or an existing
     // explicit user override) govern. (The deprecated danger.daemon alias this
-    // comment used to also name was removed in Wave 6.)
+    // comment used to also name was later removed.)
     setConfig('controlPlane.enabled', hasServers);
     setConfig('danger.httpListener', httpListener);
     setConfig('web.enabled', browserAccess);

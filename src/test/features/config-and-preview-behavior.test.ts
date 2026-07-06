@@ -243,7 +243,7 @@ describe('tool preview truncation', () => {
     // frame=1000 would normally rotate past "Thinking..." (PHRASE_ROTATION_FRAMES=375);
     // with a stall in effect, the rotated phrase must NOT appear at all.
     // outputTokens > 0: "Stalled" is the MID-STREAM label — pre-first-token
-    // silence renders "Waiting for model" instead (batch replay D1).
+    // silence renders "Waiting for model" instead (an earlier replay fix).
     const lines = UIFactory.createThinkingFragment(
       width, '-', 1000, undefined, undefined, 40, 200, undefined, undefined,
       { msSinceLastDelta: 12_000 },
@@ -320,7 +320,7 @@ describe('tool preview truncation', () => {
   it('a genuine mid-stream stall is unchanged when no approval is pending', () => {
     // Regression guard: the honest stall label must still appear for a real
     // provider silence AFTER tokens started flowing (out>0; pre-first-token
-    // silence is "Waiting for model" per batch replay D1).
+    // silence is "Waiting for model" per an earlier replay fix).
     const width = 80;
     const lines = UIFactory.createThinkingFragment(
       width, '-', 1000, undefined, undefined, 40, 200, undefined, undefined,

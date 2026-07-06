@@ -1,7 +1,7 @@
 // ---------------------------------------------------------------------------
 // fleet-tabs.ts
 //
-// Wave-3 (W3.1 Part C) — pure, testable tab-state model for FleetPanel's
+// Pure, testable tab-state model for FleetPanel's
 // session tabs. No BasePanel/rendering dependency, mirroring the
 // fleet-read-model.ts convention: this module owns attach/detach/switch as
 // pure state transitions over a small immutable FleetTabsState, so the tab
@@ -32,7 +32,7 @@ export function isAttachableFleetKind(kind: ProcessKind): kind is FleetAttachabl
 }
 
 /**
- * Wave-3 (W3.2 steering) — lifecycle of a queued steer message, tracked
+ * Lifecycle of a queued steer message, tracked
  * per-tab. `queued` means `ProcessRegistry.steer()` accepted the message
  * onto the target's inbox, NOT that the agent has seen it — that is the
  * later, honest `consumed` transition (a `COMMUNICATION_CONSUMED` runtime-bus
@@ -119,14 +119,14 @@ export interface FleetTab {
   ledgerEntries: Record<string, unknown>[] | null;
   ledgerLoadStarted: boolean;
   /**
-   * Wave-3 (W3.2): the one-line steer composer's in-progress text, or `null`
+   * The one-line steer composer's in-progress text, or `null`
    * when not composing. Mirrors git-panel.ts's `commitMessage` mutable-slot
    * convention (FleetPanel.isCapturingTextBurst() gates on this being
    * non-null so a burst/paste lands here char-by-char, never as tree/tab
    * hotkeys — see FleetPanel.handleSteerInput).
    */
   steerDraft: string | null;
-  /** Wave-3 (W3.2): this tab's most recent steer message's lifecycle, or null. */
+  /** This tab's most recent steer message's lifecycle, or null. */
   steerBadge: SteerBadge | null;
 }
 

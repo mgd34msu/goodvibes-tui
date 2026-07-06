@@ -447,8 +447,8 @@ export function handleCtrlC(
   } catch {
     // Non-fatal to the exit chord; the quit-window bookkeeping still runs.
   }
-  // A press that silenced LIVE speech is consumed by that job (batch replay
-  // D5) — symmetric with the prompt-clearing press above. The quit chord
+  // A press that silenced LIVE speech is consumed by that job (an earlier replay
+  // fix) — symmetric with the prompt-clearing press above. The quit chord
   // ("Ctrl+C x2") starts from a quiet state; turn-aborts still count toward
   // the double-press.
   if (stoppedSpeech) return;

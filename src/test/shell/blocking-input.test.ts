@@ -146,7 +146,7 @@ describe('shell/blocking-input', () => {
     expect(rendered).toBe(1);
   });
 
-  // W3-T2: a stray (non Ctrl+R / non Esc) key now DISMISSES the recovery
+  // A stray (non Ctrl+R / non Esc) key now DISMISSES the recovery
   // banner instead of re-asserting it forever — see blocking-input.ts's
   // stray-key branch doc comment. Dismiss must not touch the recovery file.
   test('stray key dismisses the recovery banner (once), forwards the keystroke, and leaves the file intact', () => {

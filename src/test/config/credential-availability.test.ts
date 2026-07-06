@@ -6,7 +6,7 @@ import {
   type CredentialAvailability,
 } from '../../config/credential-availability.ts';
 
-// W6-C1: prove the client-side credential-status read degrades HONESTLY and never
+// Prove the client-side credential-status read degrades HONESTLY and never
 // fabricates a confident "configured" or leaks a secret value. Fully hermetic — no
 // daemon, no ports, no network. The transport error shapes below mirror the real
 // HttpStatusError the daemon wire produces (top-level `.code` sourced from the

@@ -84,7 +84,7 @@ describe('resolveInstalledDaemonBinary', () => {
 
 /**
  * Coverage for the CLI dispatch onto the SDK's REAL wired
- * `PlatformServiceManager` (rewired here after SDK W3-S5 deleted the old
+ * `PlatformServiceManager` (rewired here after the SDK deleted the old
  * systemd-only `systemd-user-service.ts` shim this module used to call).
  *
  * `service.platform` is forced to 'systemd' via config override so these tests
@@ -204,7 +204,7 @@ describe('runDaemonServiceCli (systemd path, real PlatformServiceManager, stubbe
     // platform's start() tracks a pid), so `running` honestly reports false
     // here and the CLI adds a caveat rather than claiming certainty either way.
     expect(result.status.running).toBe(false);
-    // W3 Finding 4: the old wording asserted HOW `running` was computed
+    // An earlier finding: the old wording asserted HOW `running` was computed
     // ("only reflects processes this tool started directly") — true for the
     // pid-file-only check this (currently linked) SDK build still uses, but
     // stale once the parallel SDK batch makes status().running query systemd
@@ -215,8 +215,8 @@ describe('runDaemonServiceCli (systemd path, real PlatformServiceManager, stubbe
 });
 
 /**
- * W3 Finding 4: legacy-unit detection (`goodvibes-daemon.service`, the prior
- * D7a command's literal unit name — distinct from this module's tracked
+ * Legacy-unit detection (`goodvibes-daemon.service`, the prior
+ * command's literal unit name — distinct from this module's tracked
  * `goodvibes.service`). Both the file-existence check and the `is-active`
  * query are fully faked here: `legacyUnitFileExists` never touches the real
  * `~/.config/systemd/user`, and the `is-active` query goes through the same
@@ -396,7 +396,7 @@ describe('runDaemonServiceCli — legacy unit detection (W3 Finding 4)', () => {
 });
 
 /**
- * W4-D1: the guided, consented `migrate-service` takeover of the legacy
+ * The guided, consented `migrate-service` takeover of the legacy
  * `goodvibes-daemon.service` unit. Every step (legacy stop/disable/remove,
  * daemon-reload) goes through the SAME injected `actionRunner`/
  * `legacyUnitFileRemove`/`legacyUnitFileExists`/`portProbe` seams the rest of
@@ -545,7 +545,7 @@ describe('runDaemonServiceCli — migrate-service (W4-D1)', () => {
   });
 
   /**
-   * F1: a host whose `service.serviceName` config key is set to the legacy
+   * A host whose `service.serviceName` config key is set to the legacy
    * unit's own literal name (`goodvibes-daemon`) makes `PlatformServiceManager`
    * resolve install()/uninstall()'s mutation PATH to the exact legacy unit
    * path (the SDK's `resolveServiceName()` reads that config key ahead of the

@@ -6,13 +6,13 @@ All notable changes to GoodVibes TUI.
 
 ## [1.9.1] — 2026-07-06
 
-Follow-up patch that completes the W6-C1 credential-status adoption for the TUI. The 1.9.0 release pinned SDK 1.0.0 and unified memory (C2) but left the C1 client-side credential-status read for a follow-up; this release lands it. Ships against @pellux/goodvibes-sdk 1.0.0.
+Follow-up patch that completes the client-side credential-status adoption for the TUI. The 1.9.0 release pinned SDK 1.0.0 and unified memory but left the client-side credential-status read for a follow-up; this release lands it. Ships against @pellux/goodvibes-sdk 1.0.0.
 
-### Credential-status read as a daemon client (W6-C1)
+### Credential-status read as a daemon client
 - When the TUI acts as a client of an adopted external daemon (`HostServiceStatus` mode `external`), provider/model/secret STATUS is read from that daemon's `credentials.get` wire method instead of the TUI's own surfaceRoot store. The read carries only status metadata (key / configured / usable / source / secure) — never a secret value, mirroring the SDK's status-only wire contract. The env-only API-key posture and all secret value-reads that provider auth needs stay local and are untouched; only STATUS reads use the daemon path.
 - Honest degraded state, mirroring goodvibes-webui v1.0.1 `deriveCredentialAvailability` exactly: a 503 `CREDENTIAL_STORE_UNAVAILABLE` (matched by machine code), a `METHOD_NOT_FOUND` from an older daemon, or any transport failure resolves to a reason-carrying `available: false` — never a fabricated "configured", never a stale confident value. The TUI-hosted daemon continues to serve `credentials.get` automatically from its existing secrets manager (SDK auto-wiring), so no serve-side change was needed.
 
-### Memory unification follow-up (W6-C2)
+### Memory unification follow-up
 - The legacy per-project TUI memory store now actually folds into the home-scoped canonical store once at boot, after the canonical store initializes — making good on the behavior 1.9.0 described. The fold is id-keyed and idempotent (a re-run imports nothing new and never deletes the legacy file) and is strictly non-fatal: a fold error degrades to a warning and the canonical store serves on. The home-scoped store deliberately does not re-root with the working directory; only the code index and project index do.
 
 ## [1.7.0] — 2026-07-04
@@ -77,7 +77,7 @@ The evolution release: six batched development cycles (internal 1.2.0–1.6.0, w
 
 ## [1.1.0] — 2026-07-03
 
-Wave 0 of the post-1.0 evolution effort: trust repairs. Every change closes a defect found by live dogfooding v1.0.0 where the product reported something other than the truth. Ships against @pellux/goodvibes-sdk 0.36.0 (same effort, SDK side).
+The first cycle of the post-1.0 evolution effort: trust repairs. Every change closes a defect found by live dogfooding v1.0.0 where the product reported something other than the truth. Ships against @pellux/goodvibes-sdk 0.36.0 (same effort, SDK side).
 
 ### Fixed
 - Failing commands are visible again: the SDK masked every command-level failure as "Error: Unknown error", so a red test suite was literally invisible to the model — it would honestly conclude "no failure observed" while your tests were failing. Exit code, stdout, and stderr now reach the model byte-faithfully, and long-output truncation keeps the tail (where test runners print failures) instead of the head. Verified live: the model reads a sabotaged test's actual assertion diff and fixes the right side.
@@ -101,7 +101,7 @@ Wave 0 of the post-1.0 evolution effort: trust repairs. Every change closes a de
 ### Internal
 - SDK dependency 0.35.0 → 0.36.0; foundation artifacts regenerated (new event contract entries).
 - Local-SDK overlay dev tooling (`scripts/sdk-dev.ts link|status|restore`) with release-blocking gates in release.ts and publish-check so a local SDK can never ship.
-- Wave verified three ways: full gate block, a 3-lens adversarial code review, and a live tmux scenario replay of the five previously-failing dogfood scenarios (all PASS).
+- Verified three ways: full gate block, a 3-lens adversarial code review, and a live tmux scenario replay of the five previously-failing dogfood scenarios (all PASS).
 
 ## [1.0.0] — 2026-07-03
 

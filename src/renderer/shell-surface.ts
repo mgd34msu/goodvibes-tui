@@ -48,7 +48,7 @@ export interface ShellFooterBuildOptions {
    */
   readonly compact?: boolean;
   /**
-   * S3d: cross-surface session-spine posture for the context-info segment.
+   * Cross-surface session-spine posture for the context-info segment.
    * Set ONLY in adopted-daemon mode ('online'/'offline'); left undefined in
    * embedded/local mode so no segment renders.
    */

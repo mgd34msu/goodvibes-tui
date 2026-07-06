@@ -1,5 +1,5 @@
 /**
- * Wave-5 (wo805) main-session passive-injection WIRING tests — the regression
+ * Main-session passive-injection WIRING tests — the regression
  * class the stubbed /recall tests could not catch.
  *
  * Background: the SDK turn loop hard-gates per-turn passive knowledge

@@ -4,7 +4,7 @@
  * Shared helper that enumerates the legacy workspace-scoped `operator-tokens.json`
  * locations the TUI has written at various pre-0.21.28 versions. Used by both the
  * in-process bootstrap path (`src/runtime/bootstrap.ts`) and the standalone daemon
- * CLI (`src/daemon/cli.ts`) so F3 (stale-token pruning) has a single source of
+ * CLI (`src/daemon/cli.ts`) so stale-token pruning has a single source of
  * truth for where to look.
  *
  * Adding a new legacy location: append to `workspaceOperatorTokenCandidates` and
@@ -32,7 +32,7 @@ export function workspaceOperatorTokenCandidates(workingDirectory: string): read
 }
 
 /**
- * F1 (adopt-an-already-running-external-daemon): resolve the operator/companion
+ * External-daemon adoption: resolve the operator/companion
  * token this TUI process uses to authenticate with its daemon, honoring
  * `GOODVIBES_DAEMON_TOKEN` as a non-interactive override.
  *

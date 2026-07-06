@@ -58,21 +58,21 @@ const C = DEFAULT_PANEL_PALETTE;
 export interface FleetActionCallbacks {
   /** Graceful interruption (AgentManager.cancel / trigger-schedule disable, via the registry). */
   readonly interrupt: (id: string) => boolean;
-  /** Wave-6 (wo-F item d2): re-arm a `paused` node (disabled trigger/schedule or automation job) — interrupt()'s inverse. Honest false when not paused / non-resumable. */
+  /** Re-arm a `paused` node (disabled trigger/schedule or automation job) — interrupt()'s inverse. Honest false when not paused / non-resumable. */
   readonly resume: (id: string) => boolean;
   /** Hard stop, optionally cascading to killable descendants. Returns the node ids acted on. */
   readonly kill: (id: string, opts: { readonly cascade: boolean }) => readonly string[];
   /**
-   * Wave-3 (C6): fetch an agent's conversation history — live (running) or
+   * Fetch an agent's conversation history — live (running) or
    * frozen (just-completed, still in the SDK's retention ring). Empty array
    * means "unavailable" (evicted, or never registered) — FleetPanel degrades
    * to the on-disk ledger fallback in that case, never fabricating content.
    */
   readonly getConversationSnapshot: (agentId: string) => readonly ConversationMessageSnapshot[];
-  /** Wave-3 (C6): resolve the on-disk `<agentId>.jsonl` event-ledger path for the degraded fallback view. */
+  /** Resolve the on-disk `<agentId>.jsonl` event-ledger path for the degraded fallback view. */
   readonly resolveSessionLogPath: (agentId: string) => string;
   /**
-   * Wave-3 (W3.2): queue a human message for a live in-process agent (or a
+   * Queue a human message for a live in-process agent (or a
    * wrfc-subtask's current live member agent), delivered at the target's
    * next turn boundary — never mid-token. Honest refusal
    * (`{queued:false,reason}`) for anything that cannot take mid-run input
@@ -128,7 +128,7 @@ export class FleetPanel extends ScrollableListPanel<FleetTreeRow> {
       this.reconcileSteerBadges();
       this.markDirty();
     });
-    // Wave-3 (W3.2): the honest "the agent actually consumed this steer at
+    // The honest "the agent actually consumed this steer at
     // its turn boundary" signal — see fleet-tabs.ts's SteerBadgeStatus doc.
     // A read-model without a runtimeBus dep never invokes this (graceful
     // no-op), same degrade as steer()/steerable without a messageBus dep.
@@ -179,13 +179,13 @@ export class FleetPanel extends ScrollableListPanel<FleetTreeRow> {
     for (const tab of this.tabsState.tabs) tab.lineCache.clear();
   }
 
-  /** True while a session tab (not the root tree) is focused. Replaces the old Wave-2 isDetailFocused() seam. */
+  /** True while a session tab (not the root tree) is focused. Replaces the old isDetailFocused() seam. */
   public isTabActive(): boolean {
     return this.tabsState.activeTabIndex > 0;
   }
 
   /**
-   * Wave-3 (W3.2): true while the steer composer on the active tab is open —
+   * True while the steer composer on the active tab is open —
    * every character of a burst (paste, or several fast-typed chars in one
    * stdin chunk) must land in the draft one at a time rather than being
    * routed away as panel hotkeys or exploded to the main composer. See
@@ -207,7 +207,7 @@ export class FleetPanel extends ScrollableListPanel<FleetTreeRow> {
   }
 
   /**
-   * Ctrl+X (panel-close) collision resolution (Wave-3 Part C4): the global
+   * Ctrl+X (panel-close) collision resolution: the global
    * shortcut route (handler-shortcuts.ts) calls this BEFORE closing the
    * panel. Detaching the active tab consumes the key; on the root tree tab
    * there is nothing to detach, so this returns false and Ctrl+X falls
@@ -317,7 +317,7 @@ export class FleetPanel extends ScrollableListPanel<FleetTreeRow> {
   }
 
   /**
-   * Wave-3 (W3.2, risk #2 — "dropped inference"): called on every read-model
+   * The "dropped inference" reconciliation: called on every read-model
    * snapshot update and on the panel's 1s tick. See fleet-steer.ts's
    * reconcileSteerBadges doc for why this is needed (the SDK emits no
    * cancelled/expired signal for a queued steer).
@@ -350,7 +350,7 @@ export class FleetPanel extends ScrollableListPanel<FleetTreeRow> {
     // Confirm overlay owns input first (K-armed kill confirm).
     if (this.confirmOverlay.handleInput(key)) return true;
 
-    // Wave-3 (W3.2): once the steer composer is open on the active tab, it
+    // Once the steer composer is open on the active tab, it
     // owns EVERY key (same full-priority-while-composing contract as
     // git-panel.ts's commitMessage entry) until Enter (submit) or Esc
     // (cancel) — a burst/paste and single hotkeys like 'j'/'s'/'[' all land
@@ -458,7 +458,7 @@ export class FleetPanel extends ScrollableListPanel<FleetTreeRow> {
     }
 
     if (key === 's') {
-      // Batch replay D4: 's' from the TREE was silently dead — steering
+      // An earlier replay fix: 's' from the TREE was silently dead — steering
       // required an undiscoverable Enter-attach first. Attach-and-steer in
       // one press for a steerable node; honest refusal otherwise.
       if (!selected) return false;
@@ -485,7 +485,7 @@ export class FleetPanel extends ScrollableListPanel<FleetTreeRow> {
   }
 
   /**
-   * Wave-3 (W3.2): the `s` gate — mirrors the i/K capability-gating template
+   * The `s` gate — mirrors the i/K capability-gating template
    * exactly (guard on the live node existing, non-terminal, and the specific
    * capability; consume the key and say so rather than silently no-op-ing).
    */
@@ -649,13 +649,13 @@ export class FleetPanel extends ScrollableListPanel<FleetTreeRow> {
 
     const snapshotRows = this.readModel.getSnapshot().rows;
     const liveNode = snapshotRows.find((row) => row.node.id === tab.nodeId)?.node ?? null;
-    // Wave-3 (W3.2): the steer composer only ever applies to 'agent' tabs
+    // The steer composer only ever applies to 'agent' tabs
     // (wrfc-chain has no conversation loop of its own — see
     // fleet-tabs.ts's FleetAttachableKind doc); the live-node lookup is
     // shared with the isTerminal computation below either way.
     const canSteer = liveNode !== null && !isTerminalProcessState(liveNode.state) && liveNode.capabilities.steerable;
 
-    // Wave-3 (W3.2): while composing, Enter/Esc replace the tab-switch/detach
+    // While composing, Enter/Esc replace the tab-switch/detach
     // hints (mirrors git-panel.ts's renderCommitCompose footer) so the
     // footer never advertises a key the composer itself has absorbed.
     const hints: Array<{ keys: string; label: string }> = tab.steerDraft !== null
@@ -739,7 +739,7 @@ export class FleetPanel extends ScrollableListPanel<FleetTreeRow> {
     const hints = buildFleetTreeHints(selected?.node, this.follow, this.tabsState.tabs.length > 0);
 
     // Tab strip renders only when tabs exist — omitting it entirely with no
-    // tabs attached keeps the pre-Wave-3 root-tree rendering byte-identical.
+    // tabs attached keeps the pre-session-tab root-tree rendering byte-identical.
     const stripLine = renderFleetTabStrip(this.tabsState, width);
     const header = stripLine ? [stripLine] : undefined;
 

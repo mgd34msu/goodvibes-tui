@@ -1,5 +1,5 @@
 /**
- * session-picker-modal-union.test.ts — W3-T2 union-sessions surface.
+ * session-picker-modal-union.test.ts — union-sessions surface.
  *
  * Verifies SessionPickerModal (when constructed with a sessionBroker) and its
  * renderer honestly surface the cross-surface session union alongside the
@@ -220,7 +220,7 @@ describe('SessionPickerModal — cross-surface union (W3-T2)', () => {
       expect(reapedLine).not.toContain('· closed ·');
       expect(userClosedLine).toContain('· closed ·');
       expect(legacyLine).toContain('· closed ·');
-      // Wave-4 UX-lens note: 'reaped' is jargon with no on-screen explanation
+      // UX-lens note: 'reaped' is jargon with no on-screen explanation
       // — a plain-language hint must render alongside the badge (the webui
       // pairs its own 'reaped' badge with an equivalent tooltip).
       expect(text).toContain('reaped = closed by the idle sweep — reopens on next activity');

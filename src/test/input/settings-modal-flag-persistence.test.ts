@@ -2,7 +2,7 @@
  * Tests for persistFlagState (settings-modal-mutations.ts) against a REAL
  * ConfigManager on disk.
  *
- * Regression coverage for the Wave-5 replay finding: toggling a flag back to
+ * Regression coverage for a replay finding: toggling a flag back to
  * its default left the stale override in settings.json (getCategory clones
  * and mergeCategory only sets keys, so the old delete-then-merge was a silent
  * no-op) — the flag then silently reloaded in the overridden state on the

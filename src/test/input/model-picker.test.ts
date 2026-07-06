@@ -423,7 +423,7 @@ describe('ModelPickerModal', () => {
       expect(picker.selectedIndex).toBe(0);
     });
 
-    // W3-T2: flipped. Live tmux repro showed the prior "list focus by default"
+    // Flipped. A live tmux repro showed the prior "list focus by default"
     // behavior meant typing a search term went char-by-char into single-key
     // shortcuts instead (c=capability, a=available-only, ...) with the list
     // never filtering and no indication anything happened — see the doc

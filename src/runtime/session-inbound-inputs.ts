@@ -1,7 +1,7 @@
 /**
  * session-inbound-inputs.ts
  *
- * D3 (One-Platform Wave 2, live-surface steer delivery — the inbound half of the
+ * Live-surface steer delivery (the inbound half of the
  * session spine): the TUI's INBOUND path for steer/follow-up inputs that another
  * live surface (e.g. the webui) queued against THIS TUI's session.
  *

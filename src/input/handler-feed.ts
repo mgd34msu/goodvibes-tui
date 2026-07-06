@@ -186,7 +186,7 @@ export function feedInputTokens(context: InputFeedContext, tokens: readonly Inpu
   // focus to it. panelManager.open() only makes the panel active — focus is a
   // separate axis (see PanelManager.focusPanels()/getFocusTarget()); without the
   // focusPanels() call, j/k/i/K land silently in the composer until Tab. Used by
-  // the footer indicator's [Enter] and by F2 (W6.2 e: F2 and the footer
+  // the footer indicator's [Enter] and by F2 (F2 and the footer
   // indicator both subsume the retired process modal). Mirrors the Ctrl+P
   // panel-picker launcher (ui-openers.ts openPanelPicker).
   const openFleetPanel = (): void => {

@@ -151,7 +151,7 @@ describe('modal search focus routing', () => {
         tier: 'premium',
       },
     ], 'gpt-1');
-    // W3-T2: search starts focused by default now (see openAllModels() doc
+    // Search starts focused by default now (see openAllModels() doc
     // comment) — this test is specifically about hotkey behavior OUTSIDE
     // search, so set up that precondition explicitly.
     picker.blurSearch();
@@ -191,7 +191,7 @@ describe('modal search focus routing', () => {
         tier: 'premium',
       },
     ], 'gpt-1');
-    // W3-T2: Left/Right pane switching is gated on !searchFocused, and search
+    // Left/Right pane switching is gated on !searchFocused, and search
     // now starts focused by default (see openAllModels() doc comment).
     picker.blurSearch();
 
@@ -227,7 +227,7 @@ describe('modal search focus routing', () => {
         tier: 'premium',
       },
     ], 'gpt-1');
-    // W3-T2: this test is specifically "outside search" — search now starts
+    // This test is specifically "outside search" — search now starts
     // focused by default (see openAllModels() doc comment).
     picker.blurSearch();
 

@@ -121,7 +121,7 @@ export function handleGlobalShortcutToken(
     case 'panel-close': {
       const pm = state.panelManager;
       const active = pm.getActivePanel();
-      // Wave-3: give the active panel a chance to consume Ctrl+X for an
+      // Give the active panel a chance to consume Ctrl+X for an
       // in-panel action (FleetPanel session-tab detach) before it closes the
       // panel outright — see Panel.interceptPanelClose's doc comment.
       if (active?.interceptPanelClose?.()) {

@@ -1,7 +1,7 @@
 // ---------------------------------------------------------------------------
 // fleet-tab-strip.ts
 //
-// Wave-3 (W3.1 Part C3) — renders FleetPanel's session-tab strip by reusing
+// Renders FleetPanel's session-tab strip by reusing
 // renderTabStrip exactly as panel-workspace-bar.ts does for the workspace
 // tab bar. Deliberately a SEPARATE, visually distinct strip from the
 // workspace bar: workspace tabs switch PANELS, fleet session tabs switch
@@ -23,7 +23,7 @@ const LABEL_FG = UI_TONES.fg.secondary;
 /**
  * Render the fleet session-tab strip, or `null` when there are no attached
  * tabs — the panel omits the strip entirely in that case (root-tab-only),
- * which is what keeps the pre-Wave-3 fleet-panel goldens byte-identical.
+ * which is what keeps the pre-session-tab fleet-panel goldens byte-identical.
  */
 export function renderFleetTabStrip(
   state: FleetTabsState,

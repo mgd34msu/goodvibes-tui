@@ -29,7 +29,7 @@ import { VALID_CLASSES, VALID_REVIEW_STATES, VALID_SCOPES } from './recall-share
  * src/input/commands/session-content.ts) with no modal surface — so that
  * work order deliberately did NOT touch /memory and used /recall instead.
  *
- * W6-C3 update (Wave 6 core-verb pass, MEMORY fragmentation — worst-class
+ * Update from the core-verb naming pass (MEMORY fragmentation — worst-class
  * collision #2): the agent's own `/memory` command was a plain alias for its
  * `/recall`-equivalent the whole time, meaning "/memory" meant two unrelated
  * things depending which surface you were on. The session-notes command was

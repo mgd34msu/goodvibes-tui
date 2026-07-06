@@ -195,7 +195,7 @@ export class UIFactory {
     composerFlags?: readonly string[],
     composerPendingRisk?: 'none' | 'approval-wait' | 'shell' | 'command' | 'remote',
     compact: boolean = false,
-    // S3d: honest cross-surface spine posture. Defined ONLY in adopted-daemon
+    // Honest cross-surface spine posture. Defined ONLY in adopted-daemon
     // mode (undefined in embedded/local), so the segment is absent otherwise.
     sessionSpineStatus?: 'online' | 'offline',
   ): Line[] {
@@ -442,7 +442,7 @@ export class UIFactory {
       if (model) {
         ctxParts.push({ text: model + (provider ? ` (${provider})` : ''), priority: 0 });
       }
-      // S3d: cross-surface spine posture — plain words, no blame. Adopted mode only.
+      // Cross-surface spine posture — plain words, no blame. Adopted mode only.
       if (sessionSpineStatus) ctxParts.push({ text: `spine:${sessionSpineStatus}`, priority: 1 });
       if (toolCount) ctxParts.push({ text: `${toolCount} tools`, priority: 2 });
       // Labeled "notify" (not "hitl") — /mode (aliased /hitl) governs UX
@@ -484,11 +484,11 @@ export class UIFactory {
     return lines;
   }
 
-  // W6-P1: the rotating "thinking" phrase pool and the honest waiting-state
+  // The rotating "thinking" phrase pool and the honest waiting-state
   // wording (approval/reconnecting/pre-first-token/stalled/thinking) are no
   // longer minted here. They come from the SDK presentation contract's
-  // waitingPhrase() (@pellux/goodvibes-sdk/platform/presentation, landed by
-  // W4-S1, already adopted by the agent in W4-R4) — see createThinkingFragment
+  // waitingPhrase() (@pellux/goodvibes-sdk/platform/presentation, already
+  // adopted by the agent) — see createThinkingFragment
   // below. This renderer still decides WHICH state applies from its own
   // stall/reconnect/approval signals (computeStallInfo/computeRenderStallInfo
   // stay renderer-local per the extraction decision record); only the exact
@@ -544,8 +544,8 @@ export class UIFactory {
     // long enough to be misleading (THINKING_STALL_FREEZE_MS). Decide WHICH
     // honest waiting state applies (renderer-local — this signal computation
     // stays here per the extraction decision record), then defer the exact
-    // wording to the SDK presentation contract's waitingPhrase() (W6-P1;
-    // mirrors the agent's W4-R4 adoption). Precedence matches the contract:
+    // wording to the SDK presentation contract's waitingPhrase() (which
+    // mirrors the agent's adoption). Precedence matches the contract:
     // approval > reconnecting > pre-first-token > stalled > thinking.
     const isStalled = stallInfo !== undefined && stallInfo.msSinceLastDelta >= THINKING_STALL_FREEZE_MS;
     let state: WaitingState;

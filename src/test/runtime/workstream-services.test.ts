@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// workstream-services.test.ts — Wave 4 (wo703)
+// workstream-services.test.ts — phase/work-item orchestration engine
 //
 // Integration test against a REAL OrchestrationEngine (not a fake) on a
 // scratch workspace: create -> approve -> launch drives the engine through

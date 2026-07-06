@@ -192,16 +192,16 @@ export interface CommandSessionServices {
    * fresh Orchestrator's zeroed default (W0.9).
    */
   readonly hydrateSessionUsage?: () => void;
-  /** Wave 4 (wo703): the orchestration engine's command-facing facade — see runtime/workstream-services.ts. */
+  /** The orchestration engine's command-facing facade — see runtime/workstream-services.ts. */
   readonly workstreamEngine?: import('../runtime/workstream-services.ts').WorkstreamCommandService;
-  /** Wave 5 (wo804): the repo source-tree code index — see runtime/code-index-services.ts. */
+  /** The repo source-tree code index — see runtime/code-index-services.ts. */
   readonly codeIndexStore?: import('@pellux/goodvibes-sdk/platform/state').CodeIndexStore;
-  /** Wave-5 Stage B: tool-site reindex scheduler — `/codebase status` reports its last activity. */
+  /** Tool-site reindex scheduler — `/codebase status` reports its last activity. */
   readonly codeIndexReindexScheduler?: import('@pellux/goodvibes-sdk/platform/state').CodeIndexReindexScheduler;
-  /** Wave-5 Stage B: whether the (default-off) `agent-passive-code-injection` flag is on — for `/codebase status`. */
+  /** Whether the (default-off) `agent-passive-code-injection` flag is on — for `/codebase status`. */
   readonly isPassiveCodeInjectionFlagEnabled?: () => boolean;
   /**
-   * Wave 5 (wo805): the MAIN interactive session's per-turn passive-injection
+   * The MAIN interactive session's per-turn passive-injection
    * honesty ring — `Orchestrator.getTurnInjections()`, the main-session
    * counterpart to `AgentRecord.turnInjections` (wo801). `/recall injections`
    * with no agent id reads this. Optional so command contexts built without an

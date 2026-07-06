@@ -104,9 +104,9 @@ export function handleRecallExplain(args: string[], context: CommandContext): vo
 }
 
 /**
- * W5.2 (wo803) — per-turn passive knowledge injection inspectability.
+ * Per-turn passive knowledge injection inspectability.
  *
- * With an explicit agent id, reads `AgentRecord.turnInjections` (Wave-5 wo801)
+ * With an explicit agent id, reads `AgentRecord.turnInjections`
  * via `context.ops.agentManager.exportState()` — the CommandContext-exposed
  * `ShellAgentManagerService` doesn't have a `getStatus`/`list` pair, but
  * `exportState()` returns the same full `AgentRecord[]` (it's what

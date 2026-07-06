@@ -24,7 +24,7 @@ export type OrchestratorCoreServicesSource = Pick<
  * cacheHitTracker; main: favoritesStore) — setCoreServices() merges, so the
  * later main.ts call only overlays, never erases.
  *
- * Wave-5 (wo805) BLOCKER regression guard: `memoryRegistry` here is what turns
+ * BLOCKER regression guard: `memoryRegistry` here is what turns
  * on per-turn passive knowledge injection for the MAIN interactive session —
  * the SDK turn loop hard-gates on `coreServices.memoryRegistry` (undefined is
  * a silent no-op: Orchestrator.getTurnInjections() stays empty forever and
@@ -48,7 +48,7 @@ export function buildSharedOrchestratorCoreServices(input: {
     sessionLineageTracker: services.sessionLineageTracker,
     idempotencyStore: services.idempotencyStore,
     memoryRegistry: services.memoryRegistry,
-    // Wave-5 Stage B — main-session code auto-injection + tool-site reindex. Injection is
+    // Main-session code auto-injection + tool-site reindex. Injection is
     // additionally gated by the default-off `agent-passive-code-injection` flag inside the
     // SDK; here we supply the source, the live storage.codeIndexEnabled predicate, and the
     // reindex scheduler.

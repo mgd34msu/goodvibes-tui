@@ -22,7 +22,7 @@ export function handleModelPickerToken(state: ModelPickerRouteState, token: Inpu
 
   if (token.type === 'key') {
     if (token.logicalName === 'escape') {
-      // W3-T2: search now starts focused by default (see
+      // Search now starts focused by default (see
       // ModelPickerModal.openAllModels() doc comment). Escape with an empty
       // query used to only blurSearch() here, leaving the picker open and
       // requiring a SECOND Escape to actually close it — confusing on a
@@ -133,7 +133,7 @@ export function handleModelPickerToken(state: ModelPickerRouteState, token: Inpu
         state.modelPicker.focusSearch();
       } else if (state.modelPicker.searchFocused) {
         // Symmetric with 'down' (below): search now starts focused by default
-        // (W3-T2), so 'up' must have a way out of it too, or it would be a
+        // so 'up' must have a way out of it too, or it would be a
         // silent no-op the very first time a user reaches for the list.
         state.modelPicker.blurSearch();
       } else {

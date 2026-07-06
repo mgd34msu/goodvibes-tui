@@ -882,7 +882,7 @@ describe('OnboardingWizardController', () => {
     wizard.setFieldValue('capabilities.browser-access', true);
     wizard.setFieldValue('network.mode', 'custom');
     wizard.setStep(1);
-    // F1: field 1 in the Network step is now the 'network.daemon-source' radio
+    // Field 1 in the Network step is now the 'network.daemon-source' radio
     // (start vs adopt an existing daemon) inserted ahead of the custom-mode
     // fields, so 'network.service-port' shifted from index 3 to index 4.
     wizard.moveSelection(4, 10);
@@ -909,7 +909,7 @@ describe('OnboardingWizardController', () => {
     wizard.setFieldValue('capabilities.browser-access', true);
     wizard.setFieldValue('network.mode', 'custom');
     wizard.setStep(1);
-    // F1: see the note above — 'network.service-port' is now at index 4.
+    // See the note above — 'network.service-port' is now at index 4.
     wizard.moveSelection(4, 10);
 
     const routeState = {
@@ -2017,7 +2017,7 @@ describe('daemon/auth security wizard hardening (TASK-035, TASK-036, TASK-037)',
   });
 });
 
-// F1: onboarding recognizes an adoptable running daemon by offering a
+// Onboarding recognizes an adoptable running daemon by offering a
 // "connect to an existing daemon" choice with a token-paste field, instead of
 // requiring the token file to be hand-seeded on disk before the TUI starts.
 describe('network step: connect to an existing daemon (F1)', () => {
@@ -2155,7 +2155,7 @@ describe('network step: connect to an existing daemon (F1)', () => {
   });
 });
 
-// W4-D1 wizard wiring: handleMigrateLegacyDaemonServiceForHandler shipped
+// The guided-migration wizard wiring: handleMigrateLegacyDaemonServiceForHandler shipped
 // fully built (handler-onboarding-daemon-adopt.ts) but had no visible
 // onboarding control. This closes that gap with a guided action in the
 // Network step, visible only when the runtime snapshot's read-only

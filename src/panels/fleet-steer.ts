@@ -1,7 +1,7 @@
 // ---------------------------------------------------------------------------
 // fleet-steer.ts
 //
-// Wave-3 (W3.2) — steer-badge rendering helpers and the "dropped inference"
+// Steer-badge rendering helpers and the "dropped inference"
 // reconciliation pass, split out of fleet-panel.ts to keep that file under
 // the architecture line cap (see check-architecture.ts's 800-line gate).
 // Pure functions only; FleetPanel still owns the mutable FleetTab.steerBadge
@@ -67,7 +67,7 @@ export function renderSteerBadgeLine(badge: SteerBadge, width: number, palette: 
 }
 
 /**
- * Wave-3 (W3.2, risk #2 — "dropped inference"): the SDK emits no
+ * The "dropped inference" risk: the SDK emits no
  * cancelled/expired signal for a queued steer, so a badge left `queued`
  * after its target node goes terminal (done/failed/killed/interrupted)
  * would hang forever with no honest resolution. Resolves any such badge to

@@ -1,7 +1,7 @@
 /**
  * session-inbound-inputs.test.ts
  *
- * D3 unit coverage for the TUI's INBOUND steer poller (SessionInboundInputPoller):
+ * Unit coverage for the TUI's INBOUND steer poller (SessionInboundInputPoller):
  * it collects QUEUED steer/follow-up inputs for ITS session, injects each via the
  * onSteer callback, acks delivery on the wire, and is per-session isolated. Uses a
  * stub inbound client (no daemon) — the real-daemon end-to-end proof lives in

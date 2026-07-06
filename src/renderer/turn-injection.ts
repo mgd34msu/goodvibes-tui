@@ -1,5 +1,5 @@
 /**
- * Per-turn knowledge injection record rendering (Wave-5 W5.2, wo803).
+ * Per-turn knowledge injection record rendering.
  *
  * The SDK's passive per-turn retrieval engine (wo801, W5.1 —
  * packages/sdk/src/platform/agents/turn-knowledge-injection.ts) stores one
@@ -13,7 +13,7 @@
  * the entry type here is DERIVED from `AgentRecord` rather than imported by
  * name — this needs no SDK export change.
  *
- * Reality check (updated wo805): as of Wave-5 wo805 the TUI's main interactive
+ * Reality check (since updated): the TUI's main interactive
  * session DOES route through this engine. The SDK `Orchestrator` runs per-turn
  * passive injection on the evolving primary conversation and records each turn
  * on its own bounded ring, exposed via `Orchestrator.getTurnInjections()` — the
@@ -68,7 +68,7 @@ export function formatTurnInjectionEntry(entry: TurnInjectionEntry): string {
     : '';
   // The retrieval query is part of the record's honesty contract — without it
   // an injected line can't be traced back to WHY those ids were retrieved
-  // (Wave-5 replay flagged the omission). Truncated to keep the line scannable.
+  // (a replay finding flagged the omission). Truncated to keep the line scannable.
   const queryStr = entry.query ? ` for ${JSON.stringify(truncateQuery(entry.query))}` : '';
   return (
     `  turn ${entry.turn}: injected ${labelInjectedIds(entry)}${queryStr} ` +

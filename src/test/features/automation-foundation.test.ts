@@ -132,7 +132,7 @@ describe('automation foundation feature flags', () => {
       'service-management',
     ] as const;
 
-    // One-Platform Wave 1: control-plane-gateway is the single tier-10 flag that
+    // control-plane-gateway is the single tier-10 flag that
     // defaults ON (a stock daemon must serve its auth-gated streams). Every other
     // omnichannel/automation flag stays OFF until individually validated.
     const enabledByDefault = new Set<string>(['control-plane-gateway']);

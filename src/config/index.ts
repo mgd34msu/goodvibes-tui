@@ -56,7 +56,7 @@ export function getConfiguredSystemPrompt(configManager: Pick<ConfigManager, 'ge
 
 export { getConfiguredApiKeys, resolveApiKeys } from '@pellux/goodvibes-sdk/platform/config';
 
-// W6-C1: client-side credential-status read (honest-degrade, status-only). When the
+// Client-side credential-status read (honest-degrade, status-only). When the
 // TUI acts as a client of an adopted external daemon it reads provider/model/secret
 // STATUS from that daemon's `credentials.get`, never from its own surfaceRoot store.
 export {

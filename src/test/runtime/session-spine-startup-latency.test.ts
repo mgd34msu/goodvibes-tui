@@ -1,10 +1,10 @@
 /**
  * session-spine-startup-latency.test.ts
  *
- * S3c perf evidence: with daemon.enabled defaulting ON (One-Platform Wave 1),
+ * Perf evidence: with daemon.enabled defaulting ON,
  * the adopt-or-start probe now genuinely runs on every boot — this used to be
  * inert (danger.daemon defaulted off, the whole path was skipped). This test
- * measures the REAL wall-clock cost of the case S3c's conversion actually
+ * measures the REAL wall-clock cost of the case this conversion actually
  * activates for: a compatible external daemon present, adopted rather than
  * started. That probe runs entirely inside `bootstrap.ts`'s
  * `deferredStartup.schedule({label:'external-services', ...})` task, which
@@ -16,7 +16,7 @@
  * not exercised here: it binds the real controlPlane.port from the shared
  * test RuntimeServices' ConfigManager rather than the probe-decision config
  * passed to startHostServices, so a real system daemon on the default port
- * would collide with it on a dev machine. That shape is unaffected by S3c
+ * would collide with it on a dev machine. That shape is unaffected
  * either way — the session spine only activates in the adopt path.)
  */
 import { describe, expect, test } from 'bun:test';

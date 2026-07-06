@@ -1,5 +1,5 @@
 /**
- * W4-D1: the legacy `goodvibes-daemon.service` detect/migrate engine, shared
+ * The legacy `goodvibes-daemon.service` detect/migrate engine, shared
  * by the daemon CLI (`src/daemon/service-commands.ts`, the `migrate-service`
  * subcommand) and the interactive TUI's onboarding guided UX
  * (`src/input/handler-onboarding-daemon-adopt.ts`).
@@ -11,8 +11,8 @@
  * depending on CLI/daemon entrypoint concerns), and `src/runtime/**` is the
  * shared, entrypoint-agnostic layer both sides are already allowed to import.
  *
- * Wave 3 (W3 Finding 4) shipped DETECT + DISCLOSE only: a read-only check for
- * the prior D7a-era systemd unit name plus a manual-removal hint, never
+ * An earlier release shipped DETECT + DISCLOSE only: a read-only check for
+ * the prior generation's systemd unit name plus a manual-removal hint, never
  * touching it. This module adds the guided, CONSENTED migration itself.
  * Design constraints, all load-bearing (see also the per-function docs):
  *   - NEVER auto-migrate. Without explicit consent nothing runs except a
@@ -63,7 +63,7 @@ export const MANAGED_SERVICE_NAME = 'goodvibes';
 export const MANAGED_SERVICE_DESCRIPTION = 'GoodVibes daemon (shared session broker + companion host)';
 
 /**
- * F2 follow-up: resolve the unit name the SDK's `PlatformServiceManager`
+ * Follow-up: resolve the unit name the SDK's `PlatformServiceManager`
  * would actually manage, from config alone — for callers that need the
  * honest display name BEFORE any manager/status exists (the onboarding
  * wizard's detection banner resolves this at snapshot-collection time and
@@ -218,7 +218,7 @@ export function detectLegacyUnit(input: DetectLegacyUnitInput): LegacyUnitInfo {
 }
 
 /**
- * F1: the unit name `PlatformServiceManager` is ACTUALLY about to mutate can
+ * The unit name `PlatformServiceManager` is ACTUALLY about to mutate can
  * differ from `MANAGED_SERVICE_NAME` / `definitionOverride.name`. The SDK's
  * internal `resolveServiceName()` — used by `install()`, `uninstall()`, and
  * `status()` alike to compute the unit file PATH — resolves from the
@@ -303,7 +303,7 @@ export interface RunLegacyDaemonMigrationParams {
 }
 
 /**
- * F1 belt-and-braces guard: throws if the resolved unit `status` is the
+ * Belt-and-braces guard: throws if the resolved unit `status` is the
  * legacy unit. Called immediately before the two mutation calls
  * (`manager.install()`, and `manager.uninstall()` on the failed-health
  * rollback path) that would otherwise write to or remove that path. This is
@@ -343,7 +343,7 @@ export async function runLegacyDaemonMigration(
   const { trackedServiceName } = params;
   // Computed once, up front, and reused for every branch below (this is the
   // exact same single call each branch made individually before — see the
-  // F1 fix note on `resolveManagedUnitName` for why the name/path it reports
+  // fix note on `resolveManagedUnitName` for why the name/path it reports
   // can differ from `trackedServiceName`).
   const currentStatus = manager.status();
   const resolvedUnitName = resolveManagedUnitName(currentStatus);
@@ -393,7 +393,7 @@ export async function runLegacyDaemonMigration(
     };
   }
 
-  // F1: before any mutation, confirm the unit PlatformServiceManager is
+  // Before any mutation, confirm the unit PlatformServiceManager is
   // actually about to install/uninstall isn't the legacy unit itself. This
   // happens when the host's `service.serviceName` config key is set to the
   // legacy unit's own name — see `resolveManagedUnitName`'s doc comment for
@@ -440,7 +440,7 @@ export async function runLegacyDaemonMigration(
 
   // Consented: new-up-then-old-down. The legacy unit is not touched until the
   // new unit is verified healthy.
-  // Belt-and-braces (F1): the collision check above already returns before
+  // Belt-and-braces: the collision check above already returns before
   // reaching here whenever the resolved unit is the legacy one — this
   // re-asserts the same invariant right at the mutation site so a future
   // change to the check above can never silently reopen the hole.

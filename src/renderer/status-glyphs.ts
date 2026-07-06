@@ -4,9 +4,9 @@
 // Extracted as a neutral module so both status-token.ts and polish.ts can
 // import from here without creating a circular ESM dependency.
 //
-// W6-P1: STATE_GLYPHS is no longer hardcoded here. It is the SDK presentation
-// contract (@pellux/goodvibes-sdk/platform/presentation, landed by W4-S1 and
-// already adopted by the agent in W4-R4), aliased to GLYPHS.status so the
+// STATE_GLYPHS is no longer hardcoded here. It is the SDK presentation
+// contract (@pellux/goodvibes-sdk/platform/presentation, and
+// already adopted by the agent), aliased to GLYPHS.status so the
 // four semantic glyphs are spelled out in exactly one place and can never
 // drift from the registry again. Re-exported under the historical name so
 // status-token.ts and polish.ts import unchanged.

@@ -4,7 +4,7 @@ import { registerCatalogHandler } from '../../../daemon/handlers/register.ts';
 import { HandlerError } from '../../../daemon/handlers/errors.ts';
 
 /**
- * W6-C4: registerCatalogHandler's "descriptor not in the catalog" guard used to
+ * registerCatalogHandler's "descriptor not in the catalog" guard used to
  * throw a locally-coined `'UNKNOWN_METHOD'` code. It now emits `'METHOD_NOT_FOUND'`
  * so it lines up byte-for-byte with the SDK's own SDKErrorCodes.METHOD_NOT_FOUND
  * (the code the SDK's uncataloged-method 404 carries, once the SDK pin catches up)

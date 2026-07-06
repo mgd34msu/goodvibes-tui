@@ -1,5 +1,5 @@
 /**
- * Bug fix (Wave-2 replay regression): opening the Fleet panel via the footer
+ * Bug fix (a replay regression): opening the Fleet panel via the footer
  * status-strip route (Down to focus the process indicator, then Enter) opened
  * the panel WITHOUT transferring keyboard focus to it — j/k/K/i silently
  * landed in the composer until the user manually pressed Tab. The Ctrl+P

@@ -86,7 +86,7 @@ export interface BuiltinPanelDeps {
   /** Approval broker for control-plane/operator panels. */
   approvalBroker?: ApprovalBroker;
   /**
-   * S3d: cross-surface session READ facade for control-plane/operator panels.
+   * Cross-surface session READ facade for control-plane/operator panels.
    * Sync listSessions()/getSession() shape preserved; in adopted-daemon mode it
    * serves the daemon-hosted union (with an honest offline note when the wire is
    * down) instead of only this process's local broker. See session-union-cache.ts.

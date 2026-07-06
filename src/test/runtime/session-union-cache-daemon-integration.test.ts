@@ -1,8 +1,8 @@
 /**
  * session-union-cache-daemon-integration.test.ts
  *
- * S3d acceptance evidence: drives the SessionUnionCache against a REAL
- * bootDaemon over a real HttpTransport (no mocked wire), mirroring S3c's
+ * Acceptance evidence: drives the SessionUnionCache against a REAL
+ * bootDaemon over a real HttpTransport (no mocked wire), mirroring the startup-latency test's
  * integration harness. Proves the adopted-mode union genuinely includes a
  * session that exists ONLY on the daemon (registered by a different surface),
  * which the local broker alone would miss — and that losing the daemon degrades

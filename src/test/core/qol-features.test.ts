@@ -6,7 +6,7 @@ import { RuntimeEventBus, createEventEnvelope } from '@/runtime/index.ts';
 // Drain queued microtasks so bus.emit() listeners (OBS-14 async dispatch) run before assertions.
 const flushMicrotasks = async () => { await Promise.resolve(); await Promise.resolve(); await Promise.resolve(); };
 // ---------------------------------------------------------------------------
-// F3: Auto-generated conversation title
+// Auto-generated conversation title
 // ---------------------------------------------------------------------------
 describe('ConversationManager - title', () => {
   let cm: ConversationManager;
@@ -80,7 +80,7 @@ describe('ConversationManager - title', () => {
 });
 
 // ---------------------------------------------------------------------------
-// F1: Token budget warnings
+// Token budget warnings
 // NOTE: These tests verify runtime event envelope shape only — they do not test the
 // actual Orchestrator.runTurn() path, which requires a mock provider and full
 // initialization. The cooldown bracket logic (lastWarningBracket) cannot be
@@ -164,7 +164,7 @@ describe('Token budget warning', () => {
 });
 
 // ---------------------------------------------------------------------------
-// F2: Conversation export format
+// Conversation export format
 // ---------------------------------------------------------------------------
 describe('Conversation export format', () => {
   let cm: ConversationManager;

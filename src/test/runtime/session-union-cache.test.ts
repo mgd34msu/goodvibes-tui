@@ -1,7 +1,7 @@
 /**
  * session-union-cache.test.ts
  *
- * S3d unit evidence for the cross-surface read facade. Drives the facade with a
+ * Unit evidence for the cross-surface read facade. Drives the facade with a
  * fake sync local reader + a fake async wire reader (no real daemon here — the
  * daemon-integration test covers the real wire) to prove the honesty contract:
  *  - embedded/local passthrough,
@@ -29,7 +29,7 @@ describe('deriveSpineFooterStatus (D4 — offline within one union-probe interva
     expect(deriveSpineFooterStatus('online', { mode: 'adopted', online: false, lastSyncAt: null })).toBe('online');
   });
   test('adopted + confirmed once + probe now failing: reads offline even if the spine client still says online', () => {
-    // The exact D4 bug: daemon died mid-idle, spine client is activity-gated 'online',
+    // The exact bug: daemon died mid-idle, spine client is activity-gated 'online',
     // but the 5s union probe has failed -> footer must say offline.
     expect(deriveSpineFooterStatus('online', { mode: 'adopted', online: false, lastSyncAt: 1_000 })).toBe('offline');
   });

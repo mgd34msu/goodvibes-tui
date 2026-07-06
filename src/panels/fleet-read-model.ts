@@ -71,7 +71,7 @@ export interface FleetSnapshot {
 
 export type FleetStateTone = 'active' | 'success' | 'failure' | 'warn' | 'muted';
 
-// W6-P1 ruling: this is a DIFFERENT table from the SDK presentation
+// Design ruling: this is a DIFFERENT table from the SDK presentation
 // contract's STATE_GLYPHS (@pellux/goodvibes-sdk/platform/presentation) — that
 // one is a 4-state semantic alias (good/warn/bad/info) shared by the TUI and
 // agent renderers; this one is a 12-state ProcessNode taxonomy specific to the
@@ -90,16 +90,16 @@ const STATE_GLYPHS: Record<ProcessState, string> = {
   done: '✓',
   failed: '✗',
   killed: '⊘',
-  // Wave-3 verb formalization: a distinct TERMINAL outcome from 'killed' —
+  // A distinct TERMINAL outcome from 'killed' —
   // both come from AgentManager.cancel(), but a graceful interrupt request
   // ('the operator asked nicely') is display-distinguishable from a hard
   // kill. '◌' verified free against every other glyph in this table.
   interrupted: '◌',
   idle: '·',
   queued: '…',
-  // Wave-6 SDK: schedules/triggers/automation jobs report 'paused' when
+  // SDK behavior: schedules/triggers/automation jobs report 'paused' when
   // disabled (previously mislabeled 'killed'). NOT terminal — resumable via
-  // ProcessRegistry.resume() (W6.2 d2 wires the full pause/resume UI in
+  // ProcessRegistry.resume() (the full pause/resume UI lives in
   // fleet-stop.ts). '❚' verified free against every other glyph in this table.
   paused: '❚',
 };
@@ -140,11 +140,11 @@ const KIND_TAGS: Record<ProcessKind, string> = {
   schedule: 'sched',
   watcher: 'watch',
   'background-process': 'exec',
-  // Wave 4 (wo703): orchestration-engine kinds (adapters/orchestration.ts).
+  // Orchestration-engine kinds (adapters/orchestration.ts).
   workstream: 'stream',
   phase: 'phase',
   'work-item': 'item',
-  // Wave 5 (wo804): the repo source-tree code index (adapters/code-index.ts).
+  // The repo source-tree code index (adapters/code-index.ts).
   // A single leaf node — never a rollup of other flat-list nodes (see
   // ROLLUP_KINDS below) — so no other list in this module needs updating.
   'code-index': 'index',
@@ -288,7 +288,7 @@ export function buildFleetRows(nodes: readonly ProcessNode[]): FleetTreeRow[] {
  *     nonzero cost/token reading (defense in depth against a future adapter
  *     change, not load-bearing).
  *
- * Wave 4 (wo703) additions — verified against adapters/orchestration.ts:
+ * Orchestration-engine additions — verified against adapters/orchestration.ts:
  *   - 'workstream': adaptWorkstream SUMS every work-item's usage/costUsd
  *     exactly once (sumWorkItemUsage/aggregateWorkItemCost), the same
  *     "rollup of nodes that also appear individually" shape as adaptChain —
@@ -308,7 +308,7 @@ export function buildFleetRows(nodes: readonly ProcessNode[]): FleetTreeRow[] {
  *     'wrfc-subtask'-for-capabilities analogue but the 'agent'-for-usage
  *     analogue. Excluding it would silently zero out real cost/token totals.
  *
- * Wave 5 (wo804): 'code-index' is deliberately NOT in this set either —
+ * 'code-index' is deliberately NOT in this set either —
  * adaptCodeIndex yields exactly one standalone ProcessNode per registry
  * (never a parent whose children ALSO appear individually in the flat
  * list), so it is a leaf like 'agent'/'work-item', not a grouping construct.
@@ -435,7 +435,7 @@ export interface FleetReadModel {
   /** Graceful interruption where the source supports one. Returns true when accepted. */
   interrupt(id: string): boolean;
   /**
-   * Wave-6 (wo-F item d2): re-arm a `paused` node (a disabled trigger/schedule,
+   * Re-arm a `paused` node (a disabled trigger/schedule,
    * or an automation job). The inverse of interrupt()'s pause. Returns true when
    * accepted; false for a node that is not currently `paused` or whose kind has
    * no resume path (honest refusal).
@@ -444,14 +444,14 @@ export interface FleetReadModel {
   /** Hard stop, optionally cascading to descendants. Returns the node ids acted on. */
   kill(id: string, opts?: { readonly cascade?: boolean }): readonly string[];
   /**
-   * Wave-3 (W3.2): queue a human message for a live in-process agent (or a
+   * Queue a human message for a live in-process agent (or a
    * wrfc-subtask's current live member), delivered at its next turn
    * boundary. Honest refusal (`{queued:false,reason}`) for anything that
    * cannot take mid-run input — see ProcessRegistry.steer's doc comment.
    */
   steer(id: string, text: string): SteerResult;
   /**
-   * Wave-3 (W3.2): subscribe to the honest "the agent actually consumed this
+   * Subscribe to the honest "the agent actually consumed this
    * steer at its turn boundary" signal (COMMUNICATION_CONSUMED on the
    * runtime bus's 'communication' domain). Returns an unsubscribe function.
    * A read-model constructed without a runtimeBus (e.g. the static factory,

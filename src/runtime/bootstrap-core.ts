@@ -119,7 +119,7 @@ export interface BootstrapCoreState {
   readonly runtimeSessionIdRef: { value: string };
   /** Cross-surface identity mirror; permanently dormant for embedded/local-only (docs/decisions/2026-07-06-session-spine-mode-branch-is-permanent.md), activated by bootstrap.ts only for an adopted 'external' daemon. */
   readonly sessionSpine: SessionSpineClient;
-  /** D3: inbound steer/follow-up delivery; dormant until bootstrap.ts activates it. */
+  /** Inbound steer/follow-up delivery; dormant until bootstrap.ts activates it. */
   readonly sessionInboundInputs: SessionInboundInputPoller;
   /** Cache-backed read facade; bootstrap.ts drives its mode (embedded/external/local-only) from the same HostServiceMode as the spine above. */
   readonly sessionUnionCache: SessionUnionCache;
@@ -408,7 +408,7 @@ export async function initializeBootstrapCore(
     void memoryStore.save();
     memoryStore.close();
   });
-  // W6-C2 (E6): fold this project's legacy per-project TUI memory into the home-scoped canonical store, ONCE, AFTER init(). Idempotent and non-fatal.
+  // Fold this project's legacy per-project TUI memory into the home-scoped canonical store, ONCE, AFTER init(). Idempotent and non-fatal.
   await runBootMemoryFold(memoryStore, services.memoryEmbeddingRegistry, workingDir, logger);
 
   const renderRequestRef = { value: (): void => {} };
@@ -644,7 +644,7 @@ export async function initializeBootstrapCore(
     },
   ));
 
-  // D3: inbound steer delivery — see createBootstrapInboundInputPoller's doc comment.
+  // Inbound steer delivery — see createBootstrapInboundInputPoller's doc comment.
   const sessionInboundInputs = createBootstrapInboundInputPoller({
     runtimeSessionIdRef, routeOrBuffer, orchestratorHandleUserInputRef, conversation, requestRender,
   });

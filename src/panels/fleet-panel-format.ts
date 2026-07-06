@@ -2,7 +2,7 @@
 // fleet-panel-format.ts
 //
 // Pure column-layout + cell-formatting helpers for FleetPanel's tree rows.
-// Extracted from fleet-panel.ts (S3b hygiene) to hold that file under the
+// Extracted from fleet-panel.ts (file-size hygiene) to hold that file under the
 // 800-line architecture cap; these are stateless functions the panel's
 // renderItem/renderDetail call, with no `this` dependency.
 // ---------------------------------------------------------------------------

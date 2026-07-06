@@ -126,7 +126,7 @@ export interface OnboardingSurfacesSnapshot {
 }
 
 /**
- * W4-D1 wizard wiring: read-only detection of a legacy `goodvibes-daemon.service`
+ * Wizard wiring: read-only detection of a legacy `goodvibes-daemon.service`
  * systemd unit (see `../legacy-daemon-migration.ts`'s `LegacyUnitInfo`), carried
  * on the snapshot so the Network step can show the guided migration action only
  * when there is actually something to migrate. Never implies anything was
@@ -137,7 +137,7 @@ export interface OnboardingLegacyDaemonSnapshot {
   readonly active: boolean;
   readonly path: string;
   /**
-   * F2 follow-up: the unit name this tool actually manages on this host,
+   * Follow-up: the unit name this tool actually manages on this host,
    * resolved from the `service.serviceName` config key at snapshot-collection
    * time (`resolveConfiguredServiceName`, `../legacy-daemon-migration.ts`) —
    * so the wizard's detection banner names the real unit instead of the

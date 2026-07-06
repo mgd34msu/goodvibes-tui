@@ -1,5 +1,5 @@
 /**
- * F1 (One-Platform Wave 2 friction fix): the onboarding wizard's "Connect to
+ * Friction fix: the onboarding wizard's "Connect to
  * this daemon now" action, wired from the Network step's `network.daemon-source`
  * = 'adopt' fields. Extracted from handler-onboarding.ts to keep that file
  * under the architecture line cap.
@@ -88,8 +88,8 @@ export async function handleConnectExistingDaemonForHandler(handler: InputHandle
 }
 
 /**
- * W4-D1: the guided UX entry point for migrating a legacy
- * `goodvibes-daemon.service` unit (Wave 3 shipped detect+disclose only; this
+ * The guided UX entry point for migrating a legacy
+ * `goodvibes-daemon.service` unit (an earlier release shipped detect+disclose only; this
  * closes that inheritance). This is a thin wrapper over
  * `detectLegacyUnit` + `runLegacyDaemonMigration`
  * (`../runtime/legacy-daemon-migration.ts`) — the actual migration mechanics

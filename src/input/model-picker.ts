@@ -264,7 +264,7 @@ export class ModelPickerModal {
   /**
    * Open showing all models — entry point for /model.
    *
-   * W3-T2: search starts FOCUSED. Live tmux repro (cc-w3-t2) showed the actual
+   * Search starts FOCUSED. A live tmux repro showed the actual
    * friction wasn't the filter itself (it already works — fuzzy multi-word
    * substring over id/displayName/provider) but that with search unfocused by
    * default, typing a search term went character-by-character into single-key
@@ -295,7 +295,7 @@ export class ModelPickerModal {
     this.scrollOffset = 0;
   }
 
-  /** Open showing providers first — entry point for /provider. W3-T2: search starts focused — see openAllModels(). */
+  /** Open showing providers first — entry point for /provider. Search starts focused — see openAllModels(). */
   openProviders(providers: string[], currentProvider: string): void {
     this.previousMode = null;
     this.providers = providers;

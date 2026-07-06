@@ -1,5 +1,5 @@
 /**
- * D7a Layer 1 (TUI wiring) — `goodvibes-daemon install-service | uninstall-service
+ * TUI wiring — `goodvibes-daemon install-service | uninstall-service
  * | service-status`.
  *
  * The daemon is a SYSTEM SERVICE. These subcommands install it as a durable host
@@ -7,8 +7,8 @@
  * on Windows) so N surfaces share ONE daemon that survives reboots, instead of
  * every surface spawning a session-scoped daemon.
  *
- * W3 drift note: the SDK's D7a-era `systemd-user-service.ts` (a Linux-only,
- * bespoke systemd shim) was dead code and got deleted in SDK W3-S5. The SDK's
+ * Drift note: the SDK's older `systemd-user-service.ts` (a Linux-only,
+ * bespoke systemd shim) was dead code and got deleted from the SDK. The SDK's
  * REAL wired service machinery — reached in production by the daemon's own HTTP
  * `/api/service/*` routes via facade-composition.ts — is
  * `PlatformServiceManager` (`@pellux/goodvibes-sdk/platform/daemon`): a single
@@ -26,7 +26,7 @@
  *     stray "enabled" symlink may remain until `systemctl --user daemon-reload`
  *     (offered back as a suggested follow-up) or the next login cleans it up.
  *
- * W4-D1: a fourth subcommand, `migrate-service`, closes the Wave-3 "detect and
+ * A fourth subcommand, `migrate-service`, closes the earlier "detect and
  * disclose only" inheritance (W3 Finding 4, below) with a GUIDED, CONSENTED
  * takeover of the legacy `goodvibes-daemon.service` unit. Design constraints,
  * all load-bearing:
@@ -77,9 +77,9 @@ export {
 export type { ManagedServiceActionRunner } from '../runtime/legacy-daemon-migration.ts';
 
 // ---------------------------------------------------------------------------
-// W3 Finding 4: legacy-unit detection. W4-D1: guided migration.
+// Legacy-unit detection, plus guided migration.
 //
-// The prior D7a-era command installed the daemon's systemd unit under the
+// The prior command installed the daemon's systemd unit under the
 // literal name `goodvibes-daemon.service`. This module (rewired onto
 // PlatformServiceManager, see the file banner above) manages a DIFFERENT
 // unit name (`goodvibes`, SERVICE_NAME). A host that still has the legacy
@@ -243,7 +243,7 @@ function failed(action: 'install' | 'uninstall' | 'status', status: ManagedServi
 
 /**
  * `migrate-service`: the guided, consented takeover of the legacy
- * `goodvibes-daemon.service` unit (W4-D1). Thin wrapper over
+ * `goodvibes-daemon.service` unit. Thin wrapper over
  * `runLegacyDaemonMigration` (`../runtime/legacy-daemon-migration.ts`) — see
  * that module for the design constraints (never auto-migrate,
  * new-up-then-old-down, adopt-or-warn/never kill an unrecognized process,
@@ -314,7 +314,7 @@ export async function runDaemonServiceCli(input: DaemonServiceCliInput): Promise
       const extra: string[] = [];
       if (stopped.actionError) extra.push(`(it may not have been running: ${stopped.actionError})`);
       // W3 Finding 4: this command only ever touches the TRACKED unit
-      // (whatever name/path actually resolved, per F2 — not necessarily the
+      // (whatever name/path actually resolved — not necessarily the
       // SERVICE_NAME constant) above — say so explicitly when a legacy unit
       // also exists, so its continued presence is never a silent surprise.
       if (legacy.present) extra.push(legacyUnitNote(legacy, resolveManagedUnitName(uninstalled)));

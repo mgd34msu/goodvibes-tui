@@ -9,7 +9,7 @@ import {
 } from '@pellux/goodvibes-sdk/platform/state';
 
 /**
- * W6-C2 (E6): fold the TUI's legacy per-project memory store into the canonical
+ * Fold the TUI's legacy per-project memory store into the canonical
  * cross-surface store. Called once at boot AFTER `memoryStore.init()` so records written
  * before unification survive. Id-keyed and idempotent — a re-run imports nothing new and
  * never deletes the legacy file. Returns the report so boot can log what moved.

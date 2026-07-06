@@ -1,9 +1,9 @@
 // ---------------------------------------------------------------------------
 // fleet-transcript.ts
 //
-// Wave-3 (W3.1 Part C6) — renders the content of an attached FleetPanel
+// Renders the content of an attached FleetPanel
 // session tab. Three sources, chosen by what the SDK can actually provide
-// (see the W3.1 brief's "central reality check" — a full-fidelity live
+// (see the design brief's "central reality check" — a full-fidelity live
 // transcript needs a ConversationMessageSnapshot[] history source, which
 // only exists for a RUNNING agent or a just-completed one still inside the
 // SDK's bounded retention ring):
@@ -163,8 +163,8 @@ export function renderFleetAgentTranscript(
 /**
  * Render a live one-line-per-member summary for an attached wrfc-chain tab.
  *
- * `chainDoneOrAbsent` disambiguates an empty member list (d3, W6.2): a completed
- * chain prunes its wrapper node (Wave-3 reap), so zero members can mean the
+ * `chainDoneOrAbsent` disambiguates an empty member list: a completed
+ * chain prunes its wrapper node (zombie reap), so zero members can mean the
  * chain FINISHED, not that it has not started. When the chain node is absent
  * (pruned) or terminal, say so honestly instead of the "(no member agents yet)"
  * not-started wording.
@@ -284,7 +284,7 @@ function renderLedgerEntry(width: number, entry: Record<string, unknown>, palett
         { text: `${status}${formatLedgerDuration(entry['durationMs'])}`, fg: tone },
       ]);
     }
-    // W5.2 (wo803) — Wave-5 wo801 per-turn passive knowledge injection
+    // Per-turn passive knowledge injection
     // records, appended to this same JSONL ledger as
     // `{type:'knowledge_injection', turn, ...record}` (orchestrator-runner.ts).
     // Without this case these fell through to the generic 'event' default

@@ -14,7 +14,7 @@ const ERROR_FG = '#ef4444';
  * markDirty() only sets a flag the compositor reads when a frame is ALREADY
  * being composed for another reason (input, streaming) — so a live panel
  * (fleet ticks, registry subscriptions) sat visibly stale while the app was
- * idle until the next keypress (Wave-6 replay finding). The scheduler
+ * idle until the next keypress (a replay finding). The scheduler
  * coalesces same-tick requests, so this stays cheap.
  */
 let panelFrameRequester: (() => void) | null = null;

@@ -199,7 +199,7 @@ export async function bootstrapRuntime(
     pluginManager,
   } = services;
 
-  // D4b: a liveness flip is only PAINTED once something calls requestRender();
+  // A liveness flip is only PAINTED once something calls requestRender();
   // without this, the footer's spine segment sat correct-but-undrawn until
   // incidental activity redrew it (minutes, during an idle stretch).
   sessionUnionCache.setOnTransition(() => requestRender());
@@ -413,7 +413,7 @@ export async function bootstrapRuntime(
       close: (sessionId) => httpTransport.operator.sessions.close(sessionId),
     };
     sessionSpine.activate(createTuiSpineTransport(sessionsClient));
-    // D3: adopt the same daemon's wire for the INBOUND steer path — collect
+    // Adopt the same daemon's wire for the INBOUND steer path — collect
     // steer/follow-up inputs another live surface queued for this session and
     // inject them into the turn machinery (acking delivery on the wire).
     sessionInboundInputs.activate({
@@ -453,7 +453,7 @@ export async function bootstrapRuntime(
       // Honest session-spine posture, independent of daemonRunning —
       // 'external'-adopted-but-currently-unreachable degrades to 'offline' here
       // even though daemonRunning might still read true from a stale handle.
-      // D4: sessionSpine.status() alone is ACTIVITY-gated (only updates on a
+      // sessionSpine.status() alone is ACTIVITY-gated (only updates on a
       // register/heartbeat/close), so after the daemon dies mid-idle it would
       // keep reading 'online'. Derive the footer status from the union cache's
       // 5s liveness probe too — one signal, no new timer — so offline surfaces
@@ -568,7 +568,7 @@ export async function bootstrapRuntime(
       // authenticate against the embedded daemon this surface starts.
       const daemonHomeDir = join(services.homeDirectory, '.goodvibes', 'daemon');
       const companionTokenRecord = resolveDaemonCompanionToken(daemonHomeDir);
-      // F3 resolution (TUI 0.19.20): remove stale pre-0.21.28 workspace-scoped operator
+      // Fix (TUI 0.19.20): remove stale pre-0.21.28 workspace-scoped operator
       // token files so only the canonical <daemonHomeDir>/operator-tokens.json survives.
       // The prune is best-effort — it silently skips missing files, no-ops when tokens
       // already match, and records un-deletable candidates in `failedPaths` for logging.
@@ -741,7 +741,7 @@ export async function bootstrapRuntime(
       // a no-op when the spine was never activated (embedded/local-only topology).
       sessionSpine.close(runtime.sessionId);
       sessionSpine.dispose();
-      sessionInboundInputs.dispose(); // D3: stop the inbound steer poll interval on exit
+      sessionInboundInputs.dispose(); // stop the inbound steer poll interval on exit
       sessionUnionCache.dispose(); // stop the wire-refresh interval on exit
       await deferredStartup.drain(100);
       if (externalServicesPromise) {

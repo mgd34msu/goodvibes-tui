@@ -163,7 +163,7 @@ async function main(): Promise<void> {
     logger.info('daemon: --hostname flag applied', { hostname: cliFlags.hostname });
   }
 
-  // D7a Layer 1: `install-service` / `uninstall-service` / `service-status` manage
+  // Service lifecycle: `install-service` / `uninstall-service` / `service-status` manage
   // the systemd USER unit for the shared daemon. They run BEFORE the daemon boots —
   // no runtime/services are constructed — and exit with the honest result code.
   const serviceSubcommand = cli.positionals[0];
@@ -204,7 +204,7 @@ async function main(): Promise<void> {
     homeDirectory,
   });
 
-  // F2: Load persisted providers from disk so the provider registry is pre-populated
+  // Load persisted providers from disk so the provider registry is pre-populated
   // on standalone daemon startup (same machinery the TUI uses after /scan).
   const discoveryRoots = { homeDirectory, surfaceRoot: 'tui' };
   const persistedProviders = loadPersistedProviders(discoveryRoots);
@@ -213,7 +213,7 @@ async function main(): Promise<void> {
     logger.info('daemon: loaded persisted providers', { count: persistedProviders.length });
   }
 
-  // F2: Run a background LAN scan (non-blocking). Discovered servers are registered
+  // Run a background LAN scan (non-blocking). Discovered servers are registered
   // and persisted so subsequent daemon restarts benefit from the warm cache.
   void scan().then((result) => {
     if (result.servers.length > 0) {
@@ -245,7 +245,7 @@ async function main(): Promise<void> {
   // If no explicit daemon token is set, use the companion token so mobile apps can connect.
   const daemonHomeDir = join(homeDirectory, '.goodvibes', 'daemon');
   const companionTokenRecord = getOrCreateCompanionToken('tui', { daemonHomeDir });
-  // F3 resolution (TUI 0.19.20): remove stale pre-0.21.28 workspace-scoped operator
+  // Fix (TUI 0.19.20): remove stale pre-0.21.28 workspace-scoped operator
   // token files so only the canonical <daemonHomeDir>/operator-tokens.json survives.
   const prune = pruneStaleOperatorTokens({
     daemonHomeDir,

@@ -403,12 +403,12 @@ export async function collectOnboardingSnapshot(
       snapshot: authSnapshotResult.value,
     },
     bindSettings: {
-      // danger.daemon (removed Wave 6 — see docs/decisions/2026-07-05-daemon-by-default.md)
-      // used to gate the pre-Wave-2 opt-in daemon posture; this site read it RAW
+      // danger.daemon (since removed — see docs/decisions/2026-07-05-daemon-by-default.md)
+      // used to gate the earlier opt-in daemon posture; this site read it RAW
       // (not through resolveDaemonEnabled) so the wizard's network-mode
       // classification tracked "did the user explicitly request the legacy
       // dangerous posture" rather than "does the daemon run" (which has defaulted
-      // true unconditionally since Wave 2, and would misclassify every default,
+      // true unconditionally since daemon-by-default landed, and would misclassify every default,
       // local-only install as server-mode if read here). Every realistic config
       // already evaluated this to `false` (unset, or an explicit `danger.daemon:
       // false` both did); the alias's removal migration preserves the one case

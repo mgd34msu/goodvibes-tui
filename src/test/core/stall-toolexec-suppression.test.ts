@@ -1,5 +1,5 @@
 /**
- * Integration test for the Wave-0 stall-indicator false positive during tool
+ * Integration test for the stall-indicator false positive during tool
  * execution.
  *
  * Mechanism under test (see stream-event-wiring.ts and main.ts):

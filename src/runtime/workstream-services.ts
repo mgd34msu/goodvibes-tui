@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// workstream-services.ts — Wave 4 (wo703)
+// workstream-services.ts — phase/work-item orchestration engine
 //
 // Constructs the TUI's OrchestrationEngine instance (@pellux/goodvibes-sdk/
 // platform/orchestration, landed on SDK main as wo701/W4.1) and a thin

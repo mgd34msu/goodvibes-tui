@@ -29,7 +29,7 @@ export function isAgentActive(composerStatus: string | undefined): boolean {
 // shell/ui-openers.ts). The bare noun 'panels' undersold that; naming the verb
 // keeps the tip honest about what the chord actually does.
 const TIP_PANELS = 'Ctrl+P toggle panels';
-// W6.2 e: F2 now opens the Fleet panel (the process modal was retired), so the
+// F2 now opens the Fleet panel (the process modal was retired), so the
 // tip names 'fleet', not 'processes'.
 const TIP_PROCESSES = 'F2 fleet';
 const TIP_HELP = '? help';

@@ -384,7 +384,7 @@ export function registerSessionContentCommands(registry: CommandRegistry): void 
     },
   });
 
-  // W6-C3 (Wave 6 core-verb pass, MEMORY fragmentation — worst-class
+  // From the core-verb naming pass (MEMORY fragmentation — worst-class
   // collision #2): this command used to be named /memory, colliding with
   // the agent's /memory (an alias that forwards to /recall, the durable
   // cross-session MemoryStore) — same command name, two unrelated features.
