@@ -272,7 +272,7 @@ export class InputHandler implements InputHandlerLike {
     // W6.1 retirement: ProcessModal/LiveTailModal/AgentDetailModal were removed
     // — F2 now opens the Fleet panel, which subsumes the live process tree.
     this.bookmarkModal = new BookmarkModal(uiServices.shell.bookmarkManager);
-    this.sessionPickerModal = new SessionPickerModal(uiServices.sessions.sessionManager);
+    this.sessionPickerModal = new SessionPickerModal(uiServices.sessions.sessionManager, uiServices.sessions.sessionBroker);
     this.profilePickerModal = new ProfilePickerModal(uiServices.shell.profileManager);
     this.initFeedContext();
   }
