@@ -5,14 +5,77 @@
  * Shows a list of saved sessions with:
  *   - name, timestamp (formatted), message count
  * Footer hints: [Enter] Load  [d] Delete  [Esc] Close
+ *
+ * W3-T2: when the modal was wired with a cross-surface session union
+ * (`modal.crossSurfaceView.mode !== 'local'`), an additional read-only
+ * "Cross-surface sessions" section is appended, badged kind/status/project
+ * (parity with the webui SessionsView) with one of three honest states —
+ * true-empty, offline, or stale — never a silently-collapsed list. In
+ * 'local' mode (no sessionBroker wired, e.g. every pre-existing caller/test)
+ * this section is entirely absent and the box sizing is unchanged.
  */
 
 import type { Line } from '../types/grid.ts';
 import { ModalFactory } from './modal-factory.ts';
+import { UI_TONES } from './ui-primitives.ts';
 import type { SessionPickerModal } from '../input/session-picker-modal.ts';
 import { formatTimestamp } from './modal-utils.ts';
 import { fitDisplay } from '../utils/terminal-width.ts';
 import { getOverlaySurfaceMetrics, getStableOverlayContentRows } from './overlay-viewport.ts';
+
+// ---------------------------------------------------------------------------
+// Cross-surface badge helpers (parity with webui's src/lib/sessions-union.ts)
+// ---------------------------------------------------------------------------
+
+/** Verbatim for unknown/future kinds — never dropped, never guessed. */
+function kindLabel(kind: string): string {
+  return kind.trim() || 'unknown';
+}
+
+function projectLabel(project: string): string {
+  return project.trim() || 'unknown';
+}
+
+function isClosedStatus(status: string): boolean {
+  return status.trim().toLowerCase() === 'closed';
+}
+
+function statusLabel(status: string): string {
+  const trimmed = status.trim();
+  return trimmed ? (isClosedStatus(trimmed) ? 'closed' : trimmed) : 'active';
+}
+
+const MAX_CROSS_SURFACE_ROWS = 5;
+
+/**
+ * The exact honest note for the current state, or null when the union view
+ * needs no caveat (fresh/embedded with rows). Precedence: offline > stale >
+ * true-empty — the three states from the W3-T2 brief, never collapsed into
+ * each other (an offline view never silently renders as "no sessions yet").
+ */
+function crossSurfaceNote(view: SessionPickerModal['crossSurfaceView'], rowCount: number): string | null {
+  if (view.mode === 'local') return null;
+  if (view.offlineNote) return `${view.offlineNote} — showing local sessions only`;
+  if (view.stale) {
+    if (view.lastSyncAt === null) return 'Union view may be stale.';
+    const ageSeconds = Math.max(0, Math.round((Date.now() - view.lastSyncAt) / 1000));
+    return `Union view may be stale, last synced ${ageSeconds}s ago`;
+  }
+  if (rowCount === 0) return 'No sessions yet.';
+  return null;
+}
+
+function crossSurfaceRowCount(modal: SessionPickerModal): number {
+  return modal.crossSurfaceView.mode === 'local' ? 0 : Math.min(MAX_CROSS_SURFACE_ROWS, modal.crossSurfaceSessions.length);
+}
+
+/** Extra content rows the cross-surface section needs: separator + header (+note) + rows. */
+function crossSurfaceExtraRows(modal: SessionPickerModal): number {
+  if (modal.crossSurfaceView.mode === 'local') return 0;
+  const rows = crossSurfaceRowCount(modal);
+  const noteRow = crossSurfaceNote(modal.crossSurfaceView, rows) ? 1 : 0;
+  return 2 + noteRow + Math.max(rows, noteRow === 1 && rows === 0 ? 0 : rows);
+}
 
 // ---------------------------------------------------------------------------
 // Renderer
@@ -29,16 +92,17 @@ export function renderSessionPickerModal(
   width: number,
   viewportHeight = 24,
 ): Line[] {
+  const extraRows = crossSurfaceExtraRows(modal);
   const metrics = getOverlaySurfaceMetrics(width, viewportHeight, {
     chromeRows: 6,
     minContentRows: 5,
-    maxContentRows: 9,
+    maxContentRows: 9 + extraRows,
   });
   const boxMargin = metrics.margin;
   const boxW = metrics.boxWidth;
   const contentW = metrics.contentWidth;
   const visibleRows = metrics.contentRows;
-  const targetContentRows = getStableOverlayContentRows(metrics.contentRows, 8);
+  const targetContentRows = getStableOverlayContentRows(metrics.contentRows, 8 + extraRows);
   modal.setVisibleRows(visibleRows);
 
   const sections: import('./modal-factory.ts').ModalSection[] = [];
@@ -94,6 +158,45 @@ export function renderSessionPickerModal(
         content: `[${modal.scrollOffset + 1}-${Math.min(modal.sessions.length, modal.scrollOffset + visibleRows)} of ${modal.sessions.length}]`,
         style: { fg: '244', dim: true },
       });
+    }
+  }
+
+  // W3-T2: cross-surface session union — visible only when a sessionBroker
+  // was wired (mode !== 'local'); absent entirely otherwise, so the box size
+  // and content of every pre-existing (local-only) caller is unaffected.
+  if (modal.crossSurfaceView.mode !== 'local') {
+    sections.push({ type: 'separator' });
+    sections.push({
+      type: 'text',
+      content: `Cross-surface sessions (${modal.crossSurfaceView.mode})`,
+      style: { fg: '240', dim: true, bold: true },
+    });
+    const note = crossSurfaceNote(modal.crossSurfaceView, modal.crossSurfaceSessions.length);
+    if (note) {
+      sections.push({
+        type: 'text',
+        content: note,
+        style: { fg: modal.crossSurfaceView.offlineNote ? UI_TONES.state.warn : '244', dim: !modal.crossSurfaceView.offlineNote },
+      });
+    }
+    if (modal.crossSurfaceSessions.length > 0) {
+      const rows = modal.crossSurfaceSessions.slice(0, MAX_CROSS_SURFACE_ROWS);
+      const listItems: import('./modal-factory.ts').ModalListItem[] = rows.map((record) => {
+        const closed = isClosedStatus(record.status);
+        const label = fitDisplay(
+          `${record.title || record.id} · ${kindLabel(record.kind)} · ${statusLabel(record.status)} · ${projectLabel(record.project)}`,
+          contentW,
+        );
+        return { label, style: closed ? { fg: '244', dim: true } : undefined };
+      });
+      sections.push({ type: 'list', items: listItems });
+      if (modal.crossSurfaceSessions.length > MAX_CROSS_SURFACE_ROWS) {
+        sections.push({
+          type: 'text',
+          content: `[showing ${MAX_CROSS_SURFACE_ROWS} of ${modal.crossSurfaceSessions.length}]`,
+          style: { fg: '244', dim: true },
+        });
+      }
     }
   }
 

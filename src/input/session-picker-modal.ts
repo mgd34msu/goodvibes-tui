@@ -1,12 +1,28 @@
 /**
  * SessionPickerModal — state management for the /sessions picker modal.
  *
- * Lists sessions from SessionManager.list(), tracks selected index,
- * and handles load/delete actions.
+ * Lists LOCAL saved transcript files from SessionManager.list() (load/delete
+ * operate on these — a saved JSONL session is a different thing from a live
+ * control-plane session, see below), tracks selected index, and handles
+ * load/delete actions.
+ *
+ * W3-T2 (union-sessions surface): additionally surfaces the cross-surface
+ * session union from `sessionBroker` (a SessionReadFacade — normally
+ * `uiServices.sessions.sessionBroker`, the SessionUnionCache) so a user can
+ * SEE what sessions are live/closed across every surface sharing this
+ * daemon (TUI, webui, companion, automation), not just this process's own
+ * saved files. This is deliberately READ-ONLY: a SharedSessionRecord has no
+ * on-disk transcript this process can load()/delete() the way a local
+ * SessionInfo does, so cross-surface rows are visible + badged, not
+ * selectable for load/delete. `sessionBroker` is optional so every existing
+ * caller/test that only cares about local saved-session management keeps
+ * working unchanged.
  */
 
 import { unlinkSync } from 'node:fs';
 import type { SessionInfo, SessionManager } from '@pellux/goodvibes-sdk/platform/sessions';
+import type { SharedSessionRecord } from '@pellux/goodvibes-sdk/platform/control-plane';
+import type { CrossSurfaceView, SessionReadFacade } from '@pellux/goodvibes-sdk/platform/runtime/session-spine';
 import type { ConversationManager } from '../core/conversation';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 
@@ -14,9 +30,22 @@ import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 // SessionPickerModal
 // ---------------------------------------------------------------------------
 
+/** Honest default posture when no `sessionBroker` was wired: no cross-surface claim. */
+const DORMANT_CROSS_SURFACE_VIEW: CrossSurfaceView = {
+  mode: 'local',
+  online: false,
+  stale: false,
+  lastSyncAt: null,
+  offlineNote: null,
+};
+
 export class SessionPickerModal {
   public active = false;
   public sessions: SessionInfo[] = [];
+  /** Cross-surface session union (view-only) — see class doc. Empty until open(). */
+  public crossSurfaceSessions: readonly SharedSessionRecord[] = [];
+  /** Honest posture for crossSurfaceSessions: mode/online/stale/offlineNote. */
+  public crossSurfaceView: CrossSurfaceView = DORMANT_CROSS_SURFACE_VIEW;
   public selectedIndex = 0;
   public scrollOffset = 0;
   public visibleRows = 8;
@@ -25,13 +54,24 @@ export class SessionPickerModal {
   /** Last status message to show in the modal (e.g. error or success). */
   public statusMessage = '';
 
-  public constructor(private readonly sessionManager: SessionManager) {}
+  public constructor(
+    private readonly sessionManager: SessionManager,
+    private readonly sessionBroker?: SessionReadFacade,
+  ) {}
 
   /**
-   * Open the modal, loading sessions from SessionManager.
+   * Open the modal, loading local saved sessions from SessionManager and (when
+   * a sessionBroker was wired) the cross-surface session union, honestly.
    */
   open(): void {
     this.sessions = this.sessionManager.list();
+    if (this.sessionBroker) {
+      this.crossSurfaceSessions = this.sessionBroker.listSessions();
+      this.crossSurfaceView = this.sessionBroker.crossSurfaceView;
+    } else {
+      this.crossSurfaceSessions = [];
+      this.crossSurfaceView = DORMANT_CROSS_SURFACE_VIEW;
+    }
     this.selectedIndex = 0;
     this.scrollOffset = 0;
     this.statusMessage = '';
