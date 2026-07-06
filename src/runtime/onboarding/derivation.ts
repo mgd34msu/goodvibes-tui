@@ -263,11 +263,16 @@ function hasCloudflareBatch(snapshot: OnboardingSnapshotState): boolean {
 }
 
 function describeLocalTuiOnly(snapshot: OnboardingSnapshotState): string {
+  // Honest wording (One-Platform daemon-by-default): this option turns off
+  // browser/LAN/webhook/external-app exposure, but the loopback-only GoodVibes
+  // daemon still runs by default so sessions here stay visible to other
+  // GoodVibes surfaces on this machine. Turn it off in Settings > daemon if you
+  // want none at all.
   if (!hasAnyServerEnabled(snapshot)) {
-    return 'Use GoodVibes only in this terminal. No browser access, background service, HTTP listener, external app surface, or network setup.';
+    return 'Use GoodVibes only in this terminal. No browser access, HTTP listener, external app surface, or network setup. A loopback-only background daemon still runs by default so sessions here stay visible to other GoodVibes surfaces on this machine — turn it off in Settings > daemon if you want none at all.';
   }
 
-  return 'Turn off browser access, background services, HTTP listeners, external app surfaces, and network setup.';
+  return 'Turn off browser access, HTTP listeners, external app surfaces, and network setup. The loopback-only background daemon keeps running by default for cross-surface visibility unless you turn it off in Settings > daemon.';
 }
 
 function describeBrowserAccess(snapshot: OnboardingSnapshotState): string {

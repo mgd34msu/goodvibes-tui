@@ -1,4 +1,4 @@
-import { createOAuthLocalListener } from '@pellux/goodvibes-sdk/platform/config';
+import { createOAuthLocalListener, resolveDaemonEnabled } from '@pellux/goodvibes-sdk/platform/config';
 import { beginOpenAICodexLogin, exchangeOpenAICodexCode } from '@pellux/goodvibes-sdk/platform/config';
 import { summarizeError, openExternalUrl } from '@pellux/goodvibes-sdk/platform/utils';
 import { getProviderIdFromModel } from '../config/provider-model.ts';
@@ -75,6 +75,41 @@ function formatRuntimeStoppedFailureMessage(
   const statusDetail = status ? ` ${runtimePortDiagnostic(binding, undefined, status)}` : '';
   return `${binding.label} was disabled for ${disabledSurface}, but ${binding.host}:${binding.port} is still occupied. Settings were saved; another GoodVibes process or external service may still be running on that port.${statusDetail}`;
 }
+
+/**
+ * Verification item(s) for one runtime endpoint given whether it is expected
+ * to be running. Shared by both the "nothing server-backed selected" early
+ * path and the full server-backed path so daemon-by-default (the loopback
+ * daemon can be `expected` even when nothing else was selected) is handled
+ * identically in both places.
+ */
+function buildEndpointVerificationItems(
+  handler: InputHandler,
+  request: OnboardingApplyRequest,
+  endpoint: OnboardingRuntimeEndpoint,
+  expected: boolean,
+  state: OnboardingExternalServiceState | undefined,
+): OnboardingVerificationItem[] {
+    const idPrefix = endpoint === 'daemon' ? 'daemon' : 'http-listener';
+    if (expected) {
+      const active = isRuntimeEndpointActive(state, endpoint);
+      return [{
+        id: `runtime:${idPrefix}-active`,
+        status: active ? 'pass' : 'fail',
+        message: active
+          ? formatRuntimeActiveSuccessMessage(endpoint, state)
+          : formatRuntimeActiveFailureMessage(handler, request, endpoint, state),
+        target: 'service',
+      }];
+    }
+    if (!isRuntimeEndpointOccupyingConfiguredPort(state, endpoint)) return [];
+    return [{
+      id: `runtime:${idPrefix}-stopped`,
+      status: 'fail',
+      message: formatRuntimeStoppedFailureMessage(handler, request, endpoint, state),
+      target: 'service',
+    }];
+  }
 
 function showOnboardingApplyFeedbackForHandler(handler: InputHandler, feedback: OnboardingWizardApplyFeedback): void {
     handler.onboardingWizard.setApplyFeedback(feedback);
@@ -587,7 +622,8 @@ export function getOnboardingRuntimePostureForHandler(handler: InputHandler, req
     const serviceEnabled = getConfigValue('service.enabled') === true;
     const serviceAutostart = getConfigValue('service.autostart') === true;
     const restartOnFailure = getConfigValue('service.restartOnFailure') === true;
-    const daemonEnabled = getConfigValue('danger.daemon') === true || getConfigValue('controlPlane.enabled') === true;
+    const daemonReader = { get: (key: string): boolean | string | number | undefined => getConfigValue(key) as boolean | string | number | undefined };
+    const daemonEnabled = resolveDaemonEnabled(daemonReader) || getConfigValue('controlPlane.enabled') === true;
     const listenerEnabled = getConfigValue('danger.httpListener') === true;
     const webEnabled = getConfigValue('web.enabled') === true;
     const controlPlaneRemote = getConfigValue('controlPlane.hostMode') === 'network'
@@ -608,7 +644,10 @@ export function getOnboardingRuntimePostureForHandler(handler: InputHandler, req
       restartOnFailure,
       expectedDaemon: daemonEnabled || webEnabled,
       expectedHttpListener: listenerEnabled,
-      serverBacked: serviceEnabled || daemonEnabled || listenerEnabled || webEnabled,
+      // Daemon-by-default: the loopback session daemon can be expected to run
+      // even when nothing else was explicitly enabled here, so it does not
+      // belong in "did onboarding opt into a network-facing bundle."
+      serverBacked: serviceEnabled || listenerEnabled || webEnabled,
       remoteExposure,
     };
   }
@@ -698,28 +737,20 @@ export function verifyOnboardingRuntimePostureForHandler(handler: InputHandler, 
         }];
       }
 
-      const stoppedItems: OnboardingVerificationItem[] = [];
-      if (isRuntimeEndpointOccupyingConfiguredPort(externalState, 'daemon')) {
-        stoppedItems.push({
-          id: 'runtime:daemon-stopped',
-          status: 'fail',
-          message: formatRuntimeStoppedFailureMessage(handler, request, 'daemon', externalState),
-          target: 'service',
-        });
-      }
-      if (isRuntimeEndpointOccupyingConfiguredPort(externalState, 'httpListener')) {
-        stoppedItems.push({
-          id: 'runtime:http-listener-stopped',
-          status: 'fail',
-          message: formatRuntimeStoppedFailureMessage(handler, request, 'httpListener', externalState),
-          target: 'service',
-        });
-      }
+      // Daemon-by-default: expectedDaemon can be true here (loopback daemon
+      // running for cross-surface visibility) even though nothing else was
+      // selected, so this is not simply "everything must be stopped."
+      const stoppedItems: OnboardingVerificationItem[] = [
+        ...buildEndpointVerificationItems(handler, request, 'daemon', posture.expectedDaemon, externalState),
+        ...buildEndpointVerificationItems(handler, request, 'httpListener', posture.expectedHttpListener, externalState),
+      ];
       if (externalState && stoppedItems.length === 0) {
         stoppedItems.push({
           id: 'runtime:external-services-stopped',
           status: 'pass',
-          message: 'Background daemon and HTTP listener are stopped for Local TUI Only.',
+          message: posture.expectedDaemon
+            ? 'HTTP listener is stopped for Local TUI Only; the background daemon is running as expected for cross-surface visibility on this machine.'
+            : 'Background daemon and HTTP listener are stopped for Local TUI Only.',
           target: 'service',
         });
       }
@@ -757,44 +788,10 @@ export function verifyOnboardingRuntimePostureForHandler(handler: InputHandler, 
       });
     }
 
-    if (posture.expectedDaemon) {
-      const daemonActive = isRuntimeEndpointActive(externalState, 'daemon');
-      items.push({
-        id: 'runtime:daemon-active',
-        status: daemonActive ? 'pass' : 'fail',
-        message: daemonActive
-          ? formatRuntimeActiveSuccessMessage('daemon', externalState)
-          : formatRuntimeActiveFailureMessage(handler, request, 'daemon', externalState),
-        target: 'service',
-      });
-    }
-    if (!posture.expectedDaemon && isRuntimeEndpointOccupyingConfiguredPort(externalState, 'daemon')) {
-      items.push({
-        id: 'runtime:daemon-stopped',
-        status: 'fail',
-        message: formatRuntimeStoppedFailureMessage(handler, request, 'daemon', externalState),
-        target: 'service',
-      });
-    }
-    if (posture.expectedHttpListener) {
-      const httpListenerActive = isRuntimeEndpointActive(externalState, 'httpListener');
-      items.push({
-        id: 'runtime:http-listener-active',
-        status: httpListenerActive ? 'pass' : 'fail',
-        message: httpListenerActive
-          ? formatRuntimeActiveSuccessMessage('httpListener', externalState)
-          : formatRuntimeActiveFailureMessage(handler, request, 'httpListener', externalState),
-        target: 'service',
-      });
-    }
-    if (!posture.expectedHttpListener && isRuntimeEndpointOccupyingConfiguredPort(externalState, 'httpListener')) {
-      items.push({
-        id: 'runtime:http-listener-stopped',
-        status: 'fail',
-        message: formatRuntimeStoppedFailureMessage(handler, request, 'httpListener', externalState),
-        target: 'service',
-      });
-    }
+    items.push(
+      ...buildEndpointVerificationItems(handler, request, 'daemon', posture.expectedDaemon, externalState),
+      ...buildEndpointVerificationItems(handler, request, 'httpListener', posture.expectedHttpListener, externalState),
+    );
 
     return items;
   }

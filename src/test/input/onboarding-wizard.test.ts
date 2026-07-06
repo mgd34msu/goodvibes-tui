@@ -642,7 +642,13 @@ describe('OnboardingWizardController', () => {
     expect(configValues.get('service.enabled')).toBe(true);
     expect(configValues.get('service.autostart')).toBe(true);
     expect(configValues.get('service.restartOnFailure')).toBe(true);
-    expect(configValues.get('danger.daemon')).toBe(true);
+    // Daemon-by-default (docs/decisions/2026-07-05-daemon-by-default.md): onboarding
+    // no longer writes daemon.enabled/danger.daemon at all — the loopback session
+    // daemon is ambient infrastructure independent of these network-exposing
+    // capabilities, so the SDK's own default (or an existing explicit override)
+    // governs untouched.
+    expect(configValues.has('danger.daemon')).toBe(false);
+    expect(configValues.has('daemon.enabled')).toBe(false);
     expect(configValues.get('controlPlane.enabled')).toBe(true);
     expect(configValues.get('danger.httpListener')).toBe(true);
     expect(configValues.get('web.enabled')).toBe(true);
@@ -1686,7 +1692,7 @@ describe('InputHandler onboarding integration', () => {
     expect(output).not.toContain('not running after onboarding apply');
   });
 
-  test('stops running background services before completing Local TUI Only', async () => {
+  test('stops the HTTP listener but keeps the cross-surface daemon running when completing Local TUI Only', async () => {
     resetTestRuntimeServices();
     const uiServices = createDefaultUiRuntimeServices();
     let daemonRunning = true;
@@ -1696,7 +1702,10 @@ describe('InputHandler onboarding integration', () => {
       inspect: () => ({ daemonRunning, httpListenerRunning }),
       restart: async () => {
         restarted = true;
-        daemonRunning = false;
+        // Daemon-by-default: onboarding no longer writes daemon.enabled/danger.daemon
+        // at all, so the loopback session daemon keeps running (cross-surface
+        // visibility) even for Local TUI Only. Only the HTTP listener — a real
+        // network-facing surface — actually stops.
         httpListenerRunning = false;
         return { daemonRunning, httpListenerRunning };
       },
