@@ -40,10 +40,10 @@ export interface UiProviderServices {
 export interface UiSessionServices {
   readonly sessionManager: RuntimeServices['sessionManager'];
   /**
-   * S3d: the panel-facing session READ source is the cross-surface union
-   * facade, not the raw local broker — in adopted-daemon mode the local broker
-   * misses sessions hosted for other surfaces. Sync signature preserved; the
-   * facade's cache makes that honest (see session-union-cache.ts).
+   * The panel-facing session READ source is the cross-surface union
+   * facade, not the raw local broker — in adopted-daemon ('external') mode the
+   * local broker misses sessions hosted for other surfaces. Sync signature
+   * preserved; the facade's cache makes that honest (see session-union-cache.ts).
    */
   readonly sessionBroker: SessionReadFacade;
   readonly sessionOrchestration: RuntimeServices['sessionOrchestration'];
@@ -71,7 +71,7 @@ export interface UiPlatformServices {
       readonly httpListenerPortInUse?: boolean;
       readonly daemonStatus?: HostServiceStatus;
       readonly httpListenerStatus?: HostServiceStatus;
-      // S3c/S3d: honest session-spine posture for the footer segment, driven by
+      // Honest session-spine posture for the footer segment, driven by
       // the spine client's own live wire attempts (not the one-shot adopt probe).
       readonly sessionSpineActive?: boolean;
       readonly sessionSpineStatus?: 'unknown' | 'online' | 'offline';
@@ -137,9 +137,9 @@ export interface UiRuntimeServicesOptions extends UiReadModelOptions {
   readonly forensicsRegistry?: ForensicsRegistry;
   readonly getControlPlaneRecentEvents?: (limit: number) => readonly ControlPlaneRecentEvent[];
   /**
-   * S3d: the shared session read facade constructed in bootstrap-core (so
-   * bootstrap.ts can drive its adopted/embedded/local mode). When omitted (test
-   * callers), a local-only passthrough facade over the broker is auto-created.
+   * The shared session read facade constructed in bootstrap-core (so
+   * bootstrap.ts can drive its adopted-external/embedded/local mode). When omitted
+   * (test callers), a local-only passthrough facade over the broker is auto-created.
    */
   readonly sessionUnionCache?: SessionUnionCache;
 }
