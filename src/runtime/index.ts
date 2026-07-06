@@ -274,9 +274,17 @@ export const reachableFrom = operations.reachableFrom;
 export const evaluateSessionMaintenance = operations.evaluateSessionMaintenance;
 export const formatSessionMaintenanceLines = operations.formatSessionMaintenanceLines;
 export const getGuidanceMode = operations.getGuidanceMode;
-export const DEFAULT_RETENTION_CONFIG = operations.DEFAULT_RETENTION_CONFIG;
-export const RetentionPolicy = operations.RetentionPolicy;
-export const SnapshotPruner = operations.SnapshotPruner;
+// Snapshot-retention symbols (SnapshotPruner, RetentionPolicy,
+// DEFAULT_RETENTION_CONFIG) are intentionally NOT re-exported here. No app code
+// consumes them — only the retention unit test does, and it now imports them
+// straight from the SDK `operations` namespace. Re-exporting them created a
+// second top-level binding named `SnapshotPruner` that collided with the SDK's
+// own `class SnapshotPruner`, forcing the bundler to rename ours to
+// `SnapshotPruner2` and emit a fragile `SnapshotPruner2 = operations.SnapshotPruner`
+// module-init assignment. `bun build --compile` occasionally drops that renamed
+// `var` declaration on the darwin-arm64 target, so the compiled binary died at
+// startup with `ReferenceError: SnapshotPruner2 is not defined`. Dropping the
+// re-export removes the collision (and the same latent hazard for the other two).
 export const buildPersistedSessionContext = operations.buildPersistedSessionContext;
 export const buildLocalReturnContextSummary = operations.buildLocalReturnContextSummary;
 export const formatReturnContextForDisplay = operations.formatReturnContextForDisplay;

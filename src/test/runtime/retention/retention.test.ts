@@ -10,8 +10,13 @@
  */
 
 import { describe, it, expect } from 'bun:test';
-import { RetentionPolicy, DEFAULT_RETENTION_CONFIG } from '@/runtime/index.ts';
-import { SnapshotPruner } from '@/runtime/index.ts';
+// Retention symbols come straight from the SDK operations namespace rather than
+// the local runtime barrel: the barrel deliberately does not re-export them
+// (see src/runtime/index.ts) because a same-named re-export collided with the
+// SDK's own `class SnapshotPruner` and produced a compiled-binary startup crash.
+import { operations } from '@pellux/goodvibes-sdk/platform/runtime';
+
+const { RetentionPolicy, DEFAULT_RETENTION_CONFIG, SnapshotPruner } = operations;
 import type {
   CheckpointRecord,
   PerClassPruneResult,
