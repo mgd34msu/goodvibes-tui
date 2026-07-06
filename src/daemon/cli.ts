@@ -171,12 +171,15 @@ async function main(): Promise<void> {
     const host = String(process.env.GOODVIBES_DAEMON_HOST ?? config.get('controlPlane.host') ?? '127.0.0.1');
     const port = Number(config.get('controlPlane.port'));
     const binaryPath = resolveInstalledDaemonBinary({ moduleUrl: import.meta.url });
-    const result = runDaemonServiceCli({
+    const result = await runDaemonServiceCli({
       subcommand: serviceSubcommand,
       binaryPath,
       homeDir: homeDirectory,
       host,
       port,
+      // migrate-service only: never auto-migrate — requires the same explicit
+      // consent as any other non-interactive destructive confirmation.
+      confirmMigration: cliFlags.yes,
     });
     for (const line of result.lines) {
       // eslint-disable-next-line no-console
