@@ -183,4 +183,40 @@ describe('renderModelWorkspace', () => {
 
     expect(second).toBe(first);
   });
+
+  describe('footer hints are state-aware (W3 Finding 2)', () => {
+    test('search blurred: advertises the C/A/B/G single-key shortcuts (they work in this state)', () => {
+      const picker = makePicker();
+      picker.blurSearch();
+      expect(picker.searchFocused).toBe(false);
+
+      // Wider than the default W: the footer hint string is long enough to
+      // get width-truncated at W=132 (a pre-existing, unrelated constraint),
+      // so use a width that comfortably fits the full hint line.
+      const text = linesToText(renderModelWorkspace(picker, 200, H)).join('\n');
+
+      expect(text).toContain('C caps');
+      expect(text).toContain('A available');
+      expect(text).toContain('B benchmark');
+      expect(text).toContain('G group');
+      expect(text).toContain('Tab price');
+    });
+
+    test('search focused (the default on open, W3-T2): does not advertise C/A/B/G (they type into the query instead), but keeps Tab', () => {
+      const picker = makePicker();
+      expect(picker.searchFocused).toBe(true);
+
+      // Wider than the default W: the footer hint string is long enough to
+      // get width-truncated at W=132 (a pre-existing, unrelated constraint),
+      // so use a width that comfortably fits the full hint line.
+      const text = linesToText(renderModelWorkspace(picker, 200, H)).join('\n');
+
+      expect(text).not.toContain('C caps');
+      expect(text).not.toContain('A available');
+      expect(text).not.toContain('B benchmark');
+      expect(text).not.toContain('G group');
+      expect(text).toContain('Tab price');
+      expect(text).toContain('Typing filters search');
+    });
+  });
 });

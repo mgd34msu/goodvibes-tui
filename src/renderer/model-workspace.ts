@@ -434,8 +434,15 @@ export function renderModelWorkspace(picker: ModelPickerModal, width: number, vi
 
   const footer = contentLine(safeWidth, PALETTE.footerBg);
   const targetHint = picker.focusPane === 'targets' ? 'Focus targets' : 'Focus list';
-  const searchHint = picker.searchFocused ? 'Typing filters search; Esc clears search' : '/ search';
-  const hints = `${targetHint} • Up/Down navigate • Left/Right pane • Enter select • ${searchHint} • Tab price • C caps • A available • B benchmark • G group • Esc close`;
+  // W3 Finding 2: while search is focused, every printable key (including
+  // c/a/b/g) types into the query — handler-picker-routes.ts guards those
+  // single-key shortcuts with `!searchFocused` (Up/Down blur search first).
+  // Advertising them here regardless of focus state was a footer that lied
+  // about what the keys currently do. Tab still cycles price in both states
+  // (its handler has no searchFocused guard), so it stays in both hint sets.
+  const hints = picker.searchFocused
+    ? `${targetHint} • Typing filters search; Esc clears search • Down: list shortcuts • Tab price • Esc close`
+    : `${targetHint} • Up/Down navigate • Left/Right pane • Enter select • / search • Tab price • C caps • A available • B benchmark • G group • Esc close`;
   writeText(footer, 2, safeWidth - 4, hints, { fg: PALETTE.muted, bg: PALETTE.footerBg });
   lines.push(footer);
   lines.push(borderLine(safeWidth, GLYPHS.frame.bottomLeft, GLYPHS.frame.horizontal, GLYPHS.frame.bottomRight));
