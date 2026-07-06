@@ -124,7 +124,7 @@ export function buildCapabilitiesStep(controller: OnboardingWizardControllerLike
         id: 'capabilities.clear',
         action: 'clear-capabilities',
         label: 'Use Local TUI Only (No Servers)',
-        hint: 'Clear all server-backed capabilities and keep GoodVibes in this terminal only.',
+        hint: 'Clear all server-backed capabilities: no browser access, LAN reachability, webhooks/events, or external app surfaces. The loopback-only background daemon still runs by default.',
         defaultValue: 'Action',
       },
     ];

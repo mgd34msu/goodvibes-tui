@@ -224,7 +224,7 @@ describe('onboarding derivation helpers', () => {
         id: 'local-tui-only',
         label: 'Local TUI Only (No Servers)',
         selected: false,
-        detail: 'Turn off browser access, background services, HTTP listeners, external app surfaces, and network setup.',
+        detail: 'Turn off browser access, HTTP listeners, external app surfaces, and network setup. The loopback-only background daemon keeps running by default for cross-surface visibility unless you turn it off in Settings > daemon.',
       },
       {
         id: 'browser-access',
@@ -506,7 +506,7 @@ describe('onboarding derivation helpers', () => {
         id: 'local-tui-only',
         label: 'Local TUI Only (No Servers)',
         selected: true,
-        detail: 'Use GoodVibes only in this terminal. No browser access, background service, HTTP listener, external app surface, or network setup.',
+        detail: 'Use GoodVibes only in this terminal. No browser access, HTTP listener, external app surface, or network setup. A loopback-only background daemon still runs by default so sessions here stay visible to other GoodVibes surfaces on this machine — turn it off in Settings > daemon if you want none at all.',
       },
       {
         id: 'browser-access',
