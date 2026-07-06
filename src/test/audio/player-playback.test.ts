@@ -90,8 +90,15 @@ class FakeProcess {
   }
 }
 
+// Injected alongside the fake spawn factory so these tests never consult the
+// real PATH — CI runners have no mpv/ffplay and must not need one. The real
+// PATH resolution stays covered by player.test.ts (discovery + the honest
+// no-player error).
+const FAKE_COMMAND = { command: '/fake/bin/mpv', args: ['-'] as const, label: 'fake-mpv' };
+
 function makePlayer(proc: FakeProcess): LocalStreamingAudioPlayer {
   return new LocalStreamingAudioPlayer({
+    command: FAKE_COMMAND,
     // The fake stands in for a spawned mpv/ffplay; cast bridges the private
     // SpawnProcess shape without pulling node's full Writable surface in.
     spawnProcess: (() => proc) as unknown as LocalStreamingAudioPlayerOptions['spawnProcess'],
@@ -208,6 +215,7 @@ describe('LocalStreamingAudioPlayer playback', () => {
     // hold per chunk, not just for the first one of a turn.
     const procs: FakeProcess[] = [];
     const player = new LocalStreamingAudioPlayer({
+      command: FAKE_COMMAND,
       spawnProcess: (() => {
         const proc = new FakeProcess();
         procs.push(proc);
@@ -278,6 +286,13 @@ describe('LocalStreamingAudioPlayer playback', () => {
     await player.waitForDrain(20);
     // Released by the timeout, not by a close (which never came).
     expect(Date.now() - start).toBeLessThan(1000);
+  });
+
+  test('play() on a player with no command reports the missing player honestly', async () => {
+    const player = new LocalStreamingAudioPlayer({ command: null });
+    expect(player.available).toBe(false);
+    await expect(player.play(chunksOf(bytes('unheard')), { format: 'mp3' }))
+      .rejects.toThrow('No streaming audio player found');
   });
 
   test('a sink that fails to start surfaces the failure instead of swallowing it', async () => {

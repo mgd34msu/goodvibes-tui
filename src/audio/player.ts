@@ -42,6 +42,13 @@ type SpawnProcessFactory = (command: string, args: readonly string[]) => SpawnPr
 export interface LocalStreamingAudioPlayerOptions {
   readonly env?: NodeJS.ProcessEnv;
   readonly spawnProcess?: SpawnProcessFactory;
+  /**
+   * Injected player command — the test seam companion to `spawnProcess`.
+   * When set, the constructor uses it verbatim instead of scanning PATH, so
+   * deterministic fake-sink tests never depend on mpv/ffplay being installed
+   * on the machine running them. Pass null to model "no player found".
+   */
+  readonly command?: StreamingAudioPlayerCommand | null;
 }
 
 export class LocalStreamingAudioPlayer implements StreamingAudioPlayer {
@@ -50,7 +57,9 @@ export class LocalStreamingAudioPlayer implements StreamingAudioPlayer {
   private readonly spawnProcess: SpawnProcessFactory;
 
   constructor(options: LocalStreamingAudioPlayerOptions = {}) {
-    this.command = resolveStreamingAudioPlayerCommand(options.env ?? process.env);
+    this.command = options.command !== undefined
+      ? options.command
+      : resolveStreamingAudioPlayerCommand(options.env ?? process.env);
     this.spawnProcess = options.spawnProcess ?? defaultSpawnProcess;
   }
 
