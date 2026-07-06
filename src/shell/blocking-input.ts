@@ -25,6 +25,15 @@ export type BlockingInputHandlerOptions = {
   loadRecoveryConversation: () => SessionSnapshot | null;
   deleteRecoveryFile: () => void;
   /**
+   * Copy the live recovery.jsonl aside to a preserved sibling so the dismiss
+   * message's promise ("still on disk") survives this session's later 60s
+   * autosaves, which would otherwise overwrite the shared recovery file with
+   * the CURRENT (post-dismiss) session's state (W3 Finding 3). Optional so
+   * every pre-existing test/caller that doesn't care about preservation is
+   * unaffected; when omitted, dismiss behaves exactly as before.
+   */
+  preserveRecoveryFile?: () => { readonly preserved: boolean; readonly replacedPrevious: boolean };
+  /**
    * Absolute home directory used to locate the transcript journal for this
    * recovery session. Required for journal replay on Ctrl+R restore.
    */
@@ -70,6 +79,7 @@ export function handleBlockingShellInput(
     render,
     loadRecoveryConversation,
     deleteRecoveryFile,
+    preserveRecoveryFile,
     homeDirectory,
     sessionId,
     persistSnapshot,
@@ -178,6 +188,18 @@ export function handleBlockingShellInput(
     // recoveryPending so it stops re-asserting, but do NOT delete the
     // recovery file — dismiss is not discard, and the file remains
     // restorable by the automatic recovery check on the next launch.
+    //
+    // W3 Finding 3: the promise below ("still on disk; you will be asked
+    // again") used to go false silently — main.ts's 60s autosave overwrites
+    // the single shared recovery.jsonl with the CURRENT session's state
+    // within a minute. preserveRecoveryFile (when wired) copies it aside
+    // NOW, while it still holds the dismissed session's data, so the
+    // promise stays true. If an earlier dismiss's preserved snapshot gets
+    // replaced by this one, say so honestly instead of silently discarding it.
+    const preserveResult = preserveRecoveryFile?.();
+    if (preserveResult?.replacedPrevious) {
+      systemMessageRouter.low('[Recovery] Replacing the previously preserved (unrestored) snapshot with this one.');
+    }
     systemMessageRouter.high('[Recovery] Dismissed — the unsaved session is still on disk; you will be asked again next time GoodVibes starts here.');
     render();
     return { handled: false, pendingPermission, recoveryPending: false };
