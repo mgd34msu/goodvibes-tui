@@ -1,7 +1,7 @@
 import { type Line, type Cell, createEmptyLine, createEmptyCell } from '../types/grid.ts';
 import { LAYOUT } from './layout.ts';
 import { VERSION } from '../version.ts';
-import { fitDisplay, getDisplayWidth, truncateDisplay, wrapText, interpolateColor } from '../utils/terminal-width.ts';
+import { fitDisplay, getDisplayWidth, truncateDisplay, wrapText, interpolateColor, joinPrioritizedSegments, type PrioritizedSegment } from '../utils/terminal-width.ts';
 import type { GitHeaderInfo } from './git-status.ts';
 import { renderConversationFragment, renderConversationStatusLine, type ConversationStatusSegment } from './conversation-surface.ts';
 import { GLYPHS } from './ui-primitives.ts';
@@ -431,21 +431,30 @@ export class UIFactory {
       const displayDir = workingDir && home && workingDir.startsWith(home)
         ? '~' + workingDir.slice(home.length)
         : workingDir ?? '';
-      const ctxParts: string[] = [];
-      if (displayDir) ctxParts.push(displayDir);
+      // Segments carry a survival priority (lower = survives longer) so that
+      // under width pressure whole low-value segments are dropped before any
+      // segment is character-truncated mid-word. cwd/model are the essential
+      // orientation segments (priority 0); the spine liveness marker is the
+      // daemon-honesty signal and must outlive the two decorative segments
+      // (tool count, notify mode) — it is ordered ahead of them too, so a
+      // narrow line drops "N tools"/"notify:x" whole before spine is at risk.
+      const ctxParts: PrioritizedSegment[] = [];
+      if (displayDir) ctxParts.push({ text: displayDir, priority: 0 });
       if (model) {
-        ctxParts.push(model + (provider ? ` (${provider})` : ''));
+        ctxParts.push({ text: model + (provider ? ` (${provider})` : ''), priority: 0 });
       }
-      if (toolCount) ctxParts.push(`${toolCount} tools`);
+      // S3d: cross-surface spine posture — plain words, no blame. Adopted mode only.
+      if (sessionSpineStatus) ctxParts.push({ text: `spine:${sessionSpineStatus}`, priority: 1 });
+      if (toolCount) ctxParts.push({ text: `${toolCount} tools`, priority: 2 });
       // Labeled "notify" (not "hitl") — /mode (aliased /hitl) governs UX
       // notification verbosity (quiet/balanced/operator), not tool
       // auto-approval, so it must not share vocabulary with the DANGER MODE
-      // risk banner rendered a few lines below.
-      if (hitlMode) ctxParts.push(`notify:${hitlMode}`);
-      // S3d: cross-surface spine posture — plain words, no blame. Adopted mode only.
-      if (sessionSpineStatus) ctxParts.push(`spine:${sessionSpineStatus}`);
-      const ctxLine = '   ' + ctxParts.join(`  ${GLYPHS.navigation.pipeSeparator}  `);
-      lines.push(this.stringToLine(truncateDisplay(ctxLine, width), width, { fg: '240', dim: true }));
+      // risk banner rendered a few lines below. Lowest priority: dropped first.
+      if (hitlMode) ctxParts.push({ text: `notify:${hitlMode}`, priority: 3 });
+      const sep = `  ${GLYPHS.navigation.pipeSeparator}  `;
+      const ctxBody = joinPrioritizedSegments(ctxParts, sep, width - 3);
+      const ctxLine = '   ' + ctxBody;
+      lines.push(this.stringToLine(ctxLine, width, { fg: '240', dim: true }));
     }
     if (showExitNotice) {
       const notice = `   !!! Press Ctrl+C again to exit !!! `;

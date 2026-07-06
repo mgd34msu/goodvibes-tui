@@ -166,6 +166,51 @@ export function truncateDisplay(text: string, width: number, ellipsis = '…'): 
   return result + ellipsis;
 }
 
+/** A single footer/status-line segment plus its survival priority. */
+export interface PrioritizedSegment {
+  readonly text: string;
+  /** Lower number = higher priority = dropped LAST under width pressure. */
+  readonly priority: number;
+}
+
+/**
+ * Join segments left-to-right with `separator`, but when the joined line
+ * would exceed `width`, drop whole low-priority segments (highest `priority`
+ * number first) one at a time until it fits — rather than character-truncating
+ * the joined string, which can mangle a high-value segment mid-word (e.g. a
+ * `spine:online` daemon-liveness marker clipped to `spi…`).
+ *
+ * Only falls back to character truncation (via truncateDisplay) if the
+ * remaining highest-priority segments still don't fit at width — a rare,
+ * very-narrow-terminal case.
+ */
+export function joinPrioritizedSegments(
+  segments: readonly PrioritizedSegment[],
+  separator: string,
+  width: number,
+): string {
+  const join = (list: readonly PrioritizedSegment[]) => list.map(s => s.text).join(separator);
+  let kept = segments;
+  // Keep dropping whole segments while more than one remains; once a single
+  // segment is left, stop — an empty result would be a worse outcome than
+  // falling through to character truncation on that last segment below.
+  while (kept.length > 1 && getDisplayWidth(join(kept)) > width) {
+    // Drop the single lowest-priority (highest `priority` number) segment;
+    // ties broken toward the leftmost (earlier-declared) segment surviving —
+    // `>=` (not `>`) so that on equal priority the LATER index keeps winning
+    // as the drop candidate, leaving the earliest-declared segment of that
+    // priority tier intact (e.g. cwd survives over model when both are
+    // priority 0, since cwd is declared first).
+    let dropIdx = 0;
+    for (let i = 1; i < kept.length; i++) {
+      if (kept[i].priority >= kept[dropIdx].priority) dropIdx = i;
+    }
+    kept = kept.slice(0, dropIdx).concat(kept.slice(dropIdx + 1));
+  }
+  const joined = join(kept);
+  return getDisplayWidth(joined) > width ? truncateDisplay(joined, width) : joined;
+}
+
 export function padDisplayEnd(text: string, width: number): string {
   const currentWidth = getDisplayWidth(text);
   if (currentWidth >= width) return text;

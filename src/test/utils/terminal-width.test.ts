@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { fitDisplay, getDisplayWidth, padDisplayEnd, truncateDisplay, wrapText } from '../../utils/terminal-width.ts';
+import { fitDisplay, getDisplayWidth, joinPrioritizedSegments, padDisplayEnd, truncateDisplay, wrapText } from '../../utils/terminal-width.ts';
 
 describe('ANSI escape stripping in getDisplayWidth', () => {
   test('SGR reset sequence \\x1b[0m is not counted as width', () => {
@@ -263,5 +263,77 @@ describe('padDisplayEnd — ANSI-aware padding', () => {
     const padded = padDisplayEnd(text, 4);
     // wider input is returned unchanged (no truncation contract)
     expect(padded).toBe('toolong');
+  });
+});
+
+describe('joinPrioritizedSegments: whole-segment drop under width pressure', () => {
+  const SEP = ' | ';
+
+  test('all segments fit: joined verbatim in original order, nothing dropped', () => {
+    const segs = [
+      { text: 'aaa', priority: 0 },
+      { text: 'bbb', priority: 1 },
+      { text: 'ccc', priority: 2 },
+    ];
+    expect(joinPrioritizedSegments(segs, SEP, 20)).toBe('aaa | bbb | ccc');
+  });
+
+  test('drops the single highest-priority-number (lowest-value) segment whole first', () => {
+    const segs = [
+      { text: 'essential', priority: 0 },
+      { text: 'important', priority: 1 },
+      { text: 'decorative', priority: 2 },
+    ];
+    // Width fits the two higher-priority segments plus separator, but not all three.
+    const width = 'essential | important'.length;
+    const result = joinPrioritizedSegments(segs, SEP, width);
+    expect(result).toBe('essential | important');
+    expect(result).not.toContain('decorative');
+    // No partial/mangled fragment of the dropped segment leaks through.
+    expect(result).not.toContain('deco');
+  });
+
+  test('on a priority tie, drops the LATER segment and keeps the earlier one (regression: cwd survived over model in the footer)', () => {
+    // Two priority-0 ("essential") segments that together don't fit: the
+    // earlier-declared one must survive, not be silently dropped in favor
+    // of the later one. This mirrors the footer's cwd (declared first) and
+    // model (declared second), both priority 0 — a real bug caught during
+    // live tmux verification: dir got dropped instead of model because the
+    // original tie-break picked the FIRST max-priority index, not the LAST.
+    const segs = [
+      { text: 'first-essential', priority: 0 },
+      { text: 'second-essential', priority: 0 },
+      { text: 'decorative', priority: 1 },
+    ];
+    const width = 'first-essential'.length; // fits exactly one segment alone
+    const result = joinPrioritizedSegments(segs, SEP, width);
+    expect(result).toBe('first-essential');
+    expect(result).not.toContain('second-essential');
+    expect(result).not.toContain('decorative');
+  });
+
+  test('drops multiple low-priority segments in priority order until it fits', () => {
+    const segs = [
+      { text: 'core', priority: 0 },
+      { text: 'high', priority: 1 },
+      { text: 'mid', priority: 2 },
+      { text: 'low', priority: 3 },
+    ];
+    const width = 'core | high'.length;
+    const result = joinPrioritizedSegments(segs, SEP, width);
+    expect(result).toBe('core | high');
+    expect(result).not.toContain('mid');
+    expect(result).not.toContain('low');
+  });
+
+  test('falls back to character truncation only when even the sole remaining segment does not fit', () => {
+    const segs = [{ text: 'way-too-long-to-fit-in-the-given-width', priority: 0 }];
+    const result = joinPrioritizedSegments(segs, SEP, 10);
+    expect(getDisplayWidth(result)).toBeLessThanOrEqual(10);
+    expect(result.endsWith('…')).toBe(true);
+  });
+
+  test('empty segment list returns empty string', () => {
+    expect(joinPrioritizedSegments([], SEP, 10)).toBe('');
   });
 });
