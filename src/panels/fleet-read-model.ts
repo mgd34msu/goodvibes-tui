@@ -71,6 +71,15 @@ export interface FleetSnapshot {
 
 export type FleetStateTone = 'active' | 'success' | 'failure' | 'warn' | 'muted';
 
+// W6-P1 ruling: this is a DIFFERENT table from the SDK presentation
+// contract's STATE_GLYPHS (@pellux/goodvibes-sdk/platform/presentation) — that
+// one is a 4-state semantic alias (good/warn/bad/info) shared by the TUI and
+// agent renderers; this one is a 12-state ProcessNode taxonomy specific to the
+// Fleet tree panel (thinking/executing-tool/awaiting-approval/streaming/
+// stalled/retrying/done/failed/killed/interrupted/idle/queued/paused), and no
+// other surface (checked: the agent has no fleet-panel renderer) consumes it
+// today. Per the presentation-parity brief, a table only moves to the SDK
+// contract when 2+ surfaces need it — this one stays TUI-renderer-local.
 const STATE_GLYPHS: Record<ProcessState, string> = {
   thinking: '◔',
   'executing-tool': '●',

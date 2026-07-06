@@ -12,11 +12,10 @@ import { computeContextUsage } from '../core/context-usage.ts';
 import { calcSessionCost, isModelPriced } from '../export/cost-utils.ts';
 import { buildFooterTip, isAgentActive } from './footer-tips.ts';
 import type { StreamMetrics } from '../core/stream-event-wiring.ts';
+import { waitingPhrase, type WaitingState } from '@pellux/goodvibes-sdk/platform/presentation';
 
 /** Number of frames before the animated gradient completes one full cycle. */
 const GRADIENT_CYCLE_FRAMES = 50;
-/** Number of frames before rotating to the next thinking phrase (~30 seconds at 80ms/frame). */
-const PHRASE_ROTATION_FRAMES = 375;
 /**
  * Ms since the last STREAM_DELTA before the whimsical phrase rotation freezes
  * and createThinkingFragment shows an honest "stalled Ns" / "reconnecting"
@@ -485,29 +484,15 @@ export class UIFactory {
     return lines;
   }
 
-  /** Rotating thinking phrases — vaporwave / good vibes themed. */
-  private static readonly THINKING_PHRASES = [
-    'Thinking...',
-    'Vibing...',
-    'Manifesting...',
-    'Channeling energy...',
-    'Tuning frequencies...',
-    'Riding the wave...',
-    'Aligning chakras...',
-    'Entering flow state...',
-    'Consulting the void...',
-    'Absorbing aesthetics...',
-    'Synthesizing vibes...',
-    'Transcending...',
-    'Dreaming in neon...',
-    'Parsing the cosmos...',
-    'Loading good vibes...',
-    'Meditating...',
-    'Catching a vibe...',
-    'Harmonizing...',
-    'Feeling it...',
-    'In the zone...',
-  ];
+  // W6-P1: the rotating "thinking" phrase pool and the honest waiting-state
+  // wording (approval/reconnecting/pre-first-token/stalled/thinking) are no
+  // longer minted here. They come from the SDK presentation contract's
+  // waitingPhrase() (@pellux/goodvibes-sdk/platform/presentation, landed by
+  // W4-S1, already adopted by the agent in W4-R4) — see createThinkingFragment
+  // below. This renderer still decides WHICH state applies from its own
+  // stall/reconnect/approval signals (computeStallInfo/computeRenderStallInfo
+  // stay renderer-local per the extraction decision record); only the exact
+  // wording is shared.
 
   // Gradient colors for thinking text — cyan→purple in dark, teal→purple in
   // light (matches splash/brand). Read live per render inside
@@ -556,32 +541,25 @@ export class UIFactory {
     // mode-resolved chrome tones per render (gradient/brand/tool accents flip).
     const tones = activeUiTones();
     // Freeze the whimsical phrase rotation once real silence has gone on
-    // long enough to be misleading (THINKING_STALL_FREEZE_MS), and show an
-    // honest label instead: the SDK's reconnect attempt/maxAttempts once
-    // STREAM_RETRY is available, else a plain elapsed-silence readout.
+    // long enough to be misleading (THINKING_STALL_FREEZE_MS). Decide WHICH
+    // honest waiting state applies (renderer-local — this signal computation
+    // stays here per the extraction decision record), then defer the exact
+    // wording to the SDK presentation contract's waitingPhrase() (W6-P1;
+    // mirrors the agent's W4-R4 adoption). Precedence matches the contract:
+    // approval > reconnecting > pre-first-token > stalled > thinking.
     const isStalled = stallInfo !== undefined && stallInfo.msSinceLastDelta >= THINKING_STALL_FREEZE_MS;
-    let phrase: string;
-    if (approvalPending) {
-      // An approval card is waiting on the USER — the turn is not stalled and the provider is not at
-      // fault. The stream is legitimately silent because we asked the user a question, so show an
-      // honest, blame-free label instead of "Stalled Ns..." / a provider name. This takes precedence
-      // over stall/reconnect framing: waiting on the user is the true state.
-      phrase = 'Waiting for your approval';
-    } else if (stallInfo?.reconnect) {
-      phrase = `Reconnecting (attempt ${stallInfo.reconnect.attempt}/${stallInfo.reconnect.maxAttempts})...`;
-    } else if (isStalled && (outputTokens ?? 0) === 0) {
-      // Pre-first-token silence is NORMAL for reasoning models (they think
-      // before emitting) — "Stalled" reads as hung/broken and blames the
-      // wrong party (batch replay D1). Honest wording until the first token;
-      // "Stalled" is reserved for silence AFTER the stream started producing.
-      phrase = `Waiting for model ${Math.floor(stallInfo.msSinceLastDelta / 1000)}s...`;
-    } else if (isStalled) {
-      phrase = `Stalled ${Math.floor(stallInfo.msSinceLastDelta / 1000)}s...`;
-    } else {
-      // Rotate phrase every ~30 seconds (frame ticks at 80ms, so ~375 frames)
-      const phraseIndex = Math.floor(frame / PHRASE_ROTATION_FRAMES) % this.THINKING_PHRASES.length;
-      phrase = this.THINKING_PHRASES[phraseIndex];
-    }
+    let state: WaitingState;
+    if (approvalPending) state = 'approval';
+    else if (stallInfo?.reconnect) state = 'reconnecting';
+    else if (isStalled && (outputTokens ?? 0) === 0) state = 'pre-first-token';
+    else if (isStalled) state = 'stalled';
+    else state = 'thinking';
+    const phrase = waitingPhrase(state, {
+      reconnectAttempt: stallInfo?.reconnect?.attempt,
+      reconnectMaxAttempts: stallInfo?.reconnect?.maxAttempts,
+      msSinceLastDelta: stallInfo?.msSinceLastDelta,
+      frame,
+    });
     // Token-rate and time-to-first-token readouts are meaningless while waiting on the user, and a
     // "tok/s" figure next to an approval prompt reads as if the model were still working — suppress
     // them; keep the elapsed timer since "how long the approval has waited" is honest.
