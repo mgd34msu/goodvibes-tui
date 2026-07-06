@@ -4,6 +4,7 @@ import { pathToFileURL } from 'node:url';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import {
+  buildInstallResultLines,
   isDaemonServiceSubcommand,
   resolveInstalledDaemonBinary,
   runDaemonServiceCli,
@@ -172,6 +173,173 @@ describe('runDaemonServiceCli (systemd path, real PlatformServiceManager, stubbe
     // platform's start() tracks a pid), so `running` honestly reports false
     // here and the CLI adds a caveat rather than claiming certainty either way.
     expect(result.status.running).toBe(false);
-    expect(result.lines.some((line) => line.includes("only reflects processes this tool started directly"))).toBe(true);
+    // W3 Finding 4: the old wording asserted HOW `running` was computed
+    // ("only reflects processes this tool started directly") — true for the
+    // pid-file-only check this (currently linked) SDK build still uses, but
+    // stale once the parallel SDK batch makes status().running query systemd
+    // honestly via `is-active`. The caveat now just offers the escape hatch
+    // without asserting a mechanism, so it stays true either way.
+    expect(result.lines.some((line) => line.includes('verify directly'))).toBe(true);
+  });
+});
+
+/**
+ * W3 Finding 4: legacy-unit detection (`goodvibes-daemon.service`, the prior
+ * D7a command's literal unit name — distinct from this module's tracked
+ * `goodvibes.service`). Both the file-existence check and the `is-active`
+ * query are fully faked here: `legacyUnitFileExists` never touches the real
+ * `~/.config/systemd/user`, and the `is-active` query goes through the same
+ * injected `actionRunner` used above — this suite never touches, stops, or
+ * modifies a real running service.
+ */
+describe('runDaemonServiceCli — legacy unit detection (W3 Finding 4)', () => {
+  let dir = '';
+
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), 'gv-service-commands-legacy-'));
+  });
+
+  afterEach(() => {
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  function baseInput(overrides: Partial<Parameters<typeof runDaemonServiceCli>[0]> = {}) {
+    return {
+      subcommand: 'service-status' as const,
+      binaryPath: '/usr/local/bin/goodvibes-daemon',
+      homeDir: dir,
+      host: '127.0.0.1',
+      port: 3421,
+      ...overrides,
+    };
+  }
+
+  function fakeRunner(status: number, stdout: string): { runner: ManagedServiceActionRunner; calls: string[][] } {
+    const calls: string[][] = [];
+    const runner: ManagedServiceActionRunner = (command, args) => {
+      calls.push([command, ...args]);
+      return { status, stdout };
+    };
+    return { runner, calls };
+  }
+
+  describe('service-status', () => {
+    test('legacy unit absent: no legacy note, is-active never queried', () => {
+      const { runner, calls } = fakeRunner(0, 'active');
+      const result = runDaemonServiceCli(baseInput({ legacyUnitFileExists: () => false, actionRunner: runner }));
+
+      expect(result.ok).toBe(true);
+      expect(result.lines.join('\n')).not.toContain('goodvibes-daemon.service');
+      expect(calls).toEqual([]);
+    });
+
+    test('legacy unit present + active: reports it honestly as RUNNING with a migration hint', () => {
+      const { runner, calls } = fakeRunner(0, 'active');
+      const result = runDaemonServiceCli(baseInput({ legacyUnitFileExists: () => true, actionRunner: runner }));
+
+      expect(result.ok).toBe(true);
+      const text = result.lines.join('\n');
+      expect(text).toContain('legacy name goodvibes-daemon.service');
+      expect(text).toContain('installed and RUNNING');
+      expect(text).toContain('will not touch the legacy one automatically');
+      expect(calls).toEqual([['systemctl', '--user', 'is-active', 'goodvibes-daemon.service']]);
+    });
+
+    test('legacy unit present + inactive: reports it honestly as not currently active', () => {
+      const { runner } = fakeRunner(3, 'inactive');
+      const result = runDaemonServiceCli(baseInput({ legacyUnitFileExists: () => true, actionRunner: runner }));
+
+      const text = result.lines.join('\n');
+      expect(text).toContain('goodvibes-daemon.service');
+      expect(text).toContain('not currently active');
+      expect(text).not.toContain('RUNNING');
+    });
+  });
+
+  describe('install-service', () => {
+    test('legacy unit present: refuses rather than risk a second daemon, never writes the new unit', () => {
+      const { runner, calls } = fakeRunner(0, 'active');
+      const result = runDaemonServiceCli(baseInput({ subcommand: 'install-service', legacyUnitFileExists: () => true, actionRunner: runner }));
+
+      expect(result.ok).toBe(false);
+      expect(result.exitCode).toBe(1);
+      expect(result.lines.join('\n')).toContain('legacy name goodvibes-daemon.service');
+      expect(existsSync(join(dir, '.config', 'systemd', 'user', 'goodvibes.service'))).toBe(false);
+      // Only the read-only is-active query ran — no install/enable dispatched.
+      expect(calls).toEqual([['systemctl', '--user', 'is-active', 'goodvibes-daemon.service']]);
+    });
+
+    test('legacy unit present but inactive: still refuses (an inactive unit can still be enabled and collide later)', () => {
+      const { runner } = fakeRunner(3, 'inactive');
+      const result = runDaemonServiceCli(baseInput({ subcommand: 'install-service', legacyUnitFileExists: () => true, actionRunner: runner }));
+
+      expect(result.ok).toBe(false);
+      expect(existsSync(join(dir, '.config', 'systemd', 'user', 'goodvibes.service'))).toBe(false);
+    });
+
+    test('legacy unit absent: installs normally', () => {
+      const { runner } = fakeRunner(0, 'active');
+      const result = runDaemonServiceCli(baseInput({ subcommand: 'install-service', legacyUnitFileExists: () => false, actionRunner: runner }));
+
+      expect(result.ok).toBe(true);
+      expect(existsSync(join(dir, '.config', 'systemd', 'user', 'goodvibes.service'))).toBe(true);
+    });
+  });
+
+  describe('uninstall-service', () => {
+    test('legacy unit present: mentions it is untouched, still uninstalls the tracked unit', () => {
+      // Install the TRACKED unit first (legacy absent at install time) so there is something to remove.
+      runDaemonServiceCli(baseInput({ subcommand: 'install-service', legacyUnitFileExists: () => false, actionRunner: fakeRunner(0, 'active').runner }));
+      const trackedPath = join(dir, '.config', 'systemd', 'user', 'goodvibes.service');
+      expect(existsSync(trackedPath)).toBe(true);
+
+      const { runner } = fakeRunner(0, 'active');
+      const result = runDaemonServiceCli(baseInput({ subcommand: 'uninstall-service', legacyUnitFileExists: () => true, actionRunner: runner }));
+
+      expect(result.ok).toBe(true);
+      expect(existsSync(trackedPath)).toBe(false);
+      const text = result.lines.join('\n');
+      expect(text).toContain('legacy name goodvibes-daemon.service');
+      expect(text).toContain('will not touch the legacy one automatically');
+    });
+
+    test('legacy unit absent: no legacy note', () => {
+      runDaemonServiceCli(baseInput({ subcommand: 'install-service', legacyUnitFileExists: () => false, actionRunner: fakeRunner(0, 'active').runner }));
+      const result = runDaemonServiceCli(baseInput({ subcommand: 'uninstall-service', legacyUnitFileExists: () => false, actionRunner: fakeRunner(0, 'active').runner }));
+
+      expect(result.ok).toBe(true);
+      expect(result.lines.join('\n')).not.toContain('goodvibes-daemon.service');
+    });
+  });
+});
+
+describe('buildInstallResultLines — "suggested follow-ups" gating (W3 Finding 4 friction fix)', () => {
+  function fakeStatus(overrides: Partial<Parameters<typeof buildInstallResultLines>[0]> = {}): Parameters<typeof buildInstallResultLines>[0] {
+    return {
+      platform: 'systemd',
+      path: '/home/user/.config/systemd/user/goodvibes.service',
+      installed: true,
+      autostart: true,
+      running: false,
+      commandPreview: '/usr/local/bin/goodvibes-daemon',
+      suggestedCommands: ['systemctl --user daemon-reload', 'systemctl --user enable --now goodvibes.service', 'systemctl --user status goodvibes.service'],
+      lastAction: 'install',
+      ...overrides,
+    };
+  }
+
+  test('running: true — "service is enabled and running", no "suggested follow-ups" block (it already started)', () => {
+    const lines = buildInstallResultLines(fakeStatus({ running: true }));
+
+    expect(lines).toContain('service is enabled and running');
+    expect(lines.some((line) => line.includes('suggested follow-ups'))).toBe(false);
+  });
+
+  test('running: false — keeps the "suggested follow-ups" block, no false claim that it is running', () => {
+    const lines = buildInstallResultLines(fakeStatus({ running: false }));
+
+    expect(lines).not.toContain('service is enabled and running');
+    expect(lines.some((line) => line.includes('suggested follow-ups'))).toBe(true);
+    expect(lines.some((line) => line.includes('systemctl --user daemon-reload'))).toBe(true);
   });
 });
