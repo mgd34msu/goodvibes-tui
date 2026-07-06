@@ -4,6 +4,17 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [1.9.2] — 2026-07-06
+
+Patch release fixing text-to-speech playback so spoken responses play start-to-finish without losing audio at either end.
+
+### Text-to-speech playback fixes
+- The beginning of spoken output is no longer clipped: playback now waits for the audio player to actually be ready before sending it audio, and the player's read-ahead buffering was restored so the opening of a response survives normal startup delay.
+- The end of spoken output is no longer cut off: audio now drains fully once a response finishes speaking naturally. When you quit while audio is still playing, the final bit of audio gets a bounded two-second window to finish before shutdown continues. Deliberate interrupts (stopping speech, starting a new response, Ctrl+C) still cut instantly as before. A spurious error message that could appear when stopping playback has also been removed.
+
+### Other
+- Documentation and code comments were cleaned up for clarity; no behavior changes.
+
 ## [1.9.1] — 2026-07-06
 
 Follow-up patch that completes the client-side credential-status adoption for the TUI. The 1.9.0 release pinned SDK 1.0.0 and unified memory but left the client-side credential-status read for a follow-up; this release lands it. Ships against @pellux/goodvibes-sdk 1.0.0.
