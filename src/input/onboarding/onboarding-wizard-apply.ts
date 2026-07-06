@@ -90,8 +90,9 @@ export function buildOnboardingApplyRequest(controller: OnboardingWizardControll
     // loopback bind, auth-gated, rate-limited) and runs regardless of whether
     // browser/LAN/webhook/external-app capabilities are selected here — it is no
     // longer bundled with those network-exposing surfaces, so onboarding leaves
-    // daemon.enabled/danger.daemon untouched and lets the SDK's own default-true
-    // (or an existing explicit user override, either key) govern.
+    // daemon.enabled untouched and lets the SDK's own default-true (or an existing
+    // explicit user override) govern. (The deprecated danger.daemon alias this
+    // comment used to also name was removed in Wave 6.)
     setConfig('controlPlane.enabled', hasServers);
     setConfig('danger.httpListener', httpListener);
     setConfig('web.enabled', browserAccess);

@@ -403,7 +403,20 @@ export async function collectOnboardingSnapshot(
       snapshot: authSnapshotResult.value,
     },
     bindSettings: {
-      daemonEnabled: Boolean(config.danger.daemon),
+      // danger.daemon (removed Wave 6 — see docs/decisions/2026-07-05-daemon-by-default.md)
+      // used to gate the pre-Wave-2 opt-in daemon posture; this site read it RAW
+      // (not through resolveDaemonEnabled) so the wizard's network-mode
+      // classification tracked "did the user explicitly request the legacy
+      // dangerous posture" rather than "does the daemon run" (which has defaulted
+      // true unconditionally since Wave 2, and would misclassify every default,
+      // local-only install as server-mode if read here). Every realistic config
+      // already evaluated this to `false` (unset, or an explicit `danger.daemon:
+      // false` both did); the alias's removal migration preserves the one case
+      // that changes real daemon behavior (explicit `false` -> `daemon.enabled:
+      // false`) but does not resurrect a signal for "explicitly true" — that path
+      // was always a no-op for actual daemon operation. With the alias gone there
+      // is no signal left to read, so this is pinned at its steady-state value.
+      daemonEnabled: false,
       httpListenerEnabled: Boolean(config.danger.httpListener),
       controlPlane: config.controlPlane,
       httpListener: config.httpListener,

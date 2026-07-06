@@ -47,7 +47,7 @@ export async function handleSurfacesCommand(runtime: CliCommandRuntime): Promise
       runtime.configManager.setDynamic('web.enabled', enabled);
       if (enabled) {
         enableFeatureFlags(runtime.configManager, getServerSurfaceFeatureFlags({ serverBacked: true, web: true }));
-        runtime.configManager.setDynamic('danger.daemon', true);
+        runtime.configManager.setDynamic('daemon.enabled', true);
         runtime.configManager.setDynamic('controlPlane.enabled', true);
         const webError = applyTargetEndpointFlagsOrDefault(runtime, 'web');
         if (webError) return { output: webError, exitCode: 2 };
@@ -70,7 +70,7 @@ export async function handleSurfacesCommand(runtime: CliCommandRuntime): Promise
     }
     else if (target === 'control-plane' || target === 'controlPlane') {
       runtime.configManager.setDynamic('controlPlane.enabled', enabled);
-      runtime.configManager.setDynamic('danger.daemon', enabled);
+      runtime.configManager.setDynamic('daemon.enabled', enabled);
       if (enabled) {
         const controlPlaneError = applyTargetEndpointFlagsOrDefault(runtime, 'controlPlane');
         if (controlPlaneError) return { output: controlPlaneError, exitCode: 2 };

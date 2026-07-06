@@ -84,7 +84,7 @@ Typical workflows:
 - ingest URLs, bookmarks, docs, spreadsheets, and artifacts into the structured knowledge system for later retrieval
 - dispatch and review work across remote peers and node-host runners
 
-The compiled binary is the TUI entrypoint built from `src/main.ts`. When `danger.daemon` and/or `danger.httpListener` are enabled, that same binary starts the daemon and HTTP listener in-process. `bun run daemon` uses the separate headless daemon entrypoint from source.
+The compiled binary is the TUI entrypoint built from `src/main.ts`. The daemon (`daemon.enabled`, on by default, loopback-bound) and, when `danger.httpListener` is enabled, the HTTP listener both start in-process from that same binary. `bun run daemon` uses the separate headless daemon entrypoint from source.
 
 Inbound TLS can run in `off`, `proxy`, or `direct` mode. Direct mode defaults to the certificate files above unless explicit paths are configured. Outbound HTTPS trust uses Bun’s bundled roots by default and can be extended or replaced with custom CA files/directories for internal or enterprise endpoints. Operator auth now supports bearer headers and local session cookies across REST, SSE, and control-plane WebSocket flows.
 
@@ -446,7 +446,7 @@ bun run build
 # outputs dist/goodvibes
 ```
 
-`bun run build` compiles `src/main.ts` into `dist/goodvibes`. The compiled binary runs the TUI and can also host the daemon and HTTP listener in-process when `danger.daemon` and/or `danger.httpListener` are enabled in config. The default build does not produce a separate compiled daemon-only executable.
+`bun run build` compiles `src/main.ts` into `dist/goodvibes`. The compiled binary runs the TUI and also hosts the daemon in-process (`daemon.enabled`, on by default) plus, when `danger.httpListener` is enabled, the HTTP listener. The default build does not produce a separate compiled daemon-only executable.
 
 ---
 
@@ -560,7 +560,7 @@ Related storage paths:
 | `web.port` | `3423` | Web/browser surface port |
 | `danger.agentRecursion` | `false` | Allow agents to spawn subagents |
 | `danger.maxGlobalAgents` | `8` | Max simultaneous agents |
-| `danger.daemon` | `false` | Enable daemon mode (POST /task) |
+| `daemon.enabled` | `true` | Run the local session daemon (loopback-bound; on by default) |
 | `danger.httpListener` | `false` | Enable HTTP webhook listener |
 | `tools.autoHeal` | `false` | Auto-fix syntax errors on write/edit |
 | `tools.hooksFile` | `hooks.json` | Hook configuration file name |
@@ -740,10 +740,11 @@ Key commands:
 
 ### Local daemon and HTTP listener
 
-Local service surfaces are opt-in:
+The local session daemon runs by default (`daemon.enabled`, loopback-bound); the HTTP
+webhook listener is opt-in:
 
-- `danger.daemon`
-- `danger.httpListener`
+- `daemon.enabled` (default `true`)
+- `danger.httpListener` (default `false`)
 
 They are protected by local auth, which includes:
 

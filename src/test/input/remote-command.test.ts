@@ -349,8 +349,8 @@ describe('remote command', () => {
     const ctx = createRemoteCommandContext(store, out, {
       platform: {
         configManager: {
-          getCategory: () => ({ daemon: false, httpListener: false }),
-          get: (key: string) => (key === 'danger.daemon' ? false : undefined),
+          getCategory: () => ({ httpListener: false }),
+          get: (key: string) => (key === 'daemon.enabled' ? false : undefined),
         } as never,
       },
     });
@@ -388,10 +388,7 @@ describe('remote command', () => {
     expect(out.join('\n')).toContain('Remote Bootstrap Bundle Review');
   });
 
-  test('/remote setup reports the daemon enabled by default when the legacy alias is untouched, and honors an explicit override', async () => {
-    // Same bug class as the onboarding daemon-default fix: danger.daemon has no
-    // default of its own, so reading it directly reported "disabled" for a
-    // fresh install even though the daemon runs by default via daemon.enabled.
+  test('/remote setup reports the daemon enabled by default, and honors an explicit daemon.enabled=false override', async () => {
     resetTestRuntimeServices();
     const registry = new CommandRegistry();
     registerBuiltinCommands(registry);
@@ -405,7 +402,7 @@ describe('remote command', () => {
     const defaultCtx = createRemoteCommandContext(store, out, {
       platform: {
         configManager: {
-          getCategory: () => ({ daemon: undefined, httpListener: false }),
+          getCategory: () => ({ httpListener: false }),
           get: () => undefined,
         } as never,
       },
@@ -423,8 +420,8 @@ describe('remote command', () => {
     const overrideCtx = createRemoteCommandContext(store, out, {
       platform: {
         configManager: {
-          getCategory: () => ({ daemon: false, httpListener: false }),
-          get: (key: string) => (key === 'danger.daemon' ? false : undefined),
+          getCategory: () => ({ httpListener: false }),
+          get: (key: string) => (key === 'daemon.enabled' ? false : undefined),
         } as never,
       },
     });
@@ -451,8 +448,8 @@ describe('remote command', () => {
     const ctx = createRemoteCommandContext(store, out, {
       platform: {
         configManager: {
-          getCategory: () => ({ daemon: false, httpListener: false }),
-          get: (key: string) => (key === 'danger.daemon' ? false : undefined),
+          getCategory: () => ({ httpListener: false }),
+          get: (key: string) => (key === 'daemon.enabled' ? false : undefined),
         } as never,
       },
       session: {

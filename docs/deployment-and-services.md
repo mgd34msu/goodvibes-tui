@@ -30,9 +30,11 @@ In this mode you still get the full TUI, tools, providers, knowledge system, art
 
 ## In-process daemon and HTTP listener
 
-The TUI runtime can host the daemon and HTTP listener in-process when these settings are enabled:
+The TUI runtime hosts the daemon in-process by default (`daemon.enabled`, on by default)
+and can also host the HTTP listener and the shared control-plane surface when these
+settings are enabled:
 
-- `danger.daemon`
+- `daemon.enabled` (default `true`)
 - `controlPlane.enabled`
 - `danger.httpListener`
 

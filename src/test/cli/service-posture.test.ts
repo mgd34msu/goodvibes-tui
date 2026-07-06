@@ -178,11 +178,7 @@ describe('CLI service posture', () => {
     }
   });
 
-  test('posture reports the daemon enabled by default when the legacy danger.daemon alias is untouched', async () => {
-    // Same bug class as the onboarding daemon-default fix: danger.daemon has no
-    // default, so reading it directly reported "disabled" for every fresh
-    // config even though daemon.enabled defaults to true. Posture must go
-    // through resolveDaemonEnabled instead.
+  test('posture reports the daemon enabled by default for a fresh config', async () => {
     const projectRoot = join(root, 'project');
     const homeRoot = join(root, 'home');
     mkdirSync(projectRoot, { recursive: true });
@@ -202,17 +198,29 @@ describe('CLI service posture', () => {
     expect(posture.config.daemonEnabled).toBe(true);
   });
 
-  test('posture honors an explicit danger.daemon=false override even though daemon.enabled defaults true', async () => {
+  test('posture honors a legacy on-disk danger.daemon=false through the Wave-6 removal migration', async () => {
+    // The deprecated danger.daemon alias was removed from the schema (Wave 6,
+    // docs/decisions/2026-07-05-daemon-by-default.md). A user's existing
+    // explicit off-switch on disk is preserved by the SDK's config migration
+    // (ConfigManager.load -> migrateDangerDaemonAlias), which rewrites it onto
+    // daemon.enabled=false BEFORE this posture read — it is no longer
+    // reachable via ConfigManager.setDynamic('danger.daemon', ...) at runtime
+    // because the key no longer exists in the schema.
     const projectRoot = join(root, 'project');
     const homeRoot = join(root, 'home');
     mkdirSync(projectRoot, { recursive: true });
     mkdirSync(homeRoot, { recursive: true });
+    mkdirSync(join(homeRoot, '.goodvibes', 'tui'), { recursive: true });
+    writeFileSync(
+      join(homeRoot, '.goodvibes', 'tui', 'settings.json'),
+      JSON.stringify({ danger: { daemon: false } }),
+      'utf-8',
+    );
     const config = new ConfigManager({
       surfaceRoot: 'tui',
       workingDir: projectRoot,
       homeDir: homeRoot,
     });
-    config.setDynamic('danger.daemon', false);
 
     const posture = await buildCliServicePosture({
       configManager: config,
