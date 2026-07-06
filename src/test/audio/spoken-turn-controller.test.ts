@@ -114,6 +114,22 @@ describe('SpokenTurnController', () => {
     expect(messages.join('\n')).toContain('Text response will continue');
   });
 
+  test('speaks the final unpunctuated tail flushed at turn completion', async () => {
+    const { controller, synthesized, played } = makeHarness();
+
+    expect(controller.submitNextTurn('tell me the number')).toBe(true);
+    controller.handleTurnEvent(turn({ type: 'TURN_SUBMITTED', turnId: 'turn-tail', prompt: 'tell me the number' }));
+    // The response never ends on sentence punctuation, so the tail only ever
+    // leaves the chunker via flushAll() on TURN_COMPLETED. If completion released
+    // before draining that flush, this tail would be truncated (the bug).
+    controller.handleTurnEvent(turn({ type: 'STREAM_DELTA', turnId: 'turn-tail', content: 'The answer is forty two', accumulated: 'The answer is forty two' }));
+    controller.handleTurnEvent(turn({ type: 'TURN_COMPLETED', turnId: 'turn-tail', response: 'The answer is forty two', stopReason: 'completed' }));
+    await drain();
+
+    expect(synthesized).toEqual(['fake-provider:fake-voice:The answer is forty two']);
+    expect(played).toEqual(['The answer is forty two']);
+  });
+
   test('stops playback without throwing on turn cancellation', async () => {
     const { controller, messages } = makeHarness();
 
