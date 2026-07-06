@@ -1,12 +1,14 @@
-import { describe, expect, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 import {
   isDaemonServiceSubcommand,
   resolveInstalledDaemonBinary,
   runDaemonServiceCli,
+  type ManagedServiceActionRunner,
 } from '../../daemon/service-commands.ts';
-import type { SystemctlRunner, SystemctlResult } from '@pellux/goodvibes-sdk/platform/daemon';
 
 describe('isDaemonServiceSubcommand', () => {
   test('recognizes the three service verbs and nothing else', () => {
@@ -56,79 +58,120 @@ describe('resolveInstalledDaemonBinary', () => {
   });
 });
 
-describe('runDaemonServiceCli (stubbed systemctl — never touches the host)', () => {
-  function recordingRunner(): { runner: SystemctlRunner; calls: string[][] } {
+/**
+ * Coverage for the CLI dispatch onto the SDK's REAL wired
+ * `PlatformServiceManager` (rewired here after SDK W3-S5 deleted the old
+ * systemd-only `systemd-user-service.ts` shim this module used to call).
+ *
+ * `service.platform` is forced to 'systemd' via config override so these tests
+ * exercise the systemd path on any host (matching what this repo's own Linux
+ * dev/CI hosts actually use), independent of `process.platform`. Every
+ * filesystem write is scoped to a per-test tempdir passed as both `homeDir`
+ * and `workingDirectory`, and every systemctl dispatch goes through an
+ * injected `actionRunner` — nothing here ever touches a real
+ * `~/.config/systemd/user` entry or invokes a real `systemctl` binary.
+ */
+describe('runDaemonServiceCli (systemd path, real PlatformServiceManager, stubbed systemctl)', () => {
+  let dir = '';
+
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), 'gv-service-commands-'));
+  });
+
+  afterEach(() => {
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  function recordingRunner(status = 0): { runner: ManagedServiceActionRunner; calls: string[][] } {
     const calls: string[][] = [];
-    const runner: SystemctlRunner = (args) => {
-      calls.push([...args]);
-      return { status: 0 } satisfies SystemctlResult;
+    const runner: ManagedServiceActionRunner = (command, args) => {
+      calls.push([command, ...args]);
+      return { status };
     };
     return { runner, calls };
   }
 
-  test('install-service writes the unit and enables it via systemctl', () => {
-    const { runner, calls } = recordingRunner();
-    const writes: string[] = [];
-    const result = runDaemonServiceCli({
-      subcommand: 'install-service',
+  function baseInput(overrides: Partial<Parameters<typeof runDaemonServiceCli>[0]> = {}) {
+    return {
+      subcommand: 'install-service' as const,
       binaryPath: '/usr/local/bin/goodvibes-daemon',
-      homeDir: '/home/tester',
+      homeDir: dir,
       host: '127.0.0.1',
       port: 3421,
-      env: { platform: 'linux', runSystemctl: runner, writeUnitFile: (p) => writes.push(p) },
-    });
+      ...overrides,
+    };
+  }
+
+  test('install-service writes the systemd unit then enables + starts it', () => {
+    const { runner, calls } = recordingRunner();
+    const result = runDaemonServiceCli(baseInput({ actionRunner: runner }));
+
     expect(result.ok).toBe(true);
     expect(result.exitCode).toBe(0);
-    expect(writes).toEqual(['/home/tester/.config/systemd/user/goodvibes-daemon.service']);
-    expect(calls).toEqual([
-      ['--user', 'daemon-reload'],
-      ['--user', 'enable', '--now', 'goodvibes-daemon.service'],
-    ]);
+    expect(result.status.platform).toBe('systemd');
+    const unitPath = join(dir, '.config', 'systemd', 'user', 'goodvibes.service');
+    expect(existsSync(unitPath)).toBe(true);
+    const contents = readFileSync(unitPath, 'utf-8');
+    expect(contents).toContain('ExecStart=/usr/local/bin/goodvibes-daemon --daemon-home');
+    expect(contents).toContain('--hostname 127.0.0.1');
+    expect(contents).toContain('--port 3421');
+    // install() only writes the file; install-service also calls start() to
+    // preserve the old shim's "install implies enabled + running" behavior.
+    expect(calls).toEqual([['systemctl', '--user', 'enable', '--now', 'goodvibes.service']]);
+    expect(result.lines.join('\n')).toContain('installed the systemd service');
   });
 
-  test('uninstall-service disables + removes; service-status is read-only', () => {
-    const { runner: r1, calls: c1 } = recordingRunner();
-    const uninstall = runDaemonServiceCli({
-      subcommand: 'uninstall-service',
-      binaryPath: 'goodvibes-daemon',
-      homeDir: '/home/tester',
-      host: '127.0.0.1',
-      port: 3421,
-      env: { platform: 'linux', runSystemctl: r1, removeUnitFile: () => {}, fileExists: () => true },
-    });
-    expect(uninstall.ok).toBe(true);
-    expect(c1[0]).toEqual(['--user', 'disable', '--now', 'goodvibes-daemon.service']);
+  test('install-service surfaces an honest failure when enabling fails, without pretending it started', () => {
+    const runner: ManagedServiceActionRunner = () => ({ status: 1, stderr: 'Failed to enable unit' });
+    const result = runDaemonServiceCli(baseInput({ actionRunner: runner }));
 
-    const { runner: r2, calls: c2 } = recordingRunner();
-    const status = runDaemonServiceCli({
-      subcommand: 'service-status',
-      binaryPath: 'goodvibes-daemon',
-      homeDir: '/home/tester',
-      host: '127.0.0.1',
-      port: 3421,
-      env: { platform: 'linux', runSystemctl: r2, fileExists: () => false },
-    });
-    expect(status.supported).toBe(true);
-    // Only read-only queries, no mutation.
-    expect(c2).toEqual([
-      ['--user', 'is-enabled', 'goodvibes-daemon.service'],
-      ['--user', 'is-active', 'goodvibes-daemon.service'],
-    ]);
+    expect(result.ok).toBe(true); // the write itself succeeded
+    expect(result.status.running).toBe(false);
+    expect(result.lines.some((line) => line.includes('could not start it automatically'))).toBe(true);
+    expect(result.lines.join('\n')).toContain('Failed to enable unit');
   });
 
-  test('non-linux install-service reports honest unsupported, clean non-zero exit', () => {
-    let touched = false;
-    const result = runDaemonServiceCli({
-      subcommand: 'install-service',
-      binaryPath: 'goodvibes-daemon',
-      homeDir: '/Users/tester',
-      host: '127.0.0.1',
-      port: 3421,
-      env: { platform: 'darwin', runSystemctl: () => { touched = true; return { status: 0 }; }, writeUnitFile: () => { touched = true; } },
-    });
-    expect(result.supported).toBe(false);
-    expect(result.exitCode).toBe(3);
-    expect(touched).toBe(false);
-    expect(result.lines[0]).toContain('not supported yet on darwin');
+  test('uninstall-service stops the unit then removes the file', () => {
+    // Install first so there is something to remove.
+    runDaemonServiceCli(baseInput({ actionRunner: recordingRunner().runner }));
+    const unitPath = join(dir, '.config', 'systemd', 'user', 'goodvibes.service');
+    expect(existsSync(unitPath)).toBe(true);
+
+    const { runner, calls } = recordingRunner();
+    const result = runDaemonServiceCli(baseInput({ subcommand: 'uninstall-service', actionRunner: runner }));
+
+    expect(result.ok).toBe(true);
+    expect(existsSync(unitPath)).toBe(false);
+    expect(calls).toEqual([['systemctl', '--user', 'stop', 'goodvibes.service']]);
+    expect(result.lines.join('\n')).toContain('daemon-reload');
+  });
+
+  test('uninstall-service reports ok even when stop fails (service was never running)', () => {
+    const runner: ManagedServiceActionRunner = () => ({ status: 1, stderr: 'Unit not loaded' });
+    const result = runDaemonServiceCli(baseInput({ subcommand: 'uninstall-service', actionRunner: runner }));
+
+    expect(result.ok).toBe(true);
+    expect(result.lines.some((line) => line.includes('may not have been running'))).toBe(true);
+  });
+
+  test('service-status is read-only and reports not-installed before any install', () => {
+    const result = runDaemonServiceCli(baseInput({ subcommand: 'service-status' }));
+
+    expect(result.ok).toBe(true);
+    expect(result.status.installed).toBe(false);
+    expect(result.status.running).toBe(false);
+    expect(result.lines).toContain('installed: false');
+  });
+
+  test('service-status after install reports installed:true and includes a caveat about running-state accuracy', () => {
+    runDaemonServiceCli(baseInput({ actionRunner: recordingRunner().runner }));
+    const result = runDaemonServiceCli(baseInput({ subcommand: 'service-status' }));
+
+    expect(result.status.installed).toBe(true);
+    // No pidfile is ever written on the systemd path (only the 'manual'
+    // platform's start() tracks a pid), so `running` honestly reports false
+    // here and the CLI adds a caveat rather than claiming certainty either way.
+    expect(result.status.running).toBe(false);
+    expect(result.lines.some((line) => line.includes("only reflects processes this tool started directly"))).toBe(true);
   });
 });
