@@ -137,8 +137,13 @@ describe('PlatformServiceManager', () => {
     launchdManager.start();
     launchdManager.stop();
     launchdManager.restart();
+    // restart() has no native launchd verb, so it dispatches an honest
+    // unload-then-load pair (the unload is best-effort — the agent may not be
+    // loaded yet) rather than a bare `load`, matching suggestedCommands()'
+    // human-facing `launchctl unload <path> || true` / `launchctl load <path>`.
     expect(launchdCalls).toEqual([
       { command: 'launchctl', args: ['load', launchdInstalled.path] },
+      { command: 'launchctl', args: ['unload', launchdInstalled.path] },
       { command: 'launchctl', args: ['unload', launchdInstalled.path] },
       { command: 'launchctl', args: ['load', launchdInstalled.path] },
     ]);
