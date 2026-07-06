@@ -22,7 +22,7 @@ import {
   DEFAULT_PANEL_PALETTE,
   type PanelWorkspaceSection,
 } from './polish.ts';
-import { calcSessionCost, isModelPriced, computeBudgetBreach, readBudgetAlertUsd, type BudgetAlertConfigAccess } from '../export/cost-utils.ts';
+import { calcSessionCost, isModelPriced, computeBudgetBreach, readBudgetAlertUsd, BUDGET_ALERT_USD_CONFIG_KEY, type BudgetAlertConfigAccess } from '../export/cost-utils.ts';
 import { abbreviateCount } from '../utils/format-number.ts';
 import { isTextBackspace } from '../input/delete-key-policy.ts';
 
@@ -332,7 +332,7 @@ export class CostTrackerPanel extends BasePanel {
   public setBudgetThreshold(usd: number): void {
     if (!Number.isFinite(usd) || usd < 0) return;
     this.budgetThreshold = usd;
-    this.configAccess?.set('behavior.budgetAlertUsd', usd);
+    this.configAccess?.set(BUDGET_ALERT_USD_CONFIG_KEY, usd);
     this.markDirty();
   }
 

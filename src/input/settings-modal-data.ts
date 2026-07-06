@@ -15,6 +15,7 @@ import { buildSubscriptionEntries } from './settings-modal-subscriptions.ts';
 import type { SubscriptionManager } from '@pellux/goodvibes-sdk/platform/config';
 import type { ServiceInspectionQuery } from '../runtime/ui-service-queries.ts';
 import { CODE_INDEX_ENABLED_CONFIG_KEY } from '../runtime/code-index-services.ts';
+import { BUDGET_ALERT_USD_CONFIG_KEY, BUDGET_ALERT_USD_DEFAULT, readBudgetAlertUsd } from '../export/cost-utils.ts';
 import {
   THEME_MODE_CONFIG_KEY,
   THEME_MODE_VALUES,
@@ -144,6 +145,18 @@ export function buildSettingGroups(
   const behaviorEntries = groups.get('behavior');
   if (behaviorEntries && !behaviorEntries.some((e) => e.setting.key === ('behavior.notifyAfterSeconds' as ConfigKey))) {
     behaviorEntries.push(buildNotifyAfterSecondsSyntheticEntry(configManager));
+  }
+
+  // Inject the synthetic behavior.budgetAlertUsd entry into the behavior
+  // category. This key is TUI-local (not in the SDK ConfigKey union), which
+  // previously left it with no schema-driven inspection surface at all: it
+  // never appeared in /config, and /settings-sync show rejects any key not
+  // in CONFIG_KEYS. The Cost panel's 'b' key and /cost budget <usd> remain
+  // the primary way to change it; this entry makes the current effective
+  // value (and whether it's still the "no budget configured" default)
+  // visible from /config behavior too, same rationale as notifyAfterSeconds.
+  if (behaviorEntries && !behaviorEntries.some((e) => e.setting.key === (BUDGET_ALERT_USD_CONFIG_KEY as ConfigKey))) {
+    behaviorEntries.push(buildBudgetAlertUsdSyntheticEntry(configManager));
   }
 
   // Inject the W2.3 alert-class toggles + master focus gate. TUI-local
@@ -284,6 +297,47 @@ export function buildNotifyAfterSecondsSyntheticEntry(configManager: Pick<Config
     setting: NOTIFY_AFTER_SECONDS_SYNTHETIC_SETTING,
     currentValue,
     isDefault: currentValue === NOTIFY_AFTER_SECONDS_DEFAULT_SETTING,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// behavior.budgetAlertUsd synthetic setting
+// ---------------------------------------------------------------------------
+
+/**
+ * The synthetic ConfigSetting descriptor for behavior.budgetAlertUsd.
+ *
+ * This key is TUI-local and is not yet in the SDK ConfigKey union — it never
+ * appeared in CONFIG_SCHEMA, so it was invisible to every schema-driven
+ * inspection surface (/config, /settings-sync show <key>) even though the
+ * value round-trips correctly through configManager.get/set. The descriptor
+ * is injected into the behavior settings group so /config behavior shows the
+ * real current threshold, not just the behavior.notifyOnBudgetBreach gate.
+ *
+ * 0 = no budget configured (disabled). Any positive number = the USD
+ * threshold. Default matches BUDGET_ALERT_USD_DEFAULT in cost-utils.ts, the
+ * single source of truth CostTrackerPanel and budget-breach-notifier.ts share.
+ */
+export const BUDGET_ALERT_USD_SYNTHETIC_SETTING: ConfigSetting = {
+  key: BUDGET_ALERT_USD_CONFIG_KEY as ConfigKey,
+  type: 'number',
+  default: BUDGET_ALERT_USD_DEFAULT,
+  description: 'Session cost-budget alert threshold in USD (0 = no budget configured). Set via the Cost panel\'s "b" key or /cost budget <usd>; this entry only displays the current effective value.',
+};
+
+/**
+ * Build the synthetic SettingEntry for behavior.budgetAlertUsd.
+ *
+ * Delegates parsing/fallback to readBudgetAlertUsd (cost-utils.ts) so this
+ * display entry can never disagree with what CostTrackerPanel and the
+ * background budget-breach notifier actually read.
+ */
+export function buildBudgetAlertUsdSyntheticEntry(configManager: Pick<ConfigManager, 'get'>): SettingEntry {
+  const currentValue = readBudgetAlertUsd((key) => configManager.get(key as ConfigKey));
+  return {
+    setting: BUDGET_ALERT_USD_SYNTHETIC_SETTING,
+    currentValue,
+    isDefault: currentValue === BUDGET_ALERT_USD_DEFAULT,
   };
 }
 

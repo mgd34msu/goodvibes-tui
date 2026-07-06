@@ -175,6 +175,14 @@ export interface BudgetAlertConfigAccess {
 export const BUDGET_ALERT_USD_DEFAULT = 0;
 
 /**
+ * The dot-path config key backing the session cost-budget alert threshold.
+ * Shared by cost-tracker-panel.ts (get/set), settings-modal-data.ts (the
+ * settings-modal-visible synthetic entry), and readBudgetAlertUsd below, so
+ * the string literal lives in exactly one place.
+ */
+export const BUDGET_ALERT_USD_CONFIG_KEY = 'behavior.budgetAlertUsd';
+
+/**
  * readBudgetAlertUsd — read the session cost-budget alert threshold (USD) from
  * config. This is the single source of truth CostTrackerPanel and the
  * background budget-breach notifier (core/budget-breach-notifier.ts) both
@@ -183,7 +191,7 @@ export const BUDGET_ALERT_USD_DEFAULT = 0;
  * when the key is absent or invalid.
  */
 export function readBudgetAlertUsd(configGet: (key: string) => unknown): number {
-  const raw = configGet('behavior.budgetAlertUsd');
+  const raw = configGet(BUDGET_ALERT_USD_CONFIG_KEY);
   const parsed = typeof raw === 'number' ? raw : Number(raw);
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : BUDGET_ALERT_USD_DEFAULT;
 }
