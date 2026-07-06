@@ -141,17 +141,21 @@ describe('liveness contract — remote-modal (values-only update, real host path
 });
 
 describe('liveness contract — memory-modal (group-B ported surface, values-only update, real host path)', () => {
-  test('a summary value update on a NON-selected record row repaints in place: no reflow, cursor unchanged, one row differs', () => {
+  test('a summary value update on a NON-selected record row repaints in place: no reflow, cursor unchanged, one row differs', async () => {
     // Two records; only the first (non-selected) record's summary changes, at
     // the SAME display width, so the id set is stable (values-only tick).
     const records: Array<{ id: string; scope: string; cls: string; summary: string; tags: readonly string[]; reviewState: string; confidence: number; createdAt: number; provenance: readonly { kind: string; ref: string }[] }> = [
       { id: 'mem-live-1', scope: 'project', cls: 'decision', summary: 'liveness record row alpha', tags: [], reviewState: 'reviewed', confidence: 90, createdAt: 1735689600000, provenance: [] },
       { id: 'mem-live-2', scope: 'session', cls: 'risk', summary: 'liveness record row bravo', tags: [], reviewState: 'reviewed', confidence: 80, createdAt: 1735689600000, provenance: [] },
     ];
-    const surface = createMemoryModalSurface({ memoryRegistry: { search: () => records, reviewQueue: () => [] } });
+    // The surface reads through the MemoryAccess shape (spine client), never the raw
+    // registry — `honestSearch` resolves the SAME record array each call so buildView
+    // sees live mutations to `records[i]` without a second fetch.
+    const surface = createMemoryModalSurface({ memoryRegistry: { honestSearch: async () => ({ records }) } });
     const modal = new ConfigModal();
     try {
       modal.open(surface, () => {});
+      await Promise.resolve(); await Promise.resolve(); await Promise.resolve(); // let the async onOpen refresh land
       modal.moveDown(); // interaction boundary: select the second record, freeze structure
 
       const frameA = renderConfigModal(modal, W, H);

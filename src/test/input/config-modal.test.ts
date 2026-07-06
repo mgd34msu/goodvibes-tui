@@ -292,10 +292,10 @@ function ctxNoop() {
 // ── DEBT-5 item 1: config-modal host '/' type-to-filter ─────────────────────
 
 describe('ConfigModal host — type-to-filter (DEBT-5 item 1)', () => {
-  test('/ arms the filter; typed text narrows rows on a real surface (memory-modal)', () => {
+  test('/ arms the filter; typed text narrows rows on a real surface (memory-modal)', async () => {
     const modal = new ConfigModal();
-    modal.open(memoryModalGoldenSurface());
-    modal.moveDown(); // interaction boundary: freeze structure against the now-loaded records (onOpen's refresh() runs after the initial buildView())
+    modal.open(await memoryModalGoldenSurface()); // fixture pre-awaits its onOpen refresh, so records are already loaded here
+    modal.moveDown(); // interaction boundary: freeze structure against the loaded records
     expect(modal.getRenderModel().scroll.total).toBe(2);
     expect(modal.isFilterActive()).toBe(false);
 
@@ -310,9 +310,9 @@ describe('ConfigModal host — type-to-filter (DEBT-5 item 1)', () => {
     expect(model.rows[0]!.label).toContain('batches');
   });
 
-  test('a multi-char paste token lands in the filter atomically (handleConfigModalToken) — not split into per-char nav/close', () => {
+  test('a multi-char paste token lands in the filter atomically (handleConfigModalToken) — not split into per-char nav/close', async () => {
     const modal = new ConfigModal();
-    modal.open(memoryModalGoldenSurface());
+    modal.open(await memoryModalGoldenSurface());
     const state = { configModal: modal, requestRender: () => {}, handleEscape: () => modal.close() };
     handleConfigModalToken(state, { type: 'text', value: '/' } as never);
     expect(modal.isFilterActive()).toBe(true);
@@ -323,19 +323,19 @@ describe('ConfigModal host — type-to-filter (DEBT-5 item 1)', () => {
     expect(modal.active).toBe(true); // never closed — 'k' didn't leak through as a hotkey
   });
 
-  test('backspace edits the query one character at a time', () => {
+  test('backspace edits the query one character at a time', async () => {
     const modal = new ConfigModal();
-    modal.open(memoryModalGoldenSurface());
+    modal.open(await memoryModalGoldenSurface());
     modal.activateFilter();
     modal.appendFilterText('charter');
     modal.backspaceFilter();
     expect(modal.getFilterQuery()).toBe('charte');
   });
 
-  test('Esc two-stage: a non-empty query is cleared first; a second Esc (now empty) closes — single-Esc-close preserved for the no-filter case', () => {
+  test('Esc two-stage: a non-empty query is cleared first; a second Esc (now empty) closes — single-Esc-close preserved for the no-filter case', async () => {
     const modal = new ConfigModal();
     let closed = false;
-    modal.open(memoryModalGoldenSurface());
+    modal.open(await memoryModalGoldenSurface());
     const state = { configModal: modal, requestRender: () => {}, handleEscape: () => { closed = true; modal.close(); } };
     const escToken = { type: 'key', name: '\x1b', logicalName: 'escape', ctrl: false, shift: false, meta: false } as never;
 
@@ -352,10 +352,10 @@ describe('ConfigModal host — type-to-filter (DEBT-5 item 1)', () => {
     expect(closed).toBe(true); // second Esc, now with an empty filter, closes normally
   });
 
-  test('Esc with the filter armed but never typed into closes in a single press (no query to clear)', () => {
+  test('Esc with the filter armed but never typed into closes in a single press (no query to clear)', async () => {
     const modal = new ConfigModal();
     let closed = false;
-    modal.open(memoryModalGoldenSurface());
+    modal.open(await memoryModalGoldenSurface());
     const state = { configModal: modal, requestRender: () => {}, handleEscape: () => { closed = true; modal.close(); } };
     handleConfigModalToken(state, { type: 'text', value: '/' } as never);
     expect(modal.isFilterActive()).toBe(true);
@@ -401,9 +401,9 @@ describe('ConfigModal host — type-to-filter (DEBT-5 item 1)', () => {
     expect(modal.getRenderModel().scroll.total).toBe(2);
   });
 
-  test('empty-result honest line: a query matching nothing shows "No rows match" instead of the surface\'s generic empty text', () => {
+  test('empty-result honest line: a query matching nothing shows "No rows match" instead of the surface\'s generic empty text', async () => {
     const modal = new ConfigModal();
-    modal.open(memoryModalGoldenSurface());
+    modal.open(await memoryModalGoldenSurface());
     modal.activateFilter();
     modal.appendFilterText('zzz-no-such-record-zzz');
     const model = modal.getRenderModel();
@@ -411,9 +411,9 @@ describe('ConfigModal host — type-to-filter (DEBT-5 item 1)', () => {
     expect(model.hints[0]).toContain('0 of 2 match');
   });
 
-  test('footer shows the query and a truthful match count; suppresses the surface\'s own (now-inert) action hints while filtering', () => {
+  test('footer shows the query and a truthful match count; suppresses the surface\'s own (now-inert) action hints while filtering', async () => {
     const modal = new ConfigModal();
-    modal.open(memoryModalGoldenSurface());
+    modal.open(await memoryModalGoldenSurface());
     modal.activateFilter();
     modal.appendFilterText('charter');
     const model = modal.getRenderModel();
@@ -422,9 +422,9 @@ describe('ConfigModal host — type-to-filter (DEBT-5 item 1)', () => {
     expect(model.hints.some((h) => h.includes('refresh'))).toBe(false);
   });
 
-  test('filtering resets on tab switch — a query is scoped to the tab it was typed against', () => {
+  test('filtering resets on tab switch — a query is scoped to the tab it was typed against', async () => {
     const modal = new ConfigModal();
-    modal.open(memoryModalGoldenSurface()); // two tabs: All Records / Review Queue
+    modal.open(await memoryModalGoldenSurface()); // two tabs: All Records / Review Queue
     modal.activateFilter();
     modal.appendFilterText('charter');
     expect(modal.isFilterActive()).toBe(true);

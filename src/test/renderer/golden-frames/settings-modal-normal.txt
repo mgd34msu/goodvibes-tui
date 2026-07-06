@@ -16,8 +16,8 @@
 |│ SERVICE & NETWORK      │   Setting             Value       Type       Source        Default      │|
 |│     Service (6)        │ • stream              true        boolean    default       true         │|
 |│     Daemon (2)         │   lineNumbers         off         enum       default       off          │|
-|│     Network (31)       │   collapseThreshold   30          number     default       30           │|
-|│     Control Plane (13  │   theme               vaporwave   string     default       vaporwave    │|
+|│     Network (35)       │   collapseThreshold   30          number     default       30           │|
+|│     Control Plane (17  │   theme               vaporwave   string     default       vaporwave    │|
 |│     HTTP Listener (7)  │   showThinking        false       boolean    default       false        │|
 |│     Web (6)            │   showReasoningSumma  false       boolean    default       false        │|
 |│ SURFACES & CLOUD       │   showTokenSpeed      false       boolean    default       false        │|

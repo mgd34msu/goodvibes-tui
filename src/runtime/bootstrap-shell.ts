@@ -189,7 +189,8 @@ export function createBootstrapShell(options: BootstrapShellOptions): BootstrapS
     componentHealthMonitor: services.componentHealthMonitor,
     worktreeRegistry: services.worktreeRegistry,
     sandboxSessionRegistry: services.sandboxSessionRegistry,
-    memoryRegistry: services.memoryRegistry,
+    // Memory modal reads via the spine client, not the raw registry (see builtin/shared.ts).
+    memoryRegistry: services.memorySpine,
     uiServices,
     pluginManager: services.pluginManager,
     hookDispatcher: services.hookDispatcher,

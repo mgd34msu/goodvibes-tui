@@ -3,7 +3,7 @@ import type { ServiceRegistry } from '@pellux/goodvibes-sdk/platform/config';
 import type { ToolRegistry } from '@pellux/goodvibes-sdk/platform/tools';
 import type { ProviderRegistry } from '@pellux/goodvibes-sdk/platform/providers';
 import type { Orchestrator } from '../../core/orchestrator';
-import type { MemoryRegistry } from '@pellux/goodvibes-sdk/platform/state';
+import type { MemoryAccess } from '@pellux/goodvibes-sdk/platform/runtime/memory-spine';
 import type { ApprovalBroker } from '@pellux/goodvibes-sdk/platform/control-plane';
 import type { SessionReadFacade } from '@pellux/goodvibes-sdk/platform/runtime/session-spine';
 import type { AutomationManager } from '@pellux/goodvibes-sdk/platform/automation';
@@ -79,8 +79,8 @@ export interface BuiltinPanelDeps {
    * copy via CommandContext.extensions.evalRegistry).
    */
   evalRegistry?: import('../eval-registry.ts').EvalRegistry;
-  /** MemoryRegistry for the Memory panel. */
-  memoryRegistry?: MemoryRegistry;
+  /** Host-vs-client memory access for the Memory modal — the spine client, never the raw registry (routes over the wire when a daemon is adopted). */
+  memoryRegistry?: MemoryAccess;
   /** Shared policy runtime state for governance/policy diagnostics. */
   policyRuntimeState?: import('@/runtime/index.ts').PolicyRuntimeState;
   /** Approval broker for control-plane/operator panels. */

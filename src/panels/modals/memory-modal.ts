@@ -17,6 +17,16 @@ import type {
 // panel's selected-record scope/class/tags/provenance detail is folded into
 // each row label. `memoryRegistry` absent → the retired MemoryPanel's
 // "not configured" copy renders as an honest degraded state.
+//
+// Read path (memory-spine adoption): reads go through the spine client's
+// `honestSearch` — the MemoryAccess shape — not the raw registry, so a session
+// that has adopted an external daemon reads the SAME wire-served records a
+// wire failure is deliberately surfaced (never a silently stale local copy).
+// `buildView()` stays synchronous/pure per the ConfigModalSurface contract;
+// `refresh()` is async and calls the `requestRender` callback `onOpen` hands
+// it when the data lands. The Review Queue ranking is recomputed client-side
+// from the same honestSearch batch (see `rankForReview` below) rather than
+// through a second wire call — `reviewQueue` is not part of MemoryAccess.
 // ---------------------------------------------------------------------------
 
 /** Minimal read shape of a `MemoryRecord` this modal renders. */
@@ -33,14 +43,40 @@ interface MemoryRecordLike {
   readonly reviewedAt?: number | undefined;
   readonly reviewedBy?: string | undefined;
   readonly createdAt: number;
+  readonly updatedAt?: number | undefined;
   readonly provenance: readonly { readonly kind: string; readonly ref: string }[];
 }
 
 export interface MemoryModalDeps {
   readonly memoryRegistry?: {
-    search(filter?: { limit?: number }): readonly MemoryRecordLike[];
-    reviewQueue(limit?: number): readonly MemoryRecordLike[];
+    honestSearch(filter?: { limit?: number }): Promise<{
+      readonly records: readonly MemoryRecordLike[];
+      readonly indexUnavailableReason?: string | null | undefined;
+    }>;
   };
+}
+
+/**
+ * Client-side port of the SDK's MemoryStore.reviewQueue ranking
+ * (memory-store-helpers.ts reviewQueueScore/isReviewCandidate): all four
+ * review states are candidates, scored by state + inverse confidence (flagged
+ * states penalized), tie-broken by recency. Presentation ordering only — not
+ * a wire call, so exact parity with the server's own tie-breaking on ids it
+ * has never seen is not load-bearing.
+ */
+function rankForReview(records: readonly MemoryRecordLike[], limit: number): MemoryRecordLike[] {
+  const score = (r: MemoryRecordLike): number => {
+    let s = 0;
+    if (r.reviewState === 'fresh') s += 40;
+    if (r.reviewState === 'stale') s += 20;
+    if (r.reviewState === 'contradicted') s += 10;
+    s += Math.max(0, 100 - r.confidence);
+    if (r.reviewState === 'stale' || r.reviewState === 'contradicted') s -= 20;
+    return s;
+  };
+  return [...records]
+    .sort((a, b) => score(b) - score(a) || (b.updatedAt ?? b.createdAt) - (a.updatedAt ?? a.createdAt) || b.createdAt - a.createdAt)
+    .slice(0, limit);
 }
 
 // Mirrors registerKnowledgePanels's withUnconfiguredFallback copy for the
@@ -57,6 +93,9 @@ class MemoryModalSurface implements ConfigModalSurface {
   readonly title = 'Memory';
   private allRecords: MemoryRecordLike[] = [];
   private reviewRecords: MemoryRecordLike[] = [];
+  /** Honest note on the last read: a wire failure (client mode) or the index-unavailable fallback reason — never silently dropped. */
+  private loadNote: string | null = null;
+  private requestRender: (() => void) | null = null;
 
   constructor(private readonly deps: MemoryModalDeps) {}
 
@@ -71,12 +110,27 @@ class MemoryModalSurface implements ConfigModalSurface {
     { key: 'r', id: 'refresh', label: 'refresh' },
   ];
 
-  onOpen(): void { this.refresh(); }
+  onOpen(requestRender: () => void): void {
+    this.requestRender = requestRender;
+    void this.refresh();
+  }
 
-  private refresh(): void {
-    if (!this.deps.memoryRegistry) { this.allRecords = []; this.reviewRecords = []; return; }
-    this.allRecords = [...this.deps.memoryRegistry.search({ limit: 100 })];
-    this.reviewRecords = [...this.deps.memoryRegistry.reviewQueue(24)];
+  onClose(): void {
+    this.requestRender = null;
+  }
+
+  private async refresh(): Promise<void> {
+    if (!this.deps.memoryRegistry) { this.allRecords = []; this.reviewRecords = []; this.loadNote = null; return; }
+    try {
+      const result = await this.deps.memoryRegistry.honestSearch({ limit: 100 });
+      this.allRecords = [...result.records];
+      this.reviewRecords = rankForReview(result.records, 24);
+      this.loadNote = result.indexUnavailableReason ?? null;
+    } catch (error) {
+      // Client-mode wire failure: surfaced plainly, never masked by the last-known list.
+      this.loadNote = `Failed to reach memory over the wire: ${error instanceof Error ? error.message : String(error)}`;
+    }
+    this.requestRender?.();
   }
 
   private recordFrom(id: string): MemoryRecordLike | undefined {
@@ -121,11 +175,15 @@ class MemoryModalSurface implements ConfigModalSurface {
         tabs: [{ id: 'all', label: 'All Records', rows: [] }],
       };
     }
-    return { title: 'Memory', tabs: [this.allTab(), this.reviewTab()] };
+    return {
+      title: 'Memory',
+      ...(this.loadNote ? { degraded: this.loadNote } : {}),
+      tabs: [this.allTab(), this.reviewTab()],
+    };
   }
 
   onAction(id: string, ctx: ConfigModalActionContext): void {
-    if (id === 'refresh') { this.refresh(); ctx.setStatus('Reloaded memory records.'); return; }
+    if (id === 'refresh') { void this.refresh(); ctx.setStatus('Reloading memory records...'); return; }
     const record = ctx.row ? this.recordFrom(ctx.row.id) : undefined;
     if (!record) return;
     const review = (state: string, confidence: number, reason?: string): void => {
@@ -150,9 +208,12 @@ export function createMemoryModalSurface(deps: MemoryModalDeps): ConfigModalSurf
 
 /**
  * Deterministic golden fixture: fixed memory records with frozen createdAt
- * timestamps — no live registry, no wall-clock, no random ids.
+ * timestamps — no live registry, no wall-clock, no random ids. Promise-backed
+ * (see ecosystem-modals-golden.test.ts): `honestSearch` is async even for this
+ * in-memory fixture (matching the real MemoryAccess shape), so the factory
+ * pre-awaits the initial `onOpen` refresh before handing back the surface.
  */
-export function memoryModalGoldenSurface(): ConfigModalSurface {
+export async function memoryModalGoldenSurface(): Promise<ConfigModalSurface> {
   const FIXED_CREATED_AT = 1735689600000; // 2025-01-01T00:00:00.000Z
   const records: readonly MemoryRecordLike[] = [
     {
@@ -171,10 +232,10 @@ export function memoryModalGoldenSurface(): ConfigModalSurface {
       createdAt: FIXED_CREATED_AT + 86400000, provenance: [],
     },
   ];
-  return createMemoryModalSurface({
-    memoryRegistry: {
-      search: () => records,
-      reviewQueue: () => records.filter((record) => record.reviewState !== 'reviewed'),
-    },
+  const surface = createMemoryModalSurface({
+    memoryRegistry: { honestSearch: async () => ({ records }) },
   });
+  surface.onOpen?.(() => {});
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  return surface;
 }
