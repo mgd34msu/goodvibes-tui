@@ -27,6 +27,7 @@ import { loadBootstrapSystemPrompt, syncConfiguredServices } from '@/runtime/ind
 import { registerBootstrapHookBridge } from '@/runtime/index.ts';
 import { registerBootstrapRuntimeEvents } from '@/runtime/index.ts';
 import { createRuntimeServices, type RuntimeServices } from './services.ts';
+import { runBootMemoryFold } from './memory-fold.ts';
 import { setPricingSource } from '../export/cost-utils.ts';
 import { createUiRuntimeServices, type UiRuntimeServices } from './ui-services.ts';
 import { join } from 'node:path';
@@ -407,24 +408,23 @@ export async function initializeBootstrapCore(
     void memoryStore.save();
     memoryStore.close();
   });
+  // W6-C2 (E6): fold this project's legacy per-project TUI memory into the home-scoped canonical store, ONCE, AFTER init(). Idempotent and non-fatal.
+  await runBootMemoryFold(memoryStore, services.memoryEmbeddingRegistry, workingDir, logger);
 
   const renderRequestRef = { value: (): void => {} };
-  // R1: Coalescing render scheduler — collapses N requestRender() calls into 1
-  // and enforces a 16ms minimum interval to cap repaints at ~60fps.
-  //
-  // renderScheduled stays set for the ENTIRE window (until run() executes), so
-  // requestRender() calls that arrive on later event-loop ticks within the same
-  // 16ms window are coalesced into the one already-pending tail render instead
-  // of each queuing their own setTimeout. (The streaming hot path drives its own
-  // direct repaints and does not flow through this scheduler.)
+  // R1: Coalescing render scheduler — collapses N requestRender() calls into 1 and
+  // enforces a 16ms minimum interval to cap repaints at ~60fps. renderScheduled stays
+  // set for the ENTIRE window (until run() executes), so requestRender() calls arriving
+  // on later event-loop ticks within the same 16ms window coalesce into the one
+  // already-pending tail render instead of each queuing their own setTimeout. (The
+  // streaming hot path drives its own direct repaints and skips this scheduler.)
   let renderScheduled = false;
   let lastRenderTime = 0;
   const RENDER_INTERVAL_MS = 16;
-  // run() performs the actual render. It clears renderScheduled FIRST — even if
-  // the render callback throws — otherwise a single render exception would wedge
-  // the entire TUI (no future requestRender() call would schedule anything). The
-  // renderer is expected to surface failures via its own error path; we log at
-  // error so the next requestRender() can still reschedule.
+  // run() performs the actual render. It clears renderScheduled FIRST — even if the
+  // render callback throws — otherwise a single render exception would wedge the entire
+  // TUI (no future requestRender() would schedule anything); we log at error so the
+  // next requestRender() can still reschedule.
   const run = (): void => {
     renderScheduled = false;
     lastRenderTime = Date.now();
