@@ -24,6 +24,9 @@ import { MultimodalService } from '@pellux/goodvibes-sdk/platform/multimodal';
 import { AgentMessageBus, AgentOrchestrator, ArchetypeLoader, WrfcController } from '@pellux/goodvibes-sdk/platform/agents';
 import { AgentManager, OverflowHandler, ProcessManager, createWorkflowServices, type WorkflowServices } from '@pellux/goodvibes-sdk/platform/tools';
 import { FileStateCache, FileUndoManager, MemoryEmbeddingProviderRegistry, MemoryRegistry, MemoryStore, ModeManager, ProjectIndex, type CodeIndexStore, type CodeIndexReindexScheduler } from '@pellux/goodvibes-sdk/platform/state';
+// W6-C2 (E6): one canonical cross-surface memory store + no-loss legacy fold.
+import { resolveCanonicalMemoryDbPath, foldMemoryStores } from '@pellux/goodvibes-sdk/platform/state';
+import type { LegacyMemorySource, MemoryFoldReport } from '@pellux/goodvibes-sdk/platform/state';
 import { WorkspaceCheckpointManager } from '@pellux/goodvibes-sdk/platform/workspace';
 import type { RuntimeEventBus } from '@/runtime/index.ts';
 import { createDomainDispatch } from './store/index.ts';
@@ -387,7 +390,10 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
   });
   const artifactStore = new ArtifactStore({ configManager });
   const memoryEmbeddingRegistry = new MemoryEmbeddingProviderRegistry({ configManager });
-  const memoryDbPath = join(workingDirectory, '.goodvibes', 'tui', 'memory.sqlite');
+  // W6-C2 (E6): the TUI opens the ONE canonical cross-surface store (home-scoped) so a
+  // fact learned in the agent recalls here and vice-versa. The old per-project TUI store
+  // is folded in at boot with no loss (foldTuiLegacyMemory), then left in place.
+  const memoryDbPath = resolveCanonicalMemoryDbPath(homeDirectory);
   const memoryStore = new MemoryStore(memoryDbPath, {
     embeddingRegistry: memoryEmbeddingRegistry,
   });
@@ -789,12 +795,31 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
     workspaceCheckpointManager,
     integrationHelpers,
     async rerootStores(newWorkingDir: string): Promise<void> {
-      const newMemoryDbPath = join(newWorkingDir, '.goodvibes', 'tui', 'memory.sqlite');
-      await memoryStore.reroot(newMemoryDbPath);
-      // Wave 5 (wo804) risk #7: the code index must follow memory to the new
-      // tree, or it keeps pointing at the old working directory.
+      // W6-C2 (E6): the memory store is now the home-scoped CANONICAL cross-surface
+      // store — it deliberately does NOT reroot with the working directory. Rerooting
+      // it per-project would re-silo memory into a per-tree file, the exact E6 regression
+      // this work order removes. Only the working-tree-bound stores (code index, project
+      // index) follow the new directory; memory stays canonical and shared.
       await codeIndexStore.reroot(newWorkingDir, codeIndexDbPath(newWorkingDir));
       await projectIndex.reroot(newWorkingDir);
     },
   };
+}
+
+/**
+ * W6-C2 (E6): fold the TUI's legacy per-project memory store into the canonical
+ * cross-surface store. Called once at boot AFTER `memoryStore.init()` so records written
+ * before unification survive. Id-keyed and idempotent — a re-run imports nothing new and
+ * never deletes the legacy file. Returns the report so boot can log what moved.
+ */
+export async function foldTuiLegacyMemory(
+  memoryStore: MemoryStore,
+  memoryEmbeddingRegistry: MemoryEmbeddingProviderRegistry,
+  workingDirectory: string,
+): Promise<MemoryFoldReport> {
+  const legacyTuiProject = join(workingDirectory, '.goodvibes', 'tui', 'memory.sqlite');
+  const sources: LegacyMemorySource[] = [
+    { label: `tui:${workingDirectory} (pre-E6)`, dbPath: legacyTuiProject },
+  ];
+  return foldMemoryStores(memoryStore, sources, { embeddingRegistry: memoryEmbeddingRegistry });
 }
