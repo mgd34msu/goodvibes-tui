@@ -84,6 +84,7 @@ function makeFakePlayer(): { player: StreamingAudioPlayer; played: string[] } {
       }
     },
     stop() {},
+    async waitForDrain() {},
   };
   return { player, played };
 }

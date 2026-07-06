@@ -10,6 +10,8 @@ export interface SpokenTurnRuntime {
   submitNextTurn(prompt: string): boolean;
   /** Returns whether speech was actually active (see controller.stop). */
   stop(message?: string): boolean;
+  /** Exit-path stop: lets the audio already playing drain, bounded (see controller.stopForExit). */
+  stopForExit(drainTimeoutMs?: number): Promise<void>;
 }
 
 export interface WireSpokenTurnRuntimeOptions {
@@ -63,5 +65,6 @@ export function wireSpokenTurnRuntime(options: WireSpokenTurnRuntimeOptions): Sp
     unsubs,
     submitNextTurn: (prompt) => controller.submitNextTurn(prompt),
     stop: (message) => controller.stop(message),
+    stopForExit: (drainTimeoutMs) => controller.stopForExit(drainTimeoutMs),
   };
 }

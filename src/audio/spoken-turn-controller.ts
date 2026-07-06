@@ -85,6 +85,29 @@ export class SpokenTurnController {
     return wasActive;
   }
 
+  /**
+   * Exit-path teardown: drops everything not yet audible (pending arm,
+   * buffered text, queued chunks) but lets the audio the user is already
+   * hearing finish naturally, capped at `drainTimeoutMs`, before the hard
+   * stop. Deliberate interrupts (Ctrl+C, /tts stop, turn cancel) keep their
+   * instant path through stop(); this is only for exiting the app while the
+   * final audio of a completed response is still draining.
+   */
+  async stopForExit(drainTimeoutMs = 2000): Promise<void> {
+    this.pendingPrompt = null;
+    this.activeTurnId = null;
+    this.chunker?.reset();
+    this.chunker = null;
+    this.stopTimer();
+    // Cancel chunks that have not started playing; the chunk currently in the
+    // sink is not in this set (its controller is released before playback).
+    for (const controller of this.abortControllers) controller.abort();
+    this.abortControllers.clear();
+    await this.player.waitForDrain(drainTimeoutMs);
+    // Backstop: anything still alive after the window is torn down hard.
+    this.stop();
+  }
+
   handleTurnEvent(event: TurnEvent): void {
     if (event.type === 'TURN_SUBMITTED') {
       this.maybeStartTurn(event.turnId, event.prompt);
@@ -170,6 +193,11 @@ export class SpokenTurnController {
       if (abortController.signal.aborted) return;
       const result = await resultPromise;
       this.abortControllers.delete(abortController);
+      // Re-check after the await: an abort that landed while synthesis was in
+      // flight (deliberate stop or exit) makes the rejection expected — it
+      // must not route into reportError, which would print a spurious error
+      // and hard-stop a sink that may still be draining the previous chunk.
+      if (abortController.signal.aborted) return;
       if (!result.ok) {
         this.reportError(result.error);
         return;

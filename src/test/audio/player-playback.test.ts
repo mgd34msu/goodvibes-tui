@@ -202,6 +202,84 @@ describe('LocalStreamingAudioPlayer playback', () => {
     expect(proc.stdin.ended).toBe(false);
   });
 
+  test('each chunk gets a fresh sink and each is head-gated independently', async () => {
+    // The spoken-turn controller calls play() once per synthesized chunk, so a
+    // fresh player process spawns per CHUNK — the ready gate must therefore
+    // hold per chunk, not just for the first one of a turn.
+    const procs: FakeProcess[] = [];
+    const player = new LocalStreamingAudioPlayer({
+      spawnProcess: (() => {
+        const proc = new FakeProcess();
+        procs.push(proc);
+        return proc;
+      }) as unknown as LocalStreamingAudioPlayerOptions['spawnProcess'],
+    });
+
+    // Chunk 1.
+    const first = player.play(chunksOf(bytes('chunk-one')), { format: 'mp3' });
+    await flush();
+    expect(procs.length).toBe(1);
+    expect(procs[0]!.stdin.chunks.length).toBe(0);
+    procs[0]!.emitSpawn();
+    await flush();
+    procs[0]!.emitClose();
+    await first;
+
+    // Chunk 2: a brand-new process that must gate on its own spawn.
+    const second = player.play(chunksOf(bytes('chunk-two')), { format: 'mp3' });
+    await flush();
+    expect(procs.length).toBe(2);
+    expect(procs[1]!.stdin.chunks.length).toBe(0);
+    procs[1]!.emitSpawn();
+    await flush();
+    procs[1]!.emitClose();
+    await second;
+
+    expect(procs[0]!.stdin.writesBeforeReady).toBe(0);
+    expect(procs[1]!.stdin.writesBeforeReady).toBe(0);
+    expect(procs[0]!.stdin.bytes.equals(Buffer.from(bytes('chunk-one')))).toBe(true);
+    expect(procs[1]!.stdin.bytes.equals(Buffer.from(bytes('chunk-two')))).toBe(true);
+  });
+
+  test('waitForDrain resolves immediately when nothing is playing', async () => {
+    const proc = new FakeProcess();
+    const player = makePlayer(proc);
+    const start = Date.now();
+    await player.waitForDrain(5000);
+    expect(Date.now() - start).toBeLessThan(100);
+  });
+
+  test('waitForDrain resolves when the playing sink closes naturally', async () => {
+    const proc = new FakeProcess();
+    const player = makePlayer(proc);
+    const playing = player.play(chunksOf(bytes('tail audio')), { format: 'mp3' });
+    proc.emitSpawn();
+    await flush();
+
+    let drained = false;
+    const drain = player.waitForDrain(5000).then(() => { drained = true; });
+    await flush();
+    expect(drained).toBe(false);
+
+    proc.emitClose();
+    await drain;
+    await playing;
+    expect(drained).toBe(true);
+  });
+
+  test('waitForDrain is bounded: a sink that never closes releases after the window', async () => {
+    const proc = new FakeProcess();
+    const player = makePlayer(proc);
+    void player.play(chunksOf(bytes('stuck audio')), { format: 'mp3' });
+    proc.emitSpawn();
+    await flush();
+
+    const start = Date.now();
+    await player.waitForDrain(20);
+    // Released by the timeout, not by a close (which never came).
+    expect(Date.now() - start).toBeLessThan(1000);
+  });
+
   test('a sink that fails to start surfaces the failure instead of swallowing it', async () => {
     const proc = new FakeProcess();
     const player = makePlayer(proc);

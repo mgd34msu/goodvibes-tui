@@ -57,7 +57,7 @@ export interface ProcessLifecycleDeps {
   readonly unsubs: ReadonlyArray<() => void>;
   readonly getRecoveryInterval: () => ReturnType<typeof setInterval> | null;
   readonly setRecoveryInterval: (value: ReturnType<typeof setInterval> | null) => void;
-  readonly getStopSpokenOutputForExit: () => (() => void) | null;
+  readonly getStopSpokenOutputForExit: () => (() => void | Promise<void>) | null;
 }
 
 export interface ProcessLifecycleHandlers {
@@ -153,7 +153,16 @@ export function installProcessLifecycle(deps: ProcessLifecycleDeps): ProcessLife
     // must not re-run teardown or double-fire ctx.shutdown.
     if (exiting) return;
     exiting = true;
-    getStopSpokenOutputForExit()?.();
+    // Exit lets the spoken audio the user is already hearing finish inside a
+    // short bounded window (capped inside stopForExit, under the 3s shutdown
+    // budget below) while the rest of teardown proceeds; queued-but-unplayed
+    // speech is dropped. Deliberate interrupts (Ctrl+C, /tts stop) still cut
+    // instantly through controller.stop() before this path is ever reached.
+    let spokenOutputDrain: Promise<void> = Promise.resolve();
+    try {
+      spokenOutputDrain = Promise.resolve(getStopSpokenOutputForExit()?.()).then(() => undefined);
+    } catch { /* non-fatal to exit */ }
+    spokenOutputDrain = spokenOutputDrain.catch(() => undefined);
     unsubs.forEach(fn => fn());
     const interval = getRecoveryInterval();
     if (interval !== null) { clearInterval(interval); setRecoveryInterval(null); }
@@ -169,9 +178,14 @@ export function installProcessLifecycle(deps: ProcessLifecycleDeps): ProcessLife
     try {
       // Race the graceful shutdown against a hard timeout — externalServices.stop() can hang
       // and we must still exit; deferredStartup.drain only budgets 100ms internally.
-      await Promise.race([
-        ctx.shutdown({ ...snapshot, ...buildPersistedSessionContext(snapshot.messages, ctx.conversation.getTitleSource(), buildSessionContinuityHints()) }).then(() => { shutdownOk = true; }),
-        new Promise<void>((resolve) => setTimeout(resolve, 3000)),
+      // The spoken-audio drain runs concurrently and is internally capped below
+      // this budget, so it never extends the exit beyond the hard timeout.
+      await Promise.all([
+        spokenOutputDrain,
+        Promise.race([
+          ctx.shutdown({ ...snapshot, ...buildPersistedSessionContext(snapshot.messages, ctx.conversation.getTitleSource(), buildSessionContinuityHints()) }).then(() => { shutdownOk = true; }),
+          new Promise<void>((resolve) => setTimeout(resolve, 3000)),
+        ]),
       ]);
     } catch (err) {
       logger.debug('ctx.shutdown error during exitApp (non-fatal)', { error: summarizeError(err) });
