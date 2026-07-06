@@ -54,6 +54,7 @@ function makePlayer(): { player: StreamingAudioPlayer; played: string[] } {
       }
     },
     stop() {},
+    async waitForDrain() {},
   };
   return { player, played };
 }

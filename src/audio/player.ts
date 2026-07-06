@@ -15,6 +15,14 @@ export interface StreamingAudioPlayer {
   readonly available: boolean;
   play(chunks: AsyncIterable<VoiceAudioChunk>, options: StreamingAudioPlaybackOptions): Promise<void>;
   stop(): void;
+  /**
+   * Resolves once the currently playing sink has finished naturally (its
+   * process closed) or after `timeoutMs`, whichever comes first; resolves
+   * immediately when nothing is playing. The exit path uses this to let the
+   * audio the user is already hearing finish inside a short bounded window
+   * instead of killing it mid-drain. stop() remains the instant cut.
+   */
+  waitForDrain(timeoutMs: number): Promise<void>;
 }
 
 export interface StreamingAudioPlaybackOptions {
@@ -103,6 +111,22 @@ export class LocalStreamingAudioPlayer implements StreamingAudioPlayer {
     if (!proc) return;
     try { proc.stdin.destroy(); } catch { /* ignore */ }
     try { proc.kill('SIGTERM'); } catch { /* ignore */ }
+  }
+
+  waitForDrain(timeoutMs: number): Promise<void> {
+    const proc = this.activeProcess;
+    if (!proc) return Promise.resolve();
+    return new Promise((resolve) => {
+      let settled = false;
+      const settle = () => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        resolve();
+      };
+      const timer = setTimeout(settle, timeoutMs);
+      proc.once('close', settle);
+    });
   }
 }
 

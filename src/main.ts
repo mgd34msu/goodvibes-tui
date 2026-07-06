@@ -202,7 +202,7 @@ async function main() {
 
   const unsubs: Array<() => void> = [];
   let recoveryInterval: ReturnType<typeof setInterval> | null = null;
-  let stopSpokenOutputForExit: (() => void) | null = null;
+  let stopSpokenOutputForExit: (() => Promise<void>) | null = null;
   let recoveryPending = false;
   // Which file the current recovery prompt should load/delete from (see recovery-input-helpers.ts).
   let recoverySource: 'live' | 'preserved' = 'live';
@@ -240,7 +240,8 @@ async function main() {
     events: uiServices.events,
     notify: (message) => { systemMessageRouter.high(message); render(); },
   });
-  stopSpokenOutputForExit = () => spokenTurns.stop();
+  // Exit-path stop: bounded drain of the audio already playing (see stopForExit).
+  stopSpokenOutputForExit = () => spokenTurns.stopForExit();
   unsubs.push(...spokenTurns.unsubs);
   unsubs.push(attachSpokenTurnModelRouting({
     orchestrator,

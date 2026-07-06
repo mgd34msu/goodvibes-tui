@@ -41,6 +41,7 @@ function makeHarness() {
       }
     },
     stop() {},
+    async waitForDrain() {},
   };
   const configManager = {
     get(key: string) {
@@ -63,6 +64,71 @@ function makeHarness() {
 async function drain(): Promise<void> {
   await new Promise((resolve) => setTimeout(resolve, 0));
   await new Promise((resolve) => setTimeout(resolve, 0));
+}
+
+/**
+ * Harness whose fake sink keeps "playing" after all bytes are written until
+ * the test releases it — models a real player process that is still draining
+ * its audio buffer. Used to pin the exit-path (bounded drain) and preemption
+ * (instant cut) semantics.
+ */
+function makeDrainHarness() {
+  const played: string[] = [];
+  const stopCalls: string[] = [];
+  let finishActive: (() => void) | null = null;
+  const drainWaiters: (() => void)[] = [];
+  const release = () => {
+    const finish = finishActive;
+    finishActive = null;
+    finish?.();
+    for (const waiter of drainWaiters.splice(0)) waiter();
+  };
+  const player: StreamingAudioPlayer = {
+    label: 'drain-aware',
+    available: true,
+    async play(chunks) {
+      for await (const chunk of chunks) {
+        played.push(new TextDecoder().decode(chunk.data));
+      }
+      await new Promise<void>((resolve) => { finishActive = resolve; });
+    },
+    stop() {
+      stopCalls.push('stop');
+      release();
+    },
+    waitForDrain(timeoutMs) {
+      if (!finishActive) return Promise.resolve();
+      return new Promise<void>((resolve) => {
+        const timer = setTimeout(resolve, timeoutMs);
+        drainWaiters.push(() => { clearTimeout(timer); resolve(); });
+      });
+    },
+  };
+  const voiceService = {
+    async synthesizeStream(providerId: string | undefined, request: VoiceSynthesisRequest): Promise<VoiceSynthesisStreamResult> {
+      return {
+        providerId: providerId ?? 'fake',
+        mimeType: 'audio/mpeg',
+        format: 'mp3',
+        chunks: audioChunks(request.text),
+        metadata: {},
+      };
+    },
+  };
+  const controller = new SpokenTurnController({
+    voiceService,
+    configManager: { get: () => '' } as never,
+    player,
+    setInterval: (() => 1) as never,
+    clearInterval: (() => {}) as never,
+  });
+  return {
+    controller,
+    played,
+    stopCalls,
+    playing: () => finishActive !== null,
+    finishActivePlay: release,
+  };
 }
 
 describe('SpokenTurnController', () => {
@@ -106,6 +172,7 @@ describe('SpokenTurnController', () => {
         available: false,
         play: async () => {},
         stop: () => {},
+        waitForDrain: async () => {},
       },
       notify: (message) => messages.push(message),
     });
@@ -128,6 +195,57 @@ describe('SpokenTurnController', () => {
 
     expect(synthesized).toEqual(['fake-provider:fake-voice:The answer is forty two']);
     expect(played).toEqual(['The answer is forty two']);
+  });
+
+  test('exit lets the audio already playing drain, drops queued chunks, then tears down', async () => {
+    const h = makeDrainHarness();
+
+    expect(h.controller.submitNextTurn('long answer')).toBe(true);
+    h.controller.handleTurnEvent(turn({ type: 'TURN_SUBMITTED', turnId: 'turn-exit', prompt: 'long answer' }));
+    h.controller.handleTurnEvent(turn({ type: 'STREAM_DELTA', turnId: 'turn-exit', content: 'First part of the answer. ', accumulated: 'First part of the answer. ' }));
+    await drain();
+    // Chunk 1 is now in the sink (its playback is pending); chunk 2 is queued behind it.
+    h.controller.handleTurnEvent(turn({ type: 'STREAM_DELTA', turnId: 'turn-exit', content: 'Second part of the answer. ', accumulated: 'First part of the answer. Second part of the answer. ' }));
+    await drain();
+    expect(h.playing()).toBe(true);
+    // Discard the housekeeping stop() from the arming submitNextTurn call;
+    // from here on, only exit-path teardown may touch the player.
+    h.stopCalls.length = 0;
+
+    let exitResolved = false;
+    const exiting = h.controller.stopForExit(1000).then(() => { exitResolved = true; });
+    await drain();
+
+    // While the sink is still draining, the exit path must not hard-stop it.
+    expect(h.stopCalls.length).toBe(0);
+    expect(exitResolved).toBe(false);
+
+    // The sink finishes naturally: exit completes and the backstop teardown runs.
+    h.finishActivePlay();
+    await exiting;
+    expect(exitResolved).toBe(true);
+    expect(h.stopCalls.length).toBe(1);
+    await drain();
+
+    // Only the audio that was already playing was heard; the queued chunk was dropped.
+    expect(h.played).toEqual(['First part of the answer.']);
+  });
+
+  test('a new spoken turn preempts the previous one instantly, without a drain wait', async () => {
+    const h = makeDrainHarness();
+
+    expect(h.controller.submitNextTurn('first prompt')).toBe(true);
+    h.controller.handleTurnEvent(turn({ type: 'TURN_SUBMITTED', turnId: 'turn-a', prompt: 'first prompt' }));
+    h.controller.handleTurnEvent(turn({ type: 'STREAM_DELTA', turnId: 'turn-a', content: 'Still speaking this response. ', accumulated: 'Still speaking this response. ' }));
+    await drain();
+    expect(h.playing()).toBe(true);
+    // Discard the housekeeping stop() from the first arming call; the next
+    // one below is the preemption cut under test.
+    h.stopCalls.length = 0;
+
+    // Preemption is an intentional cut: the hard stop lands synchronously.
+    expect(h.controller.submitNextTurn('next prompt')).toBe(true);
+    expect(h.stopCalls.length).toBe(1);
   });
 
   test('stops playback without throwing on turn cancellation', async () => {
