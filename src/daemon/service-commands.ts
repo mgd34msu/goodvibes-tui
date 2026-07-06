@@ -28,6 +28,7 @@
  */
 
 import { existsSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
@@ -41,6 +42,7 @@ import { PlatformServiceManager, type ManagedServiceStatus } from '@pellux/goodv
 type ManagedServiceManagerOptions = ConstructorParameters<typeof PlatformServiceManager>[1];
 type ManagedServiceDefinition = NonNullable<ManagedServiceManagerOptions['definitionOverride']>;
 export type ManagedServiceActionRunner = NonNullable<ManagedServiceManagerOptions['actionRunner']>;
+type ManagedServiceActionResult = ReturnType<ManagedServiceActionRunner>;
 
 // Fallback only: `service.serviceName`/nothing-set config default is 'goodvibes'
 // (schema-domain-runtime.ts), which is what PlatformServiceManager actually
@@ -50,6 +52,64 @@ export type ManagedServiceActionRunner = NonNullable<ManagedServiceManagerOption
 // SDK's own facade-composition.ts would manage — one shared service, one name.
 const SERVICE_NAME = 'goodvibes';
 const SERVICE_DESCRIPTION = 'GoodVibes daemon (shared session broker + companion host)';
+
+// ---------------------------------------------------------------------------
+// W3 Finding 4: legacy-unit detection.
+//
+// The prior D7a-era command installed the daemon's systemd unit under the
+// literal name `goodvibes-daemon.service`. This module (rewired onto
+// PlatformServiceManager, see the file banner above) manages a DIFFERENT
+// unit name (`goodvibes`, SERVICE_NAME). A host that still has the legacy
+// unit installed — this dev machine included — would otherwise see
+// service-status honestly report installed:false/running:false for the
+// tracked name while the legacy unit keeps running untouched underneath it,
+// uninstall-service would silently leave the legacy unit orphaned with no
+// mention, and install-service could start a SECOND daemon competing for the
+// same port. Detected via a read-only file-existence check plus a read-only
+// `systemctl --user is-active` query through the SAME injected actionRunner
+// tests already use to fake systemctl/launchctl/schtasks (never a raw exec
+// bypassing it) — so this is exercised deterministically via fakes in tests
+// and never touches, stops, or modifies a real running service.
+//
+// This detection is entirely independent of PlatformServiceManager's own
+// status() — it does not rely on (or get invalidated by) the parallel SDK
+// fix that makes status().running itself query systemd honestly for the
+// TRACKED unit name.
+// ---------------------------------------------------------------------------
+
+const LEGACY_SERVICE_UNIT_NAME = 'goodvibes-daemon';
+
+export interface LegacyUnitInfo {
+  readonly present: boolean;
+  readonly active: boolean;
+  readonly path: string;
+}
+
+function legacyUnitPath(homeDir: string): string {
+  return join(homeDir, '.config', 'systemd', 'user', `${LEGACY_SERVICE_UNIT_NAME}.service`);
+}
+
+function detectLegacyUnit(input: DaemonServiceCliInput): LegacyUnitInfo {
+  const path = legacyUnitPath(input.homeDir);
+  const fileExists = input.legacyUnitFileExists ?? existsSync;
+  if (!fileExists(path)) return { present: false, active: false, path };
+  const run: ManagedServiceActionRunner = input.actionRunner
+    ?? ((command, args) => spawnSync(command, args, { stdio: 'pipe', encoding: 'utf-8' }) as ManagedServiceActionResult);
+  const result = run('systemctl', ['--user', 'is-active', `${LEGACY_SERVICE_UNIT_NAME}.service`]);
+  const state = (result.stdout ?? '').trim();
+  const active = (result.status ?? 1) === 0 && state === 'active';
+  return { present: true, active, path };
+}
+
+/** Honest one-line disclosure of the legacy unit's presence/state plus a manual migration hint — never auto-acted-on. */
+function legacyUnitNote(legacy: LegacyUnitInfo): string {
+  const stateWord = legacy.active ? 'installed and RUNNING' : 'installed (not currently active)';
+  return (
+    `note: a service under the legacy name ${LEGACY_SERVICE_UNIT_NAME}.service is ${stateWord} at ${legacy.path} — ` +
+    `this tool manages a different unit name (${SERVICE_NAME}.service) and will not touch the legacy one automatically. ` +
+    `Remove it yourself when ready: systemctl --user disable --now ${LEGACY_SERVICE_UNIT_NAME}.service && rm ${legacy.path} && systemctl --user daemon-reload`
+  );
+}
 
 export type DaemonServiceSubcommand = 'install-service' | 'uninstall-service' | 'service-status';
 
@@ -108,6 +168,8 @@ export interface DaemonServiceCliInput {
   readonly configManager?: ConfigManager | undefined;
   /** Injectable systemctl/launchctl/schtasks runner so tests never touch the host. */
   readonly actionRunner?: ManagedServiceActionRunner | undefined;
+  /** Injectable existsSync for the legacy-unit file check (W3 Finding 4) so tests never touch the host filesystem. */
+  readonly legacyUnitFileExists?: ((path: string) => boolean) | undefined;
 }
 
 export interface DaemonServiceCliResult {
@@ -160,10 +222,36 @@ function statusLines(status: ManagedServiceStatus): string[] {
   ];
   if (status.pid !== undefined) lines.push(`pid: ${status.pid}`);
   if (status.platform !== 'manual' && status.installed && !status.running) {
+    // W3 Finding 4: this used to assert "'running' here only reflects
+    // processes this tool started directly" — true for the pid-file-only
+    // check the (currently linked) SDK still uses, but the parallel SDK
+    // batch is making status().running query systemd honestly via
+    // `is-active`, which would make that specific claim stale. Drop the
+    // claim about HOW running was computed and just offer the escape
+    // hatch — true and useful under either SDK version.
     lines.push(
-      `note: 'running' here only reflects processes this tool started directly; ` +
-        `for the authoritative state run: ${status.suggestedCommands[status.suggestedCommands.length - 1] ?? 'the platform service-status command'}`,
+      `note: if this looks wrong, verify directly: ${status.suggestedCommands[status.suggestedCommands.length - 1] ?? 'the platform service-status command'}`,
     );
+  }
+  return lines;
+}
+
+/**
+ * Build the install-branch's result lines. Exported for direct unit
+ * coverage: the "suggested follow-ups" block is gated on the actual
+ * not-started case (W3 Finding 4 friction fix) rather than printed
+ * unconditionally, and driving that through the full
+ * PlatformServiceManager/systemd integration can't reliably produce
+ * `running: true` under the (currently linked) SDK build, whose systemd
+ * status check is still pid-file-only (see the honesty note above).
+ */
+export function buildInstallResultLines(status: ManagedServiceStatus): string[] {
+  const lines = [`installed the ${status.platform} service at ${status.path}`];
+  if (status.running) {
+    lines.push('service is enabled and running');
+  } else {
+    lines.push('suggested follow-ups if it did not start automatically:');
+    for (const cmd of status.suggestedCommands) lines.push(`  ${cmd}`);
   }
   return lines;
 }
@@ -171,10 +259,7 @@ function statusLines(status: ManagedServiceStatus): string[] {
 function ok(action: 'install' | 'uninstall' | 'status', status: ManagedServiceStatus, extra: string[] = []): DaemonServiceCliResult {
   const lines: string[] = [];
   if (action === 'install') {
-    lines.push(`installed the ${status.platform} service at ${status.path}`);
-    if (status.running) lines.push('service is enabled and running');
-    lines.push('suggested follow-ups if it did not start automatically:');
-    for (const cmd of status.suggestedCommands) lines.push(`  ${cmd}`);
+    lines.push(...buildInstallResultLines(status));
   } else if (action === 'uninstall') {
     lines.push(`removed the ${status.platform} service at ${status.path}`);
     if (status.platform === 'systemd') {
@@ -202,8 +287,27 @@ function failed(action: 'install' | 'uninstall' | 'status', status: ManagedServi
 /** Dispatch a daemon service subcommand to the SDK's `PlatformServiceManager`. */
 export function runDaemonServiceCli(input: DaemonServiceCliInput): DaemonServiceCliResult {
   const manager = buildManager(input);
+  const legacy = detectLegacyUnit(input);
   switch (input.subcommand) {
     case 'install-service': {
+      // W3 Finding 4: refuse rather than risk starting a second daemon
+      // alongside an already-installed legacy unit. Refuses whenever the
+      // legacy unit is present at all (not just when currently active) —
+      // an installed-but-inactive legacy unit can still be enabled and
+      // start competing for the same port later, and "never silently
+      // start a second daemon" is the bar here, not "never right now."
+      if (legacy.present) {
+        return {
+          ok: false,
+          exitCode: 1,
+          lines: [
+            `service install refused: a service is already installed under the legacy name ${LEGACY_SERVICE_UNIT_NAME}.service.`,
+            legacyUnitNote(legacy),
+            `Installing this tool's ${SERVICE_NAME}.service alongside it risks two daemons competing for the same port.`,
+          ],
+          status: manager.status(),
+        };
+      }
       const installed = manager.install();
       if (installed.actionError) return failed('install', installed);
       const started = manager.start();
@@ -218,13 +322,18 @@ export function runDaemonServiceCli(input: DaemonServiceCliInput): DaemonService
       const stopped = manager.stop();
       const uninstalled = manager.uninstall();
       if (uninstalled.actionError) return failed('uninstall', uninstalled);
-      return stopped.actionError
-        ? ok('uninstall', uninstalled, [`(it may not have been running: ${stopped.actionError})`])
-        : ok('uninstall', uninstalled);
+      const extra: string[] = [];
+      if (stopped.actionError) extra.push(`(it may not have been running: ${stopped.actionError})`);
+      // W3 Finding 4: this command only ever touches the TRACKED unit name
+      // (SERVICE_NAME) above — say so explicitly when a legacy unit also
+      // exists, so its continued presence is never a silent surprise.
+      if (legacy.present) extra.push(legacyUnitNote(legacy));
+      return ok('uninstall', uninstalled, extra);
     }
     case 'service-status': {
       const status = manager.status();
-      return status.actionError ? failed('status', status) : ok('status', status);
+      if (status.actionError) return failed('status', status);
+      return ok('status', status, legacy.present ? [legacyUnitNote(legacy)] : []);
     }
   }
 }
