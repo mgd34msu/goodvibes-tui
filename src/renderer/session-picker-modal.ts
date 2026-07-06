@@ -69,12 +69,19 @@ function crossSurfaceRowCount(modal: SessionPickerModal): number {
   return modal.crossSurfaceView.mode === 'local' ? 0 : Math.min(MAX_CROSS_SURFACE_ROWS, modal.crossSurfaceSessions.length);
 }
 
-/** Extra content rows the cross-surface section needs: separator + header (+note) + rows. */
+/**
+ * Extra content rows the cross-surface section needs: separator + header
+ * (+note) + rows (+the "[showing N of M]" overflow line when the union has
+ * more records than MAX_CROSS_SURFACE_ROWS — previously uncounted here, which
+ * let modal-factory's tail-clip silently eat that trailing line even though
+ * the rest of the budget accounting held; see W3 Finding 1).
+ */
 function crossSurfaceExtraRows(modal: SessionPickerModal): number {
   if (modal.crossSurfaceView.mode === 'local') return 0;
   const rows = crossSurfaceRowCount(modal);
   const noteRow = crossSurfaceNote(modal.crossSurfaceView, rows) ? 1 : 0;
-  return 2 + noteRow + Math.max(rows, noteRow === 1 && rows === 0 ? 0 : rows);
+  const overflowRow = modal.crossSurfaceSessions.length > MAX_CROSS_SURFACE_ROWS ? 1 : 0;
+  return 2 + noteRow + overflowRow + Math.max(rows, noteRow === 1 && rows === 0 ? 0 : rows);
 }
 
 // ---------------------------------------------------------------------------
@@ -101,8 +108,28 @@ export function renderSessionPickerModal(
   const boxMargin = metrics.margin;
   const boxW = metrics.boxWidth;
   const contentW = metrics.contentWidth;
-  const visibleRows = metrics.contentRows;
   const targetContentRows = getStableOverlayContentRows(metrics.contentRows, 8 + extraRows);
+
+  // W3 Finding 1: when a cross-surface union section is present, cap the
+  // LOCAL list's window to what's left after reserving extraRows for the
+  // union — otherwise the local list expands to fill metrics.contentRows
+  // (which already includes the union's reservation) and modal-factory's
+  // single tail-clip (createModal, targetContentRows) silently drops the
+  // union section, or its trailing rows, once the box fills up. In local
+  // mode (extraRows === 0, every pre-existing caller/test) this reduces to
+  // the exact pre-T2 formula, so local-only output is byte-for-byte
+  // unaffected.
+  let visibleRows: number;
+  if (extraRows === 0) {
+    visibleRows = metrics.contentRows;
+  } else {
+    const localBudget = Math.max(0, targetContentRows - extraRows);
+    const overhead = 2; // header + separator row, present whenever sessions.length > 0
+    const remaining = Math.max(0, localBudget - overhead);
+    visibleRows = modal.sessions.length > remaining
+      ? Math.max(3, remaining - 2) // reserve 2 more rows for the local "[x-y of N]" overflow line
+      : Math.max(3, remaining);
+  }
   modal.setVisibleRows(visibleRows);
 
   const sections: import('./modal-factory.ts').ModalSection[] = [];

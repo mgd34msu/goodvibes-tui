@@ -207,3 +207,78 @@ describe('SessionPickerModal — cross-surface union (W3-T2)', () => {
     }
   });
 });
+
+// ---------------------------------------------------------------------------
+// W3 Finding 1: the union section's row budget must actually hold once the
+// local list has enough sessions to want more rows than metrics.contentRows
+// reserves for it. Drives the renderer directly (not through SessionManager
+// disk I/O) since only the local list's *length* matters here, matching the
+// reviewer's repro at /tmp/.../scratchpad/repro.ts.
+// ---------------------------------------------------------------------------
+describe('SessionPickerModal — cross-surface budget reservation (W3 Finding 1)', () => {
+  function fakeLocalSessions(n: number): SessionPickerModal['sessions'] {
+    return Array.from({ length: n }, (_, i) => ({
+      name: `local-session-${i + 1}`,
+      timestamp: Date.now() - i * 1000,
+      messageCount: i + 1,
+      filePath: `/x/local-${i + 1}.jsonl`,
+    })) as unknown as SessionPickerModal['sessions'];
+  }
+
+  function fakeUnionRecords(n: number): SharedSessionRecord[] {
+    return Array.from({ length: n }, (_, i) => record(`webui-${i + 1}`, { kind: 'webui', title: `webui-session-${i + 1}` }));
+  }
+
+  function makeUnionModal(localCount: number, crossRecords: SharedSessionRecord[]): SessionPickerModal {
+    const { sessionManager } = makeSessionManager();
+    const modal = new SessionPickerModal(sessionManager);
+    modal.active = true;
+    modal.sessions = fakeLocalSessions(localCount);
+    modal.selectedIndex = 0;
+    modal.crossSurfaceSessions = crossRecords;
+    modal.crossSurfaceView = { mode: 'adopted', online: true, stale: false, lastSyncAt: Date.now(), offlineNote: null };
+    return modal;
+  }
+
+  test('local=10, vh=40: all 4 union rows visible under the header (reviewer repro)', () => {
+    const modal = makeUnionModal(10, fakeUnionRecords(4));
+    const text = linesToText(renderSessionPickerModal(modal, 100, 40)).join('\n');
+    expect(text).toContain('Cross-surface sessions');
+    for (let i = 1; i <= 4; i++) expect(text).toContain(`webui-session-${i}`);
+  });
+
+  test('local=14, vh=40: header AND union rows survive (reviewer repro: header previously vanished too)', () => {
+    const modal = makeUnionModal(14, fakeUnionRecords(4));
+    const text = linesToText(renderSessionPickerModal(modal, 100, 40)).join('\n');
+    expect(text).toContain('Cross-surface sessions');
+    for (let i = 1; i <= 4; i++) expect(text).toContain(`webui-session-${i}`);
+  });
+
+  test('local=10, vh=50: all 4 union rows visible', () => {
+    const modal = makeUnionModal(10, fakeUnionRecords(4));
+    const text = linesToText(renderSessionPickerModal(modal, 100, 50)).join('\n');
+    expect(text).toContain('Cross-surface sessions');
+    for (let i = 1; i <= 4; i++) expect(text).toContain(`webui-session-${i}`);
+  });
+
+  test('>5 cross-surface records: the "[showing N of M]" overflow line is visible, not tail-clipped', () => {
+    const modal = makeUnionModal(20, fakeUnionRecords(7));
+    const text = linesToText(renderSessionPickerModal(modal, 100, 40)).join('\n');
+    expect(text).toContain('Cross-surface sessions');
+    expect(text).toContain('[showing 5 of 7]');
+    for (let i = 1; i <= 5; i++) expect(text).toContain(`webui-session-${i}`);
+  });
+
+  test('local-only mode (no sessionBroker wired) is unaffected: visibleRows still equals metrics.contentRows', () => {
+    const { sessionManager } = makeSessionManager();
+    const modal = new SessionPickerModal(sessionManager);
+    modal.active = true;
+    modal.sessions = fakeLocalSessions(10);
+    modal.selectedIndex = 0;
+    // mode stays 'local' (the DORMANT_CROSS_SURFACE_VIEW default) — no broker wired.
+    const lines = renderSessionPickerModal(modal, 100, 40);
+    const text = linesToText(lines).join('\n');
+    expect(text).not.toContain('Cross-surface sessions');
+    expect(modal.visibleRows).toBe(9);
+  });
+});
