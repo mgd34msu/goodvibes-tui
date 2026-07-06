@@ -109,12 +109,14 @@ export async function handleConnectExistingDaemonForHandler(handler: InputHandle
  * `src/daemon/**` (input must stay a pure event-handling layer) — the shared
  * engine lives in the entrypoint-agnostic `src/runtime/` layer instead.
  *
- * `confirm` is caller-supplied rather than read from a wizard field: this
- * migration has no dedicated Network-step field yet (that wiring — a visible
- * button in the onboarding wizard's daemon-source step — is a follow-on to
- * this brief; see the session report), so today this is called with
- * `confirm: false` for a dry-run plan and `confirm: true` to execute, from
- * whatever surface invokes it directly.
+ * `confirm` is caller-supplied rather than read from a fixed field name here
+ * so this stays reusable from any surface: the onboarding wizard's Network
+ * step (`onboarding-wizard-network-adopt.ts`'s `pushLegacyDaemonMigrationFields`,
+ * dispatched from `handler-onboarding.ts`'s `migrate-legacy-daemon-service`
+ * action) reads its own `network.migrate-legacy-daemon-confirm` checklist
+ * toggle and passes it through as this parameter — unchecked previews the
+ * dry-run plan (`confirm: false`), checked executes the real migration
+ * (`confirm: true`).
  */
 export async function handleMigrateLegacyDaemonServiceForHandler(handler: InputHandler, confirm: boolean): Promise<void> {
   if (handler.onboardingApplyPending) return;

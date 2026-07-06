@@ -125,6 +125,19 @@ export interface OnboardingSurfacesSnapshot {
   readonly records: readonly OnboardingSurfaceRecord[];
 }
 
+/**
+ * W4-D1 wizard wiring: read-only detection of a legacy `goodvibes-daemon.service`
+ * systemd unit (see `../legacy-daemon-migration.ts`'s `LegacyUnitInfo`), carried
+ * on the snapshot so the Network step can show the guided migration action only
+ * when there is actually something to migrate. Never implies anything was
+ * touched — detection only.
+ */
+export interface OnboardingLegacyDaemonSnapshot {
+  readonly present: boolean;
+  readonly active: boolean;
+  readonly path: string;
+}
+
 export interface OnboardingProviderAccountRecord {
   readonly providerId: string;
   readonly configured: boolean;
@@ -170,7 +183,8 @@ export type OnboardingSnapshotCollectionIssueArea =
   | 'secrets-records'
   | 'surfaces'
   | 'provider-accounts'
-  | 'acknowledgements';
+  | 'acknowledgements'
+  | 'legacy-daemon';
 
 export interface OnboardingSnapshotCollectionIssue {
   readonly area: OnboardingSnapshotCollectionIssueArea;
@@ -190,6 +204,7 @@ export interface OnboardingSnapshotState {
   readonly bindSettings: OnboardingBindSettingsSnapshot;
   readonly surfaces: OnboardingSurfacesSnapshot;
   readonly providerAccounts: OnboardingProviderAccountsSnapshot | null;
+  readonly legacyDaemon: OnboardingLegacyDaemonSnapshot;
   readonly collectionIssues: readonly OnboardingSnapshotCollectionIssue[];
 }
 
@@ -377,6 +392,10 @@ export interface OnboardingProviderAccountReadHelper {
   loadSnapshot(): Promise<OnboardingProviderAccountsSnapshot>;
 }
 
+export interface OnboardingLegacyDaemonReadHelper {
+  detect(): OnboardingLegacyDaemonSnapshot | Promise<OnboardingLegacyDaemonSnapshot>;
+}
+
 export type OnboardingShellPaths = Pick<
   ShellPathService,
   'workingDirectory' | 'resolveProjectPath' | 'resolveUserPath'
@@ -391,6 +410,7 @@ export interface OnboardingSnapshotDependencies {
   readonly services: Pick<ServiceInspectionQuery, 'getAll' | 'inspect'>;
   readonly surfaces?: OnboardingSurfaceReadHelper;
   readonly providerAccounts?: OnboardingProviderAccountReadHelper;
+  readonly legacyDaemon?: OnboardingLegacyDaemonReadHelper;
   readonly shellPaths?: OnboardingShellPaths;
   readonly acknowledgementScope?: OnboardingStateScope;
 }

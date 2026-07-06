@@ -3,7 +3,8 @@ import { beginOpenAICodexLogin, exchangeOpenAICodexCode } from '@pellux/goodvibe
 import { summarizeError, openExternalUrl } from '@pellux/goodvibes-sdk/platform/utils';
 import { getProviderIdFromModel } from '../config/provider-model.ts';
 import { buildProviderAccountSnapshot } from '@/runtime/index.ts';
-import { handleConnectExistingDaemonForHandler } from './handler-onboarding-daemon-adopt.ts';
+import { handleConnectExistingDaemonForHandler, handleMigrateLegacyDaemonServiceForHandler } from './handler-onboarding-daemon-adopt.ts';
+import { detectLegacyUnit } from '../runtime/legacy-daemon-migration.ts';
 import { OnboardingWizardController, type OnboardingWizardAction, type OnboardingWizardApplyFeedback } from './onboarding/onboarding-wizard.ts';
 import { handleCloudflareOnboardingActionForHandler, maybeProvisionCloudflareOnFinalApplyForHandler } from './handler-onboarding-cloudflare.ts';
 import { applyOnboardingRequest, collectOnboardingSnapshot, deleteWizardProgress, verifyOnboardingRequest, writeOnboardingCheckMarker, writeWizardProgress } from '../runtime/onboarding/index.ts';
@@ -190,6 +191,11 @@ export async function handleOnboardingActionForHandler(handler: InputHandler, ac
       await handleConnectExistingDaemonForHandler(handler);
       return;
     }
+    if (action === 'migrate-legacy-daemon-service') {
+      const confirm = handler.onboardingWizard.getBooleanFieldValue('network.migrate-legacy-daemon-confirm', false);
+      await handleMigrateLegacyDaemonServiceForHandler(handler, confirm);
+      return;
+    }
     if (action === 'start-openai-subscription') {
       await handler.handleOpenAiSubscriptionStart();
       return;
@@ -341,6 +347,9 @@ export async function refreshOnboardingHydrationForHandler(handler: InputHandler
             subscriptionManager: handler.uiServices.platform.subscriptionManager,
             secretsManager: handler.uiServices.platform.secretsManager,
           }),
+        },
+        legacyDaemon: {
+          detect: () => detectLegacyUnit({ homeDir: handler.uiServices.environment.homeDirectory }),
         },
       });
       if (!handler.onboardingWizard.active || hydrationSerial !== handler.onboardingHydrationSerial) return;

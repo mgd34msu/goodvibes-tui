@@ -4,6 +4,7 @@
  * already running elsewhere with a known token. Extracted from
  * onboarding-wizard-steps.ts to keep that file under the architecture line cap.
  */
+import { legacyUnitNote, MANAGED_SERVICE_NAME } from '../../runtime/legacy-daemon-migration.ts';
 import { normalizeText } from './onboarding-wizard-helpers.ts';
 import type { OnboardingWizardControllerLike } from './onboarding-wizard-types.ts';
 import type { OnboardingWizardFieldDefinition } from './onboarding-wizard-types.ts';
@@ -74,4 +75,59 @@ export function pushDaemonAdoptionFields(
       defaultValue: 'Connect',
     },
   );
+}
+
+/**
+ * W4-D1: the guided, visible entry point for migrating a detected legacy
+ * `goodvibes-daemon.service` unit — closes the fast-follow-up flagged when
+ * `handleMigrateLegacyDaemonServiceForHandler` (handler-onboarding-daemon-adopt.ts)
+ * shipped fully built but not wired to any onboarding control. Independent of
+ * the daemon-source radio above: this offers to retire an old unmanaged unit
+ * regardless of whether the wizard is set to start a new daemon or adopt an
+ * existing one.
+ *
+ * Visible ONLY when the runtime snapshot's read-only `legacyDaemon` detection
+ * (collected via `detectLegacyUnit`, see `../../runtime/legacy-daemon-migration.ts`)
+ * found a unit file present — never rendered speculatively. Confirm-gated on
+ * top of the engine's own consent requirement: a checklist toggle must be
+ * checked before the action executes the real migration (`confirmMigration:
+ * true`); left unchecked, pressing the action still works but only prints the
+ * engine's dry-run plan (`confirmMigration: false`) — see
+ * `runLegacyDaemonMigration`'s honest dry-run branch. The action label and
+ * hint change to make which mode is armed unambiguous before it is pressed.
+ */
+export function pushLegacyDaemonMigrationFields(
+  fields: OnboardingWizardFieldDefinition[],
+  controller: OnboardingWizardControllerLike,
+): void {
+  const legacy = controller.runtimeSnapshot?.legacyDaemon;
+  if (!legacy || !legacy.present) return;
+
+  fields.push({
+    kind: 'status',
+    id: 'network.migrate-legacy-daemon-detected',
+    label: 'Legacy daemon service detected',
+    hint: legacyUnitNote(legacy, MANAGED_SERVICE_NAME),
+    defaultValue: legacy.active ? 'Installed and running' : 'Installed (not active)',
+  });
+
+  const confirmFieldId = 'network.migrate-legacy-daemon-confirm';
+  const confirmed = controller.getBooleanFieldValue(confirmFieldId, false);
+  fields.push({
+    kind: 'checklist',
+    id: confirmFieldId,
+    label: 'Confirm migration execution',
+    hint: 'When checked, the action below performs the real migration: install and start the new managed service, verify it comes up healthy, and only then stop, disable, and remove the legacy unit. Leave unchecked to preview the plan without changing anything.',
+    defaultValue: false,
+  });
+  fields.push({
+    kind: 'action',
+    id: 'network.migrate-legacy-daemon',
+    label: confirmed ? 'Migrate legacy daemon service now' : 'Preview migration plan',
+    hint: confirmed
+      ? 'Executes the migration now: new-up-then-old-down, never touching the legacy unit until the new one is verified healthy. Result prints to the feed below.'
+      : 'Prints the migration plan without changing anything. Check "Confirm migration execution" above to arm the real migration.',
+    action: 'migrate-legacy-daemon-service',
+    defaultValue: confirmed ? 'Migrate' : 'Preview',
+  });
 }

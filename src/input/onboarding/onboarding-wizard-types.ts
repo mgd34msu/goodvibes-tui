@@ -54,7 +54,8 @@ export type OnboardingWizardAction =
   | 'cloudflare-disable'
   | 'start-openai-subscription'
   | 'finish-openai-subscription'
-  | 'connect-existing-daemon';
+  | 'connect-existing-daemon'
+  | 'migrate-legacy-daemon-service';
 
 export type OnboardingWizardApplyFeedbackSeverity = 'info' | 'warning' | 'error';
 
