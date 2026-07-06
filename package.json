@@ -1,6 +1,6 @@
 {
   "name": "@pellux/goodvibes-tui",
-  "version": "1.9.0",
+  "version": "1.9.1",
   "description": "Terminal-native GoodVibes product for coding, operations, automation, knowledge, channels, and daemon-backed control-plane workflows.",
   "type": "module",
   "main": "src/main.ts",
