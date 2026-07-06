@@ -384,9 +384,20 @@ export function registerSessionContentCommands(registry: CommandRegistry): void 
     },
   });
 
+  // W6-C3 (Wave 6 core-verb pass, MEMORY fragmentation — worst-class
+  // collision #2): this command used to be named /memory, colliding with
+  // the agent's /memory (an alias that forwards to /recall, the durable
+  // cross-session MemoryStore) — same command name, two unrelated features.
+  // Renamed to /note (this feature manages EPHEMERAL, session-scoped sticky
+  // notes pinned across context compaction — an entirely different resource
+  // from /recall's durable records). /memory is now registered as an alias
+  // of /recall below (memory.ts), matching the agent, so the word means the
+  // same thing on both surfaces. See
+  // docs/decisions/2026-07-06-core-verb-spec.md (in the SDK repo) for the
+  // full writeup.
   registry.register({
-    name: 'memory',
-    description: 'Manage session memories (pinned across context compaction)',
+    name: 'note',
+    description: 'Manage session notes (pinned across context compaction)',
     usage: '[list|add <text>|remove <id>]',
     argsHint: '[list|add|remove]',
     handler(args, ctx) {
@@ -394,26 +405,26 @@ export function registerSessionContentCommands(registry: CommandRegistry): void 
       if (sub === 'list' || args.length === 0) {
         const memories = requireSessionMemoryStore(ctx).list();
         ctx.print(memories.length === 0
-          ? 'No session memories. Use !# prefix or /memory add <text> to create one.'
-          : [`Session Memories (${memories.length}):`, ...memories.map(m => `  [${m.id}] ${m.text}`)].join('\n'));
+          ? 'No session notes. Use !# prefix or /note add <text> to create one.'
+          : [`Session Notes (${memories.length}):`, ...memories.map(m => `  [${m.id}] ${m.text}`)].join('\n'));
       } else if (sub === 'add') {
         const text = args.slice(1).join(' ').trim();
         if (!text) {
-          ctx.print('Usage: /memory add <text>');
+          ctx.print('Usage: /note add <text>');
           return;
         }
         const id = requireSessionMemoryStore(ctx).add(text);
-        ctx.print(`Memory added: [${id}] ${text}`);
+        ctx.print(`Note added: [${id}] ${text}`);
       } else if (sub === 'remove') {
         const id = args[1];
         if (!id) {
-          ctx.print('Usage: /memory remove <id>');
+          ctx.print('Usage: /note remove <id>');
           return;
         }
         const store = requireSessionMemoryStore(ctx);
-        ctx.print(store.remove(id) ? `Memory removed: [${id}]` : `Memory not found: ${id}`);
+        ctx.print(store.remove(id) ? `Note removed: [${id}]` : `Note not found: ${id}`);
       } else {
-        ctx.print('Usage: /memory [list|add <text>|remove <id>]\n  /memory              — list all session memories\n  /memory list         — list all session memories\n  /memory add <text>   — add a memory without sending a message\n  /memory remove <id>  — remove a specific memory');
+        ctx.print('Usage: /note [list|add <text>|remove <id>]\n  /note              — list all session notes\n  /note list         — list all session notes\n  /note add <text>   — add a note without sending a message\n  /note remove <id>  — remove a specific note');
       }
     },
   });

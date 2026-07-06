@@ -23,15 +23,22 @@ import { VALID_CLASSES, VALID_REVIEW_STATES, VALID_SCOPES } from './recall-share
 // ── Top-level command ─────────────────────────────────────────────────────────
 
 /**
- * DEBT-5 item 3 divergence note: the work order names this front door
- * "/memory", but `/memory` is already a distinct, unrelated command
- * (session-pinned notes, src/input/commands/session-content.ts) with no
- * modal surface. The modal that actually exists for this data — the
- * Project Memory Substrate — is `memory-modal.ts`, owned by THIS command
- * (`/recall`), confirmed by the panel-id redirect
+ * DEBT-5 item 3 divergence note (historical): the work order that shipped
+ * this command named its front door "/memory", but at the time `/memory` was
+ * already a distinct, unrelated command (session-pinned sticky notes,
+ * src/input/commands/session-content.ts) with no modal surface — so that
+ * work order deliberately did NOT touch /memory and used /recall instead.
+ *
+ * W6-C3 update (Wave 6 core-verb pass, MEMORY fragmentation — worst-class
+ * collision #2): the agent's own `/memory` command was a plain alias for its
+ * `/recall`-equivalent the whole time, meaning "/memory" meant two unrelated
+ * things depending which surface you were on. The session-notes command was
+ * renamed to `/note` (session-content.ts) to free the word, and `/memory` is
+ * now registered here as a real alias of `/recall` — the word means the same
+ * durable Project Memory Substrate on both surfaces. The modal that exists
+ * for this data — the Project Memory Substrate — is still `memory-modal.ts`,
+ * owned by THIS command, confirmed by the panel-id redirect
  * `registerModalRedirect('memory', 'memory-modal')` in builtin-modals.ts.
- * Applying the ruling here (not to the unrelated /memory command) is the
- * literal-truth reading: this is the command with "a full modal surface".
  */
 function printRecallUsage(context: CommandContext): void {
   const usage = [
@@ -66,7 +73,7 @@ function printRecallUsage(context: CommandContext): void {
 
 export const recallCommand: SlashCommand = {
   name: 'recall',
-  aliases: ['rc'],
+  aliases: ['rc', 'memory', 'mem'],
   description: 'Bare opens the Memory modal; project memory subcommands add decisions, constraints, incidents, and patterns with provenance',
   usage: '[<subcommand> [args]] — bare opens the modal; report prints the subcommand usage text',
   argsHint: 'add|search|link|get|list|remove|report',
