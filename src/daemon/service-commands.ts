@@ -58,6 +58,7 @@ import {
   buildManagedDaemonServiceManager,
   detectLegacyUnit,
   legacyUnitNote,
+  resolveManagedUnitName,
   runLegacyDaemonMigration,
   LEGACY_SERVICE_UNIT_NAME,
   MANAGED_SERVICE_NAME as SERVICE_NAME,
@@ -283,15 +284,17 @@ export async function runDaemonServiceCli(input: DaemonServiceCliInput): Promise
       // start competing for the same port later, and "never silently
       // start a second daemon" is the bar here, not "never right now."
       if (legacy.present) {
+        const status = manager.status();
+        const resolvedName = resolveManagedUnitName(status);
         return {
           ok: false,
           exitCode: 1,
           lines: [
             `service install refused: a service is already installed under the legacy name ${LEGACY_SERVICE_UNIT_NAME}.service.`,
-            legacyUnitNote(legacy, SERVICE_NAME),
-            `Installing this tool's ${SERVICE_NAME}.service alongside it risks two daemons competing for the same port.`,
+            legacyUnitNote(legacy, resolvedName),
+            `Installing this tool's ${resolvedName}.service alongside it risks two daemons competing for the same port.`,
           ],
-          status: manager.status(),
+          status,
         };
       }
       const installed = manager.install();
@@ -310,16 +313,17 @@ export async function runDaemonServiceCli(input: DaemonServiceCliInput): Promise
       if (uninstalled.actionError) return failed('uninstall', uninstalled);
       const extra: string[] = [];
       if (stopped.actionError) extra.push(`(it may not have been running: ${stopped.actionError})`);
-      // W3 Finding 4: this command only ever touches the TRACKED unit name
-      // (SERVICE_NAME) above — say so explicitly when a legacy unit also
-      // exists, so its continued presence is never a silent surprise.
-      if (legacy.present) extra.push(legacyUnitNote(legacy, SERVICE_NAME));
+      // W3 Finding 4: this command only ever touches the TRACKED unit
+      // (whatever name/path actually resolved, per F2 — not necessarily the
+      // SERVICE_NAME constant) above — say so explicitly when a legacy unit
+      // also exists, so its continued presence is never a silent surprise.
+      if (legacy.present) extra.push(legacyUnitNote(legacy, resolveManagedUnitName(uninstalled)));
       return ok('uninstall', uninstalled, extra);
     }
     case 'service-status': {
       const status = manager.status();
       if (status.actionError) return failed('status', status);
-      return ok('status', status, legacy.present ? [legacyUnitNote(legacy, SERVICE_NAME)] : []);
+      return ok('status', status, legacy.present ? [legacyUnitNote(legacy, resolveManagedUnitName(status))] : []);
     }
   }
 }
