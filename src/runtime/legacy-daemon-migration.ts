@@ -36,7 +36,7 @@
 import { existsSync, rmSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import net from 'node:net';
-import { dirname, join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import { PlatformServiceManager, type ManagedServiceStatus } from '@pellux/goodvibes-sdk/platform/daemon';
@@ -197,6 +197,39 @@ export function detectLegacyUnit(input: DetectLegacyUnitInput): LegacyUnitInfo {
   return { present: true, active, path };
 }
 
+/**
+ * F1: the unit name `PlatformServiceManager` is ACTUALLY about to mutate can
+ * differ from `MANAGED_SERVICE_NAME` / `definitionOverride.name`. The SDK's
+ * internal `resolveServiceName()` — used by `install()`, `uninstall()`, and
+ * `status()` alike to compute the unit file PATH — resolves from the
+ * `service.serviceName` CONFIG key first, falling back to the
+ * `defaultServiceName` this module passes only when that key is unset. It
+ * never consults `definitionOverride.name` for the path. So if a host's
+ * config sets `service.serviceName` to the legacy unit's own name
+ * (`goodvibes-daemon`), `install()` writes over the legacy unit file,
+ * `uninstall()` (used for this engine's failed-health rollback) removes it,
+ * and a "successful" migration would immediately retire the very unit it
+ * just installed.
+ *
+ * This resolves the name actually in play so callers can detect that
+ * collision before mutating anything: it prefers `status.serviceName` when
+ * the linked SDK build carries it (a parallel SDK change adds this field to
+ * `ManagedServiceStatus` precisely so callers never have to guess), and
+ * falls back to the basename of `status.path` with its unit-file extension
+ * stripped against an SDK build that predates that field. The fallback only
+ * has to handle the systemd `<name>.service` (and launchd `<name>.plist`)
+ * shapes: every call site in this module reaches this after already
+ * confirming the platform is 'systemd' (a non-systemd host is refused
+ * earlier, before any mutation), so the basename fallback is never
+ * exercised against the windows/manual path shapes that don't embed the
+ * name in their basename.
+ */
+export function resolveManagedUnitName(status: ManagedServiceStatus): string {
+  const carried = (status as { readonly serviceName?: unknown }).serviceName;
+  if (typeof carried === 'string' && carried.trim()) return carried.trim();
+  return basename(status.path).replace(/\.(service|plist)$/, '');
+}
+
 /** Honest one-line disclosure of the legacy unit's presence/state plus a manual migration hint — never auto-acted-on. */
 export function legacyUnitNote(legacy: LegacyUnitInfo, trackedServiceName: string): string {
   const stateWord = legacy.active ? 'installed and RUNNING' : 'installed (not currently active)';
@@ -249,6 +282,27 @@ export interface RunLegacyDaemonMigrationParams {
   readonly actionRunner?: ManagedServiceActionRunner | undefined;
 }
 
+/**
+ * F1 belt-and-braces guard: throws if the resolved unit `status` is the
+ * legacy unit. Called immediately before the two mutation calls
+ * (`manager.install()`, and `manager.uninstall()` on the failed-health
+ * rollback path) that would otherwise write to or remove that path. This is
+ * an internal invariant check, not a normal user-facing error path — the
+ * pre-flight collision check in `runLegacyDaemonMigration` already returns
+ * before either call site is reached whenever this would trip, so tripping
+ * here means that earlier check regressed, not that the user did anything
+ * wrong.
+ */
+function assertUnitIsNotLegacy(status: ManagedServiceStatus, legacy: LegacyUnitInfo, action: string): void {
+  if (status.path === legacy.path || resolveManagedUnitName(status) === LEGACY_SERVICE_UNIT_NAME) {
+    throw new Error(
+      `refusing to ${action}: the resolved managed unit (${resolveManagedUnitName(status)} at ${status.path}) is the ` +
+        `legacy ${LEGACY_SERVICE_UNIT_NAME}.service unit — this should already have been caught by the pre-flight ` +
+        'collision check in runLegacyDaemonMigration',
+    );
+  }
+}
+
 export interface LegacyDaemonMigrationResult {
   readonly ok: boolean;
   readonly exitCode: number;
@@ -267,6 +321,12 @@ export async function runLegacyDaemonMigration(
   legacy: LegacyUnitInfo,
 ): Promise<LegacyDaemonMigrationResult> {
   const { trackedServiceName } = params;
+  // Computed once, up front, and reused for every branch below (this is the
+  // exact same single call each branch made individually before — see the
+  // F1 fix note on `resolveManagedUnitName` for why the name/path it reports
+  // can differ from `trackedServiceName`).
+  const currentStatus = manager.status();
+  const resolvedUnitName = resolveManagedUnitName(currentStatus);
 
   if (!legacy.present) {
     const probe = params.portProbe ?? defaultPortProbe;
@@ -284,7 +344,7 @@ export async function runLegacyDaemonMigration(
           'Stop that process yourself (or point this TUI at it instead — see the onboarding "connect to an existing ' +
             'daemon" option), then re-run migrate-service or install-service once the port is free.',
         ],
-        status: manager.status(),
+        status: currentStatus,
       };
     }
     return {
@@ -293,13 +353,12 @@ export async function runLegacyDaemonMigration(
       lines: [
         `migrate-service: no legacy ${LEGACY_SERVICE_UNIT_NAME}.service unit was found and ${params.host}:${params.port} ` +
           'is free — there is nothing to migrate.',
-        `Run install-service to set up the managed ${trackedServiceName}.service directly.`,
+        `Run install-service to set up the managed ${resolvedUnitName}.service directly.`,
       ],
-      status: manager.status(),
+      status: currentStatus,
     };
   }
 
-  const currentStatus = manager.status();
   if (currentStatus.platform !== 'systemd') {
     return {
       ok: false,
@@ -314,14 +373,41 @@ export async function runLegacyDaemonMigration(
     };
   }
 
+  // F1: before any mutation, confirm the unit PlatformServiceManager is
+  // actually about to install/uninstall isn't the legacy unit itself. This
+  // happens when the host's `service.serviceName` config key is set to the
+  // legacy unit's own name — see `resolveManagedUnitName`'s doc comment for
+  // why the SDK resolves mutation paths from that config key rather than
+  // from the definition this engine passes. Without this check, `install()`
+  // below would overwrite the legacy unit file, a failed-health rollback
+  // (`uninstall()`) would DELETE it while still claiming it was "never
+  // touched," and a successful migration would immediately retire the unit
+  // it just installed.
+  if (resolvedUnitName === LEGACY_SERVICE_UNIT_NAME || currentStatus.path === legacy.path) {
+    return {
+      ok: false,
+      exitCode: 1,
+      lines: [
+        `migrate-service aborted: this host's 'service.serviceName' config key resolves to '${resolvedUnitName}', which ` +
+          `is the exact legacy unit name (${LEGACY_SERVICE_UNIT_NAME}.service at ${legacy.path}) this migration is ` +
+          'supposed to retire.',
+        'Installing or rolling back a unit under that name would overwrite or delete the legacy unit instead of ' +
+          'managing a separate one, so nothing has been changed.',
+        `Fix: set the 'service.serviceName' config key to something other than '${LEGACY_SERVICE_UNIT_NAME}' (for ` +
+          `example, the default '${trackedServiceName}') and re-run migrate-service.`,
+      ],
+      status: currentStatus,
+    };
+  }
+
   if (!params.confirmMigration) {
     return {
       ok: true,
       exitCode: 0,
       lines: [
-        legacyUnitNote(legacy, trackedServiceName),
+        legacyUnitNote(legacy, resolvedUnitName),
         'migrate-service (dry run — re-run with confirmation to execute): this would',
-        `  1. install and start the new ${trackedServiceName}.service unit`,
+        `  1. install and start the new ${resolvedUnitName}.service unit`,
         '  2. verify it comes up healthy (a fresh, honest systemd is-active check)',
         `  3. only if that succeeds, stop, disable, and remove the legacy ${LEGACY_SERVICE_UNIT_NAME}.service unit ` +
           'and run `systemctl --user daemon-reload`',
@@ -334,13 +420,18 @@ export async function runLegacyDaemonMigration(
 
   // Consented: new-up-then-old-down. The legacy unit is not touched until the
   // new unit is verified healthy.
+  // Belt-and-braces (F1): the collision check above already returns before
+  // reaching here whenever the resolved unit is the legacy one — this
+  // re-asserts the same invariant right at the mutation site so a future
+  // change to the check above can never silently reopen the hole.
+  assertUnitIsNotLegacy(currentStatus, legacy, 'install the new unit');
   const installed = manager.install();
   if (installed.actionError) {
     return {
       ok: false,
       exitCode: 1,
       lines: [
-        `migrate-service aborted: could not write the new ${trackedServiceName}.service unit (${installed.actionError}).`,
+        `migrate-service aborted: could not write the new ${resolvedUnitName}.service unit (${installed.actionError}).`,
         `The legacy ${LEGACY_SERVICE_UNIT_NAME}.service unit was never touched.`,
       ],
       status: installed,
@@ -350,6 +441,7 @@ export async function runLegacyDaemonMigration(
   const healthCheck = manager.status();
   const healthy = !started.actionError && healthCheck.running;
   if (!healthy) {
+    assertUnitIsNotLegacy(installed, legacy, 'roll back (uninstall) the new unit');
     const rollback = manager.uninstall();
     const rollbackNote = rollback.actionError
       ? `rolling back the new unit ALSO hit an error (${rollback.actionError}) — remove ${installed.path} by hand.`
@@ -358,7 +450,7 @@ export async function runLegacyDaemonMigration(
       ok: false,
       exitCode: 1,
       lines: [
-        `migrate-service aborted: the new ${trackedServiceName}.service unit did not come up healthy` +
+        `migrate-service aborted: the new ${resolvedUnitName}.service unit did not come up healthy` +
           (started.actionError ? ` (${started.actionError}).` : '.'),
         rollbackNote,
         `The legacy ${LEGACY_SERVICE_UNIT_NAME}.service unit was never touched and should still be running as before.`,
@@ -381,7 +473,7 @@ export async function runLegacyDaemonMigration(
   }
   run('systemctl', ['--user', 'daemon-reload']);
 
-  const lines = [`migrated: the new ${trackedServiceName}.service unit is installed, enabled, and running.`];
+  const lines = [`migrated: the new ${resolvedUnitName}.service unit is installed, enabled, and running.`];
   if ((stopResult.status ?? 1) !== 0) {
     lines.push(
       `note: stopping the legacy unit reported a non-zero exit (${stopResult.stderr ?? stopResult.stdout ?? 'no output'}); ` +

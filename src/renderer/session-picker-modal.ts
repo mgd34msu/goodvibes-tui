@@ -65,6 +65,25 @@ function isReapedRecord(record: SharedSessionRecord): boolean {
   return isClosedStatus(record.status) && readCloseReason(record) === 'idle-reaped';
 }
 
+/**
+ * Wave-4 UX-lens note: 'reaped' names a mechanism (the idle-session sweep),
+ * not a state a first-time reader can guess — the webui pairs its own
+ * 'reaped' badge with a tooltip explaining it
+ * (SessionsView.tsx: "Closed by the idle-session sweep — reopens
+ * automatically on the next activity"). The TUI has no hover/tooltip
+ * surface, so the plain-language explanation is rendered as its own short
+ * line under the cross-surface list instead — shown ONLY when at least one
+ * visible row actually carries the badge, so it never adds noise to a list
+ * with no reaped rows.
+ */
+const REAPED_BADGE_HINT = 'reaped = closed by the idle sweep — reopens on next activity';
+
+/** True when at least one of the currently-rendered (post-truncation) cross-surface rows carries the 'reaped' badge. */
+function hasVisibleReapedRow(modal: SessionPickerModal): boolean {
+  if (modal.crossSurfaceView.mode === 'local') return false;
+  return modal.crossSurfaceSessions.slice(0, MAX_CROSS_SURFACE_ROWS).some(isReapedRecord);
+}
+
 function statusLabel(record: SharedSessionRecord): string {
   const trimmed = record.status.trim();
   if (!trimmed) return 'active';
@@ -108,7 +127,11 @@ function crossSurfaceExtraRows(modal: SessionPickerModal): number {
   const rows = crossSurfaceRowCount(modal);
   const noteRow = crossSurfaceNote(modal.crossSurfaceView, rows) ? 1 : 0;
   const overflowRow = modal.crossSurfaceSessions.length > MAX_CROSS_SURFACE_ROWS ? 1 : 0;
-  return 2 + noteRow + overflowRow + Math.max(rows, noteRow === 1 && rows === 0 ? 0 : rows);
+  // W4 UX-lens: the plain-language 'reaped' explainer is its own row —
+  // uncounted here it would be silently eaten by modal-factory's tail-clip
+  // exactly the way W3 Finding 1 describes above.
+  const reapedHintRow = hasVisibleReapedRow(modal) ? 1 : 0;
+  return 2 + noteRow + overflowRow + reapedHintRow + Math.max(rows, noteRow === 1 && rows === 0 ? 0 : rows);
 }
 
 // ---------------------------------------------------------------------------
@@ -253,6 +276,15 @@ export function renderSessionPickerModal(
           type: 'text',
           content: `[showing ${MAX_CROSS_SURFACE_ROWS} of ${modal.crossSurfaceSessions.length}]`,
           style: { fg: '244', dim: true },
+        });
+      }
+      // W4 UX-lens: only ever rendered when a visible row actually carries
+      // the 'reaped' badge — never speculative noise.
+      if (hasVisibleReapedRow(modal)) {
+        sections.push({
+          type: 'text',
+          content: REAPED_BADGE_HINT,
+          style: { fg: UI_TONES.state.info, dim: true },
         });
       }
     }

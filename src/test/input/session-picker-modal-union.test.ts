@@ -220,6 +220,31 @@ describe('SessionPickerModal — cross-surface union (W3-T2)', () => {
       expect(reapedLine).not.toContain('· closed ·');
       expect(userClosedLine).toContain('· closed ·');
       expect(legacyLine).toContain('· closed ·');
+      // Wave-4 UX-lens note: 'reaped' is jargon with no on-screen explanation
+      // — a plain-language hint must render alongside the badge (the webui
+      // pairs its own 'reaped' badge with an equivalent tooltip).
+      expect(text).toContain('reaped = closed by the idle sweep — reopens on next activity');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test('(6) no reaped rows visible: the plain-language "reaped" hint is absent (never speculative noise)', async () => {
+    const { sessionManager, dir } = makeSessionManager();
+    try {
+      const local = localReader([
+        record('closed-1', { status: 'closed', title: 'Closed session' }),
+        record('active-1', { title: 'Active session' }),
+      ]);
+      const cache = new SessionUnionCache({ local, scheduler: noopScheduler, log: silent });
+      cache.markEmbedded();
+
+      const modal = new SessionPickerModal(sessionManager, cache);
+      modal.open();
+
+      const text = linesToText(renderSessionPickerModal(modal, 100)).join('\n');
+      expect(text).toContain('Closed session');
+      expect(text).not.toContain('reaped = closed by the idle sweep');
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
