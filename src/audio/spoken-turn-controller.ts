@@ -6,6 +6,35 @@ import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 import { TtsTextChunker } from './text-chunker.ts';
 import type { StreamingAudioPlayer } from './player.ts';
 
+/**
+ * How many synthesis requests may sit in the pipeline at once (synthesizing,
+ * waiting to play, or playing). 2 = the chunk being played plus ONE prefetch,
+ * so the next audio is ready the moment the current sink drains. Bounding
+ * this is what keeps a streaming answer from bursting N concurrent requests
+ * at the voice provider — ElevenLabs plans allow as few as 3 concurrent, and
+ * an unbounded burst 429s the whole turn. The SDK config schema has no tts.*
+ * key for pipeline tuning, so this is a constant by design.
+ */
+const SYNTHESIS_PIPELINE_WINDOW = 2;
+
+/**
+ * Upper bound for one merged synthesis request's text. The ElevenLabs
+ * provider passes request text through verbatim (no cap of its own); the API
+ * caps text per request by plan — 2,500 chars on the lowest tiers, 5,000 on
+ * most others. 1,500 stays safely under every plan while still folding a
+ * multi-paragraph answer into one or two requests.
+ */
+const SYNTHESIS_MERGE_MAX_CHARS = 1500;
+
+/**
+ * Backoff schedule for transient synthesis failures (429 rate/concurrency
+ * limits, transient 5xx, network drops): first retry after 1s, second after
+ * 2.5s, then the chunk is skipped honestly and the turn continues. The SDK's
+ * provider errors are plain Error strings with the HTTP status embedded — no
+ * Retry-After header is exposed — so the schedule is fixed, not server-driven.
+ */
+const SYNTHESIS_RETRY_DELAYS_MS = [1000, 2500] as const;
+
 export interface SpokenTurnControllerOptions {
   readonly voiceService: Pick<VoiceService, 'synthesizeStream'>;
   readonly configManager: Pick<ConfigManager, 'get'>;
@@ -14,6 +43,9 @@ export interface SpokenTurnControllerOptions {
   readonly now?: () => number;
   readonly setInterval?: typeof setInterval;
   readonly clearInterval?: typeof clearInterval;
+  /** Injectable clock for retry backoff timers (tests use fakes). */
+  readonly setTimeout?: typeof setTimeout;
+  readonly clearTimeout?: typeof clearTimeout;
 }
 
 export class SpokenTurnController {
@@ -26,6 +58,15 @@ export class SpokenTurnController {
   private timer: ReturnType<typeof setInterval> | null = null;
   private errorReportedForTurn = false;
   private noPlayerNoticed = false;
+  /** Chunker output waiting to be merged into a synthesis request. */
+  private pendingTexts: string[] = [];
+  /** Requests currently in the pipeline (synthesizing / waiting / playing). */
+  private pipelineDepth = 0;
+  /** Bumped on every teardown so stale pipeline releases are ignored. */
+  private pipelineGeneration = 0;
+  private pumpScheduled = false;
+  /** Set when TURN_COMPLETED arrives; the turn releases once the pipeline drains. */
+  private completedTurnId: string | null = null;
   private readonly voiceService: Pick<VoiceService, 'synthesizeStream'>;
   private readonly configManager: Pick<ConfigManager, 'get'>;
   private readonly player: StreamingAudioPlayer;
@@ -33,6 +74,8 @@ export class SpokenTurnController {
   private readonly now: () => number;
   private readonly setIntervalImpl: typeof setInterval;
   private readonly clearIntervalImpl: typeof clearInterval;
+  private readonly setTimeoutImpl: typeof setTimeout;
+  private readonly clearTimeoutImpl: typeof clearTimeout;
 
   constructor(options: SpokenTurnControllerOptions) {
     this.voiceService = options.voiceService;
@@ -42,6 +85,8 @@ export class SpokenTurnController {
     this.now = options.now ?? (() => Date.now());
     this.setIntervalImpl = options.setInterval ?? setInterval;
     this.clearIntervalImpl = options.clearInterval ?? clearInterval;
+    this.setTimeoutImpl = options.setTimeout ?? setTimeout;
+    this.clearTimeoutImpl = options.clearTimeout ?? clearTimeout;
   }
 
   submitNextTurn(prompt: string): boolean {
@@ -76,6 +121,7 @@ export class SpokenTurnController {
     this.chunker?.reset();
     this.chunker = null;
     this.stopTimer();
+    this.resetPipeline();
     for (const controller of this.abortControllers) controller.abort();
     this.abortControllers.clear();
     this.player.stop();
@@ -99,6 +145,7 @@ export class SpokenTurnController {
     this.chunker?.reset();
     this.chunker = null;
     this.stopTimer();
+    this.resetPipeline();
     // Cancel chunks that have not started playing; the chunk currently in the
     // sink is not in this set (its controller is released before playback).
     for (const controller of this.abortControllers) controller.abort();
@@ -116,7 +163,7 @@ export class SpokenTurnController {
     if (!this.activeTurnId || event.turnId !== this.activeTurnId) return;
 
     if (event.type === 'STREAM_DELTA') {
-      this.enqueueChunks(this.chunker?.push(event.content) ?? []);
+      this.queueTexts(this.chunker?.push(event.content) ?? []);
       return;
     }
     if (event.type === 'STREAM_END') {
@@ -140,30 +187,33 @@ export class SpokenTurnController {
     this.errorReportedForTurn = false;
     this.chunker = new TtsTextChunker({ now: this.now });
     this.playbackChain = Promise.resolve();
+    this.resetPipeline();
     this.startTimer();
     this.notify?.(`[TTS] Live playback queued through ${this.player.label}.`);
   }
 
   private finishTurn(turnId: string): void {
     if (turnId !== this.activeTurnId) return;
-    this.enqueueChunks(this.chunker?.flushAll() ?? []);
+    this.queueTexts(this.chunker?.flushAll() ?? []);
     this.stopTimer();
-    const chain = this.playbackChain;
-    chain.finally(() => {
-      if (this.activeTurnId !== turnId) return;
-      this.activeTurnId = null;
-      this.chunker = null;
-      this.abortControllers.clear();
-    }).catch(() => {
-      // Errors are already reported in the queued task.
-    });
+    this.completedTurnId = turnId;
+    // Nothing pending and nothing in flight releases immediately; otherwise
+    // the last pipeline slot to free performs the release.
+    this.maybeReleaseTurn();
+  }
+
+  private resetPipeline(): void {
+    this.pendingTexts = [];
+    this.pipelineDepth = 0;
+    this.pipelineGeneration++;
+    this.completedTurnId = null;
   }
 
   private startTimer(): void {
     this.stopTimer();
     this.timer = this.setIntervalImpl(() => {
       if (!this.activeTurnId || !this.chunker) return;
-      this.enqueueChunks(this.chunker.flushDue());
+      this.queueTexts(this.chunker.flushDue());
     }, 250);
   }
 
@@ -173,50 +223,158 @@ export class SpokenTurnController {
     this.timer = null;
   }
 
-  private enqueueChunks(chunks: readonly string[]): void {
+  /**
+   * Chunker output does NOT map 1:1 to synthesis requests. Text queues here
+   * and the pump merges everything pending into one request whenever a
+   * pipeline slot is free — so the request count tracks how often the model
+   * out-paces the audio, not how many sentences it wrote. A short answer that
+   * arrives before the first pump tick is exactly one request.
+   */
+  private queueTexts(chunks: readonly string[]): void {
     for (const chunk of chunks) {
-      this.enqueueChunk(chunk);
+      if (chunk.trim()) this.pendingTexts.push(chunk);
     }
+    if (this.pendingTexts.length > 0) this.schedulePump();
   }
 
-  private enqueueChunk(text: string): void {
+  /**
+   * Deferred one tick so text delivered in the same synchronous burst (fast
+   * deltas, or a turn that completes instantly) coalesces into a single
+   * request instead of firing per sentence boundary.
+   */
+  private schedulePump(): void {
+    if (this.pumpScheduled) return;
+    this.pumpScheduled = true;
+    queueMicrotask(() => {
+      this.pumpScheduled = false;
+      this.pump();
+    });
+  }
+
+  private pump(): void {
+    while (this.activeTurnId && this.pendingTexts.length > 0 && this.pipelineDepth < SYNTHESIS_PIPELINE_WINDOW) {
+      this.dispatchChunk(this.takeMergedText());
+    }
+    this.maybeReleaseTurn();
+  }
+
+  /** Merge everything pending into one request, capped at the per-request text limit. */
+  private takeMergedText(): string {
+    let merged = '';
+    while (this.pendingTexts.length > 0) {
+      const next = this.pendingTexts[0]!;
+      if (!merged && next.length > SYNTHESIS_MERGE_MAX_CHARS) {
+        // A single oversized entry (e.g. a large end-of-turn flush): split at
+        // a word boundary under the per-request cap; the rest stays queued.
+        const cut = findSplitIndex(next, SYNTHESIS_MERGE_MAX_CHARS);
+        this.pendingTexts[0] = next.slice(cut).trim();
+        return next.slice(0, cut).trim();
+      }
+      if (merged && merged.length + 1 + next.length > SYNTHESIS_MERGE_MAX_CHARS) break;
+      merged = merged ? `${merged} ${next}` : next;
+      this.pendingTexts.shift();
+    }
+    return merged;
+  }
+
+  private dispatchChunk(text: string): void {
     const turnId = this.activeTurnId;
     if (!turnId || !text.trim()) return;
     const sequence = ++this.chunkSequence;
+    const generation = this.pipelineGeneration;
+    this.pipelineDepth++;
     const abortController = new AbortController();
     this.abortControllers.add(abortController);
-    const resultPromise = this.synthesize(text, turnId, sequence, abortController.signal)
+    const resultPromise = this.synthesizeWithRetry(text, turnId, sequence, abortController.signal)
       .then((result) => ({ ok: true as const, result }))
       .catch((error: unknown) => ({ ok: false as const, error }));
 
     this.playbackChain = this.playbackChain.then(async () => {
-      if (abortController.signal.aborted) return;
-      const result = await resultPromise;
-      this.abortControllers.delete(abortController);
-      // Re-check after the await: an abort that landed while synthesis was in
-      // flight (deliberate stop or exit) makes the rejection expected — it
-      // must not route into reportError, which would print a spurious error
-      // and hard-stop a sink that may still be draining the previous chunk.
-      if (abortController.signal.aborted) return;
-      if (!result.ok) {
-        this.reportError(result.error);
-        return;
+      try {
+        if (abortController.signal.aborted) {
+          this.abortControllers.delete(abortController);
+          return;
+        }
+        const result = await resultPromise;
+        this.abortControllers.delete(abortController);
+        // Re-check after the await: an abort that landed while synthesis was
+        // in flight (deliberate stop or exit) makes the rejection expected —
+        // it must not be reported, and it must not hard-stop a sink that may
+        // still be draining the previous chunk.
+        if (abortController.signal.aborted) return;
+        if (!result.ok) {
+          // Retries are exhausted (or the failure was not transient). Skip
+          // just this chunk and keep speaking the rest of the turn — a gap in
+          // speech beats losing the whole response.
+          this.reportSkippedChunk(result.error);
+          return;
+        }
+        await this.player.play(result.result.chunks, {
+          format: String(result.result.format ?? 'mp3'),
+          signal: abortController.signal,
+        });
+      } finally {
+        this.releasePipelineSlot(generation);
       }
-      await this.player.play(result.result.chunks, {
-        format: String(result.result.format ?? 'mp3'),
-        signal: abortController.signal,
-      });
     }).catch((error: unknown) => {
       this.abortControllers.delete(abortController);
       this.reportError(error);
     });
   }
 
+  private releasePipelineSlot(generation: number): void {
+    if (generation !== this.pipelineGeneration) return;
+    this.pipelineDepth = Math.max(0, this.pipelineDepth - 1);
+    if (this.pendingTexts.length > 0) {
+      this.schedulePump();
+      return;
+    }
+    this.maybeReleaseTurn();
+  }
+
+  private maybeReleaseTurn(): void {
+    if (!this.completedTurnId || this.completedTurnId !== this.activeTurnId) return;
+    if (this.pendingTexts.length > 0 || this.pipelineDepth > 0 || this.pumpScheduled) return;
+    this.activeTurnId = null;
+    this.completedTurnId = null;
+    this.chunker = null;
+    this.abortControllers.clear();
+  }
+
+  private async synthesizeWithRetry(text: string, turnId: string, sequence: number, signal: AbortSignal): Promise<VoiceSynthesisStreamResult> {
+    for (let attempt = 0; ; attempt++) {
+      try {
+        return await this.synthesize(text, turnId, sequence, signal);
+      } catch (error) {
+        const retryable = attempt < SYNTHESIS_RETRY_DELAYS_MS.length
+          && !signal.aborted
+          && isTransientSynthesisError(error);
+        if (!retryable) throw error;
+        await this.delay(SYNTHESIS_RETRY_DELAYS_MS[attempt]!, signal);
+      }
+    }
+  }
+
+  /** Abortable backoff sleep — an abort clears the timer and rejects, so a stop mid-backoff leaves nothing running. */
+  private delay(ms: number, signal: AbortSignal): Promise<void> {
+    return new Promise((resolve, reject) => {
+      if (signal.aborted) {
+        reject(new Error('Synthesis retry cancelled'));
+        return;
+      }
+      const timer = this.setTimeoutImpl(() => {
+        signal.removeEventListener('abort', onAbort);
+        resolve();
+      }, ms);
+      const onAbort = () => {
+        this.clearTimeoutImpl(timer);
+        reject(new Error('Synthesis retry cancelled'));
+      };
+      signal.addEventListener('abort', onAbort, { once: true });
+    });
+  }
+
   private synthesize(text: string, turnId: string, sequence: number, signal: AbortSignal): Promise<VoiceSynthesisStreamResult> {
-    // tts.speed: VoiceSynthesisRequest accepts speed (number | undefined).
-    // No ConfigKey for tts.speed exists in the current SDK schema — pending
-    // SDK schema addition. Speed is not threaded from config until that key
-    // is added. See docs/voice-and-live-tts.md § Speed.
     return this.voiceService.synthesizeStream(readOptionalConfigString(this.configManager, 'tts.provider'), {
       text,
       voiceId: readOptionalConfigString(this.configManager, 'tts.voice'),
@@ -232,18 +390,51 @@ export class SpokenTurnController {
     });
   }
 
+  /**
+   * One synthesis request failed after its retries. Report once per turn and
+   * keep going — the rest of the response still plays.
+   */
+  private reportSkippedChunk(error: unknown): void {
+    if (this.errorReportedForTurn) return;
+    this.errorReportedForTurn = true;
+    this.notify?.(`[TTS] Skipping part of the spoken response — synthesis kept failing (${summarizeError(error)}). Playback continues with the rest.`);
+  }
+
   private reportError(error: unknown): void {
     if (this.errorReportedForTurn) return;
     this.errorReportedForTurn = true;
     this.activeTurnId = null;
     this.chunker = null;
     this.stopTimer();
+    this.resetPipeline();
     for (const controller of this.abortControllers) controller.abort();
     this.abortControllers.clear();
     this.player.stop();
     this.playbackChain = Promise.resolve();
     this.notify?.(`[TTS] Live playback stopped: ${summarizeError(error)}`);
   }
+}
+
+/**
+ * Transient = worth a bounded retry: rate/concurrency limits (HTTP 429),
+ * transient server errors (5xx), and network-level drops. The SDK's voice
+ * providers throw plain Error strings with the HTTP status embedded in the
+ * message, so classification is by message content.
+ */
+function isTransientSynthesisError(error: unknown): boolean {
+  const message = (error instanceof Error ? error.message : String(error)).toLowerCase();
+  if (message.includes('429') || message.includes('rate limit') || message.includes('rate_limit')
+    || message.includes('too many requests') || message.includes('concurrent')) return true;
+  if (/http 5\d\d/.test(message)) return true;
+  return message.includes('fetch failed') || message.includes('network')
+    || message.includes('timed out') || message.includes('timeout')
+    || message.includes('econnreset') || message.includes('socket');
+}
+
+/** Split point at or under `limit`, preferring the last word boundary. */
+function findSplitIndex(text: string, limit: number): number {
+  const space = text.lastIndexOf(' ', limit);
+  return space > 0 ? space : limit;
 }
 
 function readOptionalConfigString(configManager: Pick<ConfigManager, 'get'>, key: ConfigKey): string | undefined {
@@ -254,17 +445,10 @@ function readOptionalConfigString(configManager: Pick<ConfigManager, 'get'>, key
 /**
  * readOptionalConfigNumber — reads a numeric config value by key.
  *
- * `tts.speed` is not yet a ConfigKey in the SDK schema. This helper accepts
- * a string key and casts it, returning undefined when the value is absent,
- * zero, or not a finite positive number. Once `tts.speed` is added to the
- * SDK schema the cast can be removed and the key typed statically.
- *
- * SDK handoff note: add { key: 'tts.speed', type: 'number', default: 1,
- * description: '...' } to schema-domain-core.js and `tts: { ..., speed: 1 }`
- * to DEFAULT_CONFIG.tts to complete this feature.
+ * Accepts a string key and casts it, returning undefined when the value is
+ * absent, zero, or not a finite positive number.
  */
 function readOptionalConfigNumber(configManager: Pick<ConfigManager, 'get'>, key: string): number | undefined {
-  // Cast required: key is not yet a valid ConfigKey in the SDK schema.
   const raw = configManager.get(key as ConfigKey);
   const value = typeof raw === 'number' ? raw : parseFloat(String(raw ?? ''));
   return isFinite(value) && value > 0 ? value : undefined;

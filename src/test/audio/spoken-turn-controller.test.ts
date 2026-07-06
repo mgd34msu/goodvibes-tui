@@ -131,6 +131,241 @@ function makeDrainHarness() {
   };
 }
 
+/**
+ * Harness for the request-pipeline tests: counts every synthesis request and
+ * the number concurrently in flight, can defer each request until the test
+ * releases it, can fail requests selectively (per text / per attempt), and
+ * accepts an injected backoff clock.
+ */
+function makePipelineHarness(behavior: {
+  failWhen?: (text: string, attempt: number) => boolean;
+  deferred?: boolean;
+  setTimeout?: typeof setTimeout;
+  clearTimeout?: typeof clearTimeout;
+} = {}) {
+  const synthesized: string[] = [];
+  const played: string[] = [];
+  const messages: string[] = [];
+  const attempts = new Map<string, number>();
+  let totalRequests = 0;
+  let inFlight = 0;
+  let peakInFlight = 0;
+  const pendingSynth: (() => void)[] = [];
+  const voiceService = {
+    async synthesizeStream(_providerId: string | undefined, request: VoiceSynthesisRequest): Promise<VoiceSynthesisStreamResult> {
+      const attempt = (attempts.get(request.text) ?? 0) + 1;
+      attempts.set(request.text, attempt);
+      totalRequests++;
+      inFlight++;
+      peakInFlight = Math.max(peakInFlight, inFlight);
+      try {
+        if (behavior.deferred) {
+          await new Promise<void>((resolve) => pendingSynth.push(resolve));
+        }
+        if (behavior.failWhen?.(request.text, attempt)) {
+          throw new Error('ElevenLabs streaming synthesis failed: HTTP 429: {"detail":{"status":"too_many_concurrent_requests","message":"maximum of 3 concurrent requests"}}');
+        }
+        synthesized.push(request.text);
+        return {
+          providerId: 'fake',
+          mimeType: 'audio/mpeg',
+          format: 'mp3',
+          chunks: audioChunks(request.text),
+          metadata: {},
+        };
+      } finally {
+        inFlight--;
+      }
+    },
+  };
+  const player: StreamingAudioPlayer = {
+    label: 'fake-player',
+    available: true,
+    async play(chunks) {
+      for await (const chunk of chunks) {
+        played.push(new TextDecoder().decode(chunk.data));
+      }
+    },
+    stop() {},
+    async waitForDrain() {},
+  };
+  const controller = new SpokenTurnController({
+    voiceService,
+    configManager: { get: () => '' } as never,
+    player,
+    notify: (message) => messages.push(message),
+    setInterval: (() => 1) as never,
+    clearInterval: (() => {}) as never,
+    ...(behavior.setTimeout ? { setTimeout: behavior.setTimeout } : {}),
+    ...(behavior.clearTimeout ? { clearTimeout: behavior.clearTimeout } : {}),
+  });
+  return {
+    controller,
+    synthesized,
+    played,
+    messages,
+    attempts,
+    requests: () => totalRequests,
+    peakInFlight: () => peakInFlight,
+    releaseSynth: () => pendingSynth.shift()?.(),
+  };
+}
+
+describe('SpokenTurnController request pipeline', () => {
+  test('a turn that completes before first audio becomes exactly one synthesis request', async () => {
+    const h = makePipelineHarness();
+
+    expect(h.controller.submitNextTurn('quick weather answer')).toBe(true);
+    h.controller.handleTurnEvent(turn({ type: 'TURN_SUBMITTED', turnId: 't-one', prompt: 'quick weather answer' }));
+    // Three sentence-boundary deltas plus completion, all in one synchronous
+    // burst — the whole answer arrived before the first request could fire,
+    // so everything merges into ONE request (not one per sentence).
+    h.controller.handleTurnEvent(turn({ type: 'STREAM_DELTA', turnId: 't-one', content: 'Tonight will be cool and clear. ', accumulated: '' }));
+    h.controller.handleTurnEvent(turn({ type: 'STREAM_DELTA', turnId: 't-one', content: 'Expect a low around fifteen degrees. ', accumulated: '' }));
+    h.controller.handleTurnEvent(turn({ type: 'STREAM_DELTA', turnId: 't-one', content: 'Winds stay light through the morning.', accumulated: '' }));
+    h.controller.handleTurnEvent(turn({ type: 'TURN_COMPLETED', turnId: 't-one', response: '', stopReason: 'completed' }));
+    await drain();
+
+    const full = 'Tonight will be cool and clear. Expect a low around fifteen degrees. Winds stay light through the morning.';
+    expect(h.requests()).toBe(1);
+    expect(h.synthesized).toEqual([full]);
+    expect(h.played).toEqual([full]);
+  });
+
+  test('a fast-streaming multi-paragraph turn stays within three requests and the in-flight window', async () => {
+    const h = makePipelineHarness({ deferred: true });
+    const p1 = 'This is the first paragraph of the answer. ';
+    const p2 = 'Here is the second paragraph with more detail. ';
+    const p3 = 'The third paragraph continues the explanation. ';
+    const p4 = 'And the fourth paragraph wraps everything up.';
+
+    expect(h.controller.submitNextTurn('long explanation')).toBe(true);
+    h.controller.handleTurnEvent(turn({ type: 'TURN_SUBMITTED', turnId: 't-many', prompt: 'long explanation' }));
+    h.controller.handleTurnEvent(turn({ type: 'STREAM_DELTA', turnId: 't-many', content: p1, accumulated: '' }));
+    await drain();
+    h.controller.handleTurnEvent(turn({ type: 'STREAM_DELTA', turnId: 't-many', content: p2, accumulated: '' }));
+    await drain();
+    // Paragraphs 3 and 4 land while the window is full: they queue, they do
+    // NOT fire more requests.
+    h.controller.handleTurnEvent(turn({ type: 'STREAM_DELTA', turnId: 't-many', content: p3, accumulated: '' }));
+    h.controller.handleTurnEvent(turn({ type: 'STREAM_DELTA', turnId: 't-many', content: p4, accumulated: '' }));
+    h.controller.handleTurnEvent(turn({ type: 'TURN_COMPLETED', turnId: 't-many', response: '', stopReason: 'completed' }));
+    await drain();
+    expect(h.requests()).toBe(2);
+
+    // Each release lets one synthesis finish and its playback complete; the
+    // freed slot merges EVERYTHING still queued into a single request.
+    h.releaseSynth();
+    await drain();
+    h.releaseSynth();
+    await drain();
+    h.releaseSynth();
+    await drain();
+
+    expect(h.requests()).toBe(3);
+    expect(h.peakInFlight()).toBeLessThanOrEqual(2);
+    expect(h.played).toEqual([
+      'This is the first paragraph of the answer.',
+      'Here is the second paragraph with more detail.',
+      'The third paragraph continues the explanation. And the fourth paragraph wraps everything up.',
+    ]);
+  });
+
+  test('a 429 is retried with backoff and the chunk plays with no user-facing error', async () => {
+    const delays: number[] = [];
+    const h = makePipelineHarness({
+      failWhen: (_text, attempt) => attempt === 1,
+      setTimeout: ((cb: () => void, ms: number) => {
+        delays.push(ms);
+        queueMicrotask(cb);
+        return 0;
+      }) as unknown as typeof setTimeout,
+      clearTimeout: (() => {}) as unknown as typeof clearTimeout,
+    });
+
+    expect(h.controller.submitNextTurn('retry me')).toBe(true);
+    h.controller.handleTurnEvent(turn({ type: 'TURN_SUBMITTED', turnId: 't-retry', prompt: 'retry me' }));
+    h.controller.handleTurnEvent(turn({ type: 'STREAM_DELTA', turnId: 't-retry', content: 'The weather stays clear tonight. ', accumulated: '' }));
+    h.controller.handleTurnEvent(turn({ type: 'TURN_COMPLETED', turnId: 't-retry', response: '', stopReason: 'completed' }));
+    await drain();
+
+    expect(h.played).toEqual(['The weather stays clear tonight.']);
+    expect(h.requests()).toBe(2); // first attempt 429s, the retry succeeds
+    expect(delays).toEqual([1000]);
+    const log = h.messages.join('\n');
+    expect(log).not.toContain('stopped');
+    expect(log).not.toContain('Skipping');
+  });
+
+  test('exhausted retries skip that chunk with one honest notice and the turn continues', async () => {
+    const delays: number[] = [];
+    const h = makePipelineHarness({
+      failWhen: (text) => text.startsWith('First'),
+      setTimeout: ((cb: () => void, ms: number) => {
+        delays.push(ms);
+        queueMicrotask(cb);
+        return 0;
+      }) as unknown as typeof setTimeout,
+      clearTimeout: (() => {}) as unknown as typeof clearTimeout,
+    });
+    const failing = 'First segment of the response that keeps failing. ';
+    const fine = 'Second segment plays fine after the failure.';
+
+    expect(h.controller.submitNextTurn('gap not silence')).toBe(true);
+    h.controller.handleTurnEvent(turn({ type: 'TURN_SUBMITTED', turnId: 't-skip', prompt: 'gap not silence' }));
+    h.controller.handleTurnEvent(turn({ type: 'STREAM_DELTA', turnId: 't-skip', content: failing, accumulated: '' }));
+    await drain();
+    h.controller.handleTurnEvent(turn({ type: 'STREAM_DELTA', turnId: 't-skip', content: fine, accumulated: '' }));
+    h.controller.handleTurnEvent(turn({ type: 'TURN_COMPLETED', turnId: 't-skip', response: '', stopReason: 'completed' }));
+    await drain();
+    await drain();
+
+    // The failing chunk burned all its attempts (1 original + 2 retries)...
+    expect(h.attempts.get(failing.trim())).toBe(3);
+    expect(delays).toEqual([1000, 2500]);
+    // ...was skipped with exactly ONE notice, and the rest still played.
+    const notices = h.messages.filter((m) => m.includes('Skipping part of the spoken response'));
+    expect(notices.length).toBe(1);
+    expect(h.messages.join('\n')).not.toContain('Live playback stopped');
+    expect(h.played).toEqual([fine]);
+  });
+
+  test('an abort during retry backoff clears the timer and stays silent', async () => {
+    const timers = new Map<number, () => void>();
+    let nextId = 1;
+    const h = makePipelineHarness({
+      failWhen: () => true,
+      setTimeout: ((cb: () => void) => {
+        const id = nextId++;
+        timers.set(id, cb);
+        return id;
+      }) as unknown as typeof setTimeout,
+      clearTimeout: ((id: number) => {
+        timers.delete(id);
+      }) as unknown as typeof clearTimeout,
+    });
+
+    expect(h.controller.submitNextTurn('abort mid-backoff')).toBe(true);
+    h.controller.handleTurnEvent(turn({ type: 'TURN_SUBMITTED', turnId: 't-abort', prompt: 'abort mid-backoff' }));
+    h.controller.handleTurnEvent(turn({ type: 'STREAM_DELTA', turnId: 't-abort', content: 'This request is going to fail hard. ', accumulated: '' }));
+    await drain();
+
+    // First attempt failed; the backoff timer is armed and waiting.
+    expect(timers.size).toBe(1);
+
+    // A deliberate stop lands mid-backoff: the timer must be cleared
+    // synchronously (no leak) and no error notice may follow.
+    h.controller.stop();
+    expect(timers.size).toBe(0);
+    await drain();
+
+    const log = h.messages.join('\n');
+    expect(log).not.toContain('Skipping');
+    expect(log).not.toContain('Live playback stopped');
+    expect(h.played).toEqual([]);
+  });
+});
+
 describe('SpokenTurnController', () => {
   test('speaks only assistant deltas from the marked turn', async () => {
     const { controller, synthesized, played } = makeHarness();
