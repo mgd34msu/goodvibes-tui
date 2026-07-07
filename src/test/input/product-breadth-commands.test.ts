@@ -13,6 +13,7 @@ import { createFeatureFlagManager } from '@/runtime/index.ts';
 import { createRuntimeServices, type RuntimeServices } from '../../runtime/services.ts';
 import { ForensicsRegistry } from '@/runtime/index.ts';
 import type { MemoryAddOptions } from '@pellux/goodvibes-sdk/platform/state';
+import { MemorySpineClient, type MemoryAccess } from '@pellux/goodvibes-sdk/platform/runtime/memory-spine';
 import { UserAuthManager } from '@pellux/goodvibes-sdk/platform/security';
 import { RemoteRunnerRegistry } from '@/runtime/index.ts';
 import { RemoteSupervisor } from '@/runtime/index.ts';
@@ -330,6 +331,67 @@ describe('product breadth commands', () => {
       ...createRuntimeKnowledgeApi(runtimeServices),
       memory: createMemoryApi(memoryRegistry),
     };
+    // /memory-sync export and /incident capture route through the memory
+    // spine now, not knowledgeApi.memory — see recall-query.ts's
+    // getMemorySpine. This fake only backs the ops these tests actually
+    // exercise (add, exportBundle, importBundle, reviewQueue); every other
+    // verb honestly returns empty/null, matching a store with nothing in it.
+    const memorySpineLocal: MemoryAccess = {
+      add: (opts) => memoryRegistry.add(opts),
+      honestSearch: async () => ({
+        records: [],
+        mode: 'literal',
+        requestedSemantic: false,
+        indexUnavailableReason: null,
+        caveat: null,
+        recallFiltered: false,
+        excludedFlaggedCount: 0,
+        excludedBelowFloorCount: 0,
+        totalBeforeRecallFilter: 0,
+      }),
+      get: async () => null,
+      updateReview: async () => null,
+      delete: async () => false,
+      list: async () => [],
+      searchSemantic: async () => [],
+      update: async () => null,
+      link: async () => null,
+      linksFor: async () => [],
+      reviewQueue: (limit) => Promise.resolve(memoryRegistry.reviewQueue(limit ?? 10)),
+      exportBundle: (filter) => Promise.resolve(memoryRegistry.exportBundle(filter)),
+      importBundle: (bundle) => memoryRegistry.importBundle(bundle),
+      vectorStats: async () => ({
+        backend: 'sqlite-vec',
+        enabled: false,
+        available: false,
+        path: '',
+        dimensions: 0,
+        indexedRecords: 0,
+        embeddingProviderId: 'none',
+        embeddingProviderLabel: 'none',
+      }),
+      doctor: async () => ({
+        vector: {
+          backend: 'sqlite-vec',
+          enabled: false,
+          available: false,
+          path: '',
+          dimensions: 0,
+          indexedRecords: 0,
+          embeddingProviderId: 'none',
+          embeddingProviderLabel: 'none',
+        },
+        embeddings: {
+          activeProviderId: 'none',
+          providers: [],
+          asyncProviders: [],
+          syncProviders: [],
+          warnings: [],
+        },
+        checkedAt: Date.now(),
+      }),
+    };
+    const memorySpine = new MemorySpineClient({ local: memorySpineLocal });
 
     return {
       session: {
@@ -398,6 +460,7 @@ describe('product breadth commands', () => {
         peer: peerClient,
         providerApi,
         knowledgeApi,
+        memorySpine,
         hookApi,
         mcpApi,
         opsApi,

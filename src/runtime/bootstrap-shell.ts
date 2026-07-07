@@ -1,5 +1,6 @@
 import { join } from 'node:path';
 import { readBudgetAlertUsd, BUDGET_ALERT_USD_DEFAULT } from '../export/cost-utils.ts';
+import { refreshMemoryRecallSnapshot } from './orchestrator-core-services.ts';
 import { sumConversationUsage, type ConversationManager } from '../core/conversation';
 import type { Orchestrator } from '../core/orchestrator';
 import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
@@ -300,6 +301,10 @@ export function createBootstrapShell(options: BootstrapShellOptions): BootstrapS
     operatorClient: directTransport.operator,
     peerClient: directTransport.peer,
     knowledgeApi,
+    // /recall's browse/link/queue/export/import subcommands and the per-turn
+    // knowledge-injection read route through the spine client, not the raw
+    // local registry, so they fully detach when a daemon is adopted.
+    memorySpine: services.memorySpine,
     hookApi,
     mcpApi,
     opsApi,
@@ -310,9 +315,14 @@ export function createBootstrapShell(options: BootstrapShellOptions): BootstrapS
     loadSystemPrompt: () => loadBootstrapSystemPrompt(configManager),
     activatePlan: (_planId, task) => {
       setTimeout(() => {
-        orchestrator.handleUserInput(task).catch((err) => {
-          logger.debug('activatePlan handler failed', { error: summarizeError(err) });
-        });
+        void (async () => {
+          // Refresh the recall snapshot before this plan-driven turn — see
+          // the matching comment in main.ts's submitInput.
+          await refreshMemoryRecallSnapshot(services);
+          orchestrator.handleUserInput(task).catch((err) => {
+            logger.debug('activatePlan handler failed', { error: summarizeError(err) });
+          });
+        })();
       }, 50);
     },
     completeModelSelectionSideEffect,

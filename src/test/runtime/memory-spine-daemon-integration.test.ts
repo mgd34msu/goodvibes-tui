@@ -21,15 +21,25 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { bootDaemon, type BootedDaemon } from '@pellux/goodvibes-sdk/platform/daemon';
 import { MemorySpineClient } from '@pellux/goodvibes-sdk/platform/runtime/memory-spine';
-import type { MemoryAccess } from '@pellux/goodvibes-sdk/platform/runtime/memory-spine';
-import type { MemoryRecord } from '@pellux/goodvibes-sdk/platform/state';
+import type { MemoryAccess, MemoryTransport } from '@pellux/goodvibes-sdk/platform/runtime/memory-spine';
+import type { MemoryLink, MemoryRecord } from '@pellux/goodvibes-sdk/platform/state';
 import { createTuiMemorySpineTransport, syncMemorySpineToHostStatus, type MemorySpineActiveRef } from '../../runtime/memory-spine-transport.ts';
 
 const TOKEN = 'memory-spine-integration-token';
 
-/** A minimal, isolated in-memory MemoryAccess standing in for the TUI's own local registry — the offline/host backend. Exposes its record map so tests can assert a write never reached it (or did). */
+/**
+ * A minimal, isolated in-memory MemoryAccess standing in for the TUI's own
+ * local registry — the offline/host backend. Exposes its record map so tests
+ * can assert a write never reached it (or did). Implements the full 1.2.0
+ * MemoryAccess (core + extended) with simple in-memory behavior — this fake
+ * is never exercised through its extended methods by the tests below (they
+ * only assert core-verb local/wire routing), so the extended stubs just need
+ * to satisfy the type honestly, not model every edge case the real registry
+ * covers.
+ */
 function createFakeLocalAccess(): { access: MemoryAccess; records: Map<string, MemoryRecord> } {
   const records = new Map<string, MemoryRecord>();
+  const links: MemoryLink[] = [];
   let seq = 0;
   const access: MemoryAccess = {
     add: async (opts) => {
@@ -68,6 +78,75 @@ function createFakeLocalAccess(): { access: MemoryAccess; records: Map<string, M
       return record;
     },
     delete: async (id) => records.delete(id),
+    list: async () => [...records.values()],
+    searchSemantic: async () => [...records.values()].map((record) => ({ record, similarity: 1, score: 1 })),
+    update: async (id, patch) => {
+      const record = records.get(id);
+      if (!record) return null;
+      Object.assign(record, patch);
+      return record;
+    },
+    link: async (fromId, toId, relation) => {
+      if (!records.has(fromId) || !records.has(toId)) return null;
+      const link: MemoryLink = { fromId, toId, relation };
+      links.push(link);
+      return link;
+    },
+    linksFor: async (id) => links.filter((link) => link.fromId === id || link.toId === id),
+    reviewQueue: async (limit) => [...records.values()].slice(0, limit ?? 10),
+    exportBundle: async () => ({
+      schemaVersion: 'v1',
+      exportedAt: Date.now(),
+      scope: 'all',
+      recordCount: records.size,
+      linkCount: links.length,
+      records: [...records.values()],
+      links: [...links],
+    }),
+    importBundle: async (bundle) => {
+      let importedRecords = 0;
+      let skippedRecords = 0;
+      for (const record of bundle.records) {
+        if (records.has(record.id)) { skippedRecords++; continue; }
+        records.set(record.id, record);
+        importedRecords++;
+      }
+      let importedLinks = 0;
+      for (const link of bundle.links) {
+        if (records.has(link.fromId) && records.has(link.toId)) { links.push(link); importedLinks++; }
+      }
+      return { importedRecords, skippedRecords, importedLinks };
+    },
+    vectorStats: async () => ({
+      backend: 'sqlite-vec',
+      enabled: false,
+      available: false,
+      path: '',
+      dimensions: 0,
+      indexedRecords: 0,
+      embeddingProviderId: 'none',
+      embeddingProviderLabel: 'none',
+    }),
+    doctor: async () => ({
+      vector: {
+        backend: 'sqlite-vec',
+        enabled: false,
+        available: false,
+        path: '',
+        dimensions: 0,
+        indexedRecords: 0,
+        embeddingProviderId: 'none',
+        embeddingProviderLabel: 'none',
+      },
+      embeddings: {
+        activeProviderId: 'none',
+        providers: [],
+        asyncProviders: [],
+        syncProviders: [],
+        warnings: [],
+      },
+      checkedAt: Date.now(),
+    }),
   };
   return { access, records };
 }
@@ -159,7 +238,10 @@ describe('MemorySpineClient against a real bootDaemon (isolated home, ephemeral 
 describe('memory-spine recall honesty passthrough', () => {
   test('indexUnavailableReason from the wire transport survives to the caller unchanged (never dropped or re-derived)', async () => {
     const reason = 'semantic index unavailable: sqlite-vec extension not loaded';
-    const spyTransport: MemoryAccess = {
+    // Typed as MemoryTransport (core-only) rather than the full MemoryAccess —
+    // version tolerance: a transport implementing only the CORE verbs is valid;
+    // this spy never exercises an extended verb.
+    const spyTransport: MemoryTransport = {
       add: async () => { throw new Error('unused in this test'); },
       honestSearch: async () => ({
         records: [],

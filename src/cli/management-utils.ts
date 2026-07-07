@@ -20,6 +20,7 @@ import { spawn } from 'node:child_process';
 import { networkInterfaces } from 'node:os';
 import type { ConfigManager, GoodVibesConfig } from '../config/index.ts';
 import { bootstrapRuntime } from '../runtime/bootstrap.ts';
+import { refreshMemoryRecallSnapshot } from '../runtime/orchestrator-core-services.ts';
 import { createRuntimeServices } from '../runtime/services.ts';
 import { createRuntimeStore } from '../runtime/store/index.ts';
 import type { RuntimeServices } from '../runtime/services.ts';
@@ -317,6 +318,9 @@ export async function runNonInteractiveAgent(runtime: CliCommandRuntime): Promis
   });
 
   try {
+    // Async pre-turn refresh of the memory-spine recall snapshot (SDK 1.2.0
+    // full-detach) — see the matching comment in main.ts's submitInput.
+    await refreshMemoryRecallSnapshot(ctx.services);
     await ctx.orchestrator.handleUserInput(prompt);
     await done;
     if (outputFormat === 'json') {

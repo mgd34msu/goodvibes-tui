@@ -10,7 +10,7 @@
  */
 import { describe, expect, test } from 'bun:test';
 import type { VoiceAudioChunk, VoiceSynthesisRequest, VoiceSynthesisStreamResult } from '@pellux/goodvibes-sdk/platform/voice';
-import { SpokenTurnController } from '../../audio/spoken-turn-controller.ts';
+import { SpokenTurnController } from '@pellux/goodvibes-sdk/platform/voice';
 import type { StreamingAudioPlayer } from '../../audio/player.ts';
 import { DEFAULT_CONFIG, CONFIG_SCHEMA } from '@pellux/goodvibes-sdk/platform/config';
 
@@ -75,7 +75,7 @@ describe('SpokenTurnController — always-speak via ui.voiceEnabled', () => {
     const controller = new SpokenTurnController({
       voiceService,
       configManager: { get: (k: string) => (k === 'tts.provider' ? 'fake' : '') } as never,
-      player,
+      sink: player,
       notify: () => {},
       setInterval: (() => 1) as never,
       clearInterval: (() => {}) as never,
@@ -97,7 +97,7 @@ describe('SpokenTurnController — always-speak via ui.voiceEnabled', () => {
     const controller = new SpokenTurnController({
       voiceService,
       configManager: { get: () => '' } as never,
-      player,
+      sink: player,
       notify: () => {},
       setInterval: (() => 1) as never,
       clearInterval: (() => {}) as never,
@@ -125,7 +125,7 @@ describe('SpokenTurnController — always-speak via ui.voiceEnabled', () => {
           return '';
         },
       } as never,
-      player,
+      sink: player,
       notify: () => {},
       setInterval: (() => 1) as never,
       clearInterval: (() => {}) as never,
@@ -154,7 +154,7 @@ describe('SpokenTurnController — always-speak via ui.voiceEnabled', () => {
     const controller = new SpokenTurnController({
       voiceService,
       configManager: { get: () => '' } as never,
-      player: unavailablePlayer,
+      sink: unavailablePlayer,
       notify: (msg) => messages.push(msg),
       setInterval: (() => 1) as never,
       clearInterval: (() => {}) as never,
@@ -185,7 +185,7 @@ describe('SpokenTurnController — always-speak via ui.voiceEnabled', () => {
           return '';
         },
       } as never,
-      player,
+      sink: player,
       notify: () => {},
       setInterval: (() => 1) as never,
       clearInterval: (() => {}) as never,

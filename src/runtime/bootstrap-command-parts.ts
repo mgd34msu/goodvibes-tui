@@ -3,6 +3,7 @@ import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import type { AdaptivePlanner } from '@pellux/goodvibes-sdk/platform/core';
 import type { ConversationManager } from '../core/conversation';
 import type { KnowledgeApi } from '@pellux/goodvibes-sdk/platform/knowledge';
+import type { MemorySpineClient } from '@pellux/goodvibes-sdk/platform/runtime/memory-spine';
 import type { HookApi } from '@pellux/goodvibes-sdk/platform/hooks';
 import type { McpApi } from '@pellux/goodvibes-sdk/platform/mcp';
 import type { PanelManager, PanelDeepLinkTarget } from '../panels/panel-manager.ts';
@@ -133,6 +134,7 @@ export interface BootstrapCommandSectionOptions {
   readonly peerClient?: PeerClient;
   readonly providerApi?: ProviderApi;
   readonly knowledgeApi?: KnowledgeApi;
+  readonly memorySpine?: MemorySpineClient;
   readonly hookApi?: HookApi;
   readonly mcpApi?: McpApi;
   readonly opsApi?: OpsApi;
@@ -421,7 +423,7 @@ export function createBootstrapCommandExtensionsSection(
 export function createBootstrapCommandClientsSection(
   options: Pick<
     BootstrapCommandSectionOptions,
-    'operatorClient' | 'peerClient' | 'providerApi' | 'knowledgeApi' | 'hookApi' | 'mcpApi' | 'opsApi' | 'directTransport'
+    'operatorClient' | 'peerClient' | 'providerApi' | 'knowledgeApi' | 'memorySpine' | 'hookApi' | 'mcpApi' | 'opsApi' | 'directTransport'
   >,
 ): BootstrapCommandClientSection {
   return {
@@ -429,6 +431,7 @@ export function createBootstrapCommandClientsSection(
     peer: options.peerClient,
     providerApi: options.providerApi,
     knowledgeApi: options.knowledgeApi,
+    memorySpine: options.memorySpine,
     hookApi: options.hookApi,
     mcpApi: options.mcpApi,
     opsApi: options.opsApi,

@@ -6,6 +6,7 @@ import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import type { CommandContext } from '../../input/command-registry.ts';
 import { recallCommand } from '../../input/commands/memory.ts';
 import { createMemoryApi } from '@pellux/goodvibes-sdk/platform/knowledge';
+import { MemorySpineClient, createLocalMemoryAccess, type LocalMemoryStore } from '@pellux/goodvibes-sdk/platform/runtime/memory-spine';
 import { MemoryRegistry, MemoryStore } from '@pellux/goodvibes-sdk/platform/state';
 import { MemoryEmbeddingProviderRegistry } from '@pellux/goodvibes-sdk/platform/state';
 import { createShellPathService } from '@/runtime/index.ts';
@@ -47,6 +48,14 @@ function makeBaseContext(registry: MemoryRegistry, printed: string[]): CommandCo
       knowledgeApi: {
         memory: createMemoryApi(registry),
       } as never,
+      // /recall's browse/link/queue/export/import now route through the
+      // memory spine, not knowledgeApi.memory — see recall-query.ts's
+      // getMemorySpine. The real MemoryRegistry satisfies LocalMemoryStore
+      // structurally, so local (no transport activated) mode reads/writes the
+      // same backing MemoryStore the assertions below read back through it.
+      memorySpine: new MemorySpineClient({
+        local: createLocalMemoryAccess(registry as unknown as LocalMemoryStore),
+      }),
     },
     renderRequest: () => {},
     print: (text: string) => { printed.push(text); },
@@ -84,11 +93,11 @@ describe('recall command breadth', () => {
     const created = registry.getAll()[0];
     expect(created?.scope).toBe('team');
 
-    recallCommand.handler(['queue', '5'], context);
+    await recallCommand.handler(['queue', '5'], context);
     expect(printed.some((line) => line.includes('Review queue'))).toBe(true);
 
     printed.length = 0;
-    recallCommand.handler(['review', created!.id, 'reviewed', '--confidence', '92', '--by', 'operator'], context);
+    await recallCommand.handler(['review', created!.id, 'reviewed', '--confidence', '92', '--by', 'operator'], context);
     expect(registry.get(created!.id)?.reviewState).toBe('reviewed');
     expect(registry.get(created!.id)?.confidence).toBe(92);
     expect(printed.some((line) => line.includes('Reviewed'))).toBe(true);
@@ -111,7 +120,7 @@ describe('recall command breadth', () => {
       review: { state: 'reviewed', confidence: 90 },
     });
 
-    recallCommand.handler(['search', '--semantic', 'orchestration', 'runtime', '--limit', '1'], context);
+    await recallCommand.handler(['search', '--semantic', 'orchestration', 'runtime', '--limit', '1'], context);
     expect(printed.join('\n')).toContain('semantic record');
     expect(printed.join('\n')).toContain('orchestration graph runtime edits');
     expect(printed.join('\n')).toContain('sim ');
@@ -132,7 +141,7 @@ describe('recall command breadth', () => {
     await registry.add({ scope: 'team', cls: 'decision', summary: 'Shared deploy decision' });
     const exportPath = join(dir, 'knowledge', 'team-bundle.json');
 
-    recallCommand.handler(['export', exportPath, '--scope', 'team'], context);
+    await recallCommand.handler(['export', exportPath, '--scope', 'team'], context);
     const bundleText = readFileSync(exportPath, 'utf-8');
     expect(bundleText).toContain('"scope": "team"');
     expect(bundleText).toContain('"recordCount": 1');
@@ -163,7 +172,7 @@ describe('recall command breadth', () => {
     await registry.add({ scope: 'team', cls: 'runbook', summary: 'Shared rollout checklist' });
     const handoffPath = join(dir, 'handoff', 'team.json');
 
-    recallCommand.handler(['handoff-export', handoffPath, '--scope', 'team'], context);
+    await recallCommand.handler(['handoff-export', handoffPath, '--scope', 'team'], context);
     expect(readFileSync(handoffPath, 'utf-8')).toContain('"scope": "team"');
 
     printed.length = 0;

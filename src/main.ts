@@ -32,7 +32,7 @@ import { logger } from '@pellux/goodvibes-sdk/platform/utils';
 import { registerBuiltinPanels } from './panels/builtin-panels.ts';
 import { bootstrapRuntime } from './runtime/bootstrap.ts';
 import type { BootstrapContext } from './runtime/bootstrap.ts';
-import { buildSharedOrchestratorCoreServices } from './runtime/orchestrator-core-services.ts';
+import { buildSharedOrchestratorCoreServices, refreshMemoryRecallSnapshot } from './runtime/orchestrator-core-services.ts';
 import type { HITLMode } from '@pellux/goodvibes-sdk/platform/state';
 import { readLastSessionPointer, writeRecoveryFile } from '@/runtime/index.ts';
 import { handleBlockingShellInput, type PendingPermissionState } from './shell/blocking-input.ts';
@@ -288,6 +288,7 @@ async function main() {
         // Snapshot pre-submission state for failover retryTurn; also clears visited set.
         retryCtx = { count: conversation.getMessageCount(), text: processedText, content, opts: inputOptions };
         streamResult.clearFailoverVisited();
+        await refreshMemoryRecallSnapshot(ctx.services); // pre-turn recall-snapshot refresh (SDK 1.2.0 full detach)
         orchestrator.handleUserInput(processedText, content, inputOptions).catch((err: unknown) => {
           logger.debug('handleUserInput safety catch (already handled by runTurn)', { error: summarizeError(err) });
         });
@@ -700,7 +701,7 @@ async function main() {
     const { count, text, content: rContent, opts: rOpts } = retryCtx;
     // Roll back to pre-submission count, then re-submit. SDK gap — no retry-in-place (see handoff).
     conversation.removeMessagesAfter(count);
-    orchestrator.handleUserInput(text, rContent, rOpts).catch((e: unknown) => logger.debug('retryTurn', { error: summarizeError(e) }));
+    void refreshMemoryRecallSnapshot(ctx.services).then(() => orchestrator.handleUserInput(text, rContent, rOpts)).catch((e: unknown) => logger.debug('retryTurn', { error: summarizeError(e) }));
   };
   const streamResult: WireStreamEventMetricsResult = wireStreamEventMetrics({
     events: uiServices.events, orchestrator, providerRegistry,

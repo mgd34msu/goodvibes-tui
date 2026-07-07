@@ -1,8 +1,19 @@
 import type { CommandContext } from '../command-registry.ts';
 import type { MemoryApi } from '@pellux/goodvibes-sdk/platform/knowledge';
+import type { MemorySpineClient } from '@pellux/goodvibes-sdk/platform/runtime/memory-spine';
 import type { MemorySearchFilter } from '@pellux/goodvibes-sdk/platform/state';
 import { VALID_CLASSES, VALID_SCOPES, isValidClass, isValidScope } from './recall-shared.ts';
 
+/**
+ * The local, host-only `MemoryApi` — kept for `/recall explain` and `/recall
+ * vector` only. Both are ruled explicitly out of the wire catalog in
+ * docs/decisions/2026-07-06-memory-wire-full-detach.md (SDK repo): `explain`
+ * is a client-side projection over whatever read surface is active, not a
+ * store operation, and vector-index rebuild is host/admin maintenance a wire
+ * client does not own. Every other `/recall` subcommand reads/writes through
+ * {@link getMemorySpine} instead, so it detaches fully from the local store
+ * file when a daemon is adopted.
+ */
 export function getMemoryApi(context: CommandContext): MemoryApi | null {
   const memoryApi = context.clients?.knowledgeApi?.memory;
   if (!memoryApi) {
@@ -12,8 +23,23 @@ export function getMemoryApi(context: CommandContext): MemoryApi | null {
   return memoryApi;
 }
 
-export function handleRecallSearch(args: string[], context: CommandContext): void {
-  const memory = getMemoryApi(context);
+/**
+ * The cross-surface memory spine client — routes local when offline/embedded,
+ * over the wire when a daemon has been adopted, never both. `/recall`'s
+ * browse/link/queue/export/import subcommands use this so they never read a
+ * divergent local copy while a daemon owns the canonical store.
+ */
+export function getMemorySpine(context: CommandContext): MemorySpineClient | null {
+  const memorySpine = context.clients?.memorySpine;
+  if (!memorySpine) {
+    context.print('[recall] Memory spine is not available in this runtime.');
+    return null;
+  }
+  return memorySpine;
+}
+
+export async function handleRecallSearch(args: string[], context: CommandContext): Promise<void> {
+  const memory = getMemorySpine(context);
   if (!memory) {
     return;
   }
@@ -54,8 +80,8 @@ export function handleRecallSearch(args: string[], context: CommandContext): voi
   if (queryTokens.length) filter.query = queryTokens.join(' ');
   if (semantic) filter.semantic = true;
 
-  const semanticResults = semantic ? memory.searchSemantic(filter) : [];
-  const results = semantic ? semanticResults.map((entry) => entry.record) : memory.search(filter);
+  const semanticResults = semantic ? await memory.searchSemantic(filter) : [];
+  const results = semantic ? semanticResults.map((entry) => entry.record) : await memory.list(filter);
   if (!results.length) {
     context.print('[recall] No records found.');
     return;
@@ -110,8 +136,8 @@ function formatVectorStats(
   ].join('\n');
 }
 
-export function handleRecallGet(args: string[], context: CommandContext): void {
-  const memory = getMemoryApi(context);
+export async function handleRecallGet(args: string[], context: CommandContext): Promise<void> {
+  const memory = getMemorySpine(context);
   if (!memory) {
     return;
   }
@@ -120,7 +146,7 @@ export function handleRecallGet(args: string[], context: CommandContext): void {
     context.print('[recall] Usage: /recall get <id>');
     return;
   }
-  const record = memory.get(id);
+  const record = await memory.get(id);
   if (!record) {
     context.print(`[recall] Record not found: ${id}`);
     return;
@@ -142,7 +168,7 @@ export function handleRecallGet(args: string[], context: CommandContext): void {
     }
   }
 
-  const links = memory.linksFor(id);
+  const links = await memory.linksFor(id);
   if (links.length) {
     context.print('  Links:');
     for (const link of links) {
@@ -154,7 +180,7 @@ export function handleRecallGet(args: string[], context: CommandContext): void {
 }
 
 export async function handleRecallLink(args: string[], context: CommandContext): Promise<void> {
-  const memory = getMemoryApi(context);
+  const memory = getMemorySpine(context);
   if (!memory) {
     return;
   }
@@ -171,8 +197,8 @@ export async function handleRecallLink(args: string[], context: CommandContext):
   context.print(`[recall] Linked: ${fromId} -> ${toId} [${relation}]`);
 }
 
-export function handleRecallRemove(args: string[], context: CommandContext): void {
-  const memory = getMemoryApi(context);
+export async function handleRecallRemove(args: string[], context: CommandContext): Promise<void> {
+  const memory = getMemorySpine(context);
   if (!memory) {
     return;
   }
@@ -181,7 +207,7 @@ export function handleRecallRemove(args: string[], context: CommandContext): voi
     context.print('[recall] Usage: /recall remove <id>');
     return;
   }
-  const removed = memory.delete(id);
+  const removed = await memory.delete(id);
   if (!removed) {
     context.print(`[recall] Record not found: ${id}`);
     return;
@@ -189,8 +215,8 @@ export function handleRecallRemove(args: string[], context: CommandContext): voi
   context.print(`[recall] Deleted: ${id}`);
 }
 
-export function handleRecallList(args: string[], context: CommandContext): void {
-  const memory = getMemoryApi(context);
+export async function handleRecallList(args: string[], context: CommandContext): Promise<void> {
+  const memory = getMemorySpine(context);
   if (!memory) {
     return;
   }
@@ -207,7 +233,7 @@ export function handleRecallList(args: string[], context: CommandContext): void 
     filter.scope = scope;
   }
 
-  const records = memory.search(filter);
+  const records = await memory.list(filter);
   if (!records.length) {
     context.print('[recall] No records.');
     return;

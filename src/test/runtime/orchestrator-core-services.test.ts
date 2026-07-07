@@ -8,10 +8,18 @@
  * and main.ts) originally omitted `memoryRegistry`, so main-session injection
  * was dead in production while every /recall test passed against stubs.
  *
- * Two layers here:
+ * SDK 1.2.0 update: `memoryRegistry` is no longer forwarded by identity — the
+ * turn loop needs a SYNCHRONOUS `getAll()`, but the memory spine's wire reads
+ * are asynchronous, so the builder now synthesizes `memoryRegistry` from the
+ * spine's freshness-stamped, synchronously-readable `recallSnapshot()` (see
+ * docs/decisions/2026-07-06-memory-wire-full-detach.md in the SDK repo, and
+ * the comment on `buildSharedOrchestratorCoreServices`). These tests were
+ * updated to build a fake `memorySpine` (exposing `recallSnapshot()`) rather
+ * than a raw `{ getAll }` registry, while preserving their original intent:
+ *
  *  1. Seam: buildSharedOrchestratorCoreServices() — the REAL payload builder
- *     both call sites now spread — must forward `memoryRegistry` by identity.
- *     Dropping the field from the builder fails this test immediately.
+ *     both call sites now spread — must derive `memoryRegistry.getAll()` from
+ *     the injected `memorySpine`'s current recall snapshot.
  *  2. Full turn: a REAL Orchestrator (the TUI's re-export), fed the REAL
  *     builder output via the REAL setCoreServices(), runs handleUserInput()
  *     against a canned LLM provider — and the turn must (a) compose the
@@ -30,6 +38,11 @@ import type { PermissionManager } from '@pellux/goodvibes-sdk/platform/permissio
 import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import type { ChatResponse, LLMProvider, ModelDefinition, ProviderRegistry } from '@pellux/goodvibes-sdk/platform/providers';
 import type { MemoryRecord } from '@pellux/goodvibes-sdk/platform/state';
+
+/** A minimal fake memory spine exposing just `recallSnapshot()` — the only method `buildSharedOrchestratorCoreServices` reads. */
+function makeFakeMemorySpine(records: readonly MemoryRecord[]): { recallSnapshot: () => { records: readonly MemoryRecord[] } } {
+  return { recallSnapshot: () => ({ records }) };
+}
 
 const FAKE_MODEL: ModelDefinition = {
   id: 'fake-model',
@@ -59,17 +72,16 @@ function makeRelevantRecord(): MemoryRecord {
   };
 }
 
-function makeServicesSource(memoryRegistry: unknown): OrchestratorCoreServicesSource {
+function makeServicesSource(memorySpine: unknown): OrchestratorCoreServicesSource {
   // The five stubs are irrelevant to these tests (the orchestrator treats each
-  // as optional); memoryRegistry is the field under test and stays a real
-  // reference so identity assertions are meaningful.
+  // as optional); memorySpine is the field under test.
   return {
     planManager: undefined,
     adaptivePlanner: undefined,
     sessionMemoryStore: undefined,
     sessionLineageTracker: undefined,
     idempotencyStore: undefined,
-    memoryRegistry,
+    memorySpine,
   } as unknown as OrchestratorCoreServicesSource;
 }
 
@@ -111,24 +123,24 @@ function makeCapturingProviderRegistry(): { providerRegistry: ProviderRegistry; 
 }
 
 describe('buildSharedOrchestratorCoreServices — the shared setCoreServices payload (seam)', () => {
-  test('forwards memoryRegistry by identity — the wo805 main-session injection gate', () => {
-    const sentinelRegistry = { getAll: () => [] };
+  test('derives memoryRegistry.getAll() from the injected memorySpine\'s recall snapshot — the wo805 main-session injection gate', () => {
+    const record = makeRelevantRecord();
     const payload = buildSharedOrchestratorCoreServices({
-      services: makeServicesSource(sentinelRegistry),
+      services: makeServicesSource(makeFakeMemorySpine([record])),
       configManager: makeStubConfigManager(),
       providerRegistry: makeCapturingProviderRegistry().providerRegistry,
     });
     // The load-bearing assertion: if memoryRegistry is ever dropped from the
     // builder again, main-session passive injection dies silently — this fails loudly.
-    expect(payload.memoryRegistry).toBe(sentinelRegistry as never);
     expect(payload.memoryRegistry).toBeDefined();
+    expect(payload.memoryRegistry?.getAll()).toEqual([record]);
   });
 
   test('forwards the other shared fields both call sites rely on', () => {
     const configManager = makeStubConfigManager();
     const { providerRegistry } = makeCapturingProviderRegistry();
     const payload = buildSharedOrchestratorCoreServices({
-      services: makeServicesSource({ getAll: () => [] }),
+      services: makeServicesSource(makeFakeMemorySpine([])),
       configManager,
       providerRegistry,
     });
@@ -139,7 +151,7 @@ describe('buildSharedOrchestratorCoreServices — the shared setCoreServices pay
 });
 
 describe('main-session per-turn passive injection through the REAL wiring (full turn)', () => {
-  async function runOneTurn(memoryRegistry: unknown): Promise<{ orchestrator: Orchestrator; capturedSystemPrompts: string[] }> {
+  async function runOneTurn(memorySpine: unknown): Promise<{ orchestrator: Orchestrator; capturedSystemPrompts: string[] }> {
     const conversation = new ConversationManager(() => 80);
     const { providerRegistry, capturedSystemPrompts } = makeCapturingProviderRegistry();
 
@@ -161,7 +173,7 @@ describe('main-session per-turn passive injection through the REAL wiring (full 
     // The REAL payload builder — exactly what bootstrap.ts and main.ts spread.
     orchestrator.setCoreServices(
       buildSharedOrchestratorCoreServices({
-        services: makeServicesSource(memoryRegistry),
+        services: makeServicesSource(memorySpine),
         configManager: makeStubConfigManager(),
         providerRegistry,
       }),
@@ -172,7 +184,7 @@ describe('main-session per-turn passive injection through the REAL wiring (full 
   }
 
   test('a relevant record reaches the sent systemPrompt and getTurnInjections() — the /recall injections source', async () => {
-    const { orchestrator, capturedSystemPrompts } = await runOneTurn({ getAll: () => [makeRelevantRecord()] });
+    const { orchestrator, capturedSystemPrompts } = await runOneTurn(makeFakeMemorySpine([makeRelevantRecord()]));
 
     expect(capturedSystemPrompts.length).toBeGreaterThan(0);
     expect(capturedSystemPrompts[0]).toContain('mem_ratelimit');
@@ -184,12 +196,19 @@ describe('main-session per-turn passive injection through the REAL wiring (full 
     expect(ring[0]!.tokenCost).toBeGreaterThan(0);
   });
 
-  test('control: with memoryRegistry undefined the same turn injects nothing (the pre-fix production behavior)', async () => {
-    const { orchestrator, capturedSystemPrompts } = await runOneTurn(undefined);
+  test('control: with an empty recall snapshot (never refreshed, or no matching records) the same turn injects nothing', async () => {
+    const { orchestrator, capturedSystemPrompts } = await runOneTurn(makeFakeMemorySpine([]));
 
     expect(capturedSystemPrompts.length).toBeGreaterThan(0);
     expect(capturedSystemPrompts[0]).not.toContain('mem_ratelimit');
     expect(capturedSystemPrompts[0]).not.toContain('Injected Project Knowledge');
-    expect(orchestrator.getTurnInjections()).toEqual([]);
+    // Unlike the pre-1.2.0 hard gate (memoryRegistry undefined skipped the
+    // mechanism entirely, leaving no ring entry at all), memoryRegistry is now
+    // ALWAYS wired (synthesized from the spine's recall snapshot), so the turn
+    // loop always attempts injection and honestly records a ring entry stating
+    // why nothing qualified, rather than silently doing nothing.
+    const ring = orchestrator.getTurnInjections();
+    expect(ring.length).toBe(1);
+    expect(ring[0]!.injectedIds).toEqual([]);
   });
 });

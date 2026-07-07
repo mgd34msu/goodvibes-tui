@@ -3,7 +3,7 @@ import type { UiRuntimeEvents } from '@/runtime/index.ts';
 import type { VoiceService } from '@pellux/goodvibes-sdk/platform/voice';
 import type { StreamingAudioPlayer } from './player.ts';
 import { LocalStreamingAudioPlayer } from './player.ts';
-import { SpokenTurnController } from './spoken-turn-controller.ts';
+import { SpokenTurnController } from '@pellux/goodvibes-sdk/platform/voice';
 
 export interface SpokenTurnRuntime {
   readonly unsubs: readonly (() => void)[];
@@ -37,10 +37,15 @@ export interface WireSpokenTurnRuntimeOptions {
  */
 export function wireSpokenTurnRuntime(options: WireSpokenTurnRuntimeOptions): SpokenTurnRuntime {
   const player = options.playerFactory ? options.playerFactory() : new LocalStreamingAudioPlayer();
+  // The TUI's subprocess-based player already satisfies the SDK's AudioSink
+  // interface unchanged (see docs/decisions/2026-07-06-spoken-turn-tts-policy-sdk-hoist.md
+  // in the SDK repo) — only the option name (`sink` not `player`) and the
+  // attribution `source` are new.
   const controller = new SpokenTurnController({
     voiceService: options.voiceService,
     configManager: options.configManager,
-    player,
+    sink: player,
+    source: 'goodvibes-tui',
     notify: options.notify,
   });
 

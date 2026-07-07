@@ -12,7 +12,7 @@ export type OrchestratorCoreServicesSource = Pick<
   | 'sessionMemoryStore'
   | 'sessionLineageTracker'
   | 'idempotencyStore'
-  | 'memoryRegistry'
+  | 'memorySpine'
   | 'codeIndexStore'
   | 'codeIndexReindexScheduler'
 >;
@@ -32,6 +32,18 @@ export type OrchestratorCoreServicesSource = Pick<
  * omitted it independently; routing them through this one function (with
  * src/test/runtime/orchestrator-core-services.test.ts pinning the field) is
  * what keeps that from regressing.
+ *
+ * SDK 1.2.0 FULL DETACH: the SDK's turn loop reads `memoryRegistry.getAll()`
+ * SYNCHRONOUSLY (`TurnKnowledgeRegistrySource`), but the memory spine's wire
+ * reads are asynchronous — a sync function cannot await the wire. Per
+ * docs/decisions/2026-07-06-memory-wire-full-detach.md (SDK repo) this is
+ * satisfied by the spine's freshness-stamped recall snapshot instead of the
+ * raw local `memoryRegistry`: `getAll()` reads `memorySpine.recallSnapshot()`,
+ * which returns whatever the last `refreshRecallSnapshot()` (an async
+ * pre-turn hook — see the `handleUserInput` call sites) captured, honestly
+ * empty/stale until refreshed. This is what lets per-turn knowledge injection
+ * detach from the local store file when a daemon is adopted, instead of
+ * always reading the (possibly divergent) local registry regardless of mode.
  */
 export function buildSharedOrchestratorCoreServices(input: {
   readonly services: OrchestratorCoreServicesSource;
@@ -47,7 +59,7 @@ export function buildSharedOrchestratorCoreServices(input: {
     sessionMemoryStore: services.sessionMemoryStore,
     sessionLineageTracker: services.sessionLineageTracker,
     idempotencyStore: services.idempotencyStore,
-    memoryRegistry: services.memoryRegistry,
+    memoryRegistry: { getAll: () => services.memorySpine.recallSnapshot().records },
     // Main-session code auto-injection + tool-site reindex. Injection is
     // additionally gated by the default-off `agent-passive-code-injection` flag inside the
     // SDK; here we supply the source, the live storage.codeIndexEnabled predicate, and the
@@ -56,4 +68,17 @@ export function buildSharedOrchestratorCoreServices(input: {
     isCodeInjectionSettingEnabled: () => isCodeInjectionSettingEnabled(configManager),
     codeIndexReindexScheduler: services.codeIndexReindexScheduler,
   };
+}
+
+/**
+ * The async pre-turn hook: refreshes the memory spine's recall snapshot over
+ * the CURRENT route (wire when adopted, local otherwise) so the synchronous
+ * per-turn knowledge injection (`memoryRegistry.getAll()` above) reads
+ * up-to-date records instead of whatever the previous refresh captured.
+ * Failures are swallowed — an honest stale/empty snapshot (with its own
+ * degradation note, surfaced via `recallSnapshot().note`) is preferable to
+ * blocking the user's turn on a memory-read failure.
+ */
+export async function refreshMemoryRecallSnapshot(services: Pick<RuntimeServices, 'memorySpine'>): Promise<void> {
+  await services.memorySpine.refreshRecallSnapshot().catch(() => {});
 }

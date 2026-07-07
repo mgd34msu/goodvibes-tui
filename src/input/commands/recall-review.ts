@@ -1,10 +1,10 @@
 import type { CommandContext } from '../command-registry.ts';
 import { VALID_REVIEW_STATES, VALID_SCOPES, isValidReviewState, isValidScope } from './recall-shared.ts';
-import { getMemoryApi } from './recall-query.ts';
+import { getMemoryApi, getMemorySpine } from './recall-query.ts';
 import { buildMainSessionTurnInjectionsText, buildTurnInjectionsText } from '../../renderer/turn-injection.ts';
 
-export function handleRecallQueue(args: string[], context: CommandContext): void {
-  const memory = getMemoryApi(context);
+export async function handleRecallQueue(args: string[], context: CommandContext): Promise<void> {
+  const memory = getMemorySpine(context);
   if (!memory) {
     return;
   }
@@ -29,7 +29,7 @@ export function handleRecallQueue(args: string[], context: CommandContext): void
   // When a scope filter is requested, fetch a larger pool then slice to the
   // requested limit so scope-sparse queues still return meaningful results.
   const fetchLimit = scopeFilter ? 1000 : limit;
-  const rawQueue = memory.reviewQueue(fetchLimit);
+  const rawQueue = await memory.reviewQueue(fetchLimit);
   const queue = scopeFilter
     ? rawQueue.filter((record) => record.scope === scopeFilter).slice(0, limit)
     : rawQueue;
@@ -45,8 +45,8 @@ export function handleRecallQueue(args: string[], context: CommandContext): void
   }
 }
 
-export function handleRecallReview(args: string[], context: CommandContext): void {
-  const memory = getMemoryApi(context);
+export async function handleRecallReview(args: string[], context: CommandContext): Promise<void> {
+  const memory = getMemorySpine(context);
   if (!memory) {
     return;
   }
@@ -64,7 +64,7 @@ export function handleRecallReview(args: string[], context: CommandContext): voi
   const reviewedBy = byIdx !== -1 ? rest[byIdx + 1] : 'operator';
   const staleReason = reasonIdx !== -1 ? rest.slice(reasonIdx + 1).join(' ') : undefined;
 
-  const record = memory.review(id, {
+  const record = await memory.updateReview(id, {
     state: stateRaw,
     confidence: Number.isFinite(confidence) ? confidence : undefined,
     reviewedBy,
@@ -137,8 +137,8 @@ export function handleRecallInjections(args: string[], context: CommandContext):
   context.print(buildTurnInjectionsText(agentId, record.turnInjections ?? []));
 }
 
-export function handleRecallPromote(args: string[], context: CommandContext): void {
-  const memory = getMemoryApi(context);
+export async function handleRecallPromote(args: string[], context: CommandContext): Promise<void> {
+  const memory = getMemorySpine(context);
   if (!memory) {
     return;
   }
@@ -148,7 +148,7 @@ export function handleRecallPromote(args: string[], context: CommandContext): vo
     context.print(`[recall] Usage: /recall promote <id> <${VALID_SCOPES.join('|')}>`);
     return;
   }
-  const record = memory.update(id, { scope });
+  const record = await memory.update(id, { scope });
   if (!record) {
     context.print(`[recall] Record not found: ${id}`);
     return;

@@ -13,6 +13,7 @@ import type { KeybindingsManager } from './keybindings.ts';
 import type { OnboardingWizardMode } from './onboarding/onboarding-wizard.ts';
 import type { OpenOnboardingWizardOptions } from './handler-ui-state.ts';
 import type { KnowledgeApi } from '@pellux/goodvibes-sdk/platform/knowledge';
+import type { MemorySpineClient } from '@pellux/goodvibes-sdk/platform/runtime/memory-spine';
 import type { HookApi } from '@pellux/goodvibes-sdk/platform/hooks';
 import type { McpApi } from '@pellux/goodvibes-sdk/platform/mcp';
 import type { ProviderApi } from '@pellux/goodvibes-sdk/platform/providers';
@@ -285,6 +286,16 @@ export interface CommandContext
     readonly peer?: PeerClient;
     readonly providerApi?: ProviderApi;
     readonly knowledgeApi?: KnowledgeApi;
+    /**
+     * The cross-surface memory spine client (SDK 1.2.0 full-detach). `/recall`'s
+     * browse/link/queue/export/import subcommands read and write through this —
+     * not `knowledgeApi.memory` — so they fully detach from the local store file
+     * when a daemon has been adopted, per
+     * docs/decisions/2026-07-06-memory-wire-full-detach.md in the SDK repo.
+     * `explain` and the `vector` diagnostic subcommand stay on `knowledgeApi.memory`
+     * (host-side projection / host-only maintenance, ruled explicitly in that decision).
+     */
+    readonly memorySpine?: MemorySpineClient;
     readonly hookApi?: HookApi;
     readonly mcpApi?: McpApi;
     readonly opsApi?: OpsApi;
