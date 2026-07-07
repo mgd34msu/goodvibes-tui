@@ -7,10 +7,10 @@ import {
   buildPolicyPreflightMemoryAddOptions,
 } from '@pellux/goodvibes-sdk/platform/state';
 import { VALID_CLASSES, VALID_SCOPES, isValidClass, isValidScope } from './recall-shared.ts';
-import { getMemoryApi } from './recall-query.ts';
+import { getMemorySpine } from './recall-query.ts';
 
 export async function handleRecallAdd(args: string[], context: CommandContext): Promise<void> {
-  const memory = getMemoryApi(context);
+  const memory = getMemorySpine(context);
   if (!memory) {
     return;
   }
@@ -70,7 +70,7 @@ export async function handleRecallAdd(args: string[], context: CommandContext): 
 }
 
 export async function handleRecallCapture(args: string[], context: CommandContext): Promise<void> {
-  const memory = getMemoryApi(context);
+  const memory = getMemorySpine(context);
   const pluginManager = context.extensions.pluginManager;
   if (!memory) {
     return;

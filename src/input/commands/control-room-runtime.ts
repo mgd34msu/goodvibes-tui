@@ -3,7 +3,7 @@ import { buildMcpAttackPathReview } from '@/runtime/index.ts';
 import { buildKnowledgeInjectionPrompt, selectKnowledgeForTask } from '@pellux/goodvibes-sdk/platform/state';
 import { listBuiltinSubscriptionProviders } from '@pellux/goodvibes-sdk/platform/config';
 import { requireReadModels, requireSubscriptionManager, requireTokenAuditor } from './runtime-services.ts';
-import { getMemoryApi } from './recall-query.ts';
+import { getMemoryApi, getMemorySpine } from './recall-query.ts';
 
 export function registerControlRoomRuntimeCommands(registry: CommandRegistry): void {
   registry.register({
@@ -198,7 +198,7 @@ export function registerControlRoomRuntimeCommands(registry: CommandRegistry): v
     aliases: ['pmem'],
     description: 'Inspect durable project memory: risks, runbooks, and architecture notes',
     usage: '[open | queue [limit] | explain <task...> [--scope <path> ...]]',
-    handler(args, ctx) {
+    async handler(args, ctx) {
       const subcommand = (args[0] ?? 'open').toLowerCase();
       if (subcommand === 'open') {
         if (ctx.openMemoryPanel) {
@@ -208,11 +208,13 @@ export function registerControlRoomRuntimeCommands(registry: CommandRegistry): v
         ctx.print('Memory panel is not available in this runtime.');
         return;
       }
-      const memory = getMemoryApi(ctx);
-      if (!memory) return;
       if (subcommand === 'queue') {
+        // Repointed onto the memory spine (SDK 1.2.0 full-detach) so the
+        // queue reflects the daemon's own canonical store when adopted.
+        const memory = getMemorySpine(ctx);
+        if (!memory) return;
         const limit = Math.max(1, parseInt(args[1] ?? '10', 10) || 10);
-        const queue = memory.reviewQueue(limit);
+        const queue = await memory.reviewQueue(limit);
         if (queue.length === 0) {
           ctx.print('Knowledge review queue is empty.');
           return;
@@ -224,6 +226,11 @@ export function registerControlRoomRuntimeCommands(registry: CommandRegistry): v
         return;
       }
       if (subcommand === 'explain') {
+        // Stays on the local MemoryApi: `explain` is a host-side projection
+        // over whatever read surface is active, not a store operation
+        // (docs/decisions/2026-07-06-memory-wire-full-detach.md, SDK repo).
+        const memory = getMemoryApi(ctx);
+        if (!memory) return;
         const scopeIdx = args.indexOf('--scope');
         const scopeValues = scopeIdx !== -1
           ? args.slice(scopeIdx + 1).filter((token) => !token.startsWith('--'))

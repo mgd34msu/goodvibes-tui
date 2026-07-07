@@ -2,6 +2,7 @@ import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import type { AdaptivePlanner } from '@pellux/goodvibes-sdk/platform/core';
 import type { ConversationManager } from '../core/conversation';
 import type { KnowledgeApi } from '@pellux/goodvibes-sdk/platform/knowledge';
+import type { MemorySpineClient } from '@pellux/goodvibes-sdk/platform/runtime/memory-spine';
 import type { HookApi } from '@pellux/goodvibes-sdk/platform/hooks';
 import type { McpApi } from '@pellux/goodvibes-sdk/platform/mcp';
 import type { PanelManager } from '../panels/panel-manager.ts';
@@ -107,6 +108,7 @@ export type CreateBootstrapCommandContextOptions = {
   operatorClient?: OperatorClient;
   peerClient?: PeerClient;
   knowledgeApi?: KnowledgeApi;
+  memorySpine?: MemorySpineClient;
   hookApi?: HookApi;
   mcpApi?: McpApi;
   opsApi?: OpsApi;
@@ -195,6 +197,7 @@ export function createBootstrapCommandContext(
     operatorClient,
     peerClient,
     knowledgeApi,
+    memorySpine,
     hookApi,
     mcpApi,
     opsApi,
@@ -279,6 +282,7 @@ export function createBootstrapCommandContext(
     peerClient,
     providerApi,
     knowledgeApi,
+    memorySpine,
     hookApi,
     mcpApi,
     opsApi,

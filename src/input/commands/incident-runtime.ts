@@ -3,7 +3,7 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import type { CommandRegistry } from '../command-registry.ts';
 import { buildIncidentMemoryAddOptions } from '@pellux/goodvibes-sdk/platform/state';
 import { requireShellPaths } from './runtime-services.ts';
-import { getMemoryApi } from './recall-query.ts';
+import { getMemorySpine } from './recall-query.ts';
 
 export function registerIncidentRuntimeCommands(registry: CommandRegistry): void {
   registry.register({
@@ -74,7 +74,7 @@ export function registerIncidentRuntimeCommands(registry: CommandRegistry): void
         return;
       }
       if (subcommand === 'capture') {
-        const memory = getMemoryApi(ctx);
+        const memory = getMemorySpine(ctx);
         if (!memory) return;
         if (!report) {
           ctx.print(`Incident not found: ${requestedId ?? 'latest'}`);

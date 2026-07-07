@@ -4,6 +4,7 @@ import { recallCommand } from '../../input/commands/memory.ts';
 import { MemoryRegistry } from '@pellux/goodvibes-sdk/platform/state';
 import type { MemoryAddOptions, MemoryBundle } from '@pellux/goodvibes-sdk/platform/state';
 import { createMemoryApi } from '@pellux/goodvibes-sdk/platform/knowledge';
+import { MemorySpineClient, createLocalMemoryAccess, type LocalMemoryStore } from '@pellux/goodvibes-sdk/platform/runtime/memory-spine';
 import { ForensicsRegistry } from '@/runtime/index.ts';
 import { PolicyRuntimeState } from '@/runtime/index.ts';
 import { createShellPathService } from '@/runtime/index.ts';
@@ -49,6 +50,27 @@ function makeRegistry(): MemoryRegistry {
         && (!filter?.cls || record.cls === filter.cls)
         && (!filter?.query || `${record.summary} ${record.detail ?? ''}`.toLowerCase().includes(filter.query.toLowerCase()))
       )) as never;
+    },
+    // Used by the memory-spine local access path (createLocalMemoryAccess) —
+    // a plain literal-scan envelope over the same filtered records `search()`
+    // returns, since this fake has no real recall-honesty machinery.
+    honestSearch: (filter?: { scope?: string; cls?: string; query?: string }) => {
+      const matched = records.filter((record) => (
+        (!filter?.scope || record.scope === filter.scope)
+        && (!filter?.cls || record.cls === filter.cls)
+        && (!filter?.query || `${record.summary} ${record.detail ?? ''}`.toLowerCase().includes(filter.query.toLowerCase()))
+      ));
+      return {
+        records: matched,
+        mode: 'literal',
+        requestedSemantic: false,
+        indexUnavailableReason: null,
+        caveat: null,
+        recallFiltered: false,
+        excludedFlaggedCount: 0,
+        excludedBelowFloorCount: 0,
+        totalBeforeRecallFilter: matched.length,
+      } as never;
     },
     searchSemantic: () => [] as never,
     vectorStats: () => ({
@@ -204,6 +226,14 @@ function makeRecallCommandContext(
       knowledgeApi: {
         memory: createMemoryApi(options.memoryRegistry),
       } as never,
+      // /recall's browse/link/queue/export/import (and add/get/remove/review)
+      // now route through the memory spine, not knowledgeApi.memory — see
+      // recall-query.ts's getMemorySpine. Local mode (no transport activated)
+      // routes straight to this fake registry, same data the assertions below
+      // already read back through it.
+      memorySpine: new MemorySpineClient({
+        local: createLocalMemoryAccess(options.memoryRegistry as unknown as LocalMemoryStore),
+      }),
     },
     renderRequest: () => {},
     print: (text: string) => { printed.push(text); },

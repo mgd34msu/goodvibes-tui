@@ -47,7 +47,7 @@ import { createDeferredStartupCoordinator } from '@/runtime/index.ts';
 import { initializeBootstrapCore } from './bootstrap-core.ts';
 import { createBootstrapShell } from './bootstrap-shell.ts';
 import { announceResumeState } from './resume-notice.ts';
-import { buildSharedOrchestratorCoreServices } from './orchestrator-core-services.ts';
+import { buildSharedOrchestratorCoreServices, refreshMemoryRecallSnapshot } from './orchestrator-core-services.ts';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 import { DaemonServer } from '@pellux/goodvibes-sdk/platform/daemon';
 import { HttpListener } from '@pellux/goodvibes-sdk/platform/daemon';
@@ -239,9 +239,9 @@ export async function bootstrapRuntime(
     },
   });
   conversationFollowUpRef.value = (item) => orchestrator.enqueueConversationFollowUp(item);
-  // Wire orchestratorHandleUserInputRef so COMPANION_MESSAGE_RECEIVED fires a real LLM turn.
+  // Wire orchestratorHandleUserInputRef so COMPANION_MESSAGE_RECEIVED fires a real LLM turn (after a pre-turn recall-snapshot refresh; see main.ts's submitInput).
   orchestratorHandleUserInputRef.value = (text: string, options?: OrchestratorUserInputOptions) => {
-    orchestrator.handleUserInput(text, undefined, options).catch((err: unknown) => {
+    void refreshMemoryRecallSnapshot(services).then(() => orchestrator.handleUserInput(text, undefined, options)).catch((err: unknown) => {
       logger.debug('companion handleUserInput safety catch', { error: String(err) });
     });
   };

@@ -4,11 +4,11 @@ import type { CommandContext } from '../command-registry.ts';
 import type { MemoryBundle, MemorySearchFilter } from '@pellux/goodvibes-sdk/platform/state';
 import { VALID_CLASSES, VALID_SCOPES, isValidClass, isValidScope, resolveBundlePath } from './recall-shared.ts';
 import { requireShellPaths } from './runtime-services.ts';
-import { getMemoryApi } from './recall-query.ts';
+import { getMemorySpine } from './recall-query.ts';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 
-export function handleRecallExport(args: string[], context: CommandContext): void {
-  const memory = getMemoryApi(context);
+export async function handleRecallExport(args: string[], context: CommandContext): Promise<void> {
+  const memory = getMemorySpine(context);
   if (!memory) {
     return;
   }
@@ -40,7 +40,7 @@ export function handleRecallExport(args: string[], context: CommandContext): voi
     filter.cls = cls;
   }
 
-  const bundle = memory.exportBundle(filter);
+  const bundle = await memory.exportBundle(filter);
   const targetPath = resolveBundlePath(pathArg, requireShellPaths(context));
   mkdirSync(dirname(targetPath), { recursive: true });
   writeFileSync(targetPath, JSON.stringify(bundle, null, 2) + '\n', 'utf-8');
@@ -48,7 +48,7 @@ export function handleRecallExport(args: string[], context: CommandContext): voi
 }
 
 export async function handleRecallImport(args: string[], context: CommandContext): Promise<void> {
-  const memory = getMemoryApi(context);
+  const memory = getMemorySpine(context);
   if (!memory) {
     return;
   }
@@ -84,8 +84,8 @@ function inspectBundle(bundle: MemoryBundle): string {
   ].join('\n');
 }
 
-export function handleRecallHandoffExport(args: string[], context: CommandContext): void {
-  const memory = getMemoryApi(context);
+export async function handleRecallHandoffExport(args: string[], context: CommandContext): Promise<void> {
+  const memory = getMemorySpine(context);
   if (!memory) {
     return;
   }
@@ -100,7 +100,7 @@ export function handleRecallHandoffExport(args: string[], context: CommandContex
     context.print(`[recall] Unknown scope "${scopeRaw ?? ''}". Valid: ${VALID_SCOPES.join(', ')}`);
     return;
   }
-  const bundle = memory.exportBundle({ scope: scopeRaw });
+  const bundle = await memory.exportBundle({ scope: scopeRaw });
   const targetPath = resolveBundlePath(pathArg, requireShellPaths(context));
   mkdirSync(dirname(targetPath), { recursive: true });
   writeFileSync(targetPath, JSON.stringify(bundle, null, 2) + '\n', 'utf-8');

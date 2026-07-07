@@ -99,7 +99,7 @@ export const recallCommand: SlashCommand = {
 
       case 'search':
       case 'find':
-        handleRecallSearch(rest, context);
+        await handleRecallSearch(rest, context);
         break;
 
       case 'vector':
@@ -113,24 +113,24 @@ export const recallCommand: SlashCommand = {
 
       case 'get':
       case 'show':
-        handleRecallGet(rest, context);
+        await handleRecallGet(rest, context);
         break;
 
       case 'queue':
-        handleRecallQueue(rest, context);
+        await handleRecallQueue(rest, context);
         break;
 
       case 'review':
-        handleRecallReview(rest, context);
+        await handleRecallReview(rest, context);
         break;
 
       case 'stale':
-        handleRecallReview([rest[0] ?? '', 'stale', '--reason', ...rest.slice(1)], context);
+        await handleRecallReview([rest[0] ?? '', 'stale', '--reason', ...rest.slice(1)], context);
         break;
 
       case 'contradict':
       case 'contradicted':
-        handleRecallReview([rest[0] ?? '', 'contradicted', '--reason', ...rest.slice(1)], context);
+        await handleRecallReview([rest[0] ?? '', 'contradicted', '--reason', ...rest.slice(1)], context);
         break;
 
       case 'explain':
@@ -142,7 +142,7 @@ export const recallCommand: SlashCommand = {
         break;
 
       case 'promote':
-        handleRecallPromote(rest, context);
+        await handleRecallPromote(rest, context);
         break;
 
       case 'link':
@@ -151,17 +151,17 @@ export const recallCommand: SlashCommand = {
 
       case 'list':
       case 'ls':
-        handleRecallList(rest, context);
+        await handleRecallList(rest, context);
         break;
 
       case 'remove':
       case 'delete':
       case 'rm':
-        handleRecallRemove(rest, context);
+        await handleRecallRemove(rest, context);
         break;
 
       case 'export':
-        handleRecallExport(rest, context);
+        await handleRecallExport(rest, context);
         break;
 
       case 'import':
@@ -170,7 +170,7 @@ export const recallCommand: SlashCommand = {
 
       case 'handoff-export':
       case 'share':
-        handleRecallHandoffExport(rest, context);
+        await handleRecallHandoffExport(rest, context);
         break;
 
       case 'handoff-inspect':

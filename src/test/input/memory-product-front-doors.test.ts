@@ -6,6 +6,7 @@ import { CommandRegistry } from '../../input/command-registry.ts';
 import type { CommandContext } from '../../input/command-registry.ts';
 import { registerBuiltinCommands } from '../../input/commands.ts';
 import { createMemoryApi } from '@pellux/goodvibes-sdk/platform/knowledge';
+import { MemorySpineClient, createLocalMemoryAccess, type LocalMemoryStore } from '@pellux/goodvibes-sdk/platform/runtime/memory-spine';
 import { MemoryRegistry, MemoryStore } from '@pellux/goodvibes-sdk/platform/state';
 import { MemoryEmbeddingProviderRegistry } from '@pellux/goodvibes-sdk/platform/state';
 import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
@@ -48,6 +49,12 @@ function makeContext(registry: MemoryRegistry, printed: string[], dir: string): 
       knowledgeApi: {
         memory: createMemoryApi(registry),
       } as never,
+      // The memory-scoped front doors (/session-memory, /team-memory,
+      // /memory-sync, /incident capture) route through the memory spine now,
+      // not knowledgeApi.memory — see recall-query.ts's getMemorySpine.
+      memorySpine: new MemorySpineClient({
+        local: createLocalMemoryAccess(registry as unknown as LocalMemoryStore),
+      }),
     },
     renderRequest: () => {},
     print: (text: string) => { printed.push(text); },
