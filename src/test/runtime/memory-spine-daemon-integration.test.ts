@@ -235,6 +235,46 @@ describe('MemorySpineClient against a real bootDaemon (isolated home, ephemeral 
   });
 });
 
+describe('memory-spine version-skew wire honesty (route-not-found vs record-missing 404)', () => {
+  // A fake fetch that answers every request with one canned JSON response — lets a
+  // test drive the transport's 404 discrimination without a live daemon.
+  function cannedFetch(status: number, body: object): typeof fetch {
+    return (async () => new Response(JSON.stringify(body), {
+      status, headers: { 'content-type': 'application/json' },
+    })) as unknown as typeof fetch;
+  }
+  const routeNotFound = { error: 'Route not found', code: 'NOT_FOUND', category: 'not_found', status: 404 };
+  const recordMissing = { error: 'Unknown memory record', code: 'MEMORY_RECORD_NOT_FOUND', category: 'not_found', status: 404 };
+
+  test('a NULLABLE verb (update) against an older daemon (route-not-found 404) REJECTS honestly, never nulls', async () => {
+    const transport = createTuiMemorySpineTransport({
+      baseUrl: 'http://127.0.0.1:9', authToken: 'tok', fetchImpl: cannedFetch(404, routeNotFound),
+    });
+    await expect(transport.update!('mem_x', { summary: 's' })).rejects.toThrow(/does not support the 'update' memory verb/);
+  });
+
+  test('a NULLABLE verb (update) against a current daemon with a missing record (record-missing 404) resolves null', async () => {
+    const transport = createTuiMemorySpineTransport({
+      baseUrl: 'http://127.0.0.1:9', authToken: 'tok', fetchImpl: cannedFetch(404, recordMissing),
+    });
+    await expect(transport.update!('mem_x', { summary: 's' })).resolves.toBeNull();
+  });
+
+  test('a NON-NULLABLE verb (list) against an older daemon (route-not-found 404) REJECTS honestly instead of a raw 404', async () => {
+    const transport = createTuiMemorySpineTransport({
+      baseUrl: 'http://127.0.0.1:9', authToken: 'tok', fetchImpl: cannedFetch(404, routeNotFound),
+    });
+    await expect(transport.list!({})).rejects.toThrow(/does not support the 'list' memory verb/);
+  });
+
+  test('a bare legacy 404 with no code is treated as method-unavailable, never a silent null', async () => {
+    const transport = createTuiMemorySpineTransport({
+      baseUrl: 'http://127.0.0.1:9', authToken: 'tok', fetchImpl: cannedFetch(404, { error: 'Not found' }),
+    });
+    await expect(transport.update!('mem_x', { summary: 's' })).rejects.toThrow(/does not support the 'update' memory verb/);
+  });
+});
+
 describe('memory-spine recall honesty passthrough', () => {
   test('indexUnavailableReason from the wire transport survives to the caller unchanged (never dropped or re-derived)', async () => {
     const reason = 'semantic index unavailable: sqlite-vec extension not loaded';
