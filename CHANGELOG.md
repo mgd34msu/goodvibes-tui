@@ -4,6 +4,26 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [1.10.0] — 2026-07-06
+
+Adopts `@pellux/goodvibes-sdk` 1.3.0. The through-line is the shared engines the SDK now owns: the terminal no longer keeps its own copy of the text-to-speech pipeline or its own path to the memory store — it consumes the one the SDK ships, so the terminal, the desktop app, and the agent all speak the same way, resolve the same voice, and reach memory the same way. Ships against `@pellux/goodvibes-sdk` 1.3.0.
+
+### Shared text-to-speech engine, now sourced from the SDK
+- The TUI's local spoken-turn controller and sentence chunker were replaced by the SDK's shared voice engine (sentence chunking, request merging with bounded concurrency, retry-with-honest-skip, and drain-vs-interrupt semantics). Behavior is unchanged from what shipped in 1.9.2, but the pipeline is now the single copy shared with the agent and a future browser build rather than a hand-maintained terminal fork. The existing mpv/ffplay subprocess player stays exactly as it was, now plugged in as the engine's audio sink.
+
+### Voice-provider request handling
+- Spoken output no longer bursts past the voice provider's concurrent-request allowance. A streaming answer used to fire one synthesis request per sentence, all at once, so a simple multi-sentence reply could hit `HTTP 429 concurrent_limit_exceeded` and lose spoken playback for the whole turn. Requests now queue and merge into a single request whenever a pipeline slot is free (bounded at two: the one playing plus one prefetch, merged text capped at 1,500 characters split on a word boundary), and a transient 429 / rate-limit / 5xx / network drop backs off and retries on an abortable timer instead of killing the turn. Time-to-first-audio is unchanged — the first safe boundary still flushes early.
+
+### Memory over the daemon spine, with honest degrade
+- When the TUI adopts an external daemon, memory now reads and writes over the daemon's memory spine instead of opening the local store file, so it can no longer read a divergent local copy. The Memory modal, `/recall`'s browse/link/queue/export/import, and the per-turn passive knowledge injection all route through the spine's wire transport when a compatible daemon is adopted, and revert to local access honestly when the daemon is lost or runs embedded in-process.
+- A newer TUI against an older daemon that does not serve an extended memory operation now says so plainly. The wire transport disambiguates the two kinds of 404 by response code: a record-missing 404 carries `MEMORY_RECORD_NOT_FOUND` and folds to "not found," while a route-not-found 404 from an older daemon (or a bare legacy 404 with no code) is treated as "this daemon does not serve this operation" and surfaces a stated reason through `/recall`'s existing degraded-path message — never a silent "record gone." The TUI now imports the SDK's canonical classifier for this rather than carrying its own inlined copy.
+
+### One voice across every surface
+- The text-to-speech voice settings (`tts.*`) resolve through the SDK's shared, surface-independent config tier, so a voice chosen in the terminal, the desktop app, or the agent is the voice every surface uses. A surface that has never set a shared voice keeps its local setting, so existing setups are unchanged; a shared value simply wins once one is set.
+
+### Budget alert visible in /config
+- The session cost-budget threshold (`behavior.budgetAlertUsd`, set via the Cost panel's `b` key or `/cost budget <usd>`) is now a visible entry in `/config`'s Behavior settings, next to the existing `notifyOnBudgetBreach` gate. The value always persisted correctly on disk; it simply had no honest way to be inspected because it was never registered in the schema-driven settings surface. It now shows the real current threshold, following the same synthetic-entry pattern already used for `behavior.notifyAfterSeconds` and `tts.speed`.
+
 ## [1.9.2] — 2026-07-06
 
 Patch release fixing text-to-speech playback so spoken responses play start-to-finish without losing audio at either end.
