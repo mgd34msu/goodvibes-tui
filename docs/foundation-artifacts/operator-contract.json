@@ -3,7 +3,7 @@
   "product": {
     "id": "goodvibes",
     "surface": "operator",
-    "version": "1.3.1"
+    "version": "1.3.2"
   },
   "auth": {
     "modes": [
@@ -59030,6 +59030,9 @@
                 },
                 "error": {
                   "type": "string"
+                },
+                "platformLimitReason": {
+                  "type": "string"
                 }
               },
               "required": [
@@ -59230,6 +59233,9 @@
                   "type": "string"
                 },
                 "error": {
+                  "type": "string"
+                },
+                "platformLimitReason": {
                   "type": "string"
                 }
               },
@@ -61667,6 +61673,9 @@
                 },
                 "error": {
                   "type": "string"
+                },
+                "platformLimitReason": {
+                  "type": "string"
                 }
               },
               "required": [
@@ -61746,6 +61755,9 @@
                   "type": "string"
                 },
                 "error": {
+                  "type": "string"
+                },
+                "platformLimitReason": {
                   "type": "string"
                 }
               },
