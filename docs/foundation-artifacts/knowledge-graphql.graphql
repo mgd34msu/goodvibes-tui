@@ -206,6 +206,11 @@ type KnowledgePacket {
   strategy: String!
   budgetLimit: Int!
   estimatedTokens: Int!
+  truncated: Boolean!
+  totalCandidates: Int!
+  droppedCount: Int!
+  droppedForBudget: Int!
+  budgetExhausted: Boolean!
   items: [KnowledgePacketItem!]!
 }
 

@@ -208,3 +208,36 @@ CREATE TABLE IF NOT EXISTS knowledge_schedules (
     );
 
 CREATE INDEX IF NOT EXISTS idx_knowledge_schedules_job_id ON knowledge_schedules(job_id);
+
+CREATE TABLE IF NOT EXISTS knowledge_node_revisions (
+      id TEXT PRIMARY KEY,
+      node_id TEXT NOT NULL,
+      revision INTEGER NOT NULL,
+      change_kind TEXT NOT NULL,
+      changed_fields TEXT NOT NULL DEFAULT '[]',
+      kind TEXT NOT NULL,
+      slug TEXT NOT NULL,
+      title TEXT NOT NULL,
+      summary TEXT,
+      aliases TEXT NOT NULL DEFAULT '[]',
+      status TEXT NOT NULL,
+      confidence INTEGER NOT NULL,
+      source_id TEXT,
+      metadata TEXT NOT NULL DEFAULT '{}',
+      node_created_at INTEGER NOT NULL,
+      node_updated_at INTEGER NOT NULL,
+      recorded_at INTEGER NOT NULL
+    );
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_knowledge_node_revisions_unique ON knowledge_node_revisions(node_id, revision);
+
+CREATE INDEX IF NOT EXISTS idx_knowledge_node_revisions_node ON knowledge_node_revisions(node_id);
+
+CREATE TABLE IF NOT EXISTS knowledge_semantic_enrichment_state (
+      source_id TEXT PRIMARY KEY,
+      text_hash TEXT,
+      enriched_at INTEGER,
+      metadata TEXT NOT NULL DEFAULT '{}',
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    );
