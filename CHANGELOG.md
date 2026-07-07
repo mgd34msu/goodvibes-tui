@@ -4,6 +4,11 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [1.11.0] — 2026-07-07
+
+### Changes
+- b4a2155d chore: pin @pellux/goodvibes-sdk 1.4.0 — the daemon gains server-side turn control
+
 ## [1.10.1] - 2026-07-07
 
 ### Fixed
