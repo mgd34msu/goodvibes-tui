@@ -4,6 +4,12 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [1.10.1] - 2026-07-07
+
+### Fixed
+
+- README no longer states a stale hardcoded SDK version; it refers to the latest SDK.
+
 ## [1.10.0] — 2026-07-06
 
 Adopts `@pellux/goodvibes-sdk` 1.3.0. The through-line is the shared engines the SDK now owns: the terminal no longer keeps its own copy of the text-to-speech pipeline or its own path to the memory store — it consumes the one the SDK ships, so the terminal, the desktop app, and the agent all speak the same way, resolve the same voice, and reach memory the same way. Ships against `@pellux/goodvibes-sdk` 1.3.0.
