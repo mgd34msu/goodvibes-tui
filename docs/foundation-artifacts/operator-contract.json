@@ -43449,6 +43449,21 @@
             "estimatedTokens": {
               "type": "number"
             },
+            "truncated": {
+              "type": "boolean"
+            },
+            "totalCandidates": {
+              "type": "number"
+            },
+            "droppedCount": {
+              "type": "number"
+            },
+            "droppedForBudget": {
+              "type": "number"
+            },
+            "budgetExhausted": {
+              "type": "boolean"
+            },
             "items": {
               "type": "array",
               "items": {
@@ -43545,6 +43560,11 @@
             "strategy",
             "budgetLimit",
             "estimatedTokens",
+            "truncated",
+            "totalCandidates",
+            "droppedCount",
+            "droppedForBudget",
+            "budgetExhausted",
             "items"
           ],
           "additionalProperties": false
@@ -60925,6 +60945,9 @@
             },
             "totalBeforeRecallFilter": {
               "type": "number"
+            },
+            "recallFloor": {
+              "type": "number"
             }
           },
           "required": [
@@ -60936,7 +60959,8 @@
             "recallFiltered",
             "excludedFlaggedCount",
             "excludedBelowFloorCount",
-            "totalBeforeRecallFilter"
+            "totalBeforeRecallFilter",
+            "recallFloor"
           ],
           "additionalProperties": false
         },
