@@ -28,11 +28,18 @@
  * a transport failure here is NOT swallowed. It propagates as a rejected
  * promise, matching `MemorySpineClient`'s documented contract: a wire client
  * must never silently fall back to a divergent local copy in place of a real
- * failure. A 404 on `update`/`links.add` (an unknown record or link endpoint)
- * maps to the documented `null` "not found" result rather than a thrown
- * error, matching the CORE verbs' existing `get`/`updateReview` convention;
- * `linksFor`'s 404 (the *record itself* doesn't exist) is not representable
- * in its non-nullable array return type, so it propagates as a thrown error.
+ * failure.
+ *
+ * A 404 is disambiguated by its RESPONSE CODE (`classifyMemoryWire404`), never
+ * by the bare status. A record-missing 404 carries `MEMORY_RECORD_NOT_FOUND`:
+ * on a nullable verb (`get`/`updateReview`/`update`/`link`) it maps to the
+ * documented `null` "not found"; on a non-nullable verb (`linksFor` etc.) it is
+ * not representable as null so it propagates as a thrown error. ANY OTHER 404 —
+ * a route-not-found from an older daemon that never registered this route, or a
+ * bare legacy 404 with no code — is treated as "this daemon does not serve this
+ * verb" and rejects with a stated reason on EVERY verb, never a silent `null`.
+ * That is what lets `/recall` surface an honest degraded message on a
+ * version-skewed daemon instead of reporting an existing record as gone.
  */
 import { buildUrl, createJsonRequestInit, requestJsonRaw } from '@pellux/goodvibes-sdk/transport-http';
 import type { MemoryAccess, MemoryTransport, MemoryUpdatePatch } from '@pellux/goodvibes-sdk/platform/runtime/memory-spine';
@@ -55,10 +62,68 @@ type MemoryReviewPatch = Parameters<MemoryAccess['updateReview']>[1];
 /** Same reasoning — `MemoryImportResult` is not re-exported from a public SDK entry point. */
 type MemoryImportResult = Awaited<ReturnType<MemoryAccess['importBundle']>>;
 
-function isNotFoundWireError(error: unknown): boolean {
-  return typeof error === 'object' && error !== null && 'transport' in error
-    && typeof (error as { transport?: { status?: unknown } }).transport?.status === 'number'
-    && (error as { transport: { status: number } }).transport.status === 404;
+/**
+ * Wire `code` the daemon sets on a 404 whose body means the addressed RECORD does
+ * not exist (the route ran; the store had no such id) — see the daemon memory
+ * routes. This is the ONE 404 a consumer may fold to null. It is a stable wire
+ * protocol string; it is inlined here rather than imported because the SDK build
+ * that exports it as a shared constant/discriminator
+ * (`classifyMemoryWireError`, `MEMORY_RECORD_NOT_FOUND_CODE`) is not yet the
+ * published `@pellux/goodvibes-sdk` this surface pins. When that ships, this local
+ * copy is replaced by the imported helper.
+ */
+const MEMORY_RECORD_NOT_FOUND_CODE = 'MEMORY_RECORD_NOT_FOUND';
+
+type MemoryWire404Disposition = 'record-missing' | 'method-unavailable' | 'other';
+
+function readWireBodyCode(body: unknown): string | undefined {
+  return body !== null && typeof body === 'object' && typeof (body as { code?: unknown }).code === 'string'
+    ? (body as { code: string }).code
+    : undefined;
+}
+
+/**
+ * Decide, from the RUNTIME 404 response (never the transport object's shape),
+ * whether a caught wire error is a genuine record-miss (→ null) or the daemon not
+ * serving this verb (→ honest reject). A record-missing 404 carries
+ * {@link MEMORY_RECORD_NOT_FOUND_CODE}; a route-not-found 404 from an older daemon
+ * carries a different code (or none) and must reject honestly — never silently null.
+ */
+function classifyMemoryWire404(error: unknown): MemoryWire404Disposition {
+  if (typeof error !== 'object' || error === null) return 'other';
+  const record = error as { transport?: { status?: unknown; body?: unknown }; status?: unknown; code?: unknown; body?: unknown };
+  const status = typeof record.transport?.status === 'number' ? record.transport.status
+    : typeof record.status === 'number' ? record.status
+    : undefined;
+  if (status !== 404) return 'other';
+  const code = (typeof record.code === 'string' ? record.code : undefined)
+    ?? readWireBodyCode(record.transport?.body)
+    ?? readWireBodyCode(record.body);
+  return code === MEMORY_RECORD_NOT_FOUND_CODE ? 'record-missing' : 'method-unavailable';
+}
+
+/** The one honest "the adopted daemon does not serve this verb" rejection. */
+function memoryVerbUnavailableError(verb: string): Error {
+  return new Error(
+    `memory spine: the adopted daemon does not support the '${verb}' memory verb over the wire — `
+    + 'upgrade the daemon to a build that serves it, or run this surface offline (no daemon adopted). '
+    + 'A wire client will not read its own local store for this op, because that would break the '
+    + 'single-writer invariant and report a divergent local copy as if it were the canonical store.',
+  );
+}
+
+/** Fold for a NULLABLE record-scoped verb: record-miss → null; version-skew → honest reject; else rethrow. */
+function foldNullableMemoryWire404(verb: string, error: unknown): null {
+  const kind = classifyMemoryWire404(error);
+  if (kind === 'record-missing') return null;
+  if (kind === 'method-unavailable') throw memoryVerbUnavailableError(verb);
+  throw error;
+}
+
+/** Fold for a NON-NULLABLE (collection or record-required) verb: version-skew → honest reject; else rethrow. */
+function rethrowMemoryWire404(verb: string, error: unknown): never {
+  if (classifyMemoryWire404(error) === 'method-unavailable') throw memoryVerbUnavailableError(verb);
+  throw error;
 }
 
 export interface MemorySpineWireOptions {
@@ -97,8 +162,7 @@ export function createTuiMemorySpineTransport(options: MemorySpineWireOptions): 
         );
         return response.record;
       } catch (error) {
-        if (isNotFoundWireError(error)) return null;
-        throw error;
+        return foldNullableMemoryWire404('get', error);
       }
     },
     updateReview: async (id: string, patch: MemoryReviewPatch): Promise<MemoryRecord | null> => {
@@ -108,8 +172,7 @@ export function createTuiMemorySpineTransport(options: MemorySpineWireOptions): 
         );
         return response.record;
       } catch (error) {
-        if (isNotFoundWireError(error)) return null;
-        throw error;
+        return foldNullableMemoryWire404('updateReview', error);
       }
     },
     delete: async (id: string): Promise<boolean> => {
@@ -122,16 +185,24 @@ export function createTuiMemorySpineTransport(options: MemorySpineWireOptions): 
     // ── Extended verbs (1.2.0 full-detach) ──────────────────────────────────
 
     list: async (filter?: MemorySearchFilter): Promise<readonly MemoryRecord[]> => {
-      const response = await requestJsonRaw<{ records: readonly MemoryRecord[] }>(
-        fetchImpl, url('/api/memory/records/list'), createJsonRequestInit(token, filter ?? {}, 'POST'),
-      );
-      return response.records;
+      try {
+        const response = await requestJsonRaw<{ records: readonly MemoryRecord[] }>(
+          fetchImpl, url('/api/memory/records/list'), createJsonRequestInit(token, filter ?? {}, 'POST'),
+        );
+        return response.records;
+      } catch (error) {
+        return rethrowMemoryWire404('list', error);
+      }
     },
     searchSemantic: async (filter?: MemorySearchFilter): Promise<readonly MemorySemanticSearchResult[]> => {
-      const response = await requestJsonRaw<{ results: readonly MemorySemanticSearchResult[] }>(
-        fetchImpl, url('/api/memory/records/search-semantic'), createJsonRequestInit(token, filter ?? {}, 'POST'),
-      );
-      return response.results;
+      try {
+        const response = await requestJsonRaw<{ results: readonly MemorySemanticSearchResult[] }>(
+          fetchImpl, url('/api/memory/records/search-semantic'), createJsonRequestInit(token, filter ?? {}, 'POST'),
+        );
+        return response.results;
+      } catch (error) {
+        return rethrowMemoryWire404('searchSemantic', error);
+      }
     },
     update: async (id: string, patch: MemoryUpdatePatch): Promise<MemoryRecord | null> => {
       try {
@@ -140,8 +211,7 @@ export function createTuiMemorySpineTransport(options: MemorySpineWireOptions): 
         );
         return response.record;
       } catch (error) {
-        if (isNotFoundWireError(error)) return null;
-        throw error;
+        return foldNullableMemoryWire404('update', error);
       }
     },
     link: async (fromId: string, toId: string, relation: string): Promise<MemoryLink | null> => {
@@ -151,48 +221,71 @@ export function createTuiMemorySpineTransport(options: MemorySpineWireOptions): 
         );
         return response.link;
       } catch (error) {
-        if (isNotFoundWireError(error)) return null;
-        throw error;
+        return foldNullableMemoryWire404('link', error);
       }
     },
     linksFor: async (id: string): Promise<readonly MemoryLink[]> => {
-      const response = await requestJsonRaw<{ links: readonly MemoryLink[] }>(
-        fetchImpl, url(`/api/memory/records/${encodeURIComponent(id)}/links`), createJsonRequestInit(token),
-      );
-      return response.links;
+      try {
+        const response = await requestJsonRaw<{ links: readonly MemoryLink[] }>(
+          fetchImpl, url(`/api/memory/records/${encodeURIComponent(id)}/links`), createJsonRequestInit(token),
+        );
+        return response.links;
+      } catch (error) {
+        return rethrowMemoryWire404('linksFor', error);
+      }
     },
     reviewQueue: async (limit?: number, scope?: MemoryScope): Promise<readonly MemoryRecord[]> => {
       const params = new URLSearchParams();
       if (limit !== undefined) params.set('limit', String(limit));
       if (scope !== undefined) params.set('scope', scope);
       const query = params.toString();
-      const response = await requestJsonRaw<{ records: readonly MemoryRecord[] }>(
-        fetchImpl, url(`/api/memory/review-queue${query ? `?${query}` : ''}`), createJsonRequestInit(token),
-      );
-      return response.records;
+      try {
+        const response = await requestJsonRaw<{ records: readonly MemoryRecord[] }>(
+          fetchImpl, url(`/api/memory/review-queue${query ? `?${query}` : ''}`), createJsonRequestInit(token),
+        );
+        return response.records;
+      } catch (error) {
+        return rethrowMemoryWire404('reviewQueue', error);
+      }
     },
     exportBundle: async (filter?: MemorySearchFilter): Promise<MemoryBundle> => {
-      const response = await requestJsonRaw<{ bundle: MemoryBundle }>(
-        fetchImpl, url('/api/memory/records/export'), createJsonRequestInit(token, filter ?? {}, 'POST'),
-      );
-      return response.bundle;
+      try {
+        const response = await requestJsonRaw<{ bundle: MemoryBundle }>(
+          fetchImpl, url('/api/memory/records/export'), createJsonRequestInit(token, filter ?? {}, 'POST'),
+        );
+        return response.bundle;
+      } catch (error) {
+        return rethrowMemoryWire404('exportBundle', error);
+      }
     },
     importBundle: async (bundle: MemoryBundle): Promise<MemoryImportResult> => {
-      const response = await requestJsonRaw<{ result: MemoryImportResult }>(
-        fetchImpl, url('/api/memory/records/import'), createJsonRequestInit(token, { bundle }, 'POST'),
-      );
-      return response.result;
+      try {
+        const response = await requestJsonRaw<{ result: MemoryImportResult }>(
+          fetchImpl, url('/api/memory/records/import'), createJsonRequestInit(token, { bundle }, 'POST'),
+        );
+        return response.result;
+      } catch (error) {
+        return rethrowMemoryWire404('importBundle', error);
+      }
     },
     vectorStats: async (): Promise<MemoryVectorStats> => {
-      const response = await requestJsonRaw<{ vector: MemoryVectorStats }>(
-        fetchImpl, url('/api/memory/vector'), createJsonRequestInit(token),
-      );
-      return response.vector;
+      try {
+        const response = await requestJsonRaw<{ vector: MemoryVectorStats }>(
+          fetchImpl, url('/api/memory/vector'), createJsonRequestInit(token),
+        );
+        return response.vector;
+      } catch (error) {
+        return rethrowMemoryWire404('vectorStats', error);
+      }
     },
     doctor: async (): Promise<MemoryDoctorReport> => {
-      return await requestJsonRaw<MemoryDoctorReport>(
-        fetchImpl, url('/api/memory/doctor'), createJsonRequestInit(token),
-      );
+      try {
+        return await requestJsonRaw<MemoryDoctorReport>(
+          fetchImpl, url('/api/memory/doctor'), createJsonRequestInit(token),
+        );
+      } catch (error) {
+        return rethrowMemoryWire404('doctor', error);
+      }
     },
   };
 }
