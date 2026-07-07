@@ -125,7 +125,7 @@ The interface is rendered directly to the alternate screen buffer with raw ANSI 
 
 The runtime is organized around typed store domains, typed runtime events, a shared control plane for permissions and orchestration, and product surfaces for reviewing and repairing state. Agents run in-process with isolated histories, scoped tools, and optional worktrees. Operational state such as provider routing, local auth, daemon/gateway posture, channels, search, artifacts, structured knowledge, multimodal analysis, remote sessions, settings control-plane state, and task execution is routed into dedicated panels and APIs.
 
-The TUI now consumes the extracted `@pellux/goodvibes-sdk` (`0.34.0`) platform layer for shared contracts, daemon route surfaces, transports, remote runtime contracts, and other reusable runtime code. The repo keeps the terminal UI, host wiring, and product-specific composition while future surfaces consume the same SDK-backed runtime foundation.
+The TUI consumes the published `@pellux/goodvibes-sdk` platform layer (the exact pinned version lives in `package.json`) for shared contracts, daemon route surfaces, transports, remote runtime contracts, and other reusable runtime code. The repo keeps the terminal UI, host wiring, and product-specific composition while future surfaces consume the same SDK-backed runtime foundation.
 
 ---
 
