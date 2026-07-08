@@ -4,6 +4,11 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [1.11.1] — 2026-07-08
+
+### Changes
+- f3abc72b chore: pin @pellux/goodvibes-sdk 1.4.1 — permission settings own command-class risk in exec
+
 ## [1.11.0] — 2026-07-07
 
 ### Changes
