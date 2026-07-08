@@ -4,6 +4,12 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [1.12.0] — 2026-07-08
+
+### Changes
+- 894099e9 chore: pin @pellux/goodvibes-sdk 1.5.0 — model compaction warnings compact immediately; persistent per-model context windows
+- b89d0494 feat: /context window — view, set, or clear a custom context window for the current model
+
 ## [1.11.1] — 2026-07-08
 
 ### Changes
