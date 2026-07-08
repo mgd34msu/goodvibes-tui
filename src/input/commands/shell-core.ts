@@ -120,6 +120,7 @@ export function registerShellCoreCommands(registry: CommandRegistry): void {
           { id: '/model', label: '/model [id]', detail: 'Select LLM model', category: 'Model & Provider' },
           { id: '/provider', label: '/provider [name]', detail: 'Switch provider', category: 'Model & Provider' },
           { id: '/effort', label: '/effort [level]', detail: 'Reasoning effort (instant/low/medium/high)', category: 'Model & Provider' },
+          { id: '/context window', label: '/context window [<size>|clear]', detail: 'Show, set, or clear a custom context window for the current model', category: 'Model & Provider' },
           { id: '/config', label: '/config [category|key]', detail: 'Open fullscreen configuration workspace', category: 'Config & Display' },
           { id: '/debug', label: '/debug', detail: 'Toggle debug mode', category: 'Config & Display' },
           { id: '/expand', label: '/expand [type]', detail: 'Expand blocks (all|thinking|tool|code)', category: 'Config & Display' },

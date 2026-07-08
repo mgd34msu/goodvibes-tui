@@ -6,6 +6,7 @@ import { registerOperatorPanelCommand } from './operator-panel-runtime.ts';
 import { requireOpsApi, requireProfileManager, requireReplayEngine } from './runtime-services.ts';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 import { estimateConversationTokens } from '@pellux/goodvibes-sdk/platform/core';
+import { handleContextWindowSubcommand } from './context-window.ts';
 
 export function registerOperatorRuntimeCommands(registry: CommandRegistry): void {
   registerOperatorPanelCommand(registry);
@@ -23,8 +24,14 @@ export function registerOperatorRuntimeCommands(registry: CommandRegistry): void
   registry.register({
     name: 'context',
     aliases: ['ctx'],
-    description: 'Inspect context window usage (token breakdown per message)',
-    handler: (_args, ctx) => {
+    description: 'Inspect context usage, or set/clear a custom context window for the current model',
+    usage: '[window [<size>|clear]]',
+    argsHint: '[window <size|clear>]',
+    handler: (args, ctx) => {
+      if (args[0]?.toLowerCase() === 'window') {
+        handleContextWindowSubcommand(args.slice(1), ctx);
+        return;
+      }
       if (ctx.openContextInspector) {
         ctx.openContextInspector();
       } else {
