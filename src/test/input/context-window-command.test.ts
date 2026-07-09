@@ -68,23 +68,30 @@ interface Harness {
   calls: { set: Array<[string, number]>; cleared: string[] };
 }
 
-function makeHarness(opts: { override?: number | null; model?: ModelDefinition } = {}): Harness {
+function makeHarness(opts: { override?: number | null; observed?: number | null; model?: ModelDefinition } = {}): Harness {
   const printed: string[] = [];
   const calls: Harness['calls'] = { set: [], cleared: [] };
   let override = opts.override ?? null;
+  let observed = opts.observed ?? null;
   const baseModel = opts.model ?? makeModel();
 
   const providerRegistry = {
-    getCurrentModel: () => (override !== null
-      ? { ...baseModel, contextWindow: override, contextWindowProvenance: 'configured_cap' as const }
-      : baseModel),
+    getCurrentModel: () => {
+      if (override !== null) return { ...baseModel, contextWindow: override, contextWindowProvenance: 'configured_cap' as const };
+      if (observed !== null && observed < baseModel.contextWindow) {
+        return { ...baseModel, contextWindow: observed, contextWindowProvenance: 'observed_limit' as const };
+      }
+      return baseModel;
+    },
     getContextWindowForModel: (m: ModelDefinition) => m.contextWindow,
     getModelContextCap: () => override,
+    getObservedContextWindow: () => observed,
     setModelContextCap: (key: string, cap: number) => { calls.set.push([key, cap]); override = cap; },
     clearModelContextCap: (key: string) => {
-      const existed = override !== null;
+      const existed = override !== null || observed !== null;
       calls.cleared.push(key);
       override = null;
+      observed = null;
       return existed;
     },
   };
@@ -117,6 +124,19 @@ describe('handleContextWindowSubcommand', () => {
     const out = handleContextWindowSubcommand([], h.ctx);
     expect(out).toContain('custom override');
     expect(out).toContain('150,000 tokens');
+  });
+
+  test('no args with a learned limit shows it and labels the provenance', () => {
+    const h = makeHarness({ observed: 150_000 });
+    const out = handleContextWindowSubcommand([], h.ctx);
+    expect(out).toContain('learned from a provider rejection');
+    expect(out).toContain('learned limit: 150,000 tokens');
+  });
+
+  test('clear with only a learned limit reports cleared', () => {
+    const h = makeHarness({ observed: 250_000 });
+    const out = handleContextWindowSubcommand(['clear'], h.ctx);
+    expect(out).toContain('cleared');
   });
 
   test('setting a size calls setModelContextCap with the parsed value', () => {

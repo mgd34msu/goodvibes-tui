@@ -96,6 +96,8 @@ export class FleetPanel extends ScrollableListPanel<FleetTreeRow> {
   private readonly actions: FleetActionCallbacks;
   private readonly confirmOverlay: PanelConfirmOverlay;
   private follow = false;
+  /** Tree view mode: the live fleet, or the session archive of finished subtrees. */
+  private viewMode: 'active' | 'archived' = 'active';
   private tabsState: FleetTabsState = EMPTY_FLEET_TABS_STATE;
   private tickTimer: ReturnType<typeof setInterval> | null = null;
   /**
@@ -221,7 +223,9 @@ export class FleetPanel extends ScrollableListPanel<FleetTreeRow> {
   }
 
   protected getItems(): readonly FleetTreeRow[] {
-    return this.readModel.getSnapshot().rows;
+    return this.viewMode === 'archived'
+      ? this.readModel.getArchivedSnapshot().rows
+      : this.readModel.getSnapshot().rows;
   }
 
   protected override getPalette(): PanelPalette {
@@ -229,7 +233,9 @@ export class FleetPanel extends ScrollableListPanel<FleetTreeRow> {
   }
 
   protected override getEmptyStateMessage(): string {
-    return ' No processes tracked yet.';
+    return this.viewMode === 'archived'
+      ? ' Archive is empty — press a on a finished process (or A for all) to move it here.'
+      : ' No processes tracked yet.';
   }
 
   /**
@@ -380,6 +386,38 @@ export class FleetPanel extends ScrollableListPanel<FleetTreeRow> {
     }
 
     const selected = this.getSelectedItem();
+
+    // Archive controls: v toggles the live fleet <-> session archive view;
+    // a archives the selected finished subtree (or restores it from the
+    // archive view); A archives every fully-finished root subtree.
+    if (key === 'v') {
+      this.viewMode = this.viewMode === 'active' ? 'archived' : 'active';
+      this.markDirty();
+      return true;
+    }
+    if (key === 'a') {
+      if (!selected) return false;
+      if (this.viewMode === 'archived') {
+        const restored = this.readModel.unarchive(selected.node.id);
+        if (restored === 0) this.setError('Nothing restored for this node.');
+        this.markDirty();
+        return true;
+      }
+      if (!isTerminalProcessState(selected.node.state)) {
+        this.setError('Only finished processes can be archived.');
+        return true;
+      }
+      const result = this.readModel.archive(selected.node.id);
+      if (!result.archived) this.setError(result.reason ?? 'Could not archive this process.');
+      this.markDirty();
+      return true;
+    }
+    if (key === 'A' && this.viewMode === 'active') {
+      const count = this.readModel.archiveFinished();
+      if (count === 0) this.setError('No fully-finished processes to archive.');
+      this.markDirty();
+      return true;
+    }
 
     if (key === 'i') {
       // Guard: only consume on a real, non-terminal node (cockpit-panel.ts
@@ -736,7 +774,7 @@ export class FleetPanel extends ScrollableListPanel<FleetTreeRow> {
     // can actually accept them (most kinds are never interruptible; nothing is
     // killable once terminal), incl. the d2 state-dependent p pause/resume chip.
     // Mirrors the handleInput guards above. See buildFleetTreeHints (fleet-stop.ts).
-    const hints = buildFleetTreeHints(selected?.node, this.follow, this.tabsState.tabs.length > 0);
+    const hints = buildFleetTreeHints(selected?.node, this.follow, this.tabsState.tabs.length > 0, this.viewMode);
 
     // Tab strip renders only when tabs exist — omitting it entirely with no
     // tabs attached keeps the pre-session-tab root-tree rendering byte-identical.
@@ -744,7 +782,7 @@ export class FleetPanel extends ScrollableListPanel<FleetTreeRow> {
     const header = stripLine ? [stripLine] : undefined;
 
     return this.renderList(width, height, {
-      title: 'Fleet',
+      title: this.viewMode === 'archived' ? 'Fleet — Archived' : 'Fleet',
       header,
       footer,
       hints,

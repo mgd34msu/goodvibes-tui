@@ -10,7 +10,7 @@
 | model claude-opus-4-6  tokens 15.4k  cost $0.870                                                   |
 | activity tool: Read src/panels/fleet-panel.ts                                                      |
 | approvals —                                                                                        |
-| j/k navigate   Enter attach   i interrupt   K kill   f follow                                      |
+| j/k navigate   Enter attach   i interrupt   K kill   A archive finished   v archived   f follow    |
 |                                                                                                    |
 |                                                                                                    |
 |                                                                                                    |
@@ -975,3 +975,37 @@
 11 59 fg=#475569
 11 60 fg=#475569
 11 61 fg=#475569
+11 62 fg=#475569
+11 63 fg=#475569
+11 64 fg=#475569
+11 65 fg=#475569
+11 66 fg=#475569
+11 67 fg=#475569
+11 68 fg=#475569
+11 69 fg=#475569
+11 70 fg=#475569
+11 71 fg=#475569
+11 72 fg=#475569
+11 73 fg=#475569
+11 74 fg=#475569
+11 75 fg=#38bdf8
+11 76 fg=#475569
+11 77 fg=#475569
+11 78 fg=#475569
+11 79 fg=#475569
+11 80 fg=#475569
+11 81 fg=#475569
+11 82 fg=#475569
+11 83 fg=#475569
+11 84 fg=#475569
+11 85 fg=#475569
+11 86 fg=#475569
+11 87 fg=#475569
+11 88 fg=#38bdf8
+11 89 fg=#475569
+11 90 fg=#475569
+11 91 fg=#475569
+11 92 fg=#475569
+11 93 fg=#475569
+11 94 fg=#475569
+11 95 fg=#475569

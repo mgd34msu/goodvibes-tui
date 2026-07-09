@@ -108,6 +108,7 @@ export function buildFleetTreeHints(
   selected: ProcessNode | undefined,
   follow: boolean,
   hasTabs: boolean,
+  viewMode: 'active' | 'archived' = 'active',
 ): FleetHint[] {
   const live = selected !== undefined && !isTerminalProcessState(selected.state);
   const isPaused = selected !== undefined && selected.state === 'paused';
@@ -115,11 +116,22 @@ export function buildFleetTreeHints(
     { keys: 'j/k', label: 'navigate' },
     { keys: 'Enter', label: 'attach' },
   ];
+  if (viewMode === 'archived') {
+    // Archive view: restore + return to the live fleet; nothing here is live,
+    // so the live-only control hints (s/i/K/p) never apply.
+    if (selected) hints.push({ keys: 'a', label: 'restore' });
+    hints.push({ keys: 'v', label: 'live view' });
+    if (hasTabs) hints.push({ keys: '[ ]', label: 'tabs' });
+    return hints;
+  }
   if (live && selected.capabilities.steerable) hints.push({ keys: 's', label: 'steer' }); // discoverable from the tree (attach-and-steer)
   if (live && selected.capabilities.interruptible) hints.push({ keys: 'i', label: 'interrupt' });
   if (live && selected.capabilities.killable) hints.push({ keys: 'K', label: 'kill' });
   if (live && !isPaused && selected.capabilities.pausable) hints.push({ keys: 'p', label: 'pause' });
   if (isPaused && selected.capabilities.resumable) hints.push({ keys: 'p', label: 'resume' });
+  if (selected && !live) hints.push({ keys: 'a', label: 'archive' });
+  hints.push({ keys: 'A', label: 'archive finished' });
+  hints.push({ keys: 'v', label: 'archived' });
   hints.push({ keys: 'f', label: follow ? 'follow:on' : 'follow' });
   if (hasTabs) hints.push({ keys: '[ ]', label: 'tabs' });
   return hints;
