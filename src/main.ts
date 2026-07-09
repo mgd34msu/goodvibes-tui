@@ -422,6 +422,11 @@ async function main() {
   };
 
   const renderNow = () => {
+    // Once the terminal is restored (exit/crash/signal teardown), the user's
+    // primary screen is back — a late frame here (async shutdown races, stray
+    // timers) would paint cursor-positioned content over shell scrollback and
+    // strand the next prompt mid-screen. Hard-stop every composite path.
+    if (lifecycle.isTerminalRestored()) return;
     const width = stdout.columns || 80;
     const height = stdout.rows || 24;
 

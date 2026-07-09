@@ -137,6 +137,7 @@ export function registerShellCoreCommands(registry: CommandRegistry): void {
           { id: '/session', label: '/session', detail: 'Current session info', category: 'Conversation' },
           { id: '/session list', label: '/session list', detail: 'List all sessions', category: 'Conversation' },
           { id: '/session rename', label: '/session rename <name>', detail: 'Rename current session', category: 'Conversation' },
+          { id: '/resume', label: '/resume [id]', detail: 'Resume a previous session (picker when no id)', category: 'Conversation' },
           { id: '/session resume', label: '/session resume <id>', detail: 'Load and resume a session', category: 'Conversation' },
           { id: '/session fork', label: '/session fork [name]', detail: 'Fork current session to new ID', category: 'Conversation' },
           { id: '/session save', label: '/session save [name]', detail: 'Force-save current session', category: 'Conversation' },
