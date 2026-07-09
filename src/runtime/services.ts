@@ -56,7 +56,7 @@ import { isFeatureFlagEnabled } from './surface-feature-flags.ts';
 import type { FeatureFlagManager } from '@/runtime/index.ts';
 import { createFeatureFlagManager } from '@/runtime/index.ts';
 import { PolicyRuntimeState } from '@/runtime/index.ts';
-import { createProcessRegistry, type ProcessRegistry } from '@pellux/goodvibes-sdk/platform/runtime/fleet';
+import { createProcessRegistry, withFleetArchive, type ArchivableProcessRegistry } from '@pellux/goodvibes-sdk/platform/runtime/fleet';
 import { calcSessionCost, isModelPriced } from '../export/cost-utils.ts';
 import { createWorkstreamServices, type OrchestrationEngine, type WorkstreamCommandService } from './workstream-services.ts';
 import { codeIndexDbPath, createCodeIndexServices, isCodeInjectionSettingEnabled } from './code-index-services.ts';
@@ -231,8 +231,8 @@ export interface RuntimeServices {
   /** The repo source-tree code index — see runtime/code-index-services.ts. */
   readonly codeIndexStore: CodeIndexStore;
   readonly codeIndexReindexScheduler: CodeIndexReindexScheduler; // tool-site reindex
-  /** W2.1/W2.2: unified live process registry (agents, WRFC chains, workflows, watchers, background processes) backing the Fleet panel. */
-  readonly processRegistry: ProcessRegistry;
+  /** Unified live process registry (agents, WRFC chains, workflows, watchers, background processes) backing the Fleet panel; archive-aware — finished subtrees can be moved to the session archive view. */
+  readonly processRegistry: ArchivableProcessRegistry;
   readonly modeManager: ModeManager;
   readonly fileUndoManager: FileUndoManager;
   readonly workspaceCheckpointManager: WorkspaceCheckpointManager;
@@ -609,7 +609,7 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
   // the Fleet panel (panels/fleet-read-model.ts) is its first consumer.
   // Constructed once here (not per-consumer) so the coalesced tick and the
   // agent-activity side-table are shared, not duplicated.
-  const processRegistry = createProcessRegistry({
+  const processRegistry = withFleetArchive(createProcessRegistry({
     agentManager,
     wrfcController,
     orchestrationEngine, // Folds workstream/phase/work-item nodes into the fleet
@@ -628,7 +628,7 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
       if (!isModelPriced(modelId)) return null;
       return calcSessionCost(usage.inputTokens, usage.outputTokens, usage.cacheReadTokens, usage.cacheWriteTokens, modelId);
     },
-  });
+  }));
   const modeManager = new ModeManager();
   const fileUndoManager = new FileUndoManager();
   const workspaceCheckpointManager = new WorkspaceCheckpointManager({

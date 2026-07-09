@@ -54,6 +54,10 @@ function makeMutableReadModel(initial: FleetSnapshot): {
       kill: () => [],
       steer: () => ({ queued: false, reason: 'not wired in this test' }),
       subscribeConsumed: (cb) => { consumedListeners.add(cb); return () => consumedListeners.delete(cb); },
+      getArchivedSnapshot: () => buildFleetSnapshot([], NOW),
+      archive: () => ({ archived: false, count: 0, reason: 'not wired in this test' }),
+      archiveFinished: () => 0,
+      unarchive: () => 0,
     },
     setSnapshot: (s: FleetSnapshot) => { snapshot = s; },
     fireDirty: () => { for (const cb of listeners) cb(); },
@@ -1511,5 +1515,100 @@ describe('FleetPanel — batch replay D4: steer from the tree', () => {
     expect(panel.handleInput('s')).toBe(true);
     const text = linesText(panel.render(120, 24));
     expect(text).toContain('does not support steer');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Archive — v/a/A keys and the archived view
+// ---------------------------------------------------------------------------
+
+function makeArchiveHarness(live: readonly ProcessNode[], archived: readonly ProcessNode[] = []) {
+  const calls = { archive: [] as string[], unarchive: [] as string[], archiveFinished: 0 };
+  let archivedNodes = [...archived];
+  let liveNodes = [...live];
+  const model: FleetReadModel = {
+    getSnapshot: () => buildFleetSnapshot(liveNodes, NOW),
+    subscribe: () => () => {},
+    interrupt: () => false,
+    resume: () => false,
+    kill: () => [],
+    steer: () => ({ queued: false, reason: 'not wired' }),
+    subscribeConsumed: () => () => {},
+    getArchivedSnapshot: () => buildFleetSnapshot(archivedNodes, NOW),
+    archive: (id: string) => {
+      calls.archive.push(id);
+      const node = liveNodes.find((n) => n.id === id);
+      if (!node) return { archived: false, count: 0, reason: 'not found' };
+      liveNodes = liveNodes.filter((n) => n.id !== id);
+      archivedNodes = [...archivedNodes, node];
+      return { archived: true, count: 1 };
+    },
+    archiveFinished: () => { calls.archiveFinished++; return 0; },
+    unarchive: (id: string) => {
+      calls.unarchive.push(id);
+      return archivedNodes.some((n) => n.id === id) ? 1 : 0;
+    },
+  };
+  return { model, calls };
+}
+
+describe('FleetPanel — archive controls', () => {
+  test("v toggles to the archived view (title + empty-state hint) and back", () => {
+    const { model } = makeArchiveHarness([makeNode({ id: 'live-1' })]);
+    const panel = new FleetPanel(model);
+
+    panel.handleInput('v');
+    let text = linesText(panel.render(100, 24));
+    expect(text).toContain('Archived');
+    expect(text).toContain('Archive is empty');
+
+    panel.handleInput('v');
+    text = linesText(panel.render(100, 24));
+    expect(text).toContain('live-1');
+  });
+
+  test('a on a finished node archives it; the row leaves the live view and appears in archived', () => {
+    const { model, calls } = makeArchiveHarness([makeNode({ id: 'done-1', state: 'done' })]);
+    const panel = new FleetPanel(model);
+    panel.render(100, 24); // materialize selection
+
+    panel.handleInput('a');
+    expect(calls.archive).toEqual(['done-1']);
+    const liveText = linesText(panel.render(100, 24));
+    expect(liveText).not.toContain('done-1');
+
+    panel.handleInput('v');
+    const archivedText = linesText(panel.render(100, 24));
+    expect(archivedText).toContain('done-1');
+  });
+
+  test('a on a RUNNING node refuses with an honest message and archives nothing', () => {
+    const { model, calls } = makeArchiveHarness([makeNode({ id: 'busy-1', state: 'executing-tool' })]);
+    const panel = new FleetPanel(model);
+    panel.render(100, 24);
+
+    panel.handleInput('a');
+    expect(calls.archive).toHaveLength(0);
+    const text = linesText(panel.render(100, 24));
+    expect(text).toContain('Only finished processes can be archived');
+  });
+
+  test('A calls archiveFinished from the live view', () => {
+    const { model, calls } = makeArchiveHarness([makeNode({ id: 'done-1', state: 'done' })]);
+    const panel = new FleetPanel(model);
+    panel.render(100, 24);
+
+    panel.handleInput('A');
+    expect(calls.archiveFinished).toBe(1);
+  });
+
+  test('a in the archived view restores the selected node', () => {
+    const { model, calls } = makeArchiveHarness([], [makeNode({ id: 'old-1', state: 'done' })]);
+    const panel = new FleetPanel(model);
+    panel.handleInput('v');
+    panel.render(100, 24);
+
+    panel.handleInput('a');
+    expect(calls.unarchive).toEqual(['old-1']);
   });
 });

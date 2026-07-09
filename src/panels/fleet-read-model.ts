@@ -29,6 +29,7 @@
 // ---------------------------------------------------------------------------
 
 import type {
+  ArchivableProcessRegistry,
   ProcessCostState,
   ProcessKind,
   ProcessNode,
@@ -459,10 +460,23 @@ export interface FleetReadModel {
    * the steer()/steerable degrade-without-a-dep convention.
    */
   subscribeConsumed(listener: (event: SteerConsumedEvent) => void): () => void;
+  /** Rows snapshot of ARCHIVED subtrees (empty when the runtime has no archive layer). */
+  getArchivedSnapshot(): FleetSnapshot;
+  /** Move a finished subtree to the session archive. Honest refusal reason when it cannot be. */
+  archive(id: string): { readonly archived: boolean; readonly count: number; readonly reason?: string };
+  /** Archive every fully-finished root subtree. Returns the number of nodes archived. */
+  archiveFinished(): number;
+  /** Return an archived subtree to the live view. Returns the number of nodes restored. */
+  unarchive(id: string): number;
 }
 
-/** Narrow surface of ProcessRegistry this read-model depends on. */
-export type FleetRegistryLike = Pick<ProcessRegistry, 'query' | 'subscribe' | 'interrupt' | 'resume' | 'kill' | 'steer'>;
+/**
+ * Narrow surface of ProcessRegistry this read-model depends on. The archive
+ * methods are optional: a runtime whose registry lacks the archive layer
+ * (or a bare test double) degrades to "no archive" instead of crashing.
+ */
+export type FleetRegistryLike = Pick<ProcessRegistry, 'query' | 'subscribe' | 'interrupt' | 'resume' | 'kill' | 'steer'>
+  & Partial<Pick<ArchivableProcessRegistry, 'archive' | 'archiveFinished' | 'unarchive' | 'listArchived'>>;
 
 /**
  * Create a live FleetReadModel backed by the SDK's ProcessRegistry.
@@ -503,6 +517,21 @@ export function createFleetReadModel(
         }
       });
     },
+    getArchivedSnapshot(): FleetSnapshot {
+      if (!registry.listArchived) return buildFleetSnapshot([]);
+      const snapshot = registry.listArchived();
+      return buildFleetSnapshot(snapshot.nodes, snapshot.capturedAt);
+    },
+    archive(id: string) {
+      if (!registry.archive) return { archived: false, count: 0, reason: 'this runtime has no fleet archive' };
+      return registry.archive(id);
+    },
+    archiveFinished(): number {
+      return registry.archiveFinished?.() ?? 0;
+    },
+    unarchive(id: string): number {
+      return registry.unarchive?.(id) ?? 0;
+    },
   };
 }
 
@@ -516,5 +545,9 @@ export function createStaticFleetReadModel(snapshot: FleetSnapshot): FleetReadMo
     kill: () => [],
     steer: () => ({ queued: false, reason: 'no live registry' }),
     subscribeConsumed: () => () => {},
+    getArchivedSnapshot: () => buildFleetSnapshot([]),
+    archive: () => ({ archived: false, count: 0, reason: 'no live registry' }),
+    archiveFinished: () => 0,
+    unarchive: () => 0,
   };
 }
