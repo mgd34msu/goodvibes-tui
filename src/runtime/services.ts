@@ -4,7 +4,7 @@ import { ConfigManager, ServiceRegistry, SubscriptionManager, ToolLLM } from '@p
 import { SecretsManager } from '../config/secrets.ts';
 import { AutomationDeliveryManager, AutomationManager, AutomationRouteStore } from '@pellux/goodvibes-sdk/platform/automation';
 import { ChannelDeliveryRouter, ChannelPluginRegistry, ChannelPolicyManager, RouteBindingManager, SurfaceRegistry } from '@pellux/goodvibes-sdk/platform/channels';
-import { ApprovalBroker, GatewayMethodCatalog, SharedSessionBroker } from '@pellux/goodvibes-sdk/platform/control-plane';
+import { ApprovalBroker, GatewayMethodCatalog, SharedSessionBroker, registerGatewayVerbGroups } from '@pellux/goodvibes-sdk/platform/control-plane';
 import { WatcherRegistry } from '@pellux/goodvibes-sdk/platform/watchers';
 import { ArtifactStore } from '@pellux/goodvibes-sdk/platform/artifacts';
 import {
@@ -645,6 +645,23 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
   // commands (checkpoint-runtime.ts) are what actually catch and report the
   // failure to the user, on first use.
   void workspaceCheckpointManager.init().catch(() => {});
+
+  // Attach handlers for every ws-only gateway verb group (fleet.* including
+  // the archive verbs, checkpoints.*, sessions.search, push.*). Without this
+  // call the catalog carries descriptors but no handlers, and the daemon this
+  // runtime vendors answers every one of those verbs with
+  // 501 "Gateway method is not invokable" — which is exactly what shipped for
+  // every daemon build before this line existed (found by the companion app
+  // against the 1.13.0 daemon). Mirrors the SDK runtime's own composition
+  // root (goodvibes-sdk platform/runtime/services.ts).
+  registerGatewayVerbGroups(gatewayMethods, {
+    processRegistry,
+    workspaceCheckpointManager,
+    sessionBroker,
+    secretsManager,
+    approvalBroker,
+    shellPaths,
+  });
   const integrationHelpers = new IntegrationHelperService({
     workingDirectory,
     homeDirectory,
