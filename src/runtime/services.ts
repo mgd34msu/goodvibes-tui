@@ -4,7 +4,8 @@ import { ConfigManager, ServiceRegistry, SubscriptionManager, ToolLLM } from '@p
 import { SecretsManager } from '../config/secrets.ts';
 import { AutomationDeliveryManager, AutomationManager, AutomationRouteStore } from '@pellux/goodvibes-sdk/platform/automation';
 import { ChannelDeliveryRouter, ChannelPluginRegistry, ChannelPolicyManager, RouteBindingManager, SurfaceRegistry } from '@pellux/goodvibes-sdk/platform/channels';
-import { ApprovalBroker, GatewayMethodCatalog, SharedSessionBroker, registerGatewayVerbGroups } from '@pellux/goodvibes-sdk/platform/control-plane';
+import { ApprovalBroker, GatewayMethodCatalog, SharedSessionBroker } from '@pellux/goodvibes-sdk/platform/control-plane';
+import { attachWsOnlyGatewayVerbHandlers, createArchivableFleetRegistry } from './gateway-verbs.ts';
 import { WatcherRegistry } from '@pellux/goodvibes-sdk/platform/watchers';
 import { ArtifactStore } from '@pellux/goodvibes-sdk/platform/artifacts';
 import {
@@ -56,7 +57,7 @@ import { isFeatureFlagEnabled } from './surface-feature-flags.ts';
 import type { FeatureFlagManager } from '@/runtime/index.ts';
 import { createFeatureFlagManager } from '@/runtime/index.ts';
 import { PolicyRuntimeState } from '@/runtime/index.ts';
-import { createProcessRegistry, withFleetArchive, type ArchivableProcessRegistry } from '@pellux/goodvibes-sdk/platform/runtime/fleet';
+import { type ArchivableProcessRegistry } from '@pellux/goodvibes-sdk/platform/runtime/fleet';
 import { calcSessionCost, isModelPriced } from '../export/cost-utils.ts';
 import { createWorkstreamServices, type OrchestrationEngine, type WorkstreamCommandService } from './workstream-services.ts';
 import { codeIndexDbPath, createCodeIndexServices, isCodeInjectionSettingEnabled } from './code-index-services.ts';
@@ -605,11 +606,8 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
   // code-index-services.ts's header doc.
   const { codeIndexStore, codeIndexReindexScheduler } = createCodeIndexServices({ workingDirectory, configManager, memoryEmbeddingRegistry });
   const codeInjectionOrchestratorDeps = { codeIndex: codeIndexStore, isCodeInjectionSettingEnabled: () => isCodeInjectionSettingEnabled(configManager), codeIndexReindexScheduler }; // Code-injection seam (agent here; main via orchestrator-core-services.ts)
-  // W2.1/W2.2: one shared process registry aggregating the managers above —
-  // the Fleet panel (panels/fleet-read-model.ts) is its first consumer.
-  // Constructed once here (not per-consumer) so the coalesced tick and the
-  // agent-activity side-table are shared, not duplicated.
-  const processRegistry = withFleetArchive(createProcessRegistry({
+  // Shared, archive-aware fleet registry — see gateway-verbs.ts's factory doc.
+  const processRegistry = createArchivableFleetRegistry({
     agentManager,
     wrfcController,
     orchestrationEngine, // Folds workstream/phase/work-item nodes into the fleet
@@ -628,7 +626,7 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
       if (!isModelPriced(modelId)) return null;
       return calcSessionCost(usage.inputTokens, usage.outputTokens, usage.cacheReadTokens, usage.cacheWriteTokens, modelId);
     },
-  }));
+  });
   const modeManager = new ModeManager();
   const fileUndoManager = new FileUndoManager();
   const workspaceCheckpointManager = new WorkspaceCheckpointManager({
@@ -646,22 +644,8 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
   // failure to the user, on first use.
   void workspaceCheckpointManager.init().catch(() => {});
 
-  // Attach handlers for every ws-only gateway verb group (fleet.* including
-  // the archive verbs, checkpoints.*, sessions.search, push.*). Without this
-  // call the catalog carries descriptors but no handlers, and the daemon this
-  // runtime vendors answers every one of those verbs with
-  // 501 "Gateway method is not invokable" — which is exactly what shipped for
-  // every daemon build before this line existed (found by the companion app
-  // against the 1.13.0 daemon). Mirrors the SDK runtime's own composition
-  // root (goodvibes-sdk platform/runtime/services.ts).
-  registerGatewayVerbGroups(gatewayMethods, {
-    processRegistry,
-    workspaceCheckpointManager,
-    sessionBroker,
-    secretsManager,
-    approvalBroker,
-    shellPaths,
-  });
+  // ws-only verbs (fleet/checkpoints/search/push) 501 without this — see gateway-verbs.ts.
+  attachWsOnlyGatewayVerbHandlers(gatewayMethods, { processRegistry, workspaceCheckpointManager, sessionBroker, secretsManager, approvalBroker, shellPaths });
   const integrationHelpers = new IntegrationHelperService({
     workingDirectory,
     homeDirectory,
