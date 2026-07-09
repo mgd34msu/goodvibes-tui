@@ -4,6 +4,13 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [1.13.0] — 2026-07-09
+
+### Changes
+- c3a54b1b fix: clean terminal restore on exit; feat: /resume session picker
+- f29e97ff chore: pin @pellux/goodvibes-sdk 1.6.1 — compact-and-retry on provider context rejections, learned context ceilings, fleet archive, deliver-once replays
+- d320ca15 feat: fleet archive view + learned context-limit display
+
 ## [1.12.0] — 2026-07-08
 
 ### Changes
