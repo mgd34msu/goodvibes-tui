@@ -52,6 +52,14 @@ export interface RenderScheduler {
 export function createRenderScheduler(
   renderNow: () => void,
   scheduleFlush: (flush: () => void) => void = queueMicrotask,
+  /**
+   * When provided and returning true, every composite path becomes a no-op.
+   * Wired to process-lifecycle's isTerminalRestored(): once the exit teardown
+   * has handed the terminal back to the shell, a late frame (async shutdown
+   * races, stray timers) would paint cursor-positioned content over the
+   * user's primary screen and strand the next prompt mid-screen.
+   */
+  isReleased: () => boolean = () => false,
 ): RenderScheduler {
   let scheduled = false;
 
@@ -61,6 +69,7 @@ export function createRenderScheduler(
     // tick never composites twice.
     if (!scheduled) return;
     scheduled = false;
+    if (isReleased()) return;
     renderNow();
   };
 
@@ -73,6 +82,7 @@ export function createRenderScheduler(
   const flushNow = (): void => {
     // Satisfy any pending coalesced flush, then composite synchronously.
     scheduled = false;
+    if (isReleased()) return;
     renderNow();
   };
 

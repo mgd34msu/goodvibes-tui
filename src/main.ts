@@ -422,11 +422,6 @@ async function main() {
   };
 
   const renderNow = () => {
-    // Once the terminal is restored (exit/crash/signal teardown), the user's
-    // primary screen is back — a late frame here (async shutdown races, stray
-    // timers) would paint cursor-positioned content over shell scrollback and
-    // strand the next prompt mid-screen. Hard-stop every composite path.
-    if (lifecycle.isTerminalRestored()) return;
     const width = stdout.columns || 80;
     const height = stdout.rows || 24;
 
@@ -648,11 +643,11 @@ async function main() {
       panelWidth: panelComposite.panelWidth,
     });
   };
-  const renderScheduler = createRenderScheduler(renderNow); // WO-208 same-tick coalescer
+  const renderScheduler = createRenderScheduler(renderNow, undefined, () => lifecycle.isTerminalRestored()); // WO-208 coalescer; no frames after terminal restore
   const render = (): void => renderScheduler.schedule(); // captured direct writes → activity log + quiet /debug counter, not repeated transcript lines (UX-B 1a)
   const terminalOutputGuard = installTuiTerminalOutputGuard({ stdout, stderr: process.stderr, onCapture: (total) => { commandContext.session.runtime.terminalWritesIntercepted = total; render(); } });
 
-  setRenderRequest(renderNow); // bootstrap's 16ms coalescer calls the composite directly
+  setRenderRequest(() => renderScheduler.flushNow()); // bootstrap's 16ms coalescer composites via the (restore-gated) scheduler
   setPanelFrameRequester(render); // live panels repaint when idle (a replay finding: fleet sat stale until keypress)
   orchestratorRefs.requestRender = render;
   commandContext.renderRequest = render;
