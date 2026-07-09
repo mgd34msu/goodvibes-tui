@@ -63,6 +63,13 @@ export interface ProcessLifecycleDeps {
 export interface ProcessLifecycleHandlers {
   readonly exitApp: () => Promise<void>;
   readonly restoreTerminal: () => void;
+  /**
+   * True once restoreTerminal has run. The compositor must never write another
+   * frame after this: the terminal is back on the user's primary screen, and a
+   * late cursor-positioned frame (async shutdown races, stray timers) would
+   * paint over shell content and strand the prompt mid-screen.
+   */
+  readonly isTerminalRestored: () => boolean;
   readonly resizeHandler: () => void;
   readonly sigintHandler: () => void;
   readonly unhandledRejectionHandler: (reason: unknown) => void;
@@ -129,8 +136,20 @@ export function installProcessLifecycle(deps: ProcessLifecycleDeps): ProcessLife
   const restoreTerminal = (): void => {
     if (terminalRestored) return;
     terminalRestored = true;
-    const exitScreen = noAltScreen ? ansi.CLEAR_SCREEN : ansi.CLEAR_SCREEN + ansi.ALT_SCREEN_EXIT;
-    allowTerminalWrite(() => stdout.write(ansi.PASTE_DISABLE + ansi.KEYBOARD_EXT_DISABLE + ansi.MOUSE_DISABLE + ansi.FOCUS_DISABLE + ansi.CURSOR_SHOW + exitScreen));
+    // Alt-screen path: just leave the alt screen — 1049l restores the primary
+    // screen and cursor exactly as they were at launch. Clearing first is
+    // pointless (the alt screen is discarded) and actively harmful: the old
+    // CLEAR_SCREEN included ESC[3J, which wipes the PRIMARY scrollback on
+    // several emulators even when issued from the alt screen.
+    // No-alt path: the compositor painted over the primary screen, so clear
+    // the viewport and home the cursor — but WITHOUT 3J, the user's scrollback
+    // is theirs. CURSOR_SHOW goes AFTER the screen switch so visibility
+    // applies to the screen the shell prompt lands on.
+    const exitScreen = noAltScreen ? '\x1b[2J\x1b[H' : ansi.ALT_SCREEN_EXIT;
+    allowTerminalWrite(() => stdout.write(
+      ansi.PASTE_DISABLE + ansi.KEYBOARD_EXT_DISABLE + ansi.MOUSE_DISABLE + ansi.FOCUS_DISABLE
+      + exitScreen + ansi.CURSOR_SHOW,
+    ));
     getTerminalOutputGuard().dispose();
     try { stdin.setRawMode(false); } catch { /* stdin may not be a TTY */ }
   };
@@ -201,6 +220,7 @@ export function installProcessLifecycle(deps: ProcessLifecycleDeps): ProcessLife
   return {
     exitApp,
     restoreTerminal,
+    isTerminalRestored: () => terminalRestored,
     resizeHandler,
     sigintHandler,
     unhandledRejectionHandler,

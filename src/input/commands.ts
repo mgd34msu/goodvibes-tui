@@ -2,7 +2,7 @@ import type { CommandRegistry } from './command-registry.ts';
 import { policyCommand } from './commands/policy.ts';
 import { providerCommand } from './commands/provider.ts';
 import { evalCommand } from './commands/eval.ts';
-import { sessionCommand } from './commands/session.ts';
+import { sessionCommand, resumeCommand } from './commands/session.ts';
 import { recallCommand } from './commands/memory.ts';
 import { knowledgeCommand } from './commands/knowledge.ts';
 import { registerShellCoreCommands } from './commands/shell-core.ts';
@@ -139,6 +139,9 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
 
   // ── /session ─────────────────────────────────────────────────────────────
   registry.register(sessionCommand);
+
+  // ── /resume — the discoverable front door to /session resume ─────────────
+  registry.register(resumeCommand);
 
   // ── /recall ──────────────────────────────────────────────────────────────
   registry.register(recallCommand);

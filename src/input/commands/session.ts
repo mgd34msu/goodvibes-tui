@@ -21,7 +21,7 @@ import type { SlashCommand, CommandContext } from '../command-registry.ts';
 import type { CancellationScope, CrossSessionTaskRef } from '@pellux/goodvibes-sdk/platform/sessions';
 import { VALID_SCOPES } from '@pellux/goodvibes-sdk/platform/sessions';
 import { handleSessionWorkflowCommand } from './session-workflow.ts';
-import { requireSessionOrchestration } from './runtime-services.ts';
+import { requireSessionOrchestration, requireSessionManager } from './runtime-services.ts';
 
 // ── Argument parsing helpers ──────────────────────────────────────────────────
 
@@ -421,5 +421,50 @@ export const sessionCommand: SlashCommand = {
         break;
       }
     }
+  },
+};
+
+/**
+ * /resume — the discoverable front door to session resume.
+ *
+ * `/session resume <id>` has always existed but is buried behind a
+ * subcommand nobody remembers mid-context-switch. `/resume` with no
+ * arguments opens a picker over saved sessions (newest first, current
+ * session excluded); with an argument it resumes directly via the exact
+ * same workflow path (journal replay, model reselection, return-context
+ * reveal included).
+ */
+export const resumeCommand: SlashCommand = {
+  name: 'resume',
+  aliases: [],
+  description: 'Resume a previous session — pick from a list, or pass an id/name',
+  usage: '[session-id-or-name]',
+  argsHint: '[id|name]',
+  handler: async (args: string[], ctx: CommandContext): Promise<void> => {
+    if (args.length > 0 && args.join(' ').trim().length > 0) {
+      await handleSessionWorkflowCommand(['resume', ...args], ctx);
+      return;
+    }
+    const sm = requireSessionManager(ctx);
+    const sessions = sm.list().filter((s) => s.name !== ctx.session.runtime.sessionId);
+    if (sessions.length === 0) {
+      ctx.print('No previous sessions to resume yet. /session save [name] stores the current one explicitly.');
+      return;
+    }
+    if (!ctx.openSelection) {
+      // Headless/test surface without the picker: honest fallback to the list.
+      await handleSessionWorkflowCommand(['list'], ctx);
+      ctx.print('Resume one with: /resume <id-or-name>');
+      return;
+    }
+    const items = sessions.map((s) => ({
+      id: s.name,
+      label: s.title || s.name,
+      detail: `${new Date(s.timestamp).toLocaleString()} · ${s.messageCount} msg${s.messageCount === 1 ? '' : 's'}${s.model ? ` · ${s.model}` : ''} · ${s.name}`,
+    }));
+    ctx.openSelection('Resume session', items, { allowSearch: true, primaryVerbLabel: 'Resume' }, (result) => {
+      if (!result) return;
+      void handleSessionWorkflowCommand(['resume', result.item.id], ctx);
+    });
   },
 };
