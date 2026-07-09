@@ -4,6 +4,11 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [1.13.1] — 2026-07-09
+
+### Changes
+- 9dbd88e4 fix(daemon): attach handlers for every ws-only gateway verb — fleet.*, checkpoints.*, sessions.search, push.* were 501 on every vendored daemon build
+
 ## [1.13.0] — 2026-07-09
 
 ### Changes
