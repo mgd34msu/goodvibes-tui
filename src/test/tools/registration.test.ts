@@ -56,10 +56,17 @@ function registerTools(registry: ToolRegistry): void {
 }
 
 describe('registerAllTools', () => {
-  test('registers exactly 25 tools', () => {
+  test('registers exactly 26 tools', () => {
     const registry = new ToolRegistry();
     registerTools(registry);
-    expect(registry.list()).toHaveLength(25);
+    expect(registry.list()).toHaveLength(26);
+  });
+
+  test('registers a tool named "repo_map"', () => {
+    // Added by the SDK 1.6.1 tool surface (structure-aware repository map).
+    const registry = new ToolRegistry();
+    registerTools(registry);
+    expect(registry.has('repo_map')).toBe(true);
   });
 
   test('registers a tool named "read"', () => {

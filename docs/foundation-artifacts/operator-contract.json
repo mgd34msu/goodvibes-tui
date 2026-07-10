@@ -27557,6 +27557,25 @@
                     ],
                     "additionalProperties": false
                   },
+                  "needsAttention": {
+                    "type": "object",
+                    "properties": {
+                      "reason": {
+                        "type": "string",
+                        "enum": [
+                          "approval",
+                          "input"
+                        ]
+                      },
+                      "detail": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "reason"
+                    ],
+                    "additionalProperties": false
+                  },
                   "sessionRef": {
                     "type": "object",
                     "properties": {
@@ -27843,6 +27862,25 @@
                     ],
                     "additionalProperties": false
                   },
+                  "needsAttention": {
+                    "type": "object",
+                    "properties": {
+                      "reason": {
+                        "type": "string",
+                        "enum": [
+                          "approval",
+                          "input"
+                        ]
+                      },
+                      "detail": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "reason"
+                    ],
+                    "additionalProperties": false
+                  },
                   "sessionRef": {
                     "type": "object",
                     "properties": {
@@ -28088,6 +28126,25 @@
                       "pausable",
                       "resumable",
                       "steerable"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "needsAttention": {
+                    "type": "object",
+                    "properties": {
+                      "reason": {
+                        "type": "string",
+                        "enum": [
+                          "approval",
+                          "input"
+                        ]
+                      },
+                      "detail": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "reason"
                     ],
                     "additionalProperties": false
                   },
@@ -83153,6 +83210,54 @@
         }
       },
       {
+        "id": "runtime.fleet",
+        "title": "fleet Domain Events",
+        "description": "Live process-registry node lifecycle events (started, state-changed, finished, blocked-on-user, unblocked) — the poll-free counterpart to fleet.snapshot.",
+        "category": "runtime-domain",
+        "source": "builtin",
+        "transport": [
+          "sse",
+          "ws"
+        ],
+        "scopes": [
+          "read:events"
+        ],
+        "domains": [
+          "fleet"
+        ],
+        "wireEvents": [
+          "fleet"
+        ],
+        "outputSchema": {
+          "type": "object",
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "$.operator.events[6].outputSchema"
+              },
+              {
+                "type": "array",
+                "items": {
+                  "$ref": "$.operator.events[6].outputSchema.additionalProperties"
+                }
+              }
+            ]
+          }
+        }
+      },
+      {
         "id": "runtime.forensics",
         "title": "forensics Domain Events",
         "description": "Forensics and incident trail events.",
@@ -83188,12 +83293,12 @@
                 "type": "null"
               },
               {
-                "$ref": "$.operator.events[6].outputSchema"
+                "$ref": "$.operator.events[7].outputSchema"
               },
               {
                 "type": "array",
                 "items": {
-                  "$ref": "$.operator.events[6].outputSchema.additionalProperties"
+                  "$ref": "$.operator.events[7].outputSchema.additionalProperties"
                 }
               }
             ]
@@ -83236,12 +83341,12 @@
                 "type": "null"
               },
               {
-                "$ref": "$.operator.events[7].outputSchema"
+                "$ref": "$.operator.events[8].outputSchema"
               },
               {
                 "type": "array",
                 "items": {
-                  "$ref": "$.operator.events[7].outputSchema.additionalProperties"
+                  "$ref": "$.operator.events[8].outputSchema.additionalProperties"
                 }
               }
             ]
@@ -83284,12 +83389,12 @@
                 "type": "null"
               },
               {
-                "$ref": "$.operator.events[8].outputSchema"
+                "$ref": "$.operator.events[9].outputSchema"
               },
               {
                 "type": "array",
                 "items": {
-                  "$ref": "$.operator.events[8].outputSchema.additionalProperties"
+                  "$ref": "$.operator.events[9].outputSchema.additionalProperties"
                 }
               }
             ]
@@ -83332,12 +83437,12 @@
                 "type": "null"
               },
               {
-                "$ref": "$.operator.events[9].outputSchema"
+                "$ref": "$.operator.events[10].outputSchema"
               },
               {
                 "type": "array",
                 "items": {
-                  "$ref": "$.operator.events[9].outputSchema.additionalProperties"
+                  "$ref": "$.operator.events[10].outputSchema.additionalProperties"
                 }
               }
             ]
@@ -83380,12 +83485,12 @@
                 "type": "null"
               },
               {
-                "$ref": "$.operator.events[10].outputSchema"
+                "$ref": "$.operator.events[11].outputSchema"
               },
               {
                 "type": "array",
                 "items": {
-                  "$ref": "$.operator.events[10].outputSchema.additionalProperties"
+                  "$ref": "$.operator.events[11].outputSchema.additionalProperties"
                 }
               }
             ]
@@ -83428,12 +83533,12 @@
                 "type": "null"
               },
               {
-                "$ref": "$.operator.events[11].outputSchema"
+                "$ref": "$.operator.events[12].outputSchema"
               },
               {
                 "type": "array",
                 "items": {
-                  "$ref": "$.operator.events[11].outputSchema.additionalProperties"
+                  "$ref": "$.operator.events[12].outputSchema.additionalProperties"
                 }
               }
             ]
@@ -83476,12 +83581,12 @@
                 "type": "null"
               },
               {
-                "$ref": "$.operator.events[12].outputSchema"
+                "$ref": "$.operator.events[13].outputSchema"
               },
               {
                 "type": "array",
                 "items": {
-                  "$ref": "$.operator.events[12].outputSchema.additionalProperties"
+                  "$ref": "$.operator.events[13].outputSchema.additionalProperties"
                 }
               }
             ]
@@ -83524,12 +83629,12 @@
                 "type": "null"
               },
               {
-                "$ref": "$.operator.events[13].outputSchema"
+                "$ref": "$.operator.events[14].outputSchema"
               },
               {
                 "type": "array",
                 "items": {
-                  "$ref": "$.operator.events[13].outputSchema.additionalProperties"
+                  "$ref": "$.operator.events[14].outputSchema.additionalProperties"
                 }
               }
             ]
@@ -83572,12 +83677,12 @@
                 "type": "null"
               },
               {
-                "$ref": "$.operator.events[14].outputSchema"
+                "$ref": "$.operator.events[15].outputSchema"
               },
               {
                 "type": "array",
                 "items": {
-                  "$ref": "$.operator.events[14].outputSchema.additionalProperties"
+                  "$ref": "$.operator.events[15].outputSchema.additionalProperties"
                 }
               }
             ]
@@ -83620,12 +83725,12 @@
                 "type": "null"
               },
               {
-                "$ref": "$.operator.events[15].outputSchema"
+                "$ref": "$.operator.events[16].outputSchema"
               },
               {
                 "type": "array",
                 "items": {
-                  "$ref": "$.operator.events[15].outputSchema.additionalProperties"
+                  "$ref": "$.operator.events[16].outputSchema.additionalProperties"
                 }
               }
             ]
@@ -83668,12 +83773,12 @@
                 "type": "null"
               },
               {
-                "$ref": "$.operator.events[16].outputSchema"
+                "$ref": "$.operator.events[17].outputSchema"
               },
               {
                 "type": "array",
                 "items": {
-                  "$ref": "$.operator.events[16].outputSchema.additionalProperties"
+                  "$ref": "$.operator.events[17].outputSchema.additionalProperties"
                 }
               }
             ]
@@ -83716,12 +83821,12 @@
                 "type": "null"
               },
               {
-                "$ref": "$.operator.events[17].outputSchema"
+                "$ref": "$.operator.events[18].outputSchema"
               },
               {
                 "type": "array",
                 "items": {
-                  "$ref": "$.operator.events[17].outputSchema.additionalProperties"
+                  "$ref": "$.operator.events[18].outputSchema.additionalProperties"
                 }
               }
             ]
@@ -83764,12 +83869,12 @@
                 "type": "null"
               },
               {
-                "$ref": "$.operator.events[18].outputSchema"
+                "$ref": "$.operator.events[19].outputSchema"
               },
               {
                 "type": "array",
                 "items": {
-                  "$ref": "$.operator.events[18].outputSchema.additionalProperties"
+                  "$ref": "$.operator.events[19].outputSchema.additionalProperties"
                 }
               }
             ]
@@ -83812,12 +83917,12 @@
                 "type": "null"
               },
               {
-                "$ref": "$.operator.events[19].outputSchema"
+                "$ref": "$.operator.events[20].outputSchema"
               },
               {
                 "type": "array",
                 "items": {
-                  "$ref": "$.operator.events[19].outputSchema.additionalProperties"
+                  "$ref": "$.operator.events[20].outputSchema.additionalProperties"
                 }
               }
             ]
@@ -83860,12 +83965,12 @@
                 "type": "null"
               },
               {
-                "$ref": "$.operator.events[20].outputSchema"
+                "$ref": "$.operator.events[21].outputSchema"
               },
               {
                 "type": "array",
                 "items": {
-                  "$ref": "$.operator.events[20].outputSchema.additionalProperties"
+                  "$ref": "$.operator.events[21].outputSchema.additionalProperties"
                 }
               }
             ]
@@ -83908,12 +84013,12 @@
                 "type": "null"
               },
               {
-                "$ref": "$.operator.events[21].outputSchema"
+                "$ref": "$.operator.events[22].outputSchema"
               },
               {
                 "type": "array",
                 "items": {
-                  "$ref": "$.operator.events[21].outputSchema.additionalProperties"
+                  "$ref": "$.operator.events[22].outputSchema.additionalProperties"
                 }
               }
             ]
@@ -83956,12 +84061,12 @@
                 "type": "null"
               },
               {
-                "$ref": "$.operator.events[22].outputSchema"
+                "$ref": "$.operator.events[23].outputSchema"
               },
               {
                 "type": "array",
                 "items": {
-                  "$ref": "$.operator.events[22].outputSchema.additionalProperties"
+                  "$ref": "$.operator.events[23].outputSchema.additionalProperties"
                 }
               }
             ]
@@ -84004,12 +84109,12 @@
                 "type": "null"
               },
               {
-                "$ref": "$.operator.events[23].outputSchema"
+                "$ref": "$.operator.events[24].outputSchema"
               },
               {
                 "type": "array",
                 "items": {
-                  "$ref": "$.operator.events[23].outputSchema.additionalProperties"
+                  "$ref": "$.operator.events[24].outputSchema.additionalProperties"
                 }
               }
             ]
@@ -84052,12 +84157,12 @@
                 "type": "null"
               },
               {
-                "$ref": "$.operator.events[24].outputSchema"
+                "$ref": "$.operator.events[25].outputSchema"
               },
               {
                 "type": "array",
                 "items": {
-                  "$ref": "$.operator.events[24].outputSchema.additionalProperties"
+                  "$ref": "$.operator.events[25].outputSchema.additionalProperties"
                 }
               }
             ]
@@ -84100,12 +84205,12 @@
                 "type": "null"
               },
               {
-                "$ref": "$.operator.events[25].outputSchema"
+                "$ref": "$.operator.events[26].outputSchema"
               },
               {
                 "type": "array",
                 "items": {
-                  "$ref": "$.operator.events[25].outputSchema.additionalProperties"
+                  "$ref": "$.operator.events[26].outputSchema.additionalProperties"
                 }
               }
             ]
@@ -84148,12 +84253,12 @@
                 "type": "null"
               },
               {
-                "$ref": "$.operator.events[26].outputSchema"
+                "$ref": "$.operator.events[27].outputSchema"
               },
               {
                 "type": "array",
                 "items": {
-                  "$ref": "$.operator.events[26].outputSchema.additionalProperties"
+                  "$ref": "$.operator.events[27].outputSchema.additionalProperties"
                 }
               }
             ]
@@ -84294,12 +84399,12 @@
                     "type": "null"
                   },
                   {
-                    "$ref": "$.operator.events[29].outputSchema.properties.payload"
+                    "$ref": "$.operator.events[30].outputSchema.properties.payload"
                   },
                   {
                     "type": "array",
                     "items": {
-                      "$ref": "$.operator.events[29].outputSchema.properties.payload.additionalProperties"
+                      "$ref": "$.operator.events[30].outputSchema.properties.payload.additionalProperties"
                     }
                   }
                 ]
@@ -84441,13 +84546,13 @@
                         {
                           "type": "object",
                           "additionalProperties": {
-                            "$ref": "$.operator.events[30].outputSchema.properties.attachments.items.properties.metadata.additionalProperties"
+                            "$ref": "$.operator.events[31].outputSchema.properties.attachments.items.properties.metadata.additionalProperties"
                           }
                         },
                         {
                           "type": "array",
                           "items": {
-                            "$ref": "$.operator.events[30].outputSchema.properties.attachments.items.properties.metadata.additionalProperties"
+                            "$ref": "$.operator.events[31].outputSchema.properties.attachments.items.properties.metadata.additionalProperties"
                           }
                         }
                       ]
@@ -84487,13 +84592,13 @@
                   {
                     "type": "object",
                     "additionalProperties": {
-                      "$ref": "$.operator.events[30].outputSchema.properties.metadata.additionalProperties"
+                      "$ref": "$.operator.events[31].outputSchema.properties.metadata.additionalProperties"
                     }
                   },
                   {
                     "type": "array",
                     "items": {
-                      "$ref": "$.operator.events[30].outputSchema.properties.metadata.additionalProperties"
+                      "$ref": "$.operator.events[31].outputSchema.properties.metadata.additionalProperties"
                     }
                   }
                 ]
@@ -84519,9 +84624,9 @@
       "genericOutputs": 0
     },
     "eventCoverage": {
-      "events": 31,
-      "withDomains": 27,
-      "withWireEvents": 31
+      "events": 32,
+      "withDomains": 28,
+      "withWireEvents": 32
     },
     "validationCoverage": {
       "methods": 334,
