@@ -585,19 +585,21 @@ export function refreshEntryValues(
 ): void {
   for (const entries of groups.values()) {
     for (const entry of entries) {
-      // The worktree.setup.* keys read through a defensive helper: their
-      // config section ('worktree') isn't in DEFAULT_CONFIG as of the SDK
-      // 1.6.1 repack, so a plain configManager.get throws — which would
-      // otherwise crash this refresh for EVERY setting change, not just
-      // edits to these two keys (see worktree-setup-config.ts).
+      // The worktree.setup.* keys read through a defensive helper. The SDK now
+      // registers the 'worktree' section in DEFAULT_CONFIG, so a plain
+      // configManager.get returns the empty default rather than throwing; the
+      // helper's guard (belt-and-suspenders for an older SDK) keeps this
+      // refresh from crashing for EVERY setting change if the section is ever
+      // absent (see worktree-setup-config.ts).
       if (isWorktreeSetupListConfigKey(entry.setting.key)) {
         entry.currentValue = readWorktreeSetupList(configManager, entry.setting.key);
         entry.isDefault = (entry.currentValue as string[]).length === 0;
         continue;
       }
-      // Same 'section not in DEFAULT_CONFIG' trap as worktree.setup.* above:
-      // 'learning' has no DEFAULT_CONFIG entry, so a plain configManager.get
-      // throws for all nine learning.consolidation.* keys. Re-derive through
+      // The 'section not in DEFAULT_CONFIG' trap the worktree.setup.* guard
+      // above defends against still applies here: 'learning' has no
+      // DEFAULT_CONFIG entry, so a plain configManager.get throws for all nine
+      // learning.consolidation.* keys. Re-derive through
       // the SDK's own resolver (reads getRaw(), never throws for an absent
       // section) instead.
       if (isMemoryConsolidationConfigKey(entry.setting.key)) {
