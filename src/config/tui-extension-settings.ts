@@ -38,6 +38,45 @@ function readPositiveInt(src: RawRecord, key: string): number | undefined {
   return Math.floor(value);
 }
 
+function readNonEmptyString(src: RawRecord, key: string): string | undefined {
+  const value = src[key];
+  if (typeof value !== 'string') return undefined;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+}
+
+// ─── statusline.* — scriptable status line ───────────────────────────────────
+
+/**
+ * User-settable scriptable status line. When `command` is present it is run as
+ * a POSIX shell command at each turn boundary and its first stdout line renders
+ * in the status area. `timeoutMs` bounds each run.
+ */
+export interface StatuslineSettings {
+  /** Shell command whose first stdout line renders in the status area. Absent/empty disables the feature. */
+  readonly command?: string;
+  /** Per-run timeout in milliseconds. Defaults to 2000; clamped to [100, 15000]. */
+  readonly timeoutMs?: number;
+}
+
+export const STATUSLINE_DEFAULT_TIMEOUT_MS = 2000;
+const STATUSLINE_MIN_TIMEOUT_MS = 100;
+const STATUSLINE_MAX_TIMEOUT_MS = 15_000;
+
+/** Read `statusline.*` from settings.json, validating and clamping the timeout. */
+export function readStatuslineSettings(configManager: Pick<ConfigManager, 'getRaw'>): StatuslineSettings {
+  const src = readNamespace(configManager, 'statusline');
+  if (!src) return {};
+  const out: { command?: string; timeoutMs?: number } = {};
+  const command = readNonEmptyString(src, 'command');
+  if (command !== undefined) out.command = command;
+  const timeoutMs = readPositiveInt(src, 'timeoutMs');
+  if (timeoutMs !== undefined) {
+    out.timeoutMs = Math.min(STATUSLINE_MAX_TIMEOUT_MS, Math.max(STATUSLINE_MIN_TIMEOUT_MS, timeoutMs));
+  }
+  return out;
+}
+
 // ─── checkpoints.* — workspace checkpoint root-guard options ─────────────────
 
 /**

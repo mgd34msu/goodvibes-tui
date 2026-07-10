@@ -57,6 +57,8 @@ import { formatUserFacingErrorLine } from './core/format-user-error.ts';
 import { wireStreamEventMetrics, type StreamMetrics, type WireStreamEventMetricsResult } from './core/stream-event-wiring.ts';
 import { wireTurnEventHandlers } from './core/turn-event-wiring.ts';
 import { buildContextStatusHint } from './renderer/context-status-hint.ts';
+import { isEffectiveDangerMode } from './config/index.ts';
+import { createScriptableStatusline } from './core/scriptable-statusline.ts';
 import { evaluateSessionMaintenance } from '@/runtime/index.ts';
 import { createCancelGeneration } from './core/turn-cancellation.ts';
 import { wrapRequestPermissionWithAlert } from './core/approval-alert.ts';
@@ -243,6 +245,9 @@ async function main() {
   // Exit-path stop: bounded drain of the audio already playing (see stopForExit).
   stopSpokenOutputForExit = () => spokenTurns.stopForExit();
   unsubs.push(...spokenTurns.unsubs);
+  // Scriptable status line: runs the user's `statusline.command` at turn boundaries.
+  const scriptableStatusline = createScriptableStatusline({ configManager, cwd: workingDir, turns: uiServices.events.turns, onChange: () => render() });
+  unsubs.push(...scriptableStatusline.unsubs);
   unsubs.push(attachSpokenTurnModelRouting({
     orchestrator,
     providerRegistry,
@@ -481,21 +486,13 @@ async function main() {
       provider: runtime.provider,
       contextWindow,
       contextStatusHint,
+      scriptableStatusLine: scriptableStatusline.current(),
       // Compact footer posture on short terminals so the shell stays usable.
       compact: height < 30,
       // behavior.autoCompactThreshold is stored as a percent integer (e.g. 80);
       // the meter expects a fraction [0..1]. Clamp to [0,1] to guard nonsense values.
       compactThreshold: Math.min(1, Math.max(0, (configManager.get('behavior.autoCompactThreshold') as number) / 100)),
-      dangerMode: (() => {
-        if (configManager.get('behavior.autoApprove')) return true;
-        const permMode = configManager.get('permissions.mode');
-        if (permMode === 'allow-all') return true;
-        if (permMode === 'custom') {
-          const tools = configManager.getCategory('permissions').tools;
-          if (Object.values(tools).every(v => v === 'allow')) return true;
-        }
-        return false;
-      })(),
+      dangerMode: isEffectiveDangerMode(configManager),
       lastInputTokens: orchestrator.lastInputTokens,
       commandArgsHint,
       hitlMode: modeManager.getHITLMode(),
