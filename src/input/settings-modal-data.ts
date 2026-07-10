@@ -31,6 +31,11 @@ import {
   readSandboxExecList,
 } from './sandbox-exec-config.ts';
 import {
+  injectExecEnvScrubSyntheticEntry,
+  isExecEnvScrubAllowlistConfigKey,
+  readExecEnvScrubAllowlist,
+} from './exec-env-scrub-config.ts';
+import {
   THEME_MODE_CONFIG_KEY,
   THEME_MODE_VALUES,
   THEME_MODE_DEFAULT,
@@ -221,10 +226,12 @@ export function buildSettingGroups(
     }
   }
 
-  // Inject the sandbox.egressAllowlist / sandbox.workspaceWritable synthetic
-  // entries — see sandbox-exec-config.ts for why they are not in CONFIG_SCHEMA,
-  // same rationale as the other synthetic settings above.
+  // Inject the sandbox.egressAllowlist / sandbox.workspaceWritable and
+  // permissions.execEnvScrubAllowlist synthetic entries — see
+  // sandbox-exec-config.ts / exec-env-scrub-config.ts for why they are not in
+  // CONFIG_SCHEMA, same rationale as the other synthetic settings above.
   injectSandboxExecSyntheticEntries(groups, configManager);
+  injectExecEnvScrubSyntheticEntry(groups, configManager);
 
   // learning.consolidation.* is now a real SDK config domain (schema-domain-learning.ts
   // registers `learning` in CONFIG_SCHEMA/DEFAULT_CONFIG), so the nine keys already
@@ -610,6 +617,14 @@ export function refreshEntryValues(
         entry.isDefault = (entry.currentValue as string[]).length === 0;
         continue;
       }
+      // permissions.execEnvScrubAllowlist: same normalizing-read trap as above —
+      // 'permissions' is a real section but this leaf is TUI-local (see
+      // exec-env-scrub-config.ts).
+      if (isExecEnvScrubAllowlistConfigKey(entry.setting.key)) {
+        entry.currentValue = readExecEnvScrubAllowlist(configManager);
+        entry.isDefault = (entry.currentValue as string[]).length === 0;
+        continue;
+      }
       // 'learning' is now a real DEFAULT_CONFIG section (schema-domain-learning.ts),
       // so learning.consolidation.* keys read through the plain path below like any
       // other schema-driven setting — no special case needed anymore.
@@ -656,6 +671,11 @@ export function updateEntryForKey(
       }
       if (isSandboxExecListConfigKey(key)) {
         entry.currentValue = readSandboxExecList(configManager, key);
+        entry.isDefault = (entry.currentValue as string[]).length === 0;
+        continue;
+      }
+      if (isExecEnvScrubAllowlistConfigKey(key)) {
+        entry.currentValue = readExecEnvScrubAllowlist(configManager);
         entry.isDefault = (entry.currentValue as string[]).length === 0;
         continue;
       }

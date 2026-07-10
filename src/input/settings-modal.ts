@@ -27,6 +27,7 @@ import type { FeatureFlagManager } from '@/runtime/index.ts';
 import type { McpRegistry } from '@pellux/goodvibes-sdk/platform/mcp';
 import { isWorktreeSetupListConfigKey, parseWorktreeSetupListInput } from './worktree-setup-config.ts';
 import { isSandboxExecListConfigKey, parseSandboxExecListInput } from './sandbox-exec-config.ts';
+import { isExecEnvScrubAllowlistConfigKey, parseExecEnvScrubAllowlistInput } from './exec-env-scrub-config.ts';
 
 import {
   SETTINGS_CATEGORIES,
@@ -576,6 +577,10 @@ export class SettingsModal {
       // sandbox.egressAllowlist / sandbox.workspaceWritable keys — see
       // sandbox-exec-config.ts.
       this._setValue(setting.key, parseSandboxExecListInput(this.editBuffer));
+    } else if (isExecEnvScrubAllowlistConfigKey(setting.key)) {
+      // Same comma-separated convention for permissions.execEnvScrubAllowlist
+      // — see exec-env-scrub-config.ts.
+      this._setValue(setting.key, parseExecEnvScrubAllowlistInput(this.editBuffer));
     } else if (setting.type === 'string' && isSecretConfigKey(setting.key)) {
       setSecretBackedSettingValue({
         key: setting.key,

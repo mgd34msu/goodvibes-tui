@@ -26,6 +26,7 @@ import {
 import { loadBootstrapSystemPrompt, syncConfiguredServices } from '@/runtime/index.ts';
 import { registerBootstrapHookBridge } from '@/runtime/index.ts';
 import { registerBootstrapRuntimeEvents } from '@/runtime/index.ts';
+import { readExecEnvScrubAllowlist } from '../input/exec-env-scrub-config.ts';
 import { createRuntimeServices, type RuntimeServices } from './services.ts';
 import { runBootMemoryFold } from './memory-fold.ts';
 import { setPricingSource } from '../export/cost-utils.ts';
@@ -376,6 +377,10 @@ export async function initializeBootstrapCore(
     serviceRegistry: services.serviceRegistry,
     overflowHandler: services.overflowHandler,
     changeTracker: services.sessionChangeTracker,
+    // Master switch stays on (SDK default); this only widens the allowlist of
+    // variable NAMES kept even though they look credential-bearing. See
+    // exec-env-scrub-config.ts (permissions.execEnvScrubAllowlist).
+    credentialEnvScrub: { allowlist: readExecEnvScrubAllowlist(configManager) },
   });
   // Note: installWrfcAgentToolGuard is called after routeOrBuffer is defined
   // (further below) so the onTrace callback can route guard decisions through
