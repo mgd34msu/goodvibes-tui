@@ -1,9 +1,9 @@
 #!/usr/bin/env bun
 import { chmodSync, copyFileSync, cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { createHash } from 'node:crypto';
 import { homedir } from 'node:os';
 import { basename, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { CHECKSUM_MANIFEST_NAME, parseChecksumFile, resolveArtifactNames, sha256, verifyChecksum } from '../src/runtime/release-artifacts.ts';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const projectRoot = join(__dirname, '..');
@@ -15,71 +15,10 @@ function isSourceCheckout() {
   return existsSync(join(projectRoot, '.git')) || existsSync(join(projectRoot, 'bun.lock'));
 }
 
-function resolveArtifactNames(platform, arch) {
-  if (platform === 'linux' && arch === 'x64') {
-    return {
-      app: 'goodvibes-linux-x64',
-      daemon: 'goodvibes-daemon-linux-x64',
-    };
-  }
-  if (platform === 'linux' && arch === 'arm64') {
-    return {
-      app: 'goodvibes-linux-arm64',
-      daemon: 'goodvibes-daemon-linux-arm64',
-    };
-  }
-  if (platform === 'darwin' && arch === 'x64') {
-    return {
-      app: 'goodvibes-macos-x64',
-      daemon: 'goodvibes-daemon-macos-x64',
-    };
-  }
-  if (platform === 'darwin' && arch === 'arm64') {
-    return {
-      app: 'goodvibes-macos-arm64',
-      daemon: 'goodvibes-daemon-macos-arm64',
-    };
-  }
-  return null;
-}
-
 function prepareBinary(path) {
   if (process.platform !== 'win32') {
     chmodSync(path, 0o755);
   }
-}
-
-function sha256(buffer) {
-  return createHash('sha256').update(buffer).digest('hex');
-}
-
-const CHECKSUM_MANIFEST_NAME = 'SHA256SUMS.txt';
-
-/**
- * Verify a downloaded artifact's checksum against the parsed manifest.
- * An artifact with NO entry in the manifest is just as unverified as one
- * with a mismatching entry, so both are hard failures — never a silent
- * skip. Throws naming the artifact and the manifest it was checked against.
- */
-function verifyChecksum(artifactName, actual, expected, manifestName = CHECKSUM_MANIFEST_NAME) {
-  if (expected === undefined) {
-    throw new Error(`no checksum entry for ${artifactName} in ${manifestName} — refusing to install an unverified binary`);
-  }
-  if (expected !== actual) {
-    throw new Error(`checksum mismatch for ${artifactName}: expected ${expected}, got ${actual}`);
-  }
-}
-
-function parseChecksumFile(contents) {
-  const checksums = new Map();
-  for (const rawLine of contents.split(/\r?\n/)) {
-    const line = rawLine.trim();
-    if (!line) continue;
-    const match = line.match(/^([a-f0-9]{64})\s+\*?(.+)$/i);
-    if (!match) continue;
-    checksums.set(match[2], match[1].toLowerCase());
-  }
-  return checksums;
 }
 
 function resolveRepositoryBaseUrl() {
