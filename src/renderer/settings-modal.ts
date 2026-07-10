@@ -59,6 +59,7 @@ const CATEGORY_INFO: Record<SettingsCategory, string> = {
   tools: 'Tool LLM and helper model routing. Empty provider/model values inherit the active chat route unless a specific helper/tool route is set.',
   flags: 'Feature flags are SDK runtime gates. They are separate from normal config keys because they enable or disable staged runtime behavior.',
   network: 'Combined network view for daemon control-plane, HTTP listener, browser web surface, and general outbound network settings.',
+  learning: 'Idle-time memory consolidation: merging duplicate standing memory records and decaying/archiving stale ones. Off by default — nothing runs until enabled.',
 };
 
 const ENUM_VALUE_DESCRIPTIONS: Record<string, Record<string, string>> = {
