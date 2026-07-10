@@ -554,7 +554,7 @@ GoodVibes ships **143** built-in slash commands across **68** categories. Every 
 
 | Command | Aliases | Usage | Description |
 | --- | --- | --- | --- |
-| `/workstream` | — | `create [--isolation shared\|worktree] <task...> \| list \| status [id] \| insert-phase <id> <description...> \| approve <id> \| edit <id> [--isolation shared\|worktree] <task...> \| launch <id> \| cancel <id>` | Author and oversee multi-phase agent workstreams (orchestration engine) |
+| `/workstream` | — | `create [--isolation shared\|worktree] <task...> \| list \| status [id] \| insert-phase <id> <description...> \| edit-item <id> <item#> <brief...> \| remove-item <id> <item#> \| move-item <id> <item#> <pos> \| approve <id> \| edit <id> [--isolation shared\|worktree] <task...> \| launch <id> \| cancel <id>` | Author and oversee multi-phase agent workstreams (orchestration engine) |
 
 ## Worktrees
 
