@@ -142,4 +142,22 @@ describe('wrapRequestPermissionWithAlert', () => {
     });
     await expect(wrapped(makeRequest())).resolves.toEqual({ approved: false, remember: false });
   });
+
+  test('emits an in-terminal (OSC 9) approval-wait notification with tool + category only', async () => {
+    const tracker = new FocusTracker();
+    tracker.setFocused(false);
+    const calls: Array<{ signal: string; message: string }> = [];
+    const wrapped = wrapRequestPermissionWithAlert(async () => ({ approved: true, remember: false }), {
+      focusTracker: tracker,
+      configGet: makeConfigGet({}),
+      webhookNotifier: null,
+      terminalNotifier: { notify: (signal, message) => { calls.push({ signal, message }); } },
+    });
+    await wrapped(makeRequest({ tool: 'edit', category: 'file-write' as PermissionPromptRequest['category'] }));
+    expect(calls).toHaveLength(1);
+    expect(calls[0]!.signal).toBe('approval-wait');
+    expect(calls[0]!.message).toContain('edit');
+    expect(calls[0]!.message).toContain('file-write');
+    expect(calls[0]!.message).not.toContain('SECRET_PATH_xyzzy');
+  });
 });

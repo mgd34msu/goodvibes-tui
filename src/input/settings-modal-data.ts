@@ -167,6 +167,13 @@ export function buildSettingGroups(
         behaviorEntries.push(entry);
       }
     }
+    // In-terminal (OSC 9) notification toggles + audible bell — same category,
+    // per-key defaults (see terminal-notifier.ts).
+    for (const entry of buildTerminalNotifySyntheticEntries(configManager)) {
+      if (!behaviorEntries.some((e) => e.setting.key === entry.setting.key)) {
+        behaviorEntries.push(entry);
+      }
+    }
   }
 
   // Inject the storage.codeIndexEnabled toggle into the
@@ -393,6 +400,48 @@ function buildBooleanSyntheticEntry(
 /** Build the five synthetic SettingEntry rows for the behavior category. */
 export function buildNotifyAlertSyntheticEntries(configManager: Pick<ConfigManager, 'get'>): SettingEntry[] {
   return NOTIFY_ALERT_SYNTHETIC_SETTINGS.map((spec) => buildBooleanSyntheticEntry(configManager, spec.key, spec.description, true));
+}
+
+// ---------------------------------------------------------------------------
+// In-terminal (OSC 9) notification settings — see core/terminal-notifier.ts
+// ---------------------------------------------------------------------------
+
+/**
+ * The OSC 9 in-terminal desktop-notification toggles + the audible bell.
+ * TUI-local synthetic booleans (not in the SDK ConfigKey union), each carrying
+ * its OWN default (unlike the always-on W2.3 alert toggles above): approval-wait
+ * on, turn-end/agent-blocked off, bell off. Read generically by
+ * core/terminal-notifier.ts (readBooleanConfig); this is only the
+ * settings-modal-visible surface. These are independent of the master
+ * `notifyOnlyWhenUnfocused` gate — an in-terminal notification is always
+ * focus-gated on its own (only fires for an unfocused/unknown terminal).
+ */
+const TERMINAL_NOTIFY_SYNTHETIC_SETTINGS: ReadonlyArray<{ readonly key: string; readonly description: string; readonly defaultOn: boolean }> = [
+  {
+    key: 'behavior.terminalNotifyApprovalWait',
+    description: 'Send an in-terminal (OSC 9) desktop notification when a tool call is waiting on your approval. Fires only when the terminal window is unfocused. Works over SSH/tmux where OS notifications do not.',
+    defaultOn: true,
+  },
+  {
+    key: 'behavior.terminalNotifyTurnEnd',
+    description: 'Send an in-terminal (OSC 9) desktop notification when a turn finishes. Off by default. Fires only when the terminal window is unfocused.',
+    defaultOn: false,
+  },
+  {
+    key: 'behavior.terminalNotifyAgentBlocked',
+    description: 'Send an in-terminal (OSC 9) desktop notification when a delegated agent blocks waiting for your input. Off by default. Fires only when the terminal window is unfocused.',
+    defaultOn: false,
+  },
+  {
+    key: 'behavior.terminalBell',
+    description: 'Also ring the terminal bell alongside in-terminal notifications. Off by default.',
+    defaultOn: false,
+  },
+];
+
+/** Build the OSC 9 in-terminal notification SettingEntry rows for the behavior category. */
+export function buildTerminalNotifySyntheticEntries(configManager: Pick<ConfigManager, 'get'>): SettingEntry[] {
+  return TERMINAL_NOTIFY_SYNTHETIC_SETTINGS.map((spec) => buildBooleanSyntheticEntry(configManager, spec.key, spec.description, spec.defaultOn));
 }
 
 // ---------------------------------------------------------------------------

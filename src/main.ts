@@ -60,6 +60,7 @@ import { buildContextStatusHint } from './renderer/context-status-hint.ts';
 import { evaluateSessionMaintenance } from '@/runtime/index.ts';
 import { createCancelGeneration } from './core/turn-cancellation.ts';
 import { wrapRequestPermissionWithAlert } from './core/approval-alert.ts';
+import { createTerminalNotifier } from './core/terminal-notifier.ts';
 import { setPanelFrameRequester } from './panels/base-panel.ts';
 
 import { ALT_SCREEN_ENTER, ALT_SCREEN_EXIT, MOUSE_ENABLE, MOUSE_DISABLE, CURSOR_HIDE, CURSOR_SHOW, CLEAR_SCREEN, KEYBOARD_EXT_ENABLE, KEYBOARD_EXT_DISABLE, PASTE_ENABLE, PASTE_DISABLE, FOCUS_ENABLE, FOCUS_DISABLE } from './renderer/terminal-escapes.ts';
@@ -223,16 +224,15 @@ async function main() {
     setRecoveryInterval: (value) => { recoveryInterval = value; },
     getStopSpokenOutputForExit: () => stopSpokenOutputForExit,
   });
-  const {
-    exitApp,
-    resizeHandler,
-    sigintHandler,
-    unhandledRejectionHandler,
-    uncaughtExceptionHandler,
-    terminationSignalHandler,
-    exitListener,
-  } = lifecycle;
+  const { exitApp, resizeHandler, sigintHandler, unhandledRejectionHandler, uncaughtExceptionHandler, terminationSignalHandler, exitListener } = lifecycle;
   commandContext.exit = exitApp;
+
+  // In-terminal (OSC 9) notifier (approval-wait/turn-end/agent-blocked); writes
+  // are restore-gated so no escape sequence lands after the shell resumes.
+  const terminalNotifier = createTerminalNotifier({
+    stdout, focusTracker: ctx.services.focusTracker, isReleased: () => lifecycle.isTerminalRestored(),
+    configGet: (k: string) => configManager.get(k as Parameters<typeof configManager.get>[0]),
+  });
 
   const spokenTurns = wireSpokenTurnRuntime({
     voiceService: ctx.services.voiceService,
@@ -343,7 +343,7 @@ async function main() {
         ...buildPendingPermissionExtras(request, resolve),
       };
       render();
-    }), { focusTracker: ctx.services.focusTracker, configGet: (k: string) => configManager.get(k as Parameters<typeof configManager.get>[0]), webhookNotifier: ctx.services.webhookNotifier });
+    }), { focusTracker: ctx.services.focusTracker, configGet: (k: string) => configManager.get(k as Parameters<typeof configManager.get>[0]), webhookNotifier: ctx.services.webhookNotifier, terminalNotifier });
 
   const input: InputHandler = new InputHandler(
     () => render(),
@@ -687,7 +687,7 @@ async function main() {
     gitStatusProvider,
     lastGitInfoRef,
     buildSessionContinuityHints,
-    render, webhookNotifier: ctx.services.webhookNotifier, focusTracker: ctx.services.focusTracker,
+    render, webhookNotifier: ctx.services.webhookNotifier, focusTracker: ctx.services.focusTracker, terminalNotifier,
   });
   unsubs.push(...turnUnsubs);
 
