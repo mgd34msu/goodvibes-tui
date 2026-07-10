@@ -47,6 +47,7 @@ const CATEGORY_INFO: Record<SettingsCategory, string> = {
   runtime: 'Runtime guardrails such as companion chat limiter and event bus listener caps.',
   telemetry: 'Telemetry payload policy.',
   cache: 'Provider and model cache behavior, TTL, and hit-rate monitoring.',
+  diagnostics: 'Post-edit diagnostics: whether the shell runs language diagnostics on a file after the model edits or writes it, surfacing new problems inline.',
   mcp: 'MCP server trust and scope review. Trust changes can expose local files, tools, databases, browsers, or remote automation depending on the server.',
   sandbox: 'Isolation strategy for REPL, MCP, Windows, and QEMU-backed execution. Use these settings to separate risky tools from the host shell.',
   surfaces: 'External app surfaces such as Slack, Discord, ntfy, Home Assistant, Telegram, webhooks, chat bridges, and messaging providers.',
@@ -75,9 +76,19 @@ const ENUM_VALUE_DESCRIPTIONS: Record<string, Record<string, string>> = {
     guided: 'Provide more explanation and next-step context during configuration and operations.',
   },
   'permissions.mode': {
-    prompt: 'Ask before powerful or risky actions according to tool policy.',
-    'allow-all': 'Allow actions without prompting. This is fast but removes an important safety gate.',
+    prompt: 'Normal: ask before powerful or risky actions according to tool policy.',
+    plan: 'Plan mode: read-only planning posture — writes, commands, and network calls are blocked so the model can plan without changing anything. Toggle with /plan or Shift+Tab.',
+    'accept-edits': 'Accept edits: file writes and edits are auto-approved, but exec, network, and escalations are still gated.',
+    'allow-all': 'Auto: allow all actions without prompting. Fast, but removes an important safety gate.',
     custom: 'Use per-tool-class permission settings from the rows below.',
+  },
+  'permissions.backgroundAgents': {
+    inherit: 'Background and subagent tool calls run through the SAME session permission mode as foreground work.',
+    'allow-all': 'Background and subagent tool calls are exempt from prompting (auto-approved) even when foreground work is gated.',
+  },
+  'diagnostics.postEdit': {
+    on: 'After the model edits or writes a file, run language diagnostics on it and surface any new problems.',
+    off: 'Do not run diagnostics automatically after edits.',
   },
   'storage.secretPolicy': {
     preferred_secure: 'Use secure secret storage when available, with supported fallback behavior.',
