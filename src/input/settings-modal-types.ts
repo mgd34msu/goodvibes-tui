@@ -9,6 +9,7 @@ export type SettingsCategory =
   | 'subscriptions'
   | 'behavior'
   | 'storage'
+  | 'atRest'
   | 'permissions'
   | 'orchestration'
   | 'planner'
@@ -49,7 +50,7 @@ export const SETTINGS_CATEGORY_GROUPS: ReadonlyArray<{
   { label: 'Service & Network', categories: ['service', 'daemon', 'network', 'controlPlane', 'httpListener', 'web'] },
   { label: 'Surfaces & Cloud', categories: ['surfaces', 'mcp', 'cloudflare'] },
   { label: 'Automation', categories: ['batch', 'automation', 'checkin', 'watchers', 'orchestration', 'planner', 'wrfc'] },
-  { label: 'Runtime & Data', categories: ['storage', 'sandbox', 'runtime', 'cache', 'telemetry', 'diagnostics'] },
+  { label: 'Runtime & Data', categories: ['storage', 'atRest', 'sandbox', 'runtime', 'cache', 'telemetry', 'diagnostics'] },
   { label: 'Advanced', categories: ['flags', 'release', 'danger'] },
 ];
 
