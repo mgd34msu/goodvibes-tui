@@ -61,6 +61,7 @@ import { PolicyRuntimeState } from '@/runtime/index.ts';
 import { type ArchivableProcessRegistry } from '@pellux/goodvibes-sdk/platform/runtime/fleet';
 import { calcSessionCost, isModelPriced } from '../export/cost-utils.ts';
 import { createWorkstreamServices, type OrchestrationEngine, type WorkstreamCommandService } from './workstream-services.ts';
+import { wireFleetNeedsInputPush } from './fleet-needs-input-push.ts';
 import { codeIndexDbPath, createCodeIndexServices, isCodeInjectionSettingEnabled } from './code-index-services.ts';
 import { WorkPlanStore } from '../work-plans/work-plan-store.ts';
 import {
@@ -640,10 +641,10 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
 
   // Shared terminal-shell wrapper over the SDK's registerGatewayVerbGroups (see gateway-verbs.ts):
   // 501s the whole ws-only family without it. principals.*/channels.profiles.*/ci.* register
-  // unconditionally; checkin.* registers ONLY with all four of channelDeliveryRouter, providerRegistry,
-  // automationManager, sessionLister present (graceful-degrade so the loop is never a facade) — each is
-  // constructed above, so the TUI threads all four and the check-in loop runs for real (off by default).
-  attachWsOnlyGatewayVerbHandlers(gatewayMethods, { processRegistry, workspaceCheckpointManager, sessionBroker, secretsManager, approvalBroker, shellPaths, configManager, runtimeStore: options.runtimeStore, channelDeliveryRouter, providerRegistry, automationManager, sessionLister: sessionBroker });
+  // unconditionally; checkin.* registers ONLY with channelDeliveryRouter, providerRegistry, automationManager,
+  // sessionLister ALL present; runtimeBus/sessionPresence gate the fleet needs-input push fan-out the same
+  // way (see fleet-needs-input-push.ts) — every dep is constructed above, so both loops run for real (off by default).
+  attachWsOnlyGatewayVerbHandlers(gatewayMethods, { processRegistry, workspaceCheckpointManager, sessionBroker, secretsManager, approvalBroker, shellPaths, configManager, runtimeStore: options.runtimeStore, channelDeliveryRouter, providerRegistry, automationManager, sessionLister: sessionBroker, ...wireFleetNeedsInputPush({ registry: processRegistry, runtimeBus: options.runtimeBus, sessionBroker }) });
   const integrationHelpers = new IntegrationHelperService({
     workingDirectory,
     homeDirectory,
