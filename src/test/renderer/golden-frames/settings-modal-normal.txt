@@ -6,7 +6,7 @@
 |│   ▸ Display (9)        │ stream                                                                  │|
 |│     UI (4)             │ Key: display.stream                                                     │|
 |│     Behavior (20)      │ Current: true                                                           │|
-|│     Permissions (15)   │ Default: true                                                           │|
+|│     Permissions (16)   │ Default: true                                                           │|
 |│ AI ROUTING             │ Type: boolean                                                           │|
 |│     Provider (4)       │ Source: default                                                         │|
 |│     Subscriptions (1)  │                                                                         │|
