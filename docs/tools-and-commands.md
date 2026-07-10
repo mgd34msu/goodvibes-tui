@@ -74,6 +74,9 @@ Representative slash-command families include:
 - `/codebase`
 - `/workstream`
 - `/checkpoint`
+- `/flags`
+
+`/flags` lists every feature flag grouped by state: enabled, disabled (built but dark), and killed. Each entry shows the flag's name, description, and whether it is runtime-toggleable or startup-only. Toggle a runtime-toggleable flag with `/flags on <id>` or `/flags off <id>` (applied live and persisted); a startup-only flag is saved and applies on next launch. `/flags doctor` lists just the dark subsystems — built flags that are currently disabled — each with the command to switch it on. Interactive toggling also lives in `/settings`.
 
 `/search <query> [--limit <n>]` runs a provider-backed web search directly (bypassing the agent-tool JSON wrapper) and renders ranked results, an instant answer, and the source label into the transcript; it degrades honestly using the web-search service's own status note. `/imagine <prompt>` is the first production caller of the media-provider registry's image generation — on success it persists the artifact (inline bytes stored directly; a remote-URL-only result is stored as a small JSON pointer record rather than eagerly fetched), and prints the registry's own per-provider status (naming the exact env var) when no image-capable provider is configured. (`/image` is a different, pre-existing command — it attaches a local image file to the next message for multimodal analysis.)
 
