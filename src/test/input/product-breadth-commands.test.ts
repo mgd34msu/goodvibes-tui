@@ -1797,7 +1797,11 @@ describe('product breadth commands', () => {
     expect(out.join('\n')).toContain('Install Bundle Review');
   });
 
-  test('update command reviews channel posture and exports update bundles', async () => {
+  test('update command reviews install-kind posture and exports update bundles', async () => {
+    // The real self-update mechanics (`/update check` and `/update apply`,
+    // which hit the network) are covered with a stubbed fetch in
+    // src/test/input/update-runtime.test.ts. This test only exercises the
+    // offline `review` and `bundle export|inspect` subcommands.
     const registry = new CommandRegistry();
     registerBuiltinCommands(registry);
     const update = registry.get('update');
@@ -1808,11 +1812,11 @@ describe('product breadth commands', () => {
 
     await update!.handler(['review'], ctx);
     expect(out.join('\n')).toContain('Update Review');
-    expect(out.join('\n')).toContain('channel:');
-
-    out.length = 0;
-    await update!.handler(['channel', 'preview'], ctx);
-    expect(out.join('\n')).toContain('Update channel set to preview.');
+    expect(out.join('\n')).toContain('install kind:');
+    // The decorative release.channel subcommand was removed — nothing
+    // downstream ever read the value it wrote, so /update review no longer
+    // mentions a channel at all.
+    expect(out.join('\n')).not.toContain('channel:');
 
     const bundlePath = join(root, 'artifacts', 'update.json');
     out.length = 0;
@@ -1822,6 +1826,7 @@ describe('product breadth commands', () => {
     out.length = 0;
     await update!.handler(['bundle', 'inspect', bundlePath], ctx);
     expect(out.join('\n')).toContain('Update Bundle Review');
+    expect(out.join('\n')).toContain('installKind:');
   });
 
   test('auth command exports review bundles and exchanges session tokens with local services', async () => {

@@ -4,6 +4,7 @@ import type { CommandRegistry } from '../command-registry.ts';
 import { VERSION } from '../../version.ts';
 import { listBuiltinSubscriptionProviders } from '@pellux/goodvibes-sdk/platform/config';
 import { handleLocalAuthCommand } from './local-auth-runtime.ts';
+import { registerUpdateCommand } from './update-runtime.ts';
 import { buildAuthInspectionSnapshot, inspectProviderAuth } from '@/runtime/index.ts';
 import { requireProfileManager, requireSecretsManager, requireServiceRegistry, requireShellPaths, requireSubscriptionManager } from './runtime-services.ts';
 
@@ -16,16 +17,6 @@ interface InstallBundle {
   readonly profileCount: number;
   readonly secretKeyCount: number;
   readonly setupLinks: readonly string[];
-}
-
-interface UpdateBundle {
-  readonly version: 1;
-  readonly exportedAt: number;
-  readonly appVersion: string;
-  readonly updateChannel: 'stable' | 'preview';
-  readonly subscriptionProviders: readonly string[];
-  readonly sandboxProfile: string;
-  readonly notes: readonly string[];
 }
 
 interface AuthReviewBundle {
@@ -51,17 +42,6 @@ function inspectInstallBundle(bundle: InstallBundle): string {
     `  profileCount: ${bundle.profileCount}`,
     `  secretKeys: ${bundle.secretKeyCount}`,
     `  setupLinks: ${bundle.setupLinks.length}`,
-  ].join('\n');
-}
-
-function inspectUpdateBundle(bundle: UpdateBundle): string {
-  return [
-    'Update Bundle Review',
-    `  appVersion: ${bundle.appVersion}`,
-    `  updateChannel: ${bundle.updateChannel}`,
-    `  subscriptionProviders: ${bundle.subscriptionProviders.length}`,
-    `  sandboxProfile: ${bundle.sandboxProfile}`,
-    `  notes: ${bundle.notes.length}`,
   ].join('\n');
 }
 
@@ -189,82 +169,7 @@ export function registerPlatformAccessRuntimeCommands(registry: CommandRegistry)
     },
   });
 
-  registry.register({
-    name: 'update',
-    aliases: ['upgrade'],
-    description: 'Review update posture, choose release channel guidance, and package portable update bundles',
-    usage: '[review|channel <stable|preview>|bundle export <path>|bundle inspect <path>]',
-    handler(args, ctx) {
-      const shellPaths = requireShellPaths(ctx);
-      const sub = args[0] ?? 'review';
-      const subscriptions = requireSubscriptionManager(ctx);
-      const serviceRegistry = requireServiceRegistry(ctx);
-      const secretsManager = requireSecretsManager(ctx);
-      const builtinProviders = listBuiltinSubscriptionProviders().map((entry) => entry.provider);
-      const sandboxProfile = [
-        `${ctx.platform.configManager.get('sandbox.replIsolation')}`,
-        `${ctx.platform.configManager.get('sandbox.mcpIsolation')}`,
-        `${ctx.platform.configManager.get('sandbox.vmBackend')}`,
-      ].join('/');
-      const activeSubscriptions = subscriptions.list().map((entry) => entry.provider);
-      if (sub === 'review') {
-        const channel = ctx.platform.configManager.get('release.channel');
-        ctx.print([
-          'Update Review',
-          `  version: ${VERSION}`,
-          `  channel: ${channel}`,
-          `  built-in subscription providers: ${builtinProviders.length}${builtinProviders.length > 0 ? ` (${builtinProviders.join(', ')})` : ''}`,
-          `  active subscriptions: ${activeSubscriptions.length}${activeSubscriptions.length > 0 ? ` (${activeSubscriptions.join(', ')})` : ''}`,
-          `  sandbox profile: ${sandboxProfile}`,
-          '  use /update channel <stable|preview> to change release posture',
-        ].join('\n'));
-        return;
-      }
-      if (sub === 'channel') {
-        const channel = args[1];
-        if (channel !== 'stable' && channel !== 'preview') {
-          ctx.print('Usage: /update channel <stable|preview>');
-          return;
-        }
-        ctx.platform.configManager.setDynamic('release.channel', channel);
-        ctx.print(`Update channel set to ${channel}.`);
-        return;
-      }
-      if (sub === 'bundle') {
-        const mode = args[1];
-        const pathArg = args[2];
-        if ((mode === 'export' || mode === 'inspect') && !pathArg) {
-          ctx.print(`Usage: /update bundle ${mode} <path>`);
-          return;
-        }
-        const targetPath = shellPaths.resolveWorkspacePath(pathArg!);
-        if (mode === 'export') {
-          const bundle: UpdateBundle = {
-            version: 1,
-            exportedAt: Date.now(),
-            appVersion: VERSION,
-            updateChannel: ctx.platform.configManager.get('release.channel') as 'stable' | 'preview',
-            subscriptionProviders: [...new Set([...builtinProviders, ...activeSubscriptions])],
-            sandboxProfile,
-            notes: [
-              'Preview channel is recommended only when operator review and sandbox isolation are enabled.',
-              'OAuth-backed provider subscriptions survive channel changes and continue to apply to supported provider surfaces.',
-            ],
-          };
-          mkdirSync(dirname(targetPath), { recursive: true });
-          writeFileSync(targetPath, JSON.stringify(bundle, null, 2) + '\n', 'utf-8');
-          ctx.print(`Update bundle exported to ${targetPath}`);
-          return;
-        }
-        if (mode === 'inspect') {
-          const bundle = JSON.parse(readFileSync(targetPath, 'utf-8')) as UpdateBundle;
-          ctx.print(inspectUpdateBundle(bundle));
-          return;
-        }
-      }
-      ctx.print('Usage: /update [review|channel <stable|preview>|bundle export <path>|bundle inspect <path>]');
-    },
-  });
+  registerUpdateCommand(registry);
 
   registry.register({
     name: 'auth',
