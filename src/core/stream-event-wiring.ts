@@ -1,5 +1,6 @@
 import type { UiRuntimeEvents } from '@/runtime/index.ts';
 import { createStreamStallWatchdog } from './stream-stall-watchdog.ts';
+import { buildRoutingChip } from './model-routing-chip.ts';
 import { formatUserFacingErrorLine } from './format-user-error.ts';
 import { logger } from '@pellux/goodvibes-sdk/platform/utils';
 
@@ -75,6 +76,8 @@ interface FailoverOptimizer {
   readonly enabled: boolean;
   testFallback(profile?: Record<string, unknown>): { readonly chain: readonly FailoverChainNode[] };
   recordFallbackTransition(from: string, to: string, reason: string): void;
+  /** Recent fallback transitions — read by the routing chip to skip double-narrating a failover. */
+  readonly fallbackLog: readonly { readonly from: string; readonly to: string; readonly reason: string; readonly ts: number }[];
 }
 
 /** Minimal system-message surface required for user-visible notifications. */
@@ -299,6 +302,23 @@ export function wireStreamEventMetrics(
   unsubs.push(events.turns.on('TURN_COMPLETED', () => {
     failoverVisited.clear();
   }));
+
+  // Routing chip (never-silent model change): every MODEL_CHANGED that is not
+  // already narrated by the richer [Failover] line becomes a one-line
+  // conversation notice. Deferred a microtask so a failover's
+  // recordFallbackTransition (which runs right AFTER its setCurrentModel) has
+  // landed in the fallback log before buildRoutingChip checks for correlation.
+  // Degrade gracefully when a bare test double omits the providers feed.
+  if (events.providers) {
+    unsubs.push(events.providers.on('MODEL_CHANGED', (change) => {
+      queueMicrotask(() => {
+        const chip = buildRoutingChip(change, providerOptimizer?.fallbackLog ?? [], Date.now());
+        if (chip === null) return;
+        systemMessageRouter.high(chip);
+        render();
+      });
+    }));
+  }
 
   unsubs.push(events.turns.on('TURN_ERROR', (event) => {
     const errVal: string = event.error;

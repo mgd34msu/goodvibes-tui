@@ -74,6 +74,12 @@ describe('classifySystemMessage', () => {
     });
   });
 
+  describe('[Routing] messages', () => {
+    test('a routing chip is informational even though it says "changed"', () => {
+      expect(classifySystemMessage('[Routing] model changed: a → b (reason unknown)')).toBe('info');
+    });
+  });
+
   describe('[Local] messages', () => {
     test('Server found → info', () => {
       expect(classifySystemMessage('[Local] Server found at localhost:3000')).toBe('info');
