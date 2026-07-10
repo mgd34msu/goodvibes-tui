@@ -25,6 +25,7 @@ import {
 } from './settings-modal-secrets.ts';
 import type { FeatureFlagManager } from '@/runtime/index.ts';
 import type { McpRegistry } from '@pellux/goodvibes-sdk/platform/mcp';
+import { isWorktreeSetupListConfigKey, parseWorktreeSetupListInput } from './worktree-setup-config.ts';
 
 import {
   SETTINGS_CATEGORIES,
@@ -565,7 +566,11 @@ export class SettingsModal {
       return false;
     }
 
-    if (setting.type === 'string' && isSecretConfigKey(setting.key)) {
+    if (isWorktreeSetupListConfigKey(setting.key)) {
+      // Comma-separated display/edit convention for the array-backed
+      // worktree.setup.* keys — see worktree-setup-config.ts.
+      this._setValue(setting.key, parseWorktreeSetupListInput(this.editBuffer));
+    } else if (setting.type === 'string' && isSecretConfigKey(setting.key)) {
       setSecretBackedSettingValue({
         key: setting.key,
         value: String(parsed ?? ''),

@@ -54,7 +54,19 @@ export function applySettingValue({
   /** Called after applying the value so the caller can re-read currentValues. */
   refreshGroups: () => void;
 }): ApplyValueResult {
-  const previousValue = configManager.get(key);
+  // Defensive: a handful of TUI-local synthetic keys (see worktree-setup-config.ts)
+  // live under a config section CONFIG_SCHEMA/DEFAULT_CONFIG has never populated
+  // (e.g. 'worktree' as of the SDK 1.6.1 repack), so configManager.get can throw
+  // "Invalid config path" here even though the write attempt below is already
+  // guarded. Without this, that read — which runs unconditionally, before the
+  // write's own try/catch — would crash the whole settings modal on save instead
+  // of surfacing the honest "Save failed" message the write path below produces.
+  let previousValue: unknown;
+  try {
+    previousValue = configManager.get(key);
+  } catch (e) {
+    logger.error('SettingsModal: failed to read previous config value', { key, error: summarizeError(e) });
+  }
   // REQUIRES_RESTART: SDK's ConfigSetting has no requiresRestart field yet (see
   // goodvibes-sdk HANDOFF-FROM-TUI-SESSION-20260611.md §Item 8). Until it does,
   // we detect restart-triggering keys by sub-key name heuristic below.
