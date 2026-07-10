@@ -344,7 +344,7 @@ describe('workstream-runtime — create', () => {
     expect(printed[0]).toContain('Isolation: shared (default)');
   });
 
-  test('create carries an honest note that the proposal is not saved and is lost on restart', async () => {
+  test('create carries an honest note that the proposal is saved and survives a restart', async () => {
     const registry = new CommandRegistry();
     registerWorkstreamRuntimeCommands(registry);
     const service = makeFakeService();
@@ -352,8 +352,8 @@ describe('workstream-runtime — create', () => {
 
     await registry.execute('workstream', ['create', 'ship', 'the', 'thing'], ctx);
 
-    expect(printed[0]).toContain('not saved');
-    expect(printed[0]).toContain('restart');
+    expect(printed[0]).toContain('saved to .goodvibes/orchestration/drafts/');
+    expect(printed[0]).toContain('survives a restart');
   });
 
   test('provenance form: planning agent (item count, cost, elapsed)', async () => {
@@ -485,7 +485,7 @@ describe('workstream-runtime — approve / edit / launch', () => {
     expect(printed.every((line) => line.includes('No pending proposal found'))).toBe(true);
   });
 
-  test('unknown id with zero drafts held mentions a restart as the likely cause', async () => {
+  test('unknown id is a plain not-found now that drafts are journaled (no restart guess)', async () => {
     const registry = new CommandRegistry();
     registerWorkstreamRuntimeCommands(registry);
     const service = makeFakeService();
@@ -493,11 +493,11 @@ describe('workstream-runtime — approve / edit / launch', () => {
 
     await registry.execute('workstream', ['launch', 'does-not-exist'], ctx);
 
-    expect(printed.at(-1)).toContain('No pending proposal found');
-    expect(printed.at(-1)).toContain('restart');
+    expect(printed.at(-1)).toBe('No pending proposal found: does-not-exist');
+    expect(printed.at(-1)).not.toContain('restart');
   });
 
-  test('unknown id with other drafts still held stays a plain not-found (no restart guess)', async () => {
+  test('unknown id stays the same plain not-found even with other drafts held', async () => {
     const registry = new CommandRegistry();
     registerWorkstreamRuntimeCommands(registry);
     const service = makeFakeService();

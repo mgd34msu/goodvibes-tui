@@ -288,6 +288,58 @@ describe('createWorkstreamServices — real engine wiring', () => {
     orchestrationEngine.dispose();
   });
 
+  test('a created draft survives a restart: a second services instance on the same root reloads it', async () => {
+    const projectRoot = makeScratchProjectRoot();
+    const bus = new RuntimeEventBus();
+    const { agentManager } = makeAgentManagerHarness(bus);
+    const first = createWorkstreamServices({
+      agentManager, configManager: makeConfigManager(), adaptivePlanner: new AdaptivePlanner(), runtimeBus: bus, projectRoot,
+    });
+    const draft = await first.workstreamCommands.proposeDraft('persist me across a restart');
+    first.workstreamCommands.approveDraft(draft.id);
+    first.orchestrationEngine.dispose();
+
+    // "Restart": a brand-new services instance over the SAME project root.
+    const second = createWorkstreamServices({
+      agentManager, configManager: makeConfigManager(), adaptivePlanner: new AdaptivePlanner(), runtimeBus: bus, projectRoot,
+    });
+    const reloaded = second.workstreamCommands.getDraft(draft.id);
+    expect(reloaded).toBeDefined();
+    expect(reloaded!.task).toBe('persist me across a restart');
+    expect(reloaded!.approved).toBe(true); // approval state persisted too
+
+    // And the reloaded, already-approved draft launches straight away.
+    const result = second.workstreamCommands.launchDraft(draft.id);
+    expect(result).not.toBeNull();
+    // Launched ⇒ its draft snapshot is gone, so a THIRD instance sees nothing.
+    const third = createWorkstreamServices({
+      agentManager, configManager: makeConfigManager(), adaptivePlanner: new AdaptivePlanner(), runtimeBus: bus, projectRoot,
+    });
+    expect(third.workstreamCommands.getDraft(draft.id)).toBeUndefined();
+
+    second.orchestrationEngine.dispose();
+    third.orchestrationEngine.dispose();
+  });
+
+  test('a cancelled (removed) draft does not come back after a restart', async () => {
+    const projectRoot = makeScratchProjectRoot();
+    const bus = new RuntimeEventBus();
+    const { agentManager } = makeAgentManagerHarness(bus);
+    const first = createWorkstreamServices({
+      agentManager, configManager: makeConfigManager(), adaptivePlanner: new AdaptivePlanner(), runtimeBus: bus, projectRoot,
+    });
+    const draft = await first.workstreamCommands.proposeDraft('to be discarded');
+    expect(first.workstreamCommands.removeDraft(draft.id)).toBe(true);
+    first.orchestrationEngine.dispose();
+
+    const second = createWorkstreamServices({
+      agentManager, configManager: makeConfigManager(), adaptivePlanner: new AdaptivePlanner(), runtimeBus: bus, projectRoot,
+    });
+    expect(second.workstreamCommands.getDraft(draft.id)).toBeUndefined();
+    expect(second.workstreamCommands.listDrafts()).toHaveLength(0);
+    second.orchestrationEngine.dispose();
+  });
+
   test('agent decomposition: create spawns a planner agent (fleet pickup) and tags provenance', async () => {
     const projectRoot = makeScratchProjectRoot();
     const bus = new RuntimeEventBus();

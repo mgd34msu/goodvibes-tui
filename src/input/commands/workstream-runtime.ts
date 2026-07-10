@@ -225,12 +225,12 @@ function renderDraftProposal(draft: WorkstreamDraft): string {
   );
   lines.push(`Reshape: /workstream edit-item ${draft.id} <#> <brief...> | remove-item ${draft.id} <#> | move-item ${draft.id} <#> <pos>`);
   lines.push(`Re-decompose from a new goal: /workstream edit ${draft.id} <new task...>   Discard: /workstream cancel ${draft.id}`);
-  // Honest limitation (see workstream-services.ts's REALITY-WINS doc): the
-  // engine has no pre-creation draft concept, so this proposal is
-  // process-lifetime, in-memory state only — never journaled like a launched
-  // Workstream is. State that plainly, the same way an unsent chat draft
-  // would be, rather than letting a restart silently make it vanish.
-  lines.push('Note: not saved — lost if the TUI restarts before launch.');
+  // Honest durability note (see workstream-services.ts's REALITY-WINS doc):
+  // the engine has no pre-launch draft concept, but the TUI journals this
+  // proposal to disk (.goodvibes/orchestration/drafts/) and reloads it at
+  // startup, so it survives a restart and is here to launch afterward — its
+  // approval state included.
+  lines.push('Note: saved to .goodvibes/orchestration/drafts/ — survives a restart until you launch or cancel it.');
   return lines.join('\n');
 }
 
@@ -300,18 +300,16 @@ function resolveWorkstream(service: WorkstreamCommandService, ref: string): Work
 }
 
 /**
- * approve/edit/launch all fail this way when `id` doesn't resolve to a held
- * draft. A bare "No pending proposal found" reads like a typo'd id even when
- * the real cause is that drafts are process-lifetime, in-memory-only state
- * (see renderDraftProposal's note and workstream-services.ts's REALITY-WINS
- * doc) and a TUI restart wiped every one of them. Only hint at that when the
- * service is holding zero drafts at all — with other drafts present, a typo
- * or stale id is the more honest guess and the plain message stays.
+ * approve/edit/launch/*-item all fail this way when `id` doesn't resolve to a
+ * held draft. Drafts are now journaled to disk and reloaded at startup (see
+ * renderDraftProposal's note and workstream-services.ts's REALITY-WINS doc), so
+ * a restart no longer silently wipes them — a missing id is a typo or a
+ * stale/already-launched proposal, and the plain message is the honest guess.
+ * `service` is kept in the signature so callers stay uniform and a future
+ * "did you mean <closest id>?" hint has somewhere to live.
  */
-function draftNotFoundMessage(service: WorkstreamCommandService, id: string): string {
-  const base = `No pending proposal found: ${id}`;
-  if (service.listDrafts().length > 0) return base;
-  return `${base} (proposals aren't saved — a TUI restart since you created it would explain this; recreate it with /workstream create)`;
+function draftNotFoundMessage(_service: WorkstreamCommandService, id: string): string {
+  return `No pending proposal found: ${id}`;
 }
 
 // ---------------------------------------------------------------------------
