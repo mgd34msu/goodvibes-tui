@@ -1,0 +1,20 @@
+{
+  "name": "@pellux/goodvibes-tui-darwin-x64",
+  "version": "1.13.1",
+  "description": "Prebuilt goodvibes and goodvibes-daemon binaries for darwin-x64. Installed automatically as an optional dependency of @pellux/goodvibes-tui; do not install directly.",
+  "license": "MIT",
+  "os": ["darwin"],
+  "cpu": ["x64"],
+  "files": [
+    "bin"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mgd34msu/goodvibes-tui.git"
+  },
+  "homepage": "https://github.com/mgd34msu/goodvibes-tui",
+  "publishConfig": {
+    "access": "public"
+  },
+  "preferUnplugged": true
+}

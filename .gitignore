@@ -8,6 +8,11 @@ __pycache__/
 dist/
 vendor/
 
+# Platform binary packages: scaffolds are committed, populated binaries are not
+platform-packages/*/bin/*
+!platform-packages/*/bin/.gitkeep
+platform-packages/*/README.md.bak
+
 # Environment & secrets
 .env
 .env.*

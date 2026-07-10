@@ -282,10 +282,39 @@ jobs:
             dist/goodvibes-daemon-macos-arm64
             dist/SHA256SUMS.txt
 
+  publish-platform-packages:
+    name: Publish platform binary packages to npm
+    if: (github.event_name == 'push' || startsWith(github.event.inputs.ref, 'v') || startsWith(github.event.inputs.ref, 'refs/tags/v')) && vars.PUBLISH_NPM == 'true'
+    needs: release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
+        with:
+          ref: ${{ github.event.inputs.ref || github.ref }}
+      - name: Setup
+        uses: ./.github/actions/setup
+      - name: Setup Node
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
+        with:
+          node-version: "22"
+          registry-url: "https://registry.npmjs.org"
+      - name: Download all artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          path: dist/
+          merge-multiple: true
+      - name: Assemble platform packages (all targets required)
+        run: bun run scripts/assemble-platform-packages.ts --require-all
+      - name: Publish platform packages to npm
+        run: bun run scripts/publish-platform-packages.ts
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
   publish-npm:
     name: Publish to npm
     if: (github.event_name == 'push' || startsWith(github.event.inputs.ref, 'v') || startsWith(github.event.inputs.ref, 'refs/tags/v')) && vars.PUBLISH_NPM == 'true'
-    needs: release
+    needs: [release, publish-platform-packages]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
