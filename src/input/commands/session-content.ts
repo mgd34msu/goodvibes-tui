@@ -8,6 +8,7 @@ import { TemplateManager, parseTemplateArgs } from '@pellux/goodvibes-sdk/platfo
 import { requireSessionManager, requireSessionMemoryStore, requireShellPaths } from './runtime-services.ts';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 import { sessionCommand } from './session.ts';
+import { undoLastRewind, redoLastRewind } from './rewind-runtime.ts';
 
 export function registerSessionContentCommands(registry: CommandRegistry): void {
   registry.register({
@@ -163,10 +164,15 @@ export function registerSessionContentCommands(registry: CommandRegistry): void 
   registry.register({
     name: 'undo',
     aliases: [],
-    description: 'Undo last action. /undo file — revert last file write/edit. /undo — remove last conversation turn',
-    usage: '[file]',
-    argsHint: '[file]',
-    handler(args, ctx) {
+    description: 'Undo last action. /undo rewind — reverse the last /rewind. /undo file — revert last file write/edit. /undo — remove last conversation turn',
+    usage: '[rewind|file]',
+    argsHint: '[rewind|file]',
+    async handler(args, ctx) {
+      if (args[0] === 'rewind') {
+        const result = await undoLastRewind(ctx);
+        ctx.print(result.message);
+        return;
+      }
       if (args[0] === 'file') {
         if (!ctx.workspace.fileUndoManager) {
           ctx.print('File undo not available.');
@@ -192,10 +198,15 @@ export function registerSessionContentCommands(registry: CommandRegistry): void 
 
   registry.register({
     name: 'redo',
-    description: 'Redo last undone action. /redo file — re-apply last reverted file. /redo — restore conversation turn',
-    usage: '[file]',
-    argsHint: '[file]',
-    handler(args, ctx) {
+    description: 'Redo last undone action. /redo rewind — re-apply the last undone /rewind. /redo file — re-apply last reverted file. /redo — restore conversation turn',
+    usage: '[rewind|file]',
+    argsHint: '[rewind|file]',
+    async handler(args, ctx) {
+      if (args[0] === 'rewind') {
+        const result = await redoLastRewind(ctx);
+        ctx.print(result.message);
+        return;
+      }
       if (args[0] === 'file') {
         if (!ctx.workspace.fileUndoManager) {
           ctx.print('File redo not available.');

@@ -42,6 +42,7 @@ import { registerControlRoomRuntimeCommands } from './commands/control-room-runt
 import { registerMcpRuntimeCommands } from './commands/mcp-runtime.ts';
 import { registerSessionContentCommands } from './commands/session-content.ts';
 import { registerCheckpointRuntimeCommands } from './commands/checkpoint-runtime.ts';
+import { registerRewindRuntimeCommands } from './commands/rewind-runtime.ts';
 import { registerWorkstreamRuntimeCommands } from './commands/workstream-runtime.ts';
 import { registerCodebaseRuntimeCommands } from './commands/codebase-runtime.ts';
 import { registerLocalRuntimeCommands } from './commands/local-runtime.ts';
@@ -151,6 +152,7 @@ export const BUILTIN_COMMAND_GROUPS: readonly BuiltinCommandGroup[] = [
   { category: 'Branches', register: registerBranchRuntimeCommands },
   { category: 'Session Content', register: registerSessionContentCommands },
   { category: 'Checkpoints', register: registerCheckpointRuntimeCommands },
+  { category: 'Checkpoints', register: registerRewindRuntimeCommands },
   { category: 'Workstreams', register: registerWorkstreamRuntimeCommands },
   { category: 'Codebase', register: registerCodebaseRuntimeCommands },
   { category: 'Web Search', register: registerWebSearchRuntimeCommands },

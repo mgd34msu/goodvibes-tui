@@ -1,26 +1,19 @@
 // ---------------------------------------------------------------------------
-// checkpoint-runtime.ts — /checkpoints, /checkpoint, /rewind
+// checkpoint-runtime.ts — /checkpoints, /checkpoint
 //
 // UX over WorkspaceCheckpointManager (@pellux/goodvibes-sdk/platform/workspace),
-// the whole-workspace, git-backed rewind engine wired onto RuntimeServices as
+// the whole-workspace, git-backed snapshot engine wired onto RuntimeServices as
 // `workspaceCheckpointManager` (src/runtime/services.ts) and threaded through
 // CommandContext.workspace exactly like FileUndoManager already is.
 //
-// Architecture note (why the confirm step lives in DiffPanel, not here):
-// SlashCommand.handler(args, ctx) is a single-shot call — there is no "await
-// next keypress" primitive in the command layer. So `/rewind <id>` can only
-// resolve the target, load the preview, open+focus the diff panel, and arm
-// its confirm overlay (DiffPanel.confirmOverlay, a PanelConfirmOverlay —
-// see panel-confirm-overlay.ts); the actual y/n/Enter/Esc handling happens
-// in DiffPanel.handleInput() via the project's canonical ConfirmState<T>
-// contract (confirm-state.ts), which every other destructive-action confirm
-// in this codebase already uses (see git-panel.ts).
+// Restoring a checkpoint is now done through the unified, message-anchored
+// /rewind (rewind-runtime.ts), which rewinds files AND/OR conversation to a
+// completed turn — reusing this same checkpoint store for the files half.
 // ---------------------------------------------------------------------------
 
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
-import type { WorkspaceCheckpoint, WorkspaceCheckpointManager } from '@pellux/goodvibes-sdk/platform/workspace';
+import type { WorkspaceCheckpoint } from '@pellux/goodvibes-sdk/platform/workspace';
 import type { CommandContext, CommandRegistry } from '../command-registry.ts';
-import { requirePanelManager } from './runtime-services.ts';
 
 // ---------------------------------------------------------------------------
 // Formatting helpers
@@ -48,62 +41,6 @@ function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes}B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)}KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)}MB`;
-}
-
-function plural(n: number, word: string): string {
-  return `${n} ${word}${n === 1 ? '' : 's'}`;
-}
-
-// ---------------------------------------------------------------------------
-// Checkpoint resolution — shared by /rewind
-// ---------------------------------------------------------------------------
-
-type ResolveResult =
-  | { checkpoint: WorkspaceCheckpoint }
-  | { error: string };
-
-/**
- * Resolve a user-supplied checkpoint reference ('last' or an id / id prefix,
- * as shown by /checkpoints) against the live checkpoint list. Resolution
- * happens entirely against list() results — never against
- * WorkspaceCheckpointManager's own requireCheckpoint() — so an unknown ref is
- * caught here, before anything touches the diff panel or arms a confirm.
- *
- * mgr.list() is guarded here (not left to the caller) so every caller gets a
- * plain ResolveResult and can never be handed a rejected promise: if the
- * manager's list() call fails (including a cached init() failure — see
- * services.ts — which makes every WorkspaceCheckpointManager method reject
- * forever), that surfaces as an honest `{ error }` instead of an unhandled
- * rejection.
- */
-async function resolveCheckpointTarget(
-  mgr: WorkspaceCheckpointManager,
-  ref: string,
-): Promise<ResolveResult> {
-  let all: WorkspaceCheckpoint[];
-  try {
-    all = await mgr.list();
-  } catch (err) {
-    return { error: `Failed to list checkpoints: ${summarizeError(err)}` };
-  }
-  if (ref === 'last') {
-    const checkpoint = all[0];
-    if (!checkpoint) {
-      return { error: 'No checkpoints to rewind to. Use /checkpoint <label> to create one.' };
-    }
-    return { checkpoint };
-  }
-  const exact = all.find((c) => c.id === ref);
-  if (exact) return { checkpoint: exact };
-
-  const prefixMatches = all.filter((c) => c.id.startsWith(ref) || shortId(c.id).startsWith(ref));
-  if (prefixMatches.length === 1) return { checkpoint: prefixMatches[0]! };
-  if (prefixMatches.length > 1) {
-    return {
-      error: `Checkpoint id "${ref}" is ambiguous — matches ${prefixMatches.length} checkpoints. Use a longer prefix or run /checkpoints for full ids.`,
-    };
-  }
-  return { error: `Unknown checkpoint id: "${ref}". Run /checkpoints to see available checkpoints.` };
 }
 
 // ---------------------------------------------------------------------------
@@ -140,7 +77,7 @@ export function registerCheckpointRuntimeCommands(registry: CommandRegistry): vo
       // them would cost one diff spawn per checkpoint (O(checkpoints)), which
       // stops being cheap once there are more than a handful. /rewind <id>
       // loads exactly one diff, so the exact file list is available there.
-      ctx.print('Use /rewind <id|last> to preview the exact file changes and restore a checkpoint.');
+      ctx.print('Use /rewind to preview and restore a completed turn (files and/or conversation) — it reuses these checkpoints for the files half.');
     },
   });
 
@@ -166,115 +103,6 @@ export function registerCheckpointRuntimeCommands(registry: CommandRegistry): vo
       } catch (err) {
         ctx.print(`Checkpoint failed: ${summarizeError(err)}`);
       }
-    },
-  });
-
-  registry.register({
-    name: 'rewind',
-    description: 'Preview and restore a workspace checkpoint (files only — conversation history is unchanged)',
-    usage: '<id|last>',
-    argsHint: '<id|last>',
-    handler: async (args, ctx: CommandContext) => {
-      const mgr = ctx.workspace.workspaceCheckpointManager;
-      if (!mgr) {
-        ctx.print('Checkpoints are not available in this session.');
-        return;
-      }
-      const ref = args[0];
-      if (!ref) {
-        ctx.print('Usage: /rewind <id|last>. Run /checkpoints to see available checkpoints.');
-        return;
-      }
-
-      const resolved = await resolveCheckpointTarget(mgr, ref);
-      if ('error' in resolved) {
-        ctx.print(resolved.error);
-        return;
-      }
-      const { checkpoint } = resolved;
-
-      let diff: Awaited<ReturnType<WorkspaceCheckpointManager['diff']>>;
-      try {
-        diff = await mgr.diff(checkpoint.id);
-      } catch (err) {
-        ctx.print(`Could not load checkpoint preview: ${summarizeError(err)}`);
-        return;
-      }
-
-      const { DiffPanel } = await import('../../panels/diff-panel.ts');
-      const pm = requirePanelManager(ctx);
-      let panel = pm.getAllOpen().find((p) => p.id === 'diff');
-      if (!panel) {
-        try {
-          panel = pm.open('diff');
-        } catch {
-          ctx.print('Could not open diff panel.');
-          return;
-        }
-      }
-      pm.activateById('diff');
-      if (!pm.isVisible()) pm.show();
-      // Must focus the panel — otherwise the user is left typing at the
-      // prompt while the panel silently shows a pending confirm they never
-      // see (the single most likely UX bug in this feature).
-      ctx.focusPanels?.();
-
-      const diffPanel = panel as InstanceType<typeof DiffPanel>;
-      if (diff.unifiedDiff.trim()) {
-        diffPanel.loadRawDiff(diff.unifiedDiff);
-      } else {
-        diffPanel.showDiff('(no changes)', '@@ -0,0 +0,0 @@\n Working tree already matches this checkpoint.');
-      }
-
-      diffPanel.confirmOverlay.arm({
-        id: checkpoint.id,
-        // renderConfirmLines (panels/confirm-state.ts) builds the on-screen
-        // prompt as `${verb} "${label}"?` itself — it supplies both the verb
-        // and the surrounding quotes. A label that already contained "Restore
-        // "..."" duplicated both, rendering as `Restore "Restore
-        // "baseline-pin"…`. label here must be just the descriptive subject,
-        // with no verb and no quotes of its own (same convention GitPanel
-        // already follows for its own confirms — see git-panel.ts:352,370).
-        label: `${checkpoint.label} (${plural(diff.files.length, 'file')} differ) — files only, conversation history is unchanged`,
-        verb: 'Restore',
-        onConfirm: async () => {
-          try {
-            const result = await mgr.restore(checkpoint.id, { safetyCheckpoint: true });
-            ctx.print(
-              `Rewind complete: restored ${plural(result.restoredFiles.length, 'file')}, removed ${plural(result.removedFiles.length, 'file')}. ` +
-              `Safety checkpoint: ${result.safetyCheckpointId ? shortId(result.safetyCheckpointId) : '(none — working tree already matched)'}.`,
-            );
-            // Conversation is NOT rewound: addSystemMessage (not ctx.print)
-            // persists this note into real turn/session history so it is
-            // indexed by getTranscriptEventIndex() and session save/load,
-            // while staying a distinct message kind from user/assistant turns.
-            ctx.session.conversationManager.addSystemMessage(
-              `[Rewind] Restored checkpoint "${checkpoint.label}" (${plural(result.restoredFiles.length, 'file')} restored, ${plural(result.removedFiles.length, 'file')} removed). ` +
-              'Files were rewound — conversation history is unchanged. Use /undo to remove turns separately.',
-            );
-            // Auto-close the preview: once the restore has actually happened,
-            // the diff panel showing the (now-stale) pre-restore preview has
-            // nothing left to confirm and no obvious way to dismiss it
-            // otherwise (same pm.close(id) + focusPrompt() pattern as
-            // /panel close — see operator-panel-runtime.ts).
-            pm.close('diff');
-            ctx.focusPrompt?.();
-            ctx.renderRequest();
-          } catch (err) {
-            ctx.print(`Rewind failed: ${summarizeError(err)}`);
-          }
-        },
-        onCancel: () => {
-          ctx.print('Rewind cancelled — no files changed.');
-          // Same auto-close as the confirm path above — a denied restore also
-          // leaves nothing actionable in the preview panel.
-          pm.close('diff');
-          ctx.focusPrompt?.();
-          ctx.renderRequest();
-        },
-      });
-      ctx.print(`Previewing checkpoint ${shortId(checkpoint.id)} "${checkpoint.label}". Confirm in the diff panel: Enter/y to restore, n/Esc to cancel.`);
-      ctx.renderRequest();
     },
   });
 }
