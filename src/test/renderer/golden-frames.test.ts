@@ -77,6 +77,8 @@ import { renderConfigModal } from '../../renderer/config-modal.ts';
 import type { ConfigModalView } from '../../input/config-modal-types.ts';
 import { statusGlyph, toneStyle, pad, postureLine, kv } from '../../panels/modals/modal-surface-helpers.ts';
 import { setActiveThemeMode } from '../../renderer/theme.ts';
+import { PermissionPromptUI } from '../../permissions/prompt.ts';
+import type { PermissionRequest } from '@pellux/goodvibes-sdk/platform/permissions';
 import { ModalFactory } from '../../renderer/modal-factory.ts';
 import type { Cell, Line } from '../../types/grid.ts';
 
@@ -1739,5 +1741,49 @@ describe('golden-frames — chrome light/dark flip (ux/light-chrome)', () => {
     // Restore is handled by underLight(); confirm the shared default is dark.
     const headerDarkAgain = snapshotEncode('c-h', renderChromeHeaderFooterSurface());
     expect(headerDarkAgain).toBe(headerDark);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Exec sandbox approval prompt — the named-escalation "Sandbox" row.
+//
+// When the sandbox-aware exec gate turns an auto-allow into an ask because the
+// boundary-safe command still needs host access, the approval card renders a
+// dedicated "Sandbox : wants network …" row. The escalation strings are the
+// gate's annotation (verbatim from the SDK policy in production); hardcoded here
+// so the golden tests the RENDERER, not the SDK policy wording.
+// ---------------------------------------------------------------------------
+
+function renderSandboxEscalationPromptSurface(): Line[] {
+  setActiveThemeMode('dark');
+  const request = {
+    callId: 'call-golden-sandbox-01',
+    tool: 'exec',
+    args: { command: 'curl https://example.com/data' },
+    category: 'execute',
+    analysis: {
+      classification: 'network',
+      riskLevel: 'high',
+      summary: 'Run a shell command that reaches the network',
+      reasons: ['This command reaches outside the machine.'],
+      host: 'example.com',
+    },
+    sandboxed: true,
+    sandboxEscalations: ['wants network (not on egress allowlist — denied inside the boundary unless approved)'],
+    resolve: () => {},
+  } as unknown as PermissionRequest;
+  return PermissionPromptUI.createPromptLines(NORMAL_W, request, undefined, true);
+}
+
+describe('golden-frames — permission prompt: exec sandbox escalation', () => {
+  test('matches committed golden snapshot', () => {
+    const lines = renderSandboxEscalationPromptSurface();
+    expect(lines.length).toBeGreaterThan(0);
+    assertGolden('permission-prompt-sandbox-escalation', lines);
+  });
+  test('render is deterministic (two consecutive renders match)', () => {
+    const a = snapshotEncode('permission-prompt-sandbox-escalation', renderSandboxEscalationPromptSurface());
+    const b = snapshotEncode('permission-prompt-sandbox-escalation', renderSandboxEscalationPromptSurface());
+    expect(a).toBe(b);
   });
 });

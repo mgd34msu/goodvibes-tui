@@ -22,6 +22,23 @@ export interface CliStatusOptions {
   readonly outputFormat?: GoodVibesCliOutputFormat;
   /** Per-workspace trust + registration posture, computed read-only by the caller. */
   readonly workspace?: CliWorkspaceStatus;
+  /** Per-command exec sandbox availability, host-probed by the caller. */
+  readonly sandbox?: CliSandboxStatus;
+}
+
+/** Honest per-command exec sandbox posture for the report. */
+export interface CliSandboxStatus {
+  /** `sandbox.enabled` config switch. */
+  readonly configEnabled: boolean;
+  /** The graduation-gated `exec-sandbox` feature flag. */
+  readonly featureEnabled: boolean;
+  /** Host can actually provide a boundary (bubblewrap present and working). */
+  readonly available: boolean;
+  readonly backend: 'bubblewrap' | 'none';
+  /** Host-probe diagnosis (why unavailable) or one-line availability summary. */
+  readonly reason: string;
+  /** Whether `--unshare-net` isolation is confirmed on this host, or unknown. */
+  readonly networkIsolationGuaranteed: boolean;
 }
 
 /** Read-only snapshot of this workspace's trust gate and registration coverage. */
@@ -52,7 +69,7 @@ export interface CliAuthStatus {
 
 export interface CliDoctorFinding {
   readonly id: string;
-  readonly area: 'auth' | 'network' | 'onboarding' | 'security' | 'service' | 'secrets' | 'install';
+  readonly area: 'auth' | 'network' | 'onboarding' | 'security' | 'service' | 'secrets' | 'install' | 'sandbox';
   readonly severity: 'warning' | 'risk';
   readonly summary: string;
   readonly cause: string;
@@ -93,6 +110,7 @@ export interface CliStatusSnapshot {
     readonly updatedAt: number | null;
   };
   readonly workspace: CliWorkspaceStatus | null;
+  readonly sandbox: CliSandboxStatus | null;
   readonly exposure: readonly CliExposureSurface[];
   readonly findings: readonly CliDoctorFinding[];
 }
@@ -163,6 +181,28 @@ function renderWorkspaceSection(workspace: CliWorkspaceStatus | null): string[] 
     `  trust: ${workspace.trustLevel}${workspace.trustGrandfathered ? ' (grandfathered)' : ''}`,
     `  registration: ${registrationLine(workspace)}`,
     `  root: ${workspace.registrationRoot}`,
+    '',
+  ];
+}
+
+/** The `Exec sandbox:` block — honest host-probed availability of the per-command boundary. */
+function renderSandboxSection(sandbox: CliSandboxStatus | null): string[] {
+  if (!sandbox) return [];
+  const active = sandbox.configEnabled && sandbox.featureEnabled && sandbox.available;
+  const network = !sandbox.available
+    ? 'n/a'
+    : sandbox.networkIsolationGuaranteed
+      ? 'isolation confirmed'
+      : 'isolation unknown';
+  return [
+    'Exec sandbox:',
+    `  active: ${active ? 'yes' : 'no'}`,
+    `  configEnabled: ${yesNo(sandbox.configEnabled)}`,
+    `  featureEnabled: ${yesNo(sandbox.featureEnabled)}`,
+    `  backend: ${sandbox.backend}`,
+    `  available: ${yesNo(sandbox.available)}`,
+    `  network: ${network}`,
+    `  detail: ${sandbox.reason}`,
     '',
   ];
 }
@@ -410,6 +450,21 @@ export function buildCliDoctorFindings(options: CliStatusOptions): readonly CliD
     }
   }
 
+  // Exec sandbox requested but the host cannot provide a boundary: the exec tool
+  // silently runs unsandboxed and the approval flow keeps prompting. Flag it so
+  // the operator knows the boundary they turned on is not in force.
+  if (options.sandbox && options.sandbox.configEnabled && options.sandbox.featureEnabled && !options.sandbox.available) {
+    findings.push({
+      id: 'exec-sandbox-unavailable',
+      area: 'sandbox',
+      severity: 'warning',
+      summary: 'The per-command exec sandbox is enabled but unavailable on this host.',
+      cause: options.sandbox.reason,
+      impact: 'Exec commands run unsandboxed and boundary-safe commands still prompt instead of auto-allowing.',
+      action: 'Install bubblewrap (bwrap) on Linux, or disable sandbox.enabled to stop requesting a boundary this host cannot provide.',
+    });
+  }
+
   return findings;
 }
 
@@ -453,6 +508,7 @@ export function buildCliStatusSnapshot(options: CliStatusOptions): CliStatusSnap
       updatedAt: marker?.payload?.updatedAt ?? null,
     },
     workspace: options.workspace ?? null,
+    sandbox: options.sandbox ?? null,
     exposure: buildCliExposureReport(options),
     findings,
   };
@@ -522,6 +578,7 @@ export function renderCliStatus(options: CliStatusOptions): string {
     `  updatedAt: ${marker?.payload ? new Date(marker.payload.updatedAt).toISOString() : 'n/a'}`,
     '',
     ...renderWorkspaceSection(snapshot.workspace),
+    ...renderSandboxSection(snapshot.sandbox),
     'Exposure (report only — no changes made):',
     ...snapshot.exposure.flatMap((surface) => [
       `  ${surface.label}: ${yesNo(surface.enabled)} · ${surface.reach}${surface.networkFacing ? ' · network-facing' : ''}`,

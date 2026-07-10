@@ -28,6 +28,7 @@ import { loadBootstrapSystemPrompt, syncConfiguredServices } from '@/runtime/ind
 import { registerBootstrapHookBridge } from '@/runtime/index.ts';
 import { registerBootstrapRuntimeEvents } from '@/runtime/index.ts';
 import { readExecEnvScrubAllowlist } from '../input/exec-env-scrub-config.ts';
+import { createSandboxExecAsk, sandboxExecAskDepsFromRuntime } from '../permissions/sandbox-exec-gate.ts';
 import { createRuntimeServices, type RuntimeServices } from './services.ts';
 import { runBootMemoryFold } from './memory-fold.ts';
 import { setPricingSource } from '../export/cost-utils.ts';
@@ -695,12 +696,19 @@ export async function initializeBootstrapCore(
   await syncConfiguredServices(domainDispatch.syncIntegration, services.serviceRegistry);
 
   const permissionManager = new PermissionManager(
-    // Wrapped by the workspace trust gate — see trustGatedAsk.
-    trustGatedAsk(services.workspaceTrustManager, (request) => approvalBroker.requestApproval({
-      request,
-      sessionId: runtimeSessionIdRef.value,
-      localPrompt: permissionPromptRef.requestPermission,
-    })),
+    // Composed ask layer: the workspace trust gate (outer) wraps the sandbox-aware
+    // exec gate (inner); see sandbox-exec-gate.ts. The catastrophic block is untouched.
+    trustGatedAsk(
+      services.workspaceTrustManager,
+      createSandboxExecAsk(
+        sandboxExecAskDepsFromRuntime(configManager, featureFlags),
+        (request) => approvalBroker.requestApproval({
+          request,
+          sessionId: runtimeSessionIdRef.value,
+          localPrompt: permissionPromptRef.requestPermission,
+        }),
+      ),
+    ),
     createPermissionConfigReader(configManager),
     policyRuntimeState,
     services.hookDispatcher,

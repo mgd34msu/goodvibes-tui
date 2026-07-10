@@ -4,6 +4,7 @@ import type { PermissionCategory, PermissionRequestAnalysis } from '@pellux/good
 import { buildPermissionApprovalBrief, getDisplayArg } from '@pellux/goodvibes-sdk/platform/permissions';
 import { DIFF_TONES, UI_TONES } from '../renderer/ui-primitives.ts';
 import type { HunkSelectionState } from './hunk-selection.ts';
+import { readSandboxAskAnnotation } from './sandbox-exec-gate.ts';
 export { buildPendingPermissionExtras } from './hunk-selection.ts';
 
 import type { PermissionPromptRequest, PermissionPromptDecision, PermissionRequestHandler, PermissionRequest } from '@pellux/goodvibes-sdk/platform/permissions';
@@ -195,7 +196,7 @@ export class PermissionPromptUI {
     if (this.isCondensed(request, hunkState, detailsExpanded)) return 5 + attributionLines + previewLines;
     const analysis = this.fallbackAnalysis(request);
     const reasonLines = Math.min(2, Math.max(1, analysis.reasons.length));
-    const extraLines = (analysis.host ? 1 : 0) + (analysis.surface ? 1 : 0) + (analysis.sideEffects && analysis.sideEffects.length > 0 ? 1 : 0);
+    const extraLines = (analysis.host ? 1 : 0) + (analysis.surface ? 1 : 0) + (analysis.sideEffects && analysis.sideEffects.length > 0 ? 1 : 0) + (readSandboxAskAnnotation(request) ? 1 : 0);
     const hunkLines = hunkState ? hunkListRowCount(hunkState) : 0;
     // Base 12 counted a single arg line; the Path field now spans `pathRows`
     // lines and the full card adds one raw-args row (2a reachability), so the
@@ -324,6 +325,20 @@ export class PermissionPromptUI {
     if (analysis.host) {
       const hostLine = `   Host      : ${analysis.host}`;
       lines.push(UIFactory.stringToLine(hostLine.padEnd(width), width, { fg: DIM }));
+    }
+
+    // Sandbox escalation row: when the sandbox-aware exec gate turned an
+    // auto-allow into an ask because the boundary-safe command still needs host
+    // access, name what it wants ("wants network …"). The escalation text is the
+    // SDK policy's, verbatim — this row only surfaces it.
+    const sandboxAnnotation = readSandboxAskAnnotation(request);
+    if (sandboxAnnotation && sandboxAnnotation.sandboxEscalations.length > 0) {
+      const escalations = sandboxAnnotation.sandboxEscalations.join('; ');
+      const maxSandboxLen = Math.max(10, width - 16);
+      const truncatedSandbox =
+        escalations.length > maxSandboxLen ? `${escalations.slice(0, maxSandboxLen - 3)}...` : escalations;
+      const sandboxLine = `   Sandbox   : ${truncatedSandbox}`;
+      lines.push(UIFactory.stringToLine(sandboxLine.padEnd(width), width, { fg: WARN }));
     }
 
     const summary = analysis.summary.length > width - 16
