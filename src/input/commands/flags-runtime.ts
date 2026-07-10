@@ -11,7 +11,13 @@
 
 import type { CommandRegistry, CommandContext } from '../command-registry.ts';
 import type { FeatureFlag, FlagState } from '@/runtime/index.ts';
+import type { OperatorMethodOutput } from '@pellux/goodvibes-sdk';
 import { persistFlagState } from '../settings-modal-mutations.ts';
+import { describeOperatorRpcError, getOperatorRpc } from './operator-rpc.ts';
+
+/** The flags.graduation.report response, as typed by the installed operator contract. */
+type GraduationReport = OperatorMethodOutput<'flags.graduation.report'>;
+type GraduationEntry = GraduationReport['entries'][number];
 
 /** A flag paired with its live runtime state. */
 export interface FlagSnapshotEntry {
@@ -136,13 +142,104 @@ function applyToggle(ctx: CommandContext, id: string, target: 'enabled' | 'disab
   ctx.print(`Flag ${id} is startup-only. Saved ${target} — it applies on next launch.`);
 }
 
+// ---------------------------------------------------------------------------
+// /flags graduation — render flags.graduation.report (the release-readiness lane
+// for each flag). Candidates awaiting a decision are the only release-blocking
+// state, so they sort first; every flag shows its evidence, with "no evidence
+// collected" stated plainly rather than implied.
+// ---------------------------------------------------------------------------
+
+const GRADUATION_MARK: Record<GraduationEntry['state'], string> = {
+  'graduate-candidate': '◆',
+  blocked: '✕',
+  soaking: '◐',
+  dark: '○',
+  graduated: '●',
+};
+
+/** Sort rank: candidates (need a decision) first, then blocked, soaking, dark, graduated. */
+const GRADUATION_RANK: Record<GraduationEntry['state'], number> = {
+  'graduate-candidate': 0,
+  blocked: 1,
+  soaking: 2,
+  dark: 3,
+  graduated: 4,
+};
+
+/** One evidence line — real divergence readings, or an explicit absence of them. */
+function formatEvidence(entry: GraduationEntry): string {
+  const { evidence } = entry;
+  const parts = [evidence.note];
+  if (evidence.divergence) {
+    const d = evidence.divergence;
+    parts.push(`divergence ${(d.divergenceRate * 100).toFixed(2)}% over ${d.totalEvaluations} evals, gate ${d.gateStatus}`);
+  }
+  return `${parts.join(' · ')} (instrumentation: ${evidence.instrumentation})`;
+}
+
+function formatGraduationEntry(entry: GraduationEntry): string {
+  const toggle = entry.runtimeToggleable ? 'runtime-toggleable' : 'startup-only';
+  const lines = [
+    `  ${GRADUATION_MARK[entry.state]} ${entry.flagId}  —  ${entry.name}  [tier ${entry.tier}, default ${entry.currentDefault}, ${toggle}]`,
+    `      state: ${entry.state}`,
+    `      evidence: ${formatEvidence(entry)}`,
+  ];
+  if (entry.blocker) lines.push(`      blocked ${entry.blocker.date}: ${entry.blocker.reason}`);
+  if (entry.note) lines.push(`      note: ${entry.note}`);
+  return lines.join('\n');
+}
+
+/** Build the `/flags graduation` overview. Pure — exported for testing. */
+export function formatGraduationReport(report: GraduationReport): string {
+  const { summary } = report;
+  const out: string[] = [
+    `Feature-flag graduation (${summary.total} flags) — generated ${new Date(report.generatedAt).toISOString()}`,
+    `  candidates awaiting decision: ${summary.graduateCandidate} · graduated: ${summary.graduated} · soaking: ${summary.soaking} · dark: ${summary.dark} · blocked: ${summary.blocked}`,
+    '',
+  ];
+
+  const sorted = [...report.entries].sort(
+    (a, b) => (GRADUATION_RANK[a.state] - GRADUATION_RANK[b.state]) || (a.tier - b.tier) || a.flagId.localeCompare(b.flagId),
+  );
+
+  if (report.releaseBlockers.length > 0) {
+    out.push(`RELEASE BLOCKERS (${report.releaseBlockers.length}) — each must graduate (flip default ON) or record a dated blocker:`);
+    for (const entry of sorted.filter((e) => e.state === 'graduate-candidate')) out.push(formatGraduationEntry(entry));
+    out.push('');
+  } else {
+    out.push('No release blockers — nothing sits in graduate-candidate.');
+    out.push('');
+  }
+
+  const rest = sorted.filter((e) => e.state !== 'graduate-candidate');
+  if (rest.length > 0) {
+    out.push('All other flags:');
+    for (const entry of rest) out.push(formatGraduationEntry(entry));
+  }
+  return out.join('\n').trimEnd();
+}
+
+async function runGraduationReport(ctx: CommandContext): Promise<void> {
+  const rpc = getOperatorRpc(ctx);
+  if (!rpc.available) {
+    ctx.print(`[flags graduation] ${rpc.reason}`);
+    return;
+  }
+  try {
+    const report = await rpc.sdk.operator.invoke('flags.graduation.report', {});
+    ctx.print(formatGraduationReport(report));
+  } catch (error) {
+    ctx.print(`[flags graduation] ${describeOperatorRpcError(error)}`);
+  }
+}
+
 export function registerFlagsRuntimeCommands(registry: CommandRegistry): void {
   registry.register({
     name: 'flags',
-    description: 'List feature flags by state, toggle runtime-toggleable ones, and surface dark subsystems',
-    usage: '[list|on <id>|off <id>|doctor]',
-    argsHint: '[on|off <id> | doctor]',
-    handler(args, ctx) {
+    description: 'List feature flags by state, toggle runtime-toggleable ones, surface dark subsystems, and report graduation readiness',
+    usage: '[list|on <id>|off <id>|doctor|graduation]',
+    argsHint: '[on|off <id> | doctor | graduation]',
+    async handler(args, ctx) {
       const sub = (args[0] ?? 'list').toLowerCase();
       switch (sub) {
         case 'list':
@@ -151,6 +248,10 @@ export function registerFlagsRuntimeCommands(registry: CommandRegistry): void {
           return;
         case 'doctor':
           ctx.print(formatFlagsDoctor(snapshotEntries(ctx)));
+          return;
+        case 'graduation':
+        case 'grad':
+          await runGraduationReport(ctx);
           return;
         case 'on':
         case 'enable': {
@@ -167,7 +268,7 @@ export function registerFlagsRuntimeCommands(registry: CommandRegistry): void {
           return;
         }
         default:
-          ctx.print(`Unknown /flags subcommand: ${sub}. Use: list | on <id> | off <id> | doctor`);
+          ctx.print(`Unknown /flags subcommand: ${sub}. Use: list | on <id> | off <id> | doctor | graduation`);
       }
     },
   });

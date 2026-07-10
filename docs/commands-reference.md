@@ -195,7 +195,7 @@ GoodVibes ships **143** built-in slash commands across **68** categories. Every 
 
 | Command | Aliases | Usage | Description |
 | --- | --- | --- | --- |
-| `/flags` | — | `[list\|on <id>\|off <id>\|doctor]` | List feature flags by state, toggle runtime-toggleable ones, and surface dark subsystems |
+| `/flags` | — | `[list\|on <id>\|off <id>\|doctor\|graduation]` | List feature flags by state, toggle runtime-toggleable ones, surface dark subsystems, and report graduation readiness |
 
 ## Git
 
