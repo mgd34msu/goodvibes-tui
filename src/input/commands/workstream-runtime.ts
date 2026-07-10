@@ -28,6 +28,7 @@ import { AdaptivePlanner } from '@pellux/goodvibes-sdk/platform/core';
 import type { CreateWorkstreamInput, PhaseKind, PhaseRole, WorkItem, WorkItemState, Workstream, WorkstreamIsolation } from '@pellux/goodvibes-sdk/platform/orchestration';
 import type { WorkstreamCommandService, WorkstreamDraft, WorkstreamDraftProvenance } from '../../runtime/workstream-services.ts';
 import type { CommandContext, CommandRegistry } from '../command-registry.ts';
+import { describeOperatorRpcError, getOperatorRpc } from './operator-rpc.ts';
 
 // ---------------------------------------------------------------------------
 // Formatting helpers
@@ -56,6 +57,47 @@ function isActiveItemState(state: WorkItemState): boolean {
 /** Mirrors the engine's templateForPhase (phase-runner.ts): only 'review'/'gate' phases run the general template — everything else, INCLUDING 'custom', runs the engineer template regardless of phase.role's text. */
 function templateForPhaseKind(kind: PhaseKind): string {
   return kind === 'review' || kind === 'gate' ? 'general' : 'engineer';
+}
+
+/**
+ * Pre-fan-out quota consultation for /workstream launch. Assesses whether the
+ * draft's work-item count (the fan-out this launch is about to create, worst
+ * case — items can run concurrently within a phase) is likely to exhaust the
+ * active provider's quota window, grounded in observed rate-limit signals
+ * (quota.fanout.get). Returns a printable warning + evidence when the daemon
+ * reports 'likely-exhausts'; returns null for 'unlikely'/'unknown' (no
+ * evidence of risk is not itself evidence of safety, so those verdicts never
+ * block) and whenever the check itself can't run (daemon unavailable/
+ * unreachable, or no active provider) — an infra gap in the quota check is
+ * not grounds to block launching work the operator already approved.
+ */
+async function checkFanoutQuotaWarning(ctx: CommandContext, draft: WorkstreamDraft): Promise<string | null> {
+  const provider = ctx.session.runtime.provider;
+  if (!provider) return null;
+  const rpc = getOperatorRpc(ctx);
+  if (!rpc.available) return null;
+  const agentCount = Math.max(1, draft.proposal.workItems.length);
+  const assessment = await rpc.sdk.operator.invoke('quota.fanout.get', { provider, agentCount }).catch((error: unknown) => {
+    ctx.print(`[workstream launch] quota check could not run: ${describeOperatorRpcError(error)}`);
+    return null;
+  });
+  if (!assessment || assessment.verdict !== 'likely-exhausts') return null;
+  const ev = assessment.evidence;
+  const evidenceParts = [
+    `requested=${ev.requestedAgents}`,
+    `recentRateLimitCount=${ev.recentRateLimitCount}`,
+    ev.activeCooldownMs !== undefined ? `activeCooldownMs=${ev.activeCooldownMs}` : null,
+    ev.observedRemaining !== undefined ? `observedRemaining=${ev.observedRemaining}` : null,
+    ev.observedLimit !== undefined ? `observedLimit=${ev.observedLimit}` : null,
+  ].filter((part): part is string => part !== null);
+  return [
+    `[workstream launch] WARNING — ${provider} likely exhausts its quota window for ${agentCount} agent(s) fanning out.`,
+    `  reason: ${assessment.reason}`,
+    `  evidence: ${evidenceParts.join(' ')}`,
+    '',
+    `Launch anyway: /workstream launch ${draft.id} --force`,
+    'Cancel: do nothing — the approved proposal stays ready to launch later.',
+  ].join('\n');
 }
 
 /**
@@ -320,7 +362,7 @@ export function registerWorkstreamRuntimeCommands(registry: CommandRegistry): vo
   registry.register({
     name: 'workstream',
     description: 'Author and oversee multi-phase agent workstreams (orchestration engine)',
-    usage: 'create [--isolation shared|worktree] <task...> | list | status [id] | insert-phase <id> <description...> | edit-item <id> <item#> <brief...> | remove-item <id> <item#> | move-item <id> <item#> <pos> | approve <id> | edit <id> [--isolation shared|worktree] <task...> | launch <id> | cancel <id>',
+    usage: 'create [--isolation shared|worktree] <task...> | list | status [id] | insert-phase <id> <description...> | edit-item <id> <item#> <brief...> | remove-item <id> <item#> | move-item <id> <item#> <pos> | approve <id> | edit <id> [--isolation shared|worktree] <task...> | launch <id> [--force] | cancel <id>',
     argsHint: 'create [--isolation worktree] <task> | list | status [id] | edit-item | remove-item | move-item | approve | edit | launch | cancel',
     handler: async (args, ctx: CommandContext) => {
       const service = ctx.session.workstreamEngine;
@@ -482,9 +524,10 @@ export function registerWorkstreamRuntimeCommands(registry: CommandRegistry): vo
       }
 
       if (sub === 'launch') {
-        const id = args[1];
+        const force = args.includes('--force');
+        const id = args.find((arg, index) => index > 0 && arg !== '--force');
         if (!id) {
-          ctx.print('Usage: /workstream launch <id>');
+          ctx.print('Usage: /workstream launch <id> [--force]');
           return;
         }
         const draft = service.getDraft(id);
@@ -495,6 +538,13 @@ export function registerWorkstreamRuntimeCommands(registry: CommandRegistry): vo
         if (!draft.approved) {
           ctx.print(`Proposal ${id} is not approved yet. Run /workstream approve ${id} first.`);
           return;
+        }
+        if (!force) {
+          const quotaWarning = await checkFanoutQuotaWarning(ctx, draft);
+          if (quotaWarning) {
+            ctx.print(quotaWarning);
+            return;
+          }
         }
         const result = service.launchDraft(id);
         if (!result) {
@@ -545,7 +595,7 @@ export function registerWorkstreamRuntimeCommands(registry: CommandRegistry): vo
         + '  /workstream move-item <id> <item#> <new-position#>\n'
         + '  /workstream approve <id>\n'
         + '  /workstream edit <id> [--isolation shared|worktree] <new task...>\n'
-        + '  /workstream launch <id>\n'
+        + '  /workstream launch <id> [--force]\n'
         + '  /workstream cancel <id>',
       );
     },
