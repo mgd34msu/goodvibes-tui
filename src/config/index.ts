@@ -39,6 +39,22 @@ export function isAutoApproveEnabled(configManager: Pick<ConfigManager, 'get'>):
   return configManager.get('behavior.autoApprove');
 }
 
+/**
+ * True when the current permission posture effectively auto-approves everything:
+ * auto-approve on, permission mode `allow-all`, or a `custom` mode whose every
+ * tool action is `allow`. Drives the footer's danger indicator.
+ */
+export function isEffectiveDangerMode(configManager: Pick<ConfigManager, 'get' | 'getCategory'>): boolean {
+  if (configManager.get('behavior.autoApprove')) return true;
+  const permMode = configManager.get('permissions.mode');
+  if (permMode === 'allow-all') return true;
+  if (permMode === 'custom') {
+    const tools = configManager.getCategory('permissions').tools;
+    if (Object.values(tools).every((action) => action === 'allow')) return true;
+  }
+  return false;
+}
+
 export function getWorkingDirectory(configManager: Pick<ConfigManager, 'getWorkingDirectory'>): string | null {
   return configManager.getWorkingDirectory();
 }

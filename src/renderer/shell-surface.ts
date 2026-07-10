@@ -42,6 +42,12 @@ export interface ShellFooterBuildOptions {
    */
   readonly contextStatusHint?: string | null;
   /**
+   * Output of the user's scriptable status line (`statusline.command`).
+   * Rendered as a dim informational line above the prompt when non-null,
+   * below the context pressure hint.
+   */
+  readonly scriptableStatusLine?: string | null;
+  /**
    * Compact footer posture for short terminals (~<30 rows). Collapses the
    * footer to its essentials (prompt box + token/cost line + help) and drops
    * the process indicator, context bar, context-info line and posture block.
@@ -71,6 +77,10 @@ const PROCESS_INDICATOR_ROWS = 1;
 // bar or process indicator), leaving just: prompt-box top border, bottom
 // border, token-usage line, and the help/exit line.
 const COMPACT_FOOTER_BASE_ROWS = 4;
+
+// Dim slate foreground shared by the passive footer status lines (context
+// pressure hint and the scriptable status line).
+const DIM_STATUS_FG = '#64748b';
 
 /**
  * Real height of the most recently rendered footer, tagged with the compact
@@ -140,9 +150,14 @@ export function buildShellFooter(
     );
     const inputBoxRows = Math.max(1, options.promptLineCount) + 2;
     lines.splice(inputBoxRows, 0, ...processIndicator);
+    // Scriptable status line — dim informational line above the prompt. Unshifted
+    // before the context hint so the context hint (if any) sits above it.
+    if (options.scriptableStatusLine) {
+      lines.unshift(UIFactory.stringToLine(options.scriptableStatusLine, options.width, { fg: DIM_STATUS_FG }));
+    }
     // Passive context status hint — rendered as a dim informational line before the prompt.
     if (options.contextStatusHint) {
-      const hintLine = UIFactory.stringToLine(options.contextStatusHint, options.width, { fg: '#64748b' });
+      const hintLine = UIFactory.stringToLine(options.contextStatusHint, options.width, { fg: DIM_STATUS_FG });
       lines.unshift(hintLine);
     }
   }

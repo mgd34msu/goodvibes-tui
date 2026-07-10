@@ -41,3 +41,37 @@ Example (`.goodvibes/tui/settings.json`):
 > Compatibility note: these root-guard keys take effect only with a platform
 > build whose checkpoint manager exposes them. On an older pinned build the
 > keys are read and validated but ignored by the manager until it is upgraded.
+
+## `statusline.*` — scriptable status line
+
+Point `statusline.command` at any command and its output renders as a dim line
+in the status area (just above the prompt). The command runs as a POSIX shell
+command (`/bin/sh -c <command>`) in your working directory at each turn
+boundary — when a turn completes, errors, or is cancelled — and once at
+startup.
+
+| Key | Type | Default | Meaning |
+| --- | --- | --- | --- |
+| `statusline.command` | string | *(unset)* | Shell command to run. Its first stdout line is shown. Unset or empty disables the feature. |
+| `statusline.timeoutMs` | number | `2000` | Per-run timeout in milliseconds. Clamped to `[100, 15000]`. A command that exceeds it is killed and the line is cleared. |
+
+Behavior notes:
+
+- Only the **first line** of stdout is used. ANSI colors and control characters
+  are stripped; the result is trimmed and capped at 512 characters.
+- Each run is bounded by the timeout, and runs never overlap — refreshes that
+  arrive while a run is in flight coalesce into a single trailing run, so a slow
+  command cannot stall the UI or pile up.
+- If the command exits non-zero, times out, or fails to start, the line is
+  cleared rather than left showing stale text.
+
+Example (`.goodvibes/tui/settings.json`):
+
+```json
+{
+  "statusline": {
+    "command": "git rev-parse --abbrev-ref HEAD 2>/dev/null | sed 's/^/branch: /'",
+    "timeoutMs": 1500
+  }
+}
+```
