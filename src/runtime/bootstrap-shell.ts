@@ -291,6 +291,7 @@ export function createBootstrapShell(options: BootstrapShellOptions): BootstrapS
     codeIndexStore: services.codeIndexStore,
     codeIndexReindexScheduler: services.codeIndexReindexScheduler,
     isPassiveCodeInjectionFlagEnabled: () => services.featureFlags.isEnabled('agent-passive-code-injection'),
+    featureFlagManager: services.featureFlags,
     // Expose the MAIN session's per-turn passive-injection ring
     // so `/recall injections` (no agent id) renders it — see recall-review.ts.
     getMainSessionTurnInjections: () => orchestrator.getTurnInjections(),

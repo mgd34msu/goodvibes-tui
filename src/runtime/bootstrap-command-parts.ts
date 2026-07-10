@@ -9,6 +9,7 @@ import type { McpApi } from '@pellux/goodvibes-sdk/platform/mcp';
 import type { PanelManager, PanelDeepLinkTarget } from '../panels/panel-manager.ts';
 import type { ProviderApi } from '@pellux/goodvibes-sdk/platform/providers';
 import type { OpsApi } from '@/runtime/index.ts';
+import type { FeatureFlagManager } from '@/runtime/index.ts';
 import type { MutableRuntimeState } from '@/runtime/index.ts';
 import type { ProviderRegistry } from '@pellux/goodvibes-sdk/platform/providers';
 import type { CommandContext } from '../input/command-registry.ts';
@@ -70,6 +71,7 @@ export interface BootstrapCommandActionOptions {
 
 export interface BootstrapCommandSectionOptions {
   readonly configManager: ConfigManager;
+  readonly featureFlagManager?: FeatureFlagManager;
   readonly providerRegistry: ProviderRegistry;
   readonly conversation: ConversationManager;
   readonly runtime: MutableRuntimeState;
@@ -384,13 +386,14 @@ export function createBootstrapCommandWorkspaceSection(
 export function createBootstrapCommandPlatformSection(
   options: Pick<
     BootstrapCommandSectionOptions,
-    'configManager' | 'voiceProviderRegistry' | 'voiceService' | 'webSearchService' | 'mediaProviders' | 'artifactStore'
+    'configManager' | 'featureFlagManager' | 'voiceProviderRegistry' | 'voiceService' | 'webSearchService' | 'mediaProviders' | 'artifactStore'
   >,
   shellServices: BootstrapCommandShellServices,
 ): BootstrapCommandPlatformSection {
   return {
     config: getConfigSnapshot(options.configManager),
     configManager: options.configManager,
+    featureFlagManager: options.featureFlagManager,
     voiceProviderRegistry: options.voiceProviderRegistry,
     voiceService: options.voiceService,
     webSearchService: options.webSearchService,

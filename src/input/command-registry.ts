@@ -18,6 +18,7 @@ import type { HookApi } from '@pellux/goodvibes-sdk/platform/hooks';
 import type { McpApi } from '@pellux/goodvibes-sdk/platform/mcp';
 import type { ProviderApi } from '@pellux/goodvibes-sdk/platform/providers';
 import type { OpsApi } from '@/runtime/index.ts';
+import type { FeatureFlagManager } from '@/runtime/index.ts';
 import type { OperatorClient } from '@/runtime/index.ts';
 import type { PeerClient } from '@/runtime/index.ts';
 import type { DirectTransport } from '@/runtime/index.ts';
@@ -241,6 +242,8 @@ export interface CommandWorkspaceServices
 export interface CommandPlatformConfigServices {
   readonly config: DeepReadonly<GoodVibesConfig>;
   readonly configManager: ConfigManager;
+  /** Feature-flag runtime — backs the `/flags` command's listing and runtime toggling. */
+  readonly featureFlagManager?: FeatureFlagManager;
   readonly voiceProviderRegistry?: VoiceProviderRegistry;
   readonly voiceService?: VoiceService;
   /** Direct-command consumer (`/search`) alongside the existing agent-tool consumer. */

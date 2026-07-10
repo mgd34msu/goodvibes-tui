@@ -53,6 +53,7 @@ import {
 
 export type CreateBootstrapCommandContextOptions = {
   configManager: ConfigManager;
+  featureFlagManager?: import('@/runtime/index.ts').FeatureFlagManager;
   providerRegistry: ProviderRegistry;
   conversation: ConversationManager;
   runtime: MutableRuntimeState;
@@ -136,6 +137,7 @@ export function createBootstrapCommandContext(
   const {
     providerRegistry,
     configManager,
+    featureFlagManager,
     conversation,
     runtime,
     requestRender,
@@ -272,7 +274,7 @@ export function createBootstrapCommandContext(
     projectPlanningProjectId,
     workPlanStore,
   }, shellServices);
-  const platform = createBootstrapCommandPlatformSection({ configManager, voiceProviderRegistry, voiceService, webSearchService, mediaProviders, artifactStore }, shellServices);
+  const platform = createBootstrapCommandPlatformSection({ configManager, featureFlagManager, voiceProviderRegistry, voiceService, webSearchService, mediaProviders, artifactStore }, shellServices);
   const extensions = createBootstrapCommandExtensionsSection({
     toolRegistry,
     mcpRegistry,

@@ -34,6 +34,7 @@ import { registerRemoteRuntimeCommands } from './commands/remote-runtime.ts';
 import { registerTeleportRuntimeCommands } from './commands/teleport-runtime.ts';
 import { registerSubscriptionRuntimeCommands } from './commands/subscription-runtime.ts';
 import { registerHooksRuntimeCommands } from './commands/hooks-runtime.ts';
+import { registerFlagsRuntimeCommands } from './commands/flags-runtime.ts';
 import { registerControlRoomRuntimeCommands } from './commands/control-room-runtime.ts';
 import { registerMcpRuntimeCommands } from './commands/mcp-runtime.ts';
 import { registerSessionContentCommands } from './commands/session-content.ts';
@@ -94,6 +95,7 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
   registerTeleportRuntimeCommands(registry);
   registerSubscriptionRuntimeCommands(registry);
   registerHooksRuntimeCommands(registry);
+  registerFlagsRuntimeCommands(registry);
   registerControlRoomRuntimeCommands(registry);
   registerMcpRuntimeCommands(registry);
   registerIncidentRuntimeCommands(registry);
