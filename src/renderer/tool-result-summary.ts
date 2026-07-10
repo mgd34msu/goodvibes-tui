@@ -109,21 +109,49 @@ function withheldEnvSuffix(names: readonly string[]): string {
   return ` · withheld: ${shown}${more}`;
 }
 
+/**
+ * Compact per-command exec-sandbox suffix: `sandboxed` fields are present
+ * only when the sandbox was active for the run (SDK's attachSandboxMeta stays
+ * quiet otherwise), so absence here means "ran unsandboxed" and the suffix is
+ * empty — never a fabricated claim either way.
+ *
+ *   sandboxed, network disabled            -> " · sandboxed (net off)"
+ *   sandboxed, network enabled, escalation -> " · sandboxed (net on, +1 escalation)"
+ *   requested but host couldn't provide it -> " · sandbox unavailable (<reason>)"
+ */
+function sandboxSuffix(obj: Record<string, unknown>): string {
+  const sandboxed = obj.sandboxed;
+  if (sandboxed === undefined) return '';
+  if (sandboxed === false) {
+    const reason = typeof obj.sandbox_boundary === 'string' ? obj.sandbox_boundary : undefined;
+    return reason ? ` · sandbox unavailable (${reason})` : ' · sandbox unavailable';
+  }
+  const network = typeof obj.sandbox_network === 'string' ? obj.sandbox_network : undefined;
+  const escalations = Array.isArray(obj.sandbox_escalations)
+    ? obj.sandbox_escalations.filter((e): e is string => typeof e === 'string')
+    : [];
+  const netText = network ? `net ${network}` : undefined;
+  const escText = escalations.length > 0 ? `+${escalations.length} escalation${escalations.length === 1 ? '' : 's'}` : undefined;
+  const detail = [netText, escText].filter((s): s is string => s !== undefined).join(', ');
+  return detail ? ` · sandboxed (${detail})` : ' · sandboxed';
+}
+
 /** A single exec command result. */
 function summarizeExecOne(obj: Record<string, unknown>): string | null {
   const exit = obj.exit_code;
   const dur = asNumber(obj.duration_ms);
   const durText = dur !== undefined ? ` · ${formatDuration(dur)}` : '';
   const withheldText = withheldEnvSuffix(withheldEnvNames(obj));
-  if (obj.timed_out === true) return `timed out${durText}${withheldText}`;
-  if (obj.cancelled === true) return `cancelled${durText}${withheldText}`;
+  const sandboxText = sandboxSuffix(obj);
+  if (obj.timed_out === true) return `timed out${durText}${withheldText}${sandboxText}`;
+  if (obj.cancelled === true) return `cancelled${durText}${withheldText}${sandboxText}`;
   const stdout = typeof obj.stdout === 'string' ? obj.stdout : '';
   const lineCount = stdout.length === 0
     ? 0
     : stdout.replace(/\n$/, '').split('\n').length;
   const lineText = lineCount > 0 ? ` · ${lineCount} line${lineCount === 1 ? '' : 's'}` : '';
   const code = typeof exit === 'number' ? String(exit) : '?';
-  return `exit ${code}${durText}${lineText}${withheldText}`;
+  return `exit ${code}${durText}${lineText}${withheldText}${sandboxText}`;
 }
 
 /** exec: single { cmd, exit_code, ... } or multi { commands: [...], total }. */
@@ -142,9 +170,15 @@ function summarizeExec(obj: Record<string, unknown>): string | null {
       }
     }
     const withheldText = withheldEnvSuffix([...withheldAcrossCommands]);
+    // Count sandboxed commands across the batch — a compact "N sandboxed" beats
+    // repeating each command's full boundary detail on the collapsed line.
+    const sandboxedCount = obj.commands.filter(
+      (c) => c && typeof c === 'object' && (c as Record<string, unknown>).sandboxed === true,
+    ).length;
+    const sandboxText = sandboxedCount > 0 ? ` · ${sandboxedCount} sandboxed` : '';
     return failed > 0
-      ? `${total} commands · ${failed} failed${withheldText}`
-      : `${total} commands · all ok${withheldText}`;
+      ? `${total} commands · ${failed} failed${withheldText}${sandboxText}`
+      : `${total} commands · all ok${withheldText}${sandboxText}`;
   }
   if ('exit_code' in obj || 'timed_out' in obj || 'cancelled' in obj) {
     return summarizeExecOne(obj);

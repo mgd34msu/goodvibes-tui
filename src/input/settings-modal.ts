@@ -26,6 +26,7 @@ import {
 import type { FeatureFlagManager } from '@/runtime/index.ts';
 import type { McpRegistry } from '@pellux/goodvibes-sdk/platform/mcp';
 import { isWorktreeSetupListConfigKey, parseWorktreeSetupListInput } from './worktree-setup-config.ts';
+import { isSandboxExecListConfigKey, parseSandboxExecListInput } from './sandbox-exec-config.ts';
 
 import {
   SETTINGS_CATEGORIES,
@@ -570,6 +571,11 @@ export class SettingsModal {
       // Comma-separated display/edit convention for the array-backed
       // worktree.setup.* keys — see worktree-setup-config.ts.
       this._setValue(setting.key, parseWorktreeSetupListInput(this.editBuffer));
+    } else if (isSandboxExecListConfigKey(setting.key)) {
+      // Same comma-separated convention for the array-backed
+      // sandbox.egressAllowlist / sandbox.workspaceWritable keys — see
+      // sandbox-exec-config.ts.
+      this._setValue(setting.key, parseSandboxExecListInput(this.editBuffer));
     } else if (setting.type === 'string' && isSecretConfigKey(setting.key)) {
       setSecretBackedSettingValue({
         key: setting.key,
