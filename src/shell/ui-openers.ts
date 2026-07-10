@@ -14,6 +14,7 @@ import type { MemoryEmbeddingProviderRegistry } from '@pellux/goodvibes-sdk/plat
 import type { ServiceInspectionQuery } from '../runtime/ui-service-queries.ts';
 import type { EmbeddingProviderPickerEntry, ModelPickerTargetInfo } from '../input/model-picker.ts';
 import type { SelectionItem } from '../input/selection-modal.ts';
+import { categorizeBuiltinCommands } from '../input/commands.ts';
 import { syncServiceSettingToPlatform } from './service-settings-sync.ts';
 import { setActiveThemeMode } from '../renderer/theme.ts';
 import { THEME_MODE_CONFIG_KEY, coerceThemeModeSetting } from '../renderer/theme-mode-config.ts';
@@ -40,6 +41,23 @@ type WireShellUiOpenersOptions = {
   getPinned: () => Promise<string[]>;
   render: () => void;
 };
+
+let commandCategoryMapCache: Map<string, string> | null = null;
+
+/**
+ * Map each built-in command name to its reference category, memoized. Drives
+ * the command palette's category grouping from the same single source of truth
+ * as the generated docs (categorizeBuiltinCommands), so the palette is always
+ * registry-derived and never a hand-maintained list.
+ */
+function getCommandCategoryMap(): Map<string, string> {
+  if (!commandCategoryMapCache) {
+    commandCategoryMapCache = new Map(
+      categorizeBuiltinCommands().map((entry) => [entry.command.name, entry.category]),
+    );
+  }
+  return commandCategoryMapCache;
+}
 
 /**
  * Derive the configuredVia tier for a provider.
@@ -455,6 +473,53 @@ export function wireShellUiOpeners(options: WireShellUiOpenersOptions): void {
     conversation.setSplashSuppressed(true);
     conversation.rebuildHistory();
     render();
+  };
+
+  commandContext.openCommandPalette = () => {
+    // The palette is built live from the command registry — never a hardcoded
+    // list — so it can never drift from the real command set. Category labels
+    // come from the same source the generated docs use (getCommandCategoryMap).
+    const registry = input.commandRegistry;
+    if (!registry) return;
+    const categoryByName = getCommandCategoryMap();
+    const items: SelectionItem[] = registry
+      .getAll()
+      .slice()
+      .sort((a, b) => a.name.localeCompare(b.name))
+      .map((cmd) => {
+        const argsHint = cmd.argsHint ?? cmd.usage;
+        const detailParts: string[] = [];
+        if (cmd.description) detailParts.push(cmd.description);
+        if (argsHint) detailParts.push(`(args: ${argsHint})`);
+        if ((cmd.aliases ?? []).length > 0) detailParts.push(`[aka ${(cmd.aliases ?? []).map((a) => `/${a}`).join(', ')}]`);
+        return {
+          id: cmd.name,
+          label: `/${cmd.name}`,
+          detail: detailParts.join(' '),
+          category: categoryByName.get(cmd.name) ?? 'Other',
+          primaryAction: 'select' as const,
+        };
+      });
+    commandContext.openSelection?.(
+      'Command Palette',
+      items,
+      { allowSearch: true, primaryVerbLabel: 'Run' },
+      (result) => {
+        if (!result) return;
+        const cmd = registry.get(result.item.id);
+        if (!cmd) return;
+        // Pre-fill the composer with the command (and a trailing space so the
+        // inline args hint shows what the command wants). Keyboard-first: focus
+        // returns to the composer with command mode armed so the user fills any
+        // args and presses Enter — matching tab-completion's fill behavior.
+        input.prompt = `/${cmd.name} `;
+        input.cursorPos = input.prompt.length;
+        input.commandMode = true;
+        input.autocomplete?.reset();
+        commandContext.focusPrompt?.();
+        render();
+      },
+    );
   };
 
   commandContext.focusPanels = () => {

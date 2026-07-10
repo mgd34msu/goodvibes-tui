@@ -6,7 +6,7 @@
 
 # Command Reference
 
-GoodVibes ships **139** built-in slash commands across **65** categories. Every command below is generated directly from the command registry, so this list is always complete and current. Type a command in the composer prefixed with `/`, or press `Ctrl+K` (or run `/palette`) to search them all in the command palette.
+GoodVibes ships **140** built-in slash commands across **65** categories. Every command below is generated directly from the command registry, so this list is always complete and current. Type a command in the composer prefixed with `/`, or press `Ctrl+K` (or run `/palette`) to search them all in the command palette.
 
 ## Categories
 
@@ -64,7 +64,7 @@ GoodVibes ships **139** built-in slash commands across **65** categories. Every 
 - [Sessions & Replay](#sessions-replay) — 3
 - [Settings Sync](#settings-sync) — 1
 - [Sharing](#sharing) — 1
-- [Shell & Session](#shell-session) — 15
+- [Shell & Session](#shell-session) — 16
 - [Skills](#skills) — 1
 - [Subscriptions](#subscriptions) — 1
 - [Tasks](#tasks) — 1
@@ -474,6 +474,7 @@ GoodVibes ships **139** built-in slash commands across **65** categories. Every 
 | `/keep` | — | `<text>` | Pin text to session memory (survives compaction) |
 | `/keybindings` | `/kb` | — | List current keyboard bindings and their config file path |
 | `/model` | `/m` | `[model-id]` | Select or display the current LLM model |
+| `/palette` | `/k` | — | Open the command palette to search and run any slash command |
 | `/paste` | `/clip` | — | Insert clipboard text or image into the prompt |
 | `/quit` | `/:q` | — | Exit the application |
 | `/reset` | — | — | Full reset: clear display and conversation context |

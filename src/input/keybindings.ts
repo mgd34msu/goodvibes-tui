@@ -33,6 +33,7 @@ export type KeyAction =
   | 'copy-selection'
   | 'clear-cancel'
   | 'screen-clear'
+  | 'command-palette'
   | 'panel-picker'
   | 'panel-close'
   | 'panel-close-all'
@@ -74,6 +75,7 @@ export const ACTION_DESCRIPTIONS: Record<KeyAction, string> = {
   'copy-selection':        'Copy selected text to clipboard',
   'clear-cancel':          'Clear input / cancel generation / exit (double)',
   'screen-clear':          'Repaint the screen',
+  'command-palette':       'Open the command palette (search & run any command)',
   'panel-picker':          'Open, focus, or hide the panel workspace',
   'panel-close':            'Close the currently active panel',
   'panel-close-all':         'Close all open panels',
@@ -116,6 +118,10 @@ export const DEFAULT_KEYBINDINGS: Record<KeyAction, KeyCombo[]> = {
   'copy-selection':        [{ key: 'c', ctrl: true, shift: true }],
   'clear-cancel':          [{ key: 'c', ctrl: true }],
   'screen-clear':          [{ key: 'l', ctrl: true }],
+  // Ctrl+K opens the command palette (the standard palette chord across editors).
+  // The readline kill-to-end-of-line that historically owned Ctrl+K is repointed
+  // to Alt+K below so the capability is kept, not lost.
+  'command-palette':       [{ key: 'k', ctrl: true }],
   'panel-picker':          [{ key: 'p', ctrl: true }],
   'panel-close':            [{ key: 'x', ctrl: true }],
   'panel-close-all':         [{ key: 'x', ctrl: true, shift: true }],
@@ -157,7 +163,10 @@ export const DEFAULT_KEYBINDINGS: Record<KeyAction, KeyCombo[]> = {
   'delete-word':           [{ key: 'w', ctrl: true }],
   'apply-diff-line-start': [{ key: 'a', ctrl: true }],
   'next-error-line-end':   [{ key: 'e', ctrl: true }],
-  'kill-line':             [{ key: 'k', ctrl: true }],
+  // Alt+K: kill to end of line. Ctrl+K was reassigned to the command palette
+  // (the standard palette chord); Alt+K keeps kill-to-end available and is
+  // otherwise unused in the default table.
+  'kill-line':             [{ key: 'k', alt: true }],
   // Alt+U: clear entire prompt. Ctrl+U is owned by kill-to-start (readline
   // convention). Alt+U is unused by any other default and is representable by
   // the tokenizer's { key, alt } combo form.
@@ -169,7 +178,7 @@ export const DEFAULT_KEYBINDINGS: Record<KeyAction, KeyCombo[]> = {
   'word-back':             [{ key: 'b', alt: true }],
   'word-forward':          [{ key: 'f', alt: true }],
   // Kill-ring operations.
-  // Note: 'kill-line' (Ctrl+K) kills to end; 'kill-to-start' (Ctrl+U) kills to start.
+  // Note: 'kill-line' (Alt+K) kills to end; 'kill-to-start' (Ctrl+U) kills to start.
   // 'clear-prompt' (Alt+U) clears the entire buffer regardless of cursor position.
   // kill-to-start owns Ctrl+U (readline convention); clear-prompt uses Alt+U.
   'kill-to-start':         [{ key: 'u', ctrl: true }],
