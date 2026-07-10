@@ -93,20 +93,37 @@ function summarizeEdit(obj: Record<string, unknown>): string | null {
   return `${verb} ${applied} edit${applied === 1 ? '' : 's'}${target}${failText}`;
 }
 
+/** Credential-bearing env-var names withheld from the spawn (never values). Empty when the field is absent/empty. */
+function withheldEnvNames(obj: Record<string, unknown>): string[] {
+  const raw = obj.withheld_env;
+  if (!Array.isArray(raw)) return [];
+  return raw.filter((n): n is string => typeof n === 'string' && n.length > 0);
+}
+
+/** Compact "withheld: NAME, NAME, …" suffix, capped so a long scrub list doesn't dominate the collapsed line. */
+function withheldEnvSuffix(names: readonly string[]): string {
+  if (names.length === 0) return '';
+  const MAX_SHOWN = 3;
+  const shown = names.slice(0, MAX_SHOWN).join(', ');
+  const more = names.length > MAX_SHOWN ? `, +${names.length - MAX_SHOWN} more` : '';
+  return ` · withheld: ${shown}${more}`;
+}
+
 /** A single exec command result. */
 function summarizeExecOne(obj: Record<string, unknown>): string | null {
   const exit = obj.exit_code;
   const dur = asNumber(obj.duration_ms);
   const durText = dur !== undefined ? ` · ${formatDuration(dur)}` : '';
-  if (obj.timed_out === true) return `timed out${durText}`;
-  if (obj.cancelled === true) return `cancelled${durText}`;
+  const withheldText = withheldEnvSuffix(withheldEnvNames(obj));
+  if (obj.timed_out === true) return `timed out${durText}${withheldText}`;
+  if (obj.cancelled === true) return `cancelled${durText}${withheldText}`;
   const stdout = typeof obj.stdout === 'string' ? obj.stdout : '';
   const lineCount = stdout.length === 0
     ? 0
     : stdout.replace(/\n$/, '').split('\n').length;
   const lineText = lineCount > 0 ? ` · ${lineCount} line${lineCount === 1 ? '' : 's'}` : '';
   const code = typeof exit === 'number' ? String(exit) : '?';
-  return `exit ${code}${durText}${lineText}`;
+  return `exit ${code}${durText}${lineText}${withheldText}`;
 }
 
 /** exec: single { cmd, exit_code, ... } or multi { commands: [...], total }. */
@@ -116,9 +133,18 @@ function summarizeExec(obj: Record<string, unknown>): string | null {
     const failed = obj.commands.filter(
       (c) => c && typeof c === 'object' && (c as Record<string, unknown>).success === false,
     ).length;
+    // Union of withheld names across every command in the batch — the scrub
+    // runs per-spawn, so different commands can withhold different names.
+    const withheldAcrossCommands = new Set<string>();
+    for (const c of obj.commands) {
+      if (c && typeof c === 'object') {
+        for (const name of withheldEnvNames(c as Record<string, unknown>)) withheldAcrossCommands.add(name);
+      }
+    }
+    const withheldText = withheldEnvSuffix([...withheldAcrossCommands]);
     return failed > 0
-      ? `${total} commands · ${failed} failed`
-      : `${total} commands · all ok`;
+      ? `${total} commands · ${failed} failed${withheldText}`
+      : `${total} commands · all ok${withheldText}`;
   }
   if ('exit_code' in obj || 'timed_out' in obj || 'cancelled' in obj) {
     return summarizeExecOne(obj);

@@ -44,6 +44,46 @@ describe('summarizeToolResult (UX-B item 3)', () => {
     expect(summarizeToolResult('exec', content)).toBe('2 commands · 1 failed');
   });
 
+  test('exec — a clean scrub (no withheld_env) stays quiet', () => {
+    const content = JSON.stringify({ cmd: 'ls', exit_code: 0, stdout: 'a', duration_ms: 10, success: true });
+    expect(summarizeToolResult('exec', content)).toBe('exit 0 · 10ms · 1 line');
+  });
+
+  test('exec — withheld_env names are rendered compactly', () => {
+    const content = JSON.stringify({
+      cmd: 'env',
+      exit_code: 0,
+      stdout: '',
+      duration_ms: 10,
+      success: true,
+      withheld_env: ['AWS_SECRET_ACCESS_KEY', 'GITHUB_TOKEN'],
+    });
+    expect(summarizeToolResult('exec', content)).toBe('exit 0 · 10ms · withheld: AWS_SECRET_ACCESS_KEY, GITHUB_TOKEN');
+  });
+
+  test('exec — withheld_env caps the shown names and counts the rest', () => {
+    const content = JSON.stringify({
+      cmd: 'env',
+      exit_code: 0,
+      stdout: '',
+      duration_ms: 10,
+      success: true,
+      withheld_env: ['A_TOKEN', 'B_TOKEN', 'C_TOKEN', 'D_TOKEN', 'E_TOKEN'],
+    });
+    expect(summarizeToolResult('exec', content)).toBe('exit 0 · 10ms · withheld: A_TOKEN, B_TOKEN, C_TOKEN, +2 more');
+  });
+
+  test('exec — multiple commands union withheld names across the batch', () => {
+    const content = JSON.stringify({
+      total: 2,
+      commands: [
+        { success: true, withheld_env: ['AWS_SECRET_ACCESS_KEY'] },
+        { success: true, withheld_env: ['GITHUB_TOKEN', 'AWS_SECRET_ACCESS_KEY'] },
+      ],
+    });
+    expect(summarizeToolResult('exec', content)).toBe('2 commands · all ok · withheld: AWS_SECRET_ACCESS_KEY, GITHUB_TOKEN');
+  });
+
   test('edit — reports edits applied and target', () => {
     expect(summarizeToolResult('edit', JSON.stringify({ applied: 2, failed: 0, path: 'src/x.ts' }))).toBe('applied 2 edits to x.ts');
   });
