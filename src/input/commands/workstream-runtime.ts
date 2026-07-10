@@ -11,7 +11,12 @@
 // planning-runtime.ts), NOT a panel — a multi-phase proposal is too rich for
 // a one-line confirm overlay, and Pillar-3 doctrine keeps work visible in the
 // transcript. create -> approve -> launch is a real three-step flow (edit and
-// cancel apply to the pending proposal too): the engine's own createWorkstream
+// cancel apply to the pending proposal too). The transcript IS the plan-review
+// gate: between create and approve the proposal is reshapable in place —
+// edit-item rewrites one item's brief, remove-item drops an item (and unlinks
+// it from siblings' dependencies), move-item reorders authoring order, and
+// each re-renders the whole proposal and clears any prior approval, so nothing
+// launches until the reshaped plan is explicitly re-approved. The engine's own createWorkstream
 // immediately materializes a real, ticking-eligible Workstream with no
 // pre-creation "draft" concept, so approval happens on a TUI-held draft
 // (workstream-services.ts's WorkstreamDraft) before anything is created in
@@ -142,11 +147,20 @@ function formatItemDependencyNote(item: WorkItem, ws: Workstream): string {
  */
 function formatDraftItems(spec: CreateWorkstreamInput): string[] {
   const titleById = new Map(spec.items.map((it) => [it.id ?? it.title, it.title] as const));
-  return spec.items.map((it, i) => {
+  const lines: string[] = [];
+  spec.items.forEach((it, i) => {
     const deps = it.dependsOn ?? [];
     const after = deps.length > 0 ? ` (after: ${deps.map((d) => titleById.get(d) ?? d).join(', ')})` : '';
-    return `  ${i + 1}. ${it.title}${after}`;
+    lines.push(`  ${i + 1}. ${it.title}${after}`);
+    // Show the brief (the instructions the item's agent runs) only when it says
+    // something the title doesn't — an edited brief (via /workstream edit-item)
+    // must be visible on the review surface, but a decomposition whose title and
+    // brief coincide would just repeat itself.
+    if (it.task.trim() && it.task.trim() !== it.title.trim()) {
+      lines.push(`       brief: ${it.task.trim()}`);
+    }
   });
+  return lines;
 }
 
 function summarizeItemStates(ws: Workstream): string {
@@ -209,7 +223,8 @@ function renderDraftProposal(draft: WorkstreamDraft): string {
       ? `Approved. Launch with: /workstream launch ${draft.id}`
       : `Approve with: /workstream approve ${draft.id}`,
   );
-  lines.push(`Edit the task: /workstream edit ${draft.id} <new task...>   Discard: /workstream cancel ${draft.id}`);
+  lines.push(`Reshape: /workstream edit-item ${draft.id} <#> <brief...> | remove-item ${draft.id} <#> | move-item ${draft.id} <#> <pos>`);
+  lines.push(`Re-decompose from a new goal: /workstream edit ${draft.id} <new task...>   Discard: /workstream cancel ${draft.id}`);
   // Honest limitation (see workstream-services.ts's REALITY-WINS doc): the
   // engine has no pre-creation draft concept, so this proposal is
   // process-lifetime, in-memory state only — never journaled like a launched
@@ -307,8 +322,8 @@ export function registerWorkstreamRuntimeCommands(registry: CommandRegistry): vo
   registry.register({
     name: 'workstream',
     description: 'Author and oversee multi-phase agent workstreams (orchestration engine)',
-    usage: 'create [--isolation shared|worktree] <task...> | list | status [id] | insert-phase <id> <description...> | approve <id> | edit <id> [--isolation shared|worktree] <task...> | launch <id> | cancel <id>',
-    argsHint: 'create [--isolation worktree] <task> | list | status [id] | approve | edit | launch | cancel',
+    usage: 'create [--isolation shared|worktree] <task...> | list | status [id] | insert-phase <id> <description...> | edit-item <id> <item#> <brief...> | remove-item <id> <item#> | move-item <id> <item#> <pos> | approve <id> | edit <id> [--isolation shared|worktree] <task...> | launch <id> | cancel <id>',
+    argsHint: 'create [--isolation worktree] <task> | list | status [id] | edit-item | remove-item | move-item | approve | edit | launch | cancel',
     handler: async (args, ctx: CommandContext) => {
       const service = ctx.session.workstreamEngine;
       if (!service) {
@@ -317,6 +332,19 @@ export function registerWorkstreamRuntimeCommands(registry: CommandRegistry): vo
       }
 
       const sub = args[0];
+
+      /** Thread editItem/removeItem/moveItem's tri-state result to the transcript: a missing draft gets the restart-aware not-found message, a bad reference/argument gets its honest reason, and a success re-renders the whole reshaped proposal so the review surface always shows the current plan. */
+      const printItemEdit = (id: string, res: WorkstreamDraft | { error: string } | undefined): void => {
+        if (res === undefined) {
+          ctx.print(draftNotFoundMessage(service, id));
+          return;
+        }
+        if ('error' in res) {
+          ctx.print(res.error);
+          return;
+        }
+        ctx.print(renderDraftProposal(res));
+      };
 
       if (!sub || sub === 'list') {
         ctx.print(renderWorkstreamList(service));
@@ -419,6 +447,42 @@ export function registerWorkstreamRuntimeCommands(registry: CommandRegistry): vo
         return;
       }
 
+      if (sub === 'edit-item') {
+        const id = args[1];
+        const itemRef = args[2];
+        const brief = args.slice(3).join(' ').trim();
+        if (!id || !itemRef || !brief) {
+          ctx.print('Usage: /workstream edit-item <id> <item#> <new brief...>');
+          return;
+        }
+        printItemEdit(id, service.editItem(id, itemRef, brief));
+        return;
+      }
+
+      if (sub === 'remove-item') {
+        const id = args[1];
+        const itemRef = args[2];
+        if (!id || !itemRef) {
+          ctx.print('Usage: /workstream remove-item <id> <item#>');
+          return;
+        }
+        printItemEdit(id, service.removeItem(id, itemRef));
+        return;
+      }
+
+      if (sub === 'move-item') {
+        const id = args[1];
+        const itemRef = args[2];
+        const posRaw = args[3];
+        const position = Number(posRaw);
+        if (!id || !itemRef || posRaw === undefined || !Number.isInteger(position)) {
+          ctx.print('Usage: /workstream move-item <id> <item#> <new-position#>');
+          return;
+        }
+        printItemEdit(id, service.moveItem(id, itemRef, position));
+        return;
+      }
+
       if (sub === 'launch') {
         const id = args[1];
         if (!id) {
@@ -478,6 +542,9 @@ export function registerWorkstreamRuntimeCommands(registry: CommandRegistry): vo
         + '  /workstream list\n'
         + '  /workstream status [id]\n'
         + '  /workstream insert-phase <id> <description...>\n'
+        + '  /workstream edit-item <id> <item#> <new brief...>\n'
+        + '  /workstream remove-item <id> <item#>\n'
+        + '  /workstream move-item <id> <item#> <new-position#>\n'
         + '  /workstream approve <id>\n'
         + '  /workstream edit <id> [--isolation shared|worktree] <new task...>\n'
         + '  /workstream launch <id>\n'

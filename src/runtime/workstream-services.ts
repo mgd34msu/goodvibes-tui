@@ -51,6 +51,7 @@ import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import type { AgentManager } from '@pellux/goodvibes-sdk/platform/tools';
 import type { RuntimeEventBus } from '@/runtime/index.ts';
 import { calcSessionCost, isModelPriced } from '../export/cost-utils.ts';
+import { editItemBrief, moveItemInSpec, removeItemFromSpec } from './workstream-draft-edits.ts';
 
 export interface WorkstreamServicesDeps {
   readonly agentManager: Pick<AgentManager, 'spawn' | 'getStatus' | 'cancel' | 'registerCancellationSignal' | 'releaseCancellationSignal'>;
@@ -98,6 +99,16 @@ export interface WorkstreamCommandService {
   listDrafts(): WorkstreamDraft[];
   /** Re-derive a held draft's spec + decomposition from a new task string. Clears any prior approval — an edit must be re-approved. `isolation` omitted ⇒ keeps the draft's current choice (an edit that only changes the task text must not silently reset isolation back to shared). */
   editDraft(id: string, task: string, isolation?: WorkstreamIsolation): Promise<WorkstreamDraft | undefined>;
+  /**
+   * Plan-review-gate item edits over a held draft's launchable spec (see
+   * workstream-draft-edits.ts). Each returns the updated draft on success,
+   * `{ error }` with an honest user-facing reason on a bad reference/argument,
+   * or `undefined` when no draft with that id is held. Every successful edit
+   * clears approval — a reshaped plan must be re-approved before launch.
+   */
+  editItem(id: string, itemRef: string, brief: string): WorkstreamDraft | { error: string } | undefined;
+  removeItem(id: string, itemRef: string): WorkstreamDraft | { error: string } | undefined;
+  moveItem(id: string, itemRef: string, toPosition: number): WorkstreamDraft | { error: string } | undefined;
   approveDraft(id: string): WorkstreamDraft | undefined;
   removeDraft(id: string): boolean;
   /** Materialize an approved draft into a real, running Workstream (engine.createWorkstream + start), then drop the draft. Null when the draft is missing or not approved. */
@@ -238,6 +249,26 @@ function createWorkstreamCommandService(
     return fromChainSpec({ id: `item-${crypto.randomUUID().slice(0, 8)}`, task }, configManager);
   }
 
+  /**
+   * Apply a pure item edit (workstream-draft-edits.ts) to a held draft's spec.
+   * Threads the three outcomes straight through: `undefined` (no such draft) so
+   * the command layer can print its restart-aware not-found message, `{ error }`
+   * (a bad reference/argument) verbatim, or the mutated draft. A successful edit
+   * clears approval — a reshaped plan must be re-approved before it can launch.
+   */
+  function applyItemEdit(
+    id: string,
+    edit: (spec: CreateWorkstreamInput) => import('./workstream-draft-edits.ts').DraftEditResult,
+  ): WorkstreamDraft | { error: string } | undefined {
+    const draft = drafts.get(id);
+    if (!draft) return undefined;
+    const result = edit(draft.spec);
+    if ('error' in result) return { error: result.error };
+    draft.spec = result.spec;
+    draft.approved = false;
+    return draft;
+  }
+
   return {
     engine,
     async proposeDraft(task: string, isolation?: WorkstreamIsolation): Promise<WorkstreamDraft> {
@@ -270,6 +301,9 @@ function createWorkstreamCommandService(
       draft.approved = false;
       return draft;
     },
+    editItem: (id, itemRef, brief) => applyItemEdit(id, (spec) => editItemBrief(spec, itemRef, brief)),
+    removeItem: (id, itemRef) => applyItemEdit(id, (spec) => removeItemFromSpec(spec, itemRef)),
+    moveItem: (id, itemRef, toPosition) => applyItemEdit(id, (spec) => moveItemInSpec(spec, itemRef, toPosition)),
     approveDraft(id) {
       const draft = drafts.get(id);
       if (!draft) return undefined;

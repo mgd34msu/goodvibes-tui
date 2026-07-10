@@ -24,6 +24,7 @@ import type { PlanProposal } from '@pellux/goodvibes-sdk/platform/core';
 import { CommandRegistry, type CommandContext } from '../../input/command-registry.ts';
 import { registerWorkstreamRuntimeCommands } from '../../input/commands/workstream-runtime.ts';
 import type { WorkstreamCommandService, WorkstreamDraft, WorkstreamDraftProvenance } from '../../runtime/workstream-services.ts';
+import { editItemBrief, moveItemInSpec, removeItemFromSpec } from '../../runtime/workstream-draft-edits.ts';
 
 function makePhase(overrides: Partial<Phase> & { id: string; ordinal: number }): Phase {
   return {
@@ -175,6 +176,33 @@ function makeFakeService(
         isolation: isolation ?? draft.spec.isolation,
       };
       draft.proposal = fakeProposal(task);
+      draft.approved = false;
+      return draft;
+    },
+    editItem(id, itemRef, brief) {
+      const draft = drafts.get(id);
+      if (!draft) return undefined;
+      const res = editItemBrief(draft.spec, itemRef, brief);
+      if ('error' in res) return { error: res.error };
+      draft.spec = res.spec;
+      draft.approved = false;
+      return draft;
+    },
+    removeItem(id, itemRef) {
+      const draft = drafts.get(id);
+      if (!draft) return undefined;
+      const res = removeItemFromSpec(draft.spec, itemRef);
+      if ('error' in res) return { error: res.error };
+      draft.spec = res.spec;
+      draft.approved = false;
+      return draft;
+    },
+    moveItem(id, itemRef, toPosition) {
+      const draft = drafts.get(id);
+      if (!draft) return undefined;
+      const res = moveItemInSpec(draft.spec, itemRef, toPosition);
+      if ('error' in res) return { error: res.error };
+      draft.spec = res.spec;
       draft.approved = false;
       return draft;
     },
@@ -712,6 +740,105 @@ describe('workstream-runtime — list / status / insert-phase / cancel', () => {
     expect(service.engine.killedIds).toEqual(['item-blocked']);
     expect(printed.at(-1)).toContain('Cancelled 1 of 1');
     expect(printed.at(-1)).not.toContain('no in-flight work items');
+  });
+
+  test('edit-item rewrites one item brief, shows it on the review surface, and clears approval', async () => {
+    const registry = new CommandRegistry();
+    registerWorkstreamRuntimeCommands(registry);
+    const items: CreateWorkstreamInput['items'] = [
+      { id: 'item-a', title: 'set up schema', task: 'set up schema' },
+      { id: 'item-b', title: 'build API', task: 'build API', dependsOn: ['item-a'] },
+    ];
+    const service = makeFakeService([], AGENT_PROVENANCE, items);
+    const { ctx, printed } = makeCtx(service);
+    await registry.execute('workstream', ['create', 'ship', 'it'], ctx);
+    const id = service.listDrafts()[0]!.id;
+    await registry.execute('workstream', ['approve', id], ctx);
+    expect(service.getDraft(id)!.approved).toBe(true);
+
+    await registry.execute('workstream', ['edit-item', id, '2', 'build', 'the', 'REST', 'API', 'with', 'auth'], ctx);
+
+    const draft = service.getDraft(id)!;
+    expect(draft.spec.items[1]!.task).toBe('build the REST API with auth');
+    expect(draft.spec.items[1]!.title).toBe('build API'); // title (label) untouched
+    expect(draft.approved).toBe(false); // reshaping clears approval
+    expect(printed.at(-1)).toContain('brief: build the REST API with auth');
+  });
+
+  test('remove-item drops an item and unlinks it from a sibling dependency', async () => {
+    const registry = new CommandRegistry();
+    registerWorkstreamRuntimeCommands(registry);
+    const items: CreateWorkstreamInput['items'] = [
+      { id: 'item-a', title: 'set up schema', task: 'set up schema' },
+      { id: 'item-b', title: 'build API', task: 'build API', dependsOn: ['item-a'] },
+    ];
+    const service = makeFakeService([], AGENT_PROVENANCE, items);
+    const { ctx } = makeCtx(service);
+    await registry.execute('workstream', ['create', 'ship', 'it'], ctx);
+    const id = service.listDrafts()[0]!.id;
+
+    await registry.execute('workstream', ['remove-item', id, '1'], ctx);
+
+    const draft = service.getDraft(id)!;
+    expect(draft.spec.items).toHaveLength(1);
+    expect(draft.spec.items[0]!.id).toBe('item-b');
+    expect(draft.spec.items[0]!.dependsOn ?? []).toEqual([]); // dangling dep to item-a stripped
+  });
+
+  test('remove-item refuses to empty the plan', async () => {
+    const registry = new CommandRegistry();
+    registerWorkstreamRuntimeCommands(registry);
+    const service = makeFakeService(); // single seed item
+    const { ctx, printed } = makeCtx(service);
+    await registry.execute('workstream', ['create', 'only', 'one'], ctx);
+    const id = service.listDrafts()[0]!.id;
+
+    await registry.execute('workstream', ['remove-item', id, '1'], ctx);
+
+    expect(printed.at(-1)).toContain('Cannot remove the last item');
+    expect(service.getDraft(id)!.spec.items).toHaveLength(1);
+  });
+
+  test('move-item reorders authoring order', async () => {
+    const registry = new CommandRegistry();
+    registerWorkstreamRuntimeCommands(registry);
+    const items: CreateWorkstreamInput['items'] = [
+      { id: 'item-a', title: 'alpha', task: 'alpha' },
+      { id: 'item-b', title: 'beta', task: 'beta' },
+      { id: 'item-c', title: 'gamma', task: 'gamma' },
+    ];
+    const service = makeFakeService([], AGENT_PROVENANCE, items);
+    const { ctx } = makeCtx(service);
+    await registry.execute('workstream', ['create', 'ship', 'it'], ctx);
+    const id = service.listDrafts()[0]!.id;
+
+    await registry.execute('workstream', ['move-item', id, '3', '1'], ctx);
+
+    expect(service.getDraft(id)!.spec.items.map((it) => it.title)).toEqual(['gamma', 'alpha', 'beta']);
+  });
+
+  test('an item edit against an unresolvable reference refuses with an honest reason', async () => {
+    const registry = new CommandRegistry();
+    registerWorkstreamRuntimeCommands(registry);
+    const service = makeFakeService();
+    const { ctx, printed } = makeCtx(service);
+    await registry.execute('workstream', ['create', 'ship', 'it'], ctx);
+    const id = service.listDrafts()[0]!.id;
+
+    await registry.execute('workstream', ['edit-item', id, '9', 'nope'], ctx);
+
+    expect(printed.at(-1)).toContain('No draft item matches "9"');
+  });
+
+  test('an item edit against an unknown draft id gives the not-found message', async () => {
+    const registry = new CommandRegistry();
+    registerWorkstreamRuntimeCommands(registry);
+    const service = makeFakeService();
+    const { ctx, printed } = makeCtx(service);
+
+    await registry.execute('workstream', ['edit-item', 'wsd_nope', '1', 'x'], ctx);
+
+    expect(printed.at(-1)).toContain('No pending proposal found');
   });
 
   test('status renders a custom insert-phase description honestly, not as a real role', async () => {
