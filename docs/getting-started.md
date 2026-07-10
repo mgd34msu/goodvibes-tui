@@ -14,11 +14,11 @@ Install from the npm registry with Bun on Linux, macOS, or WSL:
 
 ```sh
 bun add -g @pellux/goodvibes-tui
-bun pm trust -g @pellux/goodvibes-tui @pellux/goodvibes-sdk core-js tree-sitter-css tree-sitter-javascript tree-sitter-json tree-sitter-python tree-sitter-typescript
+bun pm trust -g @pellux/goodvibes-tui
 goodvibes
 ```
 
-Bun blocks lifecycle scripts for untrusted global packages. The trust command is required so the GoodVibes postinstall binary installer and native dependency install scripts can run. Verify the install with:
+Bun blocks lifecycle scripts for untrusted global packages. Only `@pellux/goodvibes-tui` needs trusting, so its postinstall can place the matching TUI and daemon binaries. No dependency needs trusting: the binaries come from the platform-specific `@pellux/goodvibes-tui-<os>-<arch>` package with registry integrity, and the tree-sitter grammar packages ship their `.wasm` files as plain files (the app never loads the native bindings their `install` scripts would build). Verify the install with:
 
 ```sh
 bun pm -g untrusted

@@ -18,11 +18,11 @@ GoodVibes is a Bun program. Install Bun first and make sure `bun` is on `PATH`, 
 
 ```sh
 bun add -g @pellux/goodvibes-tui
-bun pm trust -g @pellux/goodvibes-tui @pellux/goodvibes-sdk core-js tree-sitter-css tree-sitter-javascript tree-sitter-json tree-sitter-python tree-sitter-typescript
+bun pm trust -g @pellux/goodvibes-tui
 goodvibes
 ```
 
-Bun blocks lifecycle scripts for untrusted global packages. The trust command is required after the first global install so GoodVibes can run its postinstall binary installer and every native dependency can run its install step. All packages in the trust command are required; if any remain untrusted, the install is incomplete. `tree-sitter-javascript` may appear more than once in the dependency tree, including under `tree-sitter-typescript`; trusting the package name covers those installed versions. Verify the global install with:
+Bun blocks lifecycle scripts for untrusted global packages. Only one package needs trusting — `@pellux/goodvibes-tui` itself — so its postinstall can place the matching TUI and daemon binaries. No dependency needs trusting: the prebuilt binaries arrive through the platform-specific `@pellux/goodvibes-tui-<os>-<arch>` package (installed by the package manager with registry integrity, no lifecycle script), and the tree-sitter grammar packages ship their `.wasm` files as plain files — the app loads those, never the native bindings their `install` scripts would build. If you skip the trust step entirely the `goodvibes` launcher still self-heals on first run by fetching and checksum-verifying the binaries. Verify the global install with:
 
 ```sh
 bun pm -g untrusted
@@ -30,7 +30,7 @@ goodvibes --version
 goodvibes-daemon --version
 ```
 
-`bun pm -g untrusted` must report `Found 0 untrusted dependencies with scripts`. If it lists any package, rerun the full trust command above. `npm install -g @pellux/goodvibes-tui` is also supported, but it does not install Bun for you. The package preinstall check fails with a clear message if `bun` is missing from `PATH`.
+`bun pm -g untrusted` must report `Found 0 untrusted dependencies with scripts` after trusting `@pellux/goodvibes-tui`. `npm install -g @pellux/goodvibes-tui` is also supported, but it does not install Bun for you. The package preinstall check fails with a clear message if `bun` is missing from `PATH`.
 
 Or run from source:
 
@@ -53,7 +53,7 @@ Release distribution:
 
 - GitHub Releases are the primary distribution path for compiled binaries
 - `bun add -g @pellux/goodvibes-tui` is the recommended global install path; the package is hosted on the npm registry and Bun installs from that registry directly
-- Bun global installs require trusting `@pellux/goodvibes-tui` so the package postinstall can download the matching TUI and daemon binaries; the dependency lifecycle packages currently requiring trust are `@pellux/goodvibes-sdk`, `core-js`, `tree-sitter-css`, `tree-sitter-javascript`, `tree-sitter-json`, `tree-sitter-python`, and `tree-sitter-typescript`
+- Bun global installs require trusting only `@pellux/goodvibes-tui` so the package postinstall can place the matching TUI and daemon binaries; no dependency needs trusting (grammar `.wasm` files ship as plain files, the platform binary package carries the binaries with registry integrity, and no runtime dependency's install script is loaded)
 - `npm install -g @pellux/goodvibes-tui` is supported on Linux, macOS, and WSL when Bun is already installed; the preinstall check verifies Bun, and the install script downloads the matching TUI and daemon binaries for the current platform
 - native Windows is not supported; use WSL on Windows
 
