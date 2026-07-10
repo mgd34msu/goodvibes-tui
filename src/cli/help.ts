@@ -51,6 +51,8 @@ export function renderGoodVibesHelp(binary = 'goodvibes'): string {
     '  bundle export|inspect|import',
     '                             Move setup/profile/trust/support bundles',
     '  remote|bridge              Inspect remote runner/node posture',
+    '  hooks validate             Validate hooks.json against the hook loader schema',
+    '  plugin init|validate       Scaffold a plugin or validate a plugin directory',
     '  completion <shell>         Generate shell completion script',
     '  help [command]             Print this help or command-specific help',
     '  version                    Print version',
@@ -222,6 +224,16 @@ const COMMAND_HELP: Record<string, CommandHelp> = {
     summary: 'Inspect remote runner/node posture and bridge readiness.',
     examples: ['remote', 'bridge'],
   },
+  hooks: {
+    usage: ['hooks validate'],
+    summary: 'Validate the configured hooks.json against the hook loader schema — per-hook pass/fail with plain reasons, nonzero exit if any hook is invalid.',
+    examples: ['hooks validate', 'hooks validate --json'],
+  },
+  plugin: {
+    usage: ['plugin init <name> [directory]', 'plugin validate <path>'],
+    summary: 'Scaffold a minimal valid plugin (manifest.json + entry file), or validate a plugin directory against the plugin loader checks.',
+    examples: ['plugin init my-plugin', 'plugin validate .goodvibes/plugins/my-plugin'],
+  },
 };
 
 const HELP_ALIASES: Record<string, string> = {
@@ -244,6 +256,8 @@ const HELP_ALIASES: Record<string, string> = {
   server: 'serve',
   services: 'service',
   bridge: 'remote',
+  hook: 'hooks',
+  plugins: 'plugin',
 };
 
 function normalizeHelpTopic(topic: string): string {

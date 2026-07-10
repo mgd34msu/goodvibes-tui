@@ -23,6 +23,8 @@ export type GoodVibesCliCommand =
   | 'bundle'
   | 'remote'
   | 'bridge'
+  | 'hooks'
+  | 'plugin'
   | 'completion'
   | 'help'
   | 'version'
