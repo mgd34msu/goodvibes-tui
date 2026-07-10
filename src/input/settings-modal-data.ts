@@ -24,6 +24,7 @@ import {
   readWorktreeSetupList,
 } from './worktree-setup-config.ts';
 import { BUDGET_ALERT_USD_CONFIG_KEY, BUDGET_ALERT_USD_DEFAULT, readBudgetAlertUsd } from '../export/cost-utils.ts';
+import { MEMORY_CONSOLIDATION_SYNTHETIC_SETTINGS, buildMemoryConsolidationSyntheticEntries, isMemoryConsolidationConfigKey } from './memory-consolidation-settings-config.ts';
 import {
   THEME_MODE_CONFIG_KEY,
   THEME_MODE_VALUES,
@@ -205,6 +206,18 @@ export function buildSettingGroups(
     }
     if (!orchestrationEntries.some((e) => e.setting.key === WORKTREE_SETUP_CARRY_OVER_GLOBS_CONFIG_KEY)) {
       orchestrationEntries.push(buildWorktreeSetupCarryOverGlobsSyntheticEntry(configManager));
+    }
+  }
+
+  // Inject the nine learning.consolidation.* synthetic entries into the
+  // learning category. Hoisted to the SDK (platform/state) but not part of
+  // the SDK ConfigKey union — same rationale as the other synthetic settings
+  // above (see memory-consolidation-settings-config.ts).
+  const learningEntries = groups.get('learning');
+  if (learningEntries) {
+    const knownKeys = new Set(MEMORY_CONSOLIDATION_SYNTHETIC_SETTINGS.map((s) => s.key));
+    if (!learningEntries.some((e) => knownKeys.has(e.setting.key))) {
+      learningEntries.push(...buildMemoryConsolidationSyntheticEntries(configManager));
     }
   }
 
@@ -574,6 +587,20 @@ export function refreshEntryValues(
         entry.isDefault = (entry.currentValue as string[]).length === 0;
         continue;
       }
+      // Same 'section not in DEFAULT_CONFIG' trap as worktree.setup.* above:
+      // 'learning' has no DEFAULT_CONFIG entry, so a plain configManager.get
+      // throws for all nine learning.consolidation.* keys. Re-derive through
+      // the SDK's own resolver (reads getRaw(), never throws for an absent
+      // section) instead.
+      if (isMemoryConsolidationConfigKey(entry.setting.key)) {
+        const refreshed = buildMemoryConsolidationSyntheticEntries(configManager);
+        const match = refreshed.find((e) => e.setting.key === entry.setting.key);
+        if (match) {
+          entry.currentValue = match.currentValue;
+          entry.isDefault = match.isDefault;
+        }
+        continue;
+      }
       const raw = configManager.get(entry.setting.key as ConfigKey);
       // Synthetic entries (e.g. tts.speed) that have no SDK schema key return
       // undefined from configManager. Normalize using the same logic used at
@@ -602,6 +629,15 @@ export function updateEntryForKey(
   for (const entries of groups.values()) {
     const entry = entries.find((candidate) => candidate.setting.key === key);
     if (entry) {
+      if (isMemoryConsolidationConfigKey(key)) {
+        const refreshed = buildMemoryConsolidationSyntheticEntries(configManager);
+        const match = refreshed.find((e) => e.setting.key === key);
+        if (match) {
+          entry.currentValue = match.currentValue;
+          entry.isDefault = match.isDefault;
+        }
+        continue;
+      }
       const raw = configManager.get(key);
       // Synthetic entries: normalize using the same fallback logic as construction.
       entry.currentValue = key === ('tts.speed' as ConfigKey)
