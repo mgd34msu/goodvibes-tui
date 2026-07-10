@@ -20,6 +20,7 @@ import type { ForensicsRegistry } from '@/runtime/index.ts';
 import type { PolicyRuntimeState } from '@/runtime/index.ts';
 import type { CodeIndexStore, FileUndoManager } from '@pellux/goodvibes-sdk/platform/state';
 import type { WorkspaceCheckpointManager } from '@pellux/goodvibes-sdk/platform/workspace';
+import type { WorkspaceTrustManager } from './trust/workspace-trust.ts';
 import type { McpRegistry } from '@pellux/goodvibes-sdk/platform/mcp';
 import type { MemoryRegistry } from '@pellux/goodvibes-sdk/platform/state';
 import type { IntegrationHelperService } from '@/runtime/index.ts';
@@ -93,6 +94,7 @@ export interface BootstrapCommandSectionOptions {
   readonly shellPaths: ShellPathService;
   readonly fileUndoManager: FileUndoManager;
   readonly workspaceCheckpointManager?: WorkspaceCheckpointManager;
+  readonly workspaceTrustManager?: WorkspaceTrustManager;
   readonly memoryRegistry?: MemoryRegistry;
   readonly integrationHelpers?: IntegrationHelperService;
   readonly knowledgeService?: KnowledgeService;
@@ -364,7 +366,7 @@ export function createBootstrapCommandProviderSection(
 export function createBootstrapCommandWorkspaceSection(
   options: Pick<
     BootstrapCommandSectionOptions,
-    'keybindingsManager' | 'fileUndoManager' | 'workspaceCheckpointManager' | 'panelManager' | 'profileManager' | 'bookmarkManager'
+    'keybindingsManager' | 'fileUndoManager' | 'workspaceCheckpointManager' | 'workspaceTrustManager' | 'panelManager' | 'profileManager' | 'bookmarkManager'
     | 'projectPlanningService' | 'projectPlanningProjectId' | 'workPlanStore'
   >,
   shellServices: BootstrapCommandShellServices,
@@ -373,6 +375,7 @@ export function createBootstrapCommandWorkspaceSection(
     keybindingsManager: options.keybindingsManager,
     fileUndoManager: options.fileUndoManager,
     workspaceCheckpointManager: options.workspaceCheckpointManager,
+    workspaceTrustManager: options.workspaceTrustManager,
     panelManager: options.panelManager,
     profileManager: options.profileManager,
     bookmarkManager: options.bookmarkManager,

@@ -27,7 +27,7 @@ import { AgentManager, OverflowHandler, ProcessManager, createWorkflowServices, 
 import { FileStateCache, FileUndoManager, MemoryEmbeddingProviderRegistry, MemoryRegistry, MemoryStore, ModeManager, ProjectIndex, resolveCanonicalMemoryDbPath, type CodeIndexStore, type CodeIndexReindexScheduler } from '@pellux/goodvibes-sdk/platform/state';
 import { MemorySpineClient, createLocalMemoryAccess } from '@pellux/goodvibes-sdk/platform/runtime/memory-spine';
 import { WorkspaceCheckpointManager } from '@pellux/goodvibes-sdk/platform/workspace';
-import { withCheckpointGuardSettings } from '../config/tui-extension-settings.ts';
+import { createWorkspaceCheckpointing } from './workspace-checkpointing.ts';
 import type { RuntimeEventBus } from '@/runtime/index.ts';
 import { createDomainDispatch } from './store/index.ts';
 import type { DomainDispatch, RuntimeStore } from './store/index.ts';
@@ -76,6 +76,7 @@ import { registerDraftMethods } from '../daemon/handlers/drafts/index.ts';
 import { registerCalendar } from '../daemon/handlers/calendar/index.ts';
 import { registerEmailMethods } from '../daemon/handlers/email/index.ts';
 import { registerRemoteSurface } from '../daemon/handlers/remote/index.ts';
+import { WorkspaceTrustManager } from './trust/workspace-trust.ts';
 
 const REGULAR_KNOWLEDGE_DB_FILE = 'knowledge-wiki.sqlite';
 const HOME_GRAPH_KNOWLEDGE_DB_FILE = 'knowledge-home-graph.sqlite';
@@ -137,6 +138,8 @@ export interface RuntimeServicesOptions {
   readonly getConversationTitle?: () => string | undefined;
   readonly workingDir: string;
   readonly homeDirectory: string;
+  /** Prior GoodVibes runtime state existed at startup — sampled before any write; seeds the trust gate's grandfathering. */
+  readonly workspaceHadPriorState?: boolean;
 }
 
 export interface RuntimeServices {
@@ -238,6 +241,8 @@ export interface RuntimeServices {
   readonly modeManager: ModeManager;
   readonly fileUndoManager: FileUndoManager;
   readonly workspaceCheckpointManager: WorkspaceCheckpointManager;
+  /** Per-workspace trust gate — restricts write/execute/delegate tools until the workspace is trusted. */
+  readonly workspaceTrustManager: WorkspaceTrustManager;
   readonly integrationHelpers: IntegrationHelperService;
   /** Re-root path-bound stores (MemoryStore, ProjectIndex) to a new working directory, called by WorkspaceSwapManager after verification; stores needing a process restart just warn-log and keep serving the old path until the daemon restarts with the new --working-dir. */
   rerootStores(newWorkingDir: string): Promise<void>;
@@ -250,6 +255,7 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
     workingDirectory,
     homeDirectory,
   });
+  const workspaceTrustManager = new WorkspaceTrustManager({ shellPaths, hadPriorState: options.workspaceHadPriorState ?? false });
   const configManager = options.configManager;
   const featureFlags = options.featureFlags ?? createFeatureFlagManager();
   const runtimeDispatch = createDomainDispatch(options.runtimeStore);
@@ -630,19 +636,7 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
   });
   const modeManager = new ModeManager();
   const fileUndoManager = new FileUndoManager();
-  // Checkpoint root-guard from the user's `checkpoints.*` config (docs/configuration.md;
-  // inert until the platform SDK's checkpoint manager exposes the keys — see the reader's note).
-  const workspaceCheckpointManager = new WorkspaceCheckpointManager(withCheckpointGuardSettings({ workspaceRoot: workingDirectory, runtimeBus: options.runtimeBus }, configManager));
-  // Fire-and-forget: subscriptions go live immediately if init() succeeds.
-  // If it rejects, WorkspaceCheckpointManager caches that rejection on
-  // `initPromise` and never clears it, so every later call (create/list/
-  // diff/restore — each awaits init() first) re-throws the same error
-  // forever: checkpointing becomes entirely unavailable for the rest of the
-  // session, not "degraded to manual-only". The `.catch(() => {})` here only
-  // exists to prevent an unhandled rejection at startup; the checkpoint
-  // commands (checkpoint-runtime.ts) are what actually catch and report the
-  // failure to the user, on first use.
-  void workspaceCheckpointManager.init().catch(() => {});
+  const workspaceCheckpointManager = createWorkspaceCheckpointing({ workspaceRoot: workingDirectory, runtimeBus: options.runtimeBus, configManager });
 
   // ws-only verbs (fleet/checkpoints/search/push) 501 without this — see gateway-verbs.ts.
   attachWsOnlyGatewayVerbHandlers(gatewayMethods, { processRegistry, workspaceCheckpointManager, sessionBroker, secretsManager, approvalBroker, shellPaths, configManager, runtimeStore: options.runtimeStore });
@@ -698,6 +692,7 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
     workingDirectory,
     homeDirectory,
     shellPaths,
+    workspaceTrustManager,
     configManager,
     featureFlags,
     runtimeBus: options.runtimeBus,

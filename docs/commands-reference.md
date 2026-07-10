@@ -374,7 +374,7 @@ GoodVibes ships **140** built-in slash commands across **65** categories. Every 
 | --- | --- | --- | --- |
 | `/bridge` | — | `[status\|pools\|assign <pool> <runner>\|runner <id>\|review <artifactId>\|export <artifactId> [path]\|import <path>]` | Review and operate self-hosted bridge and remote runner flows |
 | `/release` | — | `[review\|checklist\|bundle export <path>\|bundle inspect <path>]` | Package certification and release-readiness operations |
-| `/trust` | — | `[review\|bundle export <path>\|bundle inspect <path>]` | Review trust posture and export portable trust bundles |
+| `/trust` | — | `[review\|workspace [trusted\|restricted]\|bundle export <path>\|bundle inspect <path>]` | Review trust posture, set this workspace's trust level, or export trust bundles |
 
 ## Profiles
 

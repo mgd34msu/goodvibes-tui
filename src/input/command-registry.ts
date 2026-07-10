@@ -241,6 +241,7 @@ export interface CommandWorkspaceUiServices {
   keybindingsManager?: KeybindingsManager;
   fileUndoManager?: FileUndoManager;
   workspaceCheckpointManager?: WorkspaceCheckpointManager;
+  workspaceTrustManager?: import('../runtime/trust/workspace-trust.ts').WorkspaceTrustManager;
   panelManager?: PanelManager;
   profileManager?: import('@pellux/goodvibes-sdk/platform/profiles').ProfileManager;
   bookmarkManager?: import('@pellux/goodvibes-sdk/platform/bookmarks').BookmarkManager;

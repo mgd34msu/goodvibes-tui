@@ -154,11 +154,47 @@ function inspectReleaseBundle(path: string): string {
 export function registerProductRuntimeCommands(registry: CommandRegistry): void {
   registry.register({
     name: 'trust',
-    description: 'Review trust posture and export portable trust bundles',
-    usage: '[review|bundle export <path>|bundle inspect <path>]',
+    description: 'Review trust posture, set this workspace\'s trust level, or export trust bundles',
+    usage: '[review|workspace [trusted|restricted]|bundle export <path>|bundle inspect <path>]',
     async handler(args, ctx) {
-      const shellPaths = requireShellPaths(ctx);
       const sub = args[0] ?? 'review';
+      if (sub === 'workspace') {
+        const manager = ctx.workspace.workspaceTrustManager;
+        if (!manager) {
+          ctx.print('Workspace trust is unavailable in this context.');
+          return;
+        }
+        const choice = (args[1] ?? '').toLowerCase();
+        if (choice === 'trusted' || choice === 'trust' || choice === 'full' || choice === 'yes') {
+          await manager.setLevel('trusted');
+          ctx.print('This workspace is now TRUSTED — all tools may run, subject to your permission settings.');
+          ctx.renderRequest();
+          return;
+        }
+        if (choice === 'restricted' || choice === 'restrict' || choice === 'readonly' || choice === 'read-only' || choice === 'no') {
+          await manager.setLevel('restricted');
+          ctx.print('This workspace is now RESTRICTED — read-only exploration; write/execute/delegate tools are denied until you run `/trust workspace trusted`.');
+          ctx.renderRequest();
+          return;
+        }
+        if (choice && choice !== 'status' && choice !== 'show') {
+          ctx.print(`Unknown workspace trust option "${args[1]}". Usage: /trust workspace [trusted|restricted]`);
+          return;
+        }
+        const level = manager.getLevel();
+        const lines = [
+          `Workspace trust: ${level.toUpperCase()}` +
+            (manager.wasGrandfathered() ? ' (grandfathered from prior GoodVibes state)' : ''),
+          level === 'trusted'
+            ? 'All tools may run, subject to your normal permission settings.'
+            : 'Read-only exploration: write, execute, and delegate tools are denied until you trust this workspace.',
+        ];
+        if (!manager.isDecided()) lines.push('Not yet decided — run `/trust workspace trusted` to enable full capability.');
+        lines.push('Change with:  /trust workspace trusted   |   /trust workspace restricted');
+        ctx.print(lines.join('\n'));
+        return;
+      }
+      const shellPaths = requireShellPaths(ctx);
       if (sub === 'review') {
         const bundle = await buildTrustReviewBundle(ctx);
         ctx.print(formatTrustReview(bundle));
