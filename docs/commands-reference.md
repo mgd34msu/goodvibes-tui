@@ -88,7 +88,7 @@ GoodVibes ships **140** built-in slash commands across **65** categories. Every 
 
 | Command | Aliases | Usage | Description |
 | --- | --- | --- | --- |
-| `/channel` | — | `[status\|routes\|delivery\|policy] [--json]` | Inspect channel routes, delivery strategies, and ingress policies |
+| `/channel` | `/channels` | `[pair [surface]\|status\|routes\|delivery\|policy] [--json]` | Pair channels and inspect routes, delivery strategies, and ingress policies |
 
 ## Checkpoints
 
