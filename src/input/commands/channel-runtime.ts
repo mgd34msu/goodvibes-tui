@@ -152,7 +152,7 @@ export function registerChannelRuntimeCommands(registry: CommandRegistry): void 
       }
 
       if (sub === 'pair') {
-        runChannelPairing(args.slice(1), ctx);
+        await runChannelPairing(args.slice(1), ctx);
         return;
       }
 

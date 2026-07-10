@@ -1,8 +1,14 @@
 import { describe, it, expect } from 'bun:test';
+import { getBuiltinSetupSchema } from '@pellux/goodvibes-sdk/platform/channels';
 import type { ConfigManager } from '../../config/index.ts';
 import type { CommandContext } from '../../input/command-registry.ts';
 import { runChannelPairing } from '../../input/commands/channel-pairing.ts';
-import { EXTERNAL_SURFACE_SPECS } from '../../input/onboarding/onboarding-wizard-external-surfaces.ts';
+
+const PAIRABLE_SURFACES = [
+  'slack', 'discord', 'ntfy', 'webhook', 'homeassistant', 'telegram',
+  'google-chat', 'signal', 'whatsapp', 'telephony', 'imessage', 'msteams',
+  'bluebubbles', 'mattermost', 'matrix',
+] as const;
 
 function makeCtx() {
   const store = new Map<string, unknown>();
@@ -22,45 +28,48 @@ function makeCtx() {
 }
 
 describe('/channel pair', () => {
-  it('lists adapters from the surface declaration (not a hand-maintained list)', () => {
+  it('lists adapters from the SDK setup schema (not a hand-maintained list)', async () => {
     const { ctx, text } = makeCtx();
-    runChannelPairing([], ctx);
+    await runChannelPairing([], ctx);
     expect(text()).toContain('Channel adapters');
-    // Every declared surface id appears.
-    for (const spec of EXTERNAL_SURFACE_SPECS) {
-      expect(text()).toContain(spec.id);
+    // Every pairable surface id appears.
+    for (const surface of PAIRABLE_SURFACES) {
+      expect(text()).toContain(surface);
     }
   });
 
-  it('rejects an unknown surface with the list of valid ones', () => {
+  it('rejects an unknown surface with the list of valid ones', async () => {
     const { ctx, text } = makeCtx();
-    runChannelPairing(['not-a-channel'], ctx);
+    await runChannelPairing(['not-a-channel'], ctx);
     expect(text()).toContain('Unknown channel');
     expect(text()).toContain('slack');
   });
 
-  it('shows a surface\'s declared credentials and marks them not set initially', () => {
+  it('shows a surface\'s declared credentials and marks them not set initially', async () => {
     const { ctx, text } = makeCtx();
-    runChannelPairing(['slack'], ctx);
+    await runChannelPairing(['slack'], ctx);
     expect(text()).toContain('Slack');
     expect(text()).toContain('Declared credentials');
     expect(text()).toContain('not set');
   });
 
-  it('verify reports missing credentials, then passes once every credential resolves', () => {
+  it('verify reports missing credentials, then passes locally once every credential resolves', async () => {
     const { ctx, store, printed, text } = makeCtx();
-    runChannelPairing(['slack', 'verify'], ctx);
+    await runChannelPairing(['slack', 'verify'], ctx);
     expect(text()).toContain('[fail]');
+    // No control-plane base URL is configured in this stub, so the live
+    // round-trip is honestly reported as unavailable rather than skipped silently.
+    expect(text()).toContain('Cannot perform a live round-trip');
 
     // Populate every declared credential field for slack, then re-verify.
-    const slack = EXTERNAL_SURFACE_SPECS.find((s) => s.id === 'slack')!;
-    for (const field of slack.fields) {
-      if (field.kind === 'masked' || field.kind === 'text') {
-        store.set(field.configKey, field.kind === 'masked' ? 'goodvibes-secret://slack' : 'T123');
-      }
+    const schema = getBuiltinSetupSchema('slack');
+    for (const field of schema.fields) {
+      if (!field.configKey) continue;
+      if (field.kind === 'secret') store.set(field.configKey, 'goodvibes-secret://slack');
+      else if (field.kind === 'string' || field.kind === 'url' || field.kind === 'number') store.set(field.configKey, 'T123');
     }
     printed.length = 0;
-    runChannelPairing(['slack', 'verify'], ctx);
+    await runChannelPairing(['slack', 'verify'], ctx);
     expect(text()).not.toContain('[fail]');
     expect(text()).toContain('All declared credentials resolve');
   });
