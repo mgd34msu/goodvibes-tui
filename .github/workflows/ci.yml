@@ -100,3 +100,31 @@ jobs:
         uses: ./.github/actions/setup
       - name: Build
         run: bun run build
+
+  action-self-test:
+    name: GitHub Action self-test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # Runs on push only: it installs the latest published release binary from
+    # GitHub Releases (network) to exercise the composite action end-to-end.
+    if: github.event_name == 'push'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+      - name: Install GoodVibes via the composite action (install + version)
+        id: gv
+        uses: ./
+        with:
+          version: latest
+      - name: Assert the action reported a version
+        run: |
+          test -n "${{ steps.gv.outputs.version }}"
+          echo "action installed: ${{ steps.gv.outputs.version }}"
+      - name: Exercise doctor (findings tolerated in a bare CI workspace)
+        run: goodvibes doctor --json || echo "doctor reported findings (expected without config/daemon in CI)"
+      - name: Note the headless-run gap
+        # A non-interactive one-shot mode exists (goodvibes run --non-interactive),
+        # but it needs a provider credential this self-test does not carry, so the
+        # self-test covers install + version + doctor. Consumers with a credential
+        # can pass the action's `prompt` input to run a real turn.
+        run: echo "goodvibes run --non-interactive exists but requires a provider credential; not exercised here."
