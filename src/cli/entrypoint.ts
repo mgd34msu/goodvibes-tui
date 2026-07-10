@@ -12,6 +12,7 @@ import {
   applyRuntimeConfigValue,
   applyRuntimeFeatureFlagOverrides,
   buildCliStatusSnapshot,
+  handleDoctorSubcommand,
   handleGoodVibesCliCommand,
   parseGoodVibesCli,
   renderCliStatus,
@@ -125,6 +126,21 @@ export async function prepareShellCliRuntime(
   if (endpointOverrideErrors.length > 0) {
     console.error(endpointOverrideErrors.join('\n'));
     process.exit(2);
+  }
+
+  if (cli.command === 'doctor' && ['explain', 'routing', 'hooks'].includes(cli.commandArgs[0] ?? '')) {
+    const result = await handleDoctorSubcommand({
+      subcommand: cli.commandArgs[0]!,
+      args: cli.commandArgs.slice(1),
+      configManager,
+      workingDirectory: bootstrapWorkingDir,
+      homeDirectory: bootstrapHomeDirectory,
+      outputFormat: cli.flags.outputFormat,
+    });
+    if (result) {
+      console.log(result.output);
+      process.exit(result.exitCode);
+    }
   }
 
   if (cli.command === 'status' || cli.command === 'doctor' || (cli.command === 'onboarding' && cli.commandArgs[0] === 'status')) {

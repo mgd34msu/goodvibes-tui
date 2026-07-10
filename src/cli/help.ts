@@ -36,6 +36,9 @@ export function renderGoodVibesHelp(binary = 'goodvibes'): string {
     '  service                    Inspect/manage daemon service lifecycle',
     '  status                     Print config, provider, service, and onboarding posture',
     '  doctor                     Print status plus setup warnings',
+    '  doctor explain <target>    Explain why a tool/command would be allowed/asked/denied',
+    '  doctor routing             Print which model/provider serves which role',
+    '  doctor hooks               List registered hooks, their source, and validation status',
     '  onboarding [status]        Open onboarding in the TUI, or print onboarding status',
     '  models [provider]          List/use/pin selectable models and recent model history',
     '  providers                  List/inspect/use provider config/auth posture',
@@ -135,9 +138,9 @@ const COMMAND_HELP: Record<string, CommandHelp> = {
     examples: ['status', 'status --json'],
   },
   doctor: {
-    usage: ['doctor', 'doctor --json'],
-    summary: 'Print status plus actionable setup warnings with cause, impact, and next action.',
-    examples: ['doctor', 'doctor --json'],
+    usage: ['doctor', 'doctor --json', 'doctor explain <tool|command>', 'doctor routing', 'doctor hooks'],
+    summary: 'Print status plus setup warnings, or explain a platform decision: explain (why a tool/command would be allowed/asked/denied under the current mode), routing (which model/provider serves which role), hooks (registered hooks, their source, and validation status).',
+    examples: ['doctor', 'doctor explain "rm -rf build"', 'doctor explain write ./src/app.ts', 'doctor routing', 'doctor hooks --json'],
   },
   providers: {
     usage: ['providers [list]', 'providers current', 'providers inspect <provider>', 'providers use <provider> [modelRegistryKey]'],
