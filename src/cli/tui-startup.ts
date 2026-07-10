@@ -1,5 +1,6 @@
 import type { CommandContext, CommandRegistry } from '../input/command-registry.ts';
 import type { InputHandler } from '../input/handler.ts';
+import type { SelectionItem } from '../input/selection-modal.ts';
 import { hasResumableWizardProgress, readOnboardingCheckMarker, readWizardProgress } from '../runtime/onboarding/index.ts';
 import { readLastSessionPointer } from '@/runtime/index.ts';
 import type { GoodVibesCliParseResult } from './types.ts';
@@ -8,6 +9,32 @@ export type TuiStartupShellPaths = Parameters<typeof readOnboardingCheckMarker>[
   readonly workingDirectory: string;
   readonly homeDirectory: string;
 };
+
+/**
+ * First-run workspace trust prompt. When GoodVibes opens a workspace it has no
+ * trust decision for, ask before any tool runs whether to trust it (full
+ * capability) or keep it restricted (read-only exploration). Dismissing the
+ * prompt leaves it restricted — the safe default. Grandfathered workspaces
+ * (prior GoodVibes state) are already decided, so this is a no-op for them.
+ */
+function promptWorkspaceTrustIfUndecided(commandContext: CommandContext, render: () => void): void {
+  const manager = commandContext.workspace.workspaceTrustManager;
+  if (!manager || manager.isDecided()) return;
+  const items: SelectionItem[] = [
+    { id: 'trusted', label: 'Trust this workspace', detail: 'Full capability — all tools may run', primaryAction: 'select' },
+    { id: 'restricted', label: 'Keep restricted (read-only)', detail: 'Explore safely; writes and commands are denied until trusted', primaryAction: 'select' },
+  ];
+  commandContext.openSelection?.(
+    'New workspace — choose a trust level',
+    items,
+    { allowSearch: false, primaryVerbLabel: 'Choose' },
+    (result) => {
+      const level = result?.item.id === 'trusted' ? 'trusted' : 'restricted';
+      void manager.setLevel(level);
+      render();
+    },
+  );
+}
 
 export function applyInitialTuiCliState(options: {
   readonly cli: GoodVibesCliParseResult;
@@ -89,6 +116,10 @@ export function applyInitialTuiCliState(options: {
           },
         });
       }
+    } else {
+      // Returning user, no wizard to resume: this is the moment to ask about a
+      // genuinely new workspace's trust level, before they run anything here.
+      promptWorkspaceTrustIfUndecided(commandContext, render);
     }
   }
 }

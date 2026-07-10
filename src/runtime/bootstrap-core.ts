@@ -36,6 +36,8 @@ import { createWrfcPersistence, type WrfcPersistence } from './wrfc-persistence.
 import type { SystemMessagePriority } from '../core/system-message-router.ts';
 import { SessionSpineClient, SessionUnionCache, TUI_SPINE_PARTICIPANT } from '@pellux/goodvibes-sdk/platform/runtime/session-spine';
 import { SessionInboundInputPoller, createBootstrapInboundInputPoller } from './session-inbound-inputs.ts';
+import { detectPriorWorkspaceState, trustGatedAsk } from './trust/workspace-trust.ts';
+import { syncNotifierQueueIntegrations } from './bootstrap-notifier-sync.ts';
 
 // ---------------------------------------------------------------------------
 // Pre-router buffer
@@ -250,7 +252,10 @@ export async function initializeBootstrapCore(
     getConversationTitle: () => getConversationTitle(),
     workingDir,
     homeDirectory,
+    // Sampled BEFORE any service writes to <cwd>/.goodvibes so a new workspace isn't misread as used.
+    workspaceHadPriorState: detectPriorWorkspaceState(workingDir),
   });
+  await services.workspaceTrustManager.load(); // settle trust (+ grandfathering) before any tool runs
   const providerRegistry = services.providerRegistry;
   providerRegistry.initModelLimits();
   services.benchmarkStore.initBenchmarks();
@@ -679,39 +684,17 @@ export async function initializeBootstrapCore(
   services.webhookNotifier.attachToRuntimeBus(runtimeBus);
 
   const notifier = await Notifier.fromConfig(services.serviceRegistry);
-  const queueStatuses = notifier.getQueueStatus();
-  if (queueStatuses.length > 0) {
-    notifier.attachToRuntimeBus(runtimeBus);
-    for (const queueStatus of queueStatuses) {
-      domainDispatch.syncIntegration({
-        id: queueStatus.channel,
-        displayName: queueStatus.channel[0]!.toUpperCase() + queueStatus.channel.slice(1),
-        category: 'communication',
-        status: queueStatus.metrics.deadLettered > 0 ? 'degraded' : 'healthy',
-        enabled: true,
-        successCount: queueStatus.metrics.delivered,
-        errorCount: queueStatus.metrics.deadLettered,
-        ...(queueStatus.dlqEntries[0]?.deadAt ? { lastErrorAt: queueStatus.dlqEntries[0].deadAt } : {}),
-        ...(queueStatus.dlqEntries[0]?.finalError ? { lastError: queueStatus.dlqEntries[0].finalError } : {}),
-        meta: {
-          attempts: queueStatus.metrics.totalAttempts,
-          retrying: queueStatus.metrics.retrying,
-          deadLetters: queueStatus.metrics.deadLettered,
-          dlqSize: queueStatus.metrics.dlqSize,
-          sloEnforced: queueStatus.sloEnforced,
-        },
-      }, 'bootstrap.notifier');
-    }
-  }
+  syncNotifierQueueIntegrations(notifier, runtimeBus, domainDispatch);
 
   await syncConfiguredServices(domainDispatch.syncIntegration, services.serviceRegistry);
 
   const permissionManager = new PermissionManager(
-    (request) => approvalBroker.requestApproval({
+    // Wrapped by the workspace trust gate — see trustGatedAsk.
+    trustGatedAsk(services.workspaceTrustManager, (request) => approvalBroker.requestApproval({
       request,
       sessionId: runtimeSessionIdRef.value,
       localPrompt: permissionPromptRef.requestPermission,
-    }),
+    })),
     createPermissionConfigReader(configManager),
     policyRuntimeState,
     services.hookDispatcher,
