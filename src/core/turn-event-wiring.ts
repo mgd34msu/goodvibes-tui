@@ -75,6 +75,14 @@ export interface WireTurnEventHandlersOptions {
    */
   readonly focusTracker?: Pick<FocusTracker, 'shouldAlertWhenUnfocused'> | null;
   /**
+   * Optional in-terminal (OSC 9) notifier. When present: a turn finishing emits
+   * a 'turn-end' notification, and a delegated agent blocking on human input
+   * (AGENT_AWAITING_MESSAGE) emits an 'agent-blocked' notification. Each is
+   * gated independently by the notifier's own per-signal config + focus rule.
+   * Absent in tests/headless.
+   */
+  readonly terminalNotifier?: import('./terminal-notifier.ts').TerminalNotifier | null;
+  /**
    * Minimal test seam: injectable clock for controlling Date.now() in tests.
    * Defaults to the real Date.now when absent.
    * @internal — tests only
@@ -114,6 +122,7 @@ export function wireTurnEventHandlers(
     events, conversation, runtime, configManager, hookDispatcher, orchestrator, providerRegistry,
     workingDir, homeDirectory, sessionManager, gitStatusProvider,
     lastGitInfoRef, buildSessionContinuityHints, render, webhookNotifier, focusTracker,
+    terminalNotifier,
     _clock = Date.now,
   } = options;
 
@@ -158,6 +167,9 @@ export function wireTurnEventHandlers(
     const notifyThreshold = readNotifyAfterSeconds((k) => configManager.get(k as Parameters<typeof configManager.get>[0]));
     // stopReason 'empty_response' signals a non-successful completion.
     const taskStatus: LongTaskStatus = evt.stopReason === 'completed' ? 'ok' : 'fail';
+    // In-terminal (OSC 9) turn-end notification — fires on its own per-signal
+    // config + focus gate, independent of the long-task duration threshold below.
+    terminalNotifier?.notify('turn-end', taskStatus === 'ok' ? 'Turn finished' : 'Turn finished with errors');
     maybeNotifyLongTask({
       elapsedMs: turnElapsedMs,
       status: taskStatus,
@@ -205,6 +217,16 @@ export function wireTurnEventHandlers(
     // small-window handling). The TUI must not independently re-trigger it.
     refreshGit();
   }));
+
+  // In-terminal (OSC 9) agent-blocked notification: a delegated agent parked
+  // waiting for a human message (AGENT_AWAITING_MESSAGE) is "blocked on you".
+  // Gated by the notifier's own per-signal config + focus rule. PRIVACY: the
+  // short agent id only — never task text.
+  if (terminalNotifier) {
+    unsubs.push(events.agents.on('AGENT_AWAITING_MESSAGE', (payload) => {
+      terminalNotifier.notify('agent-blocked', `agent ${payload.agentId.slice(0, 8)} is waiting for your input`);
+    }));
+  }
 
   unsubs.push(events.tools.on('TOOL_SUCCEEDED', () => {
     refreshGit();

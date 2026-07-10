@@ -24,11 +24,19 @@ import type { WebhookNotifier } from '@pellux/goodvibes-sdk/platform/integration
 import type { PermissionRequestHandler, PermissionPromptRequest } from '@pellux/goodvibes-sdk/platform/permissions';
 import type { FocusTracker } from './focus-tracker.ts';
 import { shouldFireAlert, FORCE_NOTIFY_DURATION_MS, type ConfigGet } from './alert-gating.ts';
+import type { TerminalNotifier } from './terminal-notifier.ts';
 
 export interface ApprovalAlertDeps {
   readonly focusTracker: Pick<FocusTracker, 'shouldAlertWhenUnfocused'>;
   readonly configGet: ConfigGet;
   readonly webhookNotifier?: WebhookNotifier | null;
+  /**
+   * Optional in-terminal (OSC 9) notifier. When present, a permission prompt
+   * appearing also emits an in-terminal notification, gated independently by
+   * the notifier's own per-signal config + focus rule (separate from the
+   * desktop-alert gate below). Absent in tests/headless.
+   */
+  readonly terminalNotifier?: TerminalNotifier | null;
 }
 
 /**
@@ -48,11 +56,16 @@ export function wrapRequestPermissionWithAlert(
 }
 
 function fireApprovalAlert(request: PermissionPromptRequest, deps: ApprovalAlertDeps): void {
+  // PRIVACY: tool name + category only. Never request.args.
+  const message = `${request.tool} (${request.category}) is waiting for approval`;
+
+  // In-terminal (OSC 9) notification fires on its OWN gating (independent of the
+  // desktop-alert gate below), so it is emitted before the early return.
+  deps.terminalNotifier?.notify('approval-wait', message);
+
   if (!shouldFireAlert(deps.focusTracker, deps.configGet, 'behavior.notifyOnApprovalPending')) return;
 
   const title = 'GoodVibes — approval needed';
-  // PRIVACY: tool name + category only. Never request.args.
-  const message = `${request.tool} (${request.category}) is waiting for approval`;
 
   try {
     notifyCompletion(title, message, FORCE_NOTIFY_DURATION_MS);
