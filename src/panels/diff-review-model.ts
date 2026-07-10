@@ -126,6 +126,37 @@ export function hunkExcerpt(hunk: ReviewHunk, maxLines = 8): string {
   return [hunk.header, ...body, ...truncated].join('\n');
 }
 
+/** The full unified-diff hunk text (header + body) for one ReviewHunk — the input checkpoints.revertHunk takes. */
+export function hunkPatchText(hunk: ReviewHunk): string {
+  return [hunk.header, ...hunk.bodyLines].join('\n');
+}
+
+/** The subset of checkpoints.revertHunk's receipt the transcript block renders. */
+export interface HunkRevertReceiptInput {
+  readonly path: string;
+  readonly hunkHeader: string;
+  readonly addedLinesRemoved: number;
+  readonly removedLinesRestored: number;
+  readonly safetyCheckpointId: string | null;
+}
+
+/**
+ * Build the distinct `[Revert]` transcript block for one applied hunk revert.
+ * Pure. The `[Revert]` prefix is force-surfaced inline (system-message-router.ts)
+ * so a working-tree mutation from /review is never a silent change.
+ */
+export function buildHunkRevertReceiptBlock(receipt: HunkRevertReceiptInput): string {
+  const plural = (n: number, word: string): string => `${n} ${word}${n === 1 ? '' : 's'}`;
+  const lines = [
+    `[Revert] Receipt — reverted one hunk in ${receipt.path} (${receipt.hunkHeader}).`,
+    `  Restored ${plural(receipt.removedLinesRestored, 'deleted line')}, removed ${plural(receipt.addedLinesRemoved, 'added line')}.`,
+    receipt.safetyCheckpointId
+      ? `  Reversible: a pre-revert checkpoint was taken — /checkpoints restore ${receipt.safetyCheckpointId} undoes it.`
+      : '  Reversible: the working tree already matched the latest checkpoint (nothing extra to snapshot).',
+  ];
+  return lines.join('\n');
+}
+
 /** A comment attached to a specific hunk, ready to steer. */
 export interface HunkComment {
   readonly hunk: ReviewHunk;

@@ -8,6 +8,7 @@ import type { PermissionRequestHandler } from '@pellux/goodvibes-sdk/platform/pe
 import type { SelectionItem, SelectionResult, SelectionAction } from './selection-modal.ts';
 import type { FileUndoManager } from '@pellux/goodvibes-sdk/platform/state';
 import type { WorkspaceCheckpointManager } from '@pellux/goodvibes-sdk/platform/workspace';
+import type { GatewayMethodCatalog } from '@pellux/goodvibes-sdk/platform/control-plane';
 import type { PanelManager, PanelDeepLinkTarget } from '../panels/panel-manager.ts';
 import type { KeybindingsManager } from './keybindings.ts';
 import type { OnboardingWizardMode } from './onboarding/onboarding-wizard.ts';
@@ -241,6 +242,8 @@ export interface CommandWorkspaceUiServices {
   keybindingsManager?: KeybindingsManager;
   fileUndoManager?: FileUndoManager;
   workspaceCheckpointManager?: WorkspaceCheckpointManager;
+  /** In-process gateway catalog — the /review hunk-revert flow invokes checkpoints.revertHunk(Preview) over it. */
+  gatewayMethods?: GatewayMethodCatalog;
   workspaceTrustManager?: import('../runtime/trust/workspace-trust.ts').WorkspaceTrustManager;
   panelManager?: PanelManager;
   profileManager?: import('@pellux/goodvibes-sdk/platform/profiles').ProfileManager;

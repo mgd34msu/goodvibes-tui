@@ -70,6 +70,8 @@ export class DiffReviewPanel extends BasePanel {
   private composing = false;
   private draft = '';
   private submitSteer: ((text: string) => void) | null = null;
+  /** Injected by the /review command: reverse-apply (reject) the given hunk via checkpoints.revertHunk. */
+  private revertHunk: ((hunk: ReviewHunk) => void) | null = null;
   private sourceLabel = 'working tree vs HEAD (files edited this session)';
   private status: string | null = null;
   /** True once a load has completed (so the empty state can distinguish "no changes" from "not loaded"). */
@@ -92,6 +94,24 @@ export class DiffReviewPanel extends BasePanel {
   /** Wire the steering submit path (the /review command passes ctx.submitInput). */
   setSubmit(fn: (text: string) => void): void {
     this.submitSteer = fn;
+  }
+
+  /** Wire the hunk-revert path (the /review command drives checkpoints.revertHunk). */
+  setRevertHandler(fn: (hunk: ReviewHunk) => void): void {
+    this.revertHunk = fn;
+  }
+
+  /** Surface a status line (the revert flow reports conflicts/outcomes here). */
+  note(message: string): void {
+    this.status = message;
+    this.markDirty();
+    this.requestRender();
+  }
+
+  /** Re-load the session diff — used after a revert mutates the working tree. */
+  async refresh(): Promise<void> {
+    await this.loadSessionReview();
+    this.requestRender();
   }
 
   private keyFor(hunk: ReviewHunk): string {
@@ -162,6 +182,7 @@ export class DiffReviewPanel extends BasePanel {
       case 'c': this.openComposer(); return true;
       case 'x': this.clearComment(); return true;
       case 'a': this.submitAll(); return true;
+      case 'r': this.rejectCurrent(); return true;
       case 'enter': case 'return': this.submitCurrent(); return true;
       default: return false;
     }
@@ -273,6 +294,17 @@ export class DiffReviewPanel extends BasePanel {
     this.steer([{ hunk, comment: state.comment }]);
   }
 
+  /** Reject the selected hunk: hand it to the revert flow (preview → confirm → revertHunk). */
+  private rejectCurrent(): void {
+    const hunk = this.currentHunk();
+    if (!hunk) return;
+    if (!this.revertHunk) {
+      this.note('Hunk revert is not wired in this session.');
+      return;
+    }
+    this.revertHunk(hunk);
+  }
+
   private submitAll(): void {
     const items: HunkComment[] = [];
     for (const hunk of this.hunks) {
@@ -320,7 +352,7 @@ export class DiffReviewPanel extends BasePanel {
   private footer(width: number): Line {
     const hints = this.composing
       ? ' Enter attach  Esc cancel'
-      : ' ↑/↓ hunk  Tab file  c comment  Enter send  a send all  x clear';
+      : ' ↑/↓ hunk  Tab file  c comment  Enter send  a send all  r revert  x clear';
     const text = this.status ? `${hints}  •  ${this.status}` : hints;
     return buildStyledPanelLine(width, [{ text: truncateDisplay(text, width), fg: COLOR.dim, bg: COLOR.sectionBg }], { fillBg: COLOR.sectionBg });
   }
