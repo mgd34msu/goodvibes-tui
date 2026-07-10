@@ -69,11 +69,13 @@ The npm package is intended to be directly installable:
 Install behavior:
 
 - Bun is the recommended global installer because GoodVibes is a Bun program and the package is hosted on the npm registry.
-- Bun global installs require lifecycle-script trust after the first install:
+- Bun global installs require trusting only the app package's own postinstall after the first install:
 
   ```sh
-  bun pm trust -g @pellux/goodvibes-tui @pellux/goodvibes-sdk core-js tree-sitter-css tree-sitter-javascript tree-sitter-json tree-sitter-python tree-sitter-typescript
+  bun pm trust -g @pellux/goodvibes-tui
   ```
+
+  No dependency needs trusting: the binaries arrive through the platform-specific `@pellux/goodvibes-tui-<os>-<arch>` package (registry integrity, no lifecycle script), and the tree-sitter grammar packages contribute only their prebuilt `.wasm` files.
 
 - `bun pm -g untrusted` should report `Found 0 untrusted dependencies with scripts`.
 - npm and pnpm installs require `bun` to already be on `PATH`; the preinstall check fails clearly if it is missing.

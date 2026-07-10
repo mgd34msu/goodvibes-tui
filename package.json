@@ -126,15 +126,7 @@
     "@types/bun": "^1.3.10",
     "typescript": "^5.9.3"
   },
-  "trustedDependencies": [
-    "@pellux/goodvibes-sdk",
-    "core-js",
-    "tree-sitter-css",
-    "tree-sitter-javascript",
-    "tree-sitter-json",
-    "tree-sitter-python",
-    "tree-sitter-typescript"
-  ],
+  "trustedDependencies": [],
   "overrides": {
     "minimatch": "^10.2.5",
     "@pellux/goodvibes-sdk": "file:../.gv-dev-tarballs/pellux-goodvibes-sdk-1.6.1.tgz",
