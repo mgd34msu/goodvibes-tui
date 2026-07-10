@@ -190,6 +190,10 @@ export function registerProductRuntimeCommands(registry: CommandRegistry): void 
             : 'Read-only exploration: write, execute, and delegate tools are denied until you trust this workspace.',
         ];
         if (!manager.isDecided()) lines.push('Not yet decided — run `/trust workspace trusted` to enable full capability.');
+        const registrationManager = ctx.workspace.workspaceRegistrationManager;
+        if (registrationManager) {
+          lines.push(`Registration: ${await registrationManager.describe()}`);
+        }
         lines.push('Change with:  /trust workspace trusted   |   /trust workspace restricted');
         ctx.print(lines.join('\n'));
         return;

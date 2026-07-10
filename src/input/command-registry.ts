@@ -245,6 +245,7 @@ export interface CommandWorkspaceUiServices {
   /** In-process gateway catalog — the /review hunk-revert flow invokes checkpoints.revertHunk(Preview) over it. */
   gatewayMethods?: GatewayMethodCatalog;
   workspaceTrustManager?: import('../runtime/trust/workspace-trust.ts').WorkspaceTrustManager;
+  workspaceRegistrationManager?: import('../runtime/trust/workspace-registration.ts').WorkspaceRegistrationManager;
   panelManager?: PanelManager;
   profileManager?: import('@pellux/goodvibes-sdk/platform/profiles').ProfileManager;
   bookmarkManager?: import('@pellux/goodvibes-sdk/platform/bookmarks').BookmarkManager;

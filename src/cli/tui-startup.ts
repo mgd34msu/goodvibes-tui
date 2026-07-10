@@ -11,28 +11,111 @@ export type TuiStartupShellPaths = Parameters<typeof readOnboardingCheckMarker>[
   readonly homeDirectory: string;
 };
 
+export type FirstOpenTrustLevel = 'trusted' | 'restricted';
+
+/** The decisions a first-open prompt choice resolves to. Absent halves were not asked. */
+export interface FirstOpenDecision {
+  readonly trust?: FirstOpenTrustLevel;
+  readonly register?: 'yes' | 'no';
+}
+
 /**
- * First-run workspace trust prompt. When GoodVibes opens a workspace it has no
- * trust decision for, ask before any tool runs whether to trust it (full
- * capability) or keep it restricted (read-only exploration). Dismissing the
- * prompt leaves it restricted — the safe default. Grandfathered workspaces
- * (prior GoodVibes state) are already decided, so this is a no-op for them.
+ * decodeFirstOpenChoice — pure mapping from a chosen selection-item id (or null
+ * on Escape/enter-through) to the trust + registration decisions, given which
+ * halves the prompt actually offered. Kept pure so the combined-prompt semantics
+ * are unit-testable without a live modal.
+ *
+ * Escape/enter-through (id === null) is the safe default: an offered trust half
+ * settles to 'restricted' (matching the standalone trust prompt), and an offered
+ * register half defaults to NO — recorded as a subtree-scoped decline so the
+ * directory is not re-asked every startup.
  */
-function promptWorkspaceTrustIfUndecided(commandContext: CommandContext, render: () => void): void {
-  const manager = commandContext.workspace?.workspaceTrustManager;
-  if (!manager || manager.isDecided()) return;
-  const items: SelectionItem[] = [
-    { id: 'trusted', label: 'Trust this workspace', detail: 'Full capability — all tools may run', primaryAction: 'select' },
-    { id: 'restricted', label: 'Keep restricted (read-only)', detail: 'Explore safely; writes and commands are denied until trusted', primaryAction: 'select' },
-  ];
+export function decodeFirstOpenChoice(
+  id: string | null,
+  offered: { readonly trustNeeded: boolean; readonly registerNeeded: boolean },
+): FirstOpenDecision {
+  const decision: { trust?: FirstOpenTrustLevel; register?: 'yes' | 'no' } = {};
+  if (offered.trustNeeded && offered.registerNeeded) {
+    // Combined 2x2 choice.
+    const trust: FirstOpenTrustLevel = id === 'trust-register' || id === 'trust-only' ? 'trusted' : 'restricted';
+    const register: 'yes' | 'no' = id === 'trust-register' || id === 'restrict-register' ? 'yes' : 'no';
+    decision.trust = trust;
+    decision.register = register;
+  } else if (offered.trustNeeded) {
+    decision.trust = id === 'trusted' ? 'trusted' : 'restricted';
+  } else if (offered.registerNeeded) {
+    decision.register = id === 'register' ? 'yes' : 'no';
+  }
+  return decision;
+}
+
+/** Build the selection rows for a first-open prompt given which halves apply. */
+export function buildFirstOpenItems(offered: {
+  readonly trustNeeded: boolean;
+  readonly registerNeeded: boolean;
+}): { readonly title: string; readonly items: SelectionItem[] } {
+  if (offered.trustNeeded && offered.registerNeeded) {
+    return {
+      title: 'New workspace — trust level and registration',
+      items: [
+        { id: 'trust-register', label: 'Trust & register this workspace', detail: 'Full capability, and track it in your workspace registry', primaryAction: 'select' },
+        { id: 'trust-only', label: 'Trust, don\'t register', detail: 'Full capability; leave it out of the registry', primaryAction: 'select' },
+        { id: 'restrict-register', label: 'Keep restricted, register', detail: 'Read-only for now; still track it in the registry', primaryAction: 'select' },
+        { id: 'restrict-only', label: 'Keep restricted, don\'t register', detail: 'Read-only exploration; nothing recorded (default)', primaryAction: 'select' },
+      ],
+    };
+  }
+  if (offered.trustNeeded) {
+    return {
+      title: 'New workspace — choose a trust level',
+      items: [
+        { id: 'trusted', label: 'Trust this workspace', detail: 'Full capability — all tools may run', primaryAction: 'select' },
+        { id: 'restricted', label: 'Keep restricted (read-only)', detail: 'Explore safely; writes and commands are denied until trusted', primaryAction: 'select' },
+      ],
+    };
+  }
+  return {
+    title: 'Register this directory as a workspace?',
+    items: [
+      { id: 'register', label: 'Register this workspace', detail: 'Track this project root in your workspace registry', primaryAction: 'select' },
+      { id: 'skip', label: 'Don\'t register', detail: 'Leave it out; not asked again for this directory (default)', primaryAction: 'select' },
+    ],
+  };
+}
+
+/**
+ * First-open workspace prompt — one surface folding the TUI-local trust gate and
+ * the platform-wide registration half. When GoodVibes opens a workspace it has
+ * no trust decision for, and/or one whose registration resolves UNKNOWN, ask
+ * once (never two stacked modals): trust level AND "register this directory?".
+ *
+ * The two records are independent: a grandfathered-trusted workspace skips the
+ * trust half but may still see the register half once; a covered/declined/broad
+ * directory skips the register half. Escape/enter-through takes the safe default
+ * (restricted, and a recorded decline for the register half).
+ */
+async function promptWorkspaceFirstOpen(commandContext: CommandContext, render: () => void): Promise<void> {
+  const trustManager = commandContext.workspace?.workspaceTrustManager;
+  const registrationManager = commandContext.workspace?.workspaceRegistrationManager;
+  const trustNeeded = Boolean(trustManager && !trustManager.isDecided());
+  const evaluation = registrationManager ? await registrationManager.evaluate() : null;
+  const registerNeeded = Boolean(evaluation?.offerRegister);
+  if (!trustNeeded && !registerNeeded) return;
+
+  const offered = { trustNeeded, registerNeeded };
+  const { title, items } = buildFirstOpenItems(offered);
   commandContext.openSelection?.(
-    'New workspace — choose a trust level',
+    title,
     items,
     { allowSearch: false, primaryVerbLabel: 'Choose' },
     (result) => {
-      const level = result?.item.id === 'trusted' ? 'trusted' : 'restricted';
-      void manager.setLevel(level);
-      render();
+      const decision = decodeFirstOpenChoice(result?.item.id ?? null, offered);
+      const apply = async () => {
+        if (decision.trust && trustManager) await trustManager.setLevel(decision.trust);
+        if (decision.register === 'yes' && registrationManager) await registrationManager.register();
+        else if (decision.register === 'no' && registrationManager) await registrationManager.decline();
+      };
+      void apply().finally(render);
     },
   );
 }
@@ -120,9 +203,10 @@ export function applyInitialTuiCliState(options: {
         });
       }
     } else {
-      // Returning user, no wizard to resume: this is the moment to ask about a
-      // genuinely new workspace's trust level, before they run anything here.
-      promptWorkspaceTrustIfUndecided(commandContext, render);
+      // Returning user, no wizard to resume: this is the moment to ask, in one
+      // surface, about a genuinely new workspace's trust level and whether to
+      // register it — before they run anything here.
+      void promptWorkspaceFirstOpen(commandContext, render);
     }
   }
 }

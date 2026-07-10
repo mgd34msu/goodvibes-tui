@@ -20,6 +20,25 @@ export interface CliStatusOptions {
   readonly install?: readonly InstallSelfCheckFinding[];
   readonly doctor?: boolean;
   readonly outputFormat?: GoodVibesCliOutputFormat;
+  /** Per-workspace trust + registration posture, computed read-only by the caller. */
+  readonly workspace?: CliWorkspaceStatus;
+}
+
+/** Read-only snapshot of this workspace's trust gate and registration coverage. */
+export interface CliWorkspaceStatus {
+  /** TUI-local trust decision; 'undecided' when no choice is persisted yet. */
+  readonly trustLevel: 'trusted' | 'restricted' | 'undecided';
+  readonly trustGrandfathered: boolean;
+  /** Coverage verdict from the shared workspace registry. */
+  readonly registrationStatus: 'covered' | 'declined' | 'unknown';
+  /** Normalized working directory resolved against the registry. */
+  readonly registrationRoot: string;
+  /** Nearest registered root covering this path, or null. */
+  readonly registeredBy: string | null;
+  /** Coverage inherited through the git worktree→main-repo link. */
+  readonly viaWorktreeLink: boolean;
+  /** True when the root is too broad to register ($HOME, filesystem root, ~/.goodvibes). */
+  readonly registrationBroad: boolean;
 }
 
 export interface CliAuthStatus {
@@ -73,6 +92,7 @@ export interface CliStatusSnapshot {
     readonly scope: string;
     readonly updatedAt: number | null;
   };
+  readonly workspace: CliWorkspaceStatus | null;
   readonly exposure: readonly CliExposureSurface[];
   readonly findings: readonly CliDoctorFinding[];
 }
@@ -117,6 +137,34 @@ function secretPolicyLabel(policy: unknown): string {
 
 function bindLine(label: string, enabled: unknown, binding: { readonly hostMode: string; readonly host: string; readonly port: number }): string {
   return `  ${label}: ${yesNo(enabled)} (${binding.hostMode} ${binding.host}:${binding.port})`;
+}
+
+/** Describe registration coverage for the Workspace status section. */
+function registrationLine(workspace: CliWorkspaceStatus): string {
+  switch (workspace.registrationStatus) {
+    case 'covered':
+      return workspace.viaWorktreeLink
+        ? `registered (via worktree link to ${workspace.registeredBy})`
+        : `registered (covered by ${workspace.registeredBy})`;
+    case 'declined':
+      return 'not registered (declined for this directory)';
+    case 'unknown':
+      return workspace.registrationBroad
+        ? 'not registered (root too broad to register)'
+        : 'not registered (never asked)';
+  }
+}
+
+/** The `Workspace:` block showing the TUI-local trust gate and shared-registry coverage. */
+function renderWorkspaceSection(workspace: CliWorkspaceStatus | null): string[] {
+  if (!workspace) return [];
+  return [
+    'Workspace:',
+    `  trust: ${workspace.trustLevel}${workspace.trustGrandfathered ? ' (grandfathered)' : ''}`,
+    `  registration: ${registrationLine(workspace)}`,
+    `  root: ${workspace.registrationRoot}`,
+    '',
+  ];
 }
 
 /**
@@ -404,6 +452,7 @@ export function buildCliStatusSnapshot(options: CliStatusOptions): CliStatusSnap
       scope: marker?.scope ?? 'none',
       updatedAt: marker?.payload?.updatedAt ?? null,
     },
+    workspace: options.workspace ?? null,
     exposure: buildCliExposureReport(options),
     findings,
   };
@@ -472,6 +521,7 @@ export function renderCliStatus(options: CliStatusOptions): string {
     `  scope: ${marker?.scope ?? 'none'}`,
     `  updatedAt: ${marker?.payload ? new Date(marker.payload.updatedAt).toISOString() : 'n/a'}`,
     '',
+    ...renderWorkspaceSection(snapshot.workspace),
     'Exposure (report only — no changes made):',
     ...snapshot.exposure.flatMap((surface) => [
       `  ${surface.label}: ${yesNo(surface.enabled)} · ${surface.reach}${surface.networkFacing ? ' · network-facing' : ''}`,
