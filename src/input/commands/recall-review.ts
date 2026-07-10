@@ -1,5 +1,5 @@
 import type { CommandContext } from '../command-registry.ts';
-import { VALID_REVIEW_STATES, VALID_SCOPES, isValidReviewState, isValidScope } from './recall-shared.ts';
+import { VALID_REVIEW_STATES, VALID_SCOPES, isValidReviewState, isValidScope, temporalStatusLabel } from './recall-shared.ts';
 import { getMemoryApi, getMemorySpine } from './recall-query.ts';
 import { buildMainSessionTurnInjectionsText, buildTurnInjectionsText } from '../../renderer/turn-injection.ts';
 
@@ -41,7 +41,7 @@ export async function handleRecallQueue(args: string[], context: CommandContext)
   context.print(`[recall] Review queue (${queue.length}):`);
   for (const record of queue) {
     const reason = record.staleReason ? ` — ${record.staleReason}` : '';
-    context.print(`  ${record.id} [${record.scope}/${record.cls}] ${record.reviewState} ${record.confidence}%  ${record.summary}${reason}`);
+    context.print(`  ${record.id} [${record.scope}/${record.cls}] ${record.reviewState} ${record.confidence}%  ${record.summary}${reason}${temporalStatusLabel(record)}`);
   }
 }
 

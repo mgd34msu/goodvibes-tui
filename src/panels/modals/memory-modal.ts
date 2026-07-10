@@ -6,6 +6,7 @@ import type {
   ConfigModalTab,
   ConfigModalView,
 } from '../../input/config-modal-types.ts';
+import { memoryRecordTemporalStatus } from '@pellux/goodvibes-sdk/platform/state';
 
 // ---------------------------------------------------------------------------
 // Memory → config-modal surface (W6.1 group-B port). Two tabs: 'All Records'
@@ -44,7 +45,15 @@ interface MemoryRecordLike {
   readonly reviewedBy?: string | undefined;
   readonly createdAt: number;
   readonly updatedAt?: number | undefined;
+  readonly validFrom?: number | undefined;
+  readonly validUntil?: number | undefined;
   readonly provenance: readonly { readonly kind: string; readonly ref: string }[];
+}
+
+/** Compact `[pending]`/`[expired]` suffix for a record row; empty for 'active' (no window, or currently inside it). */
+function temporalSuffix(record: Pick<MemoryRecordLike, 'validFrom' | 'validUntil'>): string {
+  const status = memoryRecordTemporalStatus(record);
+  return status === 'active' ? '' : ` [${status}]`;
 }
 
 export interface MemoryModalDeps {
@@ -140,7 +149,7 @@ class MemoryModalSurface implements ConfigModalSurface {
   private allTab(): ConfigModalTab {
     const rows: ConfigModalRow[] = this.allRecords.map((record) => ({
       id: record.id,
-      label: `[${record.scope.slice(0, 1).toUpperCase()}/${record.cls.slice(0, 3).toUpperCase()}] ${record.id.slice(-8)}  ${fmtTime(record.createdAt)}  ${record.summary}${record.tags.length > 0 ? `  #${record.tags.join(' #')}` : ''}`,
+      label: `[${record.scope.slice(0, 1).toUpperCase()}/${record.cls.slice(0, 3).toUpperCase()}] ${record.id.slice(-8)}  ${fmtTime(record.createdAt)}  ${record.summary}${record.tags.length > 0 ? `  #${record.tags.join(' #')}` : ''}${temporalSuffix(record)}`,
     }));
     return {
       id: 'all',
@@ -155,7 +164,7 @@ class MemoryModalSurface implements ConfigModalSurface {
   private reviewTab(): ConfigModalTab {
     const rows: ConfigModalRow[] = this.reviewRecords.map((record) => ({
       id: record.id,
-      label: `${record.reviewState.padEnd(13)} ${String(record.confidence).padStart(3)}%  ${record.summary}${record.staleReason ? `  (stale: ${record.staleReason})` : ''}`,
+      label: `${record.reviewState.padEnd(13)} ${String(record.confidence).padStart(3)}%  ${record.summary}${record.staleReason ? `  (stale: ${record.staleReason})` : ''}${temporalSuffix(record)}`,
     }));
     return {
       id: 'review',

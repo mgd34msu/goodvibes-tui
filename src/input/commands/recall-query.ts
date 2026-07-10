@@ -2,7 +2,7 @@ import type { CommandContext } from '../command-registry.ts';
 import type { MemoryApi } from '@pellux/goodvibes-sdk/platform/knowledge';
 import type { MemorySpineClient } from '@pellux/goodvibes-sdk/platform/runtime/memory-spine';
 import type { MemorySearchFilter } from '@pellux/goodvibes-sdk/platform/state';
-import { VALID_CLASSES, VALID_SCOPES, isValidClass, isValidScope } from './recall-shared.ts';
+import { VALID_CLASSES, VALID_SCOPES, isValidClass, isValidScope, temporalStatusLabel } from './recall-shared.ts';
 
 /**
  * The local, host-only `MemoryApi` — kept for `/recall explain` and `/recall
@@ -93,7 +93,7 @@ export async function handleRecallSearch(args: string[], context: CommandContext
     const ts = new Date(record.createdAt).toISOString().slice(0, 16).replace('T', ' ');
     const tagStr = record.tags.length ? ` [${record.tags.join(', ')}]` : '';
     const scoreStr = semanticEntry ? `  sim ${Math.round(semanticEntry.similarity * 100)}%` : '';
-    context.print(`  ${record.id}  [${record.cls}]${tagStr}  ${ts}${scoreStr}`);
+    context.print(`  ${record.id}  [${record.cls}]${tagStr}  ${ts}${scoreStr}${temporalStatusLabel(record)}`);
     context.print(`    ${record.summary}`);
     if (record.provenance.length) {
       context.print(`    via: ${record.provenance.map((entry) => `${entry.kind}:${entry.ref}`).join(', ')}`);
@@ -159,6 +159,11 @@ export async function handleRecallGet(args: string[], context: CommandContext): 
   if (record.detail) context.print(`  Detail:  ${record.detail}`);
   if (record.tags.length) context.print(`  Tags:    ${record.tags.join(', ')}`);
   context.print(`  Created: ${ts}`);
+  if (record.validFrom !== undefined || record.validUntil !== undefined) {
+    const from = record.validFrom !== undefined ? new Date(record.validFrom).toISOString().slice(0, 19).replace('T', ' ') : '(none)';
+    const until = record.validUntil !== undefined ? new Date(record.validUntil).toISOString().slice(0, 19).replace('T', ' ') : '(none)';
+    context.print(`  Temporal: ${from} -> ${until}${temporalStatusLabel(record)}`);
+  }
 
   if (record.provenance.length) {
     context.print('  Provenance:');
@@ -249,7 +254,7 @@ export async function handleRecallList(args: string[], context: CommandContext):
     context.print(`\n[recall] ${clsName.toUpperCase()} (${group.length}):`);
     for (const record of group) {
       const tagStr = record.tags.length ? ` [${record.tags.join(', ')}]` : '';
-      context.print(`  ${record.id} [${record.scope}]${tagStr}  ${record.summary}`);
+      context.print(`  ${record.id} [${record.scope}]${tagStr}  ${record.summary}${temporalStatusLabel(record)}`);
     }
   }
 }

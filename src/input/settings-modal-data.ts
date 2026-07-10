@@ -25,6 +25,7 @@ import {
 } from './worktree-setup-config.ts';
 import { BUDGET_ALERT_USD_CONFIG_KEY, BUDGET_ALERT_USD_DEFAULT, readBudgetAlertUsd } from '../export/cost-utils.ts';
 import { MEMORY_CONSOLIDATION_SYNTHETIC_SETTINGS, buildMemoryConsolidationSyntheticEntries, isMemoryConsolidationConfigKey } from './memory-consolidation-settings-config.ts';
+import { MEMORY_PROJECTION_DIR_CONFIG_KEY, buildMemoryProjectionDirSyntheticEntry } from './commands/recall-files-config.ts';
 import {
   THEME_MODE_CONFIG_KEY,
   THEME_MODE_VALUES,
@@ -192,6 +193,13 @@ export function buildSettingGroups(
   const storageEntries = groups.get('storage');
   if (storageEntries && !storageEntries.some((e) => e.setting.key === (CODE_INDEX_ENABLED_CONFIG_KEY as ConfigKey))) {
     storageEntries.push(buildCodeIndexEnabledSyntheticEntry(configManager));
+  }
+
+  // Inject the memory.projection.dir synthetic entry into the storage
+  // category (alongside codeIndexEnabled — both are local-storage posture
+  // settings). Not in the SDK ConfigKey union, same rationale as above.
+  if (storageEntries && !storageEntries.some((e) => e.setting.key === MEMORY_PROJECTION_DIR_CONFIG_KEY)) {
+    storageEntries.push(buildMemoryProjectionDirSyntheticEntry(configManager));
   }
 
   // Inject the worktree.setup.commands / worktree.setup.carryOverGlobs
@@ -601,6 +609,13 @@ export function refreshEntryValues(
         }
         continue;
       }
+      // Same trap: 'memory' has no DEFAULT_CONFIG entry either.
+      if (entry.setting.key === MEMORY_PROJECTION_DIR_CONFIG_KEY) {
+        const refreshed = buildMemoryProjectionDirSyntheticEntry(configManager);
+        entry.currentValue = refreshed.currentValue;
+        entry.isDefault = refreshed.isDefault;
+        continue;
+      }
       const raw = configManager.get(entry.setting.key as ConfigKey);
       // Synthetic entries (e.g. tts.speed) that have no SDK schema key return
       // undefined from configManager. Normalize using the same logic used at
@@ -636,6 +651,12 @@ export function updateEntryForKey(
           entry.currentValue = match.currentValue;
           entry.isDefault = match.isDefault;
         }
+        continue;
+      }
+      if (key === MEMORY_PROJECTION_DIR_CONFIG_KEY) {
+        const refreshed = buildMemoryProjectionDirSyntheticEntry(configManager);
+        entry.currentValue = refreshed.currentValue;
+        entry.isDefault = refreshed.isDefault;
         continue;
       }
       const raw = configManager.get(key);

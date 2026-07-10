@@ -1,5 +1,6 @@
 import type { ShellPathService } from '@/runtime/index.ts';
 import type { MemoryClass, MemoryReviewState, MemoryScope } from '@pellux/goodvibes-sdk/platform/state';
+import { memoryRecordTemporalStatus } from '@pellux/goodvibes-sdk/platform/state';
 
 export const VALID_CLASSES: MemoryClass[] = ['decision', 'constraint', 'incident', 'pattern', 'fact', 'risk', 'runbook', 'architecture', 'ownership'];
 export const VALID_SCOPES: MemoryScope[] = ['session', 'project', 'team'];
@@ -19,4 +20,16 @@ export function isValidReviewState(s: string): s is MemoryReviewState {
 
 export function resolveBundlePath(pathArg: string, shellPaths: ShellPathService): string {
   return shellPaths.resolveWorkspacePath(pathArg);
+}
+
+/**
+ * Compact inline label for a record's temporal validity window — appended
+ * wherever `/recall` lists records, so an out-of-window record is visibly
+ * `[pending]`/`[expired]` rather than silently indistinguishable from an
+ * always-valid one. Empty string for 'active' (the common case; no window,
+ * or currently inside it) so normal listings stay unnoisy.
+ */
+export function temporalStatusLabel(record: { validFrom?: number | undefined; validUntil?: number | undefined }, now?: number): string {
+  const status = memoryRecordTemporalStatus(record, now);
+  return status === 'active' ? '' : ` [${status}]`;
 }

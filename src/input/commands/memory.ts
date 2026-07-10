@@ -19,6 +19,7 @@ import { handleRecallExport, handleRecallHandoffExport, handleRecallHandoffImpor
 import { handleRecallGet, handleRecallLink, handleRecallList, handleRecallRemove, handleRecallSearch, handleRecallVector } from './recall-query.ts';
 import { handleRecallExplain, handleRecallInjections, handleRecallPromote, handleRecallQueue, handleRecallReview } from './recall-review.ts';
 import { VALID_CLASSES, VALID_REVIEW_STATES, VALID_SCOPES } from './recall-shared.ts';
+import { handleRecallFilesApply, handleRecallFilesReview, handleRecallFilesSync } from './recall-files.ts';
 
 // ── Top-level command ─────────────────────────────────────────────────────────
 
@@ -57,6 +58,9 @@ function printRecallUsage(context: CommandContext): void {
     '  review <id> <state> [--confidence <n>] [--by <name>] [--reason <text>]',
     '  stale <id> [reason...]                          — Mark a record stale with an operator reason',
     '  contradict <id> [reason...]                     — Mark a record contradicted with an operator reason',
+    '  files sync [--dir <path>]                       — Project standing (project/team) records to git-backed markdown files',
+    '  files review [--dir <path>]                     — Diff the projection directory against the store; prints proposals, applies nothing',
+    '  files apply <id> [<id> ...] | --all [--dir <path>] — Apply only the named proposals from the last review, through the store\'s own update/delete',
     '  explain <task...> [--scope <path> ...]         — Show the knowledge records that would be injected for a task',
     '  injections [agentId]                           — Show per-turn passive knowledge injection records; no id shows the main session, an id shows that spawned agent',
     '  promote <id> <scope>                           — Promote a memory record into session|project|team scope',
@@ -110,6 +114,25 @@ export const recallCommand: SlashCommand = {
       case 'capture':
         await handleRecallCapture(rest, context);
         break;
+
+      case 'files': {
+        const [filesSub, ...filesRest] = rest;
+        switch (filesSub) {
+          case 'sync':
+            await handleRecallFilesSync(filesRest, context);
+            break;
+          case 'review':
+            await handleRecallFilesReview(filesRest, context);
+            break;
+          case 'apply':
+            await handleRecallFilesApply(filesRest, context);
+            break;
+          default:
+            context.print('[recall] Usage: /recall files <sync|review|apply> ...');
+            break;
+        }
+        break;
+      }
 
       case 'get':
       case 'show':
