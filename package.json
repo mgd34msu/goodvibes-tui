@@ -61,6 +61,7 @@
     "architecture:check": "bun run scripts/check-architecture.ts",
     "audit:home": "bun run scripts/audit-goodvibes-home.ts",
     "foundation:artifacts": "bun run scripts/export-foundation-artifacts.ts",
+    "docs:commands": "bun run scripts/generate-command-reference.ts",
     "verification:ledger": "bun run scripts/verification-ledger.ts",
     "verification:live": "bun run scripts/verify-live.ts",
     "eval:gate": "bun run scripts/eval-gate.ts",

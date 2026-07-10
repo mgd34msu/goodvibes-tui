@@ -3,6 +3,8 @@ import { join } from 'node:path';
 import { getPeerContract } from '@pellux/goodvibes-sdk/contracts';
 import { GatewayMethodCatalog, buildOperatorContract } from '@pellux/goodvibes-sdk/platform/control-plane';
 import { getKnowledgeGraphqlSchemaText, renderKnowledgeSchemaSql } from '@pellux/goodvibes-sdk/platform/knowledge';
+import { categorizeBuiltinCommands } from '../src/input/commands.ts';
+import { renderCommandReferenceMarkdown } from '../src/input/command-reference.ts';
 
 const ROOT = join(import.meta.dir, '..');
 
@@ -83,9 +85,23 @@ export function syncFoundationArtifacts(root = ROOT): void {
   console.log(`foundation artifacts written to ${outputDir}`);
 }
 
+/**
+ * Generate docs/commands-reference.md from the live slash-command registry.
+ * The committed file is guarded against drift by
+ * src/test/release-gates/command-reference-gate.test.ts, which regenerates and
+ * byte-compares (the same idiom as the foundation-artifact goldens above).
+ */
+export function syncCommandReference(root = ROOT): void {
+  const markdown = renderCommandReferenceMarkdown(categorizeBuiltinCommands());
+  const target = join(root, 'docs', 'commands-reference.md');
+  writeFileSync(target, markdown, 'utf8');
+  console.log(`command reference written to ${target}`);
+}
+
 export function syncProjectSurfaces(root = ROOT): string {
   const version = syncVersionSurfaces(root);
   syncFoundationArtifacts(root);
+  syncCommandReference(root);
   console.log(`prebuild: done (v${version})`);
   return version;
 }
