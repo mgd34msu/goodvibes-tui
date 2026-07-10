@@ -6,13 +6,14 @@
 
 # Command Reference
 
-GoodVibes ships **140** built-in slash commands across **65** categories. Every command below is generated directly from the command registry, so this list is always complete and current. Type a command in the composer prefixed with `/`, or press `Ctrl+K` (or run `/palette`) to search them all in the command palette.
+GoodVibes ships **141** built-in slash commands across **66** categories. Every command below is generated directly from the command registry, so this list is always complete and current. Type a command in the composer prefixed with `/`, or press `Ctrl+K` (or run `/palette`) to search them all in the command palette.
 
 ## Categories
 
 - [Branches](#branches) — 3
 - [Channels](#channels) — 1
 - [Checkpoints](#checkpoints) — 3
+- [CI](#ci) — 1
 - [Cloudflare](#cloudflare) — 1
 - [Codebase](#codebase) — 1
 - [Configuration](#configuration) — 1
@@ -97,6 +98,12 @@ GoodVibes ships **140** built-in slash commands across **65** categories. Every 
 | `/checkpoint` | — | `[label]` | Create a manual workspace checkpoint (forensic retention) |
 | `/checkpoints` | `/ckpts` | — | List workspace checkpoints, newest first |
 | `/rewind` | — | `<id\|last>` | Preview and restore a workspace checkpoint (files only — conversation history is unchanged) |
+
+## CI
+
+| Command | Aliases | Usage | Description |
+| --- | --- | --- | --- |
+| `/ci` | — | `status <repo-or-pr> \| watch <repo-or-pr> <deliveryChannel> [--fix-session] \| watches \| unwatch <id>` | CI-watch: one-shot per-job status and standing watches over the operator surface |
 
 ## Cloudflare
 
