@@ -235,7 +235,15 @@ function makeCtx(service?: WorkstreamCommandService) {
     },
     workspace: {},
     provider: {},
-    platform: {},
+    platform: {
+      // Minimal enough for getOperatorRpc (checkFanoutQuotaWarning) to
+      // resolve honestly to "unavailable" — no controlPlane.baseUrl means no
+      // live quota check, so /workstream launch's own behavior is what these
+      // tests exercise, not a real network round-trip.
+      configManager: {
+        get: (key: string) => (key === 'daemon.enabled' ? false : undefined),
+      },
+    },
     ops: {},
     extensions: {},
   } as unknown as CommandContext;
@@ -453,6 +461,21 @@ describe('workstream-runtime — approve / edit / launch', () => {
     expect(service.engine.createdInputs).toHaveLength(1);
     expect(service.engine.startedIds).toHaveLength(1);
     expect(service.getDraft(draftId)).toBeUndefined();
+  });
+
+  test('launch --force still resolves the draft id and launches (quota check unavailable → same as unforced here, but the flag must not be parsed as the id)', async () => {
+    const registry = new CommandRegistry();
+    registerWorkstreamRuntimeCommands(registry);
+    const service = makeFakeService();
+    const { ctx, printed } = makeCtx(service);
+    await registry.execute('workstream', ['create', 'task', 'three'], ctx);
+    const draftId = service.listDrafts()[0]!.id;
+    await registry.execute('workstream', ['approve', draftId], ctx);
+
+    await registry.execute('workstream', ['launch', draftId, '--force'], ctx);
+
+    expect(printed.at(-1)).toContain('Launched workstream');
+    expect(service.engine.createdInputs).toHaveLength(1);
   });
 
   test('edit re-derives the spec and clears a prior approval', async () => {

@@ -151,7 +151,7 @@ GoodVibes ships **143** built-in slash commands across **68** categories. Every 
 
 | Command | Aliases | Usage | Description |
 | --- | --- | --- | --- |
-| `/cost` | — | `[panel\|budget <usd>]` | Inspect session/agent cost tracking and configure the budget alert threshold |
+| `/cost` | — | `[panel\|budget <usd>\|attribution [24h\|7d] [--json]]` | Inspect session/agent cost tracking, windowed cost attribution, and the budget alert threshold |
 
 ## Diff & Review
 
@@ -554,7 +554,7 @@ GoodVibes ships **143** built-in slash commands across **68** categories. Every 
 
 | Command | Aliases | Usage | Description |
 | --- | --- | --- | --- |
-| `/workstream` | — | `create [--isolation shared\|worktree] <task...> \| list \| status [id] \| insert-phase <id> <description...> \| edit-item <id> <item#> <brief...> \| remove-item <id> <item#> \| move-item <id> <item#> <pos> \| approve <id> \| edit <id> [--isolation shared\|worktree] <task...> \| launch <id> \| cancel <id>` | Author and oversee multi-phase agent workstreams (orchestration engine) |
+| `/workstream` | — | `create [--isolation shared\|worktree] <task...> \| list \| status [id] \| insert-phase <id> <description...> \| edit-item <id> <item#> <brief...> \| remove-item <id> <item#> \| move-item <id> <item#> <pos> \| approve <id> \| edit <id> [--isolation shared\|worktree] <task...> \| launch <id> [--force] \| cancel <id>` | Author and oversee multi-phase agent workstreams (orchestration engine) |
 
 ## Worktrees
 
