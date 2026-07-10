@@ -6,7 +6,7 @@
 
 # Command Reference
 
-GoodVibes ships **142** built-in slash commands across **67** categories. Every command below is generated directly from the command registry, so this list is always complete and current. Type a command in the composer prefixed with `/`, or press `Ctrl+K` (or run `/palette`) to search them all in the command palette.
+GoodVibes ships **143** built-in slash commands across **68** categories. Every command below is generated directly from the command registry, so this list is always complete and current. Type a command in the composer prefixed with `/`, or press `Ctrl+K` (or run `/palette`) to search them all in the command palette.
 
 ## Categories
 
@@ -53,6 +53,7 @@ GoodVibes ships **142** built-in slash commands across **67** categories. Every 
 - [Platform Services](#platform-services) — 3
 - [Plugins](#plugins) — 1
 - [Policy](#policy) — 1
+- [Principals](#principals) — 1
 - [Product](#product) — 3
 - [Profiles](#profiles) — 1
 - [Provider Accounts](#provider-accounts) — 1
@@ -90,7 +91,7 @@ GoodVibes ships **142** built-in slash commands across **67** categories. Every 
 
 | Command | Aliases | Usage | Description |
 | --- | --- | --- | --- |
-| `/channel` | `/channels` | `[pair [surface]\|status\|routes\|delivery\|policy] [--json]` | Pair channels and inspect routes, delivery strategies, and ingress policies |
+| `/channel` | `/channels` | `[pair [surface]\|status\|routes\|delivery\|policy\|profiles [list\|get\|set\|delete]] [--json]` | Pair channels and inspect routes, delivery strategies, ingress policies, and per-channel profile bindings |
 
 ## Check-in
 
@@ -381,6 +382,12 @@ GoodVibes ships **142** built-in slash commands across **67** categories. Every 
 | Command | Aliases | Usage | Description |
 | --- | --- | --- | --- |
 | `/policy` | `/pol` | `<subcommand> [args]` | Open the policy panel or manage versioned policy bundles (load, simulate, diff, promote, rollback) |
+
+## Principals
+
+| Command | Aliases | Usage | Description |
+| --- | --- | --- | --- |
+| `/principals` | — | `[list\|get <id>\|create <name> <kind> [channel:value...]\|update <id> [--name x] [--kind x] [--identities c:v,c:v]\|delete <id>\|resolve <channel> <value>]` | Identity mappings: named principals and their channel identities |
 
 ## Product
 

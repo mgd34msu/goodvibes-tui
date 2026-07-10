@@ -189,5 +189,43 @@ describe('/channel command', () => {
     expect(output).toContain('routes');
     expect(output).toContain('delivery');
     expect(output).toContain('policy');
+    expect(output).toContain('profiles');
+  });
+
+  describe('profiles', () => {
+    test('list is honestly unavailable without a reachable control-plane base URL', async () => {
+      const registry = makeRegistry();
+      const ctx = makeCtx();
+      await registry.get('channel')!.handler(['profiles', 'list'], ctx);
+      expect(ctx.printed.join('\n')).toContain('no control-plane base URL is configured');
+    });
+
+    test('get without a surfaceKind prints usage', async () => {
+      const registry = makeRegistry();
+      const ctx = makeCtx();
+      await registry.get('channel')!.handler(['profiles', 'get'], ctx);
+      expect(ctx.printed.join('\n')).toContain('Usage: /channel profiles get');
+    });
+
+    test('set without a surfaceKind prints usage', async () => {
+      const registry = makeRegistry();
+      const ctx = makeCtx();
+      await registry.get('channel')!.handler(['profiles', 'set'], ctx);
+      expect(ctx.printed.join('\n')).toContain('Usage: /channel profiles set');
+    });
+
+    test('delete without a surfaceKind prints usage', async () => {
+      const registry = makeRegistry();
+      const ctx = makeCtx();
+      await registry.get('channel')!.handler(['profiles', 'delete'], ctx);
+      expect(ctx.printed.join('\n')).toContain('Usage: /channel profiles delete');
+    });
+
+    test('unknown profiles subcommand prints usage', async () => {
+      const registry = makeRegistry();
+      const ctx = makeCtx();
+      await registry.get('channel')!.handler(['profiles', 'bogus'], ctx);
+      expect(ctx.printed.join('\n')).toContain('Usage: /channel profiles <subcommand>');
+    });
   });
 });

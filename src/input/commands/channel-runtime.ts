@@ -1,15 +1,148 @@
-import type { CommandRegistry } from '../command-registry.ts';
+import type { CommandContext, CommandRegistry } from '../command-registry.ts';
 import { requireIntegrationHelpers } from './runtime-services.ts';
 import { runChannelPairing } from './channel-pairing.ts';
+import { describeOperatorRpcError, getOperatorRpc } from './operator-rpc.ts';
+import type { OperatorMethodOutput } from '@pellux/goodvibes-sdk';
+
+type ChannelProfileBinding = OperatorMethodOutput<'channels.profiles.list'>['bindings'][number];
+
+function renderProfileBinding(binding: ChannelProfileBinding): string {
+  const scope = binding.channelId ? `${binding.surfaceKind}:${binding.channelId}` : `${binding.surfaceKind} (surface-wide default)`;
+  const lines = [`  ${scope}`];
+  if (binding.model) lines.push(`    model: ${binding.model}${binding.provider ? ` (${binding.provider})` : ''}`);
+  if (binding.permissionMode) lines.push(`    permission mode: ${binding.permissionMode}`);
+  return lines.join('\n');
+}
+
+const CHANNEL_PROFILES_SUBCOMMANDS = ['list', 'get', 'set', 'delete'] as const;
+
+async function handleChannelProfilesSubcommand(args: string[], ctx: CommandContext): Promise<void> {
+  const sub = args[0] ?? 'list';
+  if (!(CHANNEL_PROFILES_SUBCOMMANDS as readonly string[]).includes(sub)) {
+    ctx.print(
+      'Usage: /channel profiles <subcommand>\n'
+      + '  list                                    — every per-channel profile binding\n'
+      + '  get <surfaceKind> [channelId]           — one binding\n'
+      + '  set <surfaceKind> [channelId] [--model x] [--provider x] [--permission-mode x]  — bind (upsert)\n'
+      + '  delete <surfaceKind> [channelId]        — remove a binding'
+    );
+    return;
+  }
+
+  if (sub === 'list') {
+    const rpc = getOperatorRpc(ctx);
+    if (!rpc.available) {
+      ctx.print(`[channel profiles] ${rpc.reason}`);
+      return;
+    }
+    try {
+      const { bindings } = await rpc.sdk.operator.invoke('channels.profiles.list', {});
+      if (bindings.length === 0) {
+        ctx.print('[channel profiles] no profile bindings configured.');
+        return;
+      }
+      ctx.print(['Channel profile bindings:', ...bindings.map(renderProfileBinding)].join('\n'));
+    } catch (error) {
+      ctx.print(`[channel profiles list] ${describeOperatorRpcError(error)}`);
+    }
+    return;
+  }
+
+  if (sub === 'get') {
+    const surfaceKind = args[1];
+    const channelId = args[2];
+    if (!surfaceKind) {
+      ctx.print('Usage: /channel profiles get <surfaceKind> [channelId]');
+      return;
+    }
+    const rpc = getOperatorRpc(ctx);
+    if (!rpc.available) {
+      ctx.print(`[channel profiles] ${rpc.reason}`);
+      return;
+    }
+    try {
+      const { binding } = await rpc.sdk.operator.invoke('channels.profiles.get', { surfaceKind, ...(channelId ? { channelId } : {}) });
+      ctx.print(renderProfileBinding(binding));
+    } catch (error) {
+      ctx.print(`[channel profiles get] ${describeOperatorRpcError(error)}`);
+    }
+    return;
+  }
+
+  if (sub === 'set') {
+    const rest = args.slice(1);
+    const flagStart = rest.findIndex((token) => token.startsWith('--'));
+    const positional = flagStart === -1 ? rest : rest.slice(0, flagStart);
+    const flagTokens = flagStart === -1 ? [] : rest.slice(flagStart);
+    const surfaceKind = positional[0];
+    const channelId = positional[1];
+    if (!surfaceKind) {
+      ctx.print('Usage: /channel profiles set <surfaceKind> [channelId] [--model x] [--provider x] [--permission-mode plan|normal|accept-edits|auto]');
+      return;
+    }
+    const flags = new Map<string, string>();
+    for (let i = 0; i < flagTokens.length; i++) {
+      const token = flagTokens[i]!;
+      if (!token.startsWith('--')) continue;
+      const name = token.slice(2);
+      const value = flagTokens[i + 1];
+      if (value !== undefined) {
+        flags.set(name, value);
+        i++;
+      }
+    }
+    const rpc = getOperatorRpc(ctx);
+    if (!rpc.available) {
+      ctx.print(`[channel profiles] ${rpc.reason}`);
+      return;
+    }
+    try {
+      const { binding } = await rpc.sdk.operator.invoke('channels.profiles.set', {
+        surfaceKind,
+        ...(channelId ? { channelId } : {}),
+        ...(flags.has('model') ? { model: flags.get('model')! } : {}),
+        ...(flags.has('provider') ? { provider: flags.get('provider')! } : {}),
+        ...(flags.has('permission-mode') ? { permissionMode: flags.get('permission-mode') as 'plan' | 'normal' | 'accept-edits' | 'auto' } : {}),
+      });
+      ctx.print(`[channel profiles set] bound ${binding.id}\n${renderProfileBinding(binding)}`);
+    } catch (error) {
+      ctx.print(`[channel profiles set] ${describeOperatorRpcError(error)}`);
+    }
+    return;
+  }
+
+  if (sub === 'delete') {
+    const surfaceKind = args[1];
+    const channelId = args[2];
+    if (!surfaceKind) {
+      ctx.print('Usage: /channel profiles delete <surfaceKind> [channelId]');
+      return;
+    }
+    const rpc = getOperatorRpc(ctx);
+    if (!rpc.available) {
+      ctx.print(`[channel profiles] ${rpc.reason}`);
+      return;
+    }
+    try {
+      const result = await rpc.sdk.operator.invoke('channels.profiles.delete', { surfaceKind, ...(channelId ? { channelId } : {}) });
+      ctx.print(result.deleted
+        ? `[channel profiles delete] removed binding for ${surfaceKind}${channelId ? `:${channelId}` : ''}.`
+        : `[channel profiles delete] no binding found for ${surfaceKind}${channelId ? `:${channelId}` : ''}.`);
+    } catch (error) {
+      ctx.print(`[channel profiles delete] ${describeOperatorRpcError(error)}`);
+    }
+    return;
+  }
+}
 
 export function registerChannelRuntimeCommands(registry: CommandRegistry): void {
   registry.register({
     name: 'channel',
     aliases: ['channels'],
-    description: 'Pair channels and inspect routes, delivery strategies, and ingress policies',
-    usage: '[pair [surface]|status|routes|delivery|policy] [--json]',
-    argsHint: 'pair | status | routes | delivery | policy',
-    handler(args, ctx) {
+    description: 'Pair channels and inspect routes, delivery strategies, ingress policies, and per-channel profile bindings',
+    usage: '[pair [surface]|status|routes|delivery|policy|profiles [list|get|set|delete]] [--json]',
+    argsHint: 'pair | status | routes | delivery | policy | profiles',
+    async handler(args, ctx) {
       const sub = args[0];
       const asJson = args.includes('--json');
 
@@ -20,6 +153,11 @@ export function registerChannelRuntimeCommands(registry: CommandRegistry): void 
 
       if (sub === 'pair') {
         runChannelPairing(args.slice(1), ctx);
+        return;
+      }
+
+      if (sub === 'profiles') {
+        await handleChannelProfilesSubcommand(args.slice(1), ctx);
         return;
       }
 
@@ -137,6 +275,7 @@ export function registerChannelRuntimeCommands(registry: CommandRegistry): void 
         + '  routes     — active route binding snapshot\n'
         + '  delivery   — outbound delivery snapshot\n'
         + '  policy     — configured channel surfaces and ingress policy location\n'
+        + '  profiles [list|get|set|delete]  — per-channel model/permission profile bindings\n'
         + '\n'
         + 'Options:\n'
         + '  --json  Output raw JSON for scripting'
