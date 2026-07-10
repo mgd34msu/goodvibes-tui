@@ -21,7 +21,8 @@ import {
   renderGoodVibesVersion,
   renderOnboardingCliStatus,
 } from './index.ts';
-import { buildCliServicePosture } from './service-posture.ts';
+import { buildCliServicePosture, getGoodVibesPackageRoot, resolveGoodVibesDaemonExecutable } from './service-posture.ts';
+import { runInstallSelfCheck } from '../runtime/install-self-check.ts';
 import { ensureGoodvibesGitignore } from './ensure-goodvibes-gitignore.ts';
 
 type ShellEntrypointOwnership = {
@@ -154,6 +155,12 @@ export async function prepareShellCliRuntime(
         operatorTokenPresent: existsSync(operatorTokenPath),
       },
       service,
+      install: runInstallSelfCheck({
+        execPath: process.execPath,
+        packageRoot: getGoodVibesPackageRoot(),
+        daemon: resolveGoodVibesDaemonExecutable(),
+        fileExists: existsSync,
+      }),
       doctor: cli.command === 'doctor',
       outputFormat: cli.flags.outputFormat,
     };

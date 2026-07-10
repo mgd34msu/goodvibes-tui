@@ -62,6 +62,16 @@ const ENDPOINTS: readonly { readonly id: RuntimeEndpointId; readonly label: stri
 
 const SOURCE_PACKAGE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
 
+/**
+ * The packaged root of this install (the directory that owns `vendor/`,
+ * `dist/`, and `bin/`), resolved the same way the daemon executable search
+ * resolves its package paths. Exposed so the install self-check can look for
+ * the vendored release binaries without re-deriving this path.
+ */
+export function getGoodVibesPackageRoot(): string {
+  return SOURCE_PACKAGE_ROOT;
+}
+
 export interface DaemonExecutableResolutionOptions {
   readonly env?: NodeJS.ProcessEnv;
   readonly argv?: readonly string[];

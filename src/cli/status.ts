@@ -2,9 +2,11 @@ import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import { resolveDaemonEnabled } from '@pellux/goodvibes-sdk/platform/config';
 import type { OnboardingCheckMarkersState } from '../runtime/onboarding/index.ts';
 import { resolveRuntimeEndpointBinding } from './endpoints.ts';
-import { isNetworkFacing } from './network-posture.ts';
+import type { RuntimeEndpointId } from './endpoints.ts';
+import { classifyBindPosture, isNetworkFacing } from './network-posture.ts';
 import type { GoodVibesCliOutputFormat } from './types.ts';
 import type { CliServicePosture } from './service-posture.ts';
+import type { InstallSelfCheckFinding } from '../runtime/install-self-check.ts';
 import { getProviderIdFromModel } from '../config/provider-model.ts';
 
 export interface CliStatusOptions {
@@ -14,6 +16,8 @@ export interface CliStatusOptions {
   readonly onboardingMarkers?: OnboardingCheckMarkersState;
   readonly auth?: CliAuthStatus;
   readonly service?: CliServicePosture;
+  /** Findings from the install self-check (missing vendor binaries, broken daemon path), computed by the caller. */
+  readonly install?: readonly InstallSelfCheckFinding[];
   readonly doctor?: boolean;
   readonly outputFormat?: GoodVibesCliOutputFormat;
 }
@@ -29,7 +33,7 @@ export interface CliAuthStatus {
 
 export interface CliDoctorFinding {
   readonly id: string;
-  readonly area: 'auth' | 'network' | 'onboarding' | 'security' | 'service' | 'secrets';
+  readonly area: 'auth' | 'network' | 'onboarding' | 'security' | 'service' | 'secrets' | 'install';
   readonly severity: 'warning' | 'risk';
   readonly summary: string;
   readonly cause: string;
@@ -69,7 +73,28 @@ export interface CliStatusSnapshot {
     readonly scope: string;
     readonly updatedAt: number | null;
   };
+  readonly exposure: readonly CliExposureSurface[];
   readonly findings: readonly CliDoctorFinding[];
+}
+
+/**
+ * Per-surface exposure report row: what a network surface binds to, how it
+ * authenticates callers, and what cross-origin allowlist (if any) applies.
+ * A plain report — it changes no behavior and writes no config.
+ */
+export interface CliExposureSurface {
+  readonly id: RuntimeEndpointId;
+  readonly label: string;
+  readonly enabled: boolean;
+  /** Bind envelope, e.g. "network 0.0.0.0:3421". */
+  readonly bind: string;
+  /** Reachability posture label, e.g. "Local only" / "Local Network" / "Custom network". */
+  readonly reach: string;
+  readonly networkFacing: boolean;
+  /** How callers authenticate against this surface when it is network-facing. */
+  readonly authMode: string;
+  /** Browser-origin allowlist state. Only the control plane has one; others report n/a. */
+  readonly originAllowlist: string;
 }
 
 function yesNo(value: unknown): string {
@@ -92,6 +117,74 @@ function secretPolicyLabel(policy: unknown): string {
 
 function bindLine(label: string, enabled: unknown, binding: { readonly hostMode: string; readonly host: string; readonly port: number }): string {
   return `  ${label}: ${yesNo(enabled)} (${binding.hostMode} ${binding.host}:${binding.port})`;
+}
+
+/**
+ * How callers authenticate against a surface, derived from the auth material
+ * the CLI already inspects. A loopback surface trusts the local host; a
+ * network-facing surface is authenticated by a local user store and/or an
+ * operator token, and reports "none configured" when neither exists.
+ */
+function surfaceAuthMode(networkFacing: boolean, auth: CliAuthStatus | undefined): string {
+  if (!networkFacing) return 'loopback (host-local trust)';
+  if (!auth) return 'unknown';
+  const parts: string[] = [];
+  if (auth.userStorePresent) parts.push('local users');
+  if (auth.operatorTokenPresent) parts.push('operator token');
+  if (parts.length === 0) return 'none configured';
+  return parts.join(' + ');
+}
+
+/** Comma-separated CORS origins, trimmed and emptied of blanks. */
+function parseAllowedOrigins(raw: unknown): string[] {
+  return String(raw ?? '')
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter((origin) => origin.length > 0);
+}
+
+/**
+ * The only browser-origin allowlist in this codebase belongs to the control
+ * plane (controlPlane.cors.*). httpListener and web have no origin allowlist
+ * concept, so this returns an honest n/a for them.
+ */
+function surfaceOriginAllowlist(id: RuntimeEndpointId, config: Pick<ConfigManager, 'get'>): string {
+  if (id !== 'controlPlane') return 'n/a (no origin allowlist for this surface)';
+  if (config.get('controlPlane.cors.enabled') !== true) return 'CORS off (same-origin only)';
+  const origins = parseAllowedOrigins(config.get('controlPlane.cors.allowedOrigins'));
+  if (origins.length === 0) return 'CORS on, empty allowlist (refuses all cross-origin)';
+  if (origins.includes('*')) return `CORS on, WILDCARD any-origin (${origins.join(', ')})`;
+  return `CORS on, allowlist: ${origins.join(', ')}`;
+}
+
+const EXPOSURE_SURFACES: readonly { readonly id: RuntimeEndpointId; readonly label: string; readonly enabledKey: string }[] = [
+  { id: 'controlPlane', label: 'controlPlane', enabledKey: 'controlPlane.enabled' },
+  { id: 'httpListener', label: 'httpListener', enabledKey: 'danger.httpListener' },
+  { id: 'web', label: 'web', enabledKey: 'web.enabled' },
+];
+
+/**
+ * Build the per-surface exposure report (bind address, auth mode, origin
+ * allowlist) for every network surface. Pure over the status options — a
+ * report only, no behavior change.
+ */
+export function buildCliExposureReport(options: CliStatusOptions): readonly CliExposureSurface[] {
+  const config = options.configManager;
+  return EXPOSURE_SURFACES.map((surface): CliExposureSurface => {
+    const enabled = config.get(surface.enabledKey as never) === true;
+    const binding = resolveRuntimeEndpointBinding(config, surface.id);
+    const networkFacing = isNetworkFacing(enabled, binding);
+    return {
+      id: surface.id,
+      label: surface.label,
+      enabled,
+      bind: `${binding.hostMode} ${binding.host}:${binding.port}`,
+      reach: classifyBindPosture(binding).label,
+      networkFacing,
+      authMode: surfaceAuthMode(networkFacing, options.auth),
+      originAllowlist: surfaceOriginAllowlist(surface.id, config),
+    };
+  });
 }
 
 export function buildCliDoctorFindings(options: CliStatusOptions): readonly CliDoctorFinding[] {
@@ -241,6 +334,34 @@ export function buildCliDoctorFindings(options: CliStatusOptions): readonly CliD
     });
   }
 
+  if (isNetworkFacing(controlPlaneEnabled, controlPlaneBinding)
+    && config.get('controlPlane.cors.enabled') === true
+    && parseAllowedOrigins(config.get('controlPlane.cors.allowedOrigins')).includes('*')) {
+    findings.push({
+      id: 'control-plane-cors-wildcard-origin',
+      area: 'network',
+      severity: 'risk',
+      summary: 'The control plane accepts cross-origin requests from any origin.',
+      cause: `controlPlane is ${controlPlaneBinding.hostMode}-bound on ${controlPlaneBinding.host}:${controlPlaneBinding.port}, controlPlane.cors.enabled is true, and controlPlane.cors.allowedOrigins contains a wildcard "*".`,
+      impact: 'Any website a signed-in operator visits could make credentialed cross-origin calls to the control plane.',
+      action: 'Replace the wildcard with an explicit list of trusted browser origins in controlPlane.cors.allowedOrigins.',
+    });
+  }
+
+  if (options.install) {
+    for (const finding of options.install) {
+      findings.push({
+        id: `install-${finding.id}`,
+        area: 'install',
+        severity: 'warning',
+        summary: finding.summary,
+        cause: finding.detail,
+        impact: 'The daemon and any background surfaces (control plane, listener, web) may fail to start until the install is repaired.',
+        action: `Repair this install by running: ${finding.repairCommand}`,
+      });
+    }
+  }
+
   return findings;
 }
 
@@ -283,6 +404,7 @@ export function buildCliStatusSnapshot(options: CliStatusOptions): CliStatusSnap
       scope: marker?.scope ?? 'none',
       updatedAt: marker?.payload?.updatedAt ?? null,
     },
+    exposure: buildCliExposureReport(options),
     findings,
   };
 }
@@ -349,6 +471,14 @@ export function renderCliStatus(options: CliStatusOptions): string {
     `  checked: ${marker?.exists ? 'yes' : 'no'}`,
     `  scope: ${marker?.scope ?? 'none'}`,
     `  updatedAt: ${marker?.payload ? new Date(marker.payload.updatedAt).toISOString() : 'n/a'}`,
+    '',
+    'Exposure (report only — no changes made):',
+    ...snapshot.exposure.flatMap((surface) => [
+      `  ${surface.label}: ${yesNo(surface.enabled)} · ${surface.reach}${surface.networkFacing ? ' · network-facing' : ''}`,
+      `    bind: ${surface.bind}`,
+      `    auth: ${surface.authMode}`,
+      `    originAllowlist: ${surface.originAllowlist}`,
+    ]),
   ];
 
   if (options.doctor) {
