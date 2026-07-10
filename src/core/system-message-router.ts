@@ -76,7 +76,7 @@ export type SystemMessagePriority = 'high' | 'low';
  * high-priority message inline (model/provider/session confirmations still
  * honour the configured target), so the routing-target config stays meaningful.
  */
-const FORCE_CONVERSATION_PREFIXES = ['[Error]', '[Failover]', '[Routing]', '[Compaction]', '[Context]'] as const;
+const FORCE_CONVERSATION_PREFIXES = ['[Error]', '[Failover]', '[Routing]', '[Compaction]', '[Context]', '[Rewind]'] as const;
 
 function mustReachConversation(message: string): boolean {
   return FORCE_CONVERSATION_PREFIXES.some((prefix) => message.startsWith(prefix));

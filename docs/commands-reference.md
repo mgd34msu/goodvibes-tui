@@ -105,7 +105,7 @@ GoodVibes ships **143** built-in slash commands across **68** categories. Every 
 | --- | --- | --- | --- |
 | `/checkpoint` | — | `[label]` | Create a manual workspace checkpoint (forensic retention) |
 | `/checkpoints` | `/ckpts` | — | List workspace checkpoints, newest first |
-| `/rewind` | — | `<id\|last>` | Preview and restore a workspace checkpoint (files only — conversation history is unchanged) |
+| `/rewind` | — | `[<n\|turnId> [files\|conversation\|both]]` | Rewind files, conversation, or both to a completed turn (preview + confirm) |
 
 ## CI
 
@@ -453,13 +453,13 @@ GoodVibes ships **143** built-in slash commands across **68** categories. Every 
 | `/export` | — | `[format] [path]` | Export conversation to a Markdown file |
 | `/load` | — | `<name>` | Load a saved session |
 | `/note` | — | `[list\|add <text>\|remove <id>]` | Manage session notes (pinned across context compaction) |
-| `/redo` | — | `[file]` | Redo last undone action. /redo file — re-apply last reverted file. /redo — restore conversation turn |
+| `/redo` | — | `[rewind\|file]` | Redo last undone action. /redo rewind — re-apply the last undone /rewind. /redo file — re-apply last reverted file. /redo — restore conversation turn |
 | `/retry` | `/r` | `[modified text]` | Re-send the last user message |
 | `/save` | — | `[name]` | Save current session to .goodvibes/tui/sessions/ |
 | `/sessions` | — | `[resume <id\|name>]` | List saved sessions |
 | `/template` | `/tmpl` | `save <name> \| use <name> [args] \| list \| edit <name> \| delete <name>` | Manage and use prompt templates |
 | `/title` | — | `[text]` | Show or set the conversation title |
-| `/undo` | — | `[file]` | Undo last action. /undo file — revert last file write/edit. /undo — remove last conversation turn |
+| `/undo` | — | `[rewind\|file]` | Undo last action. /undo rewind — reverse the last /rewind. /undo file — revert last file write/edit. /undo — remove last conversation turn |
 
 ## Sessions & Replay
 
