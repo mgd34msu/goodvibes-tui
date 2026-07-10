@@ -92,4 +92,17 @@ describe('memory modal surface', () => {
     surface.onAction?.('remove', actionCtx({ id: 'mem-aaa1', label: '' }, cap.extra));
     expect(cap.calls).toEqual([['recall', ['remove', 'mem-aaa1']]]);
   });
+
+  test('an expired record is labelled [expired] in both tabs; a window-less record carries no label', async () => {
+    const expiredRecords = [
+      ...RECORDS,
+      { id: 'mem-ccc3', scope: 'project', cls: 'fact', summary: 'Expired fact.', tags: [], reviewState: 'fresh', confidence: 50, createdAt: FIXED + 2000, provenance: [], validUntil: FIXED - 1 },
+    ];
+    const surface = createMemoryModalSurface({ memoryRegistry: { honestSearch: async () => ({ records: expiredRecords }) } });
+    const view = await openAsync(surface);
+    const all = tabText(view, 'all');
+    expect(all).toContain('Expired fact. [expired]');
+    expect(all).not.toContain('Ship in batched waves. [expired]');
+    expect(all).not.toContain('Ship in batched waves. [pending]');
+  });
 });
