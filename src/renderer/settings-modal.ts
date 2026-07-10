@@ -43,6 +43,7 @@ const CATEGORY_INFO: Record<SettingsCategory, string> = {
   web: 'Browser surface settings for the local or network web UI.',
   batch: 'Batch execution settings, including local vs Cloudflare queue behavior.',
   automation: 'Scheduled and automated run settings, concurrency, timeout, catch-up, cooldown, and retention behavior.',
+  checkin: 'Proactive check-in: on a cadence, a briefing is judged and you are contacted only when something warrants it. Off by default; every run — scheduled or manual — leaves a receipt (see /checkin) recording whether it stayed quiet, delivered a message, or was skipped.',
   watchers: 'File/process watcher heartbeat, polling, and recovery-window behavior.',
   runtime: 'Runtime guardrails such as companion chat limiter and event bus listener caps.',
   telemetry: 'Telemetry payload policy.',

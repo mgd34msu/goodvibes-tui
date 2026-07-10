@@ -71,6 +71,7 @@ import { registerPermissionsRuntimeCommands } from './commands/permissions-runti
 import { registerReviewRuntimeCommands } from './commands/review-runtime.ts';
 import { registerPaletteRuntimeCommands } from './commands/palette-runtime.ts';
 import { registerCiRuntimeCommands } from './commands/ci-runtime.ts';
+import { registerCheckinRuntimeCommands } from './commands/checkin-runtime.ts';
 
 /**
  * A named group of built-in commands. The `category` label is the single
@@ -156,6 +157,7 @@ export const BUILTIN_COMMAND_GROUPS: readonly BuiltinCommandGroup[] = [
   { category: 'Permissions', register: registerPermissionsRuntimeCommands },
   { category: 'Diff & Review', register: registerReviewRuntimeCommands },
   { category: 'CI', register: registerCiRuntimeCommands },
+  { category: 'Check-in', register: registerCheckinRuntimeCommands },
   { category: 'Policy', register: (registry) => registry.register(policyCommand) },
   { category: 'Providers', register: (registry) => registry.register(providerCommand) },
   { category: 'Eval', register: (registry) => registry.register(evalCommand) },
