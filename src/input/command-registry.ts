@@ -68,6 +68,8 @@ export interface CommandUiActions {
   renderRequest: () => void;
   print: (text: string) => void;
   exit: () => void;
+  /** Open the current composer draft in the user's $EDITOR and load back the edited text. */
+  openComposerEditor?: () => void;
   submitInput?: (text: string, content?: import('@pellux/goodvibes-sdk/platform/providers').ContentPart[]) => void;
   submitSpokenInput?: (text: string, content?: import('@pellux/goodvibes-sdk/platform/providers').ContentPart[]) => void;
   stopSpokenOutput?: () => void;

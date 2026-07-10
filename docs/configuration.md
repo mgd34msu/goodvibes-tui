@@ -75,3 +75,15 @@ Example (`.goodvibes/tui/settings.json`):
   }
 }
 ```
+
+## `session.*` — session behavior
+
+| Key | Type | Default | Meaning |
+| --- | --- | --- | --- |
+| `session.autoTitle` | boolean | `false` | Auto-title an untitled session using the configured tool/helper (weak/fast) model after the first turn completes. Off by default because it spends a small model call. Only ever sets a system title — a title you set yourself is never overwritten — and it runs at most once per session. Requires the tool LLM to be configured (`/config` → tools). |
+
+```json
+{
+  "session": { "autoTitle": true }
+}
+```

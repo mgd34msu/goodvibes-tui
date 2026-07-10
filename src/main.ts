@@ -59,6 +59,9 @@ import { wireTurnEventHandlers } from './core/turn-event-wiring.ts';
 import { buildContextStatusHint } from './renderer/context-status-hint.ts';
 import { isEffectiveDangerMode } from './config/index.ts';
 import { createScriptableStatusline } from './core/scriptable-statusline.ts';
+import { applyComposerCapture } from './input/composer-capture.ts';
+import { createSessionAutoTitler } from './core/session-auto-titler.ts';
+import { makeComposerEditorOpener } from './input/composer-editor.ts';
 import { evaluateSessionMaintenance } from '@/runtime/index.ts';
 import { createCancelGeneration } from './core/turn-cancellation.ts';
 import { wrapRequestPermissionWithAlert } from './core/approval-alert.ts';
@@ -248,6 +251,12 @@ async function main() {
   // Scriptable status line: runs the user's `statusline.command` at turn boundaries.
   const scriptableStatusline = createScriptableStatusline({ configManager, cwd: workingDir, turns: uiServices.events.turns, onChange: () => render() });
   unsubs.push(...scriptableStatusline.unsubs);
+  // Auto-title an untitled session via the weak/fast tool model (session.autoTitle, off by default).
+  const sessionAutoTitler = createSessionAutoTitler({
+    conversation, model: ctx.services.toolLLM, configManager, turns: uiServices.events.turns,
+    onTitled: (title) => { systemMessageRouter.high(`[Session] Auto-titled: "${title}"`); render(); },
+  });
+  unsubs.push(...sessionAutoTitler.unsubs);
   unsubs.push(attachSpokenTurnModelRouting({
     orchestrator,
     providerRegistry,
@@ -274,18 +283,11 @@ async function main() {
       }
       processedText = processedText.replace(atModelMatch[0], '').trim();
     }
-    if (processedText.startsWith('!#')) {
-      const memoryText = processedText.slice(2).trim();
-      if (!memoryText) {
-        systemMessageRouter.high('[Memory] Usage: !# <text to pin as session memory>');
-        render();
-        processedText = '';
-      } else {
-        const memId = ctx.services.sessionMemoryStore.add(memoryText);
-        systemMessageRouter.high(`[Memory] Pinned: "${memoryText}" (${memId})`);
-        processedText = memoryText;
-      }
-    }
+    // Composer capture markers: `!#` pins + sends; `#` saves a note without sending.
+    processedText = applyComposerCapture(processedText, {
+      sessionMemoryStore: ctx.services.sessionMemoryStore,
+      notify: (message) => systemMessageRouter.high(message),
+    }).text;
     if (processedText || content) {
       void (async () => {
         const inputOptions = options.spokenOutput ? createSpokenTurnInputOptions() : undefined;
@@ -408,6 +410,7 @@ async function main() {
   orchestratorRefs.scrollToEnd = scrollToEnd;
 
   input.setCommandRegistry(commandRegistry, commandContext);
+  commandContext.openComposerEditor = makeComposerEditorOpener({ buffer: input, stdin, stdout, writeGuard: allowTerminalWrite, repaint: () => { compositor.resetDiff(); render(); }, cwd: workingDir, env: process.env, notify: (m) => systemMessageRouter.high(m) });
   input.setConversationManager(conversation);
   input.setContentWidth(getPromptContentWidth());
   input.filePicker.setOnUpdate(() => render());

@@ -63,6 +63,28 @@ export const STATUSLINE_DEFAULT_TIMEOUT_MS = 2000;
 const STATUSLINE_MIN_TIMEOUT_MS = 100;
 const STATUSLINE_MAX_TIMEOUT_MS = 15_000;
 
+// ─── session.* — session behavior ────────────────────────────────────────────
+
+/** User-settable session behavior. */
+export interface SessionSettings {
+  /**
+   * Auto-title an untitled session using the configured tool/helper (weak/fast)
+   * model after the first turn. Off by default because it costs a small model
+   * call. Only ever sets a system-sourced title; a user-chosen title is left alone.
+   */
+  readonly autoTitle?: boolean;
+}
+
+/** Read `session.*` from settings.json. */
+export function readSessionSettings(configManager: Pick<ConfigManager, 'getRaw'>): SessionSettings {
+  const src = readNamespace(configManager, 'session');
+  if (!src) return {};
+  const out: { autoTitle?: boolean } = {};
+  const autoTitle = readBoolean(src, 'autoTitle');
+  if (autoTitle !== undefined) out.autoTitle = autoTitle;
+  return out;
+}
+
 /** Read `statusline.*` from settings.json, validating and clamping the timeout. */
 export function readStatuslineSettings(configManager: Pick<ConfigManager, 'getRaw'>): StatuslineSettings {
   const src = readNamespace(configManager, 'statusline');
