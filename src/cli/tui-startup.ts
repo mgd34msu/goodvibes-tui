@@ -2,6 +2,7 @@ import type { CommandContext, CommandRegistry } from '../input/command-registry.
 import type { InputHandler } from '../input/handler.ts';
 import type { SelectionItem } from '../input/selection-modal.ts';
 import { hasResumableWizardProgress, readOnboardingCheckMarker, readWizardProgress } from '../runtime/onboarding/index.ts';
+import { startOnboardingFastPath } from '../runtime/onboarding/fast-path.ts';
 import { readLastSessionPointer } from '@/runtime/index.ts';
 import type { GoodVibesCliParseResult } from './types.ts';
 
@@ -18,7 +19,7 @@ export type TuiStartupShellPaths = Parameters<typeof readOnboardingCheckMarker>[
  * (prior GoodVibes state) are already decided, so this is a no-op for them.
  */
 function promptWorkspaceTrustIfUndecided(commandContext: CommandContext, render: () => void): void {
-  const manager = commandContext.workspace.workspaceTrustManager;
+  const manager = commandContext.workspace?.workspaceTrustManager;
   if (!manager || manager.isDecided()) return;
   const items: SelectionItem[] = [
     { id: 'trusted', label: 'Trust this workspace', detail: 'Full capability — all tools may run', primaryAction: 'select' },
@@ -97,7 +98,9 @@ export function applyInitialTuiCliState(options: {
         .then(() => render());
     }
   } else if (!globalOnboardingMarker.exists) {
-    input.openOnboardingWizard({ mode: 'new', reset: true });
+    // Fast path: get a brand-new user to a working session in the fewest steps.
+    // Falls back to the full wizard when the surface can't detect providers.
+    startOnboardingFastPath({ input, commandContext, shellPaths, render });
   } else {
     // User has completed onboarding before but left a wizard session in progress.
     // Reopen the wizard at the last saved step so they can continue or dismiss.

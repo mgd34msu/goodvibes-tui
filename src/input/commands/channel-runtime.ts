@@ -1,19 +1,25 @@
 import type { CommandRegistry } from '../command-registry.ts';
 import { requireIntegrationHelpers } from './runtime-services.ts';
+import { runChannelPairing } from './channel-pairing.ts';
 
 export function registerChannelRuntimeCommands(registry: CommandRegistry): void {
   registry.register({
     name: 'channel',
-    aliases: [],
-    description: 'Inspect channel routes, delivery strategies, and ingress policies',
-    usage: '[status|routes|delivery|policy] [--json]',
-    argsHint: 'status | routes | delivery | policy',
+    aliases: ['channels'],
+    description: 'Pair channels and inspect routes, delivery strategies, and ingress policies',
+    usage: '[pair [surface]|status|routes|delivery|policy] [--json]',
+    argsHint: 'pair | status | routes | delivery | policy',
     handler(args, ctx) {
       const sub = args[0];
       const asJson = args.includes('--json');
 
       if (!sub || sub === 'open' || sub === 'panel') {
         if (ctx.showPanel) ctx.showPanel('routes');
+        return;
+      }
+
+      if (sub === 'pair') {
+        runChannelPairing(args.slice(1), ctx);
         return;
       }
 
@@ -126,6 +132,7 @@ export function registerChannelRuntimeCommands(registry: CommandRegistry): void 
       ctx.print(
         'Usage: /channel <subcommand>\n'
         + '  (no args)  — open the Routes panel\n'
+        + '  pair [surface] — guided channel pairing: list adapters, enter declared credentials, verify\n'
         + '  status     — channel overview: routes, sessions, tasks, pending approvals\n'
         + '  routes     — active route binding snapshot\n'
         + '  delivery   — outbound delivery snapshot\n'
