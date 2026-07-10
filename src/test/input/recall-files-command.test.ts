@@ -44,6 +44,8 @@ function makeRegistry(): MemoryRegistry {
         updatedAt: Date.now(),
         reviewState: opts.review?.state ?? 'fresh',
         confidence: opts.review?.confidence ?? 60,
+        validFrom: opts.validFrom,
+        validUntil: opts.validUntil,
       };
       records.push(record);
       return record as never;
@@ -70,13 +72,17 @@ function makeRegistry(): MemoryRegistry {
       checkedAt: Date.now(),
     }) as never,
     reviewQueue: (limit = 10) => records.slice(0, limit) as never,
-    update: (id: string, patch: { scope?: string; summary?: string; detail?: string; tags?: string[] }) => {
+    update: (id: string, patch: { scope?: string; summary?: string; detail?: string; tags?: string[]; validFrom?: number | null; validUntil?: number | null }) => {
       const record = records.find((entry) => entry.id === id);
       if (!record) return null;
       if (patch.scope !== undefined) record.scope = patch.scope;
       if (patch.summary !== undefined) record.summary = patch.summary;
       if (patch.detail !== undefined) record.detail = patch.detail;
       if (patch.tags !== undefined) record.tags = patch.tags;
+      // null clears the bound, a number sets it, omitted leaves it unchanged —
+      // mirrors the real MemoryUpdatePatch/registry semantics.
+      if (patch.validFrom !== undefined) record.validFrom = patch.validFrom === null ? undefined : patch.validFrom;
+      if (patch.validUntil !== undefined) record.validUntil = patch.validUntil === null ? undefined : patch.validUntil;
       record.updatedAt = Date.now();
       return record as never;
     },
@@ -224,20 +230,42 @@ describe('/recall files (memory file projection surface)', () => {
     expect(registry.get('mem-1')).toBeUndefined();
   });
 
-  test('a temporal-window-only edit is reported as failed with an honest reason, not silently dropped', async () => {
+  test('a temporal-window-only edit applies for real: review proposes it, apply sets validUntil on the record', async () => {
     await recallCommand.handler(['files', 'sync', '--dir', dir], makeContext(printed, registry, root));
     const file = join(dir, readdirSync(dir)[0]!);
     const withValidUntil = readFileSync(file, 'utf-8').replace('status: active', 'validUntil: 2099-01-01T00:00:00.000Z\nstatus: active');
     writeFileSync(file, withValidUntil, 'utf-8');
 
     printed.length = 0;
-    await recallCommand.handler(['files', 'apply', 'mem-1', '--dir', dir], makeContext(printed, registry, root));
-    const text = printed.join('\n');
-    expect(text).toContain('failed   mem-1 [update]');
-    expect(text).toContain('not yet applied over the memory spine');
+    await recallCommand.handler(['files', 'review', '--dir', dir], makeContext(printed, registry, root));
+    const reviewText = printed.join('\n');
+    expect(reviewText).toContain('mem-1 [update]');
+    expect(reviewText).toContain('changed: validUntil');
 
-    // Confirmed but unappliable — the record must be untouched, not partially patched.
+    printed.length = 0;
+    await recallCommand.handler(['files', 'apply', 'mem-1', '--dir', dir], makeContext(printed, registry, root));
+    expect(printed.some((l) => l.includes('Applied 1, skipped 0, failed 0'))).toBe(true);
+    expect(printed.some((l) => l.includes('applied  mem-1 [update]'))).toBe(true);
+
     const record = registry.get('mem-1') as unknown as FakeRecord;
+    expect(record.validUntil).toBe(Date.parse('2099-01-01T00:00:00.000Z'));
+  });
+
+  test('clearing a temporal bound in the projected file applies as a real clear (null), not a no-op', async () => {
+    await registry.add({ cls: 'decision', summary: 'Time-boxed note.', scope: 'project', tags: [], validUntil: Date.parse('2099-01-01T00:00:00.000Z') } as never);
+    printed.length = 0;
+    await recallCommand.handler(['files', 'sync', '--dir', dir], makeContext(printed, registry, root));
+
+    const files = readdirSync(dir);
+    const file = files.map((f) => join(dir, f)).find((f) => readFileSync(f, 'utf-8').includes('id: mem-3'))!;
+    const cleared = readFileSync(file, 'utf-8').split('\n').filter((line) => !line.startsWith('validUntil:')).join('\n');
+    writeFileSync(file, cleared, 'utf-8');
+
+    printed.length = 0;
+    await recallCommand.handler(['files', 'apply', 'mem-3', '--dir', dir], makeContext(printed, registry, root));
+    expect(printed.some((l) => l.includes('Applied 1, skipped 0, failed 0'))).toBe(true);
+
+    const record = registry.get('mem-3') as unknown as FakeRecord;
     expect(record.validUntil).toBeUndefined();
   });
 
