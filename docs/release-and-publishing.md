@@ -81,7 +81,7 @@ Install behavior:
 - the main package declares four `@pellux/goodvibes-tui-<os>-<arch>` payload packages as `optionalDependencies` with `os`/`cpu` fields (the esbuild pattern), so the package manager installs exactly the one that matches the host, verified against the registry integrity hash. This is why plain `npm`/`pnpm` installs work, not just Bun.
 - `postinstall` prefers the platform package's binaries (a plain copy into `vendor/`, no download) and falls back to the version-matched GitHub Release download (checksum-verified against `SHA256SUMS.txt`) only when no platform package is present. The `bin/goodvibes` and `bin/goodvibes-daemon` launchers also resolve the platform package directly, so the binaries run even if the postinstall was skipped.
 - npm and pnpm installs still require `bun` to be on `PATH` for the from-source fallback; the preinstall check fails clearly if it is missing.
-- on Windows, native execution is not supported; users should use WSL so the Linux binary path applies
+- on Windows, use WSL2 (the Linux binary path applies unchanged); native Windows is beta and non-gating — see [windows.md](windows.md)
 - if Bun is available and no prebuilt binary is present, the launchers can still fall back to Bun + source
 
 Platform packages are assembled and published by the Release workflow after the per-target build job:

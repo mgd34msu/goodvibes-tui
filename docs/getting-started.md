@@ -37,7 +37,7 @@ goodvibes
 
 The package downloads the matching prebuilt TUI and daemon binaries for the current Linux or macOS platform during `postinstall`. If `bun` is missing, the preinstall check fails with a clear message instead of installing a broken launcher.
 
-Native Windows is not supported. Use WSL on Windows.
+On Windows, use WSL2: inside a WSL2 distribution GoodVibes is an ordinary Linux install and the Linux binaries apply unchanged (`wsl --install`, then run the install command in your WSL2 shell). Native Windows is beta and not yet a supported path — see [windows.md](windows.md).
 
 Or install from source:
 

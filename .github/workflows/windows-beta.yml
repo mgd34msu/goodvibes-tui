@@ -1,0 +1,96 @@
+name: Windows beta (non-gating)
+
+# Native Windows is BETA and deliberately NOT part of the release gate.
+# This workflow builds the windows-x64 binaries and runs a REAL Windows-runner
+# smoke test (--version) that passes or fails — never continue-on-error. A green
+# run here is the signal to promote windows-x64 into the release matrix.
+# See docs/windows.md for the staging plan and the POSIX blockers.
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Git ref to build"
+        required: false
+        default: "main"
+
+permissions:
+  contents: read
+
+jobs:
+  build-windows-beta:
+    name: Build windows-x64 (beta)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
+        with:
+          ref: ${{ github.event.inputs.ref || github.ref }}
+      - name: Setup
+        uses: ./.github/actions/setup
+      - name: Prebuild (sync surfaces + compile-compat patch)
+        run: bun run scripts/prebuild.ts
+      - name: Build windows-x64 TUI binary (beta)
+        # Cross-compiled from Linux; bun-windows-x64 is a supported compile
+        # target and produces a PE32+ executable.
+        run: bun build src/main.ts --compile --target=bun-windows-x64 --outfile dist/goodvibes-windows-x64.exe
+      - name: Build windows-x64 daemon binary (beta)
+        run: bun build src/daemon/cli.ts --compile --target=bun-windows-x64 --outfile dist/goodvibes-daemon-windows-x64.exe
+      - name: Report binary sizes
+        run: ls -lh dist/goodvibes-windows-x64.exe dist/goodvibes-daemon-windows-x64.exe
+      - name: Upload windows-x64 beta artifacts
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: windows-x64-beta-binaries
+          path: |
+            dist/goodvibes-windows-x64.exe
+            dist/goodvibes-daemon-windows-x64.exe
+          retention-days: 1
+
+  smoke-windows-beta:
+    name: Windows smoke (windows-x64 beta)
+    # REAL required smoke: this job passes or fails. It is intentionally NOT
+    # continue-on-error. Because this whole workflow is separate from Release,
+    # a failure here never blocks a release — it only reports Windows status.
+    needs: build-windows-beta
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - name: Download windows-x64 beta artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: windows-x64-beta-binaries
+          path: dist
+      - name: Smoke test — goodvibes-windows-x64.exe --version
+        shell: pwsh
+        run: |
+          $exe = "dist/goodvibes-windows-x64.exe"
+          Write-Host "Running $exe --version"
+          $out = & $exe --version 2>&1
+          Write-Host "Output: $out"
+          if ($LASTEXITCODE -ne 0) {
+            Write-Error "goodvibes-windows-x64.exe --version exited $LASTEXITCODE"
+            exit 1
+          }
+          if ($out -notmatch '^goodvibes ') {
+            Write-Error "unexpected --version output: $out"
+            exit 1
+          }
+          Write-Host "Windows smoke passed: $out"
+      - name: Smoke test — goodvibes-daemon-windows-x64.exe --version
+        shell: pwsh
+        run: |
+          $exe = "dist/goodvibes-daemon-windows-x64.exe"
+          Write-Host "Running $exe --version"
+          $out = & $exe --version 2>&1
+          Write-Host "Output: $out"
+          if ($LASTEXITCODE -ne 0) {
+            Write-Error "goodvibes-daemon-windows-x64.exe --version exited $LASTEXITCODE"
+            exit 1
+          }
+          if ($out -notmatch '^goodvibes-daemon ') {
+            Write-Error "unexpected --version output: $out"
+            exit 1
+          }
+          Write-Host "Windows daemon smoke passed: $out"
