@@ -87257,6 +87257,283 @@
         "invokable": true
       },
       {
+        "id": "workspaces.registrations.add",
+        "title": "Register a Workspace",
+        "description": "Register a workspace root so the whole subtree beneath it is covered. Refuses an absurdly broad root (the home directory, the filesystem root, or the daemon state directory) with a 400 — coverage flows down the entire subtree, so a root that broad would sweep far more than a project. Idempotent: re-registering the same normalized root returns alreadyRegistered:true. Registering a root clears any remembered decline recorded at exactly that root.",
+        "category": "workspaces",
+        "source": "builtin",
+        "access": "authenticated",
+        "transport": [
+          "http",
+          "ws"
+        ],
+        "scopes": [
+          "write:workspaces"
+        ],
+        "http": {
+          "method": "POST",
+          "path": "/api/workspaces/registrations"
+        },
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "root": {
+              "type": "string"
+            },
+            "label": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "root"
+          ],
+          "additionalProperties": false
+        },
+        "outputSchema": {
+          "type": "object",
+          "properties": {
+            "workspace": {
+              "type": "object",
+              "properties": {
+                "root": {
+                  "type": "string"
+                },
+                "registeredAt": {
+                  "type": "string"
+                },
+                "label": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "root",
+                "registeredAt"
+              ],
+              "additionalProperties": false
+            },
+            "alreadyRegistered": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "workspace",
+            "alreadyRegistered"
+          ],
+          "additionalProperties": false
+        },
+        "invokable": true
+      },
+      {
+        "id": "workspaces.registrations.list",
+        "title": "List Registered Workspaces",
+        "description": "Return every registered workspace root (coverage flows down each root's subtree) and every remembered subtree-scoped decline. Read-only.",
+        "category": "workspaces",
+        "source": "builtin",
+        "access": "authenticated",
+        "transport": [
+          "http",
+          "ws"
+        ],
+        "scopes": [
+          "read:workspaces"
+        ],
+        "http": {
+          "method": "GET",
+          "path": "/api/workspaces/registrations"
+        },
+        "inputSchema": {
+          "type": "object",
+          "properties": {},
+          "additionalProperties": false
+        },
+        "outputSchema": {
+          "type": "object",
+          "properties": {
+            "workspaces": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "root": {
+                    "type": "string"
+                  },
+                  "registeredAt": {
+                    "type": "string"
+                  },
+                  "label": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "root",
+                  "registeredAt"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "declines": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "root": {
+                    "type": "string"
+                  },
+                  "declinedAt": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "root",
+                  "declinedAt"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": [
+            "workspaces",
+            "declines"
+          ],
+          "additionalProperties": false
+        },
+        "invokable": true
+      },
+      {
+        "id": "workspaces.registrations.remove",
+        "title": "Unregister a Workspace",
+        "description": "Remove a registered workspace root. Returns { removed: false } when no root with that normalized path was registered — an honest boolean, never a 200 that pretends a phantom root was removed.",
+        "category": "workspaces",
+        "source": "builtin",
+        "access": "authenticated",
+        "transport": [
+          "http",
+          "ws"
+        ],
+        "scopes": [
+          "write:workspaces"
+        ],
+        "http": {
+          "method": "DELETE",
+          "path": "/api/workspaces/registrations"
+        },
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "root": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "root"
+          ],
+          "additionalProperties": false
+        },
+        "outputSchema": {
+          "type": "object",
+          "properties": {
+            "root": {
+              "type": "string"
+            },
+            "removed": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "root",
+            "removed"
+          ],
+          "additionalProperties": false
+        },
+        "invokable": true
+      },
+      {
+        "id": "workspaces.resolve",
+        "title": "Resolve Workspace Coverage",
+        "description": "Resolve a path against the registry: covered (by which nearest registered root), declined (at which root), or unknown. Coverage flows DOWN a registered root's subtree and is inherited through the git worktree→main-repo link — a linked worktree outside any registered root still resolves to the main repo's registration. When mainWorktreeRoot is omitted the daemon probes the link itself. Read-only.",
+        "category": "workspaces",
+        "source": "builtin",
+        "access": "authenticated",
+        "transport": [
+          "http",
+          "ws"
+        ],
+        "scopes": [
+          "read:workspaces"
+        ],
+        "http": {
+          "method": "POST",
+          "path": "/api/workspaces/resolve"
+        },
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "path": {
+              "type": "string"
+            },
+            "mainWorktreeRoot": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "path"
+          ],
+          "additionalProperties": false
+        },
+        "outputSchema": {
+          "type": "object",
+          "properties": {
+            "path": {
+              "type": "string"
+            },
+            "status": {
+              "type": "string",
+              "enum": [
+                "covered",
+                "declined",
+                "unknown"
+              ]
+            },
+            "coveredBy": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "declinedRoot": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "viaWorktreeLink": {
+              "type": "boolean"
+            },
+            "reason": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "path",
+            "status",
+            "coveredBy",
+            "declinedRoot",
+            "viaWorktreeLink",
+            "reason"
+          ],
+          "additionalProperties": false
+        },
+        "invokable": true
+      },
+      {
         "id": "worktrees.setup.run",
         "title": "Re-run Worktree Setup",
         "description": "Re-run cold-start setup (configured commands + untracked-file carry-over) on a live worktree by path, recording the honest outcome onto the worktree record. Returns the setup result: state skipped (nothing configured), succeeded, or failed with the failing step and error. A failed setup is a visible worktree state, never silent.",
@@ -89255,10 +89532,10 @@
       }
     ],
     "schemaCoverage": {
-      "methods": 374,
-      "typedInputs": 374,
+      "methods": 378,
+      "typedInputs": 378,
       "genericInputs": 0,
-      "typedOutputs": 374,
+      "typedOutputs": 378,
       "genericOutputs": 0
     },
     "eventCoverage": {
@@ -89267,8 +89544,8 @@
       "withWireEvents": 32
     },
     "validationCoverage": {
-      "methods": 374,
-      "validated": 372,
+      "methods": 378,
+      "validated": 376,
       "skippedGeneric": 0,
       "skippedUntyped": 2
     }
