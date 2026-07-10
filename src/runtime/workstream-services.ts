@@ -17,15 +17,20 @@
 // (input/commands/workstream-runtime.ts) needs a create -> propose -> approve
 // -> launch flow (Pillar-3 doctrine: render the plan in the transcript before
 // spending anything, mirroring /plan's approve step). REALITY-WINS DIVERGENCE
-// from the wo703 design brief: the brief recommended an "engine-owned/
-// journal-backed" draft so `/workstream status` could re-render a pending
-// proposal after a restart; the real engine (verified against the linked SDK
-// build) exposes no pre-creation draft concept at all, so WorkstreamDraft
-// below is process-lifetime-only state, owned by this module's facade
-// instance (constructed once, threaded onto CommandContext) — never a
-// module-level ambient global. A draft that existed only in memory is lost on
-// restart, same as an unsent chat draft; that is a real, stated limitation,
-// not a bug.
+// from the wo703 design brief: the brief recommended an ENGINE-owned draft; the
+// real engine (verified against the linked SDK build) exposes no pre-creation
+// draft concept at all, so WorkstreamDraft below is TUI-owned state, held on
+// this module's facade instance (constructed once, threaded onto
+// CommandContext) — never a module-level ambient global. Durability is
+// likewise TUI-owned: rather than leaving the brief's restart requirement
+// unmet, the facade journals every draft to disk through
+// workstream-draft-store.ts (a drafts/ subdirectory ALONGSIDE the engine's own
+// workstream snapshots) and reloads them at construction, so a create / reshape
+// / approve done before a restart is still here to launch afterward. The engine
+// gains no draft concept; the TUI persists its OWN facade state. A journal
+// write that fails degrades to in-memory-only for that one draft — never a
+// crash — and the store never resurrects a launched draft (its snapshot is
+// removed the moment the engine takes ownership).
 // ---------------------------------------------------------------------------
 
 import {
@@ -40,7 +45,6 @@ export type { OrchestrationEngine } from '@pellux/goodvibes-sdk/platform/orchest
 import {
   AdaptivePlanner,
   decomposeGoal,
-  type DecompositionGate,
   type DecompositionServiceConfig,
   type DecomposeGoalResult,
   type PlannerInputs,
@@ -52,6 +56,7 @@ import type { AgentManager } from '@pellux/goodvibes-sdk/platform/tools';
 import type { RuntimeEventBus } from '@/runtime/index.ts';
 import { calcSessionCost, isModelPriced } from '../export/cost-utils.ts';
 import { editItemBrief, moveItemInSpec, removeItemFromSpec } from './workstream-draft-edits.ts';
+import { createWorkstreamDraftStore } from './workstream-draft-store.ts';
 
 export interface WorkstreamServicesDeps {
   readonly agentManager: Pick<AgentManager, 'spawn' | 'getStatus' | 'cancel' | 'registerCancellationSignal' | 'releaseCancellationSignal'>;
@@ -61,34 +66,11 @@ export interface WorkstreamServicesDeps {
   readonly projectRoot: string;
 }
 
-/**
- * Honest provenance for how a draft's decomposition was produced. Derived from
- * the SDK decomposition service's outcome so the draft render can state plainly
- * whether a planning agent decomposed the goal, or the heuristic path did (and
- * if so, why).
- */
-export interface WorkstreamDraftProvenance {
-  readonly kind: 'agent' | 'heuristic-configured' | 'gate-declined' | 'fallback';
-  readonly itemCount: number;
-  readonly agentCostUsd?: number | undefined;
-  readonly agentTokens?: number | undefined;
-  readonly elapsedMs?: number | undefined;
-  readonly fallbackReason?: string | undefined;
-}
-
-/** A not-yet-launched /workstream proposal. See this file's header doc for why it lives here rather than on the engine. */
-export interface WorkstreamDraft {
-  readonly id: string;
-  task: string;
-  spec: CreateWorkstreamInput;
-  readonly gate: DecompositionGate;
-  /** The engine-agnostic decomposition proposal (model- or heuristic-produced). */
-  proposal: PlanProposal;
-  /** How that proposal came to be, for honest rendering. */
-  provenance: WorkstreamDraftProvenance;
-  approved: boolean;
-  readonly createdAt: number;
-}
+// WorkstreamDraft + WorkstreamDraftProvenance live in workstream-draft-types.ts
+// (so the durable store can persist them without an import cycle) and are
+// re-exported here so every existing importer keeps its import site unchanged.
+export type { WorkstreamDraft, WorkstreamDraftProvenance } from './workstream-draft-types.ts';
+import type { WorkstreamDraft, WorkstreamDraftProvenance } from './workstream-draft-types.ts';
 
 /** `ctx.session.workstreamEngine`'s real shape: the live engine plus the draft-proposal bookkeeping the engine itself has no concept of. */
 export interface WorkstreamCommandService {
@@ -198,6 +180,13 @@ function createWorkstreamCommandService(
 ): WorkstreamCommandService {
   const drafts = new Map<string, WorkstreamDraft>();
 
+  // TUI-side draft journal (workstream-draft-store.ts). Load every persisted
+  // proposal at construction so a create/reshape/approve done before a restart
+  // is still here to launch afterward — the plan-review gate survives restart,
+  // exactly as the live-workstream snapshots do via resumeAllFromDisk().
+  const store = createWorkstreamDraftStore(projectRoot);
+  for (const persisted of store.loadAll()) drafts.set(persisted.id, persisted);
+
   /**
    * Run the SDK decomposition service: it spawns a bounded, read-only planning
    * agent (which surfaces in the fleet like any agent — kill/steer reach it,
@@ -252,7 +241,7 @@ function createWorkstreamCommandService(
   /**
    * Apply a pure item edit (workstream-draft-edits.ts) to a held draft's spec.
    * Threads the three outcomes straight through: `undefined` (no such draft) so
-   * the command layer can print its restart-aware not-found message, `{ error }`
+   * the command layer can print its not-found message, `{ error }`
    * (a bad reference/argument) verbatim, or the mutated draft. A successful edit
    * clears approval — a reshaped plan must be re-approved before it can launch.
    */
@@ -266,6 +255,7 @@ function createWorkstreamCommandService(
     if ('error' in result) return { error: result.error };
     draft.spec = result.spec;
     draft.approved = false;
+    store.save(draft);
     return draft;
   }
 
@@ -285,6 +275,7 @@ function createWorkstreamCommandService(
         createdAt: Date.now(),
       };
       drafts.set(draft.id, draft);
+      store.save(draft);
       return draft;
     },
     getDraft: (id) => drafts.get(id),
@@ -299,6 +290,7 @@ function createWorkstreamCommandService(
       draft.proposal = result.proposal;
       draft.provenance = toProvenance(result);
       draft.approved = false;
+      store.save(draft);
       return draft;
     },
     editItem: (id, itemRef, brief) => applyItemEdit(id, (spec) => editItemBrief(spec, itemRef, brief)),
@@ -308,15 +300,20 @@ function createWorkstreamCommandService(
       const draft = drafts.get(id);
       if (!draft) return undefined;
       draft.approved = true;
+      store.save(draft); // approval must survive restart too — a resumed approved draft launches straight away
       return draft;
     },
-    removeDraft: (id) => drafts.delete(id),
+    removeDraft(id) {
+      store.remove(id);
+      return drafts.delete(id);
+    },
     launchDraft(id) {
       const draft = drafts.get(id);
       if (!draft || !draft.approved) return null;
       const workstream = engine.createWorkstream(draft.spec);
       engine.start(workstream.id);
       drafts.delete(id);
+      store.remove(id); // launched: the engine now owns it (its own journal), so drop the draft snapshot
       return { workstreamId: workstream.id };
     },
   };
