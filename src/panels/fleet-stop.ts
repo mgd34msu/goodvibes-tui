@@ -14,6 +14,8 @@ import { fleetStateGlyph, fleetStateTone, isTerminalProcessState, type FleetStat
 export const STOP_SETTLE_MS = 1500;
 /** Display-only glyph for a node with an in-flight stop request. Verified free against STATE_GLYPHS (fleet-read-model.ts) and width-1 like its ⊘/⊟ siblings. */
 export const STOPPING_GLYPH = '⊗';
+/** Display-only glyph for a node blocked on the user (awaiting your approval/input). Verified free against STATE_GLYPHS + STOPPING_GLYPH and width-1. */
+export const BLOCKED_GLYPH = '⚑';
 
 /**
  * Tracks node ids the operator just asked to stop (kill/interrupt/pause) mapped
@@ -54,10 +56,18 @@ export interface FleetStateDisplay {
   readonly tone: FleetStateTone;
 }
 
-export function fleetStateDisplay(state: ProcessState, stopping: boolean): FleetStateDisplay {
-  return stopping
-    ? { glyph: STOPPING_GLYPH, label: 'stopping…', tone: 'warn' }
-    : { glyph: fleetStateGlyph(state), label: state, tone: fleetStateTone(state) };
+/**
+ * Glyph/label/tone for a row, applying two display-only overrides in priority
+ * order: an in-flight stop ('stopping…') wins first (a node the operator just
+ * asked to stop is no longer meaningfully "blocked on you"), then a
+ * blocked-on-user node gets the distinct ⚑ badge + 'blocked on you' label so it
+ * reads as needing the operator, not as an anonymous 'awaiting-approval'. Both
+ * are display-only; neither is a ProcessState.
+ */
+export function fleetStateDisplay(state: ProcessState, stopping: boolean, blocked = false): FleetStateDisplay {
+  if (stopping) return { glyph: STOPPING_GLYPH, label: 'stopping…', tone: 'warn' };
+  if (blocked) return { glyph: BLOCKED_GLYPH, label: 'blocked on you', tone: 'warn' };
+  return { glyph: fleetStateGlyph(state), label: state, tone: fleetStateTone(state) };
 }
 
 /** The narrow action + side-effect surface `toggleFleetPause` needs from FleetPanel. */
@@ -109,6 +119,7 @@ export function buildFleetTreeHints(
   follow: boolean,
   hasTabs: boolean,
   viewMode: 'active' | 'archived' = 'active',
+  blockedCount = 0,
 ): FleetHint[] {
   const live = selected !== undefined && !isTerminalProcessState(selected.state);
   const isPaused = selected !== undefined && selected.state === 'paused';
@@ -116,6 +127,10 @@ export function buildFleetTreeHints(
     { keys: 'j/k', label: 'navigate' },
     { keys: 'Enter', label: 'attach' },
   ];
+  // Jump-to-blocked is offered whenever something is waiting on the operator,
+  // in either view (the blocked nodes live in the active fleet, and the jump
+  // switches back to it) — so it is placed before the view-specific branch.
+  if (blockedCount > 0) hints.push({ keys: 'b', label: `blocked (${blockedCount})` });
   if (viewMode === 'archived') {
     // Archive view: restore + return to the live fleet; nothing here is live,
     // so the live-only control hints (s/i/K/p) never apply.

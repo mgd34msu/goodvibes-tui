@@ -7,10 +7,20 @@
 // renderItem/renderDetail call, with no `this` dependency.
 // ---------------------------------------------------------------------------
 
-import type { ProcessCostState, ProcessUsage } from '@pellux/goodvibes-sdk/platform/runtime/fleet';
+import type { ProcessCostState, ProcessNode, ProcessUsage } from '@pellux/goodvibes-sdk/platform/runtime/fleet';
+import type { Line } from '../types/grid.ts';
 import { formatAgentCost } from './agent-inspector-shared.ts';
-import { DEFAULT_PANEL_PALETTE, type ColumnSpec, type PanelPalette } from './polish.ts';
+import { buildPanelLine, DEFAULT_PANEL_PALETTE, type ColumnSpec, type PanelPalette } from './polish.ts';
 import { fleetUsageTokens, hasFleetCost, type FleetStateTone } from './fleet-read-model.ts';
+import { fleetStateDisplay } from './fleet-stop.ts';
+import { formatElapsed } from '../utils/format-elapsed.ts';
+import { truncateDisplay } from '../utils/terminal-width.ts';
+import { formatWorkItemIsolationDetailFromRaw } from './fleet-panel-worktree-detail.ts';
+import { buildAlignedRow } from './polish.ts';
+import { fleetKindTag } from './fleet-read-model.ts';
+import { steerBadgeGlyph, steerBadgeTone } from './fleet-steer.ts';
+import type { SteerBadge } from './fleet-tabs.ts';
+import type { FleetTreeRow } from './fleet-read-model.ts';
 
 // Column widths for the tree row layout. `label` absorbs whatever width is
 // left over after the fixed columns + gaps; on hostile (narrow) widths the
@@ -59,4 +69,101 @@ export function formatFleetCost(costUsd: number | null | undefined, costState: P
   if (!hasFleetCost(costUsd, costState)) return 'unpriced';
   const formatted = formatAgentCost(costUsd as number);
   return costState === 'estimated' ? `~${formatted}` : formatted;
+}
+
+/**
+ * One fleet tree row. Pure (extracted from FleetPanel.renderItem for the
+ * 800-line cap). Two display-only overrides in priority order: an in-flight
+ * `stopping` wins the glyph/label/activity, then a `blocked`-on-user node gets
+ * the ⚑ badge + 'blocked on you' in the activity slot. Otherwise a queued-steer
+ * badge (if any) prefixes the live activity text.
+ */
+export function renderFleetRowLine(
+  row: FleetTreeRow,
+  width: number,
+  stopping: boolean,
+  blocked: boolean,
+  badge: SteerBadge | null,
+  palette: PanelPalette = DEFAULT_PANEL_PALETTE,
+): Line {
+  const C = palette;
+  const node = row.node;
+  const disp = fleetStateDisplay(node.state, stopping, blocked);
+  const color = toneColor(disp.tone, C);
+  const label = `${row.treePrefix}${node.label}`;
+  // Activity column doubles as the badge slot: 'blocked on you' shouts the
+  // wait louder than the raw currentActivity text ('awaiting approval …').
+  const activity = stopping
+    ? disp.label
+    : blocked
+      ? 'blocked on you'
+      : badge
+        ? `${steerBadgeGlyph(badge.status)} ${node.currentActivity?.text ?? ''}`.trimEnd()
+        : (node.currentActivity?.text ?? '');
+  const activityColor = stopping ? color : blocked ? color : badge ? steerBadgeTone(badge.status, C) : C.dim;
+
+  return buildAlignedRow(
+    width,
+    [
+      { text: disp.glyph, fg: color },
+      { text: fleetKindTag(node.kind), fg: C.dim },
+      { text: label, fg: C.value },
+      { text: formatElapsed(node.elapsedMs), fg: C.dim },
+      { text: formatFleetTokens(node.usage), fg: C.dim },
+      { text: formatFleetCost(node.costUsd, node.costState), fg: C.value },
+      { text: activity, fg: activityColor },
+    ],
+    planColumns(width),
+  );
+}
+
+/**
+ * The selected-node detail block under the fleet tree. Pure (extracted from
+ * FleetPanel.renderDetail to hold that file under the 800-line architecture
+ * cap). `stopping`/`blocked` are display-only overrides the caller derives from
+ * the stop tracker + node state — mirror the tree row exactly so the literal
+ * 'state' text never claims a past-tense outcome mid-write, and a
+ * blocked-on-user node reads 'blocked on you' here too.
+ */
+export function renderFleetDetailLines(
+  node: ProcessNode,
+  width: number,
+  stopping: boolean,
+  blocked: boolean,
+  palette: PanelPalette = DEFAULT_PANEL_PALETTE,
+): Line[] {
+  const C = palette;
+  const disp = fleetStateDisplay(node.state, stopping, blocked);
+  const color = toneColor(disp.tone, C);
+
+  const line1 = buildPanelLine(width, [
+    [' ', C.dim],
+    [disp.glyph, color],
+    [` ${node.kind}`, C.dim],
+    ['  id ', C.label],
+    [node.id, C.value],
+    ['  state ', C.label],
+    [disp.label, color],
+    ['  elapsed ', C.label],
+    [formatElapsed(node.elapsedMs), C.value],
+  ]);
+  const line2 = buildPanelLine(width, [
+    [' model ', C.label],
+    [node.model ?? 'unknown', C.info],
+    ['  tokens ', C.label],
+    [formatFleetTokens(node.usage), C.value],
+    ['  cost ', C.label],
+    [formatFleetCost(node.costUsd, node.costState), C.value],
+  ]);
+  const activityText = node.currentActivity
+    ? `${node.currentActivity.kind}: ${node.currentActivity.text}`
+    : '(no recent activity)';
+  const line3 = buildPanelLine(width, [
+    [' activity ', C.label],
+    [truncateDisplay(activityText, Math.max(0, width - 11)), C.dim],
+  ]);
+  // Approval history attaches here once session tabs land.
+  const line4 = buildPanelLine(width, [[' approvals ', C.label], ['—', C.dim]]);
+  const isolationDetail = node.kind === 'work-item' ? formatWorkItemIsolationDetailFromRaw(node.raw) : null;
+  return [line1, line2, line3, line4, ...(isolationDetail ? [buildPanelLine(width, [[' isolation ', C.label], [isolationDetail, C.dim]])] : [])];
 }

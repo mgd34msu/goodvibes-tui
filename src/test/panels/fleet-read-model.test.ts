@@ -18,6 +18,7 @@ import {
   fleetUsageTokens,
   hasFleetCost,
   hasFleetUsage,
+  isBlockedOnUserState,
   isRunningProcessState,
   isTerminalProcessState,
   type FleetRegistryLike,
@@ -724,5 +725,68 @@ describe('automation-sourced schedule node (d4)', () => {
     expect(surfaced!.node.state).toBe('idle');
     expect(surfaced!.node.capabilities.pausable).toBe(true);
     expect(surfaced!.node.capabilities.resumable).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// blocked-on-me — derived "waiting on the user" state (never a stored flag)
+// ---------------------------------------------------------------------------
+
+describe('isBlockedOnUserState', () => {
+  test('awaiting-approval is blocked on the user', () => {
+    expect(isBlockedOnUserState('awaiting-approval')).toBe(true);
+  });
+  test('other states are not blocked on the user', () => {
+    for (const s of ['thinking', 'executing-tool', 'streaming', 'stalled', 'retrying', 'done', 'idle', 'paused'] as ProcessState[]) {
+      expect(isBlockedOnUserState(s)).toBe(false);
+    }
+  });
+});
+
+describe('blocked-on-me sorting + snapshot ids', () => {
+  test('a blocked root sorts above an earlier-started non-blocked root', () => {
+    const nodes = [
+      makeNode({ id: 'busy', state: 'executing-tool', startedAt: NOW - 10_000 }),
+      makeNode({ id: 'waiting', state: 'awaiting-approval', startedAt: NOW - 1_000 }),
+    ];
+    const rows = buildFleetRows(nodes);
+    // 'waiting' floats to the top despite starting later.
+    expect(rows.map((r) => r.node.id)).toEqual(['waiting', 'busy']);
+  });
+
+  test('a family leading to a blocked descendant floats up, tree structure intact', () => {
+    const nodes = [
+      makeNode({ id: 'root-a', state: 'executing-tool', startedAt: NOW - 20_000 }),
+      makeNode({ id: 'root-b', state: 'executing-tool', startedAt: NOW - 10_000 }),
+      makeNode({ id: 'b-child', parentId: 'root-b', state: 'awaiting-approval', startedAt: NOW - 5_000 }),
+    ];
+    const rows = buildFleetRows(nodes);
+    // root-b's subtree contains the blocked child, so root-b sorts above root-a,
+    // and its child still renders directly beneath it at depth 1.
+    expect(rows.map((r) => r.node.id)).toEqual(['root-b', 'b-child', 'root-a']);
+    expect(rows[1]!.depth).toBe(1);
+  });
+
+  test('blocked siblings sort above non-blocked siblings under the same parent', () => {
+    const nodes = [
+      makeNode({ id: 'root', state: 'executing-tool', startedAt: NOW - 30_000 }),
+      makeNode({ id: 'c-busy', parentId: 'root', state: 'executing-tool', startedAt: NOW - 20_000 }),
+      makeNode({ id: 'c-waiting', parentId: 'root', state: 'awaiting-approval', startedAt: NOW - 1_000 }),
+    ];
+    const rows = buildFleetRows(nodes);
+    expect(rows.map((r) => r.node.id)).toEqual(['root', 'c-waiting', 'c-busy']);
+  });
+
+  test('snapshot.blockedNodeIds lists blocked nodes in display order; empty when none', () => {
+    const nodes = [
+      makeNode({ id: 'busy', state: 'executing-tool', startedAt: NOW - 10_000 }),
+      makeNode({ id: 'w1', state: 'awaiting-approval', startedAt: NOW - 2_000 }),
+      makeNode({ id: 'w2', state: 'awaiting-approval', startedAt: NOW - 1_000 }),
+    ];
+    const snap = buildFleetSnapshot(nodes, NOW);
+    expect(snap.blockedNodeIds).toEqual(['w1', 'w2']);
+
+    const none = buildFleetSnapshot([makeNode({ id: 'busy', state: 'executing-tool' })], NOW);
+    expect(none.blockedNodeIds).toEqual([]);
   });
 });

@@ -13,25 +13,18 @@
 
 import { readFile } from 'node:fs/promises';
 import type { Line } from '../types/grid.ts';
-import type { ProcessCostState, ProcessUsage, SteerResult } from '@pellux/goodvibes-sdk/platform/runtime/fleet';
-import { formatWorkItemIsolationDetailFromRaw } from './fleet-panel-worktree-detail.ts';
+import type { SteerResult } from '@pellux/goodvibes-sdk/platform/runtime/fleet';
 import type { ConversationMessageSnapshot } from '@pellux/goodvibes-sdk/platform/core';
 import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import { ScrollableListPanel } from './scrollable-list-panel.ts';
 import { PanelConfirmOverlay } from './panel-confirm-overlay.ts';
-import { formatAgentCost } from './agent-inspector-shared.ts';
-import { formatElapsed } from '../utils/format-elapsed.ts';
-import { truncateDisplay } from '../utils/terminal-width.ts';
 import { isPanelSearchBackspace, isPanelSearchCancel, isPanelSearchCommit, isPanelSearchPrintable } from './search-focus.ts';
-import { buildAlignedRow, buildKeyboardHints, buildPanelLine, buildPanelWorkspace, buildSearchInputLine, DEFAULT_PANEL_PALETTE, getPanelWorkspaceContentBudget, type ColumnSpec, type PanelPalette } from './polish.ts';
+import { buildKeyboardHints, buildPanelWorkspace, buildSearchInputLine, DEFAULT_PANEL_PALETTE, getPanelWorkspaceContentBudget, type PanelPalette } from './polish.ts';
 import {
-  fleetKindTag,
-  fleetUsageTokens,
-  hasFleetCost,
+  isBlockedOnUserState,
   isRunningProcessState,
   isTerminalProcessState,
   type FleetReadModel,
-  type FleetStateTone,
   type FleetTreeRow,
 } from './fleet-read-model.ts';
 import {
@@ -46,12 +39,12 @@ import {
   type FleetTabsState,
   type SteerBadge,
 } from './fleet-tabs.ts';
-import { liveSteerableLabels, reconcileSteerBadges as reconcileSteerBadgesPure, renderSteerBadgeLine, steerBadgeGlyph, steerBadgeTone, steerRefusalMessage } from './fleet-steer.ts';
-import { FleetStopTracker, fleetStateDisplay, toggleFleetPause, buildFleetTreeHints, countDescendantStats } from './fleet-stop.ts';
+import { liveSteerableLabels, reconcileSteerBadges as reconcileSteerBadgesPure, renderSteerBadgeLine, steerRefusalMessage } from './fleet-steer.ts';
+import { FleetStopTracker, toggleFleetPause, buildFleetTreeHints, countDescendantStats } from './fleet-stop.ts';
 import { resolveFleetDeepLinkIndex } from './fleet-deep-link.ts';
 import { parseAgentLedger, renderFleetAgentTranscript, renderFleetChainSummary, renderFleetLedgerFallback, renderFleetTranscriptLoading } from './fleet-transcript.ts';
 import { renderFleetTabStrip } from '../renderer/fleet-tab-strip.ts';
-import { planColumns, toneColor, formatFleetTokens, formatFleetCost } from './fleet-panel-format.ts';
+import { renderFleetDetailLines, renderFleetRowLine } from './fleet-panel-format.ts';
 
 const C = DEFAULT_PANEL_PALETTE;
 
@@ -323,6 +316,44 @@ export class FleetPanel extends ScrollableListPanel<FleetTreeRow> {
   }
 
   /**
+   * Focus the next node blocked on the operator (awaiting approval/input),
+   * cycling top-to-bottom in display order and wrapping. Always resolves
+   * against the LIVE fleet (blocked nodes never live in the archive), and
+   * returns to the tree view from any attached tab so the reveal is visible —
+   * mirrors receiveDeepLink's "make it visible" contract. Honest no-op with a
+   * message when nothing is currently waiting on the operator. Returns true
+   * (the 'b' key is always consumed by the panel).
+   */
+  private jumpToNextBlocked(): boolean {
+    const snapshot = this.readModel.getSnapshot();
+    const blockedIds = snapshot.blockedNodeIds;
+    if (blockedIds.length === 0) {
+      this.setError('Nothing is blocked on you right now.');
+      this.markDirty();
+      return true;
+    }
+    // Pick the blocked id strictly after the current anchor (wrapping), so
+    // repeated presses cycle through every waiting node. Anchor on whatever row
+    // is actually selected right now (the base class defaults the cursor to
+    // row 0 before any explicit navigation sets selectedNodeId), so the first
+    // press already advances past a blocked node the cursor happens to sit on.
+    const anchorId = this.getSelectedItem()?.node.id ?? this.selectedNodeId;
+    const currentPos = anchorId === null || anchorId === undefined ? -1 : blockedIds.indexOf(anchorId);
+    const nextId = blockedIds[(currentPos + 1) % blockedIds.length]!;
+    // Reveal in the live tree: leave the archive view and any active session tab.
+    this.viewMode = 'active';
+    this.tabsState = { tabs: this.tabsState.tabs, activeTabIndex: 0 };
+    const idx = snapshot.rows.findIndex((row) => row.node.id === nextId);
+    if (idx >= 0) {
+      this.selectedIndex = idx;
+      this.selectedNodeId = nextId;
+    }
+    this.clearError();
+    this.markDirty();
+    return true;
+  }
+
+  /**
    * The "dropped inference" reconciliation: called on every read-model
    * snapshot update and on the panel's 1s tick. See fleet-steer.ts's
    * reconcileSteerBadges doc for why this is needed (the SDK emits no
@@ -374,6 +405,13 @@ export class FleetPanel extends ScrollableListPanel<FleetTreeRow> {
       this.tabsState = stepFleetTab(this.tabsState, key === ']' ? 1 : -1);
       this.markDirty();
       return true;
+    }
+
+    // Jump-to-blocked works from ANYWHERE in the panel (root tree OR an attached
+    // session tab): it steps to the next node waiting on the operator and
+    // reveals it in the live tree so the selection is actually visible.
+    if (key === 'b') {
+      return this.jumpToNextBlocked();
     }
 
     if (this.tabsState.activeTabIndex > 0) {
@@ -603,35 +641,11 @@ export class FleetPanel extends ScrollableListPanel<FleetTreeRow> {
   }
 
   protected renderItem(row: FleetTreeRow, _index: number, _selected: boolean, width: number): Line {
-    const node = row.node;
-    // d1: while a stop is in flight, fleetStateDisplay overrides the state
-    // glyph/label/tone with a display-only 'stopping…' so the row never claims
-    // the past-tense outcome before the state has actually flipped.
-    const stopping = this.stopTracker.isStopping(node.id);
-    const disp = fleetStateDisplay(node.state, stopping);
-    const color = toneColor(disp.tone, C);
-    const label = `${row.treePrefix}${node.label}`;
-    const badge = this.steerBadgeForNode(node.id);
-    const activity = stopping
-      ? disp.label
-      : badge
-        ? `${steerBadgeGlyph(badge.status)} ${node.currentActivity?.text ?? ''}`.trimEnd()
-        : (node.currentActivity?.text ?? '');
-    const activityColor = stopping ? color : badge ? steerBadgeTone(badge.status, C) : C.dim;
-
-    return buildAlignedRow(
-      width,
-      [
-        { text: disp.glyph, fg: color },
-        { text: fleetKindTag(node.kind), fg: C.dim },
-        { text: label, fg: C.value },
-        { text: formatElapsed(node.elapsedMs), fg: C.dim },
-        { text: formatFleetTokens(node.usage), fg: C.dim },
-        { text: formatFleetCost(node.costUsd, node.costState), fg: C.value },
-        { text: activity, fg: activityColor },
-      ],
-      planColumns(width),
-    );
+    // Display-only overrides (stopping wins, then blocked-on-user) are derived
+    // here from panel state and passed into the pure row renderer.
+    const stopping = this.stopTracker.isStopping(row.node.id);
+    const blocked = !stopping && isBlockedOnUserState(row.node.state);
+    return renderFleetRowLine(row, width, stopping, blocked, this.steerBadgeForNode(row.node.id), C);
   }
 
   /** A node's steer badge, looked up via its attached tab (if any) — null when the node has no tab or no active/recent steer. */
@@ -641,41 +655,11 @@ export class FleetPanel extends ScrollableListPanel<FleetTreeRow> {
 
   private renderDetail(row: FleetTreeRow, width: number): Line[] {
     const node = row.node;
-    // d1: mirror the tree row's 'stopping…' override so the literal state text
-    // never claims 'killed' mid-write either.
-    const disp = fleetStateDisplay(node.state, this.stopTracker.isStopping(node.id));
-    const color = toneColor(disp.tone, C);
-
-    const line1 = buildPanelLine(width, [
-      [' ', C.dim],
-      [disp.glyph, color],
-      [` ${node.kind}`, C.dim],
-      ['  id ', C.label],
-      [node.id, C.value],
-      ['  state ', C.label],
-      [disp.label, color],
-      ['  elapsed ', C.label],
-      [formatElapsed(node.elapsedMs), C.value],
-    ]);
-    const line2 = buildPanelLine(width, [
-      [' model ', C.label],
-      [node.model ?? 'unknown', C.info],
-      ['  tokens ', C.label],
-      [formatFleetTokens(node.usage), C.value],
-      ['  cost ', C.label],
-      [formatFleetCost(node.costUsd, node.costState), C.value],
-    ]);
-    const activityText = node.currentActivity
-      ? `${node.currentActivity.kind}: ${node.currentActivity.text}`
-      : '(no recent activity)';
-    const line3 = buildPanelLine(width, [
-      [' activity ', C.label],
-      [truncateDisplay(activityText, Math.max(0, width - 11)), C.dim],
-    ]);
-    // Approval history attaches here once session tabs land.
-    const line4 = buildPanelLine(width, [[' approvals ', C.label], ['—', C.dim]]);
-    const isolationDetail = node.kind === 'work-item' ? formatWorkItemIsolationDetailFromRaw(node.raw) : null;
-    return [line1, line2, line3, line4, ...(isolationDetail ? [buildPanelLine(width, [[' isolation ', C.label], [isolationDetail, C.dim]])] : [])];
+    // Mirror the tree row's display-only overrides (stopping wins, then blocked)
+    // so the detail's literal state text never contradicts the row glyph.
+    const stopping = this.stopTracker.isStopping(node.id);
+    const blocked = !stopping && isBlockedOnUserState(node.state);
+    return renderFleetDetailLines(node, width, stopping, blocked, C);
   }
 
   /** Renders the active session tab's content (transcript / chain summary / ledger fallback) in place of the tree. */
@@ -774,7 +758,10 @@ export class FleetPanel extends ScrollableListPanel<FleetTreeRow> {
     // can actually accept them (most kinds are never interruptible; nothing is
     // killable once terminal), incl. the d2 state-dependent p pause/resume chip.
     // Mirrors the handleInput guards above. See buildFleetTreeHints (fleet-stop.ts).
-    const hints = buildFleetTreeHints(selected?.node, this.follow, this.tabsState.tabs.length > 0, this.viewMode);
+    // Blocked count is always taken from the LIVE fleet (blocked nodes never
+    // live in the archive), so the 'b' jump hint shows even from the archive view.
+    const blockedCount = this.readModel.getSnapshot().blockedNodeIds.length;
+    const hints = buildFleetTreeHints(selected?.node, this.follow, this.tabsState.tabs.length > 0, this.viewMode, blockedCount);
 
     // Tab strip renders only when tabs exist — omitting it entirely with no
     // tabs attached keeps the pre-session-tab root-tree rendering byte-identical.

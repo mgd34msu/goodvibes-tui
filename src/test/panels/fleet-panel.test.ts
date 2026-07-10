@@ -1612,3 +1612,42 @@ describe('FleetPanel — archive controls', () => {
     expect(calls.unarchive).toEqual(['old-1']);
   });
 });
+
+// ---------------------------------------------------------------------------
+// blocked-on-me — distinct badge + b jump key
+// ---------------------------------------------------------------------------
+
+describe('FleetPanel — blocked on me', () => {
+  function selectedRow(panel: FleetPanel): string | undefined {
+    return linesText(panel.render(100, 24)).split('\n').find((l) => l.includes('▸'));
+  }
+
+  test('a blocked node renders the "blocked on you" badge', () => {
+    const nodes = [makeNode({ id: 'waiting', state: 'awaiting-approval', startedAt: NOW - 1_000 })];
+    const panel = new FleetPanel(createStaticFleetReadModel(buildFleetSnapshot(nodes, NOW)));
+    expect(linesText(panel.render(100, 24))).toContain('blocked on you');
+  });
+
+  test('b jumps to the next blocked node and cycles through them, wrapping', () => {
+    const nodes = [
+      makeNode({ id: 'busy', state: 'executing-tool', startedAt: NOW - 30_000 }),
+      makeNode({ id: 'w1', state: 'awaiting-approval', startedAt: NOW - 20_000 }),
+      makeNode({ id: 'w2', state: 'awaiting-approval', startedAt: NOW - 10_000 }),
+    ];
+    const panel = new FleetPanel(createStaticFleetReadModel(buildFleetSnapshot(nodes, NOW)));
+    // Blocked nodes sort to the top; the cursor starts on the first row (w1).
+    // First press moves to the next blocked node (w2)...
+    panel.handleInput('b');
+    expect(selectedRow(panel)).toContain('w2');
+    // ...second press wraps back to w1.
+    panel.handleInput('b');
+    expect(selectedRow(panel)).toContain('w1');
+  });
+
+  test('b with nothing blocked is an honest no-op message, not a crash', () => {
+    const nodes = [makeNode({ id: 'busy', state: 'executing-tool' })];
+    const panel = new FleetPanel(createStaticFleetReadModel(buildFleetSnapshot(nodes, NOW)));
+    expect(panel.handleInput('b')).toBe(true);
+    expect(linesText(panel.render(100, 24)).toLowerCase()).toContain('blocked on you');
+  });
+});
