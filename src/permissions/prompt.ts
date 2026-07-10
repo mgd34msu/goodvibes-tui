@@ -153,14 +153,46 @@ export class PermissionPromptUI {
     return scope === undefined || scope === 'local' || scope === 'project';
   }
 
+  /**
+   * The exact session-scoped permission rule that pressing [A] ("Allow always
+   * this session") will remember. Mirrors the SDK PermissionManager's
+   * getApprovalKey (`<tool>:<path>` when a path arg exists, `<tool>:<command>`
+   * for a command arg, else the bare `<tool>`), so the preview shown to the
+   * user before they choose is the exact key that gets written. Kept in sync
+   * with that SDK function by construction.
+   */
+  static rememberScopeKey(request: PermissionPromptRequest): string {
+    const args = request.args ?? {};
+    if (typeof args.path === 'string' && args.path.length > 0) return `${request.tool}:${args.path}`;
+    if (typeof args.command === 'string' && args.command.length > 0) return `${request.tool}:${args.command}`;
+    return request.tool;
+  }
+
+  /** The one-line preview text for what [A] remembers, truncated to the width. */
+  private static rememberPreviewText(request: PermissionPromptRequest, width: number): string {
+    const key = this.rememberScopeKey(request);
+    const prefix = '   Remembers : [A] allows "';
+    const suffix = '" for this session';
+    const budget = Math.max(6, width - prefix.length - suffix.length);
+    const shown = key.length > budget ? `...${key.slice(-(budget - 3))}` : key;
+    return `${prefix}${shown}${suffix}`;
+  }
+
   static getPromptHeight(
     request: PermissionPromptRequest,
     hunkState?: HunkSelectionState,
     detailsExpanded = false,
+    requestedBy?: string,
   ): number {
-    // Condensed low-risk card: top separator, title, summary, choices, bottom
-    // separator — see createPromptLines' condensed branch (must stay in sync).
-    if (this.isCondensed(request, hunkState, detailsExpanded)) return 5;
+    // Attribution line (only when known) + the always-present remember-scope
+    // preview line are added to BOTH card shapes; keep in sync with
+    // createPromptLines. A hunk-selection prompt has no single [A] remember key,
+    // so the preview line is suppressed there (see createPromptLines).
+    const attributionLines = requestedBy ? 1 : 0;
+    const previewLines = hunkState ? 0 : 1;
+    // Condensed low-risk card: top separator, title, [attribution], [preview],
+    // summary, choices, bottom separator — see createPromptLines' condensed branch.
+    if (this.isCondensed(request, hunkState, detailsExpanded)) return 5 + attributionLines + previewLines;
     const analysis = this.fallbackAnalysis(request);
     const reasonLines = Math.min(2, Math.max(1, analysis.reasons.length));
     const extraLines = (analysis.host ? 1 : 0) + (analysis.surface ? 1 : 0) + (analysis.sideEffects && analysis.sideEffects.length > 0 ? 1 : 0);
@@ -170,7 +202,7 @@ export class PermissionPromptUI {
     // arg allotment becomes pathRows + 1 → base 12 + pathRows (12 already
     // included one of those). See createPromptLines' full branch.
     const pathRows = this.pathRowTexts(this.resolvedTargets(request), 999).length;
-    return 12 + pathRows + reasonLines + extraLines + hunkLines;
+    return 12 + pathRows + reasonLines + extraLines + hunkLines + attributionLines + previewLines;
   }
 
   /** Returns the key argument to display for a given tool invocation. */
@@ -205,6 +237,7 @@ export class PermissionPromptUI {
     request: PermissionRequest,
     hunkState?: HunkSelectionState,
     detailsExpanded = false,
+    requestedBy?: string,
   ): Line[] {
     const lines: Line[] = [];
     const { tool, args, category } = request;
@@ -217,6 +250,19 @@ export class PermissionPromptUI {
     const TEXT   = '252';
     const DIM    = '244';
 
+    // Attribution line (which agent/process is asking) and the remember-scope
+    // preview line ([A] writes exactly this key). Both are shared by the
+    // condensed and full cards; the preview is suppressed for a hunk-selection
+    // prompt, which has no single whole-request [A] remember key.
+    const pushAttribution = (): void => {
+      if (!requestedBy) return;
+      lines.push(UIFactory.stringToLine(`   Requested by: ${requestedBy}`.padEnd(width), width, { fg: DIM }));
+    };
+    const pushRememberPreview = (): void => {
+      if (hunkState) return;
+      lines.push(UIFactory.stringToLine(this.rememberPreviewText(request, width).padEnd(width), width, { fg: DIM }));
+    };
+
     const maxArgLen = Math.max(10, width - 16);
     const pathRows = this.pathRowTexts(this.resolvedTargets(request), maxArgLen);
 
@@ -225,9 +271,11 @@ export class PermissionPromptUI {
     if (this.isCondensed(request, hunkState, detailsExpanded)) {
       lines.push(UIFactory.stringToLine('─'.repeat(width), width, { fg: ACCENT, dim: true }));
       lines.push(UIFactory.stringToLine(` [${label}] ${brief.title} `.padEnd(width), width, { fg: WARN, bold: true }));
+      pushAttribution();
       const scopeText = analysis.blastRadius ? ` (${analysis.blastRadius})` : '';
       const summaryLine = `   ${categoryVerb(category)} → ${pathRows[0]}${scopeText}`;
       lines.push(UIFactory.stringToLine(summaryLine.padEnd(width), width, { fg: TEXT }));
+      pushRememberPreview();
       lines.push(UIFactory.stringToLine(
         `   [Y] Allow once    [A] Allow always (session)    [N] Deny    [d] details`.padEnd(width),
         width, { fg: ACCENT, bold: true }));
@@ -242,6 +290,9 @@ export class PermissionPromptUI {
     const titleText = brief.title;
     const titleLine = ` [${label}] ${titleText} `;
     lines.push(UIFactory.stringToLine(titleLine.padEnd(width), width, { fg: WARN, bold: true }));
+
+    // Requester attribution (which agent/process raised this request).
+    pushAttribution();
 
     // Tool name row
     const toolLine = `   Tool      : ${tool}`;
@@ -351,6 +402,9 @@ export class PermissionPromptUI {
       const trailerLine = hiddenCount > 0 ? `   +${hiddenCount} more` : '';
       lines.push(UIFactory.stringToLine(trailerLine.padEnd(width), width, { fg: DIM }));
     }
+
+    // Remember-scope preview: exactly what [A] will write (omitted for hunk mode).
+    pushRememberPreview();
 
     // Choices row. A condensable card shown in full is the expanded form, so it
     // offers `[d]` to collapse back; other full cards omit the details toggle.

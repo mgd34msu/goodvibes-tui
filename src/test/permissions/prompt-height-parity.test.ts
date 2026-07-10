@@ -145,4 +145,58 @@ describe('PermissionPromptUI.getPromptHeight / createPromptLines parity', () => 
     expect(text).toContain('foo.ts');
     expect(text).toContain('[d] details');
   });
+
+  // Item 3 (b/c): attribution + remember-scope preview must keep height in sync
+  // in BOTH card shapes, with and without a known requester.
+  for (const requestedBy of [undefined, 'session abc12345']) {
+    for (const expanded of [false, true]) {
+      test(`full-card parity with requestedBy=${requestedBy}, expanded=${expanded}`, () => {
+        const request = makeFilesRequest('write', 'write', ['dir/a.ts']);
+        const height = PermissionPromptUI.getPromptHeight(request, undefined, expanded, requestedBy);
+        const lines = PermissionPromptUI.createPromptLines(WIDTH, request, undefined, expanded, requestedBy);
+        expect(lines.length).toBe(height);
+      });
+      test(`condensed-card parity with requestedBy=${requestedBy}`, () => {
+        const request = makeFilesRequest('read', 'read', ['src/foo.ts']);
+        const height = PermissionPromptUI.getPromptHeight(request, undefined, false, requestedBy);
+        const lines = PermissionPromptUI.createPromptLines(WIDTH, request, undefined, false, requestedBy);
+        expect(lines.length).toBe(height);
+      });
+    }
+  }
+
+  test('hunk-mode parity is unaffected by requestedBy (no whole-request remember key)', () => {
+    const request = makeRequest(3);
+    const hunkState = makeHunkState(3);
+    const height = PermissionPromptUI.getPromptHeight(request, hunkState, false, 'session abc12345');
+    const lines = PermissionPromptUI.createPromptLines(WIDTH, request, hunkState, false, 'session abc12345');
+    expect(lines.length).toBe(height);
+  });
+});
+
+describe('PermissionPromptUI — attribution + remember-scope preview (Item 3 b/c)', () => {
+  const lineText = (line: { char: string }[]): string => line.map((c) => c.char).join('');
+
+  function req(tool: string, args: Record<string, unknown>, category: 'read' | 'write' | 'execute'): PermissionPromptRequest {
+    return { callId: 'c', tool, args, category, analysis: analyzePermissionRequest(tool, args, category) };
+  }
+
+  test('rememberScopeKey mirrors the SDK getApprovalKey: path, then command, then tool-only', () => {
+    expect(PermissionPromptUI.rememberScopeKey(req('edit', { path: 'src/a.ts' }, 'write'))).toBe('edit:src/a.ts');
+    expect(PermissionPromptUI.rememberScopeKey(req('bash', { command: 'npm test' }, 'execute'))).toBe('bash:npm test');
+    expect(PermissionPromptUI.rememberScopeKey(req('list', {}, 'read'))).toBe('list');
+  });
+
+  test('the prompt shows the exact rule [A] will remember, before it is written', () => {
+    const text = PermissionPromptUI.createPromptLines(80, req('bash', { command: 'rm build' }, 'execute')).map(lineText).join('\n');
+    expect(text).toContain('Remembers');
+    expect(text).toContain('bash:rm build');
+  });
+
+  test('the prompt names the requesting agent/process when known, and omits the line when not', () => {
+    const withWho = PermissionPromptUI.createPromptLines(80, req('bash', { command: 'ls' }, 'execute'), undefined, false, 'agent 1a2b3c4d').map(lineText).join('\n');
+    expect(withWho).toContain('Requested by: agent 1a2b3c4d');
+    const without = PermissionPromptUI.createPromptLines(80, req('bash', { command: 'ls' }, 'execute')).map(lineText).join('\n');
+    expect(without).not.toContain('Requested by');
+  });
 });

@@ -691,4 +691,55 @@ describe('shell/blocking-input', () => {
       expect(hunkState.selected.size).toBe(3);
     });
   });
+
+  describe('approval-input debounce (Item 3a)', () => {
+    function run(data: string, openedAt: number | undefined, now: number) {
+      const resolved: Array<[boolean, boolean | undefined]> = [];
+      let aborted = 0;
+      const pendingPermission = {
+        callId: 'perm-debounce',
+        tool: 'write',
+        openedAt,
+        resolve: (approved: boolean, remember?: boolean) => { resolved.push([approved, remember]); },
+      } as unknown as PendingPermissionState;
+      const result = handleBlockingShellInput({
+        data,
+        pendingPermission,
+        recoveryPending: false,
+        abortTurn: () => { aborted++; },
+        conversation: makeConversation().conversation as never,
+        systemMessageRouter: makeRouter().router as never,
+        render: () => {},
+        loadRecoveryConversation: () => null,
+        deleteRecoveryFile: () => {},
+        now,
+        ...JOURNAL_STUBS,
+      });
+      return { result, resolved, aborted };
+    }
+
+    test('a keystroke within 350ms of the prompt appearing is swallowed, not treated as approval', () => {
+      const { result, resolved } = run('y', 1_000, 1_200); // 200ms later
+      expect(result.handled).toBe(true);
+      expect(result.pendingPermission).not.toBeNull(); // prompt stays open
+      expect(resolved).toHaveLength(0); // never answered
+    });
+
+    test('a deny keystroke within the window is also swallowed (no accidental abort)', () => {
+      const { result, resolved, aborted } = run('n', 1_000, 1_100);
+      expect(result.pendingPermission).not.toBeNull();
+      expect(resolved).toHaveLength(0);
+      expect(aborted).toBe(0);
+    });
+
+    test('a keystroke after the window resolves normally', () => {
+      const { resolved } = run('y', 1_000, 1_400); // 400ms later
+      expect(resolved).toEqual([[true, false]]);
+    });
+
+    test('a prompt without openedAt is never debounced (back-compat)', () => {
+      const { resolved } = run('y', undefined, 999_999);
+      expect(resolved).toEqual([[true, false]]);
+    });
+  });
 });

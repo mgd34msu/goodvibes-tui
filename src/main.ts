@@ -340,7 +340,7 @@ async function main() {
     new Promise((resolve) => {
       pendingPermission = {
         ...request,
-        ...buildPendingPermissionExtras(request, resolve),
+        ...buildPendingPermissionExtras(request, resolve, approvalBroker),
       };
       render();
     }), { focusTracker: ctx.services.focusTracker, configGet: (k: string) => configManager.get(k as Parameters<typeof configManager.get>[0]), webhookNotifier: ctx.services.webhookNotifier, terminalNotifier });
@@ -547,7 +547,7 @@ async function main() {
     // Calculate how many rows are consumed by overlays (thinking, permissions, queue, file picker)
     let overlayRows = 0;
     if (orchestrator.isThinking) overlayRows += 2; // spinner + blank
-    if (pendingPermission) overlayRows += PermissionPromptUI.getPromptHeight(pendingPermission, pendingPermission.hunkState, pendingPermission.detailsExpanded);
+    if (pendingPermission) overlayRows += PermissionPromptUI.getPromptHeight(pendingPermission, pendingPermission.hunkState, pendingPermission.detailsExpanded, pendingPermission.requestedBy);
     overlayRows += orchestrator.messageQueue.length * 3; // queued messages
     // File picker and model picker overlay rows computed from actual rendered line count below
     // Selection modal overlay rows are computed from actual rendered line count below
@@ -597,7 +597,7 @@ async function main() {
     }
 
     if (pendingPermission) {
-      viewport.push(...PermissionPromptUI.createPromptLines(conversationWidth, pendingPermission, pendingPermission.hunkState, pendingPermission.detailsExpanded));
+      viewport.push(...PermissionPromptUI.createPromptLines(conversationWidth, pendingPermission, pendingPermission.hunkState, pendingPermission.detailsExpanded, pendingPermission.requestedBy));
     }
 
     orchestrator.messageQueue.forEach(msg => {
