@@ -90,7 +90,12 @@ export function renderFleetRowLine(
   const node = row.node;
   const disp = fleetStateDisplay(node.state, stopping, blocked);
   const color = toneColor(disp.tone, C);
-  const label = `${row.treePrefix}${node.label}`;
+  // Best-of-N grouping: badge a sibling attempt so the N candidates read as one
+  // group and a held (pick-ready) candidate is visible (node.attemptGroup, SDK).
+  const attemptBadge = node.attemptGroup
+    ? ` [attempt ${node.attemptGroup.index + 1}/${node.attemptGroup.total}${node.attemptGroup.held ? ', held' : ''}]`
+    : '';
+  const label = `${row.treePrefix}${node.label}${attemptBadge}`;
   // Activity column doubles as the badge slot: 'blocked on you' shouts the
   // wait louder than the raw currentActivity text ('awaiting approval …').
   const activity = stopping

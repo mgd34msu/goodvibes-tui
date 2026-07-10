@@ -158,7 +158,7 @@ GoodVibes ships **143** built-in slash commands across **68** categories. Every 
 | Command | Aliases | Usage | Description |
 | --- | --- | --- | --- |
 | `/diff` | `/d` | `[session\|head\|working\|staged\|<git-ref>]` | Show unified diff of session file changes. Uses git diff HEAD if in a git repo |
-| `/review` | — | — | Review this session's diff hunk-by-hunk and steer comments to the model |
+| `/review` | — | — | Review this session's diff hunk-by-hunk, steer comments, or revert a hunk |
 
 ## Discovery
 
@@ -554,7 +554,7 @@ GoodVibes ships **143** built-in slash commands across **68** categories. Every 
 
 | Command | Aliases | Usage | Description |
 | --- | --- | --- | --- |
-| `/workstream` | — | `create [--isolation shared\|worktree] <task...> \| list \| status [id] \| insert-phase <id> <description...> \| edit-item <id> <item#> <brief...> \| remove-item <id> <item#> \| move-item <id> <item#> <pos> \| approve <id> \| edit <id> [--isolation shared\|worktree] <task...> \| launch <id> [--force] \| cancel <id>` | Author and oversee multi-phase agent workstreams (orchestration engine) |
+| `/workstream` | — | `create [--isolation shared\|worktree] <task...> \| list \| status [id] \| insert-phase <id> <description...> \| edit-item <id> <item#> <brief...> \| remove-item <id> <item#> \| move-item <id> <item#> <pos> \| approve <id> \| edit <id> [--isolation shared\|worktree] <task...> \| launch <id> [--force] \| cancel <id> \| attempts list\|diff\|judge\|pick` | Author and oversee multi-phase agent workstreams (orchestration engine) |
 
 ## Worktrees
 

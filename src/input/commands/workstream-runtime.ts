@@ -27,6 +27,8 @@
 import { AdaptivePlanner } from '@pellux/goodvibes-sdk/platform/core';
 import type { CreateWorkstreamInput, PhaseKind, PhaseRole, WorkItem, WorkItemState, Workstream, WorkstreamIsolation } from '@pellux/goodvibes-sdk/platform/orchestration';
 import type { WorkstreamCommandService, WorkstreamDraft, WorkstreamDraftProvenance } from '../../runtime/workstream-services.ts';
+import { validateAttempts } from '../../runtime/workstream-attempts-validation.ts';
+import { handleAttemptsSubcommand } from './workstream-attempts.ts';
 import type { CommandContext, CommandRegistry } from '../command-registry.ts';
 import { describeOperatorRpcError, getOperatorRpc } from './operator-rpc.ts';
 
@@ -193,7 +195,8 @@ function formatDraftItems(spec: CreateWorkstreamInput): string[] {
   spec.items.forEach((it, i) => {
     const deps = it.dependsOn ?? [];
     const after = deps.length > 0 ? ` (after: ${deps.map((d) => titleById.get(d) ?? d).join(', ')})` : '';
-    lines.push(`  ${i + 1}. ${it.title}${after}`);
+    const attempts = (it.attempts ?? 1) > 1 ? `  [best-of-${it.attempts}${it.autoAcceptWinner ? ', auto-accept winner' : ''}]` : '';
+    lines.push(`  ${i + 1}. ${it.title}${after}${attempts}`);
     // Show the brief (the instructions the item's agent runs) only when it says
     // something the title doesn't — an edited brief (via /workstream edit-item)
     // must be visible on the review surface, but a decomposition whose title and
@@ -260,6 +263,17 @@ function renderDraftProposal(draft: WorkstreamDraft): string {
   });
   lines.push('Work items (ordinal order):');
   lines.push(...formatDraftItems(draft.spec));
+  // Best-of-N plan validation (workstream-attempts-validation.ts): surface the
+  // leaf/worktree constraint breaks here so a violating plan is visible before
+  // approve, and blocked at launch. Notes (e.g. the engine's attempts cap) are advisory.
+  const attemptsCheck = validateAttempts(draft.spec);
+  if (attemptsCheck.violations.length > 0) {
+    lines.push('Best-of-N: plan is INVALID and cannot launch until fixed:');
+    for (const v of attemptsCheck.violations) lines.push(`  ✗ ${v}`);
+  } else if (attemptsCheck.hasAttempts) {
+    lines.push('Best-of-N: leaf + worktree constraints satisfied — winners are chosen via /workstream attempts pick.');
+  }
+  for (const n of attemptsCheck.notes) lines.push(`  note: ${n}`);
   lines.push(
     draft.approved
       ? `Approved. Launch with: /workstream launch ${draft.id}`
@@ -362,8 +376,8 @@ export function registerWorkstreamRuntimeCommands(registry: CommandRegistry): vo
   registry.register({
     name: 'workstream',
     description: 'Author and oversee multi-phase agent workstreams (orchestration engine)',
-    usage: 'create [--isolation shared|worktree] <task...> | list | status [id] | insert-phase <id> <description...> | edit-item <id> <item#> <brief...> | remove-item <id> <item#> | move-item <id> <item#> <pos> | approve <id> | edit <id> [--isolation shared|worktree] <task...> | launch <id> [--force] | cancel <id>',
-    argsHint: 'create [--isolation worktree] <task> | list | status [id] | edit-item | remove-item | move-item | approve | edit | launch | cancel',
+    usage: 'create [--isolation shared|worktree] <task...> | list | status [id] | insert-phase <id> <description...> | edit-item <id> <item#> <brief...> | remove-item <id> <item#> | move-item <id> <item#> <pos> | approve <id> | edit <id> [--isolation shared|worktree] <task...> | launch <id> [--force] | cancel <id> | attempts list|diff|judge|pick',
+    argsHint: 'create [--isolation worktree] <task> | list | status [id] | edit-item | remove-item | move-item | approve | edit | launch | cancel | attempts',
     handler: async (args, ctx: CommandContext) => {
       const service = ctx.session.workstreamEngine;
       if (!service) {
@@ -372,6 +386,9 @@ export function registerWorkstreamRuntimeCommands(registry: CommandRegistry): vo
       }
 
       const sub = args[0];
+
+      // Best-of-N surface: /workstream attempts list|diff|judge|pick (workstream-attempts.ts).
+      if (await handleAttemptsSubcommand(ctx, service, args)) return;
 
       /** Thread editItem/removeItem/moveItem's tri-state result to the transcript: a missing draft gets the restart-aware not-found message, a bad reference/argument gets its honest reason, and a success re-renders the whole reshaped proposal so the review surface always shows the current plan. */
       const printItemEdit = (id: string, res: WorkstreamDraft | { error: string } | undefined): void => {
@@ -537,6 +554,11 @@ export function registerWorkstreamRuntimeCommands(registry: CommandRegistry): vo
         }
         if (!draft.approved) {
           ctx.print(`Proposal ${id} is not approved yet. Run /workstream approve ${id} first.`);
+          return;
+        }
+        const attemptsCheck = validateAttempts(draft.spec);
+        if (attemptsCheck.violations.length > 0) {
+          ctx.print(`Cannot launch ${id} — best-of-N plan constraints are violated:\n${attemptsCheck.violations.map((v) => `  - ${v}`).join('\n')}\nFix the plan (or drop the attempts) and re-approve.`);
           return;
         }
         if (!force) {
