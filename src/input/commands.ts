@@ -69,6 +69,7 @@ import { registerWebSearchRuntimeCommands } from './commands/websearch-runtime.t
 import { registerImageRuntimeCommands } from './commands/image-runtime.ts';
 import { registerPermissionsRuntimeCommands } from './commands/permissions-runtime.ts';
 import { registerReviewRuntimeCommands } from './commands/review-runtime.ts';
+import { registerPaletteRuntimeCommands } from './commands/palette-runtime.ts';
 
 /**
  * A named group of built-in commands. The `category` label is the single
@@ -90,6 +91,7 @@ export interface BuiltinCommandGroup {
  */
 export const BUILTIN_COMMAND_GROUPS: readonly BuiltinCommandGroup[] = [
   { category: 'Shell & Session', register: registerShellCoreCommands },
+  { category: 'Shell & Session', register: registerPaletteRuntimeCommands },
   { category: 'Configuration', register: registerConfigCommand },
   { category: 'Operator', register: registerOperatorRuntimeCommands },
   { category: 'Plugins', register: registerPluginRuntimeCommands },

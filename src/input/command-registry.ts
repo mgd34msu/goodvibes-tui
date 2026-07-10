@@ -149,6 +149,12 @@ export interface CommandShellUiOpeners {
   getScrollTop?: () => number;
   openPanelPicker?: () => void;
   /**
+   * Open the fuzzy command palette — a searchable picker over every registered
+   * slash command (generated live from the registry). Bound to Ctrl+K and the
+   * /palette command. Selecting a command pre-fills it into the composer.
+   */
+  openCommandPalette?: () => void;
+  /**
    * Open (and optionally focus) a panel. UX-C focus rule: the command path is
    * "the user is mid-command-flow" — opening a panel this way leaves keyboard
    * focus in the composer by default. Pass `{ focus: true }` for a caller that

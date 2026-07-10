@@ -157,6 +157,11 @@ export function handleGlobalShortcutToken(
       return true;
     }
 
+    case 'command-palette':
+      state.commandContext?.openCommandPalette?.();
+      state.requestRender();
+      return true;
+
     case 'panel-picker':
       state.commandContext?.openPanelPicker?.();
       state.panelFocused = state.panelManager.isVisible() && state.panelManager.getAllOpen().length > 0;
