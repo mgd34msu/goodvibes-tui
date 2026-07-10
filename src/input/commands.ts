@@ -1,4 +1,5 @@
-import type { CommandRegistry } from './command-registry.ts';
+import { CommandRegistry } from './command-registry.ts';
+import type { SlashCommand } from './command-registry.ts';
 import { policyCommand } from './commands/policy.ts';
 import { providerCommand } from './commands/provider.ts';
 import { evalCommand } from './commands/eval.ts';
@@ -70,93 +71,125 @@ import { registerPermissionsRuntimeCommands } from './commands/permissions-runti
 import { registerReviewRuntimeCommands } from './commands/review-runtime.ts';
 
 /**
+ * A named group of built-in commands. The `category` label is the single
+ * source of truth for command categorization: it drives both the runtime
+ * registration order (via {@link registerBuiltinCommands}) and the generated
+ * command-reference docs / command palette grouping (via
+ * {@link categorizeBuiltinCommands}). Adding a new command group here is the
+ * only edit needed for it to appear, categorized, everywhere.
+ */
+export interface BuiltinCommandGroup {
+  readonly category: string;
+  readonly register: (registry: CommandRegistry) => void;
+}
+
+/**
+ * Every built-in command group, in registration order. Keeping runtime
+ * registration and doc/palette categorization on one array means a category
+ * label can never drift between the two.
+ */
+export const BUILTIN_COMMAND_GROUPS: readonly BuiltinCommandGroup[] = [
+  { category: 'Shell & Session', register: registerShellCoreCommands },
+  { category: 'Configuration', register: registerConfigCommand },
+  { category: 'Operator', register: registerOperatorRuntimeCommands },
+  { category: 'Plugins', register: registerPluginRuntimeCommands },
+  { category: 'Diff & Review', register: registerDiffRuntimeCommands },
+  { category: 'Git', register: registerGitRuntimeCommands },
+  { category: 'Testing', register: registerTestRuntimeCommands },
+  { category: 'Notifications', register: registerNotifyRuntimeCommands },
+  { category: 'Sessions & Replay', register: registerReplayRuntimeCommands },
+  { category: 'Sharing', register: registerShareRuntimeCommands },
+  { category: 'Channels', register: registerChannelRuntimeCommands },
+  { category: 'Local Setup', register: registerLocalSetupCommands },
+  { category: 'Product', register: registerProductRuntimeCommands },
+  { category: 'Platform', register: registerPlatformRuntimeCommands },
+  { category: 'Profiles', register: registerProfileSyncRuntimeCommands },
+  { category: 'Managed Runtime', register: registerManagedRuntimeCommands },
+  { category: 'Platform Access', register: registerPlatformAccessRuntimeCommands },
+  { category: 'Platform Services', register: registerPlatformServicesRuntimeCommands },
+  { category: 'Teamwork', register: registerTeamworkRuntimeCommands },
+  { category: 'Marketplace', register: registerMarketplaceRuntimeCommands },
+  { category: 'Guidance', register: registerGuidanceRuntimeCommands },
+  { category: 'Remote', register: registerRemoteRuntimeCommands },
+  { category: 'Remote', register: registerTeleportRuntimeCommands },
+  { category: 'Subscriptions', register: registerSubscriptionRuntimeCommands },
+  { category: 'Hooks', register: registerHooksRuntimeCommands },
+  { category: 'Feature Flags', register: registerFlagsRuntimeCommands },
+  { category: 'Editor', register: registerEditorRuntimeCommands },
+  { category: 'Control Room', register: registerControlRoomRuntimeCommands },
+  { category: 'MCP', register: registerMcpRuntimeCommands },
+  { category: 'Incidents', register: registerIncidentRuntimeCommands },
+  { category: 'Memory', register: registerMemoryProductRuntimeCommands },
+  { category: 'Skills', register: registerSkillsRuntimeCommands },
+  { category: 'Experience', register: registerExperienceRuntimeCommands },
+  { category: 'Services', register: registerServicesRuntimeCommands },
+  { category: 'Tasks', register: registerTasksRuntimeCommands },
+  { category: 'Local Providers', register: registerLocalProviderRuntimeCommands },
+  { category: 'Health', register: registerHealthRuntimeCommands },
+  { category: 'Settings Sync', register: registerSettingsSyncRuntimeCommands },
+  { category: 'Worktrees', register: registerWorktreeRuntimeCommands },
+  { category: 'Provider Accounts', register: registerProviderAccountsRuntimeCommands },
+  { category: 'Local Auth', register: registerLocalAuthRuntimeCommands },
+  { category: 'Intelligence', register: registerIntelligenceRuntimeCommands },
+  { category: 'Conversation', register: registerConversationRuntimeCommands },
+  { category: 'QR Codes', register: registerQrcodeRuntimeCommands },
+  { category: 'Onboarding', register: registerOnboardingRuntimeCommands },
+  { category: 'Voice & TTS', register: registerTtsRuntimeCommands },
+  { category: 'Cloudflare', register: registerCloudflareRuntimeCommands },
+  { category: 'Work Plans', register: registerWorkPlanRuntimeCommands },
+  { category: 'Cost', register: registerCostRuntimeCommands },
+  { category: 'Local Runtime', register: registerLocalRuntimeCommands },
+  { category: 'Discovery', register: registerDiscoveryRuntimeCommands },
+  { category: 'Planning', register: registerPlanningRuntimeCommands },
+  { category: 'Secrets', register: registerSecretRuntimeCommands },
+  { category: 'Scheduling', register: registerScheduleRuntimeCommands },
+  { category: 'Branches', register: registerBranchRuntimeCommands },
+  { category: 'Session Content', register: registerSessionContentCommands },
+  { category: 'Checkpoints', register: registerCheckpointRuntimeCommands },
+  { category: 'Workstreams', register: registerWorkstreamRuntimeCommands },
+  { category: 'Codebase', register: registerCodebaseRuntimeCommands },
+  { category: 'Web Search', register: registerWebSearchRuntimeCommands },
+  { category: 'Image', register: registerImageRuntimeCommands },
+  { category: 'Permissions', register: registerPermissionsRuntimeCommands },
+  { category: 'Diff & Review', register: registerReviewRuntimeCommands },
+  { category: 'Policy', register: (registry) => registry.register(policyCommand) },
+  { category: 'Providers', register: (registry) => registry.register(providerCommand) },
+  { category: 'Eval', register: (registry) => registry.register(evalCommand) },
+  { category: 'Sessions & Replay', register: (registry) => registry.register(sessionCommand) },
+  { category: 'Sessions & Replay', register: (registry) => registry.register(resumeCommand) },
+  { category: 'Memory', register: (registry) => registry.register(recallCommand) },
+  { category: 'Knowledge', register: (registry) => registry.register(knowledgeCommand) },
+];
+
+/**
  * registerBuiltinCommands - Register all built-in slash commands into the registry.
  * Call once during application startup.
  */
 export function registerBuiltinCommands(registry: CommandRegistry): void {
-  registerShellCoreCommands(registry);
-  registerConfigCommand(registry);
-  registerOperatorRuntimeCommands(registry);
-  registerPluginRuntimeCommands(registry);
-  registerDiffRuntimeCommands(registry);
-  registerGitRuntimeCommands(registry);
-  registerTestRuntimeCommands(registry);
-  registerNotifyRuntimeCommands(registry);
-  registerReplayRuntimeCommands(registry);
-  registerShareRuntimeCommands(registry);
-  registerChannelRuntimeCommands(registry);
-  registerLocalSetupCommands(registry);
-  registerProductRuntimeCommands(registry);
-  registerPlatformRuntimeCommands(registry);
-  registerProfileSyncRuntimeCommands(registry);
-  registerManagedRuntimeCommands(registry);
-  registerPlatformAccessRuntimeCommands(registry);
-  registerPlatformServicesRuntimeCommands(registry);
-  registerTeamworkRuntimeCommands(registry);
-  registerMarketplaceRuntimeCommands(registry);
-  registerGuidanceRuntimeCommands(registry);
-  registerRemoteRuntimeCommands(registry);
-  registerTeleportRuntimeCommands(registry);
-  registerSubscriptionRuntimeCommands(registry);
-  registerHooksRuntimeCommands(registry);
-  registerFlagsRuntimeCommands(registry);
-  registerEditorRuntimeCommands(registry);
-  registerControlRoomRuntimeCommands(registry);
-  registerMcpRuntimeCommands(registry);
-  registerIncidentRuntimeCommands(registry);
-  registerMemoryProductRuntimeCommands(registry);
-  registerSkillsRuntimeCommands(registry);
-  registerExperienceRuntimeCommands(registry);
-  registerServicesRuntimeCommands(registry);
-  registerTasksRuntimeCommands(registry);
-  registerLocalProviderRuntimeCommands(registry);
-  registerHealthRuntimeCommands(registry);
-  registerSettingsSyncRuntimeCommands(registry);
-  registerWorktreeRuntimeCommands(registry);
-  registerProviderAccountsRuntimeCommands(registry);
-  registerLocalAuthRuntimeCommands(registry);
-  registerIntelligenceRuntimeCommands(registry);
-  registerConversationRuntimeCommands(registry);
-  registerQrcodeRuntimeCommands(registry);
-  registerOnboardingRuntimeCommands(registry);
-  registerTtsRuntimeCommands(registry);
-  registerCloudflareRuntimeCommands(registry);
-  registerWorkPlanRuntimeCommands(registry);
-  registerCostRuntimeCommands(registry);
-  registerLocalRuntimeCommands(registry);
-  registerDiscoveryRuntimeCommands(registry);
-  registerPlanningRuntimeCommands(registry);
-  registerSecretRuntimeCommands(registry);
-  registerScheduleRuntimeCommands(registry);
-  registerBranchRuntimeCommands(registry);
-  registerSessionContentCommands(registry);
-  registerCheckpointRuntimeCommands(registry);
-  registerWorkstreamRuntimeCommands(registry);
-  registerCodebaseRuntimeCommands(registry);
-  registerWebSearchRuntimeCommands(registry);
-  registerImageRuntimeCommands(registry);
-  registerPermissionsRuntimeCommands(registry);
-  registerReviewRuntimeCommands(registry);
+  for (const group of BUILTIN_COMMAND_GROUPS) {
+    group.register(registry);
+  }
+}
 
-  // ── /policy ───────────────────────────────────────────────────────────────
-  registry.register(policyCommand);
-
-  // ── /provider ─────────────────────────────────────────────────────────────
-  registry.register(providerCommand);
-
-  // ── /eval ─────────────────────────────────────────────────────────────────
-  registry.register(evalCommand);
-
-  // ── /session ─────────────────────────────────────────────────────────────
-  registry.register(sessionCommand);
-
-  // ── /resume — the discoverable front door to /session resume ─────────────
-  registry.register(resumeCommand);
-
-  // ── /recall ──────────────────────────────────────────────────────────────
-  registry.register(recallCommand);
-
-  // ── /knowledge ───────────────────────────────────────────────────────────
-  registry.register(knowledgeCommand);
-
+/**
+ * categorizeBuiltinCommands - Build every built-in command paired with its
+ * category label, by replaying the same {@link BUILTIN_COMMAND_GROUPS} into a
+ * throwaway registry and attributing each newly-registered command to the
+ * group that added it. Handlers are never invoked, so this is side-effect free
+ * and safe to call from build scripts and tests. Used by the generated command
+ * reference (docs) and the command palette so both stay registry-driven.
+ */
+export function categorizeBuiltinCommands(): Array<{ command: SlashCommand; category: string }> {
+  const registry = new CommandRegistry();
+  const out: Array<{ command: SlashCommand; category: string }> = [];
+  const seen = new Set<string>();
+  for (const group of BUILTIN_COMMAND_GROUPS) {
+    group.register(registry);
+    for (const command of registry.getAll()) {
+      if (seen.has(command.name)) continue;
+      seen.add(command.name);
+      out.push({ command, category: group.category });
+    }
+  }
+  return out;
 }
