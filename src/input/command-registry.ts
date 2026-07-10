@@ -99,6 +99,12 @@ export interface CommandUiActions {
    */
   completeEmbeddingProviderSelection?: (providerId: string) => void;
   clearScreen?: () => void;
+  /**
+   * Begin one line of concealed (masked) composer input for a password-like
+   * secret. The typed text is masked in the composer and kept out of input
+   * history and the transcript; the plaintext reaches only request.onSubmit.
+   */
+  beginConcealedInput?: (request: import('./concealed-input.ts').ConcealedInputRequest) => void;
   activatePlan?: (planId: string, task: string) => void;
   requestPermission?: PermissionRequestHandler;
   /**

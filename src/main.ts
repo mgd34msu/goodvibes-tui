@@ -330,8 +330,7 @@ async function main() {
 
   commandContext.submitInput = submitInput;
   commandContext.submitSpokenInput = (text, content) => submitInput(text, content, { spokenOutput: true });
-  commandContext.stopSpokenOutput = () => spokenTurns.stop();
-  commandContext.pasteFromClipboard = () => input.handlePaste();
+  commandContext.stopSpokenOutput = () => spokenTurns.stop(); commandContext.pasteFromClipboard = () => input.handlePaste();
   commandContext.executeCommand = (name, args) => commandRegistry.execute(name, args, commandContext);
   commandContext.cancelGeneration = cancelGeneration;
   commandContext.isGenerating = () => orchestrator.isThinking;
@@ -343,6 +342,7 @@ async function main() {
     render();
   };
   commandContext.requestFullRepaint = () => { compositor.resetDiff(); render(); };
+  commandContext.beginConcealedInput = (req) => input.beginConcealedInput(req);
   permissionPromptRef.requestPermission = wrapRequestPermissionWithAlert((request) =>
     new Promise((resolve) => {
       pendingPermission = {
@@ -508,7 +508,7 @@ async function main() {
       composerMode: composerState.modeLabel,
       composerStatus: composerState.statusLabel,
       composerFlags: composerState.flags,
-      composerPendingRisk: composerState.pendingRisk,
+      composerPendingRisk: composerState.pendingRisk, permissionMode: configManager.get('permissions.mode') as string,
     }).lines;
 
     const onboardingOwnsScreen = input.onboardingWizard.active;
@@ -687,7 +687,7 @@ async function main() {
     gitStatusProvider,
     lastGitInfoRef,
     buildSessionContinuityHints,
-    render, webhookNotifier: ctx.services.webhookNotifier, focusTracker: ctx.services.focusTracker, terminalNotifier,
+    render, webhookNotifier: ctx.services.webhookNotifier, focusTracker: ctx.services.focusTracker, terminalNotifier, runtimeBus: uiServices.runtime.runtimeBus,
   });
   unsubs.push(...turnUnsubs);
 

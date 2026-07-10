@@ -211,7 +211,7 @@ describe('/plan project planning runtime command', () => {
     const opened: string[] = [];
     const fake = makeService();
 
-    await registry.execute('plan', ['replace', 'the', 'planning', 'panel'], makeContext(fake.service, out, opened));
+    await registry.execute('project-plan', ['replace', 'the', 'planning', 'panel'], makeContext(fake.service, out, opened));
 
     expect(opened).toContain('planning-modal');
     expect(out.join('\n')).toContain('Answer in the prompt, or open the Planning modal');
@@ -228,7 +228,7 @@ describe('/plan project planning runtime command', () => {
     const opened: string[] = [];
     const fake = makeService();
 
-    await registry.execute('plan', ['dismiss'], makeContext(fake.service, out, opened));
+    await registry.execute('project-plan', ['dismiss'], makeContext(fake.service, out, opened));
 
     expect(fake.state()).toBeNull(); // never seeded — the goal is not overwritten with "dismiss"
     expect(out.join('\n')).toContain('No active plan or planning state to dismiss.');
@@ -241,7 +241,7 @@ describe('/plan project planning runtime command', () => {
     const out: string[] = [];
     const fake = makeService(makeState({ goal: 'Ship it', metadata: { active: true, owner: 'tui' } }));
 
-    await registry.execute('plan', ['dismiss'], makeContext(fake.service, out, []));
+    await registry.execute('project-plan', ['dismiss'], makeContext(fake.service, out, []));
 
     expect(fake.state()?.metadata?.['active']).toBe(false);
     expect(fake.state()?.metadata?.['dismissedFrom']).toBe('plan-command');
@@ -255,7 +255,7 @@ describe('/plan project planning runtime command', () => {
     const fake = makeService(makeState({ goal: 'Running', metadata: { active: true } }));
     const planManager = { dismiss: () => ({ outcome: 'requires-cancel', blockedBy: { title: 'Running plan' } }) };
 
-    await registry.execute('plan', ['dismiss'], makeContext(fake.service, out, [], planManager));
+    await registry.execute('project-plan', ['dismiss'], makeContext(fake.service, out, [], planManager));
 
     expect(out.join('\n')).toContain('mid-execution');
     expect(out.join('\n')).toContain('/workstream cancel');
@@ -284,7 +284,7 @@ describe('/plan project planning runtime command', () => {
       },
     } as unknown as ProjectPlanningService;
 
-    await registry.execute('plan', ['answer', '1', 'focused', 'first', 'pass'], makeContext(service, out, opened));
+    await registry.execute('project-plan', ['answer', '1', 'focused', 'first', 'pass'], makeContext(service, out, opened));
 
     expect(answerCalls).toEqual([{ projectId: 'proj', questionIndex: 0, answer: 'focused first pass' }]);
     expect(out.join('\n')).toContain('Recorded answer to: What scope?');
@@ -306,7 +306,7 @@ describe('/plan project planning runtime command', () => {
       }),
     } as unknown as ProjectPlanningService;
 
-    await registry.execute('plan', ['answer', 'nope', 'my', 'answer'], makeContext(service, out, []));
+    await registry.execute('project-plan', ['answer', 'nope', 'my', 'answer'], makeContext(service, out, []));
     expect(out.join('\n')).toContain('No open question matched "nope"');
     expect(out.join('\n')).toContain('1. What scope? (q1)');
   });
@@ -317,7 +317,7 @@ describe('/plan project planning runtime command', () => {
       registerPlanningRuntimeCommands(registry);
       const out: string[] = [];
       const fake = makeService();
-      await registry.execute('plan', [verb], makeContext(fake.service, out, []));
+      await registry.execute('project-plan', [verb], makeContext(fake.service, out, []));
       expect(fake.state()).toBeNull();
       expect(out.join('\n')).toContain(`Unknown /plan subcommand "${verb}"`);
     }
@@ -330,7 +330,7 @@ describe('/plan project planning runtime command', () => {
     const opened: string[] = [];
     const fake = makeService();
 
-    await registry.execute('plan', ['cancel', 'the', 'legacy', 'billing', 'flow'], makeContext(fake.service, out, opened));
+    await registry.execute('project-plan', ['cancel', 'the', 'legacy', 'billing', 'flow'], makeContext(fake.service, out, opened));
 
     expect(fake.state()?.metadata?.['active']).toBe(true); // multi-word → genuine goal → seeded
     expect(fake.state()?.goal).toBe('cancel the legacy billing flow');

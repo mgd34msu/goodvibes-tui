@@ -9,6 +9,7 @@ import { activeUiTones } from './theme.ts';
 import { formatElapsed } from '../utils/format-elapsed.ts';
 import { abbreviateCount } from '../utils/format-number.ts';
 import { computeContextUsage } from '../core/context-usage.ts';
+import { permissionModeLabel, permissionModeTone } from '../core/permission-mode.ts';
 import { calcSessionCost, isModelPriced } from '../export/cost-utils.ts';
 import { buildFooterTip, isAgentActive } from './footer-tips.ts';
 import type { StreamMetrics } from '../core/stream-event-wiring.ts';
@@ -198,6 +199,9 @@ export class UIFactory {
     // Honest cross-surface spine posture. Defined ONLY in adopted-daemon
     // mode (undefined in embedded/local), so the segment is absent otherwise.
     sessionSpineStatus?: 'online' | 'offline',
+    // Session permission mode (config value). Rendered as a leading pill in the
+    // posture block; undefined suppresses the pill (e.g. bare test callers).
+    permissionMode?: string,
   ): Line[] {
     const lines: Line[] = [];
     const promptLines = prompt.split('\n');
@@ -332,6 +336,24 @@ export class UIFactory {
     // (light-terminal-aware); state.info reads on both light and dark terminals.
     const t = activeUiTones();
     const composerTokens: Array<{ text: string; fg: string; bold?: boolean; dim?: boolean }> = [];
+    // Permission-mode pill — always shown so the active session posture (normal
+    // / plan / accept-edits / auto) is visible at a glance. Tone: normal reads
+    // dim/neutral, plan reads info (read-only, safe), accept-edits and auto read
+    // as caution (raised autonomy). Cycled by Shift+Tab, toggled by /plan.
+    if (permissionMode) {
+      const modeTone = permissionModeTone(permissionMode);
+      const modeFg = modeTone === 'caution' ? t.chrome.warn : modeTone === 'info' ? t.state.info : '244';
+      composerTokens.push({ text: ` mode:${permissionModeLabel(permissionMode)} `, fg: modeFg, bold: modeTone !== 'neutral', dim: modeTone === 'neutral' });
+    }
+    // Context-usage chip — always-visible compaction-pressure indicator so the
+    // user sees compaction approaching before it happens. Colored by proximity
+    // to the auto-compact threshold (fraction; falls back to 0.85 when unset).
+    if (contextWindow && contextWindow > 0) {
+      const ctxUsage = computeContextUsage(lastInputTokens ?? 0, contextWindow);
+      const ctxThr = compactThreshold && compactThreshold > 0 ? compactThreshold : 0.85;
+      const ctxFg = ctxUsage.clampedRatio >= ctxThr ? t.chrome.bad : ctxUsage.clampedRatio >= ctxThr * 0.85 ? t.chrome.warn : '244';
+      composerTokens.push({ text: ` ctx:${ctxUsage.pct}% `, fg: ctxFg, bold: ctxUsage.clampedRatio >= ctxThr, dim: ctxUsage.clampedRatio < ctxThr * 0.85 });
+    }
     if (composerMode) composerTokens.push({ text: ` ${GLYPHS.status.active} ${composerMode} `, fg: t.state.info, bold: true });
     if (composerPendingRisk && composerPendingRisk !== 'none') {
       const riskColor = composerPendingRisk === 'approval-wait'

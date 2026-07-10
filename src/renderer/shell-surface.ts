@@ -37,6 +37,12 @@ export interface ShellFooterBuildOptions {
   readonly composerFlags?: readonly string[];
   readonly composerPendingRisk?: 'none' | 'approval-wait' | 'shell' | 'command' | 'remote';
   /**
+   * Current session permission mode (config value: 'prompt' | 'allow-all' |
+   * 'custom' | 'plan' | 'accept-edits'). Rendered as a pill in the composer
+   * posture block. Cycled by Shift+Tab and toggled by /plan.
+   */
+  readonly permissionMode?: string;
+  /**
    * Passive context pressure hint from buildContextStatusHint.
    * Rendered as a dim informational line above the prompt when non-null.
    */
@@ -137,6 +143,7 @@ export function buildShellFooter(
     options.composerPendingRisk,
     options.compact ?? false,
     options.sessionSpineStatus,
+    options.permissionMode,
   );
   // Compact posture drops the process indicator and context hint entirely so
   // the footer fits within ~5 rows on short terminals.

@@ -555,3 +555,59 @@ describe('handleGlobalShortcutToken', () => {
     expect(state.scroll).not.toHaveBeenCalled();
   });
 });
+
+describe('Shift+Tab cycles the session permission mode', () => {
+  function stateWithConfig(mode: string, panelFocused = false) {
+    const store: Record<string, unknown> = { 'permissions.mode': mode };
+    const setCalls: Array<[string, unknown]> = [];
+    const prints: string[] = [];
+    const state = buildState({
+      panelFocused,
+      commandContext: {
+        print: (t: string) => { prints.push(t); },
+        platform: {
+          configManager: {
+            get: (k: string) => store[k],
+            set: (k: string, v: unknown) => { store[k] = v; setCalls.push([k, v]); },
+          },
+        },
+      } as unknown as NonNullable<GlobalShortcutRouteState['commandContext']>,
+    });
+    return { state, store, setCalls, prints };
+  }
+
+  test('legacy backtab (\\x1b[Z) advances normal → accept-edits and narrates it', () => {
+    const { state, store, setCalls, prints } = stateWithConfig('prompt');
+    const handled = handleGlobalShortcutToken(
+      state,
+      { type: 'key', name: '\x1b[Z', logicalName: '\x1b[Z', ctrl: false, shift: false, meta: false },
+      24,
+    );
+    expect(handled).toBe(true);
+    expect(store['permissions.mode']).toBe('accept-edits');
+    expect(setCalls).toEqual([['permissions.mode', 'accept-edits']]);
+    expect(prints.at(-1)).toContain('accept-edits');
+  });
+
+  test('kitty shift+tab advances plan → auto (allow-all)', () => {
+    const { state, store } = stateWithConfig('plan');
+    const handled = handleGlobalShortcutToken(
+      state,
+      { type: 'key', name: '\t', logicalName: 'tab', ctrl: false, shift: true, meta: false },
+      24,
+    );
+    expect(handled).toBe(true);
+    expect(store['permissions.mode']).toBe('allow-all');
+  });
+
+  test('a focused panel keeps its own Shift+Tab — the mode cycle does not fire', () => {
+    const { state, setCalls } = stateWithConfig('prompt', true);
+    const handled = handleGlobalShortcutToken(
+      state,
+      { type: 'key', name: '\x1b[Z', logicalName: '\x1b[Z', ctrl: false, shift: false, meta: false },
+      24,
+    );
+    expect(handled).toBe(false);
+    expect(setCalls).toEqual([]);
+  });
+});

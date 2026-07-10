@@ -9,6 +9,7 @@ import { registerShellCoreCommands } from './commands/shell-core.ts';
 import { registerConfigCommand } from './commands/config.ts';
 import { registerDiscoveryRuntimeCommands } from './commands/discovery-runtime.ts';
 import { registerPlanningRuntimeCommands } from './commands/planning-runtime.ts';
+import { registerSecretRuntimeCommands } from './commands/secret-runtime.ts';
 import { registerScheduleRuntimeCommands } from './commands/schedule-runtime.ts';
 import { registerBranchRuntimeCommands } from './commands/branch-runtime.ts';
 import { registerOperatorRuntimeCommands } from './commands/operator-runtime.ts';
@@ -123,6 +124,7 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
   registerLocalRuntimeCommands(registry);
   registerDiscoveryRuntimeCommands(registry);
   registerPlanningRuntimeCommands(registry);
+  registerSecretRuntimeCommands(registry);
   registerScheduleRuntimeCommands(registry);
   registerBranchRuntimeCommands(registry);
   registerSessionContentCommands(registry);
