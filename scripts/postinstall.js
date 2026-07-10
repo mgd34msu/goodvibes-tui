@@ -53,6 +53,23 @@ function sha256(buffer) {
   return createHash('sha256').update(buffer).digest('hex');
 }
 
+const CHECKSUM_MANIFEST_NAME = 'SHA256SUMS.txt';
+
+/**
+ * Verify a downloaded artifact's checksum against the parsed manifest.
+ * An artifact with NO entry in the manifest is just as unverified as one
+ * with a mismatching entry, so both are hard failures — never a silent
+ * skip. Throws naming the artifact and the manifest it was checked against.
+ */
+function verifyChecksum(artifactName, actual, expected, manifestName = CHECKSUM_MANIFEST_NAME) {
+  if (expected === undefined) {
+    throw new Error(`no checksum entry for ${artifactName} in ${manifestName} — refusing to install an unverified binary`);
+  }
+  if (expected !== actual) {
+    throw new Error(`checksum mismatch for ${artifactName}: expected ${expected}, got ${actual}`);
+  }
+}
+
 function parseChecksumFile(contents) {
   const checksums = new Map();
   for (const rawLine of contents.split(/\r?\n/)) {
@@ -144,9 +161,11 @@ async function installPlatformBinaries() {
     await downloadFile(`${releaseBaseUrl}/${artifactName}`, tempDestination);
     const actual = sha256(readFileSync(tempDestination));
     const expected = checksums.get(artifactName);
-    if (expected && expected !== actual) {
+    try {
+      verifyChecksum(artifactName, actual, expected);
+    } catch (error) {
       rmSync(tempDestination, { force: true });
-      throw new Error(`checksum mismatch for ${artifactName}: expected ${expected}, got ${actual}`);
+      throw error;
     }
     rmSync(destination, { force: true });
     copyFileSync(tempDestination, destination);
@@ -217,4 +236,11 @@ async function main() {
   deployBundledFiles();
 }
 
-await main();
+// Guarded so this module can be imported by tests (to exercise
+// verifyChecksum, parseChecksumFile, etc.) without triggering a real
+// network install as a side effect of the import.
+if (import.meta.main) {
+  await main();
+}
+
+export { verifyChecksum, parseChecksumFile, sha256, resolveArtifactNames, CHECKSUM_MANIFEST_NAME };
