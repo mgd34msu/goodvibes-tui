@@ -28,6 +28,7 @@ import { FileStateCache, FileUndoManager, MemoryEmbeddingProviderRegistry, Memor
 import { MemorySpineClient, createLocalMemoryAccess } from '@pellux/goodvibes-sdk/platform/runtime/memory-spine';
 import { WorkspaceCheckpointManager } from '@pellux/goodvibes-sdk/platform/workspace';
 import { createWorkspaceCheckpointing } from './workspace-checkpointing.ts';
+import { createSessionConversationRewindPort } from './conversation-rewind-port.ts';
 import type { RuntimeEventBus } from '@/runtime/index.ts';
 import { createDomainDispatch } from './store/index.ts';
 import type { DomainDispatch, RuntimeStore } from './store/index.ts';
@@ -639,12 +640,11 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
   const fileUndoManager = new FileUndoManager();
   const workspaceCheckpointManager = createWorkspaceCheckpointing({ workspaceRoot: workingDirectory, runtimeBus: options.runtimeBus, configManager });
 
-  // Shared terminal-shell wrapper over the SDK's registerGatewayVerbGroups (see gateway-verbs.ts):
-  // 501s the whole ws-only family without it. principals.*/channels.profiles.*/ci.* register
-  // unconditionally; checkin.* registers ONLY with channelDeliveryRouter, providerRegistry, automationManager,
-  // sessionLister ALL present; runtimeBus/sessionPresence gate the fleet needs-input push fan-out the same
-  // way (see fleet-needs-input-push.ts) — every dep is constructed above, so both loops run for real (off by default).
-  attachWsOnlyGatewayVerbHandlers(gatewayMethods, { processRegistry, workspaceCheckpointManager, sessionBroker, secretsManager, approvalBroker, shellPaths, configManager, runtimeStore: options.runtimeStore, channelDeliveryRouter, providerRegistry, automationManager, sessionLister: sessionBroker, ...wireFleetNeedsInputPush({ registry: processRegistry, runtimeBus: options.runtimeBus, sessionBroker }) });
+  // Shared terminal-shell wrapper over the SDK's registerGatewayVerbGroups (see gateway-verbs.ts): 501s the ws-only
+  // family without it. principals.*/channels.profiles.*/ci.* register unconditionally; checkin.* only with
+  // channelDeliveryRouter/providerRegistry/automationManager/sessionLister ALL present; fleet needs-input push gated by
+  // runtimeBus/sessionPresence (fleet-needs-input-push.ts). conversationRewindPort serves conversation-scope rewind live.
+  attachWsOnlyGatewayVerbHandlers(gatewayMethods, { processRegistry, workspaceCheckpointManager, conversationRewindPort: createSessionConversationRewindPort(), sessionBroker, secretsManager, approvalBroker, shellPaths, configManager, runtimeStore: options.runtimeStore, channelDeliveryRouter, providerRegistry, automationManager, sessionLister: sessionBroker, ...wireFleetNeedsInputPush({ registry: processRegistry, runtimeBus: options.runtimeBus, sessionBroker }) });
   const integrationHelpers = new IntegrationHelperService({
     workingDirectory,
     homeDirectory,
