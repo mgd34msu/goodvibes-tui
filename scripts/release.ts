@@ -1,6 +1,7 @@
 import { existsSync, readFileSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { execSync } from 'child_process';
+import { PLATFORM_PACKAGES } from './platform-packages.ts';
 
 /**
  * Release script — bumps version, updates CHANGELOG, creates git tag.
@@ -191,7 +192,27 @@ if (!SKIP_GATES) {
 console.log(`\n[9/12] Updating package.json: ${current} → ${next}`);
 if (!DRY_RUN) {
   pkg.version = next;
+  // Keep the platform binary packages (optionalDependencies) pinned to the
+  // exact new version so the package manager only ever resolves the matching
+  // just-published payload package.
+  if (pkg.optionalDependencies) {
+    for (const platformPkg of PLATFORM_PACKAGES) {
+      if (platformPkg.name in pkg.optionalDependencies) {
+        pkg.optionalDependencies[platformPkg.name] = next;
+      }
+    }
+  }
   writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + '\n');
+
+  // Stamp each platform package.json version to match.
+  for (const platformPkg of PLATFORM_PACKAGES) {
+    const platformPkgPath = join(root, 'platform-packages', platformPkg.dir, 'package.json');
+    if (existsSync(platformPkgPath)) {
+      const platformJson = JSON.parse(readFileSync(platformPkgPath, 'utf8'));
+      platformJson.version = next;
+      writeFileSync(platformPkgPath, JSON.stringify(platformJson, null, 2) + '\n');
+    }
+  }
 }
 
 // --- Update src/version.ts via prebuild script ---
@@ -253,7 +274,7 @@ console.log(`\n[12/12] Creating git commit and tag v${next}...`);
 const tag = `v${next}`;
 const commitMsg = `chore: release ${tag}`;
 
-run('git add package.json src/version.ts README.md CHANGELOG.md docs/foundation-artifacts');
+run('git add package.json src/version.ts README.md CHANGELOG.md docs/foundation-artifacts platform-packages');
 run(`git commit -m "${commitMsg}"`);
 run(`git tag -a ${tag} -m "Release ${tag}"`);
 

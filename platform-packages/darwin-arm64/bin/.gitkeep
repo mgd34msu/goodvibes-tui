@@ -1,0 +1,2 @@
+Binaries are populated at release time by scripts/assemble-platform-packages.ts
+and are intentionally not committed to git (see .gitignore).

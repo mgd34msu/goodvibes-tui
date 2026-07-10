@@ -7,6 +7,7 @@ import {
   isExecutable,
   isSourceCheckout,
   resolveArtifactName,
+  resolvePlatformPackageBinary,
   run,
   supportedTargetsText,
 } from './launcher-support.js';
@@ -35,6 +36,11 @@ if (isExecutable(localBuild)) {
 
 if (vendoredBinary && isExecutable(vendoredBinary)) {
   run(vendoredBinary, process.argv.slice(2));
+}
+
+const platformPackageBinary = resolvePlatformPackageBinary('app', process.platform, process.arch, packageRoot);
+if (platformPackageBinary) {
+  run(platformPackageBinary, process.argv.slice(2));
 }
 
 if (artifactName) {

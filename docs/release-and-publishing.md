@@ -78,10 +78,20 @@ Install behavior:
   No dependency needs trusting: the binaries arrive through the platform-specific `@pellux/goodvibes-tui-<os>-<arch>` package (registry integrity, no lifecycle script), and the tree-sitter grammar packages contribute only their prebuilt `.wasm` files.
 
 - `bun pm -g untrusted` should report `Found 0 untrusted dependencies with scripts`.
-- npm and pnpm installs require `bun` to already be on `PATH`; the preinstall check fails clearly if it is missing.
-- on Linux and macOS, the published package downloads the matching TUI and daemon binaries from the version-matched GitHub Release during `postinstall`
+- the main package declares four `@pellux/goodvibes-tui-<os>-<arch>` payload packages as `optionalDependencies` with `os`/`cpu` fields (the esbuild pattern), so the package manager installs exactly the one that matches the host, verified against the registry integrity hash. This is why plain `npm`/`pnpm` installs work, not just Bun.
+- `postinstall` prefers the platform package's binaries (a plain copy into `vendor/`, no download) and falls back to the version-matched GitHub Release download (checksum-verified against `SHA256SUMS.txt`) only when no platform package is present. The `bin/goodvibes` and `bin/goodvibes-daemon` launchers also resolve the platform package directly, so the binaries run even if the postinstall was skipped.
+- npm and pnpm installs still require `bun` to be on `PATH` for the from-source fallback; the preinstall check fails clearly if it is missing.
 - on Windows, native execution is not supported; users should use WSL so the Linux binary path applies
-- if Bun is already available and the platform binary is missing, the launchers can still fall back to Bun + source
+- if Bun is available and no prebuilt binary is present, the launchers can still fall back to Bun + source
+
+Platform packages are assembled and published by the Release workflow after the per-target build job:
+
+```bash
+bun run scripts/assemble-platform-packages.ts --require-all   # populate bin/ from dist/
+bun run scripts/publish-platform-packages.ts                  # publish each to npm
+```
+
+The `publish-platform-packages` job runs before `publish-npm`, so the payload packages exist in the registry before the main package that references them is published.
 
 Local npm packaging checks:
 

@@ -1,9 +1,19 @@
 #!/usr/bin/env bun
 import { chmodSync, copyFileSync, cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import { homedir } from 'node:os';
 import { basename, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { CHECKSUM_MANIFEST_NAME, parseChecksumFile, resolveArtifactNames, sha256, verifyChecksum } from '../src/runtime/release-artifacts.ts';
+
+// Platform package names, mirrored from scripts/platform-packages.ts, keyed by
+// `${process.platform}-${node-arch}`.
+const PLATFORM_PACKAGE_NAMES = {
+  'linux-x64': '@pellux/goodvibes-tui-linux-x64',
+  'linux-arm64': '@pellux/goodvibes-tui-linux-arm64',
+  'darwin-x64': '@pellux/goodvibes-tui-darwin-x64',
+  'darwin-arm64': '@pellux/goodvibes-tui-darwin-arm64',
+};
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const projectRoot = join(__dirname, '..');
@@ -49,6 +59,48 @@ async function downloadText(url) {
   return await response.text();
 }
 
+/**
+ * Copy the prebuilt binaries (and sqlite-vec addon, if present) out of the
+ * installed platform package into vendor/. Returns true when it handled the
+ * install, false when no platform package is available (fall back to download).
+ */
+function installFromPlatformPackage(artifacts, vendorDir) {
+  const pkgName = PLATFORM_PACKAGE_NAMES[`${process.platform}-${process.arch}`];
+  if (!pkgName) return false;
+
+  let pkgBinDir;
+  try {
+    const require = createRequire(join(projectRoot, 'package.json'));
+    const pkgJsonPath = require.resolve(`${pkgName}/package.json`);
+    pkgBinDir = join(dirname(pkgJsonPath), 'bin');
+  } catch {
+    return false;
+  }
+
+  const app = join(pkgBinDir, artifacts.app);
+  const daemon = join(pkgBinDir, artifacts.daemon);
+  if (!existsSync(app) || !existsSync(daemon)) {
+    return false;
+  }
+
+  for (const artifactName of [artifacts.app, artifacts.daemon]) {
+    const destination = join(vendorDir, artifactName);
+    rmSync(destination, { force: true });
+    copyFileSync(join(pkgBinDir, artifactName), destination);
+    prepareBinary(destination);
+  }
+
+  // Carry the sqlite-vec native addon (bin/lib/...) beside the vendored binary
+  // so semantic memory keeps working (resolved as <execDir>/lib/...).
+  const libSrc = join(pkgBinDir, 'lib');
+  if (existsSync(libSrc)) {
+    cpSync(libSrc, join(vendorDir, 'lib'), { recursive: true });
+  }
+
+  console.log(`postinstall: installed binaries from ${pkgName} (registry integrity, no download)`);
+  return true;
+}
+
 async function installPlatformBinaries() {
   const artifacts = resolveArtifactNames(process.platform, process.arch);
   if (!artifacts) {
@@ -81,6 +133,14 @@ async function installPlatformBinaries() {
       prepareBinary(destination);
     }
     console.log(`postinstall: installed local smoke-test binaries for ${process.platform}-${process.arch}`);
+    return;
+  }
+
+  // Prefer the platform package (@pellux/goodvibes-tui-<os>-<arch>): the package
+  // manager installed it with registry integrity and no lifecycle script, so its
+  // binaries need no checksum download here. Copy them into vendor/ so the bin/
+  // launchers find them on the fast path.
+  if (installFromPlatformPackage(artifacts, vendorDir)) {
     return;
   }
 

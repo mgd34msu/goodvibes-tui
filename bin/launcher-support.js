@@ -1,9 +1,42 @@
 import { accessSync, chmodSync, constants, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
+import { createRequire } from 'node:module';
 import { spawnSync } from 'node:child_process';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 
 const SUPPORTED_TARGETS = ['linux-x64', 'linux-arm64', 'darwin-x64', 'darwin-arm64'];
+
+// Platform package names, mirrored from scripts/platform-packages.ts. This file
+// is plain JS shipped in the tarball and cannot import that TS module; keep the
+// two in sync. Keyed by `${process.platform}-${node-arch}`.
+const PLATFORM_PACKAGE_NAMES = {
+  'linux-x64': '@pellux/goodvibes-tui-linux-x64',
+  'linux-arm64': '@pellux/goodvibes-tui-linux-arm64',
+  'darwin-x64': '@pellux/goodvibes-tui-darwin-x64',
+  'darwin-arm64': '@pellux/goodvibes-tui-darwin-arm64',
+};
+
+/**
+ * Resolve the prebuilt binary from the installed platform package
+ * (@pellux/goodvibes-tui-<os>-<arch>), if present. The package manager installs
+ * it with registry integrity and no lifecycle script, so this path needs no
+ * trust step and no post-install download. Returns null when the package is not
+ * installed (e.g. an unsupported platform, or optional-dep resolution skipped).
+ */
+export function resolvePlatformPackageBinary(kind, platform, arch, fromDir) {
+  const artifactName = resolveArtifactName(kind, platform, arch);
+  if (!artifactName) return null;
+  const pkgName = PLATFORM_PACKAGE_NAMES[`${platform}-${arch}`];
+  if (!pkgName) return null;
+  try {
+    const require = createRequire(join(fromDir, 'package.json'));
+    const pkgJsonPath = require.resolve(`${pkgName}/package.json`);
+    const binPath = join(dirname(pkgJsonPath), 'bin', artifactName);
+    return isExecutable(binPath) ? binPath : null;
+  } catch {
+    return null;
+  }
+}
 
 export function isExecutable(path) {
   try {
