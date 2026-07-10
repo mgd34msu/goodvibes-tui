@@ -46,6 +46,10 @@ export function classifySystemMessage(content: string): SystemMessageType {
     return 'info';
   }
 
+  // [Routing] chip — a mid-session model change is informational (the [Failover]
+  // line, not this, carries the alarming transport-error cases).
+  if (/^\[Routing\]/.test(content)) return 'info';
+
   // [Local] and [Recovery] messages
   if (/^\[Local\]/.test(content)) return 'info';
   if (/^\[Recovery\]/.test(content)) {
