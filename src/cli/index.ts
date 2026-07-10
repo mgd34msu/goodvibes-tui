@@ -9,5 +9,6 @@ export * from './surface-command.ts';
 export * from './service-command.ts';
 export * from './bundle-command.ts';
 export * from './hooks-command.ts';
+export * from './doctor.ts';
 export * from './plugin-command.ts';
 export * from './management.ts';
