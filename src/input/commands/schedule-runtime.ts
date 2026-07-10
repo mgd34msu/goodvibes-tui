@@ -10,6 +10,7 @@ import type { AutomationManager } from '@pellux/goodvibes-sdk/platform/automatio
 import type { AutomationJob } from '@pellux/goodvibes-sdk/platform/automation';
 import type { AutomationScheduleDefinition } from '@pellux/goodvibes-sdk/platform/automation';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
+import { parseNaturalLanguageSchedule } from './schedule-nl.ts';
 import type {
   AutomationExecutionPolicy,
   AutomationExternalContentSource,
@@ -91,8 +92,8 @@ export function registerScheduleRuntimeCommands(registry: CommandRegistry): void
     name: 'schedule',
     aliases: ['sched'],
     description: 'Manage automation jobs and scheduled runs',
-    usage: 'add <cron|every|at> <value> <prompt...> | list | remove <id> | enable <id> | disable <id> | run <id>',
-    argsHint: 'add cron <expr> | add every <interval> | add at <timestamp> | list | remove | enable | disable | run',
+    usage: 'add <cron|every|at|when> <value> <prompt...> | list | remove <id> | enable <id> | disable <id> | run <id>',
+    argsHint: 'add cron <expr> | add every <interval> | add at <timestamp> | add when "<natural language>" | list | remove | enable | disable | run',
     async handler(args, ctx) {
       const manager = ctx.ops.automationManager;
       if (!manager) {
@@ -134,12 +135,13 @@ export function registerScheduleRuntimeCommands(registry: CommandRegistry): void
             'Usage:\n'
             + '  /schedule add cron "<expr>" <prompt...> [--name <name>] [--model <model>] [--provider <provider>] [--template <tmpl>] [--tz <timezone>] [--stagger <ms>]\n'
             + '  /schedule add every <interval> <prompt...> [--name <name>] [--model <model>] [--provider <provider>] [--template <tmpl>]\n'
-            + '  /schedule add at <timestamp> <prompt...> [--name <name>] [--model <model>] [--provider <provider>] [--template <tmpl>]'
+            + '  /schedule add at <timestamp> <prompt...> [--name <name>] [--model <model>] [--provider <provider>] [--template <tmpl>]\n'
+            + '  /schedule add when "<natural language, e.g. every weekday at 9am>" <prompt...>'
           );
           return;
         }
 
-        const legacyCronMode = scheduleKind !== 'cron' && scheduleKind !== 'every' && scheduleKind !== 'at';
+        const legacyCronMode = scheduleKind !== 'cron' && scheduleKind !== 'every' && scheduleKind !== 'at' && scheduleKind !== 'when';
         const scheduleArg = legacyCronMode ? args[1] : args[2];
         const valueStartIndex = legacyCronMode ? 2 : 3;
         if (!scheduleArg) {
@@ -215,13 +217,30 @@ export function registerScheduleRuntimeCommands(registry: CommandRegistry): void
         }
 
         try {
-          const schedule = legacyCronMode
-            ? normalizeCronSchedule(scheduleArg, timezone, staggerMs)
-            : scheduleKind === 'cron'
+          let schedule: AutomationScheduleDefinition;
+          if (scheduleKind === 'when') {
+            // Natural-language phrase: parse locally, ALWAYS echo the concrete
+            // interpretation before saving so nothing is scheduled silently.
+            const parsed = parseNaturalLanguageSchedule(scheduleArg);
+            if (parsed.kind === 'error') {
+              ctx.print(`Error: ${parsed.error}`);
+              return;
+            }
+            schedule = parsed.kind === 'cron'
+              ? normalizeCronSchedule(parsed.expression, timezone, staggerMs)
+              : parsed.kind === 'every'
+                ? normalizeEverySchedule(parsed.interval)
+                : normalizeAtSchedule(parsed.at);
+            ctx.print(`Interpreted "${scheduleArg}" as: ${parsed.description}\n  → ${formatSchedule(schedule)}`);
+          } else {
+            schedule = legacyCronMode
               ? normalizeCronSchedule(scheduleArg, timezone, staggerMs)
-              : scheduleKind === 'every'
-                ? normalizeEverySchedule(scheduleArg)
-                : normalizeAtSchedule(parseAtValue(scheduleArg));
+              : scheduleKind === 'cron'
+                ? normalizeCronSchedule(scheduleArg, timezone, staggerMs)
+                : scheduleKind === 'every'
+                  ? normalizeEverySchedule(scheduleArg)
+                  : normalizeAtSchedule(parseAtValue(scheduleArg));
+          }
           const job = await manager.createJob({
             name: name ?? prompt.slice(0, 40),
             prompt,
