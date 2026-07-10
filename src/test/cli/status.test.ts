@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { buildCliDoctorFindings, renderCliStatus } from '../../cli/status.ts';
+import { buildCliDoctorFindings, buildCliExposureReport, renderCliStatus } from '../../cli/status.ts';
 import type { CliStatusOptions } from '../../cli/status.ts';
 
 type ConfigValues = Record<string, unknown>;
@@ -177,5 +177,108 @@ describe('CLI status and doctor output', () => {
     expect(parsed.service.lifecycle.managed.pid).toBe(123);
     expect(parsed.surfaces.controlPlane.port).toBe(3421);
     expect(parsed.findings).toBeArray();
+  });
+});
+
+describe('CLI exposure report', () => {
+  test('reports bind, auth mode, and origin allowlist per surface', () => {
+    const report = buildCliExposureReport(makeOptions({
+      'controlPlane.enabled': true,
+      'controlPlane.hostMode': 'network',
+      'controlPlane.host': '0.0.0.0',
+      'controlPlane.cors.enabled': true,
+      'controlPlane.cors.allowedOrigins': 'http://localhost:5173, https://app.example',
+    }));
+
+    const controlPlane = report.find((surface) => surface.id === 'controlPlane');
+    expect(controlPlane?.networkFacing).toBe(true);
+    expect(controlPlane?.bind).toBe('network 0.0.0.0:3421');
+    // makeOptions has both a user store and an operator token present.
+    expect(controlPlane?.authMode).toBe('local users + operator token');
+    expect(controlPlane?.originAllowlist).toBe('CORS on, allowlist: http://localhost:5173, https://app.example');
+
+    const web = report.find((surface) => surface.id === 'web');
+    expect(web?.networkFacing).toBe(false);
+    expect(web?.authMode).toBe('loopback (host-local trust)');
+    expect(web?.originAllowlist).toBe('n/a (no origin allowlist for this surface)');
+  });
+
+  test('reports "none configured" auth for a network-facing surface with no auth material', () => {
+    const report = buildCliExposureReport({
+      ...makeOptions({
+        'web.enabled': true,
+        'web.hostMode': 'network',
+        'web.host': '0.0.0.0',
+      }),
+      auth: {
+        userStorePath: '/home/test/.goodvibes/tui/auth-users.json',
+        userStorePresent: false,
+        bootstrapCredentialPath: '/home/test/.goodvibes/tui/auth-bootstrap.txt',
+        bootstrapCredentialPresent: false,
+        operatorTokenPath: '/home/test/.goodvibes/daemon/operator-tokens.json',
+        operatorTokenPresent: false,
+      },
+    });
+    const web = report.find((surface) => surface.id === 'web');
+    expect(web?.authMode).toBe('none configured');
+  });
+
+  test('the rendered status output includes the exposure section', () => {
+    const text = renderCliStatus(makeOptions());
+    expect(text).toContain('Exposure (report only — no changes made):');
+    expect(text).toContain('originAllowlist:');
+  });
+});
+
+describe('CLI doctor risky-combination and install findings', () => {
+  test('flags a wildcard CORS origin on a network-facing control plane', () => {
+    const findings = buildCliDoctorFindings(makeOptions({
+      'controlPlane.enabled': true,
+      'controlPlane.hostMode': 'network',
+      'controlPlane.host': '0.0.0.0',
+      'controlPlane.cors.enabled': true,
+      'controlPlane.cors.allowedOrigins': 'https://trusted.example, *',
+    }));
+    expect(findings.map((finding) => finding.id)).toContain('control-plane-cors-wildcard-origin');
+  });
+
+  test('does not flag a wildcard when the control plane is loopback-bound', () => {
+    const findings = buildCliDoctorFindings(makeOptions({
+      'controlPlane.enabled': true,
+      'controlPlane.hostMode': 'local',
+      'controlPlane.host': '127.0.0.1',
+      'controlPlane.cors.enabled': true,
+      'controlPlane.cors.allowedOrigins': '*',
+    }));
+    expect(findings.map((finding) => finding.id)).not.toContain('control-plane-cors-wildcard-origin');
+  });
+
+  test('does not flag an explicit CORS allowlist without a wildcard', () => {
+    const findings = buildCliDoctorFindings(makeOptions({
+      'controlPlane.enabled': true,
+      'controlPlane.hostMode': 'network',
+      'controlPlane.host': '0.0.0.0',
+      'controlPlane.cors.enabled': true,
+      'controlPlane.cors.allowedOrigins': 'https://trusted.example',
+    }));
+    expect(findings.map((finding) => finding.id)).not.toContain('control-plane-cors-wildcard-origin');
+  });
+
+  test('maps install self-check findings into doctor findings with the repair command as the action', () => {
+    const findings = buildCliDoctorFindings({
+      ...makeOptions(),
+      install: [
+        {
+          id: 'broken-daemon-path',
+          summary: 'The background daemon binary could not be located.',
+          detail: 'No daemon executable was found on the packaged search paths.',
+          repairCommand: 'bun add -g @pellux/goodvibes-tui',
+        },
+      ],
+    });
+    const mapped = findings.find((finding) => finding.id === 'install-broken-daemon-path');
+    expect(mapped).toBeDefined();
+    expect(mapped?.area).toBe('install');
+    expect(mapped?.action).toBe('Repair this install by running: bun add -g @pellux/goodvibes-tui');
   });
 });

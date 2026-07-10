@@ -47,6 +47,7 @@ import { createDeferredStartupCoordinator } from '@/runtime/index.ts';
 import { initializeBootstrapCore } from './bootstrap-core.ts';
 import { createBootstrapShell } from './bootstrap-shell.ts';
 import { announceResumeState } from './resume-notice.ts';
+import { announceInstallSelfCheck } from './install-self-check-startup.ts';
 import { buildSharedOrchestratorCoreServices, refreshMemoryRecallSnapshot } from './orchestrator-core-services.ts';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 import { DaemonServer } from '@pellux/goodvibes-sdk/platform/daemon';
@@ -317,9 +318,8 @@ export async function bootstrapRuntime(
   }).catch(() => {
     // Best-effort — never let the resume notice block or crash boot.
   });
-  const gitStatusProvider = shell.gitStatusProvider;
-  const inputHistory = shell.inputHistory;
-  const lastGitInfoRef = shell.lastGitInfoRef;
+  announceInstallSelfCheck(systemMessageRouter);
+  const { gitStatusProvider, inputHistory, lastGitInfoRef } = shell;
   // W1.6 FIX 2: dispose the header's live-repo-state poll (git-status.ts
   // startPolling) on shutdown, same pattern as acpTaskSyncInterval above.
   bootstrapUnsubs.push(() => gitStatusProvider.stopPolling());
