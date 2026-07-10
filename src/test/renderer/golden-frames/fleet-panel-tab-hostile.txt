@@ -1,13 +1,13 @@
 # GV_GOLDEN surface=fleet-panel-tab-hostile width=28 height=20
-| Fleet — agent owner-01     |
-| SESSIONS  ‹│[agent owner-01|
-|  ▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄       |
-|   › Fix the golden         |
-|     fixture                |
-|  ▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀       |
+| Fleet — agent iewer-01     |
+| SESSIONS  ‹│[agent iewer-01|
+| (no messages yet)          |
 |                            |
-|    On it — reading         |
-|    fleet-panel.ts first.   |
+|                            |
+|                            |
+|                            |
+|                            |
+|                            |
 |                            |
 |                            |
 |                            |
@@ -152,120 +152,24 @@
 1 27 fg=#e2e8f0
 1 27 bg=#223049
 1 27 bold=1
-2 2 fg=#2a2a2a
-2 3 fg=#2a2a2a
-2 4 fg=#2a2a2a
-2 5 fg=#2a2a2a
-2 6 fg=#2a2a2a
-2 7 fg=#2a2a2a
-2 8 fg=#2a2a2a
-2 9 fg=#2a2a2a
-2 10 fg=#2a2a2a
-2 11 fg=#2a2a2a
-2 12 fg=#2a2a2a
-2 13 fg=#2a2a2a
-2 14 fg=#2a2a2a
-2 15 fg=#2a2a2a
-2 16 fg=#2a2a2a
-2 17 fg=#2a2a2a
-2 18 fg=#2a2a2a
-2 19 fg=#2a2a2a
-2 20 fg=#2a2a2a
-3 2 fg=#a855f7
-3 2 bg=#2a2a2a
-3 3 fg=#a855f7
-3 3 bg=#2a2a2a
-3 4 fg=#a855f7
-3 4 bg=#2a2a2a
-3 5 fg=#cbd5e1
-3 5 bg=#2a2a2a
-3 6 fg=#cbd5e1
-3 6 bg=#2a2a2a
-3 7 fg=#cbd5e1
-3 7 bg=#2a2a2a
-3 8 fg=#cbd5e1
-3 8 bg=#2a2a2a
-3 9 fg=#cbd5e1
-3 9 bg=#2a2a2a
-3 10 fg=#cbd5e1
-3 10 bg=#2a2a2a
-3 11 fg=#cbd5e1
-3 11 bg=#2a2a2a
-3 12 fg=#cbd5e1
-3 12 bg=#2a2a2a
-3 13 fg=#cbd5e1
-3 13 bg=#2a2a2a
-3 14 fg=#cbd5e1
-3 14 bg=#2a2a2a
-3 15 fg=#cbd5e1
-3 15 bg=#2a2a2a
-3 16 fg=#cbd5e1
-3 16 bg=#2a2a2a
-3 17 fg=#cbd5e1
-3 17 bg=#2a2a2a
-3 18 fg=#cbd5e1
-3 18 bg=#2a2a2a
-3 19 fg=#cbd5e1
-3 19 bg=#2a2a2a
-3 20 fg=#cbd5e1
-3 20 bg=#2a2a2a
-4 2 fg=#a855f7
-4 2 bg=#2a2a2a
-4 3 fg=#a855f7
-4 3 bg=#2a2a2a
-4 4 fg=#a855f7
-4 4 bg=#2a2a2a
-4 5 fg=#cbd5e1
-4 5 bg=#2a2a2a
-4 6 fg=#cbd5e1
-4 6 bg=#2a2a2a
-4 7 fg=#cbd5e1
-4 7 bg=#2a2a2a
-4 8 fg=#cbd5e1
-4 8 bg=#2a2a2a
-4 9 fg=#cbd5e1
-4 9 bg=#2a2a2a
-4 10 fg=#cbd5e1
-4 10 bg=#2a2a2a
-4 11 fg=#cbd5e1
-4 11 bg=#2a2a2a
-4 12 fg=#cbd5e1
-4 12 bg=#2a2a2a
-4 13 fg=#cbd5e1
-4 13 bg=#2a2a2a
-4 14 fg=#cbd5e1
-4 14 bg=#2a2a2a
-4 15 fg=#cbd5e1
-4 15 bg=#2a2a2a
-4 16 fg=#cbd5e1
-4 16 bg=#2a2a2a
-4 17 fg=#cbd5e1
-4 17 bg=#2a2a2a
-4 18 fg=#cbd5e1
-4 18 bg=#2a2a2a
-4 19 fg=#cbd5e1
-4 19 bg=#2a2a2a
-4 20 fg=#cbd5e1
-4 20 bg=#2a2a2a
-5 2 fg=#2a2a2a
-5 3 fg=#2a2a2a
-5 4 fg=#2a2a2a
-5 5 fg=#2a2a2a
-5 6 fg=#2a2a2a
-5 7 fg=#2a2a2a
-5 8 fg=#2a2a2a
-5 9 fg=#2a2a2a
-5 10 fg=#2a2a2a
-5 11 fg=#2a2a2a
-5 12 fg=#2a2a2a
-5 13 fg=#2a2a2a
-5 14 fg=#2a2a2a
-5 15 fg=#2a2a2a
-5 16 fg=#2a2a2a
-5 17 fg=#2a2a2a
-5 18 fg=#2a2a2a
-5 19 fg=#2a2a2a
-5 20 fg=#2a2a2a
+2 0 fg=#475569
+2 1 fg=#475569
+2 2 fg=#475569
+2 3 fg=#475569
+2 4 fg=#475569
+2 5 fg=#475569
+2 6 fg=#475569
+2 7 fg=#475569
+2 8 fg=#475569
+2 9 fg=#475569
+2 10 fg=#475569
+2 11 fg=#475569
+2 12 fg=#475569
+2 13 fg=#475569
+2 14 fg=#475569
+2 15 fg=#475569
+2 16 fg=#475569
+2 17 fg=#475569
 19 0 fg=#475569
 19 1 fg=#38bdf8
 19 2 fg=#38bdf8
