@@ -638,8 +638,12 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
   const fileUndoManager = new FileUndoManager();
   const workspaceCheckpointManager = createWorkspaceCheckpointing({ workspaceRoot: workingDirectory, runtimeBus: options.runtimeBus, configManager });
 
-  // ws-only verbs (fleet/checkpoints/search/push) 501 without this — see gateway-verbs.ts.
-  attachWsOnlyGatewayVerbHandlers(gatewayMethods, { processRegistry, workspaceCheckpointManager, sessionBroker, secretsManager, approvalBroker, shellPaths, configManager, runtimeStore: options.runtimeStore });
+  // Shared terminal-shell wrapper over the SDK's registerGatewayVerbGroups (see gateway-verbs.ts):
+  // 501s the whole ws-only family without it. principals.*/channels.profiles.*/ci.* register
+  // unconditionally; checkin.* registers ONLY with all four of channelDeliveryRouter, providerRegistry,
+  // automationManager, sessionLister present (graceful-degrade so the loop is never a facade) — each is
+  // constructed above, so the TUI threads all four and the check-in loop runs for real (off by default).
+  attachWsOnlyGatewayVerbHandlers(gatewayMethods, { processRegistry, workspaceCheckpointManager, sessionBroker, secretsManager, approvalBroker, shellPaths, configManager, runtimeStore: options.runtimeStore, channelDeliveryRouter, providerRegistry, automationManager, sessionLister: sessionBroker });
   const integrationHelpers = new IntegrationHelperService({
     workingDirectory,
     homeDirectory,
