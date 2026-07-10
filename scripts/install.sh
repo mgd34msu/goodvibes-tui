@@ -39,7 +39,12 @@ resolve_platform() {
   case "$os" in
     Linux) os_tag="linux" ;;
     Darwin) os_tag="macos" ;;
-    *) fail "unsupported operating system: $os (Windows: use WSL2 for now; native build is on the roadmap)" ;;
+    MINGW*|MSYS*|CYGWIN*|Windows_NT)
+      fail "native Windows is not supported yet. Install WSL2 and run GoodVibes inside it (the Linux binaries apply unchanged):
+    1. In an elevated PowerShell:  wsl --install
+    2. Open your WSL2 distribution, then re-run:  curl -fsSL https://goodvibes.sh/install.sh | sh
+  WSL2 setup and native-Windows status: https://github.com/$REPO/blob/main/docs/windows.md" ;;
+    *) fail "unsupported operating system: $os (Windows: use WSL2 — see https://github.com/$REPO/blob/main/docs/windows.md)" ;;
   esac
   case "$arch" in
     x86_64|amd64) arch_tag="x64" ;;

@@ -55,7 +55,7 @@ Release distribution:
 - `bun add -g @pellux/goodvibes-tui` is the recommended global install path; the package is hosted on the npm registry and Bun installs from that registry directly
 - Bun global installs require trusting only `@pellux/goodvibes-tui` so the package postinstall can place the matching TUI and daemon binaries; no dependency needs trusting (grammar `.wasm` files ship as plain files, the platform binary package carries the binaries with registry integrity, and no runtime dependency's install script is loaded)
 - `npm install -g @pellux/goodvibes-tui` is supported on Linux, macOS, and WSL when Bun is already installed; the preinstall check verifies Bun, and the install script downloads the matching TUI and daemon binaries for the current platform
-- native Windows is not supported; use WSL on Windows
+- Windows is supported via WSL2 today: inside a WSL2 distribution GoodVibes is an ordinary Linux install, so the `linux-x64`/`linux-arm64` binaries run natively. Native Windows is beta (the `windows-x64` binary compiles but is not yet a stable release asset). See [docs/windows.md](docs/windows.md).
 
 Common paths:
 
