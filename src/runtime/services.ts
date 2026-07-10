@@ -645,7 +645,7 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
   void workspaceCheckpointManager.init().catch(() => {});
 
   // ws-only verbs (fleet/checkpoints/search/push) 501 without this — see gateway-verbs.ts.
-  attachWsOnlyGatewayVerbHandlers(gatewayMethods, { processRegistry, workspaceCheckpointManager, sessionBroker, secretsManager, approvalBroker, shellPaths });
+  attachWsOnlyGatewayVerbHandlers(gatewayMethods, { processRegistry, workspaceCheckpointManager, sessionBroker, secretsManager, approvalBroker, shellPaths, configManager, runtimeStore: options.runtimeStore });
   const integrationHelpers = new IntegrationHelperService({
     workingDirectory,
     homeDirectory,
