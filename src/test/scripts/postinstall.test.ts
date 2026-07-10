@@ -5,7 +5,12 @@ import {
   resolveArtifactNames,
   sha256,
   verifyChecksum,
-} from '../../../scripts/postinstall.js';
+} from '../../runtime/release-artifacts.ts';
+// postinstall.js re-exports these same bindings (its download-verify loop
+// calls them directly) — importing it here proves that wiring holds, and
+// is safe: import.meta.main is only true when the file is the process
+// entry point, so this import does not trigger its network install.
+import * as postinstall from '../../../scripts/postinstall.js';
 
 describe('verifyChecksum', () => {
   test('passes silently when the checksum matches', () => {
@@ -93,6 +98,18 @@ describe('resolveArtifactNames', () => {
 
   test('returns null for unsupported platform/arch pairs', () => {
     expect(resolveArtifactNames('win32', 'x64')).toBeNull();
+  });
+});
+
+describe('postinstall.js wiring', () => {
+  test('re-exports the same verification functions it uses internally', () => {
+    // Guards against postinstall.js drifting back to its own copy of this
+    // logic instead of the shared src/runtime/release-artifacts.ts module.
+    expect(postinstall.verifyChecksum).toBe(verifyChecksum);
+    expect(postinstall.parseChecksumFile).toBe(parseChecksumFile);
+    expect(postinstall.sha256).toBe(sha256);
+    expect(postinstall.resolveArtifactNames).toBe(resolveArtifactNames);
+    expect(postinstall.CHECKSUM_MANIFEST_NAME).toBe(CHECKSUM_MANIFEST_NAME);
   });
 });
 
