@@ -1,6 +1,7 @@
 import type { PanelManager } from '../panel-manager.ts';
 import { GitPanel } from '../git-panel.ts';
 import { DiffPanel } from '../diff-panel.ts';
+import { DiffReviewPanel } from '../diff-review-panel.ts';
 import { CostTrackerPanel } from '../cost-tracker-panel.ts';
 import type { ResolvedBuiltinPanelDeps } from './shared.ts';
 import { requireUiServices, withUnconfiguredFallback } from './shared.ts';
@@ -40,6 +41,19 @@ export function registerDevelopmentPanels(manager: PanelManager, deps: ResolvedB
     category: 'development',
     description: 'Unified diff view of agent file changes',
     factory: () => new DiffPanel(requireUiServices(deps).environment.workingDirectory, deps.requestRender),
+  });
+
+  manager.registerType({
+    id: 'review',
+    name: 'Review',
+    icon: 'R',
+    category: 'development',
+    description: 'Comment on session diff hunks and steer the comments to the model',
+    factory: () => new DiffReviewPanel(
+      requireUiServices(deps).environment.workingDirectory,
+      deps.requestRender,
+      deps.sessionChangeTracker ? () => deps.sessionChangeTracker!.getChangedFiles() : undefined,
+    ),
   });
 
   // WO-110: 'inspector' registration moved to builtin/agent.ts (category

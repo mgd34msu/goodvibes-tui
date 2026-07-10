@@ -67,6 +67,7 @@ import { registerCostRuntimeCommands } from './commands/cost-runtime.ts';
 import { registerWebSearchRuntimeCommands } from './commands/websearch-runtime.ts';
 import { registerImageRuntimeCommands } from './commands/image-runtime.ts';
 import { registerPermissionsRuntimeCommands } from './commands/permissions-runtime.ts';
+import { registerReviewRuntimeCommands } from './commands/review-runtime.ts';
 
 /**
  * registerBuiltinCommands - Register all built-in slash commands into the registry.
@@ -135,6 +136,7 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
   registerWebSearchRuntimeCommands(registry);
   registerImageRuntimeCommands(registry);
   registerPermissionsRuntimeCommands(registry);
+  registerReviewRuntimeCommands(registry);
 
   // ── /policy ───────────────────────────────────────────────────────────────
   registry.register(policyCommand);
