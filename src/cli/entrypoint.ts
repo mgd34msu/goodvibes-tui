@@ -26,7 +26,10 @@ import { buildCliServicePosture, getGoodVibesPackageRoot, resolveGoodVibesDaemon
 import { runInstallSelfCheck } from '../runtime/install-self-check.ts';
 import { readPersistedWorkspaceTrust } from '../runtime/trust/workspace-trust.ts';
 import { WorkspaceRegistrationManager } from '../runtime/trust/workspace-registration.ts';
-import type { CliWorkspaceStatus } from './status.ts';
+import type { CliWorkspaceStatus, CliSandboxStatus } from './status.ts';
+import { detectSandboxAvailability, probeSandboxHost } from '@pellux/goodvibes-sdk/platform/tools/exec/sandbox';
+import { createFeatureFlagManager } from '@/runtime/index.ts';
+import type { FlagState } from '@/runtime/index.ts';
 import { ensureGoodvibesGitignore } from './ensure-goodvibes-gitignore.ts';
 
 type ShellEntrypointOwnership = {
@@ -174,6 +177,21 @@ export async function prepareShellCliRuntime(
       viaWorktreeLink: registrationEvaluation.viaWorktreeLink,
       registrationBroad: registrationEvaluation.broad,
     };
+    // Honest per-command exec sandbox posture: the host probe (a bwrap spawn on
+    // Linux, a no-op elsewhere) is what makes "available" trustworthy.
+    const sandboxAvailability = detectSandboxAvailability(probeSandboxHost());
+    const sandboxFeatureFlags = createFeatureFlagManager();
+    sandboxFeatureFlags.loadFromConfig({
+      flags: (configManager.getCategory('featureFlags') as Record<string, FlagState>) ?? {},
+    });
+    const sandboxStatus: CliSandboxStatus = {
+      configEnabled: Boolean(configManager.getCategory('sandbox').enabled),
+      featureEnabled: sandboxFeatureFlags.isEnabled('exec-sandbox'),
+      available: sandboxAvailability.available,
+      backend: sandboxAvailability.backend,
+      reason: sandboxAvailability.reason,
+      networkIsolationGuaranteed: sandboxAvailability.networkIsolationGuaranteed,
+    };
     const statusOptions = {
       configManager,
       workingDirectory: bootstrapWorkingDir,
@@ -197,6 +215,7 @@ export async function prepareShellCliRuntime(
       doctor: cli.command === 'doctor',
       outputFormat: cli.flags.outputFormat,
       workspace: workspaceStatus,
+      sandbox: sandboxStatus,
     };
     const snapshot = buildCliStatusSnapshot(statusOptions);
     console.log(cli.command === 'onboarding'
