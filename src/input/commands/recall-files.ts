@@ -21,13 +21,11 @@
  * mutating `/recall` subcommand, so this fully detaches from the local store
  * file when a daemon has been adopted.
  *
- * KNOWN LIMITATION: the memory spine's wire `MemoryUpdatePatch` (SDK
- * platform/runtime/memory-spine) carries scope/summary/detail/tags only —
- * it does not yet carry validFrom/validUntil, unlike the SDK's local
- * `MemoryProjectionRegistry.update` patch shape. A proposal whose `desired`
- * includes a temporal-window change is reported as failed with an honest
- * reason rather than silently dropping just the temporal fields or silently
- * applying a partial edit.
+ * The memory spine's wire `MemoryUpdatePatch` (SDK platform/runtime/memory-spine)
+ * now carries validFrom/validUntil alongside scope/summary/detail/tags — a
+ * number sets the bound, `null` clears it, and an omitted field leaves it
+ * unchanged — so a proposal whose `desired` changes ONLY the temporal window
+ * applies for real over the wire, the same as any other field change.
  */
 import { existsSync } from 'node:fs';
 import type { CommandContext } from '../command-registry.ts';
@@ -115,8 +113,6 @@ export async function handleRecallFilesReview(args: string[], context: CommandCo
   context.print('[recall] Nothing has been applied. Run /recall files apply <id> [<id> ...] | --all to confirm.');
 }
 
-const TEMPORAL_UNSUPPORTED_REASON = 'temporal window (validFrom/validUntil) changes are not yet applied over the memory spine in this SDK version';
-
 export async function handleRecallFilesApply(args: string[], context: CommandContext): Promise<void> {
   const memory = getMemorySpine(context);
   if (!memory) return;
@@ -161,15 +157,20 @@ export async function handleRecallFilesApply(args: string[], context: CommandCon
         continue;
       }
       const desired = proposal.desired ?? {};
-      if (desired.validFrom !== undefined || desired.validUntil !== undefined) {
-        failed.push({ proposal, reason: TEMPORAL_UNSUPPORTED_REASON });
-        continue;
-      }
-      const patch: { scope?: typeof desired.scope; summary?: string; detail?: string; tags?: string[] } = {};
+      const patch: {
+        scope?: typeof desired.scope;
+        summary?: string;
+        detail?: string;
+        tags?: string[];
+        validFrom?: number | null;
+        validUntil?: number | null;
+      } = {};
       if (desired.scope !== undefined) patch.scope = desired.scope;
       if (desired.summary !== undefined) patch.summary = desired.summary;
       if (desired.detail !== undefined) patch.detail = desired.detail;
       if (desired.tags !== undefined) patch.tags = [...desired.tags];
+      if (desired.validFrom !== undefined) patch.validFrom = desired.validFrom;
+      if (desired.validUntil !== undefined) patch.validUntil = desired.validUntil;
       const result = await memory.update(proposal.id, patch);
       if (result) applied.push(proposal);
       else failed.push({ proposal, reason: 'store update returned null (record not found?)' });
