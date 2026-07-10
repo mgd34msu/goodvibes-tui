@@ -70,6 +70,7 @@ export const CATEGORY_LABELS: Record<(typeof SETTINGS_CATEGORIES)[number], strin
   web: 'Web',
   batch: 'Batch',
   automation: 'Automation',
+  checkin: 'Check-in',
   watchers: 'Watchers',
   runtime: 'Runtime',
   telemetry: 'Telemetry',

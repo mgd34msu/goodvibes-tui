@@ -26,6 +26,7 @@ export type SettingsCategory =
   | 'cloudflare'
   | 'batch'
   | 'automation'
+  | 'checkin'
   | 'watchers'
   | 'runtime'
   | 'telemetry'
@@ -47,7 +48,7 @@ export const SETTINGS_CATEGORY_GROUPS: ReadonlyArray<{
   { label: 'AI Routing', categories: ['provider', 'subscriptions', 'helper', 'tools', 'tts'] },
   { label: 'Service & Network', categories: ['service', 'daemon', 'network', 'controlPlane', 'httpListener', 'web'] },
   { label: 'Surfaces & Cloud', categories: ['surfaces', 'mcp', 'cloudflare'] },
-  { label: 'Automation', categories: ['batch', 'automation', 'watchers', 'orchestration', 'planner', 'wrfc'] },
+  { label: 'Automation', categories: ['batch', 'automation', 'checkin', 'watchers', 'orchestration', 'planner', 'wrfc'] },
   { label: 'Runtime & Data', categories: ['storage', 'sandbox', 'runtime', 'cache', 'telemetry', 'diagnostics'] },
   { label: 'Advanced', categories: ['flags', 'release', 'danger'] },
 ];

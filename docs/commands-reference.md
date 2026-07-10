@@ -6,12 +6,13 @@
 
 # Command Reference
 
-GoodVibes ships **141** built-in slash commands across **66** categories. Every command below is generated directly from the command registry, so this list is always complete and current. Type a command in the composer prefixed with `/`, or press `Ctrl+K` (or run `/palette`) to search them all in the command palette.
+GoodVibes ships **142** built-in slash commands across **67** categories. Every command below is generated directly from the command registry, so this list is always complete and current. Type a command in the composer prefixed with `/`, or press `Ctrl+K` (or run `/palette`) to search them all in the command palette.
 
 ## Categories
 
 - [Branches](#branches) — 3
 - [Channels](#channels) — 1
+- [Check-in](#check-in) — 1
 - [Checkpoints](#checkpoints) — 3
 - [CI](#ci) — 1
 - [Cloudflare](#cloudflare) — 1
@@ -90,6 +91,12 @@ GoodVibes ships **141** built-in slash commands across **66** categories. Every 
 | Command | Aliases | Usage | Description |
 | --- | --- | --- | --- |
 | `/channel` | `/channels` | `[pair [surface]\|status\|routes\|delivery\|policy] [--json]` | Pair channels and inspect routes, delivery strategies, and ingress policies |
+
+## Check-in
+
+| Command | Aliases | Usage | Description |
+| --- | --- | --- | --- |
+| `/checkin` | — | `[run]` | Proactive check-in: view config + recent receipts, or trigger one now |
 
 ## Checkpoints
 
