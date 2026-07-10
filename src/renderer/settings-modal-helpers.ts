@@ -57,6 +57,7 @@ export const CATEGORY_LABELS: Record<(typeof SETTINGS_CATEGORIES)[number], strin
   subscriptions: 'Subscriptions',
   behavior: 'Behavior',
   storage: 'Storage',
+  atRest: 'Data at Rest',
   permissions: 'Permissions',
   orchestration: 'Orchestration',
   planner: 'Planner',
