@@ -63,6 +63,14 @@ export interface FleetSnapshot {
   readonly totalTokens: number | null;
   /** Count of nodes in an actively-working state (see isRunningProcessState). */
   readonly runningCount: number;
+  /**
+   * Ids of the nodes that are "blocked on me" — waiting on a user approval or
+   * user input right now (see isBlockedOnUserState) — in display (row) order.
+   * This is a DERIVED view over the same node states the rows already carry,
+   * never a second source of truth: the panel reads it to badge/jump, it is
+   * not a store. Empty when nothing is waiting on the operator.
+   */
+  readonly blockedNodeIds: readonly string[];
   readonly capturedAt: number;
 }
 
@@ -127,6 +135,17 @@ const STATE_TONES: Record<ProcessState, FleetStateTone> = {
 /** Terminal states — interrupt/kill are not offered; not counted as running. */
 const TERMINAL_STATES = new Set<ProcessState>(['done', 'failed', 'killed', 'interrupted']);
 
+/**
+ * States that mean "this node is waiting on ME right now" — a user approval or
+ * user input. Today the registry derives exactly one such state,
+ * `awaiting-approval` (an agent parked at a permission prompt). This is the
+ * single place that mapping lives, so if the SDK adds a distinct
+ * awaiting-user-input state later it joins here and every "blocked on me"
+ * surface (badge, sort, jump) picks it up for free. Kept as a set for that
+ * forward-compatibility, not because more than one state qualifies today.
+ */
+const BLOCKED_ON_USER_STATES = new Set<ProcessState>(['awaiting-approval']);
+
 /** States representing actively-working nodes (drives runningCount + follow target). */
 const RUNNING_STATES = new Set<ProcessState>([
   'thinking', 'executing-tool', 'awaiting-approval', 'streaming', 'stalled', 'retrying',
@@ -171,6 +190,11 @@ export function isRunningProcessState(state: ProcessState): boolean {
   return RUNNING_STATES.has(state);
 }
 
+/** True when a node is waiting on a user approval or user input right now — "blocked on me". */
+export function isBlockedOnUserState(state: ProcessState): boolean {
+  return BLOCKED_ON_USER_STATES.has(state);
+}
+
 // ---------------------------------------------------------------------------
 // Honest usage/cost helpers (W0.9 convention, ported from agent-inspector-shared.ts)
 // ---------------------------------------------------------------------------
@@ -201,10 +225,53 @@ export function hasFleetCost(costUsd: number | null | undefined, costState: Proc
 // Tree builder — pure, testable (ported tree-walk shape from process-modal.ts)
 // ---------------------------------------------------------------------------
 
-function compareNodes(a: ProcessNode, b: ProcessNode): number {
-  const delta = (a.startedAt ?? Infinity) - (b.startedAt ?? Infinity);
-  if (delta !== 0) return delta;
-  return a.id.localeCompare(b.id);
+/**
+ * Sibling comparator. `blockedSubtree` is the set of node ids whose own subtree
+ * contains a node blocked on the user (see collectBlockedSubtrees) — those
+ * siblings sort to the TOP of their level so a blocked node (and the family
+ * that leads to it) floats up the tree, at every depth, without breaking the
+ * parent/child structure. Ties fall back to startedAt then id, unchanged.
+ */
+function makeCompareNodes(blockedSubtree: ReadonlySet<string>): (a: ProcessNode, b: ProcessNode) => number {
+  return (a, b) => {
+    const aBlocked = blockedSubtree.has(a.id) ? 0 : 1;
+    const bBlocked = blockedSubtree.has(b.id) ? 0 : 1;
+    if (aBlocked !== bBlocked) return aBlocked - bBlocked;
+    const delta = (a.startedAt ?? Infinity) - (b.startedAt ?? Infinity);
+    if (delta !== 0) return delta;
+    return a.id.localeCompare(b.id);
+  };
+}
+
+/**
+ * The set of node ids whose subtree (the node itself or any descendant) holds a
+ * node currently blocked on the user. Post-order DFS with a memo + visiting
+ * guard so a defensive parentId cycle terminates. Drives the blocked-first
+ * sibling ordering; purely derived from the live node states.
+ */
+function collectBlockedSubtrees(
+  nodes: readonly ProcessNode[],
+  childrenByParent: Map<string, ProcessNode[]>,
+): Set<string> {
+  const blocked = new Set<string>();
+  const memo = new Map<string, boolean>();
+  const visiting = new Set<string>();
+  const dfs = (node: ProcessNode): boolean => {
+    const cached = memo.get(node.id);
+    if (cached !== undefined) return cached;
+    if (visiting.has(node.id)) return false; // cycle guard
+    visiting.add(node.id);
+    let has = isBlockedOnUserState(node.state);
+    for (const child of childrenByParent.get(node.id) ?? []) {
+      if (dfs(child)) has = true;
+    }
+    visiting.delete(node.id);
+    memo.set(node.id, has);
+    if (has) blocked.add(node.id);
+    return has;
+  };
+  for (const node of nodes) dfs(node);
+  return blocked;
 }
 
 function appendSubtree(
@@ -215,17 +282,18 @@ function appendSubtree(
   ancestorPrefix: string,
   isLast: boolean,
   visited: Set<string>,
+  compare: (a: ProcessNode, b: ProcessNode) => number,
 ): void {
   if (visited.has(node.id)) return; // cycle guard
   visited.add(node.id);
 
-  const children = (childrenByParent.get(node.id) ?? []).slice().sort(compareNodes);
+  const children = (childrenByParent.get(node.id) ?? []).slice().sort(compare);
   const treePrefix = depth === 0 ? '' : `${ancestorPrefix}${isLast ? '└─ ' : '├─ '}`;
   rows.push({ node, depth, treePrefix, isLastChild: isLast, hasChildren: children.length > 0 });
 
   const descendantPrefix = depth === 0 ? '' : `${ancestorPrefix}${isLast ? '   ' : '│  '}`;
   children.forEach((child, index) => {
-    appendSubtree(rows, child, childrenByParent, depth + 1, descendantPrefix, index === children.length - 1, visited);
+    appendSubtree(rows, child, childrenByParent, depth + 1, descendantPrefix, index === children.length - 1, visited, compare);
   });
 }
 
@@ -254,18 +322,24 @@ export function buildFleetRows(nodes: readonly ProcessNode[]): FleetTreeRow[] {
     }
   }
 
+  // Blocked-on-user nodes (and the families that lead to them) float to the top
+  // at every level — see makeCompareNodes / collectBlockedSubtrees. Derived from
+  // the live node states on this same pass; never a stored flag.
+  const blockedSubtree = collectBlockedSubtrees(nodes, childrenByParent);
+  const compare = makeCompareNodes(blockedSubtree);
+
   const rows: FleetTreeRow[] = [];
   const visited = new Set<string>();
 
-  for (const root of roots.slice().sort(compareNodes)) {
-    appendSubtree(rows, root, childrenByParent, 0, '', true, visited);
+  for (const root of roots.slice().sort(compare)) {
+    appendSubtree(rows, root, childrenByParent, 0, '', true, visited, compare);
   }
 
   // Defensive: nodes never reached because their entire ancestor chain forms
   // a cycle with no true root. Walked as pseudo-roots so they still render.
-  const leftovers = nodes.filter((n) => !visited.has(n.id)).sort(compareNodes);
+  const leftovers = nodes.filter((n) => !visited.has(n.id)).sort(compare);
   for (const node of leftovers) {
-    appendSubtree(rows, node, childrenByParent, 0, '', true, visited);
+    appendSubtree(rows, node, childrenByParent, 0, '', true, visited, compare);
   }
 
   return rows;
@@ -381,7 +455,13 @@ export function buildFleetSnapshot(nodes: readonly ProcessNode[], capturedAt: nu
     if (isFleetRunningLeaf(node)) runningCount++;
   }
 
-  return { rows, totalCost, totalTokens, runningCount, capturedAt };
+  // Blocked ids in display (row) order so the panel's jump key steps through
+  // them top-to-bottom exactly as they appear on screen.
+  const blockedNodeIds = rows
+    .filter((row) => isBlockedOnUserState(row.node.state))
+    .map((row) => row.node.id);
+
+  return { rows, totalCost, totalTokens, runningCount, blockedNodeIds, capturedAt };
 }
 
 /**

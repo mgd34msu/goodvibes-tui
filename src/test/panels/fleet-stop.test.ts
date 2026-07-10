@@ -9,6 +9,7 @@ import {
   FleetStopTracker,
   STOP_SETTLE_MS,
   STOPPING_GLYPH,
+  BLOCKED_GLYPH,
   fleetStateDisplay,
   toggleFleetPause,
   buildFleetTreeHints,
@@ -83,6 +84,19 @@ describe('fleetStateDisplay (d1)', () => {
     const d = fleetStateDisplay('killed', false);
     expect(d.label).toBe('killed');
     expect(d.glyph).not.toBe(STOPPING_GLYPH);
+  });
+
+  test('blocked (not stopping) shows the distinct ⚑ blocked-on-you badge', () => {
+    const d = fleetStateDisplay('awaiting-approval', false, true);
+    expect(d.glyph).toBe(BLOCKED_GLYPH);
+    expect(d.label).toBe('blocked on you');
+    expect(d.tone).toBe('warn');
+  });
+
+  test('an in-flight stop wins over blocked', () => {
+    const d = fleetStateDisplay('awaiting-approval', true, true);
+    expect(d.glyph).toBe(STOPPING_GLYPH);
+    expect(d.label).toBe('stopping…');
   });
 });
 
@@ -159,6 +173,14 @@ describe('buildFleetTreeHints (d2)', () => {
     const deadHints = buildFleetTreeHints(dead, false, false);
     expect(deadHints).not.toContainEqual({ keys: 'i', label: 'interrupt' });
     expect(deadHints).not.toContainEqual({ keys: 'K', label: 'kill' });
+  });
+
+  test('a positive blocked count surfaces the b jump chip; zero hides it', () => {
+    const node = makeNode({ id: 'a', kind: 'agent', state: 'executing-tool' });
+    const withBlocked = buildFleetTreeHints(node, false, false, 'active', 3);
+    expect(withBlocked).toContainEqual({ keys: 'b', label: 'blocked (3)' });
+    const none = buildFleetTreeHints(node, false, false, 'active', 0);
+    expect(none.some((h) => h.keys === 'b')).toBe(false);
   });
 
   test('follow + tabs flags surface their chips', () => {
