@@ -15,7 +15,7 @@
  * as trusted on first load, so the gate only ever prompts for genuinely new
  * places.
  */
-import { existsSync, readdirSync, statSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { JsonFileStore } from '@pellux/goodvibes-sdk/platform/state';
 import type { PermissionCategory } from '@pellux/goodvibes-sdk/platform/permissions';
@@ -84,6 +84,33 @@ export function detectPriorWorkspaceState(workingDirectory: string): boolean {
 export interface WorkspaceTrustPaths {
   readonly projectGoodVibesRoot: string;
   resolveProjectPath(...segments: string[]): string;
+}
+
+/** Read-only view of the persisted trust decision, for status/doctor reporting. */
+export interface PersistedWorkspaceTrustView {
+  /** 'trusted' | 'restricted' when a decision exists; 'undecided' when none is persisted yet. */
+  readonly level: WorkspaceTrustLevel | 'undecided';
+  readonly grandfathered: boolean;
+}
+
+/**
+ * readPersistedWorkspaceTrust — read <cwd>/.goodvibes/tui/trust.json WITHOUT the
+ * side effects of WorkspaceTrustManager.load() (which grandfathers and persists).
+ * Reporting surfaces (`status`/`doctor`) must never mutate trust state, so they
+ * use this pure reader instead of constructing a manager.
+ */
+export function readPersistedWorkspaceTrust(paths: WorkspaceTrustPaths): PersistedWorkspaceTrustView {
+  const file = paths.resolveProjectPath('tui', TRUST_FILE);
+  try {
+    if (!existsSync(file)) return { level: 'undecided', grandfathered: false };
+    const parsed = JSON.parse(readFileSync(file, 'utf-8')) as Partial<PersistedWorkspaceTrust>;
+    if (parsed.level === 'trusted' || parsed.level === 'restricted') {
+      return { level: parsed.level, grandfathered: parsed.grandfathered ?? false };
+    }
+  } catch {
+    // Unreadable/corrupt — report undecided rather than crash the report.
+  }
+  return { level: 'undecided', grandfathered: false };
 }
 
 export interface WorkspaceTrustManagerOptions {

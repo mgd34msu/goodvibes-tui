@@ -17,6 +17,7 @@ import { GitStatusProvider } from '../renderer/git-status.ts';
 import type { GitHeaderInfo } from '../renderer/git-status.ts';
 import type { PermissionRequestHandler } from '@pellux/goodvibes-sdk/platform/permissions';
 import { registerBuiltinPanels } from '../panels/builtin-panels.ts';
+import { WorkspaceRegistrationManager } from './trust/workspace-registration.ts';
 import { createSystemMessageRouter, type SystemMessageRouter } from '../core/system-message-router.ts';
 import { getConfigSnapshot } from '../config/index.ts';
 import { createBootstrapCommandContext } from './bootstrap-command-context.ts';
@@ -261,6 +262,10 @@ export function createBootstrapShell(options: BootstrapShellOptions): BootstrapS
     workspaceCheckpointManager: services.workspaceCheckpointManager,
     gatewayMethods: services.gatewayMethods,
     workspaceTrustManager: services.workspaceTrustManager,
+    // Registration half is stateless (reads the shared registry on demand), so
+    // it is constructed here for the command context rather than threaded through
+    // RuntimeServices — no early-load requirement like the trust gate has.
+    workspaceRegistrationManager: new WorkspaceRegistrationManager({ shellPaths: services.shellPaths }),
     memoryRegistry: services.memoryRegistry,
     integrationHelpers: services.integrationHelpers,
     automationManager: services.automationManager,

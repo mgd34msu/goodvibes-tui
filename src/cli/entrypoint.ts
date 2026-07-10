@@ -24,6 +24,9 @@ import {
 } from './index.ts';
 import { buildCliServicePosture, getGoodVibesPackageRoot, resolveGoodVibesDaemonExecutable } from './service-posture.ts';
 import { runInstallSelfCheck } from '../runtime/install-self-check.ts';
+import { readPersistedWorkspaceTrust } from '../runtime/trust/workspace-trust.ts';
+import { WorkspaceRegistrationManager } from '../runtime/trust/workspace-registration.ts';
+import type { CliWorkspaceStatus } from './status.ts';
 import { ensureGoodvibesGitignore } from './ensure-goodvibes-gitignore.ts';
 
 type ShellEntrypointOwnership = {
@@ -157,6 +160,20 @@ export async function prepareShellCliRuntime(
       workingDirectory: bootstrapWorkingDir,
       homeDirectory: bootstrapHomeDirectory,
     });
+    // Read-only workspace posture for the report: the trust reader never
+    // persists (no grandfathering side effect), and registration resolve() is
+    // read-only, so `status`/`doctor` observe state without mutating it.
+    const trustView = readPersistedWorkspaceTrust(shellPaths);
+    const registrationEvaluation = await new WorkspaceRegistrationManager({ shellPaths }).evaluate();
+    const workspaceStatus: CliWorkspaceStatus = {
+      trustLevel: trustView.level,
+      trustGrandfathered: trustView.grandfathered,
+      registrationStatus: registrationEvaluation.status,
+      registrationRoot: registrationEvaluation.root,
+      registeredBy: registrationEvaluation.coveredBy,
+      viaWorktreeLink: registrationEvaluation.viaWorktreeLink,
+      registrationBroad: registrationEvaluation.broad,
+    };
     const statusOptions = {
       configManager,
       workingDirectory: bootstrapWorkingDir,
@@ -179,6 +196,7 @@ export async function prepareShellCliRuntime(
       }),
       doctor: cli.command === 'doctor',
       outputFormat: cli.flags.outputFormat,
+      workspace: workspaceStatus,
     };
     const snapshot = buildCliStatusSnapshot(statusOptions);
     console.log(cli.command === 'onboarding'
