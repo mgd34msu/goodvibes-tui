@@ -21,6 +21,8 @@ import { applyRuntimeEndpointFlagOverrides } from './config-overrides.ts';
 import type { RuntimeEndpointId } from './endpoints.ts';
 import { handleServiceCommand } from './service-command.ts';
 import { handleBundleCommand } from './bundle-command.ts';
+import { handleHooksCommand } from './hooks-command.ts';
+import { handlePluginCommand } from './plugin-command.ts';
 import { buildListenerTestResult, formatListenerTestResult, handleSurfacesCommand } from './surface-command.ts';
 import { buildControlPlaneStatusResult, formatControlPlaneStatus, handleSecrets, handleSessions, handleTasks, renderPairing, renderRemote, renderSubscriptions, renderWeb } from './management-commands.ts';
 import {
@@ -489,6 +491,16 @@ export async function handleGoodVibesCliCommand(runtime: CliCommandRuntime): Pro
         return { handled: true, exitCode: 0 };
       case 'bundle': {
         const result = await handleBundleCommand(runtime);
+        console.log(result.output);
+        return { handled: true, exitCode: result.exitCode };
+      }
+      case 'hooks': {
+        const result = await handleHooksCommand(runtime);
+        console.log(result.output);
+        return { handled: true, exitCode: result.exitCode };
+      }
+      case 'plugin': {
+        const result = await handlePluginCommand(runtime);
         console.log(result.output);
         return { handled: true, exitCode: result.exitCode };
       }

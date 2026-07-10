@@ -281,6 +281,18 @@ export const COMPLETION_COMMANDS: readonly CompletionCommand[] = [
     subcommands: [],
   },
   {
+    name: 'hooks',
+    aliases: ['hooks', 'hook'],
+    description: 'Validate hooks.json against the hook loader schema',
+    subcommands: ['validate'],
+  },
+  {
+    name: 'plugin',
+    aliases: ['plugin', 'plugins'],
+    description: 'Scaffold or validate a plugin directory',
+    subcommands: ['init', 'validate'],
+  },
+  {
     name: 'completion',
     aliases: ['completion', 'completions'],
     description: 'Generate shell completion script',
