@@ -27,6 +27,7 @@ import { AgentManager, OverflowHandler, ProcessManager, createWorkflowServices, 
 import { FileStateCache, FileUndoManager, MemoryEmbeddingProviderRegistry, MemoryRegistry, MemoryStore, ModeManager, ProjectIndex, resolveCanonicalMemoryDbPath, type CodeIndexStore, type CodeIndexReindexScheduler } from '@pellux/goodvibes-sdk/platform/state';
 import { MemorySpineClient, createLocalMemoryAccess } from '@pellux/goodvibes-sdk/platform/runtime/memory-spine';
 import { WorkspaceCheckpointManager } from '@pellux/goodvibes-sdk/platform/workspace';
+import { withCheckpointGuardSettings } from '../config/tui-extension-settings.ts';
 import type { RuntimeEventBus } from '@/runtime/index.ts';
 import { createDomainDispatch } from './store/index.ts';
 import type { DomainDispatch, RuntimeStore } from './store/index.ts';
@@ -629,10 +630,9 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
   });
   const modeManager = new ModeManager();
   const fileUndoManager = new FileUndoManager();
-  const workspaceCheckpointManager = new WorkspaceCheckpointManager({
-    workspaceRoot: workingDirectory,
-    runtimeBus: options.runtimeBus,
-  });
+  // Checkpoint root-guard from the user's `checkpoints.*` config (docs/configuration.md;
+  // inert until the platform SDK's checkpoint manager exposes the keys — see the reader's note).
+  const workspaceCheckpointManager = new WorkspaceCheckpointManager(withCheckpointGuardSettings({ workspaceRoot: workingDirectory, runtimeBus: options.runtimeBus }, configManager));
   // Fire-and-forget: subscriptions go live immediately if init() succeeds.
   // If it rejects, WorkspaceCheckpointManager caches that rejection on
   // `initPromise` and never clears it, so every later call (create/list/

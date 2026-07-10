@@ -7,6 +7,9 @@ This directory contains the current product documentation for `goodvibes-tui`.
 - [Getting started](getting-started.md)
   Installation, first-run setup, provider configuration, common paths, and basic run/build flows.
 
+- [Configuration reference](configuration.md)
+  TUI-owned settings namespaces you add by hand to settings.json: checkpoint root guard and the scriptable statusline.
+
 - [Deployment and services](deployment-and-services.md)
   TUI-only mode, compiled binary behavior, in-process daemon/listener hosting, source-run daemon mode, inbound TLS, outbound trust configuration, and control-plane entrypoints.
 
