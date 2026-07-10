@@ -560,4 +560,4 @@ GoodVibes ships **143** built-in slash commands across **68** categories. Every 
 
 | Command | Aliases | Usage | Description |
 | --- | --- | --- | --- |
-| `/worktree` | `/worktrees` | `[review\|panel\|inspect <path>\|attach <path> <session\|task> <id>\|session <id>\|task <id>\|recover <session\|task> <id>\|pause <path>\|resume <path>\|keep <path>\|discard <path>\|cleanup <path>]` | Review and manage orchestrator-owned git worktrees |
+| `/worktree` | `/worktrees` | `[review\|panel\|inspect <path>\|setup <path>\|attach <path> <session\|task> <id>\|session <id>\|task <id>\|recover <session\|task> <id>\|pause <path>\|resume <path>\|keep <path>\|discard <path>\|cleanup <path>]` | Review and manage orchestrator-owned git worktrees |

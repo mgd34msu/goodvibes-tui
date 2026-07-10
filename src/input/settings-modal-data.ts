@@ -15,6 +15,14 @@ import { buildSubscriptionEntries } from './settings-modal-subscriptions.ts';
 import type { SubscriptionManager } from '@pellux/goodvibes-sdk/platform/config';
 import type { ServiceInspectionQuery } from '../runtime/ui-service-queries.ts';
 import { CODE_INDEX_ENABLED_CONFIG_KEY } from '../runtime/code-index-services.ts';
+import {
+  WORKTREE_SETUP_CARRY_OVER_GLOBS_CONFIG_KEY,
+  WORKTREE_SETUP_COMMANDS_CONFIG_KEY,
+  buildWorktreeSetupCarryOverGlobsSyntheticEntry,
+  buildWorktreeSetupCommandsSyntheticEntry,
+  isWorktreeSetupListConfigKey,
+  readWorktreeSetupList,
+} from './worktree-setup-config.ts';
 import { BUDGET_ALERT_USD_CONFIG_KEY, BUDGET_ALERT_USD_DEFAULT, readBudgetAlertUsd } from '../export/cost-utils.ts';
 import {
   THEME_MODE_CONFIG_KEY,
@@ -183,6 +191,21 @@ export function buildSettingGroups(
   const storageEntries = groups.get('storage');
   if (storageEntries && !storageEntries.some((e) => e.setting.key === (CODE_INDEX_ENABLED_CONFIG_KEY as ConfigKey))) {
     storageEntries.push(buildCodeIndexEnabledSyntheticEntry(configManager));
+  }
+
+  // Inject the worktree.setup.commands / worktree.setup.carryOverGlobs
+  // synthetic entries into the orchestration category (worktree isolation is
+  // an orchestration-engine concern — see WorkstreamIsolation 'worktree').
+  // Neither key is in the SDK ConfigKey union (see worktree-setup-config.ts),
+  // same rationale as the other synthetic settings above.
+  const orchestrationEntries = groups.get('orchestration');
+  if (orchestrationEntries) {
+    if (!orchestrationEntries.some((e) => e.setting.key === WORKTREE_SETUP_COMMANDS_CONFIG_KEY)) {
+      orchestrationEntries.push(buildWorktreeSetupCommandsSyntheticEntry(configManager));
+    }
+    if (!orchestrationEntries.some((e) => e.setting.key === WORKTREE_SETUP_CARRY_OVER_GLOBS_CONFIG_KEY)) {
+      orchestrationEntries.push(buildWorktreeSetupCarryOverGlobsSyntheticEntry(configManager));
+    }
   }
 
   return groups;
@@ -541,6 +564,16 @@ export function refreshEntryValues(
 ): void {
   for (const entries of groups.values()) {
     for (const entry of entries) {
+      // The worktree.setup.* keys read through a defensive helper: their
+      // config section ('worktree') isn't in DEFAULT_CONFIG as of the SDK
+      // 1.6.1 repack, so a plain configManager.get throws — which would
+      // otherwise crash this refresh for EVERY setting change, not just
+      // edits to these two keys (see worktree-setup-config.ts).
+      if (isWorktreeSetupListConfigKey(entry.setting.key)) {
+        entry.currentValue = readWorktreeSetupList(configManager, entry.setting.key);
+        entry.isDefault = (entry.currentValue as string[]).length === 0;
+        continue;
+      }
       const raw = configManager.get(entry.setting.key as ConfigKey);
       // Synthetic entries (e.g. tts.speed) that have no SDK schema key return
       // undefined from configManager. Normalize using the same logic used at

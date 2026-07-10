@@ -28,6 +28,9 @@ export function formatValue(entry: SettingEntry): string {
   if (typeof val === 'boolean') return val ? 'true' : 'false';
   if (typeof val === 'string' && isSecretConfigKey(entry.setting.key)) return maskSecretValue(val);
   if (typeof val === 'string' && val === '') return '(empty)';
+  // Array-backed settings (e.g. worktree.setup.commands) display as a
+  // comma-separated list, matching how they're edited (see worktree-setup-config.ts).
+  if (Array.isArray(val)) return val.length > 0 ? val.join(', ') : '(empty)';
   return String(val);
 }
 

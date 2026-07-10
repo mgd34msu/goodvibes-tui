@@ -1,13 +1,39 @@
 import { getPersistedWorktreeMeta, reviewWorktreeAttachments, summarizeWorktreeOwnership } from '@/runtime/index.ts';
+import type { ManagedWorktreeMeta } from '@/runtime/index.ts';
 import type { CommandRegistry } from '../command-registry.ts';
 import { openCommandPanel, requireShellPaths } from './runtime-services.ts';
+import { describeOperatorRpcError, getOperatorRpc } from './operator-rpc.ts';
+
+/** Compact per-row setup-state tag for /worktree review — absent when setup has never run; failure stands out. */
+export function formatSetupTag(setup: ManagedWorktreeMeta['setup']): string {
+  if (!setup) return '';
+  if (setup.state === 'failed') return ' setup:FAILED';
+  if (setup.state === 'succeeded') return ' setup:ok';
+  return ' setup:skipped';
+}
+
+/** Full setup-state block for /worktree inspect — the failing step + captured output when failed. */
+export function formatSetupDetail(setup: ManagedWorktreeMeta['setup']): string[] {
+  if (!setup) return ['  setup: never run'];
+  if (setup.state !== 'failed') return [`  setup: ${setup.state}`];
+  const failingStep = setup.steps.find((step) => !step.ok);
+  return [
+    `  setup: FAILED — ${setup.error ?? 'unknown error'}`,
+    ...(failingStep
+      ? [
+          `    failing step (${failingStep.kind}): ${failingStep.label}${failingStep.exitCode !== undefined ? ` (exit ${failingStep.exitCode})` : ''}`,
+          ...(failingStep.output ? [`    output: ${failingStep.output.slice(0, 2000)}`] : []),
+        ]
+      : []),
+  ];
+}
 
 export function registerWorktreeRuntimeCommands(registry: CommandRegistry): void {
   registry.register({
     name: 'worktree',
     aliases: ['worktrees'],
     description: 'Review and manage orchestrator-owned git worktrees',
-    usage: '[review|panel|inspect <path>|attach <path> <session|task> <id>|session <id>|task <id>|recover <session|task> <id>|pause <path>|resume <path>|keep <path>|discard <path>|cleanup <path>]',
+    usage: '[review|panel|inspect <path>|setup <path>|attach <path> <session|task> <id>|session <id>|task <id>|recover <session|task> <id>|pause <path>|resume <path>|keep <path>|discard <path>|cleanup <path>]',
     async handler(args, ctx) {
       const sub = (args[0] ?? 'review').toLowerCase();
       const runtime = ctx.workspace.worktreeRegistry;
@@ -32,6 +58,7 @@ export function registerWorktreeRuntimeCommands(registry: CommandRegistry): void
           return;
         }
         const nextSteps = [
+          record.setup?.state === 'failed' ? `/worktree setup ${record.path}` : null,
           record.state === 'paused' ? `/worktree resume ${record.path}` : null,
           record.state === 'discard' || record.state === 'pending-cleanup' ? `/worktree cleanup ${record.path}` : null,
           record.state === 'kept' ? `/worktree keep ${record.path}` : null,
@@ -47,8 +74,35 @@ export function registerWorktreeRuntimeCommands(registry: CommandRegistry): void
           `  session: ${record.sessionId ?? 'n/a'}`,
           `  task: ${record.taskId ?? 'n/a'}`,
           `  updated: ${new Date(record.updatedAt).toLocaleString()}`,
+          ...formatSetupDetail(record.setup),
           ...(nextSteps.length > 0 ? ['  next:', ...nextSteps.map((step) => `    ${step}`)] : ['  next: /worktree review']),
         ].join('\n'));
+        return;
+      }
+      if (sub === 'setup') {
+        const path = args[1];
+        if (!path) {
+          ctx.print('Usage: /worktree setup <path>');
+          return;
+        }
+        const rpc = getOperatorRpc(ctx);
+        if (!rpc.available) {
+          ctx.print(`[worktree setup] ${rpc.reason}`);
+          return;
+        }
+        ctx.print(`[worktree setup] Re-running cold-start setup for ${path}...`);
+        try {
+          const { setup } = await rpc.sdk.operator.invoke('worktrees.setup.run', { path });
+          if (setup.state === 'skipped') {
+            ctx.print('[worktree setup] skipped — no setup commands or carry-over globs are configured.');
+          } else if (setup.state === 'succeeded') {
+            ctx.print(`[worktree setup] succeeded (${setup.steps.length} step(s)).`);
+          } else {
+            ctx.print(formatSetupDetail(setup).join('\n'));
+          }
+        } catch (error) {
+          ctx.print(`[worktree setup] round-trip request failed: ${describeOperatorRpcError(error)}`);
+        }
         return;
       }
       if (sub === 'attach') {
@@ -128,7 +182,7 @@ export function registerWorktreeRuntimeCommands(registry: CommandRegistry): void
             `  session attached: ${summary.sessionAttached}  task attached: ${summary.taskAttached}`,
             `  agent owned: ${summary.agentOwned}  orchestrator owned: ${summary.orchestratorOwned}  manual: ${summary.manualOwned}`,
             ...rows.map((row) => (
-              `  ${row.kind.padEnd(12)} ${row.state.padEnd(15)} ${row.branch.padEnd(22)} session=${(row.sessionId ?? '-').padEnd(12)} task=${(row.taskId ?? '-').padEnd(12)} ${row.path}`
+              `  ${row.kind.padEnd(12)} ${row.state.padEnd(15)} ${row.branch.padEnd(22)} session=${(row.sessionId ?? '-').padEnd(12)} task=${(row.taskId ?? '-').padEnd(12)} ${row.path}${formatSetupTag(row.setup)}`
             )),
           ].join('\n')
         : 'Worktree Review\n  No worktrees discovered.');
