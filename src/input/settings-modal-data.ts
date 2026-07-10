@@ -26,6 +26,11 @@ import {
 import { BUDGET_ALERT_USD_CONFIG_KEY, BUDGET_ALERT_USD_DEFAULT, readBudgetAlertUsd } from '../export/cost-utils.ts';
 import { MEMORY_PROJECTION_DIR_CONFIG_KEY, buildMemoryProjectionDirSyntheticEntry } from './commands/recall-files-config.ts';
 import {
+  injectSandboxExecSyntheticEntries,
+  isSandboxExecListConfigKey,
+  readSandboxExecList,
+} from './sandbox-exec-config.ts';
+import {
   THEME_MODE_CONFIG_KEY,
   THEME_MODE_VALUES,
   THEME_MODE_DEFAULT,
@@ -215,6 +220,11 @@ export function buildSettingGroups(
       orchestrationEntries.push(buildWorktreeSetupCarryOverGlobsSyntheticEntry(configManager));
     }
   }
+
+  // Inject the sandbox.egressAllowlist / sandbox.workspaceWritable synthetic
+  // entries — see sandbox-exec-config.ts for why they are not in CONFIG_SCHEMA,
+  // same rationale as the other synthetic settings above.
+  injectSandboxExecSyntheticEntries(groups, configManager);
 
   // learning.consolidation.* is now a real SDK config domain (schema-domain-learning.ts
   // registers `learning` in CONFIG_SCHEMA/DEFAULT_CONFIG), so the nine keys already
@@ -589,6 +599,17 @@ export function refreshEntryValues(
         entry.isDefault = (entry.currentValue as string[]).length === 0;
         continue;
       }
+      // sandbox.egressAllowlist / sandbox.workspaceWritable: 'sandbox' IS a real
+      // DEFAULT_CONFIG section (has been since before this repack, backing the
+      // VM/REPL isolation settings), so a plain get() would not throw — but an
+      // unset leaf still reads back as `undefined`, not `[]`, so this still needs
+      // the same array-normalizing read as the worktree keys above (see
+      // sandbox-exec-config.ts).
+      if (isSandboxExecListConfigKey(entry.setting.key)) {
+        entry.currentValue = readSandboxExecList(configManager, entry.setting.key);
+        entry.isDefault = (entry.currentValue as string[]).length === 0;
+        continue;
+      }
       // 'learning' is now a real DEFAULT_CONFIG section (schema-domain-learning.ts),
       // so learning.consolidation.* keys read through the plain path below like any
       // other schema-driven setting — no special case needed anymore.
@@ -631,6 +652,11 @@ export function updateEntryForKey(
         const refreshed = buildMemoryProjectionDirSyntheticEntry(configManager);
         entry.currentValue = refreshed.currentValue;
         entry.isDefault = refreshed.isDefault;
+        continue;
+      }
+      if (isSandboxExecListConfigKey(key)) {
+        entry.currentValue = readSandboxExecList(configManager, key);
+        entry.isDefault = (entry.currentValue as string[]).length === 0;
         continue;
       }
       const raw = configManager.get(key);

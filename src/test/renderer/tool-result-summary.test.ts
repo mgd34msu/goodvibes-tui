@@ -84,6 +84,44 @@ describe('summarizeToolResult (UX-B item 3)', () => {
     expect(summarizeToolResult('exec', content)).toBe('2 commands · all ok · withheld: AWS_SECRET_ACCESS_KEY, GITHUB_TOKEN');
   });
 
+  test('exec — a run outside the sandbox (no sandboxed field) stays quiet', () => {
+    const content = JSON.stringify({ exit_code: 0, duration_ms: 10, stdout: '' });
+    expect(summarizeToolResult('exec', content)).toBe('exit 0 · 10ms');
+  });
+
+  test('exec — a boundary-safe sandboxed run reports net state', () => {
+    const content = JSON.stringify({ exit_code: 0, duration_ms: 10, stdout: '', sandboxed: true, sandbox_network: 'disabled' });
+    expect(summarizeToolResult('exec', content)).toBe('exit 0 · 10ms · sandboxed (net disabled)');
+  });
+
+  test('exec — a sandboxed run with a granted escalation reports the count', () => {
+    const content = JSON.stringify({
+      exit_code: 0,
+      duration_ms: 10,
+      stdout: '',
+      sandboxed: true,
+      sandbox_network: 'enabled',
+      sandbox_escalations: ['network (command on egress allowlist)'],
+    });
+    expect(summarizeToolResult('exec', content)).toBe('exit 0 · 10ms · sandboxed (net enabled, +1 escalation)');
+  });
+
+  test('exec — requested-but-unavailable sandbox is reported honestly, not silently', () => {
+    const content = JSON.stringify({ exit_code: 0, duration_ms: 10, stdout: '', sandboxed: false, sandbox_boundary: 'bubblewrap not found on PATH' });
+    expect(summarizeToolResult('exec', content)).toBe('exit 0 · 10ms · sandbox unavailable (bubblewrap not found on PATH)');
+  });
+
+  test('exec — multiple commands count how many ran sandboxed', () => {
+    const content = JSON.stringify({
+      total: 2,
+      commands: [
+        { success: true, sandboxed: true },
+        { success: true, sandboxed: false },
+      ],
+    });
+    expect(summarizeToolResult('exec', content)).toBe('2 commands · all ok · 1 sandboxed');
+  });
+
   test('edit — reports edits applied and target', () => {
     expect(summarizeToolResult('edit', JSON.stringify({ applied: 2, failed: 0, path: 'src/x.ts' }))).toBe('applied 2 edits to x.ts');
   });
