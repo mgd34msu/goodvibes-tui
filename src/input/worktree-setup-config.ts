@@ -37,16 +37,13 @@ export function isWorktreeSetupListConfigKey(key: ConfigKey): boolean {
  * Read a config value as a string array — mirrors the SDK's own tolerant
  * readStringArray (non-array/malformed degrades to empty).
  *
- * Defensive try/catch: as of the 1.6.1 repack, `worktree` has no entry in
- * DEFAULT_CONFIG (unlike every other synthetic-setting section this file's
- * siblings use — behavior, storage, display, tts all pre-exist), so
- * ConfigManager's resolvePath throws "Invalid config path: section
- * 'worktree' does not exist" for both get and set/setDynamic on a config
- * store that has never had the key written. The write path already degrades
- * gracefully (applySettingValue in settings-modal-mutations.ts catches
- * setDynamic failures into an honest "Save failed" message); this read path
- * has no such wrapper upstream and runs on every settings-modal build, so it
- * must not let that SDK-side gap crash /config or /settings.
+ * Defensive try/catch (now belt-and-suspenders): the SDK registers the
+ * `worktree` section in DEFAULT_CONFIG (setup.commands / setup.carryOverGlobs,
+ * both empty lists) as of this repack, so ConfigManager.get no longer throws
+ * for these keys on a fresh store. The guard is retained so an older SDK — or
+ * a config store whose section was pruned — degrades to an empty list here
+ * (this read runs on every settings-modal build) rather than crashing /config
+ * or /settings.
  */
 export function readWorktreeSetupList(configManager: Pick<ConfigManager, 'get'>, key: ConfigKey): string[] {
   let raw: unknown;

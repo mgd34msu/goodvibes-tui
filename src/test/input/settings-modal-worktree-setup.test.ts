@@ -54,13 +54,11 @@ describe('worktree.setup.* synthetic settings', () => {
   });
 
   test('reflects a value the config store already holds for the key', () => {
-    // A stub stands in here rather than a real ConfigManager: as of the SDK
-    // 1.6.1 repack, 'worktree' has no entry in DEFAULT_CONFIG (unlike every
-    // other synthetic-setting section — behavior, storage, display, tts all
-    // pre-exist), so ConfigManager.get/set/setDynamic throw "Invalid config
-    // path: section 'worktree' does not exist" for a store that has never
-    // had the key written. That SDK-side gap is covered by the "never
-    // crashes" tests below; this test isolates the read-mapping logic itself.
+    // A stub stands in here rather than a real ConfigManager purely to isolate
+    // the read-mapping logic from any on-disk store state. (The SDK now
+    // registers the `worktree` section in DEFAULT_CONFIG, so a real
+    // ConfigManager reads/writes these keys without throwing — covered by the
+    // two "real ConfigManager" tests below.)
     const stub: Pick<ConfigManagerType, 'get'> = { get: () => ['bun install', 'bun run codegen'] };
     const entry = buildWorktreeSetupCommandsSyntheticEntry(stub);
     expect(entry.currentValue).toEqual(['bun install', 'bun run codegen']);
@@ -72,20 +70,22 @@ describe('worktree.setup.* synthetic settings', () => {
     expect(readWorktreeSetupList(stub, WORKTREE_SETUP_CARRY_OVER_GLOBS_CONFIG_KEY)).toEqual([]);
   });
 
-  test('a real ConfigManager missing the worktree config section never crashes the read path', () => {
-    // Documents the actual SDK 1.6.1 gap: 'worktree' isn't in DEFAULT_CONFIG,
-    // so configManager.get throws for this key on a fresh store. The
-    // synthetic-entry builder must degrade to an empty list, not propagate.
-    expect(() => cm.get(WORKTREE_SETUP_COMMANDS_CONFIG_KEY)).toThrow();
+  test('a real ConfigManager reads the worktree section the SDK now registers, without crashing', () => {
+    // The SDK's DEFAULT_CONFIG registers the `worktree` section (setup.commands
+    // and setup.carryOverGlobs, both empty lists) as of this repack, so
+    // configManager.get no longer throws for these keys on a fresh store — it
+    // returns the registered empty default. The synthetic-entry builder (and
+    // its defensive try/catch, now belt-and-suspenders) reflects that default.
+    expect(cm.get(WORKTREE_SETUP_COMMANDS_CONFIG_KEY)).toEqual([]);
     const entry = buildWorktreeSetupCommandsSyntheticEntry(cm);
     expect(entry.currentValue).toEqual([]);
     expect(entry.isDefault).toBe(true);
   });
 
-  test('a real ConfigManager missing the worktree config section never crashes the write path (applySettingValue)', () => {
-    // Documents the write-side counterpart: applySettingValue must surface an
-    // honest "Save failed" effect message instead of throwing, since
-    // configManager.setDynamic also throws for this section on a fresh store.
+  test('a real ConfigManager writes the worktree section the SDK now registers (applySettingValue)', () => {
+    // Write-side counterpart: setDynamic succeeds now that the section exists in
+    // DEFAULT_CONFIG, so applySettingValue reports a real change and never the
+    // "Save failed" message the pre-registration gap used to force.
     const groups = new Map<string, ReturnType<typeof buildWorktreeSetupCommandsSyntheticEntry>[]>();
     const result = applySettingValue({
       key: WORKTREE_SETUP_COMMANDS_CONFIG_KEY,
@@ -95,8 +95,9 @@ describe('worktree.setup.* synthetic settings', () => {
       onSettingApplied: null,
       refreshGroups: () => {},
     });
-    expect(result.changed).toBe(false);
-    expect(result.effectMessage).toContain('Save failed');
+    expect(result.changed).toBe(true);
+    expect(result.effectMessage ?? '').not.toContain('Save failed');
+    expect(cm.get(WORKTREE_SETUP_COMMANDS_CONFIG_KEY)).toEqual(['bun install']);
   });
 
   test('buildSettingGroups injects both entries into the orchestration category exactly once', () => {
