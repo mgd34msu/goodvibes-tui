@@ -4,7 +4,10 @@ import {
   applyHunkKey,
   buildHunkSelectionState,
   buildModifiedEditArgs,
+  buildPendingPermissionExtras,
   isHunkSelectable,
+  resolveApprovalRequester,
+  type ApprovalRequesterLookup,
   type HunkSelectionState,
 } from '../../permissions/hunk-selection.ts';
 
@@ -171,5 +174,47 @@ describe('buildModifiedEditArgs', () => {
     expect(result['output']).toEqual({ format: 'minimal' });
     expect(result['dry_run']).toBe(false);
     expect(result['validate']).toEqual({ after: ['typecheck'] });
+  });
+});
+
+describe('resolveApprovalRequester (Item 3b)', () => {
+  function broker(records: Array<{ callId: string; sessionId?: string; metadata: Record<string, unknown> }>): ApprovalRequesterLookup {
+    return { listApprovals: () => records };
+  }
+
+  test('returns null when no broker or no matching callId', () => {
+    expect(resolveApprovalRequester(null, 'c1')).toBeNull();
+    expect(resolveApprovalRequester(broker([]), 'c1')).toBeNull();
+  });
+
+  test('prefers an explicit requester from broker metadata', () => {
+    const b = broker([{ callId: 'c1', sessionId: 's-abcdefgh', metadata: { agentId: 'reviewer-agent' } }]);
+    expect(resolveApprovalRequester(b, 'c1')).toBe('reviewer-agent');
+  });
+
+  test('falls back to a shortened session id when metadata has no requester', () => {
+    const b = broker([{ callId: 'c1', sessionId: 'abcdefgh1234', metadata: {} }]);
+    expect(resolveApprovalRequester(b, 'c1')).toBe('session abcdefgh');
+  });
+
+  test('a throwing broker degrades to null, never crashes the prompt', () => {
+    const b: ApprovalRequesterLookup = { listApprovals: () => { throw new Error('boom'); } };
+    expect(resolveApprovalRequester(b, 'c1')).toBeNull();
+  });
+});
+
+describe('buildPendingPermissionExtras (Item 3a/3b)', () => {
+  test('stamps openedAt and resolves requestedBy from the broker', () => {
+    const request = makeRequest('bash', { command: 'ls' });
+    const b: ApprovalRequesterLookup = { listApprovals: () => [{ callId: 'call-1', sessionId: 's', metadata: { actor: 'delegated-1' } }] };
+    const extras = buildPendingPermissionExtras(request, () => {}, b, 4242);
+    expect(extras.openedAt).toBe(4242);
+    expect(extras.requestedBy).toBe('delegated-1');
+  });
+
+  test('requestedBy is undefined when the broker is absent', () => {
+    const extras = buildPendingPermissionExtras(makeRequest('bash', { command: 'ls' }), () => {});
+    expect(extras.requestedBy).toBeUndefined();
+    expect(typeof extras.openedAt).toBe('number');
   });
 });

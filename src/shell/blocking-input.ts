@@ -12,7 +12,24 @@ export type PendingPermissionState = PermissionRequest & {
   hunkState?: HunkSelectionState;
   /** True once the user pressed `d` to expand a condensed low-risk card. (UX-B 2b.) */
   detailsExpanded?: boolean;
+  /**
+   * Epoch ms when the prompt first appeared. Keystrokes that arrive within
+   * APPROVAL_INPUT_DEBOUNCE_MS of this are swallowed (not interpreted as an
+   * approve/deny response) so text typed ahead — before the user saw the
+   * prompt — cannot accidentally answer it.
+   */
+  openedAt?: number;
+  /** Requester attribution ("session abc12345" / a named agent) shown on the prompt; absent when unknown. */
+  requestedBy?: string;
 };
+
+/**
+ * Settle window after a permission prompt appears during which buffered
+ * keystrokes are ignored rather than interpreted as the response. 350ms is long
+ * enough to absorb type-ahead from before the prompt rendered, short enough not
+ * to feel laggy to a user reacting to the prompt itself.
+ */
+export const APPROVAL_INPUT_DEBOUNCE_MS = 350;
 
 export type BlockingInputHandlerOptions = {
   data: string;
@@ -58,6 +75,8 @@ export type BlockingInputHandlerOptions = {
    * posture is not restored.
    */
   reopenPanels?: (snapshot: SessionSnapshot) => void;
+  /** Injectable clock for the approval-input debounce; defaults to Date.now(). Tests only. */
+  now?: number;
 };
 
 export type BlockingInputHandlerResult = {
@@ -88,6 +107,16 @@ export function handleBlockingShellInput(
 
   if (pendingPermission) {
     const req = pendingPermission;
+
+    // Input debounce: swallow any key that arrives within the settle window
+    // after the prompt appeared, so type-ahead text from before the user saw
+    // the prompt cannot answer it (neither approve, deny, nor navigate). The
+    // prompt stays open; re-render and consume the key.
+    const now = options.now ?? Date.now();
+    if (req.openedAt !== undefined && now - req.openedAt < APPROVAL_INPUT_DEBOUNCE_MS) {
+      render();
+      return { handled: true, pendingPermission, recoveryPending };
+    }
 
     if (req.hunkState) {
       const { state, commit } = applyHunkKey(req.hunkState, data);

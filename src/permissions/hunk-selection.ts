@@ -158,22 +158,75 @@ export function buildModifiedEditArgs(
   return { ...request.args, edits: filtered };
 }
 
+/** Narrow approval-broker surface needed to attribute a prompt to its requester. */
+export interface ApprovalRequesterLookup {
+  listApprovals(limit?: number): ReadonlyArray<{
+    readonly callId: string;
+    readonly sessionId?: string | undefined;
+    readonly metadata: Record<string, unknown>;
+  }>;
+}
+
+/**
+ * Human label for WHICH agent/process raised this approval, correlated from the
+ * approval broker by callId (the broker record for a request exists by the time
+ * its local prompt is shown). Prefers an explicit requester recorded in the
+ * broker record's metadata (agentId / agent / requestedBy / actor /
+ * actorSurface), then the owning session id; returns null when the broker has
+ * no matching record or nothing identifying — the prompt then omits the
+ * attribution line rather than guessing a name.
+ */
+export function resolveApprovalRequester(
+  broker: ApprovalRequesterLookup | null | undefined,
+  callId: string,
+): string | null {
+  if (!broker) return null;
+  let record: { readonly sessionId?: string | undefined; readonly metadata: Record<string, unknown> } | undefined;
+  try {
+    record = broker.listApprovals().find((r) => r.callId === callId);
+  } catch {
+    return null;
+  }
+  if (!record) return null;
+  const meta = record.metadata ?? {};
+  for (const key of ['agentId', 'agent', 'requestedBy', 'actor', 'actorSurface'] as const) {
+    const value = meta[key];
+    if (typeof value === 'string' && value.trim().length > 0) return value.trim();
+  }
+  if (typeof record.sessionId === 'string' && record.sessionId.length > 0) {
+    return `session ${record.sessionId.slice(0, 8)}`;
+  }
+  return null;
+}
+
 /**
  * buildPendingPermissionExtras — the `hunkState` + wrapped `resolve` fields
- * main.ts spreads onto its PendingPermissionState alongside `...request`.
- * Bundled into one helper (rather than inlined in main.ts) to keep main.ts's
- * net line count at zero for this change — main.ts sits at the 800-line
- * architecture cap and must never grow it.
+ * (plus the input-debounce timestamp and requester attribution) main.ts spreads
+ * onto its PendingPermissionState alongside `...request`. Bundled into one
+ * helper (rather than inlined in main.ts) to keep main.ts's net line count at
+ * zero for this change — main.ts sits at the 800-line architecture cap and must
+ * never grow it.
+ *
+ * `openedAt` is the moment the prompt appeared; the blocking-input handler uses
+ * it to swallow typed-ahead keystrokes for a short settle window so buffered
+ * text cannot answer a prompt the user has not seen yet. `requestedBy` is the
+ * requester attribution resolved from the broker (see resolveApprovalRequester).
  */
 export function buildPendingPermissionExtras(
   request: PermissionPromptRequest,
   resolvePromise: (decision: PermissionPromptDecisionWithModifiedArgs) => void,
+  broker?: ApprovalRequesterLookup | null,
+  now: number = Date.now(),
 ): {
   hunkState: HunkSelectionState | undefined;
   resolve: (approved: boolean, remember?: boolean, modifiedArgs?: Record<string, unknown>) => void;
+  openedAt: number;
+  requestedBy: string | undefined;
 } {
   return {
     hunkState: isHunkSelectable(request) ? buildHunkSelectionState(request) : undefined,
     resolve: (approved, remember = false, modifiedArgs) => resolvePromise({ approved, remember, modifiedArgs }),
+    openedAt: now,
+    requestedBy: resolveApprovalRequester(broker, request.callId) ?? undefined,
   };
 }
