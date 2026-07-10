@@ -1,5 +1,6 @@
-import type { UiRuntimeEvents } from '@/runtime/index.ts';
+import type { UiRuntimeEvents, RuntimeEventBus } from '@/runtime/index.ts';
 import { buildPersistedSessionContext, persistConversation } from '@/runtime/index.ts';
+import { buildCompactionReceiptBlock } from './compaction-receipt.ts';
 import { logger } from '@pellux/goodvibes-sdk/platform/utils';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 import type { HookDispatcher, HookPhase, HookCategory, HookEventPath } from '@pellux/goodvibes-sdk/platform/hooks';
@@ -32,6 +33,10 @@ interface TurnProviderRegistry {
 /** Minimal config manager surface required by turn-event wiring. */
 interface TurnConfigManager {
   get(key: string): unknown;
+  /** Subscribe to a config-key change; returns an unsubscribe. Used to keep the
+   *  footer permission-mode pill live without polling. Optional so bare test
+   *  doubles that only implement get() still satisfy the type. */
+  subscribe?(key: string, cb: (...args: unknown[]) => void): () => void;
 }
 
 /** Minimal system message router surface required by turn-event wiring. */
@@ -43,6 +48,13 @@ interface TurnSystemMessageRouter {
 
 export interface WireTurnEventHandlersOptions {
   readonly events: UiRuntimeEvents;
+  /**
+   * Raw runtime event bus. Needed for domains NOT surfaced by the grouped
+   * UiRuntimeEvents feed — specifically the 'compaction' domain, whose
+   * mandatory COMPACTION_RECEIPT the transcript renders as a distinct block.
+   * Optional so headless/test callers can omit it.
+   */
+  readonly runtimeBus?: RuntimeEventBus | null;
   readonly conversation: ConversationManager;
   readonly runtime: { sessionId: string; model: string; provider: string };
   readonly orchestrator: TurnOrchestrator;
@@ -122,7 +134,7 @@ export function wireTurnEventHandlers(
     events, conversation, runtime, configManager, hookDispatcher, orchestrator, providerRegistry,
     workingDir, homeDirectory, sessionManager, gitStatusProvider,
     lastGitInfoRef, buildSessionContinuityHints, render, webhookNotifier, focusTracker,
-    terminalNotifier,
+    terminalNotifier, runtimeBus, systemMessageRouter,
     _clock = Date.now,
   } = options;
 
@@ -267,6 +279,34 @@ export function wireTurnEventHandlers(
         }
       } catch (err) {
         logger.debug('turn-event-wiring: chain-failure notify error', { error: String(err) });
+      }
+    }));
+  }
+
+  // Live footer permission-mode pill: re-render whenever the SDK config
+  // surface reports permissions.mode changed. Mode changes are made through
+  // configManager.set('permissions.mode', ...) (the SDK-owned surface the
+  // PermissionManager reads), so this covers our own Shift+Tab / /plan toggles
+  // as well as any other in-process writer. No polling.
+  if (typeof configManager.subscribe === 'function') {
+    unsubs.push(configManager.subscribe('permissions.mode', () => { render(); }));
+  }
+
+  // Post-compaction receipt (never-silent): the SDK emits a mandatory
+  // COMPACTION_RECEIPT on the 'compaction' domain after every automatic (and
+  // the manual) compaction. That domain is NOT in the grouped UiRuntimeEvents
+  // feed, so we subscribe on the raw bus and render the receipt as a distinct
+  // [Compaction] block. Automatic compaction previously left no transcript
+  // trace; this makes the audit visible.
+  if (runtimeBus) {
+    unsubs.push(runtimeBus.on('COMPACTION_RECEIPT', (envelope) => {
+      try {
+        const payload = envelope.payload;
+        if (payload.type !== 'COMPACTION_RECEIPT') return;
+        systemMessageRouter.high(buildCompactionReceiptBlock(payload));
+        render();
+      } catch (err) {
+        logger.debug('turn-event-wiring: compaction-receipt render error', { error: String(err) });
       }
     }));
   }

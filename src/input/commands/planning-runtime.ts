@@ -6,6 +6,7 @@ import type {
 } from '@pellux/goodvibes-sdk/platform/knowledge';
 import type { CommandRegistry } from '../command-registry.ts';
 import { openModalCommand, requirePlanManager, requireSessionLineageTracker } from './runtime-services.ts';
+import { togglePlanMode, permissionModeLabel, type PermissionModeValue } from '../../core/permission-mode.ts';
 
 /**
  * Single-token verbs that look like a `/plan` subcommand but are not real ones.
@@ -60,7 +61,8 @@ function formatNextQuestion(question: ProjectPlanningQuestion | undefined): stri
 
 export function registerPlanningRuntimeCommands(registry: CommandRegistry): void {
   registry.register({
-    name: 'plan',
+    name: 'project-plan',
+    aliases: ['planning'],
     description: 'Inspect or seed TUI-owned project planning state',
     usage: '[panel | approve | dismiss | answer <n> <text> | list | show <id> | mode | explain | override <strategy> | status | clear | <planning goal>]',
     argsHint: '[panel|approve|status|<goal>]',
@@ -312,6 +314,31 @@ export function registerPlanningRuntimeCommands(registry: CommandRegistry): void
         `Readiness: ${evaluation.readiness}\n` +
         formatNextQuestion(evaluation.nextQuestion),
       );
+    },
+  });
+
+  // /plan now enters/toggles the SESSION PERMISSION plan mode (read-only
+  // planning posture) — distinct from the project-planning manager above, which
+  // moved to /project-plan (alias /planning). The change goes through the SDK
+  // config surface (permissions.mode), the same value the PermissionManager
+  // reads and Shift+Tab cycles, so plan mode is one concept across surfaces.
+  registry.register({
+    name: 'plan',
+    description: 'Enter or exit plan mode — a read-only planning posture where writes, commands, and network calls are blocked',
+    usage: '[on | off | toggle]',
+    argsHint: '[on|off]',
+    handler(args, ctx) {
+      const configManager = ctx.platform.configManager;
+      const current = configManager.get('permissions.mode') as PermissionModeValue | undefined;
+      const sub = (args[0] ?? 'toggle').toLowerCase();
+      const next: PermissionModeValue =
+        sub === 'on' || sub === 'enter' ? 'plan'
+        : sub === 'off' || sub === 'exit' ? 'prompt'
+        : togglePlanMode(current);
+      configManager.set('permissions.mode', next);
+      ctx.print(next === 'plan'
+        ? '[Permissions] Plan mode ON — read-only: writes, commands, and network calls are blocked until you exit (/plan off or Shift+Tab).'
+        : `[Permissions] Plan mode OFF — mode: ${permissionModeLabel(next)}.`);
     },
   });
 }

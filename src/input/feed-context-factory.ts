@@ -139,6 +139,8 @@ export interface FeedContextStableRefs {
 export interface FeedContextClosures {
   modalOpened: (name: string) => void;
   handleEscape: () => void;
+  /** Deliver a concealed submission; returns true when concealed mode consumed it. */
+  submitConcealedInput: (value: string) => boolean;
   handleCopy: () => void;
   handleCtrlC: () => void;
   handleBlockCopy: () => void;

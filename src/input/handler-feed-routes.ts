@@ -328,6 +328,13 @@ export type KeyRouteState = {
   conversationManager: ConversationManager | null;
   commandContext: CommandContext | undefined;
   /**
+   * Deliver a concealed submission. When it returns true, concealed mode was
+   * active and consumed the value — the plaintext went straight to the
+   * requester, bypassing input history and the transcript. Optional so bare
+   * test callers omit it.
+   */
+  submitConcealedInput?: (value: string) => boolean;
+  /**
    * Optional: only used by the enter-key desync safety net below (a stray
    * slash-prefixed submission with commandMode somehow still false). When
    * absent, that fallback simply doesn't trigger — the primary fix (arming
@@ -408,6 +415,16 @@ export function handlePromptKeyToken(state: KeyRouteState, token: InputToken): {
       prompt = prompt.slice(0, cursorPos) + '\n' + prompt.slice(cursorPos);
       cursorPos++;
       ensureLocalInputCursorVisible();
+      return { handled: true, prompt, cursorPos, inputScrollTop, commandMode, indicatorFocused };
+    }
+
+    // Concealed input: the typed line is a secret. Deliver the plaintext (the
+    // live feed snapshot, not the possibly-stale handler buffer) to the
+    // concealed consumer, never to input history or the transcript, then clear.
+    if (state.submitConcealedInput?.(prompt)) {
+      prompt = '';
+      cursorPos = 0;
+      state.requestRender();
       return { handled: true, prompt, cursorPos, inputScrollTop, commandMode, indicatorFocused };
     }
 

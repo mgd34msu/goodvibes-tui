@@ -81,6 +81,7 @@ import {
   type WrappedPromptInfo,
 } from './handler-prompt-buffer.ts';
 import { KillRing } from './kill-ring.ts';
+import { maskConcealedText, beginConcealedInputFor, submitConcealedInputFor, cancelConcealedInputFor, type ConcealedInputRequest } from './concealed-input.ts';
 import { clearModalStack, handleEscape, modalOpened } from './handler-modal-stack.ts';
 import { handleModalTokenRoutes } from './handler-modal-token-routes.ts';
 import {
@@ -128,6 +129,13 @@ export class InputHandler implements InputHandlerLike {
   public prompt = '';
   public cursorPos = 0;
   public showExitNotice = false;
+  /**
+   * Active concealed-input request, or null. When set, the composer masks its
+   * echo (see getWrappedPromptInfo) and diverts submission to the request's
+   * onSubmit (see submitConcealedInput) instead of the normal chat/command path,
+   * so the plaintext never reaches input history or the transcript.
+   */
+  public concealedInput: ConcealedInputRequest | null = null;
   /** Max visible rows for the input area. Content beyond this scrolls internally. */
   public static readonly MAX_INPUT_ROWS = 8;
   /** Internal scroll offset for the input area when content exceeds MAX_INPUT_ROWS. */
@@ -331,7 +339,8 @@ export class InputHandler implements InputHandlerLike {
       },
       {
         modalOpened: (name: string) => this.modalOpened(name),
-        handleEscape: () => { this.handleEscape(); this.syncFeedContextMutableFields(); },
+        handleEscape: () => { if (!this.cancelConcealedInput()) this.handleEscape(); this.syncFeedContextMutableFields(); },
+        submitConcealedInput: (value: string) => this.submitConcealedInput(value),
         handleCopy: () => this.handleCopy(),
         handleCtrlC: () => { this.handleCtrlC(); this.syncFeedContextMutableFields(); },
         handleBlockCopy: () => this.handleBlockCopy(),
@@ -637,14 +646,27 @@ export class InputHandler implements InputHandlerLike {
    * and the visible slice respecting inputScrollTop.
    */
   public getWrappedPromptInfo(contentWidth: number): WrappedPromptInfo {
+    // In concealed mode, wrap the MASKED buffer. maskConcealedText preserves
+    // length and newlines, so wrapping and cursor coordinates are identical to
+    // the plaintext while no plaintext character reaches the screen buffer.
+    const displayPrompt = this.concealedInput ? maskConcealedText(this.prompt) : this.prompt;
     return getWrappedPromptInfo(
-      this.prompt,
+      displayPrompt,
       this.cursorPos,
       this.inputScrollTop,
       contentWidth,
       InputHandler.MAX_INPUT_ROWS,
     );
   }
+
+  /** Begin one line of concealed (masked) composer input. See concealed-input.ts. */
+  public beginConcealedInput(request: ConcealedInputRequest): void { beginConcealedInputFor(this, request); }
+  /** True while a concealed-input request is active. */
+  public isConcealedInput(): boolean { return this.concealedInput !== null; }
+  /** Deliver a concealed submission; returns true when concealed mode consumed it. */
+  public submitConcealedInput(value: string): boolean { return submitConcealedInputFor(this, value); }
+  /** Cancel an active concealed-input request without submitting (Escape). */
+  public cancelConcealedInput(): boolean { return cancelConcealedInputFor(this); }
 
   // ── Undo / Redo methods ─────────────────────────────────────────────────
 

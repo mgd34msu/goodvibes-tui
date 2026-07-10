@@ -10,8 +10,21 @@ describe('submission router', () => {
   });
 
   test('classifies slash planning commands', () => {
-    expect(routeSubmissionIntent({ text: '/plan draft roadmap' })).toMatchObject({
+    // The free-form project-planning command (renamed from /plan to
+    // /project-plan when /plan became the plan-mode toggle) keeps the 'plan'
+    // composer intent for its free-form goal text.
+    expect(routeSubmissionIntent({ text: '/project-plan draft roadmap' })).toMatchObject({
       kind: 'plan',
+      commandName: 'project-plan',
+    });
+    expect(routeSubmissionIntent({ text: '/planning draft roadmap' })).toMatchObject({
+      kind: 'plan',
+      commandName: 'planning',
+    });
+    // /plan is now a plain slash-command (the plan-mode toggle), not the
+    // free-form 'plan' intent.
+    expect(routeSubmissionIntent({ text: '/plan' })).toMatchObject({
+      kind: 'slash-command',
       commandName: 'plan',
     });
   });

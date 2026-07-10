@@ -140,6 +140,8 @@ export interface InputFeedContext {
   requestRender: () => void;
   readonly modalOpened: (name: string) => void;
   readonly handleEscape: () => void;
+  /** Deliver a concealed submission; returns true when concealed mode consumed it. */
+  readonly submitConcealedInput: (value: string) => boolean;
   readonly handleCopy: () => void;
   readonly handleCtrlC: () => void;
   readonly handleBlockCopy: () => void;
@@ -472,6 +474,7 @@ export function feedInputTokens(context: InputFeedContext, tokens: readonly Inpu
         conversationManager: context.conversationManager,
         commandContext: context.commandContext,
         commandRegistry: context.commandRegistry,
+        submitConcealedInput: context.submitConcealedInput,
         autocomplete: context.autocomplete,
         blockActionsMenu: { open: (block: BlockMeta) => context.blockActionsMenu.open(block) },
         openFleetPanel,

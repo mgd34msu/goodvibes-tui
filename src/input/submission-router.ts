@@ -7,7 +7,10 @@ export interface SubmissionRouterInput {
   readonly hasAttachments?: boolean;
 }
 
-const PLAN_COMMANDS = new Set(['plan']);
+// The project-planning command (renamed from /plan to /project-plan when /plan
+// became the plan-mode toggle) takes a free-form goal, so it keeps the distinct
+// 'plan' composer intent/label. The /plan mode-toggle is a plain slash command.
+const PLAN_COMMANDS = new Set(['project-plan', 'planning']);
 const REVIEW_COMMANDS = new Set(['review']);
 const PANEL_COMMANDS = new Set(['panel']);
 const ORCHESTRATION_COMMANDS = new Set([
