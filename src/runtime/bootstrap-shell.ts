@@ -259,6 +259,7 @@ export function createBootstrapShell(options: BootstrapShellOptions): BootstrapS
     planRuntime,
     fileUndoManager: services.fileUndoManager,
     workspaceCheckpointManager: services.workspaceCheckpointManager,
+    gatewayMethods: services.gatewayMethods,
     workspaceTrustManager: services.workspaceTrustManager,
     memoryRegistry: services.memoryRegistry,
     integrationHelpers: services.integrationHelpers,
