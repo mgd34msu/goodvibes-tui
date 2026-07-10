@@ -43,6 +43,11 @@ function makeGateResult(overrides: Partial<EvalGateResult> = {}): EvalGateResult
     fresh: makeSuiteResult(),
     baseline: undefined,
     regressions: [],
+    // SDK 1.6.1: the gate now reports absolute-floor failures and
+    // unbaselined scenarios as first-class, required arrays; formatGateResult
+    // reads both. Default them empty here (the passing-gate case).
+    floorFailures: [],
+    unbaselined: [],
     ...overrides,
   };
 }

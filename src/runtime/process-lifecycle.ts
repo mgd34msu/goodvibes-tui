@@ -19,6 +19,7 @@
  * `unsubs` registry is shared by reference and drained on exit.
  */
 import { logger, summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
+import { createTerminalLifecycle, TERMINAL_ESCAPES } from '@pellux/goodvibes-terminal-shell';
 import { formatUserFacingErrorLine } from '../core/format-user-error.ts';
 import { allowTerminalWrite } from './terminal-output-guard.ts';
 import { buildPersistedSessionContext, deleteRecoveryFile } from '@/runtime/index.ts';
@@ -129,30 +130,37 @@ export function installProcessLifecycle(deps: ProcessLifecycleDeps): ProcessLife
     render();
   };
 
-  let terminalRestored = false;
+  // Terminal enter/restore sequencing is the byte-identical seam both daemon
+  // front-ends share, so it lives in @pellux/goodvibes-terminal-shell and this
+  // wiring delegates to it. Only the restore path is used here (the TUI's
+  // startup enter sequence stays in main.ts); the graceful shutdown below
+  // (draining services, persisting sessions, exit codes) is TUI-specific and
+  // stays local, calling restoreTerminal() for the synchronous hand-back.
+  //
+  // The injected `ansi` restore sequences are mapped onto the package's escape
+  // set so the exact bytes the TUI has always emitted are preserved. The no-alt
+  // exit deliberately uses the package's CLEAR_VIEWPORT_HOME ('\x1b[2J\x1b[H',
+  // no ESC[3J) — never ansi.CLEAR_SCREEN, which carries the scrollback-wiping 3J.
+  const terminalLifecycle = createTerminalLifecycle({
+    write: (data) => { stdout.write(data); },
+    noAltScreen,
+    guardedWrite: allowTerminalWrite,
+    disposeOutputGuard: () => getTerminalOutputGuard().dispose(),
+    setRawMode: (enabled) => stdin.setRawMode(enabled),
+    escapes: {
+      ...TERMINAL_ESCAPES,
+      ALT_SCREEN_EXIT: ansi.ALT_SCREEN_EXIT,
+      PASTE_DISABLE: ansi.PASTE_DISABLE,
+      KEYBOARD_EXT_DISABLE: ansi.KEYBOARD_EXT_DISABLE,
+      MOUSE_DISABLE: ansi.MOUSE_DISABLE,
+      CURSOR_SHOW: ansi.CURSOR_SHOW,
+      FOCUS_DISABLE: ansi.FOCUS_DISABLE,
+    },
+  });
   // Idempotent, synchronous-only terminal restore. Safe to call from process.on('exit'),
-  // signal handlers, uncaughtException, and exitApp. Disposes the output guard FIRST so a
-  // crash stack reaches the real stderr instead of being suppressed by the guard.
-  const restoreTerminal = (): void => {
-    if (terminalRestored) return;
-    terminalRestored = true;
-    // Alt-screen path: just leave the alt screen — 1049l restores the primary
-    // screen and cursor exactly as they were at launch. Clearing first is
-    // pointless (the alt screen is discarded) and actively harmful: the old
-    // CLEAR_SCREEN included ESC[3J, which wipes the PRIMARY scrollback on
-    // several emulators even when issued from the alt screen.
-    // No-alt path: the compositor painted over the primary screen, so clear
-    // the viewport and home the cursor — but WITHOUT 3J, the user's scrollback
-    // is theirs. CURSOR_SHOW goes AFTER the screen switch so visibility
-    // applies to the screen the shell prompt lands on.
-    const exitScreen = noAltScreen ? '\x1b[2J\x1b[H' : ansi.ALT_SCREEN_EXIT;
-    allowTerminalWrite(() => stdout.write(
-      ansi.PASTE_DISABLE + ansi.KEYBOARD_EXT_DISABLE + ansi.MOUSE_DISABLE + ansi.FOCUS_DISABLE
-      + exitScreen + ansi.CURSOR_SHOW,
-    ));
-    getTerminalOutputGuard().dispose();
-    try { stdin.setRawMode(false); } catch { /* stdin may not be a TTY */ }
-  };
+  // signal handlers, uncaughtException, and exitApp. Disposes the output guard AFTER the
+  // restore write so a crash stack reaches the real stderr instead of being suppressed.
+  const restoreTerminal = terminalLifecycle.restoreTerminal;
 
   const uncaughtExceptionHandler = (err: Error): void => {
     restoreTerminal();
@@ -220,7 +228,7 @@ export function installProcessLifecycle(deps: ProcessLifecycleDeps): ProcessLife
   return {
     exitApp,
     restoreTerminal,
-    isTerminalRestored: () => terminalRestored,
+    isTerminalRestored: terminalLifecycle.isTerminalRestored,
     resizeHandler,
     sigintHandler,
     unhandledRejectionHandler,
