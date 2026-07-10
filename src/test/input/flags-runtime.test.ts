@@ -73,3 +73,73 @@ describe('formatFlagsDoctor', () => {
     expect(formatFlagsDoctor([entry('beta', 'disabled')])).toContain('1 dark subsystem (built');
   });
 });
+
+import { formatGraduationReport } from '@/input/commands/flags-runtime.ts';
+import type { OperatorMethodOutput } from '@pellux/goodvibes-sdk';
+
+type GraduationReport = OperatorMethodOutput<'flags.graduation.report'>;
+type GEntry = GraduationReport['entries'][number];
+
+function gentry(partial: Partial<GEntry> & { flagId: string; state: GEntry['state'] }): GEntry {
+  return {
+    flagId: partial.flagId,
+    name: partial.name ?? partial.flagId,
+    tier: partial.tier ?? 1,
+    currentDefault: partial.currentDefault ?? 'disabled',
+    runtimeToggleable: partial.runtimeToggleable ?? true,
+    state: partial.state,
+    evidence: partial.evidence ?? { instrumentation: 'none', divergence: null, note: 'no evidence collected this run' },
+    blocker: partial.blocker ?? null,
+    note: partial.note ?? null,
+  } as GEntry;
+}
+
+function report(entries: GEntry[], releaseBlockers: string[] = []): GraduationReport {
+  const count = (s: GEntry['state']) => entries.filter((e) => e.state === s).length;
+  return {
+    generatedAt: 0,
+    entries,
+    summary: {
+      total: entries.length,
+      dark: count('dark'),
+      soaking: count('soaking'),
+      graduateCandidate: count('graduate-candidate'),
+      graduated: count('graduated'),
+      blocked: count('blocked'),
+    },
+    releaseBlockers,
+  } as GraduationReport;
+}
+
+describe('formatGraduationReport', () => {
+  test('sorts graduate-candidates first, under a release-blockers heading', () => {
+    const text = formatGraduationReport(report([
+      gentry({ flagId: 'zeta', state: 'graduated', currentDefault: 'enabled' }),
+      gentry({
+        flagId: 'alpha', state: 'graduate-candidate',
+        evidence: { instrumentation: 'divergence-simulation', divergence: { divergenceRate: 0.004, totalEvaluations: 2000, gateStatus: 'allowed' }, note: 'ready' },
+      }),
+    ], ['alpha']));
+    expect(text).toContain('RELEASE BLOCKERS (1)');
+    // alpha (candidate) is rendered before zeta (graduated).
+    expect(text.indexOf('alpha')).toBeLessThan(text.indexOf('zeta'));
+    expect(text).toContain('divergence 0.40% over 2000 evals, gate allowed');
+    expect(text).toContain('All other flags:');
+  });
+
+  test('states "no evidence collected" plainly and reports no blockers when clear', () => {
+    const text = formatGraduationReport(report([
+      gentry({ flagId: 'dark-one', state: 'dark' }),
+    ]));
+    expect(text).toContain('No release blockers');
+    expect(text).toContain('no evidence collected this run');
+    expect(text).toContain('instrumentation: none');
+  });
+
+  test('renders a dated blocker reason for a blocked flag', () => {
+    const text = formatGraduationReport(report([
+      gentry({ flagId: 'held', state: 'blocked', blocker: { reason: 'perf regression', date: '2026-07-01' } }),
+    ]));
+    expect(text).toContain('blocked 2026-07-01: perf regression');
+  });
+});
