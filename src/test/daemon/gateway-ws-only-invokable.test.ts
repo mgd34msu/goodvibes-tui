@@ -12,6 +12,7 @@
  * handler attachment.
  */
 import { describe, expect, test } from 'bun:test';
+import { assertEveryDescriptorHasHandler } from '@pellux/goodvibes-terminal-shell/conformance';
 import { getTestRuntimeServices } from '../helpers/runtime-services.ts';
 
 const WS_ONLY_METHOD_IDS = [
@@ -33,12 +34,26 @@ const WS_ONLY_METHOD_IDS = [
 describe('ws-only gateway verbs are invokable on the vendored runtime', () => {
   const services = getTestRuntimeServices();
 
+  // Descriptor presence is the part the conformance helper cannot cover: it
+  // sweeps handlers over the descriptors already registered, so a WS-ONLY id
+  // absent from the catalog entirely would be silently skipped. Keep an
+  // explicit presence check per id.
   for (const methodId of WS_ONLY_METHOD_IDS) {
-    test(`${methodId} has an attached handler (descriptor alone is a 501)`, () => {
+    test(`${methodId} descriptor is registered in the catalog`, () => {
       expect(services.gatewayMethods.get(methodId), `${methodId} descriptor missing from the catalog`).toBeTruthy();
-      expect(services.gatewayMethods.hasHandler(methodId), `${methodId} is registered but NOT invokable`).toBe(true);
     });
   }
+
+  // Handler-attachment is the package-owned drift gate: assertEveryDescriptorHasHandler
+  // fails loudly (naming every offending id) if any ws-only descriptor is
+  // descriptor-present but handler-absent — the 501 regression class. Scoped to
+  // the ws-only ids so builtin descriptors whose handlers a host daemon attaches
+  // elsewhere do not trip it.
+  test('every ws-only descriptor has an attached handler (package conformance gate)', () => {
+    expect(() =>
+      assertEveryDescriptorHasHandler(services.gatewayMethods, { onlyIds: WS_ONLY_METHOD_IDS }),
+    ).not.toThrow();
+  });
 
   test('fleet.snapshot invokes end-to-end and answers with real nodes shape', async () => {
     const result = await services.gatewayMethods.invoke('fleet.snapshot', {

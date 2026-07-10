@@ -49,7 +49,7 @@ import { wireSpokenTurnRuntime } from './audio/spoken-turn-wiring.ts';
 import { attachSpokenTurnModelRouting, createSpokenTurnInputOptions } from './audio/spoken-turn-model-routing.ts';
 import { allowTerminalWrite, installTuiTerminalOutputGuard } from './runtime/terminal-output-guard.ts';
 import { installProcessLifecycle } from './runtime/process-lifecycle.ts';
-import { createRenderScheduler } from './runtime/render-scheduler.ts';
+import { createRenderScheduler } from '@pellux/goodvibes-terminal-shell';
 import { buildCommandArgsHint } from './input/command-args-hint.ts';
 import { summarizeRunningAgents } from './renderer/process-summary.ts';
 import { footerFleetCost } from './panels/fleet-read-model.ts';

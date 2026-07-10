@@ -1,5 +1,9 @@
-import { describe, expect, test } from 'bun:test';
-import { readCheckpointGuardSettings } from '@/config/tui-extension-settings.ts';
+import { describe, expect, test, afterEach } from 'bun:test';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { WorkspaceCheckpointManager } from '@pellux/goodvibes-sdk/platform/workspace';
+import { readCheckpointGuardSettings, withCheckpointGuardSettings } from '@/config/tui-extension-settings.ts';
 import type { ConfigManager } from '@/config/index.ts';
 
 // A minimal stand-in for the ConfigManager surface the reader depends on.
@@ -63,14 +67,72 @@ describe('readCheckpointGuardSettings', () => {
   });
 });
 
-// End-to-end wiring — that the values flow into WorkspaceCheckpointManager and
-// actually change its root-guard behavior — is deliberately NOT exercised here.
-// The pinned platform SDK (@pellux/goodvibes-sdk 1.6.1) predates these options:
-// its constructor reads only workspaceRoot/checkpointDir/runtimeBus/retention/now
-// and silently ignores the guard keys. Re-enable this once the SDK is upgraded
-// to a build whose WorkspaceCheckpointManagerOptions declares them.
-describe.skip('checkpoint root-guard wiring (pending SDK upgrade)', () => {
-  test('preferGitRoot/allowBroadRoot change the effective snapshot root', () => {
-    // Intentionally empty: see the note above.
+// End-to-end wiring — that the user's checkpoints.* values flow through
+// withCheckpointGuardSettings into WorkspaceCheckpointManager and actually
+// change its root-guard behavior. @pellux/goodvibes-sdk 1.6.1's
+// WorkspaceCheckpointManagerOptions now declares these guard keys
+// (preferGitRoot/allowBroadRoot/allowLargeFirstSnapshot/maxFirstSnapshotFiles/
+// autoRetention), so the previously-inert options are live and observable via
+// create()'s refusals. Each case runs the REAL manager against a scratch
+// workspace, merging the guard settings exactly as services.ts does.
+describe('checkpoint root-guard wiring (SDK 1.6.1 options are live)', () => {
+  const tempDirs: string[] = [];
+  afterEach(() => {
+    while (tempDirs.length > 0) rmSync(tempDirs.pop()!, { recursive: true, force: true });
+  });
+  function scratch(): string {
+    const dir = mkdtempSync(join(tmpdir(), 'gv-guard-wiring-'));
+    tempDirs.push(dir);
+    return dir;
+  }
+
+  test('allowBroadRoot reaches the manager: false refuses a home-directory root, true permits it', async () => {
+    // homeDir === workspaceRoot makes the root look "broad"; the guard then
+    // hinges purely on the allowBroadRoot key the user set in checkpoints.*.
+    const dirRefused = scratch();
+    writeFileSync(join(dirRefused, 'f.txt'), 'hello');
+    const refusingMgr = new WorkspaceCheckpointManager(
+      withCheckpointGuardSettings(
+        { workspaceRoot: dirRefused, homeDir: dirRefused },
+        fakeConfig({ checkpoints: { allowBroadRoot: false } }),
+      ),
+    );
+    await expect(refusingMgr.create({ kind: 'manual', label: 'x', retentionClass: 'forensic' }))
+      .rejects.toThrow(/home directory|refus/i);
+
+    const dirAllowed = scratch();
+    writeFileSync(join(dirAllowed, 'f.txt'), 'hello');
+    const allowingMgr = new WorkspaceCheckpointManager(
+      withCheckpointGuardSettings(
+        { workspaceRoot: dirAllowed, homeDir: dirAllowed },
+        fakeConfig({ checkpoints: { allowBroadRoot: true } }),
+      ),
+    );
+    const cp = await allowingMgr.create({ kind: 'manual', label: 'x', retentionClass: 'forensic' });
+    expect(cp).not.toBeNull();
+  });
+
+  test('maxFirstSnapshotFiles + allowLargeFirstSnapshot reach the manager: a tiny ceiling refuses the first snapshot unless the override is set', async () => {
+    const dirRefused = scratch();
+    for (let i = 0; i < 5; i++) writeFileSync(join(dirRefused, `f${i}.txt`), 'x');
+    const tinyCeilingMgr = new WorkspaceCheckpointManager(
+      withCheckpointGuardSettings(
+        { workspaceRoot: dirRefused },
+        fakeConfig({ checkpoints: { maxFirstSnapshotFiles: 2, allowLargeFirstSnapshot: false } }),
+      ),
+    );
+    await expect(tinyCeilingMgr.create({ kind: 'manual', label: 'x', retentionClass: 'forensic' }))
+      .rejects.toThrow(/first checkpoint|sweep|refus/i);
+
+    const dirAllowed = scratch();
+    for (let i = 0; i < 5; i++) writeFileSync(join(dirAllowed, `f${i}.txt`), 'x');
+    const overrideMgr = new WorkspaceCheckpointManager(
+      withCheckpointGuardSettings(
+        { workspaceRoot: dirAllowed },
+        fakeConfig({ checkpoints: { maxFirstSnapshotFiles: 2, allowLargeFirstSnapshot: true } }),
+      ),
+    );
+    const cp = await overrideMgr.create({ kind: 'manual', label: 'x', retentionClass: 'forensic' });
+    expect(cp).not.toBeNull();
   });
 });

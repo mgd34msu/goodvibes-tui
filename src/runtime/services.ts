@@ -5,7 +5,7 @@ import { SecretsManager } from '../config/secrets.ts';
 import { AutomationDeliveryManager, AutomationManager, AutomationRouteStore } from '@pellux/goodvibes-sdk/platform/automation';
 import { ChannelDeliveryRouter, ChannelPluginRegistry, ChannelPolicyManager, RouteBindingManager, SurfaceRegistry } from '@pellux/goodvibes-sdk/platform/channels';
 import { ApprovalBroker, GatewayMethodCatalog, SharedSessionBroker } from '@pellux/goodvibes-sdk/platform/control-plane';
-import { attachWsOnlyGatewayVerbHandlers, createArchivableFleetRegistry } from './gateway-verbs.ts';
+import { attachWsOnlyGatewayVerbHandlers, createArchivableFleetRegistry } from '@pellux/goodvibes-terminal-shell';
 import { WatcherRegistry } from '@pellux/goodvibes-sdk/platform/watchers';
 import { ArtifactStore } from '@pellux/goodvibes-sdk/platform/artifacts';
 import {

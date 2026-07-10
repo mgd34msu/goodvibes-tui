@@ -8,7 +8,7 @@
 // ---------------------------------------------------------------------------
 
 import { describe, test, expect } from 'bun:test';
-import { createRenderScheduler } from '../../runtime/render-scheduler.ts';
+import { createRenderScheduler } from '@pellux/goodvibes-terminal-shell';
 
 /** A manual flush queue so tick boundaries are deterministic (no real microtask wait). */
 function manualQueue() {
