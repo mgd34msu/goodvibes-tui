@@ -278,13 +278,9 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
     globalHome: homeDirectory,
     configManager,
   });
-  // Step-up (WebAuthn) ceremony service — constructed once here and shared
-  // between the ceremony gateway verbs and the relay gate's verifier, exactly as
-  // the SDK's own createRuntimeServices assembles it (secrets custody = SecretsManager).
+  // Step-up (WebAuthn) ceremony service, shared between the ceremony gateway verbs and the relay gate's verifier.
   const stepUpService = new StepUpService({ secrets: secretsManager });
-  const subscriptionManager = new SubscriptionManager(
-    shellPaths.resolveUserPath('tui', 'subscriptions.json'),
-  );
+  const subscriptionManager = new SubscriptionManager(shellPaths.resolveUserPath('tui', 'subscriptions.json'));
   const serviceRegistry = new ServiceRegistry(shellPaths.resolveProjectPath('tui', 'services.json'), {
     secretsManager,
     subscriptionManager,
