@@ -14,6 +14,7 @@ function baseReceipt(overrides: Partial<CompactionReceiptInput> = {}): Compactio
     lowQuality: false,
     instructionsReinjected: true,
     validationPassed: true,
+    sectionsIncluded: ['standing-instructions', 'recent-turns'],
     outcome: 'applied',
     ...overrides,
   };
@@ -33,6 +34,12 @@ describe('compaction-receipt', () => {
     expect(block).toContain('87/100');
     expect(block).toContain('standing instructions re-injected');
     expect(block).toContain('validation passed');
+    expect(block).toContain('Sections included: standing-instructions, recent-turns');
+  });
+
+  test('applied receipt with no recorded sections says so plainly rather than hiding it', () => {
+    const block = buildCompactionReceiptBlock(baseReceipt({ sectionsIncluded: [] }));
+    expect(block).toContain('Sections included: none recorded');
   });
 
   test('kept-original receipt reports retention, not a misleading savings figure', () => {
