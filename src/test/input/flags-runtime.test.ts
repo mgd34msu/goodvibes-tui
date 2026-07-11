@@ -23,28 +23,35 @@ describe('formatFlagsOverview', () => {
     expect(formatFlagsOverview([])).toContain('No feature flags are registered');
   });
 
-  test('groups flags by state with counts', () => {
+  test('summarizes state counts and lists flags as feature units', () => {
     const text = formatFlagsOverview([
       entry('alpha', 'enabled'),
       entry('beta', 'disabled'),
       entry('gamma', 'disabled', { runtimeToggleable: false }),
       entry('delta', 'killed', { killReason: 'crash loop' }),
     ]);
-    expect(text).toContain('Feature flags (4 total)');
-    expect(text).toContain('Enabled (1):');
-    expect(text).toContain('Disabled — built, dark (2):');
-    expect(text).toContain('Killed (1):');
+    // State counts fold into the summary line; the body is grouped feature units.
+    expect(text).toContain('Feature flags (4 total) — 1 enabled · 2 dark · 1 killed');
     expect(text).toContain('killed: crash loop');
     expect(text).toContain('runtime-toggleable');
     expect(text).toContain('startup-only');
     expect(text).toContain('/flags on <id>');
+    // No flat state-bucket headers anymore.
+    expect(text).not.toContain('Enabled (1):');
+    expect(text).not.toContain('Disabled — built, dark');
   });
 
-  test('shows (none) for empty groups and omits killed section when empty', () => {
-    const text = formatFlagsOverview([entry('alpha', 'enabled')]);
-    expect(text).toContain('Disabled — built, dark (0):');
-    expect(text).toContain('(none)');
-    expect(text).not.toContain('Killed');
+  test('presents each flag as a unit with its config-key summary and a /settings pointer', () => {
+    // A real flag with config keys shows the keys it tunes; an unknown/no-config
+    // flag is a bare toggle. exec-sandbox is a real flag hosted under Runtime & Data.
+    const text = formatFlagsOverview([
+      entry('exec-sandbox', 'disabled'),
+      entry('bare-flag', 'enabled'),
+    ]);
+    expect(text).toContain('one feature unit');
+    expect(text).toContain('tunes: sandbox.enabled');
+    expect(text).toContain('(edit in /settings)');
+    expect(text).toContain('no config keys — toggle only');
   });
 });
 
