@@ -186,6 +186,35 @@ function summarizeExec(obj: Record<string, unknown>): string | null {
   return null;
 }
 
+/**
+ * agent status/get/wait: an optional `failure` field (ChildFailureEnvelope,
+ * see the SDK's tools/agent/child-failure-envelope.ts) is present once the
+ * child agent terminated abnormally (max_turns, circuit_breaker,
+ * watchdog_timeout, budget_exhausted, claim_unverified, api_error, killed,
+ * interrupted, error). Renders it compactly on the collapsed preview line so
+ * a failed child is visible without expanding the full result; absent
+ * `failure` (the common, successful case) falls through to the raw preview.
+ */
+function summarizeAgentFailure(obj: Record<string, unknown>): string | null {
+  const failure = obj.failure;
+  if (!failure || typeof failure !== 'object') return null;
+  const f = failure as Record<string, unknown>;
+  const agentId = typeof f.agentId === 'string' ? f.agentId : '?';
+  const phase = typeof f.phase === 'string' ? f.phase : undefined;
+  const reason = f.reason && typeof f.reason === 'object' ? f.reason as Record<string, unknown> : undefined;
+  const code = reason && typeof reason.code === 'string' ? reason.code : 'error';
+  const message = reason && typeof reason.message === 'string' ? reason.message : '';
+  const partialOutputs = f.partialOutputs && typeof f.partialOutputs === 'object' ? f.partialOutputs as Record<string, unknown> : undefined;
+  const turnsCompleted = asNumber(partialOutputs?.turnsCompleted);
+
+  const MAX_MSG_LEN = 80;
+  const truncatedMessage = message.length > MAX_MSG_LEN ? `${message.slice(0, MAX_MSG_LEN - 3)}...` : message;
+  const phaseText = phase ? ` at ${phase}` : '';
+  const turnsText = turnsCompleted !== undefined ? ` (${turnsCompleted} turn${turnsCompleted === 1 ? '' : 's'} completed)` : '';
+  const msgText = truncatedMessage.length > 0 ? `: ${truncatedMessage}` : '';
+  return `agent ${agentId} failed [${code}]${phaseText}${msgText}${turnsText}`;
+}
+
 export function summarizeToolResult(toolName: string | undefined, content: string): string | null {
   if (!toolName) return null;
   const family = toolName.includes('__') ? toolName.split('__').pop()! : toolName;
@@ -203,6 +232,7 @@ export function summarizeToolResult(toolName: string | undefined, content: strin
     case 'read': return summarizeRead(obj);
     case 'edit': return summarizeEdit(obj);
     case 'exec': return summarizeExec(obj);
+    case 'agent': return summarizeAgentFailure(obj);
     default: return null;
   }
 }
