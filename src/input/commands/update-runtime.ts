@@ -230,15 +230,20 @@ export async function applyUpdate(options: ApplyUpdateOptions): Promise<void> {
 
   // The sqlite-vec native addon travels with the binaries: refresh it in the
   // same download-verify-swap pass so /update never leaves a new binary beside a
-  // stale (or missing) addon. Placed at <execDir>/lib/sqlite-vec-<os>-<arch>/vec0.<suffix>,
-  // exactly where the SDK's loader resolves it. A missing manifest entry is
-  // fatal, identical to the binaries. On macOS the file is refreshed for
-  // consistency even though the platform blocks extension loading.
+  // stale addon. It lands at <execDir>/lib/sqlite-vec-<os>-<arch>/vec0.<suffix>,
+  // exactly where the SDK's loader resolves it. The manifest entry decides
+  // whether the target release ships it — an entry that IS present makes the
+  // download and checksum mandatory (a mismatch is fatal, verified before any
+  // swap), while an absent entry means the target predates the addon and is
+  // skipped rather than blocking an otherwise-valid binary update. On macOS the
+  // file is refreshed for consistency even though the platform blocks extension
+  // loading.
   const addon = resolveSqliteVecAsset(options.platform, options.arch);
+  const addonExpected = addon ? checksums.get(addon.assetName) : undefined;
   let addonBuffer: Buffer | null = null;
-  if (addon) {
+  if (addon && addonExpected !== undefined) {
     addonBuffer = await downloadBuffer(options.fetchImpl, `${baseUrl}/${addon.assetName}`);
-    verifyChecksum(addon.assetName, sha256(addonBuffer), checksums.get(addon.assetName));
+    verifyChecksum(addon.assetName, sha256(addonBuffer), addonExpected);
   }
 
   // All downloads verified before any write — an update must not apply partially.
@@ -247,10 +252,10 @@ export async function applyUpdate(options: ApplyUpdateOptions): Promise<void> {
   if (daemonBuffer) {
     swap(daemonBinaryPath, daemonBuffer);
   }
-  const addonTargetPath = addon
+  const addonTargetPath = addon && addonBuffer
     ? join(dirname(appBinaryPath), 'lib', addon.dirName, addon.fileName)
     : null;
-  if (addon && addonBuffer && addonTargetPath) {
+  if (addonBuffer && addonTargetPath) {
     const writeAddon = options.writeAddon ?? writeAddonAtomically;
     writeAddon(addonTargetPath, addonBuffer);
   }

@@ -225,6 +225,23 @@ restart_running_agent() {
 install_sqlite_vec() {
   [ "$WITH_VECTOR" = "1" ] || return 0
   addon_asset="sqlite-vec-${VEC_OS}-${arch_tag}.${VEC_SUFFIX}"
+
+  # The addon is verified against the SAME SHA256SUMS.txt as the binaries, so
+  # the manifest entry decides whether this release even ships it. A release
+  # that predates the addon has no entry — that is an older build with nothing
+  # to install here, so note it and continue (the binaries still run; semantic
+  # vector search stays unavailable, exactly as before the addon shipped). This
+  # is the only non-fatal case. When the entry IS present the download and its
+  # checksum are mandatory: a 404 or a mismatch is fatal, never a silent
+  # unverified install.
+  expected=$(awk -v name="$addon_asset" '$2 == name || $2 == "*"name {print $1}' "$WORKDIR/SHA256SUMS.txt" | head -1)
+  if [ -z "$expected" ]; then
+    say ""
+    say "  note: release $VERSION does not ship $addon_asset — semantic vector"
+    say "  search will be unavailable; upgrade to a release that includes it."
+    return 0
+  fi
+
   addon_dir="$INSTALL_DIR/lib/sqlite-vec-${VEC_OS}-${arch_tag}"
   addon_target="$addon_dir/vec0.${VEC_SUFFIX}"
 
@@ -232,8 +249,6 @@ install_sqlite_vec() {
   say "  downloading $addon_asset ..."
   fetch "$BASE_URL/$addon_asset" "$WORKDIR/$addon_asset"
 
-  expected=$(awk -v name="$addon_asset" '$2 == name || $2 == "*"name {print $1}' "$WORKDIR/SHA256SUMS.txt" | head -1)
-  [ -n "$expected" ] || fail "SHA256SUMS.txt has no entry for $addon_asset — refusing to install an unverified native addon"
   actual=$(sha256_of "$WORKDIR/$addon_asset")
   [ "$expected" = "$actual" ] || fail "checksum mismatch for $addon_asset (expected $expected, got $actual)"
   say "  verified   $addon_asset"
