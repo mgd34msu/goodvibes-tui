@@ -264,14 +264,15 @@ function renderDraftProposal(draft: WorkstreamDraft): string {
   lines.push('Work items (ordinal order):');
   lines.push(...formatDraftItems(draft.spec));
   // Best-of-N plan validation (workstream-attempts-validation.ts): surface the
-  // leaf/worktree constraint breaks here so a violating plan is visible before
-  // approve, and blocked at launch. Notes (e.g. the engine's attempts cap) are advisory.
+  // worktree/stable-id constraint breaks here so a violating plan is visible
+  // before approve, and blocked at launch. Non-leaf best-of-N (items with
+  // dependents) is allowed. Notes (e.g. the engine's attempts cap) are advisory.
   const attemptsCheck = validateAttempts(draft.spec);
   if (attemptsCheck.violations.length > 0) {
     lines.push('Best-of-N: plan is INVALID and cannot launch until fixed:');
     for (const v of attemptsCheck.violations) lines.push(`  ✗ ${v}`);
   } else if (attemptsCheck.hasAttempts) {
-    lines.push('Best-of-N: leaf + worktree constraints satisfied — winners are chosen via /workstream attempts pick.');
+    lines.push('Best-of-N: worktree + stable-id constraints satisfied — winners are chosen via /workstream attempts pick, and any dependents wait for the winner to be picked and merged.');
   }
   for (const n of attemptsCheck.notes) lines.push(`  note: ${n}`);
   lines.push(
