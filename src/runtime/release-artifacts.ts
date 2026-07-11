@@ -42,6 +42,36 @@ export function resolveArtifactNames(platform: string, arch: string): ReleaseArt
   };
 }
 
+export interface SqliteVecAsset {
+  /** Release asset filename, e.g. `sqlite-vec-linux-x64.so`. */
+  readonly assetName: string;
+  /** Directory name the SDK loader resolves, e.g. `sqlite-vec-linux-x64`. */
+  readonly dirName: string;
+  /** File the loader opens inside that directory, e.g. `vec0.so`. */
+  readonly fileName: string;
+}
+
+/**
+ * Names the sqlite-vec native addon for a platform/arch. Unlike the binaries
+ * (whose release tag maps darwin→"macos"), the addon keeps the Node-style
+ * platform tag ("linux" | "darwin") because that is exactly what the SDK's
+ * loader resolves at `<execDir>/lib/sqlite-vec-<process.platform>-<process.arch>/vec0.<suffix>`.
+ * The scripts/install.sh installer and the release workflow name the asset the
+ * same way; all three must stay in lockstep.
+ */
+export function resolveSqliteVecAsset(platform: string, arch: string): SqliteVecAsset | null {
+  if ((platform !== 'linux' && platform !== 'darwin') || (arch !== 'x64' && arch !== 'arm64')) {
+    return null;
+  }
+  const suffix = platform === 'darwin' ? 'dylib' : 'so';
+  const dirName = `sqlite-vec-${platform}-${arch}`;
+  return {
+    assetName: `${dirName}.${suffix}`,
+    dirName,
+    fileName: `vec0.${suffix}`,
+  };
+}
+
 export function sha256(buffer: Buffer | Uint8Array): string {
   return createHash('sha256').update(buffer).digest('hex');
 }

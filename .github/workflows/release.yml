@@ -223,6 +223,31 @@ jobs:
         with:
           path: dist/
           merge-multiple: true
+      - name: Stage sqlite-vec addons as flat release assets
+        # The per-target build (scripts/build.ts) copied each platform's
+        # sqlite-vec native addon into dist/lib/sqlite-vec-<os>-<arch>/vec0.<suffix>;
+        # the artifact download merged all four platforms' lib/ trees together.
+        # Flatten them to installer-parseable asset names (sqlite-vec-<os>-<arch>.<suffix>).
+        # Every platform's addon MUST be present — a missing one would silently
+        # ship a binary that loses semantic vector search, which is exactly the
+        # regression this asset closes, so a missing file is fatal here.
+        run: |
+          set -eu
+          cd dist
+          stage() {
+            src="lib/$1/vec0.$2"
+            dest="$1.$2"
+            if [ ! -f "$src" ]; then
+              echo "FATAL: expected sqlite-vec addon missing: dist/$src" >&2
+              exit 1
+            fi
+            cp "$src" "$dest"
+            echo "staged $dest"
+          }
+          stage sqlite-vec-linux-x64 so
+          stage sqlite-vec-linux-arm64 so
+          stage sqlite-vec-darwin-x64 dylib
+          stage sqlite-vec-darwin-arm64 dylib
       - name: Generate release checksums
         run: |
           cd dist
@@ -235,6 +260,10 @@ jobs:
             goodvibes-daemon-linux-arm64 \
             goodvibes-daemon-macos-x64 \
             goodvibes-daemon-macos-arm64 \
+            sqlite-vec-linux-x64.so \
+            sqlite-vec-linux-arm64.so \
+            sqlite-vec-darwin-x64.dylib \
+            sqlite-vec-darwin-arm64.dylib \
             > SHA256SUMS.txt
       - name: Extract version
         id: version
@@ -282,6 +311,10 @@ jobs:
             dist/goodvibes-daemon-linux-arm64
             dist/goodvibes-daemon-macos-x64
             dist/goodvibes-daemon-macos-arm64
+            dist/sqlite-vec-linux-x64.so
+            dist/sqlite-vec-linux-arm64.so
+            dist/sqlite-vec-darwin-x64.dylib
+            dist/sqlite-vec-darwin-arm64.dylib
             dist/SHA256SUMS.txt
 
   publish-platform-packages:

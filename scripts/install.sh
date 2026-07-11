@@ -9,6 +9,16 @@
 # into ~/.local/bin (override with GOODVIBES_INSTALL_DIR), and runs the
 # doctor install self-check when possible.
 #
+# It also downloads and verifies the platform's sqlite-vec native addon and
+# places it at $INSTALL_DIR/lib/sqlite-vec-<os>-<arch>/vec0.<suffix> — the path
+# the SDK resolves next to the running binary — so semantic vector search works
+# for pure-binary installs (npm installs already ship it in the platform
+# package). One copy in $INSTALL_DIR/lib serves goodvibes, goodvibes-daemon, and
+# goodvibes-agent, since all three share $INSTALL_DIR. On macOS the addon is
+# installed for consistency but Apple's system SQLite blocks extension loading,
+# so the runtime reports the vector index unavailable and memory search stays
+# literal — see docs/getting-started.md.
+#
 # Also installs goodvibes-agent (the always-on personal agent) by default,
 # as a compiled binary from its own repository's release — the whole install
 # is pure-binary and checksum-verified; nothing is fetched through a package
@@ -20,6 +30,7 @@
 #   GOODVIBES_AGENT           set to 0 to skip installing goodvibes-agent (default: 1)
 #   GOODVIBES_AGENT_VERSION   install a specific agent tag (default: latest)
 #   GOODVIBES_RESTART_DAEMON  set to 0 to leave running daemon/agent untouched (default: 1)
+#   GOODVIBES_VECTOR          set to 0 to skip the sqlite-vec native addon (default: 1)
 #
 # This file is versioned in the goodvibes-tui repository at scripts/install.sh
 # and published to goodvibes.sh on release. The `/update` command re-runs the
@@ -34,6 +45,7 @@ REQUESTED_VERSION="${GOODVIBES_VERSION:-latest}"
 REQUESTED_AGENT_VERSION="${GOODVIBES_AGENT_VERSION:-latest}"
 WITH_AGENT="${GOODVIBES_AGENT:-1}"
 RESTART_DAEMON="${GOODVIBES_RESTART_DAEMON:-1}"
+WITH_VECTOR="${GOODVIBES_VECTOR:-1}"
 
 say() { printf '%s\n' "$*"; }
 fail() { printf 'install.sh: %s\n' "$*" >&2; exit 1; }
@@ -58,6 +70,13 @@ resolve_platform() {
     *) fail "unsupported architecture: $arch" ;;
   esac
   PLATFORM_SUFFIX="${os_tag}-${arch_tag}"
+  # The sqlite-vec addon uses the Node-style platform tag (linux|darwin) and the
+  # shared-library suffix the SDK's loader resolves — distinct from the release
+  # binaries' os_tag (linux|macos).
+  case "$os_tag" in
+    linux) VEC_OS="linux"; VEC_SUFFIX="so" ;;
+    macos) VEC_OS="darwin"; VEC_SUFFIX="dylib" ;;
+  esac
 }
 
 # --- tooling: curl or wget, and a sha256 command ---
@@ -196,6 +215,34 @@ restart_running_agent() {
   restart_bare_processes '[g]oodvibes-agent' "$INSTALL_DIR/goodvibes-agent"
 }
 
+# --- sqlite-vec native addon: restores semantic vector search ---
+# The SDK resolves the addon at <execDir>/lib/sqlite-vec-<os>-<arch>/vec0.<suffix>
+# next to the running binary, so one copy in $INSTALL_DIR/lib serves goodvibes,
+# goodvibes-daemon, and goodvibes-agent (they share $INSTALL_DIR). Verified
+# against the same SHA256SUMS.txt as the binaries — a missing manifest entry is
+# a hard failure, never a skip. Placed with an atomic rename so a running
+# process never dlopen()s a half-written file.
+install_sqlite_vec() {
+  [ "$WITH_VECTOR" = "1" ] || return 0
+  addon_asset="sqlite-vec-${VEC_OS}-${arch_tag}.${VEC_SUFFIX}"
+  addon_dir="$INSTALL_DIR/lib/sqlite-vec-${VEC_OS}-${arch_tag}"
+  addon_target="$addon_dir/vec0.${VEC_SUFFIX}"
+
+  say ""
+  say "  downloading $addon_asset ..."
+  fetch "$BASE_URL/$addon_asset" "$WORKDIR/$addon_asset"
+
+  expected=$(awk -v name="$addon_asset" '$2 == name || $2 == "*"name {print $1}' "$WORKDIR/SHA256SUMS.txt" | head -1)
+  [ -n "$expected" ] || fail "SHA256SUMS.txt has no entry for $addon_asset — refusing to install an unverified native addon"
+  actual=$(sha256_of "$WORKDIR/$addon_asset")
+  [ "$expected" = "$actual" ] || fail "checksum mismatch for $addon_asset (expected $expected, got $actual)"
+  say "  verified   $addon_asset"
+
+  mkdir -p "$addon_dir"
+  mv -f "$WORKDIR/$addon_asset" "$addon_target"
+  say "  installed  $addon_target"
+}
+
 # --- goodvibes-agent: compiled binary from its own repository's release ---
 install_agent() {
   say ""
@@ -279,6 +326,10 @@ main() {
   else
     fail "the installed binary failed to run ('goodvibes --version'); the download may not match this platform"
   fi
+
+  # Install the sqlite-vec addon before restarting the daemon so the restarted
+  # process picks it up and semantic vector search is live immediately.
+  install_sqlite_vec
 
   restart_running_daemon
 
