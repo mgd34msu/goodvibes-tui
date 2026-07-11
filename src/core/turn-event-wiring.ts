@@ -1,7 +1,7 @@
 import type { UiRuntimeEvents, RuntimeEventBus } from '@/runtime/index.ts';
 import { buildPersistedSessionContext, persistConversation } from '@/runtime/index.ts';
 import { buildCompactionReceiptBlock } from './compaction-receipt.ts';
-import { recordTurnAnchor, summarizeTurnLabel } from './rewind-turn-anchors.ts';
+import { persistTurnAnchors, recordTurnAnchor, summarizeTurnLabel } from './rewind-turn-anchors.ts';
 import { logger } from '@pellux/goodvibes-sdk/platform/utils';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 import type { HookDispatcher, HookPhase, HookCategory, HookEventPath } from '@pellux/goodvibes-sdk/platform/hooks';
@@ -235,6 +235,9 @@ export function wireTurnEventHandlers(
         messageCount: conversation.getMessageCount(),
         at: _clock(),
       });
+      // Mirror the anchors to the session's sidecar so message-anchored /rewind
+      // survives a resume (the in-memory registry alone is process-local).
+      persistTurnAnchors(runtime.sessionId, workingDir);
     } catch { /* best-effort; a rewind-anchor miss must never break the turn */ }
     // Auto-compaction is owned by the SDK Orchestrator's post-turn maintenance
     // (handlePostTurnContextMaintenance), which runs on every turn against the

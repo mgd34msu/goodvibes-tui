@@ -8,6 +8,7 @@ import type { SessionReturnContextSummary } from '@/runtime/index.ts';
 import { formatReturnContextForDisplay, getReturnContextMode, maybeAssistReturnContextSummary } from '@/runtime/index.ts';
 import { requirePanelManager, requireProviderApi, requireSessionManager, requireShellPaths } from './runtime-services.ts';
 import { replayJournalForSession } from '../../core/session-recovery.ts';
+import { restoreTurnAnchors } from '../../core/rewind-turn-anchors.ts';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 
 function parseTranscriptKind(raw: string | undefined): TranscriptEventKind | 'all' {
@@ -257,6 +258,12 @@ export async function handleSessionWorkflowCommand(args: string[], ctx: CommandC
       ctx.session.conversationManager.rebuildHistory();
       ctx.session.runtime.sessionId = found.name;
 
+      // Restore the resumed session's message-anchored rewind anchors from its
+      // sidecar so /rewind works identically before and after the resume. The
+      // in-memory registry is process-local, so a fresh process would otherwise
+      // start with no anchors for the loaded session.
+      const restoredAnchorCount = restoreTurnAnchors(found.name, requireShellPaths(ctx).workingDirectory);
+
       // Journal replay: recover turns that post-date the loaded snapshot.
       const shellPaths = requireShellPaths(ctx);
       const journalReplay = replayJournalForSession({
@@ -293,6 +300,9 @@ export async function handleSessionWorkflowCommand(args: string[], ctx: CommandC
       ctx.renderRequest();
       const resumedMsgCount = ctx.session.conversationManager.getMessageCount();
       ctx.print(`Resumed session: ${found.name}\n  Name: ${meta.title || '(untitled)'}\n  Messages: ${resumedMsgCount}\n  Model: ${meta.model || ctx.session.runtime.model}`);
+      if (restoredAnchorCount > 0) {
+        ctx.print(`  Rewind: restored ${restoredAnchorCount} turn anchor(s) — /rewind is available for this resumed session.`);
+      }
       if (journalReplay.replayed > 0) {
         ctx.print(`  [Recovery] Replayed ${journalReplay.replayed} journal record(s) — restored turns since last snapshot.`);
       }
