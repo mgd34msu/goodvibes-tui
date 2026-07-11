@@ -18,8 +18,18 @@ import {
 import { buildGoodVibesSecretKey, buildGoodVibesSecretRef, isLoopbackAddress, isSecretReferenceValue } from './onboarding-wizard-helpers.ts';
 import type { OnboardingWizardControllerLike } from './onboarding-wizard-types.ts';
 
+/** SDK schema default for behavior.hitlMode (schema-domain-core DEFAULT_CONFIG). */
+const HITL_MODE_SCHEMA_DEFAULT = 'balanced';
+/** Feature flag that gates behavior.hitlMode preset application in ModeManager. */
+const HITL_UX_MODES_FEATURE_FLAG = 'hitl-ux-modes';
+
 export function buildOnboardingApplyRequest(controller: OnboardingWizardControllerLike): OnboardingApplyRequest {
     const operations: OnboardingApplyOperation[] = [];
+    // Accumulates capability/feature flags that onboarding selections require to
+    // be enabled so the written config actually takes effect (e.g. behavior.hitlMode
+    // is inert unless hitl-ux-modes is on). Flushed once, unioned with the surface
+    // flags, at the end of the apply build so every gating flag is set in one batch.
+    const featureFlagsToEnable = new Set<string>();
     const hasServers = controller.hasServerCapabilitiesSelected();
     const browserAccess = controller.shouldEnableBrowserSurface();
     const httpListener = controller.shouldEnableHttpListener();
@@ -119,7 +129,18 @@ export function buildOnboardingApplyRequest(controller: OnboardingWizardControll
       setConfig('provider.model', formatProviderModel(defaultModel.providerId, defaultModel.modelId));
     }
     setConfig('provider.reasoningEffort', controller.getStringFieldValue('default-model.reasoning', controller.runtimeSnapshot?.providerRouting.primaryReasoningEffort ?? 'medium'));
-    setConfig('behavior.hitlMode', controller.getStringFieldValue('experience.hitl', controller.runtimeSnapshot?.runtimeDefaults.behavior.hitlMode ?? 'balanced'));
+    const hitlMode = controller.getStringFieldValue('experience.hitl', controller.runtimeSnapshot?.runtimeDefaults.behavior.hitlMode ?? 'balanced');
+    setConfig('behavior.hitlMode', hitlMode);
+    // behavior.hitlMode is gated by the hitl-ux-modes feature flag: ModeManager
+    // only applies the chosen preset to the notification router when the flag is
+    // on. Writing hitlMode without enabling the flag leaves the user's choice
+    // silently inert. When the user picks a non-default mode, enable the gating
+    // flag in the same apply batch so the selection actually takes effect. The
+    // SDK schema default is 'balanced' (schema-domain-core DEFAULT_CONFIG); a
+    // choice equal to the default is left to the flag's own default-off state.
+    if (hitlMode !== HITL_MODE_SCHEMA_DEFAULT) {
+      featureFlagsToEnable.add(HITL_UX_MODES_FEATURE_FLAG);
+    }
     setConfig('behavior.guidanceMode', controller.getStringFieldValue('experience.guidance', controller.runtimeSnapshot?.runtimeDefaults.behavior.guidanceMode ?? 'minimal'));
     setConfig('permissions.mode', controller.getStringFieldValue('experience.permissions', controller.runtimeSnapshot?.runtimeDefaults.permissionsMode ?? 'prompt'));
     setConfig('storage.secretPolicy', controller.getStringFieldValue('external-services.secret-policy', controller.runtimeSnapshot?.runtimeDefaults.secretStoragePolicy ?? 'preferred_secure'));
@@ -167,11 +188,14 @@ export function buildOnboardingApplyRequest(controller: OnboardingWizardControll
         else setConfig(setupField.configKey, value);
       }
     }
-    enableFeatureFlags(getServerSurfaceFeatureFlags({
+    for (const surfaceFlag of getServerSurfaceFeatureFlags({
       serverBacked: hasServers,
       web: browserAccess,
       externalSurfaces: enabledExternalSurfaceIds,
-    }));
+    })) {
+      featureFlagsToEnable.add(surfaceFlag);
+    }
+    enableFeatureFlags([...featureFlagsToEnable].sort((left, right) => left.localeCompare(right)));
 
     acknowledge('providers', 'providers.reviewed');
     acknowledge('subscriptions', 'accounts.subscriptions');

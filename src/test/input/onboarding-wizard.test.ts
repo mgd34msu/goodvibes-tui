@@ -671,6 +671,9 @@ describe('OnboardingWizardController', () => {
     expect(configValues.get('provider.reasoningEffort')).toBe('high');
     expect(configValues.get('storage.secretPolicy')).toBe('plaintext_allowed');
     expect(configValues.get('behavior.hitlMode')).toBe('operator');
+    // A non-default hitlMode must also enable its gating flag, or ModeManager
+    // never applies the preset and the choice is silently inert.
+    expect(configValues.get('featureFlags.hitl-ux-modes')).toBe('enabled');
     expect(configValues.get('behavior.guidanceMode')).toBe('guided');
     expect(configValues.get('permissions.mode')).toBe('allow-all');
     expect(request.operations).toContainEqual({ kind: 'acknowledge', target: 'providers', acknowledged: true });
@@ -701,6 +704,41 @@ describe('OnboardingWizardController', () => {
     expect(configValues.get('featureFlags.discord-surface')).toBe('enabled');
     expect(configValues.get('featureFlags.ntfy-surface')).toBe('enabled');
     expect(configValues.get('featureFlags.webhook-surface')).toBe('enabled');
+  });
+
+  // behavior.hitlMode is gated by the hitl-ux-modes feature flag: ModeManager
+  // (SDK-owned, test-guarded there) only applies the chosen preset to the
+  // notification router when that flag is enabled. The TUI's job at the apply
+  // seam is to never emit a hitlMode choice without its gating flag — otherwise
+  // the choice is silently inert. These two tests pin that seam.
+  test('a non-default hitlMode enables the gating flag so the choice takes effect', () => {
+    const wizard = new OnboardingWizardController();
+    wizard.open('new');
+    wizard.setFieldValue('experience.hitl', 'quiet');
+
+    const configValues = new Map<string, unknown>();
+    for (const operation of wizard.buildApplyRequest().operations) {
+      if (operation.kind === 'set-config') configValues.set(operation.key, operation.value);
+    }
+
+    expect(configValues.get('behavior.hitlMode')).toBe('quiet');
+    expect(configValues.get('featureFlags.hitl-ux-modes')).toBe('enabled');
+  });
+
+  test('the default hitlMode does not force the gating flag on', () => {
+    const wizard = new OnboardingWizardController();
+    wizard.open('new');
+    // Leave experience.hitl at its schema default ('balanced'): the wizard must
+    // not silently flip a feature flag the user never opted into.
+    wizard.setFieldValue('experience.hitl', 'balanced');
+
+    const configValues = new Map<string, unknown>();
+    for (const operation of wizard.buildApplyRequest().operations) {
+      if (operation.kind === 'set-config') configValues.set(operation.key, operation.value);
+    }
+
+    expect(configValues.get('behavior.hitlMode')).toBe('balanced');
+    expect(configValues.has('featureFlags.hitl-ux-modes')).toBe(false);
   });
 
   test('does not block selected external surfaces when setup values are blank', () => {
@@ -1994,15 +2032,20 @@ describe('daemon/auth security wizard hardening (TASK-035, TASK-036, TASK-037)',
     expect(corsNoteField?.defaultValue).toBe('Info');
   });
 
-  test('cors-note hint references settings.json not goodvibes.json', () => {
+  test('cors-note hint references the real controlPlane.cors keys, not the never-existent httpListener CORS keys', () => {
     const wizard = new OnboardingWizardController();
     wizard.open('new');
     wizard.setFieldValue('capabilities.webhook-events', true);
 
     const networkStep = wizard.steps.find((s) => s.id === 'network');
     const corsNoteField = networkStep?.fields.find((f) => f.id === 'network.cors-note');
-    expect(corsNoteField?.hint).toContain('settings.json');
-    expect(corsNoteField?.hint).not.toContain('goodvibes.json');
+    // The listener honors controlPlane.cors.enabled / controlPlane.cors.allowedOrigins,
+    // which are real, settable config keys. The old note pointed users at
+    // httpListener.enforceCors / httpListener.allowedOrigins, which never existed.
+    expect(corsNoteField?.hint).toContain('controlPlane.cors.enabled');
+    expect(corsNoteField?.hint).toContain('controlPlane.cors.allowedOrigins');
+    expect(corsNoteField?.hint).not.toContain('httpListener.enforceCors');
+    expect(corsNoteField?.hint).not.toContain('httpListener.allowedOrigins');
   });
 
   test('trust-proxy-notice hint contains RESIDUAL RISK language', () => {
