@@ -20,7 +20,7 @@ export type GoodVibesCliCommand =
   | 'surfaces'
   | 'listener'
   | 'control-plane'
-  | 'bundle'
+  | 'support-bundle'
   | 'remote'
   | 'bridge'
   | 'hooks'

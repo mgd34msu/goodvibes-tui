@@ -201,9 +201,14 @@ describe('parseCliFlags', () => {
   });
 
   test('parses GoodVibes-specific command names', () => {
-    for (const command of ['surfaces', 'control-plane', 'bundle', 'remote', 'bridge', 'service'] as const) {
+    for (const command of ['surfaces', 'control-plane', 'support-bundle', 'remote', 'bridge', 'service'] as const) {
       expect(parseGoodVibesCli([command]).command).toBe(command);
     }
+  });
+
+  test('bundle/bundles remain backward-compat aliases for support-bundle', () => {
+    expect(parseGoodVibesCli(['bundle']).command).toBe('support-bundle');
+    expect(parseGoodVibesCli(['bundles']).command).toBe('support-bundle');
   });
 
   test('parses --cd, --no-alt-screen, completion, and port flags', () => {
