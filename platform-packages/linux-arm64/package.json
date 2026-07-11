@@ -1,10 +1,14 @@
 {
   "name": "@pellux/goodvibes-tui-linux-arm64",
-  "version": "1.13.1",
+  "version": "1.14.0",
   "description": "Prebuilt goodvibes and goodvibes-daemon binaries for linux-arm64. Installed automatically as an optional dependency of @pellux/goodvibes-tui; do not install directly.",
   "license": "MIT",
-  "os": ["linux"],
-  "cpu": ["arm64"],
+  "os": [
+    "linux"
+  ],
+  "cpu": [
+    "arm64"
+  ],
   "files": [
     "bin"
   ],
