@@ -56,10 +56,14 @@ function registerTools(registry: ToolRegistry): void {
 }
 
 describe('registerAllTools', () => {
-  test('registers exactly 26 tools', () => {
+  test('registers exactly 27 tools', () => {
     const registry = new ToolRegistry();
     registerTools(registry);
-    expect(registry.list()).toHaveLength(26);
+    // 27: the SDK's context_accounting tool is now always registered on the
+    // shared roster (unbound by default here, so it honestly reports no live
+    // session context — see runtime/context-accounting-source.ts for the
+    // interactive session's real binding).
+    expect(registry.list()).toHaveLength(27);
   });
 
   test('registers a tool named "repo_map"', () => {
