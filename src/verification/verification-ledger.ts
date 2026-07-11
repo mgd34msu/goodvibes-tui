@@ -27,6 +27,60 @@ export interface VerificationLedger {
   };
 }
 
+/**
+ * Baseline count of `Settings schema and persistence` items with real local
+ * behavior verification, as measured when this ledger was first authored. New
+ * schema keys added since then are accounted for explicitly (see
+ * FEATURE_KNOB_LOCAL_SETTINGS) rather than folded into this number, so the
+ * baseline stays an auditable fixed point.
+ */
+const SETTINGS_BEHAVIOR_BASELINE = 184;
+
+/**
+ * Config keys promoted into CONFIG_SCHEMA for the flag-gated feature knobs
+ * (SDK commit f5c4af31, "config: add schema keys for flag-gated feature
+ * knobs"). Adding these 28 keys raised the settings inventory `total` without a
+ * matching rise in behavior-verified coverage, which dropped
+ * `localBehaviorPercent` below its floor. Each key is a local, non-external
+ * setting whose full persistence behavior — schema default, set → write →
+ * reload round-trip, and reset-to-default — is exercised by
+ * `src/test/verification/feature-knob-settings-persistence.test.ts`. They are
+ * therefore genuinely behavior-verified locally and counted as such here.
+ */
+export const FEATURE_KNOB_LOCAL_SETTINGS = [
+  'provider.optimizerMode',
+  'provider.optimizerPinnedModel',
+  'permissions.divergenceThreshold',
+  'permissions.maxDivergenceRecords',
+  'tools.overflowSpillBackend',
+  'notifications.burstWindowMs',
+  'notifications.burstThreshold',
+  'notifications.burstCooldownMs',
+  'fetch.sanitizeMode',
+  'fetch.trustedHosts',
+  'fetch.blockedHosts',
+  'security.tokenAudit.rotationCadenceDays',
+  'security.tokenAudit.rotationWarningDays',
+  'security.tokenAudit.managed',
+  'integrations.delivery.maxRetries',
+  'integrations.delivery.initialDelayMs',
+  'integrations.delivery.maxDelayMs',
+  'integrations.delivery.maxDlqSize',
+  'integrations.delivery.sloEnforced',
+  'policy.bundleSource',
+  'policy.bundlePath',
+  'agents.passiveInjection.budgetTokens',
+  'agents.passiveInjection.relevanceFloor',
+  'agents.passiveInjection.codeLimit',
+  'agents.contextCompactThreshold',
+  'runtime.toolBudget.maxMs',
+  'runtime.toolBudget.maxTokens',
+  'runtime.toolBudget.maxCostUsd',
+] as const;
+
+/** Settings with real local behavior verification: the authored baseline plus the newly persistence-tested feature-knob keys. */
+const SETTINGS_BEHAVIOR_VERIFIED = SETTINGS_BEHAVIOR_BASELINE + FEATURE_KNOB_LOCAL_SETTINGS.length;
+
 const EXTERNAL_SLASH_COMMANDS = new Set([
   'auth',
   'bridge',
@@ -137,8 +191,8 @@ export function buildVerificationLedger(root: string): VerificationLedger {
       area: 'Settings schema and persistence',
       total: settings,
       localSignalVerified: settings,
-      localBehaviorVerified: 184,
-      externalOutcomeRequired: settings - 184,
+      localBehaviorVerified: SETTINGS_BEHAVIOR_VERIFIED,
+      externalOutcomeRequired: settings - SETTINGS_BEHAVIOR_VERIFIED,
       notes: 'Every schema setting can be validated for schema/default/load/write/location; external side effects remain separate.',
     },
     {
