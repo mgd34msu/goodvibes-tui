@@ -5,6 +5,7 @@ import { SecretsManager } from '../config/secrets.ts';
 import { AutomationDeliveryManager, AutomationManager, AutomationRouteStore } from '@pellux/goodvibes-sdk/platform/automation';
 import { ChannelDeliveryRouter, ChannelPluginRegistry, ChannelPolicyManager, RouteBindingManager, SurfaceRegistry } from '@pellux/goodvibes-sdk/platform/channels';
 import { ApprovalBroker, GatewayMethodCatalog, SharedSessionBroker } from '@pellux/goodvibes-sdk/platform/control-plane';
+import { StepUpService } from '@pellux/goodvibes-sdk/daemon';
 import { attachWsOnlyGatewayVerbHandlers, createArchivableFleetRegistry } from '@pellux/goodvibes-terminal-shell';
 import { WatcherRegistry } from '@pellux/goodvibes-sdk/platform/watchers';
 import { ArtifactStore } from '@pellux/goodvibes-sdk/platform/artifacts';
@@ -171,6 +172,7 @@ export interface RuntimeServices {
   readonly memorySpine: MemorySpineClient;
   readonly serviceRegistry: ServiceRegistry;
   readonly secretsManager: SecretsManager;
+  readonly stepUpService: StepUpService;
   readonly subscriptionManager: SubscriptionManager;
   readonly localUserAuthManager: UserAuthManager;
   readonly profileManager: ProfileManager;
@@ -276,6 +278,10 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
     globalHome: homeDirectory,
     configManager,
   });
+  // Step-up (WebAuthn) ceremony service — constructed once here and shared
+  // between the ceremony gateway verbs and the relay gate's verifier, exactly as
+  // the SDK's own createRuntimeServices assembles it (secrets custody = SecretsManager).
+  const stepUpService = new StepUpService({ secrets: secretsManager });
   const subscriptionManager = new SubscriptionManager(
     shellPaths.resolveUserPath('tui', 'subscriptions.json'),
   );
@@ -639,7 +645,7 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
   // family without it. principals.*/channels.profiles.*/ci.* register unconditionally; checkin.* only with
   // channelDeliveryRouter/providerRegistry/automationManager/sessionLister ALL present; fleet needs-input push gated by
   // runtimeBus/sessionPresence (fleet-needs-input-push.ts). conversationRewindPort serves conversation-scope rewind live.
-  attachWsOnlyGatewayVerbHandlers(gatewayMethods, { processRegistry, workspaceCheckpointManager, conversationRewindPort: createSessionConversationRewindPort(), sessionBroker, secretsManager, approvalBroker, shellPaths, configManager, runtimeStore: options.runtimeStore, channelDeliveryRouter, providerRegistry, automationManager, sessionLister: sessionBroker, ...wireFleetNeedsInputPush({ registry: processRegistry, runtimeBus: options.runtimeBus, sessionBroker }) });
+  attachWsOnlyGatewayVerbHandlers(gatewayMethods, { processRegistry, workspaceCheckpointManager, conversationRewindPort: createSessionConversationRewindPort(), sessionBroker, secretsManager, stepUpService, approvalBroker, shellPaths, configManager, runtimeStore: options.runtimeStore, channelDeliveryRouter, providerRegistry, automationManager, sessionLister: sessionBroker, ...wireFleetNeedsInputPush({ registry: processRegistry, runtimeBus: options.runtimeBus, sessionBroker }) });
   const integrationHelpers = new IntegrationHelperService({
     workingDirectory,
     homeDirectory,
@@ -723,6 +729,7 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
     memorySpine,
     serviceRegistry,
     secretsManager,
+    stepUpService,
     subscriptionManager,
     localUserAuthManager,
     profileManager,

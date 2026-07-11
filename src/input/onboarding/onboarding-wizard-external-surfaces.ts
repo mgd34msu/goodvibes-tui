@@ -366,7 +366,7 @@ function buildSurfaceSpec(overlay: SurfaceOverlay): ExternalSurfaceSpec {
 
   // Auto-include any SDK field (other than the enabled toggle) the overlay did
   // not curate, so a new SDK channel field surfaces in onboarding automatically.
-  const coveredKeys = new Set(overlay.fields.filter((f) => !f.tuiOnly).map((f) => f.configKey));
+  const coveredKeys = new Set<string>(overlay.fields.filter((f) => !f.tuiOnly).map((f) => f.configKey));
   const enabledKey = `surfaces.${overlay.onboardingId}.enabled`;
   const appended: ExternalSurfaceSetupFieldSpec[] = [];
   for (const sdkField of schema.fields) {
