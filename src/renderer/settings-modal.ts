@@ -234,6 +234,9 @@ function buildFlagContext(entry: FlagEntry | null): string[] {
     `Default: ${entry.flag.defaultState}`,
     `Tier: ${entry.flag.tier}`,
     `Runtime toggleable: ${entry.flag.runtimeToggleable ? 'yes' : 'no'}`,
+    ...(entry.pendingRestart
+      ? [`Pending restart: saved as ${entry.persistedState}; effective state stays ${entry.state} until the next launch.`]
+      : []),
     '',
     entry.flag.description,
     ...(entry.state === 'killed' && entry.flag.killReason ? ['', `Kill reason: ${entry.flag.killReason}`] : []),
@@ -451,11 +454,15 @@ function renderSettingTableRow(
   defaultWidth: number,
 ): string {
   if (entry.flag) {
-    const { flag, state } = entry.flag;
+    const { flag, state, pendingRestart, persistedState } = entry.flag;
     const stateMark = state === 'enabled' ? '●' : state === 'killed' ? '✕' : '○';
     const label = `${stateMark} ${flag.name}`;
     const source = `tier ${flag.tier} ${flag.runtimeToggleable ? 'live' : 'restart'}`;
-    return `${marker} ${padDisplay(label, keyWidth)}  ${padDisplay(state, valueWidth)}  ${padDisplay('feature', typeWidth)}  ${padDisplay(source, sourceWidth)}  ${padDisplay(flag.defaultState, defaultWidth)}`;
+    // A startup-gated flag toggled this session keeps its effective state and
+    // shows the pending value it will take on restart, so the row never implies
+    // the change already took effect.
+    const value = pendingRestart ? `${state} → ${persistedState} on restart` : state;
+    return `${marker} ${padDisplay(label, keyWidth)}  ${padDisplay(value, valueWidth)}  ${padDisplay('feature', typeWidth)}  ${padDisplay(source, sourceWidth)}  ${padDisplay(flag.defaultState, defaultWidth)}`;
   }
   const value = currentSettingValue(modal, entry, selected);
   const source = `${entry.effectiveSource ?? 'default'}${entry.locked ? ' locked' : ''}${entry.conflict ? ' conflict' : ''}`;

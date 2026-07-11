@@ -22,10 +22,15 @@ import { getFeatureUnitHostCategory } from '../feature-unit-layout.ts';
 type GraduationReport = OperatorMethodOutput<'flags.graduation.report'>;
 type GraduationEntry = GraduationReport['entries'][number];
 
-/** A flag paired with its live runtime state. */
+/** A flag paired with its live runtime state and any pending-restart marker. */
 export interface FlagSnapshotEntry {
   readonly flag: FeatureFlag;
+  /** Live effective state the runtime currently sees. */
   readonly state: FlagState;
+  /** Persisted config-layer value; differs from `state` only for a startup-gated flag awaiting restart. */
+  readonly persistedState: FlagState;
+  /** True when a startup-gated flag's saved value needs a restart to take effect. */
+  readonly pendingRestart: boolean;
 }
 
 const ENABLED_MARK = '●';
@@ -49,6 +54,9 @@ function flagConfigKeys(flagId: string): readonly string[] {
 function formatUnit(entry: FlagSnapshotEntry): string {
   const { flag } = entry;
   const lines = [`  ${stateMark(entry.state)} ${flag.id}  —  ${flag.name}  [${toggleability(flag)}]`];
+  if (entry.pendingRestart) {
+    lines.push(`      restart pending: saved ${entry.persistedState}; still ${entry.state} until next launch`);
+  }
   const keys = flagConfigKeys(flag.id);
   if (keys.length > 0) {
     const shown = keys.slice(0, 4).join(', ');
@@ -146,7 +154,7 @@ function snapshotEntries(ctx: CommandContext): FlagSnapshotEntry[] {
   const manager = ctx.platform.featureFlagManager;
   if (!manager) return [];
   return Array.from(manager.getAll().values())
-    .map(({ flag, state }) => ({ flag, state }))
+    .map(({ flag, state, persistedState, pendingRestart }) => ({ flag, state, persistedState, pendingRestart }))
     .sort((a, b) => (a.flag.tier - b.flag.tier) || a.flag.id.localeCompare(b.flag.id));
 }
 
@@ -167,23 +175,24 @@ function applyToggle(ctx: CommandContext, id: string, target: 'enabled' | 'disab
   }
   const { flag } = entry;
 
-  if (flag.runtimeToggleable) {
-    try {
-      if (target === 'enabled') manager.enable(flag.id);
-      else manager.disable(flag.id);
-    } catch (err) {
-      ctx.print(`Could not ${target === 'enabled' ? 'enable' : 'disable'} ${id}: ${err instanceof Error ? err.message : String(err)}`);
-      return;
-    }
+  // Persist the override, then apply the same value to the live manager through
+  // applyConfigState — the same consistent path the settings modal uses. It
+  // flips runtime-toggleable flags immediately and records a pending-restart
+  // marker (never a fake live flip) for startup-gated ones.
+  try {
     persistFlagState(ctx.platform.configManager, flag.id, target, flag.defaultState);
-    ctx.print(`Flag ${id} is now ${target} (runtime + persisted).`);
-    ctx.renderRequest();
+    manager.applyConfigState(flag.id, target);
+  } catch (err) {
+    ctx.print(`Could not ${target === 'enabled' ? 'enable' : 'disable'} ${id}: ${err instanceof Error ? err.message : String(err)}`);
     return;
   }
 
-  // Startup-only: cannot flip live; persist so it applies on next launch.
-  persistFlagState(ctx.platform.configManager, flag.id, target, flag.defaultState);
-  ctx.print(`Flag ${id} is startup-only. Saved ${target} — it applies on next launch.`);
+  if (manager.hasPendingRestart(flag.id)) {
+    ctx.print(`Flag ${id} is startup-only. Saved ${target} — it applies on next launch (currently ${manager.getState(flag.id)}).`);
+    return;
+  }
+  ctx.print(`Flag ${id} is now ${manager.getState(flag.id)} (runtime + persisted).`);
+  ctx.renderRequest();
 }
 
 // ---------------------------------------------------------------------------

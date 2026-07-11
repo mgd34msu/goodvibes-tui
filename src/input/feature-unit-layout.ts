@@ -17,7 +17,7 @@
 
 import { FEATURE_FLAG_CONFIG, FEATURE_FLAGS } from '@pellux/goodvibes-sdk/platform/runtime/state';
 import type { ConfigKey, ConfigSetting } from '@pellux/goodvibes-sdk/platform/config';
-import type { FeatureFlag, FlagState } from '@/runtime/index.ts';
+import type { FeatureFlag } from '@/runtime/index.ts';
 import type { FlagEntry, SettingEntry, SettingsCategory } from './settings-modal-types.ts';
 
 /**
@@ -66,7 +66,8 @@ export function buildConfigKeyOwnership(): Map<string, string> {
  * the "modified" marker shows only for an actual override). The attached
  * `flag` marks the row as a feature-unit header for rendering and interaction.
  */
-export function buildFlagHeaderEntry(flag: FeatureFlag, state: FlagState): SettingEntry {
+export function buildFlagHeaderEntry(entry: FlagEntry): SettingEntry {
+  const { flag, state } = entry;
   const setting: ConfigSetting = {
     key: `featureFlags.${flag.id}` as ConfigKey,
     type: 'boolean',
@@ -77,7 +78,7 @@ export function buildFlagHeaderEntry(flag: FeatureFlag, state: FlagState): Setti
     setting,
     currentValue: state === 'enabled',
     isDefault: state === flag.defaultState,
-    flag: { flag, state },
+    flag: entry,
   };
 }
 
@@ -101,7 +102,7 @@ export function applyFeatureUnitLayout(
 ): void {
   if (flagEntries.length === 0) return;
   const owner = buildConfigKeyOwnership();
-  const flagState = new Map<string, FlagState>(flagEntries.map((entry) => [entry.flag.id, entry.state]));
+  const flagState = new Map<string, FlagEntry>(flagEntries.map((entry) => [entry.flag.id, entry]));
 
   // Group the flags this runtime actually registered by their host category,
   // preserving FEATURE_FLAGS declaration order within each category.
@@ -132,7 +133,7 @@ export function applyFeatureUnitLayout(
 
     const rebuilt: SettingEntry[] = [];
     for (const flag of flags) {
-      rebuilt.push(buildFlagHeaderEntry(flag, flagState.get(flag.id)!));
+      rebuilt.push(buildFlagHeaderEntry(flagState.get(flag.id)!));
       for (const sub of ownedByFlag.get(flag.id) ?? []) rebuilt.push(sub);
     }
     rebuilt.push(...orphans);

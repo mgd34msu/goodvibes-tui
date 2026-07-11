@@ -90,7 +90,20 @@ export interface SettingEntry {
 
 export interface FlagEntry {
   flag: FeatureFlag;
+  /** Live effective state as the runtime currently sees it. */
   state: FlagState;
+  /**
+   * Last known config-layer (persisted) value. Equals `state` unless a
+   * startup-gated flag was toggled this session — then it holds the value that
+   * will take effect on the next launch.
+   */
+  persistedState: FlagState;
+  /**
+   * True when a startup-gated flag's persisted value differs from its effective
+   * state, i.e. a restart is required before the change takes effect. Sourced
+   * from FeatureFlagManager.getAll(), never guessed.
+   */
+  pendingRestart: boolean;
 }
 
 export interface McpEntry {
