@@ -98,13 +98,10 @@ export function buildSettingGroups(
   featureFlagManager?: FeatureFlagManager | null,
 ): Map<SettingsCategory, SettingEntry[]> {
   const groups = new Map<SettingsCategory, SettingEntry[]>();
-  for (const cat of SETTINGS_CATEGORIES) {
-    // 'flags' is no longer a flat dump — it is the Advanced Features bucket for
-    // no-config flags, filled by applyFeatureUnitLayout below. Every category
-    // (including the new fetch/agents/security/integrations/policy/notifications
-    // namespaces) starts empty and is filled from CONFIG_SCHEMA.
-    groups.set(cat, []);
-  }
+  // Every category starts empty (including 'flags', now the Advanced Features
+  // bucket, and the new fetch/agents/security/integrations/policy/notifications
+  // namespaces) and is filled from CONFIG_SCHEMA below.
+  for (const cat of SETTINGS_CATEGORIES) groups.set(cat, []);
 
   for (const setting of CONFIG_SCHEMA) {
     const rawCat = setting.key.split('.')[0] as string;
@@ -243,22 +240,16 @@ export function buildSettingGroups(
   // the SDK's own descriptions don't carry (see relay-settings-descriptions.ts).
   enrichRelaySettingDescriptions(groups);
 
-  // Feature-unit presentation: turn each feature flag into ONE unit — its toggle
-  // header immediately followed by the config keys that tune it — hosted in the
-  // topical category its config lives under, and fold the no-config flags into
-  // the Advanced Features bucket. Sourced from FEATURE_FLAG_CONFIG so this modal,
-  // the onboarding wizard, and /flags share one grouping. Runs AFTER all synthetic
-  // injection above so synthetic (non-flag-owned) rows stay as orphan rows in
-  // their category. Skipped when no flag manager is supplied (flagless test path).
-  if (featureFlagManager) {
-    applyFeatureUnitLayout(groups, buildFlagEntries(featureFlagManager));
-  }
+  // Feature-unit presentation: turn each flag into ONE unit (toggle + the config
+  // keys it tunes) hosted in its topical category, folding no-config flags into
+  // the Advanced Features bucket. Sourced from FEATURE_FLAG_CONFIG. Runs AFTER
+  // synthetic injection so non-flag-owned rows stay as orphans; skipped on the
+  // flagless test path.
+  if (featureFlagManager) applyFeatureUnitLayout(groups, buildFlagEntries(featureFlagManager));
 
-  // learning.consolidation.* is now a real SDK config domain (schema-domain-learning.ts
-  // registers `learning` in CONFIG_SCHEMA/DEFAULT_CONFIG), so the nine keys already
-  // arrive through the CONFIG_SCHEMA loop above with full resolved-source/lock/conflict
-  // metadata. The TUI-local synthetic entries this project used to inject here (back
-  // when the SDK schema had no `learning` domain at all) were removed for this reason.
+  // learning.consolidation.* is a real SDK config domain now, so its keys arrive
+  // through the CONFIG_SCHEMA loop above; the old TUI-local synthetic entries were
+  // removed for this reason.
 
   return groups;
 }
