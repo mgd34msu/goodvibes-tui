@@ -38,13 +38,9 @@ export function buildOnboardingWizardSteps(controller: OnboardingWizardControlle
   if (shouldShowCloudflareStep(controller)) {
     steps.push(buildCloudflareStep(controller));
   }
-  steps.push(buildProviderAccessStep(controller));
-  steps.push(buildDefaultModelStep(controller));
-  steps.push(buildExperienceStep(controller));
-  // Guided feature coverage: every remaining feature flag is reachable here as a
-  // unit (enable + its key sub-options), grouped into thematic skippable steps.
-  for (const step of buildFeatureUnitSteps(controller)) steps.push(step);
-  steps.push(buildReviewStep(controller));
+  steps.push(buildProviderAccessStep(controller), buildDefaultModelStep(controller), buildExperienceStep(controller));
+  // Guided feature coverage: every remaining feature flag is reachable here as a unit.
+  steps.push(...buildFeatureUnitSteps(controller), buildReviewStep(controller));
   return steps.map(addApplyAndContinueAction);
 }
 
