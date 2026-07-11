@@ -151,21 +151,37 @@ export function applyFlagState(
 ): void {
   const flag: FeatureFlag = flagEntry.flag;
 
-  if (!flag.runtimeToggleable) {
-    persistFlagState(configManager, flag.id, newState, flag.defaultState as FlagState);
-    flagEntry.state = newState;
-    return;
-  }
-
   try {
-    if (newState === 'enabled') {
-      featureFlagManager.enable(flag.id);
-    } else {
-      featureFlagManager.disable(flag.id);
-    }
+    // Persist first so the on-disk override is the source of truth, then apply
+    // the same value to the live manager through applyConfigState. That single
+    // call keeps both paths consistent with the SDK's config→flag bridge:
+    //   - runtime-toggleable flags apply immediately (firing flag subscribers
+    //     exactly as a direct enable()/disable() would), and
+    //   - startup-gated flags are NOT faked live — the effective state is left
+    //     untouched and a pending-restart marker is recorded instead.
     persistFlagState(configManager, flag.id, newState, flag.defaultState as FlagState);
-    flagEntry.state = newState;
+    featureFlagManager.applyConfigState(flag.id, newState);
   } catch (e) {
     logger.error('SettingsModal: failed to toggle feature flag', { flag: flag.id, error: summarizeError(e) });
   }
+
+  // Reflect the manager's real state, never the requested target: for a
+  // startup-gated flag `state` stays at the unchanged effective value and
+  // `pendingRestart` reports that a restart is needed for `persistedState`.
+  syncFlagEntryFromManager(flagEntry, featureFlagManager);
+}
+
+/**
+ * Refresh a FlagEntry's live/persisted/pending fields from the manager's
+ * authoritative snapshot so the settings UI never displays a guessed state.
+ */
+export function syncFlagEntryFromManager(
+  flagEntry: FlagEntry,
+  featureFlagManager: FeatureFlagManager,
+): void {
+  const snapshot = featureFlagManager.getAll().get(flagEntry.flag.id);
+  if (!snapshot) return;
+  flagEntry.state = snapshot.state;
+  flagEntry.persistedState = snapshot.persistedState;
+  flagEntry.pendingRestart = snapshot.pendingRestart;
 }

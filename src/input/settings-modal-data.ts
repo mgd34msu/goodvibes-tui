@@ -537,10 +537,9 @@ export function buildCodeIndexEnabledSyntheticEntry(configManager: Pick<ConfigMa
 
 export function buildFlagEntries(featureFlagManager: FeatureFlagManager | null): FlagEntry[] {
   if (!featureFlagManager) return [];
-  return Array.from(featureFlagManager.getAll().values()).map(({ flag, state }) => ({
-    flag,
-    state,
-  }));
+  return Array.from(featureFlagManager.getAll().values()).map(
+    ({ flag, state, persistedState, pendingRestart }) => ({ flag, state, persistedState, pendingRestart }),
+  );
 }
 
 // ---------------------------------------------------------------------------
