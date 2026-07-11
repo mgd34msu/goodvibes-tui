@@ -263,9 +263,9 @@ export const COMPLETION_COMMANDS: readonly CompletionCommand[] = [
     subcommands: ['status'],
   },
   {
-    name: 'bundle',
-    aliases: ['bundle', 'bundles'],
-    description: 'Move setup/profile/trust/support bundles',
+    name: 'support-bundle',
+    aliases: ['support-bundle', 'bundle', 'bundles'],
+    description: 'Move a support snapshot (config + diagnostics + posture)',
     subcommands: ['export', 'inspect', 'import'],
   },
   {

@@ -21,7 +21,7 @@ const COMMANDS = [
   'surfaces',
   'listener',
   'control-plane',
-  'bundle',
+  'support-bundle',
   'remote',
   'bridge',
   'completion',

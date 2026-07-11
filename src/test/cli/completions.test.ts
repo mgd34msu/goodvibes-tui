@@ -61,7 +61,7 @@ describe('COMPLETION_COMMANDS data integrity', () => {
       surfaces: ['list', 'check', 'show', 'enable', 'disable'],
       listener: ['test'],
       'control-plane': ['status'],
-      bundle: ['export', 'inspect', 'import'],
+      'support-bundle': ['export', 'inspect', 'import'],
       completion: ['bash', 'zsh', 'fish'],
       onboarding: ['status'],
     };
@@ -81,7 +81,7 @@ describe('COMPLETION_COMMANDS data integrity', () => {
       'tui', 'run', 'serve', 'web', 'service', 'status', 'doctor',
       'onboarding', 'models', 'providers', 'auth', 'subscription', 'secrets',
       'sessions', 'tasks', 'pair', 'surfaces', 'listener', 'control-plane',
-      'bundle', 'remote', 'completion', 'help', 'version',
+      'support-bundle', 'remote', 'completion', 'help', 'version',
     ] as const;
     for (const name of required) {
       expect(names.has(name)).toBe(true);

@@ -125,14 +125,14 @@ export async function handleBundleCommand(runtime: CliCommandRuntime): Promise<C
 
   if (sub === 'inspect') {
     const path = rest[0];
-    if (!path) return { output: 'Usage: goodvibes bundle inspect <path>', exitCode: 2 };
+    if (!path) return { output: 'Usage: goodvibes support-bundle inspect <path>', exitCode: 2 };
     const sourcePath = shellPaths.resolveWorkspacePath(path);
     const parsed = readJsonFile(sourcePath);
     if (!parsed.ok) return { output: `Invalid bundle JSON: ${parsed.error}`, exitCode: 1 };
     const summary = inspectBundle(sourcePath, parsed.value);
     return {
       output: formatJsonOrText(runtime, summary, [
-        'GoodVibes bundle',
+        'GoodVibes support bundle',
         `  type: ${summary.type}`,
         `  version: ${summary.version}`,
         `  path: ${summary.path}`,
@@ -192,14 +192,14 @@ export async function handleBundleCommand(runtime: CliCommandRuntime): Promise<C
         path: targetPath,
         redactedConfigPaths: redactedConfig.redactedPaths,
         serviceIssues: service.issues,
-      }, `Bundle exported: ${targetPath}\n  redactedConfigKeys: ${redactedConfig.redactedPaths.length}\n  serviceIssues: ${service.issues.length}`),
+      }, `Support bundle exported: ${targetPath}\n  redactedConfigKeys: ${redactedConfig.redactedPaths.length}\n  serviceIssues: ${service.issues.length}`),
       exitCode: 0,
     };
   }
 
   if (sub === 'import') {
     const path = rest[0];
-    if (!path) return { output: 'Usage: goodvibes bundle import <path>', exitCode: 2 };
+    if (!path) return { output: 'Usage: goodvibes support-bundle import <path>', exitCode: 2 };
     const sourcePath = shellPaths.resolveWorkspacePath(path);
     const parsed = readJsonFile(sourcePath);
     if (!parsed.ok) return { output: `Invalid bundle JSON: ${parsed.error}`, exitCode: 1 };
@@ -223,5 +223,5 @@ export async function handleBundleCommand(runtime: CliCommandRuntime): Promise<C
     };
   }
 
-  return { output: 'Usage: goodvibes bundle export [path]|inspect <path>|import <path>', exitCode: 2 };
+  return { output: 'Usage: goodvibes support-bundle export [path]|inspect <path>|import <path>', exitCode: 2 };
 }

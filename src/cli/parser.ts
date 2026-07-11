@@ -45,8 +45,12 @@ const COMMAND_ALIASES: Readonly<Record<string, GoodVibesCliCommand>> = {
   'control-plane': 'control-plane',
   controlplane: 'control-plane',
   cp: 'control-plane',
-  bundle: 'bundle',
-  bundles: 'bundle',
+  'support-bundle': 'support-bundle',
+  // `bundle`/`bundles` are retained as backward-compat aliases for the shipped
+  // command word; the primary, unambiguous name is `support-bundle` (distinct
+  // from the `plugin bundles` capability-bundle surface).
+  bundle: 'support-bundle',
+  bundles: 'support-bundle',
   remote: 'remote',
   bridge: 'bridge',
   hooks: 'hooks',
