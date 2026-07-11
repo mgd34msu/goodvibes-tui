@@ -4,6 +4,14 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [1.15.0] — 2026-07-11
+
+### Changes
+- e95c369d fix(install): treat a release without a sqlite-vec manifest entry as pre-addon
+- 86c1cd9c feat(install): ship the sqlite-vec native addon to pure-binary installs
+- b5590ef3 install.sh: install goodvibes-agent as a checksum-verified compiled binary; restart a running agent post-install
+- f0860827 install.sh: restart a running daemon after the binary swap so the curl one-liner works as an upgrade
+
 ## [1.14.0] — 2026-07-11
 
 ### Changes
