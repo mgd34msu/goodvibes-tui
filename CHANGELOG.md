@@ -4,6 +4,11 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [1.16.0] — 2026-07-11
+
+### Changes
+- f1ce7694 feat(install): first-run daemon service setup and uninstall mode
+
 ## [1.15.0] — 2026-07-11
 
 ### Changes
