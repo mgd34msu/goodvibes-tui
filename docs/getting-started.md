@@ -39,6 +39,41 @@ The package downloads the matching prebuilt TUI and daemon binaries for the curr
 
 On Windows, use WSL2: inside a WSL2 distribution GoodVibes is an ordinary Linux install and the Linux binaries apply unchanged (`wsl --install`, then run the install command in your WSL2 shell). Native Windows is beta and not yet a supported path — see [windows.md](windows.md).
 
+### Pure-binary installer (`goodvibes.sh/install.sh`)
+
+The one-line installer downloads the checksum-verified TUI, daemon, and agent binaries without a package manager, and doubles as the upgrade path:
+
+```sh
+curl -fsSL https://goodvibes.sh/install.sh | sh
+```
+
+On a **fresh install** — when no daemon is running and no service unit exists yet — it also registers the daemon as a user service so it comes up immediately and on every login:
+
+- **Linux (systemd):** writes `~/.config/systemd/user/goodvibes-daemon.service` (marked as installer-managed), then `systemctl --user daemon-reload` and `enable --now`, and reports whether it went active.
+- **macOS (launchd):** writes `~/Library/LaunchAgents/sh.goodvibes.daemon.plist` (installer-managed) and loads it with `launchctl bootstrap`.
+- **Neither available (or opted out):** prints the plain `goodvibes-daemon` command to run it yourself.
+
+It never overwrites an existing unit — an already-running daemon is restarted in place by the upgrade path instead.
+
+**Installer options** (environment variables):
+
+| Variable | Default | Effect |
+| --- | --- | --- |
+| `GOODVIBES_INSTALL_DIR` | `~/.local/bin` | Target directory for the binaries |
+| `GOODVIBES_AGENT` | `1` | Set to `0` to skip installing `goodvibes-agent` |
+| `GOODVIBES_RESTART_DAEMON` | `1` | Set to `0` to leave a running daemon/agent untouched |
+| `GOODVIBES_VECTOR` | `1` | Set to `0` to skip the sqlite-vec native addon |
+| `GOODVIBES_DAEMON_SERVICE` | `1` | Set to `0` to skip first-run daemon service setup |
+| `GOODVIBES_UNINSTALL` | `0` | Set to `1` to uninstall (see below) |
+
+**Uninstall:**
+
+```sh
+curl -fsSL https://goodvibes.sh/install.sh | GOODVIBES_UNINSTALL=1 sh
+```
+
+Uninstall mode takes precedence over everything else (no downloads happen). It stops the running daemon/agent, then removes only what the installer manages — the three binaries in the install dir, the sqlite-vec addon directories, and the service unit/plist **only when it carries the installer-managed marker**. A hand-written unit is never deleted; it is reported with the manual removal command instead. Your `~/.goodvibes` data (settings, sessions, memory) is deliberately preserved, and the summary prints the `rm -rf ~/.goodvibes` command if you want to erase it too.
+
 Or install from source:
 
 ```sh

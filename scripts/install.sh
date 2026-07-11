@@ -31,6 +31,23 @@
 #   GOODVIBES_AGENT_VERSION   install a specific agent tag (default: latest)
 #   GOODVIBES_RESTART_DAEMON  set to 0 to leave running daemon/agent untouched (default: 1)
 #   GOODVIBES_VECTOR          set to 0 to skip the sqlite-vec native addon (default: 1)
+#   GOODVIBES_DAEMON_SERVICE  set to 0 to skip first-run daemon service setup (default: 1)
+#   GOODVIBES_UNINSTALL       set to 1 to remove installer-managed files and stop
+#                             the daemon/agent, then exit — no downloads (default: 0)
+#
+# First-run daemon service setup (GOODVIBES_DAEMON_SERVICE=1): when no daemon is
+# running and no service unit exists yet, the installer registers the daemon as a
+# user service (systemd user unit on Linux, launchd LaunchAgent on macOS) so a
+# fresh install comes up with a running, auto-restarting daemon. It never
+# overwrites an existing unit (installer-managed or hand-written) — the
+# upgrade-restart path owns an already-running service — and falls back to
+# printing the manual run command when no user service manager is available.
+#
+# Uninstall mode (GOODVIBES_UNINSTALL=1) takes precedence over everything else
+# (no downloads happen): it stops the running daemon/agent, removes only the
+# files this installer manages (the three binaries, the sqlite-vec addon dirs,
+# and the service unit/plist ONLY when it carries the installer-managed marker),
+# deliberately preserves ~/.goodvibes user data, and prints a summary.
 #
 # This file is versioned in the goodvibes-tui repository at scripts/install.sh
 # and published to goodvibes.sh on release. The `/update` command re-runs the
@@ -46,9 +63,30 @@ REQUESTED_AGENT_VERSION="${GOODVIBES_AGENT_VERSION:-latest}"
 WITH_AGENT="${GOODVIBES_AGENT:-1}"
 RESTART_DAEMON="${GOODVIBES_RESTART_DAEMON:-1}"
 WITH_VECTOR="${GOODVIBES_VECTOR:-1}"
+DAEMON_SERVICE="${GOODVIBES_DAEMON_SERVICE:-1}"
+UNINSTALL="${GOODVIBES_UNINSTALL:-0}"
+
+# The marker string written into every installer-created service unit/plist.
+# The uninstall path keys on it to tell an installer-managed unit (safe to
+# remove) apart from a hand-written one (never deleted, only reported). The
+# systemd unit carries it as a `# managed by goodvibes install.sh` comment; the
+# launchd plist carries it both as an XML comment and a GoodVibesManagedBy key —
+# a plain substring grep for this string matches either form.
+INSTALLER_MARKER="managed by goodvibes install.sh"
+
+# Service unit / LaunchAgent identities. The systemd unit name matches the one
+# the installer's existing upgrade-restart logic already targets
+# (goodvibes-daemon.service), so setup and restart agree on a single unit.
+SYSTEMD_DAEMON_UNIT="goodvibes-daemon.service"
+LAUNCHD_DAEMON_LABEL="sh.goodvibes.daemon"
 
 say() { printf '%s\n' "$*"; }
 fail() { printf 'install.sh: %s\n' "$*" >&2; exit 1; }
+
+# Paths depend on $HOME; recomputed via functions so an overridden HOME (tests)
+# is always honored.
+systemd_daemon_unit_path() { printf '%s' "$HOME/.config/systemd/user/$SYSTEMD_DAEMON_UNIT"; }
+launchd_daemon_plist_path() { printf '%s' "$HOME/Library/LaunchAgents/$LAUNCHD_DAEMON_LABEL.plist"; }
 
 # --- platform detection (release asset naming: goodvibes[-daemon]-{linux|macos}-{x64|arm64}) ---
 resolve_platform() {
@@ -215,6 +253,188 @@ restart_running_agent() {
   restart_bare_processes '[g]oodvibes-agent' "$INSTALL_DIR/goodvibes-agent"
 }
 
+# --- daemon liveness detection (shared by first-run setup and uninstall) ---
+# A systemd user unit reported active, OR a bare goodvibes-daemon process.
+
+daemon_systemd_active() {
+  command -v systemctl >/dev/null 2>&1 || return 1
+  systemctl --user is-active --quiet "$SYSTEMD_DAEMON_UNIT" 2>/dev/null
+}
+
+daemon_bare_process_running() {
+  pgrep -f '[g]oodvibes-daemon' >/dev/null 2>&1
+}
+
+daemon_running() {
+  daemon_systemd_active && return 0
+  daemon_bare_process_running
+}
+
+# --- first-run daemon service setup ---
+# A brand-new install gets binaries but nothing running. When no daemon is
+# running AND no service unit exists yet, register the daemon as a user service
+# so it comes up now and on every login. Never overwrites an existing unit
+# (installer-managed or hand-written) — the upgrade-restart path owns an
+# already-running service. Every outcome is stated plainly; success is never
+# faked.
+
+write_systemd_unit() {
+  # write_systemd_unit <path> — writes the installer-managed unit text only,
+  # no activation. Split out so tests can validate the generated text without
+  # touching the host's systemd.
+  _unit_path="$1"
+  mkdir -p "$(dirname "$_unit_path")"
+  cat > "$_unit_path" <<EOF
+# $INSTALLER_MARKER
+# The uninstall path (GOODVIBES_UNINSTALL=1) keys on the marker line above to
+# know this unit is installer-managed and safe to remove. Delete that line and
+# the installer treats this unit as hand-written and never touches it.
+[Unit]
+Description=GoodVibes daemon (shared session broker + companion host)
+After=network-online.target
+
+[Service]
+Type=simple
+ExecStart=$INSTALL_DIR/goodvibes-daemon
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=default.target
+EOF
+}
+
+write_launchd_plist() {
+  # write_launchd_plist <path> — writes the installer-managed LaunchAgent text
+  # only, no activation. The GoodVibesManagedBy key and the XML comment both
+  # carry the marker string the uninstall path greps for.
+  _plist_path="$1"
+  mkdir -p "$(dirname "$_plist_path")"
+  cat > "$_plist_path" <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- $INSTALLER_MARKER -->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>$LAUNCHD_DAEMON_LABEL</string>
+  <key>GoodVibesManagedBy</key>
+  <string>$INSTALLER_MARKER</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>$INSTALL_DIR/goodvibes-daemon</string>
+  </array>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <dict>
+    <key>SuccessfulExit</key>
+    <false/>
+  </dict>
+</dict>
+</plist>
+EOF
+}
+
+setup_daemon_service_systemd() {
+  unit_path=$(systemd_daemon_unit_path)
+  if [ -f "$unit_path" ]; then
+    say "A ${SYSTEMD_DAEMON_UNIT} unit already exists at $unit_path — leaving it as is."
+    say "  Start it yourself if it is not running:"
+    say "    systemctl --user start $SYSTEMD_DAEMON_UNIT"
+    return 0
+  fi
+
+  say "Setting up the goodvibes daemon as a systemd user service ..."
+  write_systemd_unit "$unit_path"
+  say "  wrote      $unit_path"
+
+  if ! systemctl --user daemon-reload 2>/dev/null; then
+    say "  NOTE: 'systemctl --user daemon-reload' failed — a user systemd instance"
+    say "  may not be running for this session. Enable it yourself later with:"
+    say "    systemctl --user enable --now $SYSTEMD_DAEMON_UNIT"
+    return 0
+  fi
+
+  if systemctl --user enable --now "$SYSTEMD_DAEMON_UNIT" 2>/dev/null; then
+    if systemctl --user is-active --quiet "$SYSTEMD_DAEMON_UNIT" 2>/dev/null; then
+      say "  started    $SYSTEMD_DAEMON_UNIT (active)"
+      say "  The daemon starts on login and restarts on failure."
+    else
+      say "  NOTE: enabled $SYSTEMD_DAEMON_UNIT but it is not active yet. Inspect it with:"
+      say "    systemctl --user status $SYSTEMD_DAEMON_UNIT"
+    fi
+  else
+    say "  NOTE: 'systemctl --user enable --now $SYSTEMD_DAEMON_UNIT' failed. Enable it yourself with:"
+    say "    systemctl --user enable --now $SYSTEMD_DAEMON_UNIT"
+  fi
+}
+
+setup_daemon_service_launchd() {
+  plist_path=$(launchd_daemon_plist_path)
+  if [ -f "$plist_path" ]; then
+    say "A LaunchAgent already exists at $plist_path — leaving it as is."
+    say "  Load it yourself if it is not running:"
+    say "    launchctl bootstrap gui/$(id -u) $plist_path"
+    return 0
+  fi
+
+  say "Setting up the goodvibes daemon as a launchd user agent ..."
+  write_launchd_plist "$plist_path"
+  say "  wrote      $plist_path"
+
+  uid=$(id -u)
+  # Prefer the modern bootstrap; fall back to legacy load on older macOS.
+  if launchctl bootstrap "gui/$uid" "$plist_path" 2>/dev/null ||
+     launchctl load "$plist_path" 2>/dev/null; then
+    if launchctl print "gui/$uid/$LAUNCHD_DAEMON_LABEL" >/dev/null 2>&1 ||
+       launchctl list "$LAUNCHD_DAEMON_LABEL" >/dev/null 2>&1; then
+      say "  started    $LAUNCHD_DAEMON_LABEL (loaded)"
+      say "  The daemon starts on login and restarts on failure."
+    else
+      say "  NOTE: loaded the agent but could not confirm it is running. Inspect it with:"
+      say "    launchctl print gui/$uid/$LAUNCHD_DAEMON_LABEL"
+    fi
+  else
+    say "  NOTE: could not load the LaunchAgent automatically. Load it yourself with:"
+    say "    launchctl bootstrap gui/$uid $plist_path"
+  fi
+}
+
+setup_daemon_service() {
+  if [ "$DAEMON_SERVICE" != "1" ]; then
+    say ""
+    say "Daemon service setup skipped (GOODVIBES_DAEMON_SERVICE=0). Run it yourself with:"
+    say "  $INSTALL_DIR/goodvibes-daemon"
+    return 0
+  fi
+
+  # New-user only: if a daemon is already running, the upgrade-restart path
+  # (restart_running_daemon) already handled it — do not also set up a service.
+  daemon_running && return 0
+
+  say ""
+  case "$os_tag" in
+    linux)
+      if command -v systemctl >/dev/null 2>&1; then
+        setup_daemon_service_systemd
+        return 0
+      fi
+      ;;
+    macos)
+      if command -v launchctl >/dev/null 2>&1; then
+        setup_daemon_service_launchd
+        return 0
+      fi
+      ;;
+  esac
+
+  # No supported user service manager available (or the tool is missing).
+  say "No user service manager (systemd/launchd) is available to run the daemon"
+  say "automatically. Start it yourself with:"
+  say "  $INSTALL_DIR/goodvibes-daemon"
+}
+
 # --- sqlite-vec native addon: restores semantic vector search ---
 # The SDK resolves the addon at <execDir>/lib/sqlite-vec-<os>-<arch>/vec0.<suffix>
 # next to the running binary, so one copy in $INSTALL_DIR/lib serves goodvibes,
@@ -288,8 +508,199 @@ install_agent() {
   fi
 }
 
+# --- uninstall mode (GOODVIBES_UNINSTALL=1) ---
+# Stops the running daemon/agent and removes ONLY what this installer manages:
+# the three binaries, the sqlite-vec addon dirs, and the service unit/plist when
+# (and only when) it carries the installer-managed marker. ~/.goodvibes user
+# data is preserved deliberately. No downloads happen in this mode.
+
+UNINSTALL_REMOVED=""
+UNINSTALL_KEPT=""
+record_removed() { UNINSTALL_REMOVED="${UNINSTALL_REMOVED}  $1
+"; }
+record_kept() { UNINSTALL_KEPT="${UNINSTALL_KEPT}  $1
+"; }
+
+proc_belongs_to_install_dir() {
+  # proc_belongs_to_install_dir <pid> — true only when the process's executable
+  # lives under $INSTALL_DIR, so uninstalling one install never stops a
+  # daemon/agent launched from a different install dir (this is what keeps a
+  # scratch-dir uninstall from touching a real daemon elsewhere on the host).
+  _pid="$1"
+  if [ -r "/proc/$_pid/exe" ]; then
+    _exe=$(readlink -f "/proc/$_pid/exe" 2>/dev/null || true)
+  else
+    _exe=$(ps -o args= -p "$_pid" 2>/dev/null | sed 's/ .*$//')
+  fi
+  case "$_exe" in
+    "$INSTALL_DIR"/*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+stop_bare_processes() {
+  # stop_bare_processes <pgrep-pattern> <label> — TERM processes matching the
+  # pattern whose executable lives under $INSTALL_DIR. A process that cannot be
+  # attributed to $INSTALL_DIR is left alone and reported, never killed.
+  pattern="$1"
+  label="$2"
+  pids=$(pgrep -f "$pattern" 2>/dev/null || true)
+  [ -n "$pids" ] || return 0
+  for pid in $pids; do
+    if ! proc_belongs_to_install_dir "$pid"; then
+      continue
+    fi
+    say "Stopping $label (pid $pid) ..."
+    kill "$pid" 2>/dev/null || continue
+    waited=0
+    while kill -0 "$pid" 2>/dev/null && [ "$waited" -lt 10 ]; do
+      sleep 1
+      waited=$((waited + 1))
+    done
+    if kill -0 "$pid" 2>/dev/null; then
+      say "  NOTE: pid $pid did not exit within 10s — stop it yourself: kill $pid"
+    else
+      say "  stopped    $label (pid $pid)"
+      record_removed "$label process (pid $pid)"
+    fi
+  done
+}
+
+uninstall_systemd_service() {
+  # uninstall_systemd_service <unit> <unit_path>
+  unit="$1"
+  unit_path="$2"
+  command -v systemctl >/dev/null 2>&1 || return 0
+
+  unit_present=0
+  systemctl --user cat "$unit" >/dev/null 2>&1 && unit_present=1
+  [ -f "$unit_path" ] && unit_present=1
+  [ "$unit_present" = "1" ] || return 0
+
+  managed=0
+  [ -f "$unit_path" ] && grep -q "$INSTALLER_MARKER" "$unit_path" 2>/dev/null && managed=1
+
+  if [ "$managed" = "1" ]; then
+    say "Stopping and removing installer-managed $unit ..."
+    systemctl --user disable --now "$unit" 2>/dev/null ||
+      systemctl --user stop "$unit" 2>/dev/null || true
+    rm -f "$unit_path"
+    systemctl --user daemon-reload 2>/dev/null || true
+    say "  removed    $unit_path"
+    record_removed "$unit_path (installer-managed unit)"
+  else
+    say "Stopping $unit (present but not installer-managed) ..."
+    systemctl --user stop "$unit" 2>/dev/null || true
+    if [ -f "$unit_path" ]; then
+      say "  KEPT       $unit_path is not installer-managed (no marker) — leaving it in place."
+      say "  Remove it yourself:"
+      say "    systemctl --user disable --now $unit && rm $unit_path && systemctl --user daemon-reload"
+      record_kept "$unit_path (hand-written $unit — not installer-managed)"
+    fi
+  fi
+}
+
+uninstall_launchd_agent() {
+  # uninstall_launchd_agent <label> <plist_path>
+  label="$1"
+  plist_path="$2"
+  command -v launchctl >/dev/null 2>&1 || return 0
+  uid=$(id -u)
+
+  present=0
+  launchctl print "gui/$uid/$label" >/dev/null 2>&1 && present=1
+  [ -f "$plist_path" ] && present=1
+  [ "$present" = "1" ] || return 0
+
+  managed=0
+  [ -f "$plist_path" ] && grep -q "$INSTALLER_MARKER" "$plist_path" 2>/dev/null && managed=1
+
+  say "Stopping launchd user agent $label ..."
+  launchctl bootout "gui/$uid/$label" 2>/dev/null ||
+    launchctl unload "$plist_path" 2>/dev/null || true
+
+  if [ "$managed" = "1" ]; then
+    rm -f "$plist_path"
+    say "  removed    $plist_path"
+    record_removed "$plist_path (installer-managed agent)"
+  elif [ -f "$plist_path" ]; then
+    say "  KEPT       $plist_path is not installer-managed (no marker) — leaving it in place."
+    say "  Remove it yourself:"
+    say "    launchctl bootout gui/$uid/$label ; rm $plist_path"
+    record_kept "$plist_path (hand-written agent — not installer-managed)"
+  fi
+}
+
+uninstall_services_and_processes() {
+  case "$os_tag" in
+    linux)
+      uninstall_systemd_service "$SYSTEMD_DAEMON_UNIT" "$(systemd_daemon_unit_path)"
+      uninstall_systemd_service goodvibes-agent.service "$HOME/.config/systemd/user/goodvibes-agent.service"
+      ;;
+    macos)
+      uninstall_launchd_agent "$LAUNCHD_DAEMON_LABEL" "$(launchd_daemon_plist_path)"
+      uninstall_launchd_agent sh.goodvibes.agent "$HOME/Library/LaunchAgents/sh.goodvibes.agent.plist"
+      ;;
+  esac
+  # Any bare (non-service) processes launched from this INSTALL_DIR.
+  stop_bare_processes '[g]oodvibes-daemon' goodvibes-daemon
+  stop_bare_processes '[g]oodvibes-agent' goodvibes-agent
+}
+
+run_uninstall() {
+  say "Uninstalling GoodVibes (installer-managed files) from $INSTALL_DIR"
+  say ""
+
+  uninstall_services_and_processes
+
+  # Binaries the installer places.
+  for name in goodvibes goodvibes-daemon goodvibes-agent; do
+    bin_path="$INSTALL_DIR/$name"
+    if [ -e "$bin_path" ]; then
+      rm -f "$bin_path"
+      say "  removed    $bin_path"
+      record_removed "$bin_path"
+    fi
+  done
+
+  # sqlite-vec addon dirs the installer places under $INSTALL_DIR/lib.
+  for addon_dir in "$INSTALL_DIR"/lib/sqlite-vec-*; do
+    [ -d "$addon_dir" ] || continue
+    rm -rf "$addon_dir"
+    say "  removed    $addon_dir"
+    record_removed "$addon_dir"
+  done
+  # Drop the lib dir only if the installer left it empty.
+  rmdir "$INSTALL_DIR/lib" 2>/dev/null || true
+
+  say ""
+  say "Uninstall summary"
+  say "-----------------"
+  if [ -n "$UNINSTALL_REMOVED" ]; then
+    say "Removed:"
+    printf '%s' "$UNINSTALL_REMOVED"
+  else
+    say "Removed: nothing — no installer-managed files were found in $INSTALL_DIR."
+  fi
+  say ""
+  say "Preserved:"
+  say "  $HOME/.goodvibes (your GoodVibes data — settings, sessions, memory) is left untouched."
+  if [ -n "$UNINSTALL_KEPT" ]; then
+    printf '%s' "$UNINSTALL_KEPT"
+  fi
+  say ""
+  say "To also erase all GoodVibes user data, remove it yourself:"
+  say "  rm -rf $HOME/.goodvibes"
+}
+
 main() {
   resolve_platform
+
+  if [ "$UNINSTALL" = "1" ]; then
+    run_uninstall
+    return 0
+  fi
+
   resolve_version
 
   BASE_URL="https://github.com/$REPO/releases/download/$VERSION"
@@ -353,6 +764,11 @@ main() {
     restart_running_agent
   fi
 
+  # First-run only: register the daemon as a user service when nothing is
+  # running and no unit exists yet (a no-op on an upgrade, which the restart
+  # path above already handled).
+  setup_daemon_service
+
   say ""
   say "Done. Start with: goodvibes   (health check: goodvibes doctor)"
   if [ "$WITH_AGENT" = "1" ]; then
@@ -360,4 +776,9 @@ main() {
   fi
 }
 
-main
+# Run unless sourced as a library. The shell-level tests source this file with
+# GOODVIBES_INSTALL_SH_LIB=1 to exercise individual functions (unit generation,
+# uninstall file handling) without performing a network install.
+if [ "${GOODVIBES_INSTALL_SH_LIB:-0}" != "1" ]; then
+  main
+fi
