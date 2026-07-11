@@ -215,7 +215,7 @@ GoodVibes ships **144** built-in slash commands across **69** categories. Every 
 
 | Command | Aliases | Usage | Description |
 | --- | --- | --- | --- |
-| `/health` | `/doctor` | `[report\|review\|open\|setup\|services\|sandbox\|provider\|accounts\|auth\|settings\|intelligence\|remote\|mcp\|continuity\|worktrees\|maintenance\|term\|repair [domain]] — bare and report stay a cross-domain transcript report (see also /health provider for the providers modal)` | Health workspace for startup posture, service readiness, sandbox posture, and provider health |
+| `/health` | `/doctor` | `[report\|review\|open\|setup\|services\|sandbox\|provider\|accounts\|auth\|settings\|intelligence\|remote\|mcp\|metrics\|continuity\|worktrees\|maintenance\|term\|repair [domain]] — bare and report stay a cross-domain transcript report (see also /health provider for the providers modal)` | Health workspace for startup posture, service readiness, sandbox posture, and provider health |
 
 ## Hooks
 

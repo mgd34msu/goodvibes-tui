@@ -14,10 +14,13 @@ function makeProvider(): OpenAICompatProvider {
   });
 }
 
-function setChatCreate(provider: OpenAICompatProvider, create: (...args: unknown[]) => Promise<unknown>): void {
+// The provider calls `client.chat.completions.create(...).withResponse()` (the
+// openai SDK's APIPromise surface — it exposes rate-limit headers on success).
+// The injected create therefore returns an object carrying `withResponse`.
+function setChatCreate(provider: OpenAICompatProvider, create: (...args: unknown[]) => unknown): void {
   (provider as unknown as {
     client: {
-      chat: { completions: { create: (...args: unknown[]) => Promise<unknown> } };
+      chat: { completions: { create: (...args: unknown[]) => unknown } };
     };
   }).client = {
     chat: { completions: { create } },
@@ -28,20 +31,22 @@ describe('OpenAICompatProvider diagnostics', () => {
   test('preserves upstream request details for request-phase failures', async () => {
     const provider = makeProvider();
     const errorSpy = spyOn(logger, 'error');
-    setChatCreate(provider, mock(async () => {
-      throw {
-        status: 401,
-        requestID: 'req-review-1',
-        code: 'invalid_api_key',
-        type: 'authentication_error',
-        error: {
-          message: 'token rejected by upstream',
+    setChatCreate(provider, mock(() => ({
+      withResponse: async () => {
+        throw {
+          status: 401,
+          requestID: 'req-review-1',
           code: 'invalid_api_key',
           type: 'authentication_error',
-        },
-        message: '401 Unauthorized',
-      };
-    }));
+          error: {
+            message: 'token rejected by upstream',
+            code: 'invalid_api_key',
+            type: 'authentication_error',
+          },
+          message: '401 Unauthorized',
+        };
+      },
+    })));
 
     try {
       let thrown: unknown;
@@ -72,15 +77,20 @@ describe('OpenAICompatProvider diagnostics', () => {
   test('marks stream failures as post-request errors', async () => {
     const provider = makeProvider();
     const errorSpy = spyOn(logger, 'error');
-    setChatCreate(provider, mock(async () => ({
-      async *[Symbol.asyncIterator]() {
-        throw {
-          status: 401,
-          requestID: 'req-stream-1',
-          error: { message: 'stream authorization expired' },
-          message: 'stream closed',
-        };
-      },
+    setChatCreate(provider, mock(() => ({
+      withResponse: async () => ({
+        data: {
+          async *[Symbol.asyncIterator]() {
+            throw {
+              status: 401,
+              requestID: 'req-stream-1',
+              error: { message: 'stream authorization expired' },
+              message: 'stream closed',
+            };
+          },
+        },
+        response: { headers: new Headers() },
+      }),
     })));
 
     try {
