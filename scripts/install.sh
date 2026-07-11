@@ -9,15 +9,17 @@
 # into ~/.local/bin (override with GOODVIBES_INSTALL_DIR), and runs the
 # doctor install self-check when possible.
 #
-# Also installs goodvibes-agent (the always-on personal agent) by default.
-# The agent has no compiled binary — it runs on Bun — so this step uses an
-# existing Bun install or installs Bun first via its official installer.
+# Also installs goodvibes-agent (the always-on personal agent) by default,
+# as a compiled binary from its own repository's release — the whole install
+# is pure-binary and checksum-verified; nothing is fetched through a package
+# manager.
 #
 # Options (environment variables, so the pipe-to-sh form stays one command):
-#   GOODVIBES_VERSION         install a specific tag, e.g. v1.13.1 (default: latest)
+#   GOODVIBES_VERSION         install a specific TUI tag, e.g. v1.14.0 (default: latest)
 #   GOODVIBES_INSTALL_DIR     target directory (default: ~/.local/bin)
 #   GOODVIBES_AGENT           set to 0 to skip installing goodvibes-agent (default: 1)
-#   GOODVIBES_RESTART_DAEMON  set to 0 to leave a running daemon untouched (default: 1)
+#   GOODVIBES_AGENT_VERSION   install a specific agent tag (default: latest)
+#   GOODVIBES_RESTART_DAEMON  set to 0 to leave running daemon/agent untouched (default: 1)
 #
 # This file is versioned in the goodvibes-tui repository at scripts/install.sh
 # and published to goodvibes.sh on release. The `/update` command re-runs the
@@ -26,8 +28,10 @@
 set -eu
 
 REPO="mgd34msu/goodvibes-tui"
+AGENT_REPO="mgd34msu/goodvibes-agent"
 INSTALL_DIR="${GOODVIBES_INSTALL_DIR:-$HOME/.local/bin}"
 REQUESTED_VERSION="${GOODVIBES_VERSION:-latest}"
+REQUESTED_AGENT_VERSION="${GOODVIBES_AGENT_VERSION:-latest}"
 WITH_AGENT="${GOODVIBES_AGENT:-1}"
 RESTART_DAEMON="${GOODVIBES_RESTART_DAEMON:-1}"
 
@@ -78,61 +82,76 @@ sha256_of() {
   fi
 }
 
-# --- resolve version tag ---
-resolve_version() {
-  if [ "$REQUESTED_VERSION" = "latest" ]; then
+# --- resolve a release tag for a repo ---
+resolve_tag() {
+  # resolve_tag <repo> <requested> — prints the tag (vX.Y.Z)
+  tag_repo="$1"
+  tag_requested="$2"
+  if [ "$tag_requested" = "latest" ]; then
     # GitHub serves the tag in the redirect Location for /releases/latest.
     if command -v curl >/dev/null 2>&1; then
-      redirect=$(curl -fsSI -o /dev/null -w '%{redirect_url}' "https://github.com/$REPO/releases/latest") ||
-        fail "could not resolve the latest release tag"
-      VERSION="${redirect##*/}"
+      redirect=$(curl -fsSI -o /dev/null -w '%{redirect_url}' "https://github.com/$tag_repo/releases/latest") ||
+        fail "could not resolve the latest release tag for $tag_repo"
+      tag="${redirect##*/}"
     else
-      redirect=$(wget -q --max-redirect=0 --server-response "https://github.com/$REPO/releases/latest" 2>&1 |
+      redirect=$(wget -q --max-redirect=0 --server-response "https://github.com/$tag_repo/releases/latest" 2>&1 |
         awk '/Location:/ {print $2}' | tr -d '\r' | head -1)
-      VERSION="${redirect##*/}"
+      tag="${redirect##*/}"
     fi
-    [ -n "$VERSION" ] || fail "could not resolve the latest release tag"
+    [ -n "$tag" ] || fail "could not resolve the latest release tag for $tag_repo"
   else
-    VERSION="$REQUESTED_VERSION"
+    tag="$tag_requested"
   fi
-  case "$VERSION" in v*) : ;; *) VERSION="v$VERSION" ;; esac
+  case "$tag" in v*) : ;; *) tag="v$tag" ;; esac
+  printf '%s' "$tag"
 }
 
-# --- daemon restart on upgrade ---
-# The curl one-liner doubles as the upgrade path. Replacing the binary on disk
-# does not affect a running daemon (it keeps executing the old inode), so an
-# already-running daemon must be restarted for the upgrade to take effect.
-restart_running_daemon() {
-  [ "$RESTART_DAEMON" = "1" ] || return 0
+resolve_version() {
+  VERSION=$(resolve_tag "$REPO" "$REQUESTED_VERSION")
+}
 
-  # systemd-managed (Linux): restart the user unit.
-  if command -v systemctl >/dev/null 2>&1 &&
-     systemctl --user is-active --quiet goodvibes-daemon.service 2>/dev/null; then
-    say ""
-    say "Restarting the running goodvibes-daemon (systemd user service) ..."
-    if systemctl --user restart goodvibes-daemon.service 2>/dev/null; then
-      say "  restarted  goodvibes-daemon.service"
-      exec_start=$(systemctl --user show -p ExecStart --value goodvibes-daemon.service 2>/dev/null || true)
-      case "$exec_start" in
-        ""|*"$INSTALL_DIR/goodvibes-daemon"*) : ;;
-        *)
-          say "  NOTE: the service does not exec $INSTALL_DIR/goodvibes-daemon, so it may"
-          say "  still be running a different (older) install. Inspect it with:"
-          say "    systemctl --user cat goodvibes-daemon.service"
-          ;;
-      esac
-    else
-      say "  NOTE: restart failed — restart it yourself with:"
-      say "    systemctl --user restart goodvibes-daemon.service"
-    fi
-    return 0
+# --- restart on upgrade ---
+# The curl one-liner doubles as the upgrade path. Replacing a binary on disk
+# does not affect a running process (it keeps executing the old inode), so an
+# already-running daemon/agent must be restarted for the upgrade to take
+# effect. systemd-managed services are restarted through their unit; bare
+# processes are stopped and relaunched with their original arguments.
+
+restart_systemd_unit() {
+  # restart_systemd_unit <unit> <expected-binary> — returns 0 if it handled a
+  # running unit (restarted or reported), 1 if no active unit exists.
+  unit="$1"
+  expected_bin="$2"
+  command -v systemctl >/dev/null 2>&1 || return 1
+  systemctl --user is-active --quiet "$unit" 2>/dev/null || return 1
+  say ""
+  say "Restarting the running ${unit%.service} (systemd user service) ..."
+  if systemctl --user restart "$unit" 2>/dev/null; then
+    say "  restarted  $unit"
+    exec_start=$(systemctl --user show -p ExecStart --value "$unit" 2>/dev/null || true)
+    case "$exec_start" in
+      ""|*"$expected_bin"*) : ;;
+      *)
+        say "  NOTE: the service does not exec $expected_bin, so it may still be"
+        say "  running a different (older) install. Inspect it with:"
+        say "    systemctl --user cat $unit"
+        ;;
+    esac
+  else
+    say "  NOTE: restart failed — restart it yourself with:"
+    say "    systemctl --user restart $unit"
   fi
+  return 0
+}
 
-  # Bare process: stop it and relaunch the new binary with the same arguments.
-  pids=$(pgrep -f '[g]oodvibes-daemon' 2>/dev/null || true)
+restart_bare_processes() {
+  # restart_bare_processes <pgrep-pattern> <new-binary>
+  pattern="$1"
+  new_bin="$2"
+  pids=$(pgrep -f "$pattern" 2>/dev/null || true)
   [ -n "$pids" ] || return 0
   for pid in $pids; do
-    # Recover the original arguments so flags (port, host, daemon home) survive.
+    # Recover the original arguments so flags (port, host, home dir) survive.
     if [ -r "/proc/$pid/cmdline" ]; then
       args=$(tr '\0' '\n' < "/proc/$pid/cmdline" | tail -n +2 | tr '\n' ' ')
     else
@@ -140,7 +159,7 @@ restart_running_daemon() {
     fi
     args=$(printf '%s' "${args:-}" | sed 's/[[:space:]]*$//')
     say ""
-    say "Restarting running goodvibes-daemon (pid $pid) ..."
+    say "Restarting running ${new_bin##*/} (pid $pid) ..."
     kill "$pid" 2>/dev/null || continue
     waited=0
     while kill -0 "$pid" 2>/dev/null && [ "$waited" -lt 10 ]; do
@@ -148,63 +167,62 @@ restart_running_daemon() {
       waited=$((waited + 1))
     done
     if kill -0 "$pid" 2>/dev/null; then
-      say "  NOTE: pid $pid did not exit within 10s — not starting a second daemon."
-      say "  Stop it, then start the new one: $INSTALL_DIR/goodvibes-daemon ${args:-}"
+      say "  NOTE: pid $pid did not exit within 10s — not starting a second instance."
+      say "  Stop it, then start the new one: $new_bin ${args:-}"
       continue
     fi
     # shellcheck disable=SC2086  # args is intentionally word-split
-    nohup "$INSTALL_DIR/goodvibes-daemon" ${args:-} >/dev/null 2>&1 &
+    nohup "$new_bin" ${args:-} >/dev/null 2>&1 &
     newpid=$!
     sleep 1
     if kill -0 "$newpid" 2>/dev/null; then
       say "  restarted  pid $newpid${args:+ (args: $args)}"
     else
-      say "  NOTE: the new daemon did not stay up — start it yourself and check its output:"
-      say "    $INSTALL_DIR/goodvibes-daemon ${args:-}"
+      say "  NOTE: the new process did not stay up — start it yourself and check its output:"
+      say "    $new_bin ${args:-}"
     fi
   done
 }
 
-# --- goodvibes-agent: npm package running on Bun (no compiled binary exists) ---
+restart_running_daemon() {
+  [ "$RESTART_DAEMON" = "1" ] || return 0
+  restart_systemd_unit goodvibes-daemon.service "$INSTALL_DIR/goodvibes-daemon" && return 0
+  restart_bare_processes '[g]oodvibes-daemon' "$INSTALL_DIR/goodvibes-daemon"
+}
+
+restart_running_agent() {
+  [ "$RESTART_DAEMON" = "1" ] || return 0
+  restart_systemd_unit goodvibes-agent.service "$INSTALL_DIR/goodvibes-agent" && return 0
+  restart_bare_processes '[g]oodvibes-agent' "$INSTALL_DIR/goodvibes-agent"
+}
+
+# --- goodvibes-agent: compiled binary from its own repository's release ---
 install_agent() {
   say ""
-  say "Installing goodvibes-agent ..."
+  AGENT_VERSION=$(resolve_tag "$AGENT_REPO" "$REQUESTED_AGENT_VERSION")
+  agent_base_url="https://github.com/$AGENT_REPO/releases/download/$AGENT_VERSION"
+  artifact="goodvibes-agent-$PLATFORM_SUFFIX"
 
-  bun_bin=""
-  if command -v bun >/dev/null 2>&1; then
-    bun_bin="bun"
-  elif [ -x "${BUN_INSTALL:-$HOME/.bun}/bin/bun" ]; then
-    bun_bin="${BUN_INSTALL:-$HOME/.bun}/bin/bun"
+  say "Installing goodvibes-agent $AGENT_VERSION ..."
+  fetch "$agent_base_url/SHA256SUMS.txt" "$WORKDIR/agent-SHA256SUMS.txt"
+
+  say "  downloading $artifact ..."
+  fetch "$agent_base_url/$artifact" "$WORKDIR/$artifact"
+
+  expected=$(awk -v name="$artifact" '$2 == name || $2 == "*"name {print $1}' "$WORKDIR/agent-SHA256SUMS.txt" | head -1)
+  [ -n "$expected" ] || fail "SHA256SUMS.txt has no entry for $artifact — refusing to install an unverified binary"
+  actual=$(sha256_of "$WORKDIR/$artifact")
+  [ "$expected" = "$actual" ] || fail "checksum mismatch for $artifact (expected $expected, got $actual)"
+  say "  verified   $artifact"
+
+  chmod +x "$WORKDIR/$artifact"
+  mv -f "$WORKDIR/$artifact" "$INSTALL_DIR/goodvibes-agent"
+  say "  installed  $INSTALL_DIR/goodvibes-agent"
+
+  if agent_version_out=$("$INSTALL_DIR/goodvibes-agent" --version 2>/dev/null); then
+    say "  running:   $agent_version_out"
   else
-    say "  goodvibes-agent runs on Bun; installing Bun first (official installer) ..."
-    if command -v curl >/dev/null 2>&1; then
-      curl -fsSL https://bun.sh/install | bash >/dev/null 2>&1 ||
-        fail "Bun install failed. The TUI is installed and working; install Bun manually (https://bun.sh), then run: bun add -g @pellux/goodvibes-agent"
-    else
-      wget -qO- https://bun.sh/install | bash >/dev/null 2>&1 ||
-        fail "Bun install failed. The TUI is installed and working; install Bun manually (https://bun.sh), then run: bun add -g @pellux/goodvibes-agent"
-    fi
-    bun_bin="${BUN_INSTALL:-$HOME/.bun}/bin/bun"
-    [ -x "$bun_bin" ] || fail "Bun installer finished but bun was not found at $bun_bin. The TUI is installed and working; run: bun add -g @pellux/goodvibes-agent"
-  fi
-
-  "$bun_bin" add -g @pellux/goodvibes-agent >/dev/null 2>&1 ||
-    fail "goodvibes-agent install failed. The TUI is installed and working; retry with: $bun_bin add -g @pellux/goodvibes-agent"
-
-  # Global bin dir for bun installs (agent has no postinstall and needs no trust step).
-  # `bun pm bin -g` prints the directory itself.
-  agent_bin_dir=$("$bun_bin" pm bin -g 2>/dev/null) || agent_bin_dir="${BUN_INSTALL:-$HOME/.bun}/bin"
-  if [ -x "$agent_bin_dir/goodvibes-agent" ]; then
-    say "  installed  $agent_bin_dir/goodvibes-agent"
-    case ":$PATH:" in
-      *":$agent_bin_dir:"*) : ;;
-      *)
-        say "  NOTE: $agent_bin_dir is not on your PATH. Add it with:"
-        say "    export PATH=\"$agent_bin_dir:\$PATH\""
-        ;;
-    esac
-  else
-    say "  installed (run 'bun pm bin -g' to locate the goodvibes-agent command)"
+    fail "the installed goodvibes-agent binary failed to run ('goodvibes-agent --version')"
   fi
 }
 
@@ -266,6 +284,7 @@ main() {
 
   if [ "$WITH_AGENT" = "1" ]; then
     install_agent
+    restart_running_agent
   fi
 
   say ""
