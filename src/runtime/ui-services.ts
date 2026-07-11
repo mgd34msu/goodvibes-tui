@@ -10,6 +10,7 @@ import { SessionUnionCache, type SessionReadFacade } from '@pellux/goodvibes-sdk
 import type { ShellPathService } from '@/runtime/index.ts';
 import type { HostServiceStatus } from '@/runtime/index.ts';
 import type { SecretsManager } from '../config/secrets.ts';
+import type { buildRelayExternalServiceMethods } from './relay-reachability-bridge.ts';
 
 export interface UiEnvironmentServices {
   readonly workingDirectory: string;
@@ -63,7 +64,7 @@ export interface UiPlatformServices {
   readonly webhookNotifier: RuntimeServices['webhookNotifier'];
   readonly focusTracker: RuntimeServices['focusTracker'];
   readonly policyRuntimeState: RuntimeServices['policyRuntimeState'];
-  readonly externalServices?: {
+  readonly externalServices?: ReturnType<typeof buildRelayExternalServiceMethods> & {
     inspect(): {
       readonly daemonRunning: boolean;
       readonly daemonPortInUse?: boolean;

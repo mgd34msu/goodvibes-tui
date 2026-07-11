@@ -332,17 +332,17 @@ async function main() {
   commandContext.submitSpokenInput = (text, content) => submitInput(text, content, { spokenOutput: true });
   commandContext.stopSpokenOutput = () => spokenTurns.stop(); commandContext.pasteFromClipboard = () => input.handlePaste();
   commandContext.executeCommand = (name, args) => commandRegistry.execute(name, args, commandContext);
+  // Late-patched: bootstrap.ts populates uiServices.platform.externalServices AFTER commandContext is built.
+  commandContext.platform.externalServices = uiServices.platform.externalServices;
   commandContext.cancelGeneration = cancelGeneration;
   commandContext.isGenerating = () => orchestrator.isThinking;
-  commandContext.jumpToBookmark = jumpToBookmark;
-  commandContext.scrollToLine = scrollToLine;
+  commandContext.jumpToBookmark = jumpToBookmark; commandContext.scrollToLine = scrollToLine;
   commandContext.clearScreen = () => {
     compositor.resetDiff();
     allowTerminalWrite(() => stdout.write(CLEAR_SCREEN));
     render();
   };
-  commandContext.requestFullRepaint = () => { compositor.resetDiff(); render(); };
-  commandContext.beginConcealedInput = (req) => input.beginConcealedInput(req);
+  commandContext.requestFullRepaint = () => { compositor.resetDiff(); render(); }; commandContext.beginConcealedInput = (req) => input.beginConcealedInput(req);
   permissionPromptRef.requestPermission = wrapRequestPermissionWithAlert((request) =>
     new Promise((resolve) => {
       pendingPermission = {

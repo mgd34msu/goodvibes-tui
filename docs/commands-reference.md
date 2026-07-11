@@ -6,7 +6,7 @@
 
 # Command Reference
 
-GoodVibes ships **143** built-in slash commands across **68** categories. Every command below is generated directly from the command registry, so this list is always complete and current. Type a command in the composer prefixed with `/`, or press `Ctrl+K` (or run `/palette`) to search them all in the command palette.
+GoodVibes ships **144** built-in slash commands across **69** categories. Every command below is generated directly from the command registry, so this list is always complete and current. Type a command in the composer prefixed with `/`, or press `Ctrl+K` (or run `/palette`) to search them all in the command palette.
 
 ## Categories
 
@@ -59,6 +59,7 @@ GoodVibes ships **143** built-in slash commands across **68** categories. Every 
 - [Provider Accounts](#provider-accounts) — 1
 - [Providers](#providers) — 1
 - [QR Codes](#qr-codes) — 1
+- [Relay](#relay) — 1
 - [Remote](#remote) — 2
 - [Scheduling](#scheduling) — 1
 - [Secrets](#secrets) — 1
@@ -420,6 +421,12 @@ GoodVibes ships **143** built-in slash commands across **68** categories. Every 
 | Command | Aliases | Usage | Description |
 | --- | --- | --- | --- |
 | `/qrcode` | `/qr`, `/pair` | `[regenerate]` | Open the companion-app pairing modal (QR code), or regenerate the pairing token |
+
+## Relay
+
+| Command | Aliases | Usage | Description |
+| --- | --- | --- | --- |
+| `/relay` | — | `[status\|pair]` | Outbound relay reachability status, or mint a QR-encodable pairing payload |
 
 ## Remote
 

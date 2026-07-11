@@ -26,7 +26,7 @@ import { buildCliServicePosture, getGoodVibesPackageRoot, resolveGoodVibesDaemon
 import { runInstallSelfCheck } from '../runtime/install-self-check.ts';
 import { readPersistedWorkspaceTrust } from '../runtime/trust/workspace-trust.ts';
 import { WorkspaceRegistrationManager } from '../runtime/trust/workspace-registration.ts';
-import type { CliWorkspaceStatus, CliSandboxStatus } from './status.ts';
+import type { CliWorkspaceStatus, CliSandboxStatus, CliRelayStatus } from './status.ts';
 import { detectSandboxAvailability, probeSandboxHost } from '@pellux/goodvibes-sdk/platform/tools/exec/sandbox';
 import { createFeatureFlagManager } from '@/runtime/index.ts';
 import type { FlagState } from '@/runtime/index.ts';
@@ -192,6 +192,16 @@ export async function prepareShellCliRuntime(
       reason: sandboxAvailability.reason,
       networkIsolationGuaranteed: sandboxAvailability.networkIsolationGuaranteed,
     };
+    // Reuses sandboxFeatureFlags (already loaded from the same featureFlags config category)
+    // for the relay-connect gate rather than constructing a second FeatureFlagManager.
+    const relayCategory = configManager.getCategory('relay');
+    const relayStatus: CliRelayStatus = {
+      configEnabled: relayCategory.enabled === true,
+      featureEnabled: sandboxFeatureFlags.isEnabled('relay-connect'),
+      url: String(relayCategory.url ?? ''),
+      rendezvousId: String(relayCategory.rendezvousId ?? ''),
+      requireStepUpForMutations: relayCategory.requireStepUpForMutations === true,
+    };
     const statusOptions = {
       configManager,
       workingDirectory: bootstrapWorkingDir,
@@ -216,6 +226,7 @@ export async function prepareShellCliRuntime(
       outputFormat: cli.flags.outputFormat,
       workspace: workspaceStatus,
       sandbox: sandboxStatus,
+      relay: relayStatus,
     };
     const snapshot = buildCliStatusSnapshot(statusOptions);
     console.log(cli.command === 'onboarding'

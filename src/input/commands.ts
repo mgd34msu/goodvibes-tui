@@ -61,6 +61,7 @@ import { registerLocalAuthRuntimeCommands } from './commands/local-auth-runtime.
 import { registerIntelligenceRuntimeCommands } from './commands/intelligence-runtime.ts';
 import { registerConversationRuntimeCommands } from './commands/conversation-runtime.ts';
 import { registerQrcodeRuntimeCommands } from './commands/qrcode-runtime.ts';
+import { registerRelayRuntimeCommands } from './commands/relay-runtime.ts';
 import { registerOnboardingRuntimeCommands } from './commands/onboarding-runtime.ts';
 import { registerTtsRuntimeCommands } from './commands/tts-runtime.ts';
 import { registerCloudflareRuntimeCommands } from './commands/cloudflare-runtime.ts';
@@ -139,6 +140,7 @@ export const BUILTIN_COMMAND_GROUPS: readonly BuiltinCommandGroup[] = [
   { category: 'Intelligence', register: registerIntelligenceRuntimeCommands },
   { category: 'Conversation', register: registerConversationRuntimeCommands },
   { category: 'QR Codes', register: registerQrcodeRuntimeCommands },
+  { category: 'Relay', register: registerRelayRuntimeCommands },
   { category: 'Onboarding', register: registerOnboardingRuntimeCommands },
   { category: 'Voice & TTS', register: registerTtsRuntimeCommands },
   { category: 'Cloudflare', register: registerCloudflareRuntimeCommands },

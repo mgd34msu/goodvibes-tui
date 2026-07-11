@@ -50,9 +50,9 @@ import { announceResumeState } from './resume-notice.ts';
 import { announceInstallSelfCheck } from './install-self-check-startup.ts';
 import { buildSharedOrchestratorCoreServices, refreshMemoryRecallSnapshot } from './orchestrator-core-services.ts';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
-import { DaemonServer } from '@pellux/goodvibes-sdk/platform/daemon';
-import { HttpListener } from '@pellux/goodvibes-sdk/platform/daemon';
+import { DaemonServer, HttpListener } from '@pellux/goodvibes-sdk/platform/daemon';
 import { createSafeHostServeFactory } from '../daemon/safe-serve.ts';
+import { buildRelayExternalServiceMethods } from './relay-reachability-bridge.ts';
 import { startMcpConfigAutoReload } from '../mcp/runtime-reload.ts';
 
 type ExternalServiceFactories = NonNullable<Parameters<typeof startExternalServices>[4]>;
@@ -494,8 +494,7 @@ export async function bootstrapRuntime(
   });
 
   let externalServices: ExternalServicesHandle = {
-    daemonServer: null,
-    httpListener: null,
+    daemonServer: null, httpListener: null,
     daemonStatus: createPendingServiceStatus('daemon'),
     httpListenerStatus: createPendingServiceStatus('httpListener'),
     listRecentControlPlaneEvents: () => [],
@@ -506,6 +505,7 @@ export async function bootstrapRuntime(
     externalServices: NonNullable<typeof uiServices.platform.externalServices>;
   };
   platformExternalServices.externalServices = {
+    ...buildRelayExternalServiceMethods(() => externalServices.daemonServer),
     inspect: inspectExternalServices,
     restart: async () => {
       if (externalServicesPromise) {
