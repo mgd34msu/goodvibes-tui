@@ -65,6 +65,23 @@ try {
       const pkgPath = join(stageDir, 'package.json');
       const pkg = JSON.parse(readFileSync(pkgPath, 'utf8'));
       pkg.name = packageNameOverride;
+      // When the payload package is rescoped for a mirror registry (GitHub
+      // Packages requires every package to live under the repo owner's scope),
+      // the per-platform optionalDependencies must be rescoped in lockstep so
+      // the mirrored main package resolves the mirrored platform packages
+      // instead of the npm-only @pellux ones. The npm publish path never sets
+      // an override, so its @pellux optionalDependencies are left untouched.
+      const overrideScope = packageNameOverride.includes('/')
+        ? packageNameOverride.slice(0, packageNameOverride.indexOf('/'))
+        : '';
+      if (overrideScope && pkg.optionalDependencies && typeof pkg.optionalDependencies === 'object') {
+        const rescoped: Record<string, string> = {};
+        for (const [depName, depVersion] of Object.entries(pkg.optionalDependencies as Record<string, string>)) {
+          const match = /^@[^/]+\/(goodvibes-tui-.+)$/.exec(depName);
+          rescoped[match ? `${overrideScope}/${match[1]}` : depName] = depVersion;
+        }
+        pkg.optionalDependencies = rescoped;
+      }
       writeFileSync(pkgPath, `${JSON.stringify(pkg, null, 2)}\n`);
     }
 
