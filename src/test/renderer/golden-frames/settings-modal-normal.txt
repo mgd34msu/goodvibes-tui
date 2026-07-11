@@ -5,7 +5,7 @@
 |│ INTERFACE              │ Display configuration                                                   │|
 |│   ▸ Display (9)        │ stream                                                                  │|
 |│     UI (4)             │ Key: display.stream                                                     │|
-|│     Behavior (20)      │ Current: true                                                           │|
+|│     Behavior (21)      │ Current: true                                                           │|
 |│     Permissions (17)   │ Default: true                                                           │|
 |│ AI ROUTING             │ Type: boolean                                                           │|
 |│     Provider (4)       │ Source: default                                                         │|
