@@ -19,6 +19,8 @@ import {
   requireSubscriptionManager,
   requireSessionMemoryStore,
 } from './runtime-services.ts';
+import { getOperatorRpc, describeOperatorRpcError } from './operator-rpc.ts';
+import { formatQuotaSnapshotLine, renderMetricMap, telemetryScopeRefusalLine } from './health-metrics-format.ts';
 
 function renderSandboxHealthSummary(configManager: ConfigManager): string[] {
   const backend = String(configManager.get('sandbox.vmBackend') ?? 'local');
@@ -34,12 +36,13 @@ function renderSandboxHealthSummary(configManager: ConfigManager): string[] {
   return lines;
 }
 
+
 export function registerHealthRuntimeCommands(registry: CommandRegistry): void {
   registry.register({
     name: 'health',
     aliases: ['doctor'],
     description: 'Health workspace for startup posture, service readiness, sandbox posture, and provider health',
-    usage: '[report|review|open|setup|services|sandbox|provider|accounts|auth|settings|intelligence|remote|mcp|continuity|worktrees|maintenance|term|repair [domain]] — bare and report stay a cross-domain transcript report (see also /health provider for the providers modal)',
+    usage: '[report|review|open|setup|services|sandbox|provider|accounts|auth|settings|intelligence|remote|mcp|metrics|continuity|worktrees|maintenance|term|repair [domain]] — bare and report stay a cross-domain transcript report (see also /health provider for the providers modal)',
     async handler(args, ctx) {
       const sub = (args[0] ?? 'review').toLowerCase();
       const readModels = requireReadModels(ctx);
@@ -214,6 +217,56 @@ export function registerHealthRuntimeCommands(registry: CommandRegistry): void {
           '  next: /mcp auth-review',
           '  next: /mcp repair',
         ].join('\n'));
+        return;
+      }
+
+      if (sub === 'metrics' || sub === 'runtime' || sub === 'quota') {
+        const rpc = getOperatorRpc(ctx);
+        if (!rpc.available) {
+          ctx.print([
+            'Health Review: Runtime Metrics',
+            `  unavailable: ${rpc.reason}`,
+            '  next: connect a daemon (control plane) to read live runtime metrics.',
+          ].join('\n'));
+          return;
+        }
+
+        const lines: string[] = ['Health Review: Runtime Metrics'];
+
+        // Process-wide runtime metrics snapshot (runtime.metrics.get). Requires
+        // the read:telemetry scope; a scope refusal is rendered as such, never
+        // as zero counters.
+        try {
+          const metrics = await rpc.sdk.operator.invoke('runtime.metrics.get', {});
+          lines.push(...renderMetricMap('counters', metrics.counters as Record<string, unknown>));
+          lines.push(...renderMetricMap('gauges', metrics.gauges as Record<string, unknown>));
+          lines.push(...renderMetricMap('histograms', metrics.histograms as Record<string, unknown>));
+          const byModel = Object.keys(metrics.toolFormat?.byModel ?? {}).length;
+          const byClass = Object.keys(metrics.toolFormat?.byClass ?? {}).length;
+          lines.push(`  tool-format telemetry: ${byModel} model(s), ${byClass} class(es)`);
+        } catch (error) {
+          const scopeLine = telemetryScopeRefusalLine(error, 'runtime metrics');
+          lines.push(scopeLine ?? `  runtime metrics: ${describeOperatorRpcError(error)}`);
+        }
+
+        // Remaining rate-limit quota for the active provider (quota.snapshot.get).
+        // hasSignal:false is an honest "no observation yet", never a fabricated
+        // full quota. An explicit provider may be passed: /health metrics <provider>.
+        const provider = (args[1] ?? ctx.session.runtime.provider ?? '').trim();
+        if (provider) {
+          try {
+            const quota = await rpc.sdk.operator.invoke('quota.snapshot.get', { provider });
+            lines.push(formatQuotaSnapshotLine(provider, quota));
+          } catch (error) {
+            const scopeLine = telemetryScopeRefusalLine(error, `quota (${provider})`);
+            lines.push(scopeLine ?? `  quota (${provider}): ${describeOperatorRpcError(error)}`);
+          }
+        } else {
+          lines.push('  quota: no active provider to query (pass one: /health metrics <provider>).');
+        }
+
+        lines.push('  next: /health accounts');
+        ctx.print(lines.join('\n'));
         return;
       }
 
@@ -455,6 +508,7 @@ export function registerHealthRuntimeCommands(registry: CommandRegistry): void {
         '  /health auth',
         '  /health settings',
         '  /health intelligence',
+        '  /health metrics',
         '  /health remote',
         '  /health maintenance',
         '  /health worktrees',

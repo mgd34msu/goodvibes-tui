@@ -54,4 +54,23 @@ describe('/health front door (DEBT-5 item 3)', () => {
       expect(opened).toEqual(['providers-modal']);
     }
   });
+
+  test('/health metrics reports the daemon-disabled reason plainly (never zeros)', async () => {
+    const cmd = getCommand();
+    const printed: string[] = [];
+    const ctx = {
+      platform: {
+        readModels: {} as never,
+        configManager: { get: (key: string) => (key === 'daemon.enabled' ? false : undefined) } as never,
+      },
+      session: { runtime: { provider: 'anthropic' } },
+      print: (s: string) => printed.push(s),
+    } as unknown as CommandContext;
+    await cmd.handler(['metrics'], ctx);
+    const out = printed.join('\n');
+    expect(out).toContain('Health Review: Runtime Metrics');
+    expect(out).toContain('unavailable:');
+    expect(out).toContain('daemon is disabled');
+    expect(out).not.toMatch(/counters: 0/);
+  });
 });
