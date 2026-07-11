@@ -25,6 +25,10 @@ import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 import type { CommandContext } from '../command-registry.ts';
 import type { WorkstreamCommandService } from '../../runtime/workstream-services.ts';
 import { requirePanelManager } from './runtime-services.ts';
+import { type AttemptGraphItem, renderDependentHoldLines } from './workstream-attempt-dependents.ts';
+
+/** Resolve a workstream's items for dependent-hold display; null-safe against a stubbed engine. */
+type ResolveWorkstreamItems = (workstreamId: string) => readonly AttemptGraphItem[] | null;
 
 function shortId(id: string): string {
   return id.length > 10 ? `${id.slice(0, 10)}…` : id;
@@ -58,7 +62,7 @@ function candidateLine(c: AttemptCandidate): string {
   return `    ${c.attemptIndex + 1}. [${state}] ${c.title} — ${files}, item ${shortId(c.itemId)}`;
 }
 
-function renderGroupList(groups: readonly HeldMergeGroup[]): string {
+function renderGroupList(groups: readonly HeldMergeGroup[], resolveItems?: ResolveWorkstreamItems): string {
   if (groups.length === 0) {
     return 'No best-of-N groups awaiting a pick. A worktree-isolated item with attempts>1 appears here once its siblings finish.';
   }
@@ -68,6 +72,12 @@ function renderGroupList(groups: readonly HeldMergeGroup[]): string {
     for (const c of g.candidates) lines.push(candidateLine(c));
     if (g.judgment?.proposedWinnerItemId) {
       lines.push(`    judge proposal: item ${shortId(g.judgment.proposedWinnerItemId)} (model, advisory)`);
+    }
+    // Non-leaf best-of-N: name the dependents this group holds, so a group that
+    // gates downstream work reads as such (leaf groups add nothing here).
+    const items = resolveItems?.(g.workstreamId);
+    if (items) {
+      lines.push(...renderDependentHoldLines(items, g.candidates.map((c) => c.itemId)));
     }
   }
   lines.push('Compare: /workstream attempts diff <group> <#>   Judge: /workstream attempts judge <group>   Pick: /workstream attempts pick <group> <#>');
@@ -122,7 +132,14 @@ export async function handleAttemptsSubcommand(ctx: CommandContext, service: Wor
   }
 
   if (action === 'list') {
-    ctx.print(renderGroupList(groups));
+    const resolveItems: ResolveWorkstreamItems = (workstreamId) => {
+      try {
+        return (service.engine.getWorkstream(workstreamId)?.items as readonly AttemptGraphItem[] | undefined) ?? null;
+      } catch {
+        return null;
+      }
+    };
+    ctx.print(renderGroupList(groups, resolveItems));
     return true;
   }
 

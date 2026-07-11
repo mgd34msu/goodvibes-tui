@@ -24,7 +24,7 @@ function spec(items: CreateWorkstreamInput['items'], isolation?: 'shared' | 'wor
   return { title: 't', phases: [], items, isolation };
 }
 
-describe('validateAttempts — leaf + worktree constraints', () => {
+describe('validateAttempts — worktree + stable-id constraints (non-leaf allowed)', () => {
   test('a worktree-isolated leaf best-of-N item is valid', () => {
     const v = validateAttempts(spec([{ id: 'a', title: 'A', task: 'a', attempts: 3 }], 'worktree'));
     expect(v.hasAttempts).toBe(true);
@@ -36,20 +36,30 @@ describe('validateAttempts — leaf + worktree constraints', () => {
     expect(v.violations.some((m) => /worktree-isolated/.test(m))).toBe(true);
   });
 
-  test('a best-of-N item with dependencies breaks the leaf rule', () => {
+  test('a best-of-N item that itself declares dependencies is allowed (non-leaf)', () => {
     const v = validateAttempts(spec([
       { id: 'a', title: 'A', task: 'a' },
       { id: 'b', title: 'B', task: 'b', attempts: 2, dependsOn: ['a'] },
     ], 'worktree'));
-    expect(v.violations.some((m) => /must be a leaf \(no dependencies/.test(m))).toBe(true);
+    expect(v.violations).toHaveLength(0);
   });
 
-  test('a best-of-N item that others depend on breaks the leaf rule', () => {
+  test('a best-of-N item that others depend on is allowed when it carries a stable id (non-leaf)', () => {
     const v = validateAttempts(spec([
       { id: 'a', title: 'A', task: 'a', attempts: 2 },
       { id: 'b', title: 'B', task: 'b', dependsOn: ['a'] },
     ], 'worktree'));
-    expect(v.violations.some((m) => /nothing may depend on it/.test(m))).toBe(true);
+    expect(v.violations).toHaveLength(0);
+  });
+
+  test('a depended-upon best-of-N item WITHOUT a stable id is a violation', () => {
+    // Express a dependency edge that names the item by its title (its only handle
+    // when it has no id) — the stable-id rule must reject it.
+    const v = validateAttempts(spec([
+      { title: 'A', task: 'a', attempts: 2 },
+      { id: 'b', title: 'B', task: 'b', dependsOn: ['A'] },
+    ], 'worktree'));
+    expect(v.violations.some((m) => /no stable id/.test(m))).toBe(true);
   });
 
   test('an over-cap attempts value is a non-blocking note', () => {
@@ -136,6 +146,24 @@ describe('/workstream attempts', () => {
     expect(printed.join('\n')).toContain('implement the parser');
     expect(printed.join('\n')).toContain('attempt A');
     expect(printed.join('\n')).toContain('READY');
+  });
+
+  test('list shows dependents held by a non-leaf best-of-N group', async () => {
+    const engine = {
+      listHeldMergeGroups: async () => [group()],
+      getWorkstream: (_id: string) => ({
+        items: [
+          { id: 'item-a', title: 'attempt A', state: 'held-merge', attemptSourceId: 'parser' },
+          { id: 'item-b', title: 'attempt B', state: 'held-merge', attemptSourceId: 'parser' },
+          { id: 'wire', title: 'Wire it up', state: 'blocked-dependency', dependsOn: ['parser'] },
+        ],
+      }),
+    } as unknown as OrchestrationEngine;
+    const { ctx, printed } = makeCtx();
+    await handleAttemptsSubcommand(ctx, svc(engine), ['attempts', 'list']);
+    const out = printed.join('\n');
+    expect(out).toContain('1 dependent(s) held until the winner is picked and merged');
+    expect(out).toContain('"Wire it up"');
   });
 
   test('judge shows the model proposal clearly labelled, with reasons', async () => {
