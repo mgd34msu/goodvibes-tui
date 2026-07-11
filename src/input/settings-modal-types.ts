@@ -37,6 +37,12 @@ export type SettingsCategory =
   | 'sandbox'
   | 'mcp'
   | 'learning'
+  | 'fetch'
+  | 'agents'
+  | 'security'
+  | 'integrations'
+  | 'policy'
+  | 'notifications'
   | 'flags'
   | 'release'
   | 'danger';
@@ -47,12 +53,12 @@ export const SETTINGS_CATEGORY_GROUPS: ReadonlyArray<{
   readonly label: string;
   readonly categories: readonly SettingsCategory[];
 }> = [
-  { label: 'Interface', categories: ['display', 'ui', 'behavior', 'permissions'] },
+  { label: 'Interface', categories: ['display', 'ui', 'behavior', 'notifications', 'permissions', 'policy', 'security'] },
   { label: 'AI Routing', categories: ['provider', 'subscriptions', 'helper', 'tools', 'tts'] },
   { label: 'Service & Network', categories: ['service', 'daemon', 'network', 'controlPlane', 'httpListener', 'web', 'relay'] },
-  { label: 'Surfaces & Cloud', categories: ['surfaces', 'mcp', 'cloudflare'] },
+  { label: 'Surfaces & Cloud', categories: ['surfaces', 'integrations', 'mcp', 'cloudflare'] },
   { label: 'Automation', categories: ['batch', 'automation', 'checkin', 'watchers', 'orchestration', 'planner', 'wrfc'] },
-  { label: 'Runtime & Data', categories: ['storage', 'atRest', 'sandbox', 'runtime', 'cache', 'telemetry', 'diagnostics', 'learning'] },
+  { label: 'Runtime & Data', categories: ['storage', 'atRest', 'sandbox', 'fetch', 'agents', 'runtime', 'cache', 'telemetry', 'diagnostics', 'learning'] },
   { label: 'Advanced', categories: ['flags', 'release', 'danger'] },
 ];
 
@@ -67,6 +73,19 @@ export interface SettingEntry {
   conflict?: boolean;
   sourceLabel?: string;
   lockReason?: string;
+  /**
+   * Present when this row is a feature-unit toggle header (a feature flag
+   * rendered as one unit with its config keys beneath it). The row's
+   * setting.key is `featureFlags.<id>` and setting.type is 'boolean'; toggling
+   * routes to the feature-flag manager, not a plain config write.
+   */
+  flag?: FlagEntry;
+  /**
+   * Present when this row is a config sub-option OWNED by a feature unit — the
+   * id of the owning flag. Drives the indented rendering beneath its header and
+   * marks the row as claimed so it does not double-list as an orphan.
+   */
+  ownerFlagId?: string;
 }
 
 export interface FlagEntry {

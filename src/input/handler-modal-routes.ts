@@ -384,8 +384,10 @@ export function handleSettingsModalToken(state: SettingsRouteState, token: Input
         state.settingsModal.activateSelected();
         consumeSettingsPickerRequest(state);
       } else if (focusPane === 'categories') state.settingsModal.focusSettings?.();
-      else if (state.settingsModal.currentCategory === 'flags') state.settingsModal.toggleSelectedFlag();
       else {
+        // Feature-unit toggle headers are boolean settings rows now, so
+        // activateSelected toggles them (via the flag-toggle chokepoint) the same
+        // way it edits/toggles any other setting — no flags-category special case.
         state.settingsModal.activateSelected();
         consumeSettingsPickerRequest(state);
       }
@@ -447,8 +449,9 @@ export function handleSettingsModalToken(state: SettingsRouteState, token: Input
     } else if (token.value === ' ' && !state.settingsModal.editingMode) {
       const focusPane = state.settingsModal.focusPane ?? 'settings';
       if (focusPane === 'categories') state.settingsModal.focusSettings?.();
-      else if (state.settingsModal.currentCategory === 'flags') state.settingsModal.toggleSelectedFlag();
       else {
+        // See the Enter/Space handler above: feature-unit headers toggle through
+        // activateSelected now, so no flags-category special case is needed.
         state.settingsModal.activateSelected();
         consumeSettingsPickerRequest(state);
       }

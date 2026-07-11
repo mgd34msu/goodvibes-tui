@@ -6,17 +6,17 @@
 |│   ▸ Display  │ configurati|
 |│     UI (4)   │ stream    │|
 |│     Behavio  │ Key:      │|
-|│     Permiss  │ display.str|
-|│ AI ROUTING   │ Current: tr|
-|│     Provide  │ Default: tr|
-|│     Subscri  │ Type: boole|
-|│     Helper   │ Source: def|
-|│     Tools (  │           │|
-|│     TTS (6)  │───────────│|
-|│ SERVICE & N  │   Setting  |
-|│     Service  │ • stream   |
-|│     Daemon   │   lineNumbe|
-|│     Network  │ ▼ 7 more se|
+|│     Notific  │ display.str|
+|│     Permiss  │ Current: tr|
+|│     Policy-  │ Default: tr|
+|│     Token S  │ Type: boole|
+|│ AI ROUTING   │ Source: def|
+|│     Provide  │           │|
+|│     Subscri  │───────────│|
+|│     Helper   │   Setting  |
+|│     Tools (  │ • stream   |
+|│     TTS (6)  │   lineNumbe|
+|│ SERVICE & N  │ ▼ 7 more se|
 |│ Focus categories · [Up/D │|
 |└──────────────────────────┘|
 @STYLES
@@ -442,36 +442,27 @@
 7 27 bg=#161a22
 8 0 fg=#64748b
 8 1 bg=#18202b
-8 2 fg=#93c5fd
+8 2 fg=#94a3b8
 8 2 bg=#18202b
-8 2 bold=1
-8 3 fg=#93c5fd
+8 3 fg=#94a3b8
 8 3 bg=#18202b
-8 3 bold=1
-8 4 fg=#93c5fd
+8 4 fg=#94a3b8
 8 4 bg=#18202b
-8 4 bold=1
-8 5 fg=#93c5fd
+8 5 fg=#94a3b8
 8 5 bg=#18202b
-8 5 bold=1
-8 6 fg=#93c5fd
+8 6 fg=#94a3b8
 8 6 bg=#18202b
-8 6 bold=1
-8 7 fg=#93c5fd
+8 7 fg=#94a3b8
 8 7 bg=#18202b
-8 7 bold=1
-8 8 fg=#93c5fd
+8 8 fg=#94a3b8
 8 8 bg=#18202b
-8 8 bold=1
-8 9 fg=#93c5fd
+8 9 fg=#94a3b8
 8 9 bg=#18202b
-8 9 bold=1
-8 10 fg=#93c5fd
+8 10 fg=#94a3b8
 8 10 bg=#18202b
-8 10 bold=1
-8 11 fg=#93c5fd
+8 11 fg=#94a3b8
 8 11 bg=#18202b
-8 11 bold=1
+8 12 fg=#94a3b8
 8 12 bg=#18202b
 8 13 bg=#18202b
 8 14 bg=#18202b
@@ -604,27 +595,36 @@
 10 27 bg=#161a22
 11 0 fg=#64748b
 11 1 bg=#18202b
-11 2 fg=#94a3b8
+11 2 fg=#93c5fd
 11 2 bg=#18202b
-11 3 fg=#94a3b8
+11 2 bold=1
+11 3 fg=#93c5fd
 11 3 bg=#18202b
-11 4 fg=#94a3b8
+11 3 bold=1
+11 4 fg=#93c5fd
 11 4 bg=#18202b
-11 5 fg=#94a3b8
+11 4 bold=1
+11 5 fg=#93c5fd
 11 5 bg=#18202b
-11 6 fg=#94a3b8
+11 5 bold=1
+11 6 fg=#93c5fd
 11 6 bg=#18202b
-11 7 fg=#94a3b8
+11 6 bold=1
+11 7 fg=#93c5fd
 11 7 bg=#18202b
-11 8 fg=#94a3b8
+11 7 bold=1
+11 8 fg=#93c5fd
 11 8 bg=#18202b
-11 9 fg=#94a3b8
+11 8 bold=1
+11 9 fg=#93c5fd
 11 9 bg=#18202b
-11 10 fg=#94a3b8
+11 9 bold=1
+11 10 fg=#93c5fd
 11 10 bg=#18202b
-11 11 fg=#94a3b8
+11 10 bold=1
+11 11 fg=#93c5fd
 11 11 bg=#18202b
-11 12 fg=#94a3b8
+11 11 bold=1
 11 12 bg=#18202b
 11 13 bg=#18202b
 11 14 bg=#18202b
@@ -734,39 +734,28 @@
 13 27 fg=#64748b
 14 0 fg=#64748b
 14 1 bg=#18202b
-14 2 fg=#93c5fd
+14 2 fg=#94a3b8
 14 2 bg=#18202b
-14 2 bold=1
-14 3 fg=#93c5fd
+14 3 fg=#94a3b8
 14 3 bg=#18202b
-14 3 bold=1
-14 4 fg=#93c5fd
+14 4 fg=#94a3b8
 14 4 bg=#18202b
-14 4 bold=1
-14 5 fg=#93c5fd
+14 5 fg=#94a3b8
 14 5 bg=#18202b
-14 5 bold=1
-14 6 fg=#93c5fd
+14 6 fg=#94a3b8
 14 6 bg=#18202b
-14 6 bold=1
-14 7 fg=#93c5fd
+14 7 fg=#94a3b8
 14 7 bg=#18202b
-14 7 bold=1
-14 8 fg=#93c5fd
+14 8 fg=#94a3b8
 14 8 bg=#18202b
-14 8 bold=1
-14 9 fg=#93c5fd
+14 9 fg=#94a3b8
 14 9 bg=#18202b
-14 9 bold=1
-14 10 fg=#93c5fd
+14 10 fg=#94a3b8
 14 10 bg=#18202b
-14 10 bold=1
-14 11 fg=#93c5fd
+14 11 fg=#94a3b8
 14 11 bg=#18202b
-14 11 bold=1
-14 12 fg=#93c5fd
+14 12 fg=#94a3b8
 14 12 bg=#18202b
-14 12 bold=1
 14 13 bg=#18202b
 14 14 bg=#18202b
 14 15 fg=#64748b
@@ -898,28 +887,39 @@
 16 27 bg=#11131a
 17 0 fg=#64748b
 17 1 bg=#18202b
-17 2 fg=#94a3b8
+17 2 fg=#93c5fd
 17 2 bg=#18202b
-17 3 fg=#94a3b8
+17 2 bold=1
+17 3 fg=#93c5fd
 17 3 bg=#18202b
-17 4 fg=#94a3b8
+17 3 bold=1
+17 4 fg=#93c5fd
 17 4 bg=#18202b
-17 5 fg=#94a3b8
+17 4 bold=1
+17 5 fg=#93c5fd
 17 5 bg=#18202b
-17 6 fg=#94a3b8
+17 5 bold=1
+17 6 fg=#93c5fd
 17 6 bg=#18202b
-17 7 fg=#94a3b8
+17 6 bold=1
+17 7 fg=#93c5fd
 17 7 bg=#18202b
-17 8 fg=#94a3b8
+17 7 bold=1
+17 8 fg=#93c5fd
 17 8 bg=#18202b
-17 9 fg=#94a3b8
+17 8 bold=1
+17 9 fg=#93c5fd
 17 9 bg=#18202b
-17 10 fg=#94a3b8
+17 9 bold=1
+17 10 fg=#93c5fd
 17 10 bg=#18202b
-17 11 fg=#94a3b8
+17 10 bold=1
+17 11 fg=#93c5fd
 17 11 bg=#18202b
-17 12 fg=#94a3b8
+17 11 bold=1
+17 12 fg=#93c5fd
 17 12 bg=#18202b
+17 12 bold=1
 17 13 bg=#18202b
 17 14 bg=#18202b
 17 15 fg=#64748b

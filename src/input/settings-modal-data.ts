@@ -51,6 +51,7 @@ import {
   type SubscriptionEntry,
 } from './settings-modal-types.ts';
 import { enrichRelaySettingDescriptions } from './relay-settings-descriptions.ts';
+import { applyFeatureUnitLayout } from './feature-unit-layout.ts';
 
 // ---------------------------------------------------------------------------
 // deepEqual — structural equality for isDefault comparisons
@@ -94,10 +95,14 @@ export function deepEqual(a: unknown, b: unknown): boolean {
 
 export function buildSettingGroups(
   configManager: ConfigManager,
+  featureFlagManager?: FeatureFlagManager | null,
 ): Map<SettingsCategory, SettingEntry[]> {
   const groups = new Map<SettingsCategory, SettingEntry[]>();
   for (const cat of SETTINGS_CATEGORIES) {
-    if (cat === 'flags') continue;
+    // 'flags' is no longer a flat dump — it is the Advanced Features bucket for
+    // no-config flags, filled by applyFeatureUnitLayout below. Every category
+    // (including the new fetch/agents/security/integrations/policy/notifications
+    // namespaces) starts empty and is filled from CONFIG_SCHEMA.
     groups.set(cat, []);
   }
 
@@ -237,6 +242,17 @@ export function buildSettingGroups(
   // relay.* is a real SDK CONFIG_SCHEMA domain; append the threat-model note
   // the SDK's own descriptions don't carry (see relay-settings-descriptions.ts).
   enrichRelaySettingDescriptions(groups);
+
+  // Feature-unit presentation: turn each feature flag into ONE unit — its toggle
+  // header immediately followed by the config keys that tune it — hosted in the
+  // topical category its config lives under, and fold the no-config flags into
+  // the Advanced Features bucket. Sourced from FEATURE_FLAG_CONFIG so this modal,
+  // the onboarding wizard, and /flags share one grouping. Runs AFTER all synthetic
+  // injection above so synthetic (non-flag-owned) rows stay as orphan rows in
+  // their category. Skipped when no flag manager is supplied (flagless test path).
+  if (featureFlagManager) {
+    applyFeatureUnitLayout(groups, buildFlagEntries(featureFlagManager));
+  }
 
   // learning.consolidation.* is now a real SDK config domain (schema-domain-learning.ts
   // registers `learning` in CONFIG_SCHEMA/DEFAULT_CONFIG), so the nine keys already
