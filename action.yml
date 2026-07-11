@@ -52,6 +52,8 @@ runs:
       env:
         GOODVIBES_VERSION: ${{ inputs.version }}
         GOODVIBES_AGENT: ${{ inputs.install-agent }}
+        # CI installs binaries only — never register a persistent user service.
+        GOODVIBES_DAEMON_SERVICE: '0'
       run: |
         set -eu
         # Resolve the install directory (default to a stable, PATH-able dir).
