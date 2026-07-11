@@ -12,8 +12,11 @@
 import type { CommandRegistry, CommandContext } from '../command-registry.ts';
 import type { FeatureFlag, FlagState } from '@/runtime/index.ts';
 import type { OperatorMethodOutput } from '@pellux/goodvibes-sdk';
+import { FEATURE_FLAG_CONFIG } from '@pellux/goodvibes-sdk/platform/runtime/state';
 import { persistFlagState } from '../settings-modal-mutations.ts';
 import { describeOperatorRpcError, getOperatorRpc } from './operator-rpc.ts';
+import { SETTINGS_CATEGORY_GROUPS, type SettingsCategory } from '../settings-modal-types.ts';
+import { getFeatureUnitHostCategory } from '../feature-unit-layout.ts';
 
 /** The flags.graduation.report response, as typed by the installed operator contract. */
 type GraduationReport = OperatorMethodOutput<'flags.graduation.report'>;
@@ -33,43 +36,84 @@ function toggleability(flag: FeatureFlag): string {
   return flag.runtimeToggleable ? 'runtime-toggleable' : 'startup-only';
 }
 
-function formatEntry(entry: FlagSnapshotEntry, mark: string): string {
+function stateMark(state: FlagState): string {
+  return state === 'enabled' ? ENABLED_MARK : state === 'killed' ? KILLED_MARK : DISABLED_MARK;
+}
+
+/** The config keys a flag tunes, from FEATURE_FLAG_CONFIG (empty for no-config flags). */
+function flagConfigKeys(flagId: string): readonly string[] {
+  return FEATURE_FLAG_CONFIG[flagId]?.configKeys ?? [];
+}
+
+/** Format one flag as a feature unit: state + name + toggleability, then a config-key summary. */
+function formatUnit(entry: FlagSnapshotEntry): string {
   const { flag } = entry;
-  const header = `  ${mark} ${flag.id}  —  ${flag.name}  [${toggleability(flag)}]`;
-  const lines = [header, `      ${flag.description}`];
+  const lines = [`  ${stateMark(entry.state)} ${flag.id}  —  ${flag.name}  [${toggleability(flag)}]`];
+  const keys = flagConfigKeys(flag.id);
+  if (keys.length > 0) {
+    const shown = keys.slice(0, 4).join(', ');
+    const more = keys.length > 4 ? `, +${keys.length - 4} more` : '';
+    lines.push(`      tunes: ${shown}${more}  (edit in /settings)`);
+  } else {
+    lines.push('      no config keys — toggle only');
+  }
   if (entry.state === 'killed' && flag.killReason) {
     lines.push(`      killed: ${flag.killReason}`);
   }
   return lines.join('\n');
 }
 
-/** Build the grouped `/flags` overview text. Pure — exported for testing. */
+/** Top-level settings group label that hosts a flag's feature unit (mirrors the settings modal grouping). */
+function groupLabelForFlag(flagId: string): string {
+  const host = getFeatureUnitHostCategory(flagId);
+  for (const group of SETTINGS_CATEGORY_GROUPS) {
+    if (group.categories.includes(host as SettingsCategory)) return group.label;
+  }
+  return 'Advanced';
+}
+
+/**
+ * Build the `/flags` overview: feature units grouped by their topical settings
+ * group — each flag with the config keys it tunes — matching how the settings
+ * modal now presents them. This replaces the old flat Enabled/Disabled/Killed
+ * dump; the doctor and graduation views keep their diagnostic form. Pure —
+ * exported for testing.
+ */
 export function formatFlagsOverview(entries: readonly FlagSnapshotEntry[]): string {
   if (entries.length === 0) return 'No feature flags are registered in this runtime.';
 
-  const enabled = entries.filter((e) => e.state === 'enabled');
-  const disabled = entries.filter((e) => e.state === 'disabled');
-  const killed = entries.filter((e) => e.state === 'killed');
+  const enabled = entries.filter((e) => e.state === 'enabled').length;
+  const dark = entries.filter((e) => e.state === 'disabled').length;
+  const killed = entries.filter((e) => e.state === 'killed').length;
 
-  const out: string[] = [`Feature flags (${entries.length} total)`, ''];
+  const out: string[] = [
+    `Feature flags (${entries.length} total) — ${enabled} enabled · ${dark} dark · ${killed} killed`,
+    'Each flag is one feature unit: its toggle plus the config keys it tunes. Full editing lives in /settings.',
+    '',
+  ];
 
-  out.push(`Enabled (${enabled.length}):`);
-  out.push(enabled.length > 0 ? enabled.map((e) => formatEntry(e, ENABLED_MARK)).join('\n') : '  (none)');
-  out.push('');
+  // Bucket the (already tier-then-id sorted) entries by their topical group,
+  // preserving SETTINGS_CATEGORY_GROUPS order.
+  const byGroup = new Map<string, FlagSnapshotEntry[]>();
+  for (const entry of entries) {
+    const label = groupLabelForFlag(entry.flag.id);
+    if (!byGroup.has(label)) byGroup.set(label, []);
+    byGroup.get(label)!.push(entry);
+  }
+  const orderedLabels = [
+    ...SETTINGS_CATEGORY_GROUPS.map((g) => g.label).filter((label) => byGroup.has(label)),
+    ...[...byGroup.keys()].filter((label) => !SETTINGS_CATEGORY_GROUPS.some((g) => g.label === label)),
+  ];
 
-  out.push(`Disabled — built, dark (${disabled.length}):`);
-  out.push(disabled.length > 0 ? disabled.map((e) => formatEntry(e, DISABLED_MARK)).join('\n') : '  (none)');
-
-  if (killed.length > 0) {
+  for (const label of orderedLabels) {
+    out.push(`${label.toUpperCase()}:`);
+    for (const entry of byGroup.get(label)!) out.push(formatUnit(entry));
     out.push('');
-    out.push(`Killed (${killed.length}):`);
-    out.push(killed.map((e) => formatEntry(e, KILLED_MARK)).join('\n'));
   }
 
-  out.push('');
   out.push('Toggle runtime-toggleable flags:  /flags on <id>   /flags off <id>');
-  out.push('Startup-only flags apply on next launch. Interactive toggling also lives in /settings.');
-  out.push('See /flags doctor for dark subsystems you can switch on.');
+  out.push('Startup-only flags apply on next launch. Interactive toggling + full config: /settings.');
+  out.push('See /flags doctor for dark subsystems you can switch on; /flags graduation for release readiness.');
   return out.join('\n');
 }
 
