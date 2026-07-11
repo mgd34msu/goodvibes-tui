@@ -2,8 +2,11 @@
 /**
  * CI eval gate script.
  *
- * Runs all built-in benchmark suites, compares results against the stored
- * baseline, and exits with code 1 if any suite has regressions above threshold.
+ * Runs the standing-gate suite set (GATE_SUITES — the all-floors-passing
+ * scenarios the SDK designates for gating, as distinct from BUILTIN_SUITES'
+ * branch-exercising scenarios), compares results against the stored
+ * baseline, and exits with code 1 if any suite has regressions above
+ * threshold or fails an absolute per-dimension floor.
  *
  * Usage:
  *   bun run eval:gate [--suite <name>] [--baseline <path>] [--save-baseline]
@@ -15,7 +18,7 @@
  */
 
 import { EvalRunner } from '@/runtime/index.ts';
-import { BUILTIN_SUITES } from '@/runtime/index.ts';
+import { GATE_SUITES } from '@/runtime/index.ts';
 import { loadBaseline, captureBaseline, writeBaseline } from '@/runtime/index.ts';
 import { formatSuiteResult, formatGateResult } from '@/runtime/index.ts';
 import { formatScorecard } from '@/runtime/index.ts';
@@ -37,13 +40,13 @@ const projectRoot = process.cwd();
 
 // ── Suite selection ───────────────────────────────────────────────────────────
 
-const suitesToRun: Array<[string, typeof BUILTIN_SUITES[string]]> =
-  suiteArg && BUILTIN_SUITES[suiteArg]
-    ? [[suiteArg, BUILTIN_SUITES[suiteArg]!]]
-    : Object.entries(BUILTIN_SUITES);
+const suitesToRun: Array<[string, typeof GATE_SUITES[string]]> =
+  suiteArg && GATE_SUITES[suiteArg]
+    ? [[suiteArg, GATE_SUITES[suiteArg]!]]
+    : Object.entries(GATE_SUITES);
 
-if (suiteArg && !BUILTIN_SUITES[suiteArg]) {
-  console.error(`eval-gate: Unknown suite "${suiteArg}". Available: ${Object.keys(BUILTIN_SUITES).join(', ')}`);
+if (suiteArg && !GATE_SUITES[suiteArg]) {
+  console.error(`eval-gate: Unknown suite "${suiteArg}". Available: ${Object.keys(GATE_SUITES).join(', ')}`);
   process.exit(2);
 }
 
