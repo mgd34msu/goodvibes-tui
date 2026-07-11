@@ -23,6 +23,7 @@ export type SettingsCategory =
   | 'httpListener'
   | 'web'
   | 'network'
+  | 'relay'
   | 'surfaces'
   | 'cloudflare'
   | 'batch'
@@ -48,7 +49,7 @@ export const SETTINGS_CATEGORY_GROUPS: ReadonlyArray<{
 }> = [
   { label: 'Interface', categories: ['display', 'ui', 'behavior', 'permissions'] },
   { label: 'AI Routing', categories: ['provider', 'subscriptions', 'helper', 'tools', 'tts'] },
-  { label: 'Service & Network', categories: ['service', 'daemon', 'network', 'controlPlane', 'httpListener', 'web'] },
+  { label: 'Service & Network', categories: ['service', 'daemon', 'network', 'controlPlane', 'httpListener', 'web', 'relay'] },
   { label: 'Surfaces & Cloud', categories: ['surfaces', 'mcp', 'cloudflare'] },
   { label: 'Automation', categories: ['batch', 'automation', 'checkin', 'watchers', 'orchestration', 'planner', 'wrfc'] },
   { label: 'Runtime & Data', categories: ['storage', 'atRest', 'sandbox', 'runtime', 'cache', 'telemetry', 'diagnostics', 'learning'] },

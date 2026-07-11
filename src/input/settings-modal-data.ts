@@ -50,6 +50,7 @@ import {
   type SettingsCategory,
   type SubscriptionEntry,
 } from './settings-modal-types.ts';
+import { enrichRelaySettingDescriptions } from './relay-settings-descriptions.ts';
 
 // ---------------------------------------------------------------------------
 // deepEqual — structural equality for isDefault comparisons
@@ -232,6 +233,10 @@ export function buildSettingGroups(
   // CONFIG_SCHEMA, same rationale as the other synthetic settings above.
   injectSandboxExecSyntheticEntries(groups, configManager);
   injectExecEnvScrubSyntheticEntry(groups, configManager);
+
+  // relay.* is a real SDK CONFIG_SCHEMA domain; append the threat-model note
+  // the SDK's own descriptions don't carry (see relay-settings-descriptions.ts).
+  enrichRelaySettingDescriptions(groups);
 
   // learning.consolidation.* is now a real SDK config domain (schema-domain-learning.ts
   // registers `learning` in CONFIG_SCHEMA/DEFAULT_CONFIG), so the nine keys already

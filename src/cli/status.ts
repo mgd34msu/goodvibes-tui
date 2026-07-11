@@ -24,6 +24,17 @@ export interface CliStatusOptions {
   readonly workspace?: CliWorkspaceStatus;
   /** Per-command exec sandbox availability, host-probed by the caller. */
   readonly sandbox?: CliSandboxStatus;
+  /** Outbound relay reachability posture (config + feature-flag gate only — a one-shot CLI process has no live connection to inspect). */
+  readonly relay?: CliRelayStatus;
+}
+
+/** Config-derived relay posture. No live socket check — see doctor's other surfaces for the same honesty bar. */
+export interface CliRelayStatus {
+  readonly configEnabled: boolean;
+  readonly featureEnabled: boolean;
+  readonly url: string;
+  readonly rendezvousId: string;
+  readonly requireStepUpForMutations: boolean;
 }
 
 /** Honest per-command exec sandbox posture for the report. */
@@ -111,6 +122,7 @@ export interface CliStatusSnapshot {
   };
   readonly workspace: CliWorkspaceStatus | null;
   readonly sandbox: CliSandboxStatus | null;
+  readonly relay: CliRelayStatus | null;
   readonly exposure: readonly CliExposureSurface[];
   readonly findings: readonly CliDoctorFinding[];
 }
@@ -203,6 +215,28 @@ function renderSandboxSection(sandbox: CliSandboxStatus | null): string[] {
     `  available: ${yesNo(sandbox.available)}`,
     `  network: ${network}`,
     `  detail: ${sandbox.reason}`,
+    '',
+  ];
+}
+
+/**
+ * The `Relay:` block — config + feature-flag gate only. This CLI invocation is
+ * a separate one-shot process from any running daemon, so it cannot read the
+ * daemon's live in-memory connection state (see /relay status in the TUI for
+ * that). "active" here means the gate that lets a running daemon register.
+ */
+function renderRelaySection(relay: CliRelayStatus | null): string[] {
+  if (!relay) return [];
+  const active = relay.configEnabled && relay.featureEnabled;
+  return [
+    'Relay:',
+    `  active: ${active ? 'yes (a running daemon will register)' : 'no'}`,
+    `  configEnabled (relay.enabled): ${yesNo(relay.configEnabled)}`,
+    `  featureEnabled (relay-connect flag): ${yesNo(relay.featureEnabled)}`,
+    `  url: ${relay.url || '(not set)'}`,
+    `  rendezvousId: ${relay.rendezvousId || '(not yet minted)'}`,
+    `  requireStepUpForMutations: ${yesNo(relay.requireStepUpForMutations)}`,
+    '  Threat model: the relay operator sees only ciphertext and connection metadata — self-host your own relay for full control.',
     '',
   ];
 }
@@ -509,6 +543,7 @@ export function buildCliStatusSnapshot(options: CliStatusOptions): CliStatusSnap
     },
     workspace: options.workspace ?? null,
     sandbox: options.sandbox ?? null,
+    relay: options.relay ?? null,
     exposure: buildCliExposureReport(options),
     findings,
   };
@@ -579,6 +614,7 @@ export function renderCliStatus(options: CliStatusOptions): string {
     '',
     ...renderWorkspaceSection(snapshot.workspace),
     ...renderSandboxSection(snapshot.sandbox),
+    ...renderRelaySection(snapshot.relay),
     'Exposure (report only — no changes made):',
     ...snapshot.exposure.flatMap((surface) => [
       `  ${surface.label}: ${yesNo(surface.enabled)} · ${surface.reach}${surface.networkFacing ? ' · network-facing' : ''}`,

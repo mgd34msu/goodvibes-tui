@@ -89,6 +89,7 @@ export const CATEGORY_LABELS: Record<(typeof SETTINGS_CATEGORIES)[number], strin
   tools: 'Tools',
   flags: 'Feature Flags',
   network: 'Network',
+  relay: 'Relay',
   learning: 'Learning',
 };
 

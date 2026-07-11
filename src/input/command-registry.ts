@@ -24,6 +24,7 @@ import type { OperatorClient } from '@/runtime/index.ts';
 import type { PeerClient } from '@/runtime/index.ts';
 import type { DirectTransport } from '@/runtime/index.ts';
 import type { VoiceProviderRegistry, VoiceService } from '@pellux/goodvibes-sdk/platform/voice';
+import type { UiPlatformServices } from '../runtime/ui-services.ts';
 import type {
   CommandWorkspaceShellServices,
 } from '@/runtime/index.ts';
@@ -270,6 +271,8 @@ export interface CommandPlatformConfigServices {
   /** Direct-command consumer (`/image`) — first production caller of `.generate()`. */
   readonly mediaProviders?: import('@pellux/goodvibes-sdk/platform/media').MediaProviderRegistry;
   readonly artifactStore?: import('@pellux/goodvibes-sdk/platform/artifacts').ArtifactStore;
+  /** Background daemon/HTTP-listener/relay controller. Mutable: main.ts patches it in post-bootstrap (see bootstrap-command-parts.ts ordering note). */
+  externalServices?: UiPlatformServices['externalServices'];
 }
 
 export interface CommandPlatformServices

@@ -59,6 +59,7 @@ const CATEGORY_INFO: Record<SettingsCategory, string> = {
   tools: 'Tool LLM and helper model routing. Empty provider/model values inherit the active chat route unless a specific helper/tool route is set.',
   flags: 'Feature flags are SDK runtime gates. They are separate from normal config keys because they enable or disable staged runtime behavior.',
   network: 'Combined network view for daemon control-plane, HTTP listener, browser web surface, and general outbound network settings.',
+  relay: 'Outbound zero-knowledge relay reachability, for reaching this daemon from outside the LAN without opening an inbound port. Off by default; also gated by the relay-connect feature flag. The relay operator sees only ciphertext and connection metadata — self-host your own relay for full control.',
   learning: 'Idle-time memory consolidation: merging duplicate standing memory records and decaying/archiving stale ones. Off by default — nothing runs until enabled.',
 };
 
