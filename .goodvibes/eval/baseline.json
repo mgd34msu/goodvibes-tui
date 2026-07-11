@@ -1,28 +1,13 @@
 {
-  "label": "run-2026-06-12",
-  "capturedAt": 1781269090834,
+  "label": "run-2026-07-11",
+  "capturedAt": 1783796322733,
   "suites": {
-    "core-performance": {
-      "meanScore": 87.16666666666667,
+    "standing-gate": {
+      "meanScore": 93.66666666666667,
       "scenarioScores": {
-        "core-perf:render-p95-under-budget": 93,
-        "core-perf:slo-turn-start-latency": 93,
-        "core-perf:memory-growth-stable": 75.5
-      }
-    },
-    "safety-baseline": {
-      "meanScore": 74.16666666666667,
-      "scenarioScores": {
-        "safety:clean-run-no-violations": 75.5,
-        "safety:recovery-success": 77.5,
-        "safety:recovery-failure-score": 69.5
-      }
-    },
-    "cost-tokens": {
-      "meanScore": 75.5,
-      "scenarioScores": {
-        "cost:no-token-usage": 75.5,
-        "cost:low-token-usage": 75.5
+        "gate:clean-turn-holds-all-floors": 93,
+        "gate:recovery-success-holds-floor": 95,
+        "gate:cost-within-budget-holds-floor": 93
       }
     }
   }
