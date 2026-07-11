@@ -56,6 +56,7 @@ export function renderGoodVibesHelp(binary = 'goodvibes'): string {
     '  remote|bridge              Inspect remote runner/node posture',
     '  hooks validate             Validate hooks.json against the hook loader schema',
     '  plugin init|validate       Scaffold a plugin or validate a plugin directory',
+    '  plugin bundles ...         Browse/install/list SHA-256-pinned capability bundles',
     '  completion <shell>         Generate shell completion script',
     '  help [command]             Print this help or command-specific help',
     '  version                    Print version',
@@ -233,9 +234,9 @@ const COMMAND_HELP: Record<string, CommandHelp> = {
     examples: ['hooks validate', 'hooks validate --json'],
   },
   plugin: {
-    usage: ['plugin init <name> [directory]', 'plugin validate <path>'],
-    summary: 'Scaffold a minimal valid plugin (manifest.json + entry file), or validate a plugin directory against the plugin loader checks.',
-    examples: ['plugin init my-plugin', 'plugin validate .goodvibes/plugins/my-plugin'],
+    usage: ['plugin init <name> [directory]', 'plugin validate <path>', 'plugin bundles browse <index-url-or-file>', 'plugin bundles install <ref> --sha256 <pin>', 'plugin bundles list'],
+    summary: 'Scaffold a minimal valid plugin (manifest.json + entry file), validate a plugin directory against the plugin loader checks, or browse/install/list SHA-256-pinned capability bundles from a governed marketplace index. Bundle installs are never unpinned — a missing or mismatched --sha256 is refused, not overridable.',
+    examples: ['plugin init my-plugin', 'plugin validate .goodvibes/plugins/my-plugin', 'plugin bundles browse ./marketplace-index.json', 'plugin bundles install ./bundle.json --sha256 <64-hex> --yes'],
   },
 };
 
