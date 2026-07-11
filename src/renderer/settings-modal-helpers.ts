@@ -87,10 +87,16 @@ export const CATEGORY_LABELS: Record<(typeof SETTINGS_CATEGORIES)[number], strin
   release: 'Release',
   danger: 'Danger',
   tools: 'Tools',
-  flags: 'Feature Flags',
+  flags: 'Advanced Features',
   network: 'Network',
   relay: 'Relay',
   learning: 'Learning',
+  fetch: 'Fetch Safety',
+  agents: 'Agents & Context',
+  security: 'Token Security',
+  integrations: 'Integration Delivery',
+  policy: 'Policy-as-Code',
+  notifications: 'Notifications',
 };
 
 const SETTING_LABELS: Partial<Record<string, string>> = {
@@ -165,6 +171,9 @@ const SETTING_LABELS: Partial<Record<string, string>> = {
 };
 
 export function getSettingLabel(entry: SettingEntry): string {
+  // Feature-unit toggle headers carry the flag's human name, not the raw
+  // `featureFlags.<id>` key tail.
+  if (entry.flag) return entry.flag.flag.name;
   return SETTING_LABELS[entry.setting.key] ?? entry.setting.key.replace(/^[^.]+\./, '');
 }
 

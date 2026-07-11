@@ -45,13 +45,10 @@ export function adjustSelected(
 ): void {
   if (ctx.editingMode) return;
 
-  if (ctx.currentCategory === 'flags') {
-    const flagEntry = ctx.getSelectedFlag();
-    if (!flagEntry || flagEntry.state === 'killed' || !ctx.featureFlagManager || !ctx.configManager) return;
-    const targetState: FlagState = direction === 'right' ? 'enabled' : 'disabled';
-    if (flagEntry.state !== targetState) applyFlagState(flagEntry, targetState, ctx.featureFlagManager, ctx.configManager);
-    return;
-  }
+  // Feature-unit toggle headers (setting.type === 'boolean', key featureFlags.<id>)
+  // now live across topical categories, not a single flags tab. They fall through
+  // to the boolean branch below, which routes through setValue → the modal's
+  // flag-toggle chokepoint. No category-special-case is needed here anymore.
 
   if (ctx.currentCategory === 'mcp') {
     const entry = ctx.getSelectedMcp();

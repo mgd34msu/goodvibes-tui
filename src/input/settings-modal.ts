@@ -51,6 +51,7 @@ import {
 import { getSettingLabel } from '../renderer/settings-modal-helpers.ts';
 import {
   applySettingValue,
+  applyFlagState,
   type SettingAppliedCallback,
 } from './settings-modal-mutations.ts';
 import {
@@ -59,7 +60,6 @@ import {
 } from './settings-modal-activation.ts';
 import {
   adjustSelected as _adjustSelected,
-  toggleSelectedFlag as _toggleSelectedFlag,
 } from './settings-modal-adjustment.ts';
 import {
   resetSelected as _resetSelected,
@@ -206,7 +206,7 @@ export class SettingsModal {
     this.serviceRegistry = serviceRegistry;
     this.mcpRegistry = mcpRegistry ?? null;
     this.onSettingApplied = options?.onSettingApplied ?? null;
-    this.groups = buildSettingGroups(configManager);
+    this.groups = buildSettingGroups(configManager, featureFlagManager);
     this.flagEntries = buildFlagEntries(featureFlagManager);
     this.mcpEntries = buildMcpEntries(this.mcpRegistry);
     this.subscriptionEntries = buildSubscriptionEntries(subscriptionManager, serviceRegistry);
@@ -381,11 +381,14 @@ export class SettingsModal {
     return items[Math.max(0, Math.min(items.length - 1, this.selectedIndex))] ?? null;
   }
 
-  /** Get the currently selected flag entry (flags tab only). */
+  /**
+   * Get the flag entry for the currently selected feature-unit header row, or
+   * null when the selected row is a plain config setting. Feature-unit headers
+   * now live across topical categories (not a single flags tab), so this reads
+   * the selected SettingEntry's attached flag rather than a separate list.
+   */
   getSelectedFlag(): FlagEntry | null {
-    if (this.currentCategory !== 'flags') return null;
-    if (this.flagEntries.length === 0) return null;
-    return this.flagEntries[Math.max(0, Math.min(this.flagEntries.length - 1, this.selectedIndex))] ?? null;
+    return this.getSelected()?.flag ?? null;
   }
 
   getSelectedMcp(): McpEntry | null {
@@ -496,11 +499,32 @@ export class SettingsModal {
    * only (require restart). runtimeToggleable flags toggle immediately.
    */
   toggleSelectedFlag(): void {
-    _toggleSelectedFlag({
-      featureFlagManager: this.featureFlagManager,
-      configManager: this.configManager,
-      getSelectedFlag: () => this.getSelectedFlag(),
-    });
+    const entry = this.getSelected();
+    if (!entry?.flag) return;
+    if (entry.flag.state === 'killed') return;
+    this._toggleFlagValue(entry.setting.key as ConfigKey, entry.flag.state !== 'enabled');
+  }
+
+  /**
+   * Toggle the feature flag behind a `featureFlags.<id>` header row. Finds the
+   * header entry, applies the desired state through the flag manager (runtime +
+   * persisted override), and refreshes the header row's value/default marker in
+   * place. Killed flags and no-op toggles are ignored.
+   */
+  private _toggleFlagValue(key: ConfigKey, value: unknown): void {
+    if (!this.featureFlagManager || !this.configManager) return;
+    let target: SettingEntry | null = null;
+    for (const entries of this.groups.values()) {
+      const candidate = entries.find((e) => e.setting.key === key && e.flag);
+      if (candidate) { target = candidate; break; }
+    }
+    if (!target?.flag) return;
+    if (target.flag.state === 'killed') return;
+    const desired = value ? 'enabled' : 'disabled';
+    if (target.flag.state === desired) return;
+    applyFlagState(target.flag, desired, this.featureFlagManager, this.configManager);
+    target.currentValue = target.flag.state === 'enabled';
+    target.isDefault = target.flag.state === target.flag.flag.defaultState;
   }
 
   /**
@@ -672,11 +696,14 @@ export class SettingsModal {
     }
   }
 
-  /** Returns [] for the flags/mcp/subscriptions categories. */
+  /**
+   * Returns [] for the mcp/subscriptions categories (which render their own
+   * entry types). The 'flags' category now flows through the normal group path
+   * — it holds the no-config feature-unit toggles (Advanced Features).
+   */
   private _currentItems(): SettingEntry[] {
     if (
-      this.currentCategory === 'flags'
-      || this.currentCategory === 'mcp'
+      this.currentCategory === 'mcp'
       || this.currentCategory === 'subscriptions'
     ) return [];
     const items = this.groups.get(this.currentCategory) ?? [];
@@ -688,6 +715,15 @@ export class SettingsModal {
 
   private _setValue(key: ConfigKey, value: unknown): void {
     if (!this.configManager) return;
+
+    // Feature-unit toggle headers write to `featureFlags.<id>`; route those to
+    // the feature-flag manager (runtime toggle + persisted override) instead of
+    // a plain config write. Reset/adjust/activate all funnel a boolean value
+    // here (true = enabled), so this is the single flag-toggle chokepoint.
+    if (typeof key === 'string' && key.startsWith('featureFlags.')) {
+      this._toggleFlagValue(key, value);
+      return;
+    }
 
     const callback: SettingAppliedCallback | null = this.onSettingApplied
       ? (change) => this.onSettingApplied!(change)

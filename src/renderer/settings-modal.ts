@@ -57,8 +57,14 @@ const CATEGORY_INFO: Record<SettingsCategory, string> = {
   release: 'Release-channel preference.',
   danger: 'High-impact switches for daemon and HTTP listener behavior. These are operational overrides, not normal preferences.',
   tools: 'Tool LLM and helper model routing. Empty provider/model values inherit the active chat route unless a specific helper/tool route is set.',
-  flags: 'Feature flags are SDK runtime gates. They are separate from normal config keys because they enable or disable staged runtime behavior.',
+  flags: 'Advanced feature toggles with no tuning knobs — internal and startup-gated runtime gates. Features that DO have config sit as units (toggle + settings) in their topical category, not here.',
   network: 'Combined network view for daemon control-plane, HTTP listener, browser web surface, and general outbound network settings.',
+  fetch: 'Fetch response sanitization and host trust tiers for the fetch tool: sanitize mode plus default trusted/blocked host lists. Gated by the Fetch Response Sanitization feature.',
+  agents: 'Sub-agent context-window awareness and per-turn passive knowledge/code injection: token budget, relevance floor, code-chunk limit, and the compaction threshold. Gated by the agent context/injection features.',
+  security: 'API token scope and rotation auditing: rotation cadence, warning lead time, and whether overdue/over-scoped tokens are blocked or only reported. Gated by the Token Scope and Rotation Audit feature.',
+  integrations: 'Integration delivery reliability (Slack/Discord/webhook): retry counts, backoff bounds, dead-letter queue size, and SLO enforcement. Gated by the Integration Delivery SLO feature.',
+  policy: 'Policy-as-code bundle loading: where the startup policy bundle is loaded from and its file path. Gated by the Policy-as-Code feature.',
+  notifications: 'Notification router burst-suppression tuning: burst window, threshold, and cooldown. Gated by the Adaptive Notification Suppression feature.',
   relay: 'Outbound zero-knowledge relay reachability, for reaching this daemon from outside the LAN without opening an inbound port. Off by default; also gated by the relay-connect feature flag. The relay operator sees only ciphertext and connection metadata — self-host your own relay for full control.',
   learning: 'Idle-time memory consolidation: merging duplicate standing memory records and decaying/archiving stale ones. Off by default — nothing runs until enabled.',
 };
@@ -317,15 +323,16 @@ function buildContextLines(modal: SettingsModal, width: number): string[] {
     `${CATEGORY_LABELS[category]} configuration`,
   ];
 
-  if (category === 'flags') {
-    lines.push(...buildFlagContext(modal.getSelectedFlag()));
-  } else if (category === 'mcp') {
+  if (category === 'mcp') {
     lines.push(...buildMcpContext(modal, modal.getSelectedMcp()));
   } else if (category === 'subscriptions') {
     lines.push(...buildSubscriptionContext(modal, modal.getSelectedSubscription()));
   } else {
     const selected = modal.getSelected();
-    if (selected) lines.push(...buildSettingContext(modal, selected));
+    // A feature-unit toggle header shows flag context (tier, default, impact);
+    // its config sub-options and plain settings show the setting context.
+    if (selected?.flag) lines.push(...buildFlagContext(selected.flag));
+    else if (selected) lines.push(...buildSettingContext(modal, selected));
     else lines.push('No setting is selected in this category.');
   }
 
@@ -343,9 +350,9 @@ function buildContextLines(modal: SettingsModal, width: number): string[] {
 }
 
 function categoryItemCount(modal: SettingsModal, category: SettingsCategory): number {
-  if (category === 'flags') return modal.flagEntries.length;
   if (category === 'mcp') return modal.mcpEntries.length;
   if (category === 'subscriptions') return modal.subscriptionEntries.length;
+  // 'flags' (Advanced Features) now flows through the normal group path.
   return modal.groups.get(category)?.length ?? 0;
 }
 
@@ -419,39 +426,43 @@ function renderSettingRows(modal: SettingsModal, width: number, height: number):
     const entry = items[index]!;
     const selected = index === selectedIndex;
     const marker = selected ? (modal.focusPane === 'settings' ? GLYPHS.navigation.selected : '•') : entry.isDefault ? ' ' : '◇';
-    const value = currentSettingValue(modal, entry, selected);
-    const source = `${entry.effectiveSource ?? 'default'}${entry.locked ? ' locked' : ''}${entry.conflict ? ' conflict' : ''}`;
-    const label = getSettingLabel(entry);
-    rows.push(`${marker} ${padDisplay(label, keyWidth)}  ${padDisplay(value, valueWidth)}  ${padDisplay(entry.setting.type, typeWidth)}  ${padDisplay(source, sourceWidth)}  ${padDisplay(formatDefaultValue(entry.setting.default), defaultWidth)}`);
+    rows.push(renderSettingTableRow(modal, entry, selected, marker, keyWidth, valueWidth, typeWidth, sourceWidth, defaultWidth));
   }
 
   if (window.end < items.length) rows.push(`${GLYPHS.navigation.moreBelow} ${items.length - window.end} more setting(s) below`);
   return rows.slice(0, height);
 }
 
-function renderFlagRows(modal: SettingsModal, width: number, height: number): string[] {
-  const rows: string[] = [];
-  const items = modal.flagEntries;
-  if (items.length === 0) return ['No feature flags registered.'];
-  const selectedIndex = clamp(modal.selectedIndex, 0, items.length - 1);
-  const nameWidth = clamp(Math.floor(width * 0.40), 24, 58);
-  const stateWidth = 10;
-  const tierWidth = 6;
-  const runtimeWidth = 9;
-  const defaultWidth = 9;
-  const idWidth = Math.max(12, width - nameWidth - stateWidth - tierWidth - runtimeWidth - defaultWidth - 14);
-  rows.push(`  ${padDisplay('Feature Flag', nameWidth)}  ${padDisplay('State', stateWidth)}  ${padDisplay('Tier', tierWidth)}  ${padDisplay('Runtime', runtimeWidth)}  ${padDisplay('Default', defaultWidth)}  ${padDisplay('ID', idWidth)}`);
-  const visibleCount = Math.max(1, height - 2);
-  const window = stableWindow(items.length, selectedIndex, visibleCount);
-  if (window.start > 0) rows.push(`${GLYPHS.navigation.moreAbove} ${window.start} more flag(s) above`);
-  for (let index = window.start; index < window.end; index += 1) {
-    const entry = items[index]!;
-    const selected = index === selectedIndex;
-    const marker = selected ? (modal.focusPane === 'settings' ? GLYPHS.navigation.selected : '•') : ' ';
-    rows.push(`${marker} ${padDisplay(entry.flag.name, nameWidth)}  ${padDisplay(entry.state, stateWidth)}  ${padDisplay(String(entry.flag.tier), tierWidth)}  ${padDisplay(entry.flag.runtimeToggleable ? 'yes' : 'restart', runtimeWidth)}  ${padDisplay(entry.flag.defaultState, defaultWidth)}  ${padDisplay(entry.flag.id, idWidth)}`);
+/**
+ * One settings-table row. A feature-unit toggle header (entry.flag) shows the
+ * flag name, its live state, tier/toggleability, and default state. A config
+ * sub-option owned by a feature unit (entry.ownerFlagId) is indented under its
+ * header. Everything else renders as a plain setting row.
+ */
+function renderSettingTableRow(
+  modal: SettingsModal,
+  entry: SettingEntry,
+  selected: boolean,
+  marker: string,
+  keyWidth: number,
+  valueWidth: number,
+  typeWidth: number,
+  sourceWidth: number,
+  defaultWidth: number,
+): string {
+  if (entry.flag) {
+    const { flag, state } = entry.flag;
+    const stateMark = state === 'enabled' ? '●' : state === 'killed' ? '✕' : '○';
+    const label = `${stateMark} ${flag.name}`;
+    const source = `tier ${flag.tier} ${flag.runtimeToggleable ? 'live' : 'restart'}`;
+    return `${marker} ${padDisplay(label, keyWidth)}  ${padDisplay(state, valueWidth)}  ${padDisplay('feature', typeWidth)}  ${padDisplay(source, sourceWidth)}  ${padDisplay(flag.defaultState, defaultWidth)}`;
   }
-  if (window.end < items.length) rows.push(`${GLYPHS.navigation.moreBelow} ${items.length - window.end} more flag(s) below`);
-  return rows.slice(0, height);
+  const value = currentSettingValue(modal, entry, selected);
+  const source = `${entry.effectiveSource ?? 'default'}${entry.locked ? ' locked' : ''}${entry.conflict ? ' conflict' : ''}`;
+  // Sub-options of a feature unit are indented under their toggle header so the
+  // "one unit = toggle + its knobs" grouping reads at a glance.
+  const label = entry.ownerFlagId ? `  · ${getSettingLabel(entry)}` : getSettingLabel(entry);
+  return `${marker} ${padDisplay(label, keyWidth)}  ${padDisplay(value, valueWidth)}  ${padDisplay(entry.setting.type, typeWidth)}  ${padDisplay(source, sourceWidth)}  ${padDisplay(formatDefaultValue(entry.setting.default), defaultWidth)}`;
 }
 
 function renderMcpRows(modal: SettingsModal, width: number, height: number): string[] {
@@ -548,7 +559,6 @@ function renderSearchRows(modal: SettingsModal, width: number, height: number): 
 
 function renderControlRows(modal: SettingsModal, width: number, height: number): string[] {
   if (modal.searchFocused) return renderSearchRows(modal, width, height);
-  if (modal.currentCategory === 'flags') return renderFlagRows(modal, width, height);
   if (modal.currentCategory === 'mcp') return renderMcpRows(modal, width, height);
   if (modal.currentCategory === 'subscriptions') return renderSubscriptionRows(modal, width, height);
   return renderSettingRows(modal, width, height);
@@ -609,15 +619,9 @@ function footerText(modal: SettingsModal, width: number): string {
       { key: 'Enter', verb: 'Edit trust' },
       { key: 'Esc', verb: 'Close' },
     ]));
-  if (modal.currentCategory === 'flags')
-    return joinHints('Focus feature flags', formatHints([
-      { key: 'Up/Down', verb: 'Flag' },
-      { key: 'Left', verb: 'Categories' },
-      { key: 'Tab', verb: 'Pane' },
-      { key: '/', verb: 'Search' },
-      { key: 'Enter/Space', verb: 'Toggle' },
-      { key: 'Esc', verb: 'Close' },
-    ]));
+  // 'flags' (Advanced Features) and every topical category that now hosts feature
+  // units flow through the default settings footer below — Enter/Space toggles a
+  // feature-unit header exactly as it edits/toggles any setting row.
   // Default settings pane: tier the reset affordances by available width.
   // W<80:  minimal — only the most critical action survives.
   // W<160: compact but still shows both reset affordances.
