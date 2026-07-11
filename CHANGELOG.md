@@ -4,6 +4,102 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [1.14.0] — 2026-07-11
+
+### Changes
+- f45a47a6 chore: pin @pellux/goodvibes-sdk 1.7.0 — published feature-flags and emitters runtime subpaths; add @pellux/goodvibes-terminal-shell 1.7.0; drop dev-link overrides
+- e9f844d6 feat(flags): align TUI toggle path with the SDK live config->flag bridge
+- 3d1cb772 test(verification): behavior-verify the 28 flag-gated feature-knob settings; clear ledger floor
+- a714db76 chore: adopt repacked SDK dev tarballs 1.6.1 (HEAD 0665cadc)
+- b2dba275 chore: keep onboarding-wizard-steps and settings-modal-data within the 800-line budget
+- 7729ec19 Onboarding: guided coverage for every remaining feature as a unit
+- 4625c662 /flags: fold the flat dump into feature-unit-aware grouped output
+- 64dcf4cd Settings modal: present each feature flag as a unit (toggle + its config keys)
+- c7ad86c3 Fix inert hitl-ux-modes onboarding: enable gating flag with non-default hitlMode
+- dea4fa31 chore: keep runtime/services.ts within the 800-line architecture budget
+- 1ac1036e chore(sdk): reconcile generated artifacts and provider test for SDK 1.6.1
+- 43c84ff7 chore(sdk): wire StepUpService into RuntimeServices for SDK 1.6.1
+- 326772bd refactor(onboarding): source channel setup fields from the SDK schema, keep presentation local
+- 50a41dab refactor(cli): rename the support-snapshot command to 'support-bundle' to end the 'bundle' collision
+- 5cb1b444 feat(workstream): support non-leaf best-of-N attempts and show held dependents
+- 6f8ebde2 feat(health): surface daemon runtime metrics and remaining quota in /health metrics
+- b1299979 feat(rewind): persist message-anchored rewind anchors across session resume
+- 572d52f2 feat(release): mirror platform binary packages to GitHub Packages + workflow structure gate
+- f3a34e00 feat(compaction): surface sectionsIncluded in the post-compaction receipt
+- be1f0fe2 chore: refresh @pellux tarball integrity for repacked SDK 1.6.1 dev state
+- 6f9e03cd feat: surface the new SDK asks/receipts/results (compaction, attribution, judgment, child failure)
+- 14185544 feat(context): bind context_accounting to the live Orchestrator
+- b8b76ea9 chore: reconcile goldens for the refreshed SDK dev-link tarballs
+- b44f70d0 feat(plugin): add the capability-bundle marketplace surface to goodvibes plugin
+- 6613153b feat(relay): expose outbound relay reachability in the TUI
+- 6c7e3fbe chore: refresh dev-linked SDK tarball integrity (relay + capability-bundle content)
+- 44d4dcd8 feat(permissions): wire the exec sandbox into the approval flow
+- 1df64126 feat(runtime): fold workspace registration into the first-open trust prompt
+- 7a447c78 chore: refresh dev-linked SDK tarballs for repacked 1.6.1 (workspace registration store, sandbox policy exports)
+- 6a9ca59e feat(workstream): surface best-of-N attempts (plan validation + attempts subcommand + fleet badge)
+- 3eb500d1 feat(review): add per-hunk reject (revert) to /review via checkpoints.revertHunk
+- 9e81187d feat(rewind): swap the TUI-local rewind coordinator for the SDK UnifiedRewindService
+- e228188a chore: refresh dev-linked SDK tarballs for repacked 1.6.1 (rewind service, hunk revert, best-of-N attempts)
+- 00ba2ff5 feat: add the exec env-scrub allowlist setting, wired through registerAllTools
+- 0cb80635 feat: expose the per-command exec sandbox surface in settings and exec results
+- a6ef4a71 feat: apply temporal-window-only /recall files proposals for real
+- c4bc39b9 chore: refresh dev-linked SDK tarballs for repacked 1.6.1 (sandbox, scrub, temporal patch, learning config)
+- b8c31445 feat(flags): /flags graduation — feature-flag graduation readiness report
+- 3742073e feat(rewind): unified message-anchored /rewind (files + conversation) with /undo and /redo
+- 13572e44 chore: refresh dev-linked SDK tarballs for repacked 1.6.1 (rewind + flag graduation + worktree config)
+- 72cf6f78 memory: add the git-backed file projection surface (/recall files sync|review|apply) + temporal-status visibility
+- 697a9458 exec: render withheld_env in tool results, surface shipped credential-read rules in /permissions
+- e7293290 settings: add learning.consolidation category for the hoisted memory consolidation config
+- 0b7ae90b chore: refresh dev-linked SDK tarball integrity for repacked 1.6.1 content
+- 00986ade Add /cost attribution over cost.attribution.get, pre-launch quota consultation
+- ab27babc Expose worktree.setup.commands/carryOverGlobs, show setup state, add rerun command
+- 235b60f0 Drive /channel pair from the SDK's getBuiltinSetupSchema, add a real verify round-trip
+- 2c1831bf Refresh dev-linked SDK tarballs to the repacked 1.6.1 content
+- c96580bf docs: regenerate command reference for the new /workstream item-edit subcommands
+- 6495cc23 workstream: journal drafts to disk so the plan-review gate survives a restart
+- 06e71816 workstream: editable plan-review gate — edit-item / remove-item / move-item
+- 9155cc6a feat(runtime): wire the fleet needs-input push fan-out live in the composed daemon
+- 0d327ef4 feat(runtime): register the check-in gateway verb group live in the composed daemon
+- 05f88c1b feat: add /principals command and /channel profiles subcommand
+- b9436292 feat: expose check-in config in settings + add /checkin command
+- d6f7f8d3 feat: add /ci command for CI-watch (status, watch, watches, unwatch)
+- 9ab191d5 chore: refresh local SDK 1.6.1 tarballs (initiative cluster surface)
+- c44fff9f Add run-goodvibes composite action + CI self-test
+- 5e07b9e7 Stage Windows support: WSL2 documented, windows-x64 as non-gating beta
+- e6f2b32b Add platform binary packages (esbuild/biome pattern) for npm/pnpm installs
+- b76019d5 Collapse the global-install trust list to one package
+- ef35276c feat(install): one-command curl installer for TUI, daemon, and agent
+- 7000df12 feat(onboarding): fast-path first run + guided channel pairing
+- ec214814 feat(runtime): per-workspace trust gate composed into the permission machinery
+- 46677c0d feat(input): fuzzy command palette over the command registry
+- 17bc7769 feat(docs): generate command reference from the registry with a drift gate
+- 1ad897d5 chore: refresh dev-link integrity + operator contract for repacked SDK 1.6.1 tarballs
+- 673bd32e Add comment-on-hunk review loop that steers comments to the session
+- d082f7bc Add /permissions provenance panel
+- d9847b14 Add doctor explain/routing/hooks diagnostician subcommands
+- e91e9b02 feat: adopt SDK session permission-mode, compaction-receipt, and concealed-input surfaces
+- 3b0c470a feat(settings): surface C3a config keys — permissions.backgroundAgents and diagnostics.postEdit
+- 1d484a37 test: reconcile suite with SDK 1.6.1 surfaces (repo_map tool, fleet event domain, operator contract)
+- bb8424f6 chore: refresh dev-link integrity for repacked SDK 1.6.1 tarballs
+- d277d84c Add doctor exposure report and startup install self-check
+- 2de2cfcd Regenerate operator contract artifact for SDK 1.6.1 gateway catalog
+- efe3e075 Add hooks validate and plugin init/validate CLI subcommands
+- 93312c5b Adopt goodvibes-terminal-shell package and SDK 1.6.1 surfaces
+- 21d67309 Dev-link goodvibes SDK 1.6.1 tarballs for local adoption work
+- 6f125cf0 Composer set: $EDITOR composition, # note capture, auto-titles, NL schedules
+- ab695150 Add /flags command surfacing every feature flag by state
+- 5ce19325 Add scriptable statusline driven by statusline.command config
+- a4465501 Add checkpoints.* config keys for the workspace checkpoint root guard
+- 512e7e24 test(goldens): regenerate settings-modal snapshot for OSC 9 notification settings
+- e0e2ea5c test(goldens): regenerate fleet-panel snapshots for blocked-on-me badge + sort
+- 93617d1a Routing chip: surface mid-session model changes as a visible conversation notice
+- 949efcdb Approval prompt: 350ms input debounce, requester attribution, remember-scope preview
+- cc89882e Notifications: OSC 9 in-terminal alerts + optional bell on approval/turn-end/agent-blocked
+- 26a18444 Fleet: derive blocked-on-me state with badge, blocked-first sort, and jump key
+- db8ca380 /update: implement a real self-update path instead of a decorative posture review
+- 994a4444 Extract checksum verification into a shared release-artifacts module
+- c0fa04e4 postinstall: hard-fail on a checksum entry missing from SHA256SUMS.txt
+
 ## [1.13.1] — 2026-07-09
 
 ### Changes
