@@ -5,6 +5,7 @@ import { discoverPlugins } from '../plugins/loader.ts';
 import { validateManifestV2 } from '@/runtime/index.ts';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 import type { CliCommandOutput, CliCommandRuntime } from './types.ts';
+import { handlePluginBundlesCommand } from './plugin-bundles-command.ts';
 
 // ---------------------------------------------------------------------------
 // `goodvibes plugin init` / `plugin validate` — scaffold and check plugins
@@ -171,5 +172,8 @@ export async function handlePluginCommand(runtime: CliCommandRuntime): Promise<C
     }
     return renderValidation(validatePluginDirectory(target), json);
   }
-  return { output: 'Usage: goodvibes plugin [init <name> [directory]|validate <path>]', exitCode: 2 };
+  if (sub === 'bundles') {
+    return handlePluginBundlesCommand(runtime, runtime.cli.commandArgs.slice(1));
+  }
+  return { output: 'Usage: goodvibes plugin [init <name> [directory]|validate <path>|bundles browse|install|list]', exitCode: 2 };
 }
