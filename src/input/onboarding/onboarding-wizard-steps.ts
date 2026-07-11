@@ -8,6 +8,7 @@ import {
   isExternalSurfaceSelectedByDefault,
   type ExternalSurfaceSpec,
 } from './onboarding-wizard-external-surfaces.ts';
+import { buildFeatureUnitSteps } from './onboarding-feature-units.ts';
 import { countSelected, modelSelectionLabel, normalizeText } from './onboarding-wizard-helpers.ts';
 import { getDaemonSource, pushDaemonAdoptionFields, pushLegacyDaemonMigrationFields } from './onboarding-wizard-network-adopt.ts';
 import type { OnboardingWizardControllerLike } from './onboarding-wizard-types.ts';
@@ -40,6 +41,9 @@ export function buildOnboardingWizardSteps(controller: OnboardingWizardControlle
   steps.push(buildProviderAccessStep(controller));
   steps.push(buildDefaultModelStep(controller));
   steps.push(buildExperienceStep(controller));
+  // Guided feature coverage: every remaining feature flag is reachable here as a
+  // unit (enable + its key sub-options), grouped into thematic skippable steps.
+  for (const step of buildFeatureUnitSteps(controller)) steps.push(step);
   steps.push(buildReviewStep(controller));
   return steps.map(addApplyAndContinueAction);
 }

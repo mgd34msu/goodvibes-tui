@@ -26,6 +26,12 @@ export type OnboardingWizardStepId =
   | 'provider-access'
   | 'default-model'
   | 'experience'
+  | 'features-safety'
+  | 'features-context'
+  | 'features-telemetry'
+  | 'features-automation'
+  | 'features-provider'
+  | 'features-advanced'
   | 'review';
 
 export type OnboardingWizardFieldKind =
