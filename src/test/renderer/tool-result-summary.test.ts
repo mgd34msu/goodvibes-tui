@@ -136,4 +136,31 @@ describe('summarizeToolResult (UX-B item 3)', () => {
     expect(summarizeToolResult('write', 'not json')).toBeNull();
     expect(summarizeToolResult(undefined, '{}')).toBeNull();
   });
+
+  test('agent status/get/wait — a child-failure envelope is rendered compactly', () => {
+    const content = JSON.stringify({
+      status: 'failed',
+      failure: {
+        agentId: 'agent-42',
+        phase: 'running',
+        reason: { code: 'watchdog_timeout', message: 'No progress for 300s' },
+        partialOutputs: { turnsCompleted: 3 },
+      },
+    });
+    expect(summarizeToolResult('agent', content)).toBe('agent agent-42 failed [watchdog_timeout] at running: No progress for 300s (3 turns completed)');
+  });
+
+  test('agent status/get/wait — a long failure message is truncated', () => {
+    const longMessage = 'x'.repeat(200);
+    const content = JSON.stringify({
+      failure: { agentId: 'a1', phase: 'planning', reason: { code: 'error', message: longMessage } },
+    });
+    const summary = summarizeToolResult('agent', content);
+    expect(summary).toContain('agent a1 failed [error] at planning:');
+    expect(summary!.length).toBeLessThan(150);
+  });
+
+  test('agent status/get/wait — no failure field means no summary (caller falls back to raw preview)', () => {
+    expect(summarizeToolResult('agent', JSON.stringify({ status: 'completed', agentId: 'a1' }))).toBeNull();
+  });
 });

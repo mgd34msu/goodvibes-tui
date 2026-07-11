@@ -88,6 +88,24 @@ function categoryVerb(category: PermissionCategory): string {
  * cannot drift apart (Risk 2 — main.ts's render loop reserves viewport
  * space from getPromptHeight *before* the real render happens).
  */
+/**
+ * The optional sandbox model-judgment tier (see sandbox-judgment.ts in the
+ * SDK) annotates an escalation ask by pushing one string — verbatim
+ * "model judgment: looks safe because…" / "model judgment: flags risk
+ * because…" — onto `analysis.reasons`, alongside the sandbox-boundary and
+ * policy reasons. Pulled out here so it gets its own clearly-labeled row
+ * instead of blending into the generic Review bullets, where the truncation
+ * to 2 reasons could silently cut it (it is typically the LAST reason
+ * pushed, after the boundary line and any policy reasons).
+ */
+const MODEL_JUDGMENT_PREFIX = 'model judgment:';
+
+function extractModelJudgmentAnnotation(reasons: readonly string[]): { annotation: string | undefined; rest: string[] } {
+  const idx = reasons.findIndex((r) => r.toLowerCase().startsWith(MODEL_JUDGMENT_PREFIX));
+  if (idx === -1) return { annotation: undefined, rest: [...reasons] };
+  return { annotation: reasons[idx], rest: [...reasons.slice(0, idx), ...reasons.slice(idx + 1)] };
+}
+
 function hunkListRowCount(hunkState: HunkSelectionState): number {
   return Math.min(hunkState.hunks.length, MAX_VISIBLE_HUNKS) + 2;
 }
@@ -195,8 +213,9 @@ export class PermissionPromptUI {
     // summary, choices, bottom separator — see createPromptLines' condensed branch.
     if (this.isCondensed(request, hunkState, detailsExpanded)) return 5 + attributionLines + previewLines;
     const analysis = this.fallbackAnalysis(request);
-    const reasonLines = Math.min(2, Math.max(1, analysis.reasons.length));
-    const extraLines = (analysis.host ? 1 : 0) + (analysis.surface ? 1 : 0) + (analysis.sideEffects && analysis.sideEffects.length > 0 ? 1 : 0) + (readSandboxAskAnnotation(request) ? 1 : 0);
+    const { annotation: judgmentAnnotation, rest: reasonsMinusJudgment } = extractModelJudgmentAnnotation(analysis.reasons);
+    const reasonLines = Math.min(2, Math.max(1, reasonsMinusJudgment.length));
+    const extraLines = (analysis.host ? 1 : 0) + (analysis.surface ? 1 : 0) + (analysis.sideEffects && analysis.sideEffects.length > 0 ? 1 : 0) + (readSandboxAskAnnotation(request) ? 1 : 0) + (judgmentAnnotation ? 1 : 0);
     const hunkLines = hunkState ? hunkListRowCount(hunkState) : 0;
     // Base 12 counted a single arg line; the Path field now spans `pathRows`
     // lines and the full card adds one raw-args row (2a reachability), so the
@@ -359,7 +378,20 @@ export class PermissionPromptUI {
       lines.push(UIFactory.stringToLine(effectsLine.padEnd(width), width, { fg: DIM }));
     }
 
-    for (const reason of analysis.reasons.slice(0, 2)) {
+    // Model-judgment annotation: gets its own clearly-labeled row (never
+    // subject to the Review truncation below) so a `sandbox-model-judgment`
+    // verdict — "model judgment: looks safe because…" / "flags risk because…"
+    // — is never silently cut. See extractModelJudgmentAnnotation.
+    const { annotation: judgmentAnnotation, rest: reasonsMinusJudgment } = extractModelJudgmentAnnotation(analysis.reasons);
+    if (judgmentAnnotation) {
+      const maxJudgmentLen = Math.max(10, width - 16);
+      const truncatedJudgment =
+        judgmentAnnotation.length > maxJudgmentLen ? `${judgmentAnnotation.slice(0, maxJudgmentLen - 3)}...` : judgmentAnnotation;
+      const judgmentLine = `   Judgment  : ${truncatedJudgment}`;
+      lines.push(UIFactory.stringToLine(judgmentLine.padEnd(width), width, { fg: ACCENT, bold: true }));
+    }
+
+    for (const reason of reasonsMinusJudgment.slice(0, 2)) {
       const maxReasonLen = Math.max(10, width - 16);
       const truncatedReason =
         reason.length > maxReasonLen ? `${reason.slice(0, maxReasonLen - 3)}...` : reason;

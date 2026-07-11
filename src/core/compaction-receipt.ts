@@ -33,6 +33,14 @@ export interface CompactionReceiptInput {
   readonly validationPassed: boolean;
   readonly outcome: 'applied' | 'kept-original' | 'failed';
   readonly detail?: string | undefined;
+  /**
+   * The strategy the caller REQUESTED (from `behavior.compactionStrategy`),
+   * present only when it differs from `strategy` — i.e. a distiller→structured
+   * fallback happened. `strategy` always names what actually ran.
+   */
+  readonly requestedStrategy?: string | undefined;
+  /** Why the requested strategy fell back to `strategy`. Present only alongside requestedStrategy. */
+  readonly strategyFallbackReason?: string | undefined;
 }
 
 function fmtN(n: number): string {
@@ -84,6 +92,13 @@ export function buildCompactionReceiptBlock(receipt: CompactionReceiptInput): st
   const gradeStr = receipt.qualityGrade ? `${receipt.qualityGrade} ` : '';
   const qualitySuffix = receipt.lowQuality ? ' (below the quality bar)' : '';
   lines.push(`  Quality: ${gradeStr}${Math.round(receipt.qualityScore)}/100${qualitySuffix} · strategy: ${receipt.strategy || 'unknown'}.`);
+
+  // Only present on a distiller→structured fallback — say plainly what was
+  // requested, what actually ran, and why, so the fallback is never silent.
+  if (receipt.requestedStrategy && receipt.requestedStrategy !== receipt.strategy) {
+    const reasonSuffix = receipt.strategyFallbackReason ? `: ${receipt.strategyFallbackReason}` : '';
+    lines.push(`  Requested strategy "${receipt.requestedStrategy}" fell back to "${receipt.strategy}"${reasonSuffix}.`);
+  }
 
   const reinjected = receipt.instructionsReinjected ? 'standing instructions re-injected' : 'no standing instructions to re-inject';
   const validated = receipt.validationPassed ? 'validation passed' : 'validation did NOT pass';

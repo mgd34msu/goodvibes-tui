@@ -1,4 +1,4 @@
-import type { PermissionPromptRequest } from '@pellux/goodvibes-sdk/platform/permissions';
+import type { PermissionAttribution, PermissionPromptRequest } from '@pellux/goodvibes-sdk/platform/permissions';
 
 /**
  * Per-hunk accept/reject at the approval gate (W1.3 v1).
@@ -168,18 +168,46 @@ export interface ApprovalRequesterLookup {
 }
 
 /**
- * Human label for WHICH agent/process raised this approval, correlated from the
- * approval broker by callId (the broker record for a request exists by the time
- * its local prompt is shown). Prefers an explicit requester recorded in the
- * broker record's metadata (agentId / agent / requestedBy / actor /
- * actorSurface), then the owning session id; returns null when the broker has
- * no matching record or nothing identifying — the prompt then omits the
- * attribution line rather than guessing a name.
+ * Human label for a `mcp-server` or `sandbox-escalation` attribution — the two
+ * non-agent origins the approval broker can name (see PermissionAttribution in
+ * the SDK). `background-agent` deliberately falls through to the
+ * broker-metadata lookup below instead, which resolves a richer label
+ * (agentId/session) than the attribution alone carries.
+ */
+function describeNonAgentAttribution(attribution: PermissionAttribution): string | null {
+  switch (attribution.kind) {
+    case 'mcp-server':
+      return `MCP server: ${attribution.serverName}`;
+    case 'sandbox-escalation':
+      return `${attribution.sandbox} wants: ${attribution.escalations.join(', ')}`;
+    default:
+      return null;
+  }
+}
+
+/**
+ * Human label for WHICH agent/process/server/sandbox raised this approval.
+ *
+ * Prefers the request's own typed `attribution` (see PermissionAttribution)
+ * for the `mcp-server` and `sandbox-escalation` origins, since those carry
+ * structured data (which server, which escalations) no broker-metadata scan
+ * can reconstruct. For `background-agent` (and when no attribution is
+ * present), falls back to the approval broker by callId (the broker record
+ * for a request exists by the time its local prompt is shown), preferring an
+ * explicit requester recorded in the broker record's metadata (agentId /
+ * agent / requestedBy / actor / actorSurface), then the owning session id.
+ * Returns null when nothing identifying is available — the prompt then omits
+ * the attribution line rather than guessing a name.
  */
 export function resolveApprovalRequester(
   broker: ApprovalRequesterLookup | null | undefined,
   callId: string,
+  attribution?: PermissionAttribution | undefined,
 ): string | null {
+  if (attribution && attribution.kind !== 'background-agent') {
+    const described = describeNonAgentAttribution(attribution);
+    if (described) return described;
+  }
   if (!broker) return null;
   let record: { readonly sessionId?: string | undefined; readonly metadata: Record<string, unknown> } | undefined;
   try {
@@ -227,6 +255,6 @@ export function buildPendingPermissionExtras(
     hunkState: isHunkSelectable(request) ? buildHunkSelectionState(request) : undefined,
     resolve: (approved, remember = false, modifiedArgs) => resolvePromise({ approved, remember, modifiedArgs }),
     openedAt: now,
-    requestedBy: resolveApprovalRequester(broker, request.callId) ?? undefined,
+    requestedBy: resolveApprovalRequester(broker, request.callId, request.attribution) ?? undefined,
   };
 }

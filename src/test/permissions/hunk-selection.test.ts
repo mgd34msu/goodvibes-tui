@@ -201,6 +201,25 @@ describe('resolveApprovalRequester (Item 3b)', () => {
     const b: ApprovalRequesterLookup = { listApprovals: () => { throw new Error('boom'); } };
     expect(resolveApprovalRequester(b, 'c1')).toBeNull();
   });
+
+  test('mcp-server attribution names the server, without needing a broker', () => {
+    expect(resolveApprovalRequester(null, 'c1', { kind: 'mcp-server', serverName: 'figma' })).toBe('MCP server: figma');
+  });
+
+  test('sandbox-escalation attribution names the sandbox and every escalation', () => {
+    expect(resolveApprovalRequester(null, 'c1', { kind: 'sandbox-escalation', sandbox: 'exec-sandbox', escalations: ['wants-network', 'wants-host-privilege'] }))
+      .toBe('exec-sandbox wants: wants-network, wants-host-privilege');
+  });
+
+  test('background-agent attribution falls through to the broker lookup instead of being described directly', () => {
+    const b = broker([{ callId: 'c1', sessionId: 's-abcdefgh', metadata: { agentId: 'reviewer-agent' } }]);
+    expect(resolveApprovalRequester(b, 'c1', { kind: 'background-agent', agentId: 'agent-1', template: 'engineer' })).toBe('reviewer-agent');
+  });
+
+  test('non-agent attribution takes priority over broker metadata when both are present', () => {
+    const b = broker([{ callId: 'c1', sessionId: 's-abcdefgh', metadata: { agentId: 'reviewer-agent' } }]);
+    expect(resolveApprovalRequester(b, 'c1', { kind: 'mcp-server', serverName: 'figma' })).toBe('MCP server: figma');
+  });
 });
 
 describe('buildPendingPermissionExtras (Item 3a/3b)', () => {

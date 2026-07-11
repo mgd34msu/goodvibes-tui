@@ -79,6 +79,7 @@ import { statusGlyph, toneStyle, pad, postureLine, kv } from '../../panels/modal
 import { setActiveThemeMode } from '../../renderer/theme.ts';
 import { PermissionPromptUI } from '../../permissions/prompt.ts';
 import type { PermissionRequest } from '@pellux/goodvibes-sdk/platform/permissions';
+import { resolveApprovalRequester } from '../../permissions/hunk-selection.ts';
 import { ModalFactory } from '../../renderer/modal-factory.ts';
 import type { Cell, Line } from '../../types/grid.ts';
 
@@ -1784,6 +1785,70 @@ describe('golden-frames — permission prompt: exec sandbox escalation', () => {
   test('render is deterministic (two consecutive renders match)', () => {
     const a = snapshotEncode('permission-prompt-sandbox-escalation', renderSandboxEscalationPromptSurface());
     const b = snapshotEncode('permission-prompt-sandbox-escalation', renderSandboxEscalationPromptSurface());
+    expect(a).toBe(b);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Non-foreground approval attribution — the generic "Requested by: …" row for
+// asks the SDK's approval broker attributes to an origin other than the
+// foreground turn loop (see PermissionAttribution). Two new origins as of the
+// 1.6.1 SDK: an MCP server's elicitation request, and a sandbox brokering a
+// host-access escalation THROUGH the shared approval broker (distinct from
+// the dedicated "Sandbox : wants …" row above, which is the TUI's own local
+// exec-gate escalation UI, not a broker-routed ask).
+// ---------------------------------------------------------------------------
+
+function renderAttributedPromptSurface(attribution: Parameters<typeof resolveApprovalRequester>[2]): Line[] {
+  setActiveThemeMode('dark');
+  const request = {
+    callId: 'call-golden-attribution-01',
+    tool: 'read',
+    args: { path: '/tmp/example.txt' },
+    category: 'read',
+    analysis: {
+      classification: 'file-read',
+      riskLevel: 'low',
+      summary: 'Read a file',
+      reasons: [],
+    },
+    attribution,
+    resolve: () => {},
+  } as unknown as PermissionRequest;
+  const requestedBy = resolveApprovalRequester(undefined, request.callId, attribution) ?? undefined;
+  return PermissionPromptUI.createPromptLines(NORMAL_W, request, undefined, false, requestedBy);
+}
+
+describe('golden-frames — permission prompt: mcp-server elicitation attribution', () => {
+  function render(): Line[] {
+    return renderAttributedPromptSurface({ kind: 'mcp-server', serverName: 'figma' });
+  }
+  test('matches committed golden snapshot', () => {
+    const lines = render();
+    expect(lines.length).toBeGreaterThan(0);
+    expect(lines.some((l) => l.map((c) => c.char).join('').includes('MCP server: figma'))).toBe(true);
+    assertGolden('permission-prompt-mcp-server-attribution', lines);
+  });
+  test('render is deterministic (two consecutive renders match)', () => {
+    const a = snapshotEncode('permission-prompt-mcp-server-attribution', render());
+    const b = snapshotEncode('permission-prompt-mcp-server-attribution', render());
+    expect(a).toBe(b);
+  });
+});
+
+describe('golden-frames — permission prompt: sandbox-escalation attribution (broker-routed)', () => {
+  function render(): Line[] {
+    return renderAttributedPromptSurface({ kind: 'sandbox-escalation', sandbox: 'exec-sandbox', escalations: ['wants-network'] });
+  }
+  test('matches committed golden snapshot', () => {
+    const lines = render();
+    expect(lines.length).toBeGreaterThan(0);
+    expect(lines.some((l) => l.map((c) => c.char).join('').includes('exec-sandbox wants: wants-network'))).toBe(true);
+    assertGolden('permission-prompt-sandbox-escalation-attribution', lines);
+  });
+  test('render is deterministic (two consecutive renders match)', () => {
+    const a = snapshotEncode('permission-prompt-sandbox-escalation-attribution', render());
+    const b = snapshotEncode('permission-prompt-sandbox-escalation-attribution', render());
     expect(a).toBe(b);
   });
 });

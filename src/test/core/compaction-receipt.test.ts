@@ -55,4 +55,19 @@ describe('compaction-receipt', () => {
     expect(block).toContain('no standing instructions to re-inject');
     expect(block).toContain('validation did NOT pass');
   });
+
+  test('distiller→structured fallback names the requested strategy and the reason', () => {
+    const block = buildCompactionReceiptBlock(baseReceipt({
+      strategy: 'structured',
+      requestedStrategy: 'distiller',
+      strategyFallbackReason: 'distillation quality 0.41 (D) below floor 0.55; fell back to structured',
+    }));
+    expect(block).toContain('Requested strategy "distiller" fell back to "structured"');
+    expect(block).toContain('distillation quality 0.41 (D) below floor 0.55');
+  });
+
+  test('no fallback line when requestedStrategy matches the strategy that ran', () => {
+    const block = buildCompactionReceiptBlock(baseReceipt({ strategy: 'structured', requestedStrategy: 'structured' }));
+    expect(block).not.toContain('Requested strategy');
+  });
 });

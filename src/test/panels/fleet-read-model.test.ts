@@ -617,6 +617,21 @@ describe('createFleetReadModel', () => {
     expect(registry.steerCalls).toEqual([{ id: 'agent-x', text: 'hello' }]);
   });
 
+  test('steer passes the SDK\'s wake-retry result (woke: true) straight through — this read model needs no change for steer-wake', () => {
+    // ProcessRegistry.steer() now wake-retries a stalled node internally (SDK
+    // 1.6.1's agent-experience round) and reports it via SteerResult.woke.
+    // The TUI's fleet read model is a pure passthrough to registry.steer() —
+    // pin that the extra field survives instead of being dropped by an
+    // exact-shape reconstruction somewhere in the plumbing.
+    const registry = makeRegistry([]);
+    registry.steer = (id: string, text: string) => {
+      registry.steerCalls.push({ id, text });
+      return { queued: true, messageId: 'msg-woke-1', woke: true };
+    };
+    const model = createFleetReadModel(registry);
+    expect(model.steer('agent-stalled', 'still there?')).toEqual({ queued: true, messageId: 'msg-woke-1', woke: true });
+  });
+
   test('subscribeConsumed without a runtimeBus dep is a graceful no-op (never invokes the listener)', () => {
     const registry = makeRegistry([]);
     const model = createFleetReadModel(registry);
