@@ -23,18 +23,19 @@ import {
 import { MediaProviderRegistry, ensureBuiltinMediaProviders } from '@pellux/goodvibes-sdk/platform/media';
 import { MultimodalService } from '@pellux/goodvibes-sdk/platform/multimodal';
 import { AgentMessageBus, AgentOrchestrator, ArchetypeLoader, WrfcController } from '@pellux/goodvibes-sdk/platform/agents';
-import { AgentManager, OverflowHandler, ProcessManager, createWorkflowServices, type WorkflowServices } from '@pellux/goodvibes-sdk/platform/tools';
+import { AgentManager, ContextAccountingHolder, OverflowHandler, ProcessManager, createWorkflowServices, type WorkflowServices } from '@pellux/goodvibes-sdk/platform/tools';
 import { FileStateCache, FileUndoManager, MemoryEmbeddingProviderRegistry, MemoryRegistry, MemoryStore, ModeManager, ProjectIndex, resolveCanonicalMemoryDbPath, type CodeIndexStore, type CodeIndexReindexScheduler } from '@pellux/goodvibes-sdk/platform/state';
 import { MemorySpineClient, createLocalMemoryAccess } from '@pellux/goodvibes-sdk/platform/runtime/memory-spine';
 import { WorkspaceCheckpointManager } from '@pellux/goodvibes-sdk/platform/workspace';
 import { createWorkspaceCheckpointing } from './workspace-checkpointing.ts';
 import { createSessionConversationRewindPort } from './conversation-rewind-port.ts';
-import type { RuntimeEventBus } from '@/runtime/index.ts';
 import { createDomainDispatch } from './store/index.ts';
 import type { DomainDispatch, RuntimeStore } from './store/index.ts';
-import { DistributedRuntimeManager } from '@/runtime/index.ts';
-import { RemoteRunnerRegistry, RemoteSupervisor } from '@/runtime/index.ts';
-import { IntegrationHelperService } from '@/runtime/index.ts';
+import {
+  type RuntimeEventBus, DistributedRuntimeManager, RemoteRunnerRegistry, RemoteSupervisor, IntegrationHelperService,
+  IdempotencyStore, ComponentHealthMonitor, WorktreeRegistry, SandboxSessionRegistry, createShellPathService,
+  type ShellPathService, type FeatureFlagManager, createFeatureFlagManager, PolicyRuntimeState,
+} from '@/runtime/index.ts';
 import { VoiceProviderRegistry, VoiceService, ensureBuiltinVoiceProviders } from '@pellux/goodvibes-sdk/platform/voice';
 import { WebSearchProviderRegistry, WebSearchService } from '@pellux/goodvibes-sdk/platform/web-search';
 import { PanelManager } from '../panels/panel-manager.ts';
@@ -50,15 +51,7 @@ import { McpRegistry } from '@pellux/goodvibes-sdk/platform/mcp';
 import { BenchmarkStore, CacheHitTracker, FavoritesStore, inferFallbackContextWindow, type ModelDefinition, ModelLimitsService, ProviderCapabilityRegistry, ProviderOptimizer, ProviderRegistry } from '@pellux/goodvibes-sdk/platform/providers';
 import { KeybindingsManager } from '../input/keybindings.ts';
 import { AdaptivePlanner, DeterministicReplayEngine, ExecutionPlanManager, SessionLineageTracker, SessionMemoryStore } from '@pellux/goodvibes-sdk/platform/core';
-import { IdempotencyStore } from '@/runtime/index.ts';
-import { ComponentHealthMonitor } from '@/runtime/index.ts';
-import { WorktreeRegistry } from '@/runtime/index.ts';
-import { SandboxSessionRegistry } from '@/runtime/index.ts';
-import { createShellPathService, type ShellPathService } from '@/runtime/index.ts';
 import { isFeatureFlagEnabled } from './surface-feature-flags.ts';
-import type { FeatureFlagManager } from '@/runtime/index.ts';
-import { createFeatureFlagManager } from '@/runtime/index.ts';
-import { PolicyRuntimeState } from '@/runtime/index.ts';
 import { type ArchivableProcessRegistry } from '@pellux/goodvibes-sdk/platform/runtime/fleet';
 import { calcSessionCost, isModelPriced } from '../export/cost-utils.ts';
 import { createWorkstreamServices, type OrchestrationEngine, type WorkstreamCommandService } from './workstream-services.ts';
@@ -230,6 +223,7 @@ export interface RuntimeServices {
   readonly agentManager: AgentManager;
   readonly agentMessageBus: AgentMessageBus;
   readonly agentOrchestrator: AgentOrchestrator;
+  readonly contextAccountingHolder: ContextAccountingHolder; // bound at bootstrap.ts; see context-accounting-source.ts
   readonly wrfcController: WrfcController;
   readonly processManager: ProcessManager;
   /** The phase/work-item orchestration engine — see runtime/workstream-services.ts. */
@@ -346,6 +340,7 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
     executor: agentOrchestrator,
     configManager,
   });
+  const contextAccountingHolder = new ContextAccountingHolder();
   agentOrchestrator.setConversationSink({ // Conversation-snapshot bridge (mirrors the SDK's own createRuntimeServices)
     register: (agentId, source) => agentManager.registerConversationSource(agentId, source),
     release: (agentId) => agentManager.releaseConversationSource(agentId),
@@ -691,6 +686,7 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
     overflowHandler,
     sandboxSessionRegistry,
     workflowServices: workflow,
+    contextAccountingHolder,
   });
 
   return {
@@ -778,6 +774,7 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
     agentManager,
     agentMessageBus,
     agentOrchestrator,
+    contextAccountingHolder,
     wrfcController,
     processManager,
     orchestrationEngine,

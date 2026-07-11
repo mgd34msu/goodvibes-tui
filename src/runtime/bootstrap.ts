@@ -13,43 +13,34 @@ import { join } from 'node:path';
 import { Orchestrator, type OrchestratorUserInputOptions } from '../core/orchestrator.ts';
 import { AcpManager } from '@pellux/goodvibes-sdk/platform/acp';
 import { getTierPromptSupplement, getTierForContextWindow } from '@pellux/goodvibes-sdk/platform/providers';
-import { logger } from '@pellux/goodvibes-sdk/platform/utils';
+import { logger, summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 import type { PermissionRequestHandler } from '@pellux/goodvibes-sdk/platform/permissions';
 import type { CommandContext } from '../input/command-registry.ts';
 import type { InputHistory } from '../input/input-history.ts';
-import type { GitStatusProvider } from '../renderer/git-status.ts';
-import type { GitHeaderInfo } from '../renderer/git-status.ts';
+import type { GitStatusProvider, GitHeaderInfo } from '../renderer/git-status.ts';
 import type { SelectionManager } from '../input/selection.ts';
 import type { Compositor } from '../renderer/compositor.ts';
 
 import type { RuntimeContext, BootstrapOptions } from './context.ts';
-import { shutdownRuntime, fireSessionStart, saveSession } from '@/runtime/index.ts';
-import { createTaskManager } from '@/runtime/index.ts';
-import { OpsControlPlane } from '@/runtime/index.ts';
-import { AcpTaskAdapter } from '@/runtime/index.ts';
 import type { SystemMessageRouter } from '../core/system-message-router.ts';
-import { emitSessionReady, emitSessionStarted } from '@/runtime/index.ts';
 import {
-  loadLastConversation,
-  writeLastSessionPointer,
+  shutdownRuntime, fireSessionStart, saveSession, createTaskManager, OpsControlPlane, AcpTaskAdapter,
+  emitSessionReady, emitSessionStarted, loadLastConversation, writeLastSessionPointer,
+  scheduleBackgroundMcpDiscovery, startBackgroundProviderRegistration, restoreSavedModel, startExternalServices,
+  type ExternalServicesHandle, type HostServiceStatus, createHttpTransport, createDeferredStartupCoordinator,
 } from '@/runtime/index.ts';
-import { scheduleBackgroundMcpDiscovery, startBackgroundProviderRegistration } from '@/runtime/index.ts';
-import { restoreSavedModel } from '@/runtime/index.ts';
-import { startExternalServices, type ExternalServicesHandle, type HostServiceStatus } from '@/runtime/index.ts';
-import { createHttpTransport } from '@/runtime/index.ts';
 import { foldLegacySpineStore, deriveSpineFooterStatus } from '@pellux/goodvibes-sdk/platform/runtime/session-spine';
 import { createTuiSpineTransport, type SpineSessionsClient } from './session-spine-transport.ts';
 import { syncMemorySpineToHostStatus, type MemorySpineActiveRef } from './memory-spine-transport.ts';
 import { pruneStaleOperatorTokens } from '@pellux/goodvibes-sdk/platform/pairing';
 import { resolveDaemonCompanionToken, workspaceOperatorTokenCandidates } from './operator-token-cleanup.ts';
 import type { UiRuntimeServices } from './ui-services.ts';
-import { createDeferredStartupCoordinator } from '@/runtime/index.ts';
 import { initializeBootstrapCore } from './bootstrap-core.ts';
 import { createBootstrapShell } from './bootstrap-shell.ts';
 import { announceResumeState } from './resume-notice.ts';
 import { announceInstallSelfCheck } from './install-self-check-startup.ts';
 import { buildSharedOrchestratorCoreServices, refreshMemoryRecallSnapshot } from './orchestrator-core-services.ts';
-import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
+import { createContextAccountingSource } from './context-accounting-source.ts';
 import { DaemonServer, HttpListener } from '@pellux/goodvibes-sdk/platform/daemon';
 import { createSafeHostServeFactory } from '../daemon/safe-serve.ts';
 import { buildRelayExternalServiceMethods } from './relay-reachability-bridge.ts';
@@ -253,6 +244,13 @@ export async function bootstrapRuntime(
     cacheHitTracker: services.cacheHitTracker,
   });
   conversation.setSessionLineageTracker(services.sessionLineageTracker);
+
+  // Bind context_accounting's session source to the live Orchestrator (see context-accounting-source.ts).
+  const contextAccountingSourceHandle = createContextAccountingSource({
+    orchestrator, providerRegistry, sessionLineageTracker: services.sessionLineageTracker, runtimeBus, sessionId: runtime.sessionId,
+  });
+  services.contextAccountingHolder.setSource(contextAccountingSourceHandle.source);
+  bootstrapUnsubs.push(contextAccountingSourceHandle.dispose);
 
   const acpManager = new AcpManager({
     requestPermission: (request) => permissionPromptRef.requestPermission(request),

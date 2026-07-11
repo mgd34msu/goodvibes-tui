@@ -14,19 +14,13 @@ import type { SystemMessageRouter } from '../core/system-message-router.ts';
 import type { ConversationFollowUpItem } from '@pellux/goodvibes-sdk/platform/core';
 import type { OrchestratorUserInputOptions } from '../core/orchestrator.ts';
 import type { ControlPlaneRecentEvent } from '@pellux/goodvibes-sdk/platform/control-plane';
-import type { MutableRuntimeState } from '@/runtime/index.ts';
 import type { BootstrapOptions } from './context.ts';
-import { createFeatureFlagManager } from '@/runtime/index.ts';
-import { RuntimeEventBus } from '@/runtime/index.ts';
-import type { SessionEvent } from '@/runtime/index.ts';
 import { createRuntimeStore, createDomainDispatch, type RuntimeStore } from './store/index.ts';
-import { ForensicsCollector, ForensicsRegistry } from '@/runtime/index.ts';
 import {
-  generateUserSessionId,
+  type MutableRuntimeState, type SessionEvent, createFeatureFlagManager, RuntimeEventBus, ForensicsCollector,
+  ForensicsRegistry, generateUserSessionId, loadBootstrapSystemPrompt, syncConfiguredServices,
+  registerBootstrapHookBridge, registerBootstrapRuntimeEvents,
 } from '@/runtime/index.ts';
-import { loadBootstrapSystemPrompt, syncConfiguredServices } from '@/runtime/index.ts';
-import { registerBootstrapHookBridge } from '@/runtime/index.ts';
-import { registerBootstrapRuntimeEvents } from '@/runtime/index.ts';
 import { readExecEnvScrubAllowlist } from '../input/exec-env-scrub-config.ts';
 import { createSandboxExecAsk, sandboxExecAskDepsFromRuntime } from '../permissions/sandbox-exec-gate.ts';
 import { createRuntimeServices, type RuntimeServices } from './services.ts';
@@ -383,6 +377,11 @@ export async function initializeBootstrapCore(
     // variable NAMES kept even though they look credential-bearing. See
     // exec-env-scrub-config.ts (permissions.execEnvScrubAllowlist).
     credentialEnvScrub: { allowlist: readExecEnvScrubAllowlist(configManager) },
+    // Registers the context_accounting tool on this (the real, interactive)
+    // registry against OUR holder rather than a fresh internal one, so the
+    // Orchestrator-backed source bound at bootstrap.ts is what the tool
+    // actually reads from. See runtime/context-accounting-source.ts.
+    contextAccountingHolder: services.contextAccountingHolder,
   });
   // Note: installWrfcAgentToolGuard is called after routeOrBuffer is defined
   // (further below) so the onTrace callback can route guard decisions through
@@ -412,6 +411,7 @@ export async function initializeBootstrapCore(
     memoryRegistry: services.memoryRegistry,
     sandboxSessionRegistry: services.sandboxSessionRegistry,
     workflowServices: services.workflow,
+    contextAccountingHolder: services.contextAccountingHolder,
   });
 
   const bootstrapUnsubs: Array<() => void> = [];
