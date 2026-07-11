@@ -15,6 +15,7 @@ import {
   getExternalSurfaceAutoStartFieldId,
   isExternalSurfaceSelectedByDefault,
 } from './onboarding-wizard-external-surfaces.ts';
+import { applyFeatureUnitOperations } from './onboarding-feature-units.ts';
 import { buildGoodVibesSecretKey, buildGoodVibesSecretRef, isLoopbackAddress, isSecretReferenceValue } from './onboarding-wizard-helpers.ts';
 import type { OnboardingWizardControllerLike } from './onboarding-wizard-types.ts';
 
@@ -25,11 +26,14 @@ const HITL_UX_MODES_FEATURE_FLAG = 'hitl-ux-modes';
 
 export function buildOnboardingApplyRequest(controller: OnboardingWizardControllerLike): OnboardingApplyRequest {
     const operations: OnboardingApplyOperation[] = [];
-    // Accumulates capability/feature flags that onboarding selections require to
-    // be enabled so the written config actually takes effect (e.g. behavior.hitlMode
-    // is inert unless hitl-ux-modes is on). Flushed once, unioned with the surface
-    // flags, at the end of the apply build so every gating flag is set in one batch.
-    const featureFlagsToEnable = new Set<string>();
+    // Accumulates feature-flag state that onboarding selections require, so the
+    // written config actually takes effect (e.g. behavior.hitlMode is inert unless
+    // hitl-ux-modes is on) and so a default-on feature the user turned OFF in a
+    // feature step is persisted as a disabled override. Flushed once, after the
+    // surface flags, at the end of the apply build so every gating flag is set in
+    // one batch. A later write for the same flag id wins (surface enables are
+    // authoritative for the network-exposing flags they own).
+    const featureFlagOverrides = new Map<string, 'enabled' | 'disabled'>();
     const hasServers = controller.hasServerCapabilitiesSelected();
     const browserAccess = controller.shouldEnableBrowserSurface();
     const httpListener = controller.shouldEnableHttpListener();
@@ -43,9 +47,6 @@ export function buildOnboardingApplyRequest(controller: OnboardingWizardControll
       value: unknown,
     ): void => {
       operations.push({ kind: 'set-config', key, value });
-    };
-    const enableFeatureFlags = (flagIds: readonly string[]): void => {
-      for (const flagId of flagIds) setConfig(`featureFlags.${flagId}`, 'enabled');
     };
     const acknowledge = (target: OnboardingAcknowledgementTarget, fieldId: string): void => {
       operations.push({
@@ -139,7 +140,7 @@ export function buildOnboardingApplyRequest(controller: OnboardingWizardControll
     // SDK schema default is 'balanced' (schema-domain-core DEFAULT_CONFIG); a
     // choice equal to the default is left to the flag's own default-off state.
     if (hitlMode !== HITL_MODE_SCHEMA_DEFAULT) {
-      featureFlagsToEnable.add(HITL_UX_MODES_FEATURE_FLAG);
+      featureFlagOverrides.set(HITL_UX_MODES_FEATURE_FLAG, 'enabled');
     }
     setConfig('behavior.guidanceMode', controller.getStringFieldValue('experience.guidance', controller.runtimeSnapshot?.runtimeDefaults.behavior.guidanceMode ?? 'minimal'));
     setConfig('permissions.mode', controller.getStringFieldValue('experience.permissions', controller.runtimeSnapshot?.runtimeDefaults.permissionsMode ?? 'prompt'));
@@ -188,14 +189,23 @@ export function buildOnboardingApplyRequest(controller: OnboardingWizardControll
         else setConfig(setupField.configKey, value);
       }
     }
+    // Feature units from the guided feature steps (safety, memory & context,
+    // telemetry, automation, provider, advanced): enable/disable each flag the
+    // user changed from its default and write its chosen sub-options.
+    applyFeatureUnitOperations(controller, setConfig, featureFlagOverrides);
+
+    // Surface/server flags are authoritative for the network-exposing flags they
+    // own — apply them last so they win over any feature-step override.
     for (const surfaceFlag of getServerSurfaceFeatureFlags({
       serverBacked: hasServers,
       web: browserAccess,
       externalSurfaces: enabledExternalSurfaceIds,
     })) {
-      featureFlagsToEnable.add(surfaceFlag);
+      featureFlagOverrides.set(surfaceFlag, 'enabled');
     }
-    enableFeatureFlags([...featureFlagsToEnable].sort((left, right) => left.localeCompare(right)));
+    for (const flagId of [...featureFlagOverrides.keys()].sort((left, right) => left.localeCompare(right))) {
+      setConfig(`featureFlags.${flagId}`, featureFlagOverrides.get(flagId)!);
+    }
 
     acknowledge('providers', 'providers.reviewed');
     acknowledge('subscriptions', 'accounts.subscriptions');
