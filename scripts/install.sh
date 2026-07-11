@@ -14,9 +14,10 @@
 # existing Bun install or installs Bun first via its official installer.
 #
 # Options (environment variables, so the pipe-to-sh form stays one command):
-#   GOODVIBES_VERSION      install a specific tag, e.g. v1.13.1 (default: latest)
-#   GOODVIBES_INSTALL_DIR  target directory (default: ~/.local/bin)
-#   GOODVIBES_AGENT        set to 0 to skip installing goodvibes-agent (default: 1)
+#   GOODVIBES_VERSION         install a specific tag, e.g. v1.13.1 (default: latest)
+#   GOODVIBES_INSTALL_DIR     target directory (default: ~/.local/bin)
+#   GOODVIBES_AGENT           set to 0 to skip installing goodvibes-agent (default: 1)
+#   GOODVIBES_RESTART_DAEMON  set to 0 to leave a running daemon untouched (default: 1)
 #
 # This file is versioned in the goodvibes-tui repository at scripts/install.sh
 # and published to goodvibes.sh on release. The `/update` command re-runs the
@@ -28,6 +29,7 @@ REPO="mgd34msu/goodvibes-tui"
 INSTALL_DIR="${GOODVIBES_INSTALL_DIR:-$HOME/.local/bin}"
 REQUESTED_VERSION="${GOODVIBES_VERSION:-latest}"
 WITH_AGENT="${GOODVIBES_AGENT:-1}"
+RESTART_DAEMON="${GOODVIBES_RESTART_DAEMON:-1}"
 
 say() { printf '%s\n' "$*"; }
 fail() { printf 'install.sh: %s\n' "$*" >&2; exit 1; }
@@ -94,6 +96,73 @@ resolve_version() {
     VERSION="$REQUESTED_VERSION"
   fi
   case "$VERSION" in v*) : ;; *) VERSION="v$VERSION" ;; esac
+}
+
+# --- daemon restart on upgrade ---
+# The curl one-liner doubles as the upgrade path. Replacing the binary on disk
+# does not affect a running daemon (it keeps executing the old inode), so an
+# already-running daemon must be restarted for the upgrade to take effect.
+restart_running_daemon() {
+  [ "$RESTART_DAEMON" = "1" ] || return 0
+
+  # systemd-managed (Linux): restart the user unit.
+  if command -v systemctl >/dev/null 2>&1 &&
+     systemctl --user is-active --quiet goodvibes-daemon.service 2>/dev/null; then
+    say ""
+    say "Restarting the running goodvibes-daemon (systemd user service) ..."
+    if systemctl --user restart goodvibes-daemon.service 2>/dev/null; then
+      say "  restarted  goodvibes-daemon.service"
+      exec_start=$(systemctl --user show -p ExecStart --value goodvibes-daemon.service 2>/dev/null || true)
+      case "$exec_start" in
+        ""|*"$INSTALL_DIR/goodvibes-daemon"*) : ;;
+        *)
+          say "  NOTE: the service does not exec $INSTALL_DIR/goodvibes-daemon, so it may"
+          say "  still be running a different (older) install. Inspect it with:"
+          say "    systemctl --user cat goodvibes-daemon.service"
+          ;;
+      esac
+    else
+      say "  NOTE: restart failed — restart it yourself with:"
+      say "    systemctl --user restart goodvibes-daemon.service"
+    fi
+    return 0
+  fi
+
+  # Bare process: stop it and relaunch the new binary with the same arguments.
+  pids=$(pgrep -f '[g]oodvibes-daemon' 2>/dev/null || true)
+  [ -n "$pids" ] || return 0
+  for pid in $pids; do
+    # Recover the original arguments so flags (port, host, daemon home) survive.
+    if [ -r "/proc/$pid/cmdline" ]; then
+      args=$(tr '\0' '\n' < "/proc/$pid/cmdline" | tail -n +2 | tr '\n' ' ')
+    else
+      args=$(ps -o args= -p "$pid" 2>/dev/null | sed 's/^[^ ]* *//')
+    fi
+    args=$(printf '%s' "${args:-}" | sed 's/[[:space:]]*$//')
+    say ""
+    say "Restarting running goodvibes-daemon (pid $pid) ..."
+    kill "$pid" 2>/dev/null || continue
+    waited=0
+    while kill -0 "$pid" 2>/dev/null && [ "$waited" -lt 10 ]; do
+      sleep 1
+      waited=$((waited + 1))
+    done
+    if kill -0 "$pid" 2>/dev/null; then
+      say "  NOTE: pid $pid did not exit within 10s — not starting a second daemon."
+      say "  Stop it, then start the new one: $INSTALL_DIR/goodvibes-daemon ${args:-}"
+      continue
+    fi
+    # shellcheck disable=SC2086  # args is intentionally word-split
+    nohup "$INSTALL_DIR/goodvibes-daemon" ${args:-} >/dev/null 2>&1 &
+    newpid=$!
+    sleep 1
+    if kill -0 "$newpid" 2>/dev/null; then
+      say "  restarted  pid $newpid${args:+ (args: $args)}"
+    else
+      say "  NOTE: the new daemon did not stay up — start it yourself and check its output:"
+      say "    $INSTALL_DIR/goodvibes-daemon ${args:-}"
+    fi
+  done
 }
 
 # --- goodvibes-agent: npm package running on Bun (no compiled binary exists) ---
@@ -192,6 +261,8 @@ main() {
   else
     fail "the installed binary failed to run ('goodvibes --version'); the download may not match this platform"
   fi
+
+  restart_running_daemon
 
   if [ "$WITH_AGENT" = "1" ]; then
     install_agent
