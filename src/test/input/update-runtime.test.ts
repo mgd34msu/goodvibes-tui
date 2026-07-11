@@ -219,11 +219,12 @@ describe('applyUpdate — binary install, checksum verification', () => {
     expect(printed.join('\n')).toContain('/home/user/.local/bin/lib/sqlite-vec-linux-x64/vec0.so');
   });
 
-  test('a missing manifest entry for the sqlite-vec addon hard-fails and never swaps a binary or writes the addon', async () => {
+  test('a target release that predates the sqlite-vec addon (no manifest entry) still swaps the binaries and simply skips the addon', async () => {
     const appBuffer = Buffer.from('new-app-bytes');
     const daemonBuffer = Buffer.from('new-daemon-bytes');
-    // Binaries have valid entries; the addon has none — a missing addon entry is
-    // as fatal as a missing binary entry.
+    // Binaries have valid entries; the addon has none. A pre-addon release must
+    // not block an otherwise-valid binary update — the addon is skipped, never
+    // placed unverified.
     const checksumText = [
       `${sha256Hex(appBuffer)}  goodvibes-linux-x64`,
       `${sha256Hex(daemonBuffer)}  goodvibes-daemon-linux-x64`,
@@ -237,8 +238,11 @@ describe('applyUpdate — binary install, checksum verification', () => {
       writeAddon: (target) => addonCalls.push(target),
       fileExists: () => true,
     });
-    await expect(applyUpdate(options)).rejects.toThrow(/no checksum entry for sqlite-vec-linux-x64\.so/);
-    expect(swapCalls).toEqual([]);
+    await applyUpdate(options);
+    expect(swapCalls).toEqual([
+      '/home/user/.local/bin/goodvibes',
+      '/home/user/.local/bin/goodvibes-daemon',
+    ]);
     expect(addonCalls).toEqual([]);
   });
 
