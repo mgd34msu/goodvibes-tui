@@ -9,10 +9,12 @@
  *                                whether this build is already current.
  *   /update apply              — for a binary install (scripts/install.sh),
  *                                download + verify + atomically swap the
- *                                app and daemon binaries. For any other
- *                                install kind, prints the exact command to
- *                                run instead — it never attempts a swap it
- *                                can't do safely.
+ *                                app and daemon binaries, and refresh the
+ *                                sqlite-vec native addon in lockstep so the
+ *                                vector index never goes stale beside a new
+ *                                binary. For any other install kind, prints the
+ *                                exact command to run instead — it never
+ *                                attempts a swap it can't do safely.
  *   /update review              — install/subscription/sandbox posture,
  *                                unrelated to the update mechanics above.
  *   /update bundle export|inspect <path> — portable posture bundle, as before.
@@ -34,6 +36,7 @@ import {
   CHECKSUM_MANIFEST_NAME,
   parseChecksumFile,
   resolveArtifactNames,
+  resolveSqliteVecAsset,
   sha256,
   verifyChecksum,
 } from '../../runtime/release-artifacts.ts';
@@ -83,6 +86,24 @@ function swapBinaryAtomically(targetPath: string, buffer: Buffer): void {
   writeFileSync(tempPath, buffer);
   if (process.platform !== 'win32') {
     chmodSync(tempPath, 0o755);
+  }
+  renameSync(tempPath, targetPath);
+}
+
+/**
+ * Writes the sqlite-vec native addon into place with the same temp-write +
+ * atomic-rename discipline as the binaries, so a running process never
+ * dlopen()s a half-written extension. The addon's parent directory
+ * (`<execDir>/lib/sqlite-vec-<os>-<arch>/`) is created first because a fresh
+ * install may not have a `lib/` tree yet. A shared library needs no execute
+ * bit, so this uses 0o644 rather than the binaries' 0o755.
+ */
+function writeAddonAtomically(targetPath: string, buffer: Buffer): void {
+  mkdirSync(dirname(targetPath), { recursive: true });
+  const tempPath = `${targetPath}.update-download`;
+  writeFileSync(tempPath, buffer);
+  if (process.platform !== 'win32') {
+    chmodSync(tempPath, 0o644);
   }
   renameSync(tempPath, targetPath);
 }
@@ -150,6 +171,8 @@ export interface ApplyUpdateOptions {
   readonly runCommand?: RunCommand;
   /** Injectable so tests can observe/skip the actual filesystem swap. */
   readonly swap?: (targetPath: string, buffer: Buffer) => void;
+  /** Injectable so tests can observe/skip writing the sqlite-vec addon. */
+  readonly writeAddon?: (targetPath: string, buffer: Buffer) => void;
   readonly fileExists?: (path: string) => boolean;
 }
 
@@ -205,11 +228,31 @@ export async function applyUpdate(options: ApplyUpdateOptions): Promise<void> {
     verifyChecksum(artifacts.daemon, sha256(daemonBuffer), checksums.get(artifacts.daemon));
   }
 
-  // Both downloads verified before either swap — an update must not apply partially.
+  // The sqlite-vec native addon travels with the binaries: refresh it in the
+  // same download-verify-swap pass so /update never leaves a new binary beside a
+  // stale (or missing) addon. Placed at <execDir>/lib/sqlite-vec-<os>-<arch>/vec0.<suffix>,
+  // exactly where the SDK's loader resolves it. A missing manifest entry is
+  // fatal, identical to the binaries. On macOS the file is refreshed for
+  // consistency even though the platform blocks extension loading.
+  const addon = resolveSqliteVecAsset(options.platform, options.arch);
+  let addonBuffer: Buffer | null = null;
+  if (addon) {
+    addonBuffer = await downloadBuffer(options.fetchImpl, `${baseUrl}/${addon.assetName}`);
+    verifyChecksum(addon.assetName, sha256(addonBuffer), checksums.get(addon.assetName));
+  }
+
+  // All downloads verified before any write — an update must not apply partially.
   const swap = options.swap ?? swapBinaryAtomically;
   swap(appBinaryPath, appBuffer);
   if (daemonBuffer) {
     swap(daemonBinaryPath, daemonBuffer);
+  }
+  const addonTargetPath = addon
+    ? join(dirname(appBinaryPath), 'lib', addon.dirName, addon.fileName)
+    : null;
+  if (addon && addonBuffer && addonTargetPath) {
+    const writeAddon = options.writeAddon ?? writeAddonAtomically;
+    writeAddon(addonTargetPath, addonBuffer);
   }
 
   const serviceInfo = detectDaemonServiceManaged(options.platform, options.configManager, options.runCommand);
@@ -221,6 +264,7 @@ export async function applyUpdate(options: ApplyUpdateOptions): Promise<void> {
       daemonBinaryPresent
         ? `  daemon binary: ${daemonBinaryPath}`
         : `  daemon binary: not found at ${daemonBinaryPath} — left untouched`,
+      ...(addonTargetPath ? [`  vector addon:  ${addonTargetPath}`] : []),
       '',
       'Restart goodvibes to run the new version.',
       serviceInfo.managed

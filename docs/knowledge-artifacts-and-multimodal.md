@@ -156,6 +156,30 @@ The runtime uses these for:
 - knowledge packet selection
 - review and search support
 
+### The sqlite-vec native addon
+
+Semantic search runs on the `sqlite-vec` native extension, which the runtime
+loads from `<install-dir>/lib/sqlite-vec-<os>-<arch>/vec0.<suffix>` next to the
+running binary. Every install channel ships it:
+
+- **npm / Bun installs** carry it inside the platform-specific
+  `@pellux/goodvibes-tui-<os>-<arch>` package and vendor it beside the binaries.
+- **The pure-binary installer** (`curl -fsSL https://goodvibes.sh/install.sh | sh`)
+  downloads the platform's addon as a checksum-verified release asset
+  (`sqlite-vec-<os>-<arch>.<suffix>`, covered by `SHA256SUMS.txt`) and places it
+  in `lib/` next to `goodvibes`, `goodvibes-daemon`, and `goodvibes-agent` — one
+  copy serves all three. `/update` refreshes it in the same download-verify-swap
+  pass as the binaries, so it never goes stale beside a new build. Set
+  `GOODVIBES_VECTOR=0` to skip installing it.
+
+**macOS limitation:** on macOS, `bun:sqlite` links Apple's system SQLite, which
+ships with extension loading disabled. The addon is still installed for
+consistency (and would work if a future runtime lifts the limit), but the
+runtime reports the vector index as unavailable and memory search degrades to
+literal matching. This is a permanent platform capability limit, not a
+packaging defect — `/recall vector status` names the reason plainly. Linux
+(including WSL2) has no such restriction.
+
 ## GraphQL and projections
 
 The knowledge domain exposes:
