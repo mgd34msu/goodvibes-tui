@@ -13,7 +13,7 @@
  *   bun run scripts/publish-platform-packages.ts --only linux-x64
  */
 import { execFileSync } from 'node:child_process';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { PLATFORM_PACKAGES } from './platform-packages.ts';
@@ -28,6 +28,19 @@ const allowMissing = args.includes('--allow-missing');
 const onlyIdx = args.indexOf('--only');
 const only = onlyIdx >= 0 ? args[onlyIdx + 1] : undefined;
 const registry = process.env.GOODVIBES_PUBLISH_REGISTRY?.trim() || 'https://registry.npmjs.org';
+// Optional scope override for mirror registries (e.g. GitHub Packages requires
+// every package under the repo owner's scope). When set (e.g. "@mgd34msu"), each
+// platform package's @pellux scope is rewritten to the override before publish so
+// the mirrored set matches the mirrored main package's rescoped optionalDependencies.
+// Unset on the npm path, which publishes the packages under their @pellux names.
+const scopeOverride = process.env.GOODVIBES_PUBLIC_PACKAGE_SCOPE?.trim().replace(/\/+$/, '') || '';
+
+/** Rewrite a @scope/goodvibes-tui-<os>-<arch> name onto the override scope. */
+function rescopeName(name: string): string {
+  if (!scopeOverride) return name;
+  const match = /^@[^/]+\/(goodvibes-tui-.+)$/.exec(name);
+  return match ? `${scopeOverride}/${match[1]}` : name;
+}
 
 const mainVersion = (JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')) as { version: string }).version;
 
@@ -50,15 +63,25 @@ for (const pkg of targets) {
     throw new Error(`${pkg.name} is not assembled (missing binaries in ${pkgDir}/bin) — run assemble-platform-packages first`);
   }
 
-  const version = (JSON.parse(readFileSync(join(pkgDir, 'package.json'), 'utf8')) as { version: string }).version;
+  const pkgJsonPath = join(pkgDir, 'package.json');
+  const pkgJson = JSON.parse(readFileSync(pkgJsonPath, 'utf8')) as { version: string; name: string };
+  const version = pkgJson.version;
   if (version !== mainVersion) {
     throw new Error(`${pkg.name} version ${version} does not match main package ${mainVersion} — re-run assembly`);
+  }
+
+  // Apply the mirror scope override in place before publishing. On the npm path
+  // scopeOverride is empty and the name is left as its @pellux original.
+  const publishName = rescopeName(pkg.name);
+  if (publishName !== pkgJson.name) {
+    pkgJson.name = publishName;
+    writeFileSync(pkgJsonPath, `${JSON.stringify(pkgJson, null, 2)}\n`);
   }
 
   const npmArgs = dryRun
     ? ['pack']
     : ['publish', '--access', 'public', '--registry', registry];
-  console.log(`${dryRun ? 'pack' : 'publish'} ${pkg.name}@${version} -> ${registry}`);
+  console.log(`${dryRun ? 'pack' : 'publish'} ${publishName}@${version} -> ${registry}`);
   execFileSync('npm', npmArgs, { cwd: pkgDir, stdio: 'inherit', env: process.env });
   published++;
 }

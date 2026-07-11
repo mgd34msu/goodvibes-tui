@@ -62,6 +62,7 @@
     "perf:check": "bun run scripts/perf-check.ts",
     "perf:baseline": "GOODVIBES_PERF_SAVE_BASELINE=1 bun run scripts/perf-check.ts",
     "architecture:check": "bun run scripts/check-architecture.ts",
+    "workflows:check": "bun run scripts/check-workflows.ts",
     "audit:home": "bun run scripts/audit-goodvibes-home.ts",
     "foundation:artifacts": "bun run scripts/export-foundation-artifacts.ts",
     "docs:commands": "bun run scripts/generate-command-reference.ts",

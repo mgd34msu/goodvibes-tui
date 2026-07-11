@@ -65,6 +65,8 @@ jobs:
         uses: ./.github/actions/setup
       - name: Architecture check
         run: bun run architecture:check
+      - name: Workflow structure check
+        run: bun run workflows:check
 
   perf-check:
     runs-on: ubuntu-latest

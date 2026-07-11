@@ -41,6 +41,8 @@ jobs:
         run: bun run test:coverage
       - name: Architecture check
         run: bun run architecture:check
+      - name: Workflow structure check
+        run: bun run workflows:check
       - name: Performance check
         run: bun run perf:check
       - name: Eval gate
@@ -337,10 +339,48 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
+  publish-github-platform-packages:
+    name: Publish platform binary packages to GitHub Packages
+    if: github.event_name == 'push' || startsWith(github.event.inputs.ref, 'v') || startsWith(github.event.inputs.ref, 'refs/tags/v')
+    needs: release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    env:
+      # Rescope the @pellux platform packages onto the repo owner's scope so they
+      # can be mirrored to GitHub Packages (which requires the owner scope). The
+      # payload-package mirror below rescopes its optionalDependencies to match.
+      GOODVIBES_PUBLIC_PACKAGE_SCOPE: ${{ format('@{0}', github.repository_owner) }}
+      GOODVIBES_PUBLISH_REGISTRY: https://npm.pkg.github.com
+    steps:
+      - name: Checkout
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
+        with:
+          ref: ${{ github.event.inputs.ref || github.ref }}
+      - name: Setup
+        uses: ./.github/actions/setup
+      - name: Setup Node
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
+        with:
+          node-version: "22"
+          registry-url: "https://npm.pkg.github.com"
+      - name: Download all artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          path: dist/
+          merge-multiple: true
+      - name: Assemble platform packages (all targets required)
+        run: bun run scripts/assemble-platform-packages.ts --require-all
+      - name: Publish platform packages to GitHub Packages
+        run: bun run scripts/publish-platform-packages.ts
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
   publish-github-packages:
     name: Publish to GitHub Packages
     if: github.event_name == 'push' || startsWith(github.event.inputs.ref, 'v') || startsWith(github.event.inputs.ref, 'refs/tags/v')
-    needs: release
+    needs: [release, publish-github-platform-packages]
     runs-on: ubuntu-latest
     permissions:
       contents: read
