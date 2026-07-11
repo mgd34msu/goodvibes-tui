@@ -31,6 +31,12 @@ export interface CompactionReceiptInput {
   readonly lowQuality: boolean;
   readonly instructionsReinjected: boolean;
   readonly validationPassed: boolean;
+  /**
+   * IDs of the sections the compactor actually carried into the compacted
+   * output. Rendered plainly so the receipt says which parts of context
+   * survived; an empty list is narrated as "none recorded" rather than hidden.
+   */
+  readonly sectionsIncluded: readonly string[];
   readonly outcome: 'applied' | 'kept-original' | 'failed';
   readonly detail?: string | undefined;
   /**
@@ -103,6 +109,15 @@ export function buildCompactionReceiptBlock(receipt: CompactionReceiptInput): st
   const reinjected = receipt.instructionsReinjected ? 'standing instructions re-injected' : 'no standing instructions to re-inject';
   const validated = receipt.validationPassed ? 'validation passed' : 'validation did NOT pass';
   lines.push(`  ${reinjected}; ${validated}.`);
+
+  // Name the sections carried into the compacted output. Only meaningful when a
+  // summary was actually applied; on kept-original / failed nothing new was
+  // committed, so an empty list there is expected, not a fault.
+  const sections = (receipt.sectionsIncluded ?? []).map((s) => s.trim()).filter((s) => s.length > 0);
+  if (receipt.outcome === 'applied') {
+    const sectionsText = sections.length > 0 ? sections.join(', ') : 'none recorded';
+    lines.push(`  Sections included: ${sectionsText}.`);
+  }
 
   if (receipt.detail && receipt.detail.trim().length > 0) {
     lines.push(`  ${receipt.detail.trim()}`);
