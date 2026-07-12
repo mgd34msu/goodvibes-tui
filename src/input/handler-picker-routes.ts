@@ -214,7 +214,7 @@ function cycleCapabilityFilter(modelPicker: ModelPickerModal): void {
   modelPicker.setCapabilityFilter(cycle[(cur + 1) % cycle.length]!);
 }
 
-// W6.2 e / W6.1 retirement: the process-modal and live-tail-modal token routes
+// e / retirement: the process-modal and live-tail-modal token routes
 // were removed with those modals (F2 now opens Fleet, which subsumes the live
 // process tree). ProcessModal/AgentDetailModal/LiveTailModal were structurally
 // unreachable after the F2 repoint and were deleted.

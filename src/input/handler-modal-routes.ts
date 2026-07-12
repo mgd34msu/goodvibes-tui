@@ -95,7 +95,7 @@ export function handleSelectionModalToken(state: SelectionRouteState, token: Inp
           dispatchSelectionAction(action, selected);
         }
       } else if (state.selectionModal.allowSearch) {
-        // UX-C instant filter: an unclaimed keystroke arms search AND starts
+        // instant filter: an unclaimed keystroke arms search AND starts
         // the query immediately, instead of silently doing nothing until the
         // user discovers '/' first (the "help search needs '/' arming while
         // the palette filters instantly" evaluator finding — /help has no
@@ -108,7 +108,7 @@ export function handleSelectionModalToken(state: SelectionRouteState, token: Inp
     }
   } else if (token.type === 'key') {
     if (token.logicalName === 'escape') {
-      // UX-C: ONE Escape always closes the modal, regardless of search state.
+      // ONE Escape always closes the modal, regardless of search state.
       // Clearing an in-progress query is Backspace's job, not Esc's — the old
       // two-stage contract (1st Esc clears query, 2nd blurs search, 3rd
       // finally closes) was the "help modal took 3 Escapes after searching"
@@ -556,9 +556,9 @@ type ConfigModalRouteState = {
 };
 
 /**
- * Route a key to the generic config-modal host (W6.1 MIGRATE-TO-MODAL
+ * Route a key to the generic config-modal host (MIGRATE-TO-MODAL
  * surfaces). The host owns the reserved navigation keys (Esc, up/down/j/k tab
- * left/right, and now '/' — DEBT-5 item 1's type-to-filter, armed the same
+ * left/right, and now '/' — item 1's type-to-filter, armed the same
  * way as scrollable-list-panel.ts's opt-in filter and SettingsModal's own
  * '/'-armed search); every other key is offered to the active surface's
  * declarative action table (fireAction handles the two-press confirm for

@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// panel-paste-flood-guard.ts — DEBT-5 item 5.
+// panel-paste-flood-guard.ts — item 5.
 //
 // A terminal WITHOUT bracketed paste delivers a pasted block as a burst of
 // discrete 1-char 'text' tokens (isPasteToken stays false for every one of

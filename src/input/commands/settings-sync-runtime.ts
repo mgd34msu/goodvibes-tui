@@ -32,7 +32,7 @@ export function registerSettingsSyncRuntimeCommands(registry: CommandRegistry): 
       const shellPaths = requireShellPaths(ctx);
       const controlPlaneConfigDir = ctx.platform.configManager.getControlPlaneConfigDir();
       const sub = (args[0] ?? '').toLowerCase();
-      // DEBT-5 item 3 (report-vs-modal front doors): settings-sync has a full
+      // item 3 (report-vs-modal front doors): settings-sync has a full
       // modal surface (settings-sync-modal), so the bare command now opens it
       // — the old bare/`review` transcript report moved to an explicit
       // `report` subcommand (scriptability preserved: /settings-sync report).
@@ -41,7 +41,7 @@ export function registerSettingsSyncRuntimeCommands(registry: CommandRegistry): 
         return;
       }
       if (sub === 'panel' || sub === 'open') {
-        ctx.openModal?.('settings-sync-modal'); // W6.1: settings-sync panel -> config modal
+        ctx.openModal?.('settings-sync-modal'); // settings-sync panel -> config modal
         return;
       }
       if (sub === 'report' || sub === 'review') {

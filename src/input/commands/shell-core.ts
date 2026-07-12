@@ -165,7 +165,7 @@ export function registerShellCoreCommands(registry: CommandRegistry): void {
           { id: '/quit', label: '/quit', detail: 'Exit', category: 'Tools & System' },
           { id: '/wq', label: '/wq', detail: 'Commit all git changes and then exit', category: 'Tools & System' },
         ];
-        // UX-C: every item here is a command, and picking one RUNS it — label
+        // every item here is a command, and picking one RUNS it — label
         // the verb "Run" (matching the slash-command palette) instead of the
         // generic "Select" default.
         ctx.openSelection('Help  —  Commands', items, { allowSearch: true, primaryVerbLabel: 'Run' }, (result) => {
@@ -214,7 +214,7 @@ export function registerShellCoreCommands(registry: CommandRegistry): void {
     description: 'Summarize conversation to free context window',
     async handler(_args, ctx) {
       const messages = ctx.session.conversationManager.getMessagesForLLM();
-      // W5.4 (wo803): contextWindow IS reachable from CommandContext — the same
+      // contextWindow IS reachable from CommandContext — the same
       // call compactConversation() (runtime-services.ts) already makes to scale
       // its own behaviour by window size. Previously hardcoded to 0 here, which
       // silently suppressed buildCompactionPreview()'s capacity-% clause even
@@ -230,7 +230,7 @@ export function registerShellCoreCommands(registry: CommandRegistry): void {
       const result = await compactConversation(ctx);
       if (result) {
         // Post-compact notice: uses real CompactionEvent figures, plus an
-        // out-of-band quality-score grade line when one was computed (W5.4/B28).
+        // out-of-band quality-score grade line when one was computed ().
         ctx.print(buildCompactionAfterNotice({ event: result.event, pinnedMemoryCount, qualityScore: result.qualityScore }));
       } else {
         ctx.print('[Context] Compact complete.');
@@ -300,7 +300,7 @@ export function registerShellCoreCommands(registry: CommandRegistry): void {
       ctx.session.runtime.debugMode = !ctx.session.runtime.debugMode;
       ctx.print(`Debug mode: ${ctx.session.runtime.debugMode ? 'ON' : 'OFF'}`);
       // Honest quiet counter for direct terminal writes the guard intercepted
-      // (routed here instead of spamming the transcript). (UX-B item 1a.)
+      // (routed here instead of spamming the transcript). (item 1a.)
       const intercepted = ctx.session.runtime.terminalWritesIntercepted ?? 0;
       if (intercepted > 0) {
         ctx.print(`Terminal writes intercepted this session: ${intercepted} (details in the activity log)`);

@@ -112,9 +112,9 @@ export function handleRecallExplain(args: string[], context: CommandContext): vo
  * `exportState()` returns the same full `AgentRecord[]` (it's what
  * compactConversation() already uses for the same reason).
  *
- * With NO agent id (wo805 wiring), renders the MAIN interactive session's own
+ * With NO agent id (wiring), renders the MAIN interactive session's own
  * per-turn injection ring — `Orchestrator.getTurnInjections()`, threaded onto
- * the command context as `session.getMainSessionTurnInjections`. As of wo805 the
+ * the command context as `session.getMainSessionTurnInjections`. As of the
  * main session DOES route through the passive-injection engine, so this is the
  * honest main-session default (previously there was no record source, so the
  * no-id path could only print a usage hint). When the accessor isn't wired

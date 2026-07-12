@@ -3,7 +3,7 @@
 //
 // Pure mouse-geometry helpers for the panel workspace, extracted from
 // handler-feed-routes.ts so that file stays under the 800-line architecture
-// cap once the UX-C focus verbs and the DEBT-5 paste-flood guard both live in
+// cap once the focus verbs and the paste-flood guard both live in
 // it. These map a terminal (row, col) onto the panel/pane/workspace-tab under
 // the cursor. No dependency on the feed-route state types, so no import cycle.
 // ---------------------------------------------------------------------------

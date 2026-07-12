@@ -115,7 +115,7 @@ export function registerShareRuntimeCommands(registry: CommandRegistry): void {
       );
       // The exported document has no field for "this cost is a placeholder" —
       // omit `cost` entirely rather than embed a misleading 0 when the model
-      // never resolved to a real price (WO-315).
+      // never resolved to a real price.
       const costIsUnpriced = !isModelPriced(sessionModel);
       if (costIsUnpriced) {
         ctx.print(`Note: cost omitted from export — no pricing data for model "${sessionModel}".`);

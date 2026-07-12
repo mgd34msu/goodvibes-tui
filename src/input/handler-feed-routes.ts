@@ -45,7 +45,7 @@ export type PanelFocusRouteState = {
    * no text capture (Invariant A: focus must not silently flip to the composer).
    */
   onPasteDropped?: (panelName: string) => void;
-  /** Wall-clock time (ms) for this token; `burstGuard` is DEBT-5 item 5's flood-guard state, mutated in place across tokens (see panel-paste-flood-guard.ts). */
+  /** Wall-clock time (ms) for this token; `burstGuard` is item 5's flood-guard state, mutated in place across tokens (see panel-paste-flood-guard.ts). */
   now: number;
   burstGuard: PanelBurstGuardState;
   /**
@@ -92,7 +92,7 @@ export function handlePanelFocusToken(state: PanelFocusRouteState, token: InputT
     // (e.g. dismiss a confirm dialog or clear search). Only unfocus if the
     // panel returns false (unconsumed) or there is no active panel.
     if (token.logicalName === 'escape') {
-      // I6.1/replay R5: while streaming, a focused panel must not swallow the
+      // While streaming, a focused panel must not swallow the
       // only way to cancel — Escape's first job is always cancel-turn; the
       // panel's own two-stage consume-or-unfocus contract only runs once no
       // turn is active, so a *second* Escape falls through to it normally
@@ -148,12 +148,12 @@ export function handlePanelFocusToken(state: PanelFocusRouteState, token: InputT
 
   if (token.type === 'text' && token.value) {
     const activePanel = state.panelManager.getActive();
-    // UX-C: '/' is an explicit transfer verb back to the composer (a capturing panel, isCapturingTextBurst, keeps '/' for itself).
+    // '/' is an explicit transfer verb back to the composer (a capturing panel, isCapturingTextBurst, keeps '/' for itself).
     if (token.value === '/' && !activePanel?.isCapturingTextBurst?.()) {
       panelFocused = false;
       return { handled: false, panelFocused };
     }
-    // Invariant A/B (W6.2): a paste (isPasteToken, one multi-char token) into
+    // Invariant A/B: a paste (isPasteToken, one multi-char token) into
     // a capturing panel forwards verbatim below; elsewhere it is DROPPED with
     // a one-shot hint (never exploded into hotkeys, never a silent focus
     // flip — focus moves only on an explicit verb). Discrete keystrokes fall
@@ -164,7 +164,7 @@ export function handlePanelFocusToken(state: PanelFocusRouteState, token: InputT
       return { handled: true, panelFocused };
     }
 
-    // DEBT-5 item 5 — paste flood guard (rate-based; see panel-paste-flood-guard.ts).
+    // item 5 — paste flood guard (rate-based; see panel-paste-flood-guard.ts).
     if (!state.isPasteToken && !activePanel?.isCapturingTextBurst?.()) {
       const guard = trackPanelPasteFloodGuard(state.burstGuard, state.now);
       if (!guard.dispatch) {
@@ -211,7 +211,7 @@ export function handleIndicatorFocusToken(state: IndicatorFocusRouteState, token
     }
     if (token.logicalName === 'enter') {
       indicatorFocused = false;
-      // W2.2: opens the Fleet panel (see openFleetPanel's own doc, line ~352).
+      // opens the Fleet panel (see openFleetPanel's own doc, line ~352).
       state.openFleetPanel();
       state.requestRender();
       return { handled: true, indicatorFocused };
@@ -626,7 +626,7 @@ export function handlePromptKeyToken(state: KeyRouteState, token: InputToken): {
     return { handled: true, prompt, cursorPos, inputScrollTop, commandMode, indicatorFocused };
   }
 
-  // UX-C: F2 is now handled globally with toggle semantics (handler-shortcuts.ts)
+  // F2 is now handled globally with toggle semantics (handler-shortcuts.ts)
   // BEFORE it ever reaches this route; this branch is dead in the real
   // pipeline but stays for panel-entry-points-reachable.test.ts's direct test.
   if (token.logicalName === 'f2') {

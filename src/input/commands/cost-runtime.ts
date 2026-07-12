@@ -11,7 +11,7 @@ import {
 } from './cost-attribution-format.ts';
 
 /**
- * /cost budget <usd> — makes the CostTrackerPanel's budget alert real (WO-139).
+ * /cost budget <usd> — makes the CostTrackerPanel's budget alert real.
  * Opens the cost panel (creating it via the registered factory if not already
  * open) and sets its budget threshold directly, so the meter+alert already
  * built into CostTrackerPanel.render() (:266-290) actually fires. 0 disables

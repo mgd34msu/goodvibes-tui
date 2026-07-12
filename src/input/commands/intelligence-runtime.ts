@@ -55,7 +55,7 @@ export function registerIntelligenceRuntimeCommands(registry: CommandRegistry): 
     async handler(args, ctx) {
       const sub = (args[0] ?? 'review').toLowerCase();
       if (sub === 'panel' || sub === 'open') {
-        // W6.1 (the purge): 'intelligence'/IntelligencePanel was
+        // (the purge): 'intelligence'/IntelligencePanel was
         // DELETE-disposition (no surviving human surface — its read model
         // stays and still backs every subcommand below). There is no alias
         // to resolve through, so this prints an honest notice and opens

@@ -13,7 +13,7 @@ import { togglePlanMode, permissionModeLabel, type PermissionModeValue } from '.
  * A lone one of these is refused rather than seeded as a goal, so a stray verb
  * can never overwrite the project goal with itself.
  *
- * DEBT-3: `dismiss` and `answer` are now REAL subcommands (handled above this
+ * `dismiss` and `answer` are now REAL subcommands (handled above this
  * guard), so they were removed from the refuse-list. `pause`/`stop`/`cancel`
  * remain here — they still have no backing verb and must not seed a goal.
  */
@@ -178,7 +178,7 @@ export function registerPlanningRuntimeCommands(registry: CommandRegistry): void
         return;
       }
 
-      // DEBT-3: /plan dismiss — archive the current plan. Dismisses the active
+      // /plan dismiss — archive the current plan. Dismisses the active
       // execution plan (ExecutionPlanManager.dismiss, honest per-state) AND
       // deactivates the project-planning interview state shown in the modal so a
       // later /plan <goal> starts fresh. Mid-execution is refused outright.
@@ -223,7 +223,7 @@ export function registerPlanningRuntimeCommands(registry: CommandRegistry): void
         return;
       }
 
-      // DEBT-3: /plan answer <n|question-id> <text> — record a real answer to an
+      // /plan answer <n|question-id> <text> — record a real answer to an
       // open planning question (moves open → answered, consumed on next refine).
       if (args[0] === 'answer') {
         if (!projectPlanningService || !projectId) {

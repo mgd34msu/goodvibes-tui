@@ -19,7 +19,7 @@ export interface AutocompleteState {
   results: AutocompleteResult[];
   selectedIndex: number;
   /**
-   * UX-C (item 4): how many leading entries of `results` belong to the
+   * (item 4): how many leading entries of `results` belong to the
    * curated "common" tier — only meaningful when `query === ''` (0
    * otherwise, since a typed filter searches everything and the common/rest
    * split no longer applies). The renderer uses this to draw a separator
@@ -56,7 +56,7 @@ export class AutocompleteEngine {
     this.state.query = query;
     this.state.results = this.registry.fuzzyMatch(query);
     this.state.active = true;
-    // UX-C: fuzzyMatch('') sorts the curated common tier first (score 2),
+    // fuzzyMatch('') sorts the curated common tier first (score 2),
     // then the alphabetical rest (score 1) — both tiers alphabetical within
     // themselves. Count the leading common run to tell the renderer where to
     // draw the separator. A non-empty query means every command was scored on

@@ -124,7 +124,7 @@ export function buildSettingGroups(
     }
   }
 
-  // DEBT-2: inject the synthetic display.themeMode enum (auto|dark|light). TUI-local
+  // inject the synthetic display.themeMode enum (auto|dark|light). TUI-local
   // key stored under the existing `display` section (see theme-mode-config.ts for why
   // not `appearance`), same rationale as the other synthetic settings below.
   const displayEntries = groups.get('display');
@@ -181,7 +181,7 @@ export function buildSettingGroups(
     behaviorEntries.push(buildBudgetAlertUsdSyntheticEntry(configManager));
   }
 
-  // Inject the W2.3 alert-class toggles + master focus gate. TUI-local
+  // Inject the alert-class toggles + master focus gate. TUI-local
   // synthetic settings, same rationale as notifyAfterSeconds above.
   if (behaviorEntries) {
     for (const entry of buildNotifyAlertSyntheticEntries(configManager)) {
@@ -301,7 +301,7 @@ export function buildTtsSpeedSyntheticEntry(configManager: Pick<ConfigManager, '
 }
 
 // ---------------------------------------------------------------------------
-// display.themeMode synthetic setting (DEBT-2 light theme)
+// display.themeMode synthetic setting (light theme)
 // ---------------------------------------------------------------------------
 
 /**
@@ -415,11 +415,11 @@ export function buildBudgetAlertUsdSyntheticEntry(configManager: Pick<ConfigMana
 }
 
 // ---------------------------------------------------------------------------
-// W2.3 alert-class synthetic settings — behavior.notifyOn* + notifyOnlyWhenUnfocused
+// alert-class synthetic settings — behavior.notifyOn* + notifyOnlyWhenUnfocused
 // ---------------------------------------------------------------------------
 
 /**
- * The five W2.3 alert-gating booleans, all TUI-local (not yet in the SDK
+ * The five alert-gating booleans, all TUI-local (not yet in the SDK
  * ConfigKey union), all defaulting to on. Read/written generically by
  * core/alert-gating.ts (readBooleanConfig) and the per-alert-class modules
  * (budget-breach-notifier.ts, approval-alert.ts, turn-event-wiring.ts,
@@ -475,7 +475,7 @@ export function buildNotifyAlertSyntheticEntries(configManager: Pick<ConfigManag
 /**
  * The OSC 9 in-terminal desktop-notification toggles + the audible bell.
  * TUI-local synthetic booleans (not in the SDK ConfigKey union), each carrying
- * its OWN default (unlike the always-on W2.3 alert toggles above): approval-wait
+ * its OWN default (unlike the always-on alert toggles above): approval-wait
  * on, turn-end/agent-blocked off, bell off. Read generically by
  * core/terminal-notifier.ts (readBooleanConfig); this is only the
  * settings-modal-visible surface. These are independent of the master

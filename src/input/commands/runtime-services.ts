@@ -104,8 +104,8 @@ export function openCommandPanel(
 }
 
 /**
- * W6.1 (group-B migration): open a config-modal surface by name via the
- * ctx.openModal seam (ui-openers wires it; the WO-A host replaces the interim
+ * (group-B migration): open a config-modal surface by name via the
+ * ctx.openModal seam (ui-openers wires it; the host replaces the interim
  * "not available yet" implementation with real dispatch). Front-doors for
  * panels that migrated to modals call this instead of openCommandPanel — the
  * modal is the surface's new home. Stubbed in tests by setting ctx.openModal.
@@ -256,7 +256,7 @@ export function requireProviderApi(context: CommandContext): ProviderApi {
 }
 
 /** Result of a manual /compact run: the SDK's CompactionEvent, plus an
- * out-of-band quality score (W5.4/B28) when one could be computed. */
+ * out-of-band quality score () when one could be computed. */
 export interface CompactionRunResult {
   readonly event: CompactionEvent;
   readonly qualityScore: CompactionQualityScore | null;
@@ -328,7 +328,7 @@ export async function compactConversation(context: CommandContext): Promise<Comp
   const eventAfter = getLastCompactionEvent();
   // Return the new event only if it differs from the one recorded before the call.
   if (eventAfter !== null && eventAfter !== eventBefore) {
-    // W5.4/B28: score this run out-of-band (see compaction-quality.ts for why
+    //: score this run out-of-band (see compaction-quality.ts for why
     // this can't just subscribe to the SDK's own CompactionManager pipeline)
     // and keep the score keyed by this event's timestamp for /compact-history.
     const qualityScore = scoreCompactionRun({

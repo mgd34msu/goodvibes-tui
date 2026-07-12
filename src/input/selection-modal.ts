@@ -37,7 +37,7 @@ export class SelectionModal {
   public allowSearch = true;
   public customActions: Map<string, SelectionAction> = new Map();
   /**
-   * UX-C vocab unification: overrides the default per-primaryAction Enter
+   * vocab unification: overrides the default per-primaryAction Enter
    * verb ("Select"/"Toggle"/"Edit"/"Delete") shown in the footer hint. Used by
    * callers whose items are really commands (e.g. /help) so the hint reads
    * "[Enter] Run", matching the slash-command palette's own verb, instead of

@@ -70,7 +70,7 @@ export function registerLocalRuntimeCommands(registry: CommandRegistry): void {
     handler(args, ctx) {
       const sub = (args[0] ?? '').toLowerCase();
       if (sub === 'panel' || sub === 'review') {
-        // W6.1 (the purge): 'tools'/ToolInspectorPanel was DELETE-disposition
+        // (the purge): 'tools'/ToolInspectorPanel was DELETE-disposition
         // (no surviving human surface — tool results render inline in the
         // transcript, plus a per-node tool list in Fleet). There is no alias
         // to resolve through, so this prints an honest notice and opens

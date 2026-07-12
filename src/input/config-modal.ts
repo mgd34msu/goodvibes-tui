@@ -66,7 +66,7 @@ const DEFAULT_VISIBLE_ROWS = 10;
 const DEFAULT_LABEL_WRAP_WIDTH = 70;
 
 /**
- * Stable id for the synthesized "no matches" row DEBT-5 item 1 injects when a
+ * Stable id for the synthesized "no matches" row item 1 injects when a
  * filter query excludes every selectable row in a tab. Non-selectable (info
  * rows are never filtered — see ConfigModal's filter doc) so this id can
  * never collide with a real surface row id.
@@ -97,7 +97,7 @@ export class ConfigModal {
   private pendingConfirmKey: string | null = null;
 
   /**
-   * DEBT-5 item 1 — the host's own type-to-filter, armed with '/' (matching
+   * item 1 — the host's own type-to-filter, armed with '/' (matching
    * the pre-existing "'/' to filter" convention: scrollable-list-panel.ts's
    * opt-in filter, and SettingsModal's own '/'-armed search). `filterActive`
    * gates whether printable keys go to the query instead of nav/actions;
@@ -111,11 +111,11 @@ export class ConfigModal {
    *   - '/'-ARMED here (config-modal host surfaces): these surfaces bind PLAIN
    *     single keys to ACTION HOTKEYS (e.g. 'r' refresh, 'd' delete). A key
    *     can't be both an action and a filter character, so filtering must be
-   *     explicitly armed with '/' first. This is DEBT-5's design.
+   *     explicitly armed with '/' first. This is a deliberate design choice.
    *   - INSTANT filtering (pure pickers — help overlay, command palette,
    *     selection-modal): these have no single-key actions, so every printable
    *     key is unambiguously a filter character and narrows the list on the
-   *     first keystroke. This is UX-C's design (selection-modal-overlay.ts).
+   *     first keystroke. This is a deliberate design choice (selection-modal-overlay.ts).
    *   - Both keep single-Esc-close semantics. The only extra step is here: a
    *     two-stage Esc (first Esc clears a NON-EMPTY query, second Esc closes)
    *     — see the Esc branch in handleConfigModalToken. With an empty query,
@@ -221,7 +221,7 @@ export class ConfigModal {
     this._clampScroll();
   }
 
-  // ── Filter (DEBT-5 item 1 — each mutation is an interaction boundary) ──────
+  // ── Filter (item 1 — each mutation is an interaction boundary) ──────
 
   isFilterActive(): boolean {
     return this.filterActive;
@@ -306,7 +306,7 @@ export class ConfigModal {
   private _switchTab(dir: 1 | -1): void {
     this._clearConfirm();
     // A filter query is scoped to the tab it was typed against — switching
-    // tabs resets it (DEBT-5 item 1), same as statusMessage below.
+    // tabs resets it (item 1), same as statusMessage below.
     this.filterActive = false;
     this.filterQuery = '';
     this.syncStructure();
@@ -395,8 +395,7 @@ export class ConfigModal {
    *
    * `labelWrapWidth` is the wrap column ModalFactory's list section will use
    * for row labels (renderConfigModal computes and passes the real one for
-   * the current terminal size). It exists so the wrap-clamp below (DEBT-5
-   * item 2) can pre-empt a live label growing past ModalFactory's wrap width
+   * the current terminal size). It exists so the wrap-clamp below (* item 2) can pre-empt a live label growing past ModalFactory's wrap width
    * mid-tick — a structural change (an extra visible line) without an
    * interaction — by measuring wrapped line counts here, before the label
    * ever reaches the renderer.
@@ -445,7 +444,7 @@ export class ConfigModal {
     const visible = this.visibleRows;
     const windowed = allRows.slice(this.scrollOffset, this.scrollOffset + visible);
 
-    // DEBT-5 item 1: while filtering, the surface's own action/tab hints are
+    // item 1: while filtering, the surface's own action/tab hints are
     // unreliable (their printable-letter keys are captured by the filter
     // instead of firing — see handleConfigModalToken), so the footer swaps
     // to just the filter status (query + a truthful match count) and the
@@ -483,7 +482,7 @@ export class ConfigModal {
   // ── internals ────────────────────────────────────────────────────────────────
 
   /**
-   * DEBT-5 item 2 (wrap-clamp overlay): keep a live label within the FROZEN
+   * item 2 (wrap-clamp overlay): keep a live label within the FROZEN
    * row's line footprint until the next interaction boundary re-freezes it.
    * `frozenLabel` is what the row wrapped to when the structure was captured
    * (open/nav/filter keystroke); `liveLabel` is this tick's value. If the
@@ -526,7 +525,7 @@ export class ConfigModal {
    * empty-state copy, warning banners) always pass through unfiltered —
    * they're context, not data. When the query excludes every selectable row
    * but the tab genuinely had some, append the honest "no rows match" line
-   * (DEBT-5 item 1's empty-result case) instead of silently showing nothing
+   * (item 1's empty-result case) instead of silently showing nothing
    * or misleadingly falling back to the surface's own emptyText (which
    * describes "no data at all", not "no data matches your filter").
    */

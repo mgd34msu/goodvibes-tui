@@ -2,7 +2,7 @@
 // workstream-runtime.ts — /workstream
 //
 // UX over the OrchestrationEngine (@pellux/goodvibes-sdk/platform/orchestration,
-// wo701/W4.1) via its command-facing facade wired onto RuntimeServices as
+//) via its command-facing facade wired onto RuntimeServices as
 // `workstreamCommands` (src/runtime/workstream-services.ts) and threaded
 // through CommandContext.session.workstreamEngine exactly like wrfcController
 // already is (bootstrap-command-context.ts).
@@ -21,7 +21,7 @@
 // pre-creation "draft" concept, so approval happens on a TUI-held draft
 // (workstream-services.ts's WorkstreamDraft) before anything is created in
 // the engine at all — see that module's header doc for the full reality-wins
-// divergence from the wo703 design brief.
+// divergence from the design brief.
 // ---------------------------------------------------------------------------
 
 import { AdaptivePlanner } from '@pellux/goodvibes-sdk/platform/core';
