@@ -358,7 +358,7 @@ export function wireShellUiOpeners(options: WireShellUiOpenersOptions): void {
     input.modalOpened('settings');
     input.settingsModal.open(configManager, featureFlags, subscriptionManager, serviceRegistry, mcpRegistry, secretsManager, {
       onSettingApplied: (change) => {
-        // DEBT-2: forced dark/light applies immediately (rebuild palettes + full
+        // forced dark/light applies immediately (rebuild palettes + full
         // repaint); auto only re-probes at startup, so it takes effect next launch.
         if (String(change.key) === THEME_MODE_CONFIG_KEY) {
           const next = coerceThemeModeSetting(change.value);
@@ -379,7 +379,7 @@ export function wireShellUiOpeners(options: WireShellUiOpenersOptions): void {
     render();
   };
 
-  // W6.1 (the purge): open a MIGRATE-TO-MODAL surface by name. Fed from both
+  // (the purge): open a MIGRATE-TO-MODAL surface by name. Fed from both
   // ctx.openModal(name) (migrated command front-doors) and PanelManager's
   // open()-time modal-redirect callback (a legacy panel id resolving to a modal
   // name). Surfaces are registered in builtin-modals.ts; a name with no
@@ -445,7 +445,7 @@ export function wireShellUiOpeners(options: WireShellUiOpenersOptions): void {
       return;
     }
     if (panelManager.getAllOpen().length === 0) {
-      // W6.1 (the purge): 'panel-list' (a browse-all-panels picker PANEL)
+      // (the purge): 'panel-list' (a browse-all-panels picker PANEL)
       // was DELETE-disposition — a picker over a handful of panels is dead
       // weight now. Its replacement is this selection MODAL, built from the
       // live registry (PanelManager.getRegisteredTypes()) rather than a
@@ -534,11 +534,11 @@ export function wireShellUiOpeners(options: WireShellUiOpenersOptions): void {
   };
 
   commandContext.showPanel = (panelId, pane, target, opts) => {
-    // DEBT-5: forward the deep-link target so a jumped-to panel lands on the
+    // forward the deep-link target so a jumped-to panel lands on the
     // right row (fleet --target); undefined for ordinary opens.
     panelManager.open(panelId, pane, target);
     panelManager.show();
-    // UX-C focus rule 1a: every registered caller of showPanel is a slash
+    // focus rule 1a: every registered caller of showPanel is a slash
     // command (/panel open, /routes, /approval, /tasks, /ops-control, ...) —
     // the command path leaves focus in the composer ("the user is
     // mid-command-flow") unless the caller explicitly asks to grab it.

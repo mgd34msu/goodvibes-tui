@@ -9,7 +9,7 @@
  * that target — plus whether a panel is attached — into a { toPanel,
  * toConversation } decision.
  *
- * W6.1 (the purge): the SystemMessagesPanel this router used to optionally
+ * (the purge): the SystemMessagesPanel this router used to optionally
  * push into was DELETE-disposition (no surviving human surface — a picker
  * over the old panel registry, not something worth a dedicated console) and
  * has been removed entirely, so this router now always resolves with
@@ -61,7 +61,7 @@ export type {
   SystemMessageTarget,
 } from '@/runtime/index.ts';
 
-/** Panel emphasis level. Panel delivery was removed in W6.1 (see file doc); kept as the priority vocabulary for callers and for the SDK's delivery-resolution signature. */
+/** Panel emphasis level. Panel delivery was removed in (see file doc); kept as the priority vocabulary for callers and for the SDK's delivery-resolution signature. */
 export type SystemMessagePriority = 'high' | 'low';
 
 /**
@@ -88,7 +88,7 @@ function mustReachConversation(message: string): boolean {
 
 /**
  * Routes system messages to the conversation based on priority level and
- * configured target. See file doc for the W6.1 panel removal.
+ * configured target. See file doc for the panel removal.
  */
 export class SystemMessageRouter {
   /** Buffered provider "from last session" replay lines, folded on a microtask. */
@@ -123,7 +123,7 @@ export class SystemMessageRouter {
     kind: SystemMessageKind,
   ): void {
     // Noise gate — keep first-run plumbing out of the transcript while the
-    // information stays reachable via other live surfaces. (UX-B item 1.)
+    // information stays reachable via other live surfaces. (item 1.)
     const verdict = classifyNoise(message, this.noiseDeps);
     if (verdict.action === 'drop') return;
     if (verdict.action === 'foldProviderReplay') {
@@ -137,7 +137,7 @@ export class SystemMessageRouter {
   /** Post-noise-gate delivery: resolve target and append to the conversation. */
   private deliver(message: string, kind: SystemMessageKind): void {
     const target = this.getTargetForKind(kind);
-    // hasPanel is always false post-W6.1 — resolveSystemMessageDelivery's own
+    // hasPanel is always false now that panel delivery was removed — resolveSystemMessageDelivery's own
     // contract means every target ('panel' | 'conversation' | 'both')
     // resolves toConversation: true in that case (see file doc).
     const delivery = resolveSystemMessageDelivery(target, false);
@@ -153,7 +153,7 @@ export class SystemMessageRouter {
    * Buffer a provider "from last session" replay line and schedule a microtask
    * flush. The SDK emits the whole persisted-provider burst synchronously, so a
    * single microtask captures the full burst and folds it to one quiet line.
-   * (UX-B item 1b.)
+   * (item 1b.)
    */
   private bufferProviderReplay(message: string): void {
     this.providerReplayBuffer.push(message);

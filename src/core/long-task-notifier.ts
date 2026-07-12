@@ -18,12 +18,12 @@
  * When neither target is available the function is an honest no-op (debug log
  * only; no user-facing error spam).
  *
- * Focus tracking (W2.3): when `focusTracker` is supplied, notifications are
+ * Focus tracking: when `focusTracker` is supplied, notifications are
  * gated the same way as the other unfocused-user alert classes (see
  * alert-gating.ts) — they fire when the terminal is unfocused or focus state
  * was never observed, and are suppressed when it's known to be focused,
  * unless `behavior.notifyOnlyWhenUnfocused` is turned off. `focusTracker` is
- * optional and defaults to "always fire" (the pre-W2.3 behavior) when
+ * optional and defaults to "always fire" (the behavior before focus gating existed) when
  * omitted, so existing callers that don't have a FocusTracker in scope are
  * unaffected.
  */
@@ -82,11 +82,11 @@ export interface MaybeNotifyLongTaskOptions {
   readonly webhookNotifier?: WebhookNotifier | null;
 
   /**
-   * Terminal focus tracker (W2.3). When supplied together with `configGet`,
+   * Terminal focus tracker. When supplied together with `configGet`,
    * the notification additionally respects behavior.notifyOnlyWhenUnfocused
    * (default on): suppressed when the terminal is known to be focused, fires
    * when unfocused or when focus was never observed. Omit both to preserve
-   * pre-W2.3 behavior (always fire once the threshold is met).
+   * the behavior before focus gating existed (always fire once the threshold is met).
    */
   readonly focusTracker?: Pick<FocusTracker, 'shouldAlertWhenUnfocused'> | null;
 
@@ -121,9 +121,9 @@ export function maybeNotifyLongTask(opts: MaybeNotifyLongTaskOptions): boolean {
     return false;
   }
 
-  // Focus gate (W2.3): only applied when both a tracker and a config reader
-  // are supplied. Absent either one, behavior is unchanged from pre-W2.3
-  // (always fire once the threshold is met).
+  // Focus gate: only applied when both a tracker and a config reader
+  // are supplied. Absent either one, behavior is unchanged from before focus
+  // gating existed (always fire once the threshold is met).
   if (focusTracker && configGet && readNotifyOnlyWhenUnfocused(configGet) && !focusTracker.shouldAlertWhenUnfocused()) {
     logger.debug('long-task-notifier: suppressed — terminal focused');
     return false;

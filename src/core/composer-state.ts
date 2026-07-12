@@ -24,7 +24,7 @@ export function deriveComposerState(input: ComposerStateInput): ComposerState {
   // status tag: `risk:approval-wait`. It is therefore NOT also duplicated as a
   // `approval` flag, and (below) it suppresses the competing `state:` turn tag —
   // the turn is blocked on the user, not really streaming. Precedence:
-  // approval-wait > live turn state. (UX-B item 4.)
+  // approval-wait > live turn state. (item 4.)
   const approvalWait = input.pendingApproval === true;
   if (approvalWait) {
     pendingRisk = 'approval-wait';

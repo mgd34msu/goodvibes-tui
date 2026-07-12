@@ -2,7 +2,7 @@
 // workstream-services.ts — phase/work-item orchestration engine
 //
 // Constructs the TUI's OrchestrationEngine instance (@pellux/goodvibes-sdk/
-// platform/orchestration, landed on SDK main as wo701/W4.1) and a thin
+// platform/orchestration, landed on SDK main as) and a thin
 // command-facing facade around it. Extracted into its own module rather than
 // built inline in services.ts: services.ts sits at the architecture check's
 // 800-line cap (scripts/check-architecture.ts), so any new service gets its
@@ -17,7 +17,7 @@
 // (input/commands/workstream-runtime.ts) needs a create -> propose -> approve
 // -> launch flow (Pillar-3 doctrine: render the plan in the transcript before
 // spending anything, mirroring /plan's approve step). REALITY-WINS DIVERGENCE
-// from the wo703 design brief: the brief recommended an ENGINE-owned draft; the
+// from the design brief: the brief recommended an ENGINE-owned draft; the
 // real engine (verified against the linked SDK build) exposes no pre-creation
 // draft concept at all, so WorkstreamDraft below is TUI-owned state, held on
 // this module's facade instance (constructed once, threaded onto

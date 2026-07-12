@@ -6,7 +6,7 @@
  * formatElapsed floors to integer seconds and lacks the null/'?ms' guards
  * that the latency panels require.
  *
- * W6.1 (the purge): formatShortDuration (used only by incident-review-panel
+ * (the purge): formatShortDuration (used only by incident-review-panel
  * and eval-panel, both removed — RETIRE-INTO-FLEET and DELETE respectively)
  * was removed as a genuinely orphaned export — no remaining caller anywhere
  * in src/.

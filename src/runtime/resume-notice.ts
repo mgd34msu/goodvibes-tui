@@ -1,7 +1,7 @@
 /**
  * resume-notice.ts — the boot-time "previous session found" transcript notice.
  *
- * UX-D item 1: a supervision-journey audit of 1.7.0 found that the TUI
+ * item 1: a supervision-journey audit of 1.7.0 found that the TUI
  * accumulates rich resumable state on disk (a saved conversation, workspace
  * checkpoints, WRFC chain history) but never surfaces any of it at startup —
  * an operator has no way to know it exists short of already knowing the

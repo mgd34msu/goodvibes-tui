@@ -113,7 +113,7 @@ export interface UiRuntimeSharedServices {
     readonly distributedRuntime: RuntimeServices['distributedRuntime'];
     readonly remoteRunnerRegistry: RuntimeServices['remoteRunnerRegistry'] & RemoteRunnerRegistry;
     readonly remoteSupervisor: RuntimeServices['remoteSupervisor'] & RemoteSupervisor;
-    /** W2.2: the shared live process registry backing the Fleet panel. */
+    /** the shared live process registry backing the Fleet panel. */
     readonly processRegistry: RuntimeServices['processRegistry'];
     /** The shared runtime event bus — the Fleet panel subscribes to its 'communication' domain for the honest steer-consumed signal. */
     readonly runtimeBus: RuntimeServices['runtimeBus'];

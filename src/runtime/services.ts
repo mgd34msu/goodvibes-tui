@@ -198,7 +198,7 @@ export interface RuntimeServices {
   readonly worktreeRegistry: WorktreeRegistry;
   readonly sandboxSessionRegistry: SandboxSessionRegistry;
   readonly webhookNotifier: WebhookNotifier;
-  /** Terminal focus tracker (W2.3) — fed by input/handler-feed.ts, read by the alert notifiers in core/. */
+  /** Terminal focus tracker — fed by input/handler-feed.ts, read by the alert notifiers in core/. */
   readonly focusTracker: FocusTracker;
   readonly replayEngine: DeterministicReplayEngine;
   readonly providerOptimizer: ProviderOptimizer;
@@ -259,7 +259,7 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
   const runtimeDispatch = createDomainDispatch(options.runtimeStore);
   const gatewayMethods = new GatewayMethodCatalog();
   const panelManager = new PanelManager();
-  // W6.1 (the purge): MIGRATE-TO-MODAL surface + redirect registration moved to
+  // (the purge): MIGRATE-TO-MODAL surface + redirect registration moved to
   // registerBuiltinPanels (builtin-panels.ts), where the panels' resolved deps
   // are available for the surfaces to close over.
   const keybindingsManager = new KeybindingsManager({

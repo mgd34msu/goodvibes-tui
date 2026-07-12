@@ -1,5 +1,5 @@
 /**
- * conversation-line-cache.ts — per-message Line[] production cache (WO-209).
+ * conversation-line-cache.ts — per-message Line[] production cache.
  *
  * The measured defect (perf baseline 2026-07-03, transcript.build_1k): appending
  * ONE message to an N-message conversation re-rendered all N messages
@@ -98,7 +98,7 @@ interface KeyMeta {
   /**
    * True when this (assistant) message has a tool call with no result yet — it
    * renders as pending rather than done. Keyed so the entry invalidates and
-   * re-renders ✓ once the tool result arrives. (UX-B item 2c.)
+   * re-renders ✓ once the tool result arrives. (item 2c.)
    */
   readonly hasPendingTool: boolean;
 }
@@ -286,7 +286,7 @@ export class MessageLineCache {
     };
 
     // Tool calls with no matching tool-result message are still pending; the
-    // render context and the cache key both depend on this. (UX-B item 2c.)
+    // render context and the cache key both depend on this. (item 2c.)
     const completedToolCallIds = collectCompletedToolCallIds(messages);
     const renderContext: ConversationRenderContext = { ...context, completedToolCallIds };
 
