@@ -67,7 +67,7 @@ export interface OrchestratorUsageTotals {
  * TUI-side counterpart to SDK Orchestrator.usage: after a session resume
  * replays historical messages into a freshly-constructed Orchestrator (whose
  * `usage` starts at all zeros — bootstrap.ts always constructs a fresh
- * instance, see W0.9), this lets the caller hydrate the footer's token
+ * instance, see), this lets the caller hydrate the footer's token
  * counters from messages that already carry real usage data instead of
  * waiting for the first new turn to populate them.
  */
@@ -98,7 +98,7 @@ export class ConversationManager extends SdkConversationManager {
   /** When true the buffer needs to be rebuilt before the next display. */
   private dirty = true;
   /**
-   * Per-message Line[] cache (WO-209). rebuildHistory() reuses cached lines for
+   * Per-message Line[] cache. rebuildHistory() reuses cached lines for
    * messages whose complete render inputs are unchanged, so appending one message
    * to an N-message conversation no longer re-renders all N. A cache-served
    * rebuild is byte-identical to a cold one (pure memoisation).

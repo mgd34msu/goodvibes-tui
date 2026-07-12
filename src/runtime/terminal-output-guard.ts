@@ -45,7 +45,7 @@ export type TuiTerminalOutputGuardOptions = {
    * writes captured this session, so an honest quiet counter (e.g. /debug) can
    * refresh. The per-write detail is already recorded to the activity log via
    * logger.warn — this callback intentionally does NOT push transcript lines.
-   * (UX-B item 1a.)
+   * (item 1a.)
    */
   readonly onCapture?: (total: number) => void;
 };
@@ -224,7 +224,7 @@ export function installTuiTerminalOutputGuard(options: TuiTerminalOutputGuardOpt
     onIntercept: () => {
       // Each intercept is already logged (logger.warn in record()). Here we only
       // maintain a cumulative counter and, rate-limited, refresh a quiet counter
-      // surface — no repeated transcript lines. (UX-B item 1a.)
+      // surface — no repeated transcript lines. (item 1a.)
       totalInterceptedWrites++;
       const now = Date.now();
       if (now - lastNoticeAt < 5_000) return;

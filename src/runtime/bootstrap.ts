@@ -237,7 +237,7 @@ export async function bootstrapRuntime(
       logger.debug('companion handleUserInput safety catch', { error: String(err) });
     });
   };
-  // Shared payload (single source of truth, includes wo805's memoryRegistry —
+  // Shared payload (single source of truth, includes the memoryRegistry —
   // see orchestrator-core-services.ts) plus this site's cacheHitTracker.
   orchestrator.setCoreServices({
     ...buildSharedOrchestratorCoreServices({ services, configManager, providerRegistry }),
@@ -300,7 +300,7 @@ export async function bootstrapRuntime(
   wrfcPersistence.rehydrate();
   const commandRegistry = shell.commandRegistry;
   const commandContext = shell.commandContext;
-  // Boot resume notice (UX-D item 1): after rehydrate() so chain history is ready, before
+  // Boot resume notice (item 1): after rehydrate() so chain history is ready, before
   // the operator can type anything. Fire-and-forget, same as main.ts's non-blocking
   // `void workspaceCheckpointManager.init().catch(() => {})` — local file I/O only,
   // resolves well before a human can react to the first rendered frame.
@@ -318,7 +318,7 @@ export async function bootstrapRuntime(
   });
   announceInstallSelfCheck(systemMessageRouter);
   const { gitStatusProvider, inputHistory, lastGitInfoRef } = shell;
-  // W1.6 FIX 2: dispose the header's live-repo-state poll (git-status.ts
+  // FIX 2: dispose the header's live-repo-state poll (git-status.ts
   // startPolling) on shutdown, same pattern as acpTaskSyncInterval above.
   bootstrapUnsubs.push(() => gitStatusProvider.stopPolling());
   const pluginCommandRegistry = {

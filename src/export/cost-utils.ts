@@ -61,7 +61,7 @@ const STATIC_FALLBACK_PRICING: Record<string, ModelPricing> = {
 
 // Module-level injection point. Kept as a bare singleton (not threaded through
 // call sites) because the 9 existing consumers are pure functions with no
-// ProviderRegistry in scope; see WO-315 brief for the tradeoff. Tests that
+// ProviderRegistry in scope; see brief for the tradeoff. Tests that
 // never call setPricingSource() fall through to the static-fallback path,
 // which keeps them isolated from catalog state by default.
 let pricingSource: (() => readonly CatalogModel[]) | null = null;

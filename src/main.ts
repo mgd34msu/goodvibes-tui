@@ -111,7 +111,7 @@ async function main() {
   const { approvalBroker, agentManager, modeManager, processManager, providerRegistry, secretsManager, subscriptionManager } = ctx.services;
   conversation.setSessionMemoryStore(ctx.services.sessionMemoryStore);
   conversation.setSessionLineageTracker(ctx.services.sessionLineageTracker);
-  // Shared payload (single source of truth, includes wo805's memoryRegistry —
+  // Shared payload (single source of truth, includes the memoryRegistry —
   // see orchestrator-core-services.ts) plus this site's favoritesStore.
   orchestrator.setCoreServices({
     ...buildSharedOrchestratorCoreServices({ services: ctx.services, configManager, providerRegistry }),
@@ -414,7 +414,7 @@ async function main() {
   input.setConversationManager(conversation);
   input.setContentWidth(getPromptContentWidth());
   input.filePicker.setOnUpdate(() => render());
-  // W6.1 retirement: agentDetailModal/processModal setOnRefresh wiring removed —
+  // retirement: agentDetailModal/processModal setOnRefresh wiring removed —
   // those modals were deleted (Fleet subsumes the live process tree via F2).
 
   // Model picker callback is handled in bootstrap.ts — do not duplicate here.
@@ -643,8 +643,8 @@ async function main() {
       panelWidth: panelComposite.panelWidth,
     });
   };
-  const renderScheduler = createRenderScheduler(renderNow, undefined, () => lifecycle.isTerminalRestored()); // WO-208 coalescer; no frames after terminal restore
-  const render = (): void => renderScheduler.schedule(); // captured direct writes → activity log + quiet /debug counter, not repeated transcript lines (UX-B 1a)
+  const renderScheduler = createRenderScheduler(renderNow, undefined, () => lifecycle.isTerminalRestored()); // coalescer; no frames after terminal restore
+  const render = (): void => renderScheduler.schedule(); // captured direct writes → activity log + quiet /debug counter, not repeated transcript lines (1a)
   const terminalOutputGuard = installTuiTerminalOutputGuard({ stdout, stderr: process.stderr, onCapture: (total) => { commandContext.session.runtime.terminalWritesIntercepted = total; render(); } });
 
   setRenderRequest(() => renderScheduler.flushNow()); // bootstrap's 16ms coalescer composites via the (restore-gated) scheduler
@@ -731,7 +731,7 @@ async function main() {
   stdin.resume();
   stdin.setEncoding('utf8');
   allowTerminalWrite(() => stdout.write((cli.flags.noAltScreen ? '' : ALT_SCREEN_ENTER) + CLEAR_SCREEN + CURSOR_HIDE + MOUSE_ENABLE + KEYBOARD_EXT_ENABLE + PASTE_ENABLE + FOCUS_ENABLE));
-  // DEBT-2: forced dark/light applies before first paint; auto (TTY only) fires the
+  // forced dark/light applies before first paint; auto (TTY only) fires the
   // OSC 11 probe and repaints once if light wins. filterInput strips the reply from stdin.
   const themeProbe = installBackgroundThemeProbe({ configManager, isTTY: Boolean(stdout.isTTY), env: process.env, writeQuery: (b) => allowTerminalWrite(() => stdout.write(b)), requestRepaint: () => { compositor.resetDiff(); render(); } });
 

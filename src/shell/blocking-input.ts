@@ -10,7 +10,7 @@ export type PendingPermissionState = PermissionRequest & {
   resolve: (approved: boolean, remember?: boolean, modifiedArgs?: Record<string, unknown>) => void;
   /** Present only when isHunkSelectable(request) was true when the prompt was opened. */
   hunkState?: HunkSelectionState;
-  /** True once the user pressed `d` to expand a condensed low-risk card. (UX-B 2b.) */
+  /** True once the user pressed `d` to expand a condensed low-risk card. (2b.) */
   detailsExpanded?: boolean;
   /**
    * Epoch ms when the prompt first appeared. Keystrokes that arrive within

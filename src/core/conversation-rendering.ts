@@ -46,7 +46,7 @@ type Message = ConversationMessageSnapshot;
  * Collect the ids of tool calls that have a matching tool-result message in the
  * given slice — i.e. the tools that actually ran. Used to decide whether an
  * assistant tool call still shows as pending (awaiting approval) or done.
- * (UX-B item 2c.)
+ * (item 2c.)
  */
 export function collectCompletedToolCallIds(messages: readonly Message[]): Set<string> {
   const ids = new Set<string>();
@@ -79,7 +79,7 @@ export interface ConversationRenderContext {
    * awaiting a decision (e.g. an approval prompt) and renders with a pending
    * glyph instead of the completed ✓. When undefined (single-message callers
    * without sibling context), every tool call renders as done — the prior
-   * behaviour. (UX-B item 2c.)
+   * behaviour. (item 2c.)
    */
   readonly completedToolCallIds?: ReadonlySet<string>;
 }
@@ -273,7 +273,7 @@ export function renderConversationToolMessage(
   // Human one-line summary for tool results (write/read/exec/edit): shown as the
   // collapsed line so the transcript reads "wrote foo.txt (532 B)" instead of a
   // raw JSON blob; the full payload stays behind the expand toggle. Only for
-  // 'tool' blocks (diffs render their own view). (UX-B item 3.)
+  // 'tool' blocks (diffs render their own view). (item 3.)
   const resultSummary = blockType === 'tool'
     ? summarizeToolResult(message.toolName, message.content)
     : null;
@@ -379,7 +379,7 @@ export function appendConversationMessages(
   const lineNumberMode = context.configManager?.get('display.lineNumbers') ?? 'off';
   const collapseThreshold = context.configManager?.get('display.collapseThreshold') ?? 30;
   // Derive pending vs done for tool calls from sibling tool-result messages,
-  // unless the caller already supplied the set. (UX-B item 2c.)
+  // unless the caller already supplied the set. (item 2c.)
   const renderContext: ConversationRenderContext = context.completedToolCallIds !== undefined
     ? context
     : { ...context, completedToolCallIds: collectCompletedToolCallIds(messages) };

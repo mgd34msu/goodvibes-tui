@@ -13,7 +13,7 @@ export type { PermissionPromptRequest, PermissionPromptDecision, PermissionReque
 /** Visible hunk rows before a "+N more" trailer kicks in (Risk 3). */
 const MAX_VISIBLE_HUNKS = 8;
 
-/** Path rows shown before collapsing to a "N files: a, b, +K more" line (UX-B 2a). */
+/** Path rows shown before collapsing to a "N files: a, b, +K more" line (2a). */
 const MAX_PATH_ROWS = 3;
 
 /** Trailing filename for compact display of a long/absolute path. */
@@ -47,7 +47,7 @@ function collectField(arr: unknown, field: string): string[] {
 /**
  * The real display target(s) of a tool invocation — the paths/commands/urls a
  * user needs to see, extracted from the actual arg shapes so a nested
- * `{files:[{path}]}` no longer falls through to a raw JSON blob. (UX-B 2a.)
+ * `{files:[{path}]}` no longer falls through to a raw JSON blob. (2a.)
  * Returns [] when nothing recognisable is present (caller falls back).
  */
 function cardTargets(args: Record<string, unknown>): string[] {
@@ -153,7 +153,7 @@ export class PermissionPromptUI {
   /**
    * A low-risk, project-local request is shown condensed (one summary line +
    * choices) unless the user expanded it with `d`. High/critical risk, external
-   * scope, and hunk-selectable edits always show the full block. (UX-B 2b.)
+   * scope, and hunk-selectable edits always show the full block. (2b.)
    */
   private static isCondensed(
     request: PermissionPromptRequest,
@@ -164,7 +164,7 @@ export class PermissionPromptUI {
     // Shell execution, delegation and network requests always show the full
     // card — their action semantics (command, side effects, host, checklist)
     // warrant scrutiny even when the risk model rates them low. Only mundane
-    // low-risk filesystem reads/writes condense. (UX-B 2b.)
+    // low-risk filesystem reads/writes condense. (2b.)
     if (request.category === 'execute' || request.category === 'delegate') return false;
     const analysis = this.fallbackAnalysis(request);
     if (analysis.riskLevel !== 'low') return false;
@@ -287,7 +287,7 @@ export class PermissionPromptUI {
     const pathRows = this.pathRowTexts(this.resolvedTargets(request), maxArgLen);
 
     // Condensed low-risk / project-local card: one summary line (verb → target
-    // (scope)) plus the choices. Full block is one `d` away. (UX-B 2b.)
+    // (scope)) plus the choices. Full block is one `d` away. (2b.)
     if (this.isCondensed(request, hunkState, detailsExpanded)) {
       lines.push(UIFactory.stringToLine('─'.repeat(width), width, { fg: ACCENT, dim: true }));
       lines.push(UIFactory.stringToLine(` [${label}] ${brief.title} `.padEnd(width), width, { fg: WARN, bold: true }));
@@ -320,7 +320,7 @@ export class PermissionPromptUI {
 
     // Path/subject row(s): actual target path(s), one per line when few, a
     // "N files: a, b, +K more" summary when many. Raw args move to the Args row
-    // below so this field never shows a truncated JSON blob. (UX-B 2a.)
+    // below so this field never shows a truncated JSON blob. (2a.)
     pathRows.forEach((rowText, i) => {
       const labelCol = i === 0 ? brief.subjectLabel.padEnd(9) : ' '.repeat(9);
       lines.push(UIFactory.stringToLine(`   ${labelCol}: ${rowText}`.padEnd(width), width, { fg: TEXT }));

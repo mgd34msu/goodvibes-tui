@@ -78,12 +78,12 @@ export interface WireTurnEventHandlersOptions {
    */
   readonly webhookNotifier?: WebhookNotifier | null;
   /**
-   * Terminal focus tracker (W2.3). Gates the long-task, budget-breach, and
+   * Terminal focus tracker. Gates the long-task, budget-breach, and
    * agent/chain-failure desktop alerts wired in this module — see
-   * alert-gating.ts. Optional; when absent, none of the new W2.3 alert
-   * behavior is gated by focus (long-task keeps its pre-W2.3 always-fire
-   * behavior, and budget-breach/failure alerts are skipped entirely, since
-   * they are new-in-W2.3 and have no pre-existing unconditional-fire path
+   * alert-gating.ts. Optional; when absent, none of the new alert
+   * behavior is gated by focus (long-task keeps its always-fire
+   * behavior from before focus gating existed, and budget-breach/failure alerts are
+   * skipped entirely, since they have no pre-existing unconditional-fire path
    * to fall back to).
    */
   readonly focusTracker?: Pick<FocusTracker, 'shouldAlertWhenUnfocused'> | null;
@@ -152,7 +152,7 @@ export function wireTurnEventHandlers(
   // Track turn start time for long-task notification threshold.
   let turnStartTime: number | null = null;
 
-  // Budget-breach edge-trigger checker (W2.3) — one instance per session,
+  // Budget-breach edge-trigger checker — one instance per session,
   // piggybacking on the same TURN_COMPLETED handler as the long-task
   // notification below rather than adding a second TURN_COMPLETED subscription.
   const budgetBreachNotifier: BudgetBreachNotifier | null = focusTracker
@@ -193,7 +193,7 @@ export function wireTurnEventHandlers(
       focusTracker,
       configGet,
     });
-    // Budget-breach alert (W2.3): edge-triggered, piggybacks on this same
+    // Budget-breach alert: edge-triggered, piggybacks on this same
     // TURN_COMPLETED handler rather than a second subscription.
     if (budgetBreachNotifier) {
       const sessionModel = providerRegistry.getCurrentModel().id ?? 'unknown';
@@ -264,7 +264,7 @@ export function wireTurnEventHandlers(
     refreshGit();
   }));
 
-  // Agent/chain-failure desktop alerts (W2.3). The SDK's WebhookNotifier and
+  // Agent/chain-failure desktop alerts. The SDK's WebhookNotifier and
   // Notifier already fire webhook/Slack/Discord notifications for these two
   // events unconditionally (attachToRuntimeBus in the SDK's
   // platform/integrations — pre-existing, not focus-gated: an out-of-band

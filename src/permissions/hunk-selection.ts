@@ -1,7 +1,7 @@
 import type { PermissionAttribution, PermissionPromptRequest } from '@pellux/goodvibes-sdk/platform/permissions';
 
 /**
- * Per-hunk accept/reject at the approval gate (W1.3 v1).
+ * Per-hunk accept/reject at the approval gate (v1).
  *
  * Scoped to the `edit` tool only: EditInput.edits is already an array of
  * independent, atomic find/replace units (each a natural "hunk"), so no

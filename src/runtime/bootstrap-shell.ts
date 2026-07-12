@@ -93,7 +93,7 @@ export function createBootstrapShell(options: BootstrapShellOptions): BootstrapS
     completeModelSelectionSideEffect,
   } = options;
 
-  // W0.9: after any resume seam replays historical messages into `conversation`,
+  // after any resume seam replays historical messages into `conversation`,
   // the freshly-constructed `orchestrator` still has its zeroed default usage
   // (SDK gap — Orchestrator.usage is never persisted/reseeded). Recompute it
   // from the replayed history so the footer doesn't show Input: 0 post-resume.
@@ -140,11 +140,11 @@ export function createBootstrapShell(options: BootstrapShellOptions): BootstrapS
     runtimeBus,
   });
 
-  // WO-139: initial cost-budget alert threshold (USD; 0/unset = disabled).
+  // initial cost-budget alert threshold (USD; 0/unset = disabled).
   // Once the session starts, the real control surface is the CostTrackerPanel
   // itself — the in-panel 'b' key and /cost budget <usd> both call
   // CostTrackerPanel.setBudgetThreshold() directly on the live panel instance,
-  // which (W2.3) now writes through to the behavior.budgetAlertUsd config key
+  // which now writes through to the behavior.budgetAlertUsd config key
   // so the background budget-breach notifier reads the same value. The env
   // var remains a first-run convenience only: it seeds the config key when
   // that key has never been set, so it doesn't silently override a value the
@@ -220,7 +220,7 @@ export function createBootstrapShell(options: BootstrapShellOptions): BootstrapS
     {
       // Suppress stale WRFC replay re-notifications for chains that can no
       // longer act — gone (killed/removed → getChain null) or terminal
-      // (passed/failed). (UX-B item 1c.)
+      // (passed/failed). (item 1c.)
       isChainTerminal: (chainId) => {
         const chain = services.wrfcController.getChain(chainId);
         return chain === null || chain.state === 'passed' || chain.state === 'failed';
@@ -345,7 +345,7 @@ export function createBootstrapShell(options: BootstrapShellOptions): BootstrapS
     lastGitInfoRef.value = info;
     requestRender();
   }).catch(() => { /* non-fatal */ });
-  // W1.6 FIX 2: the header's git segment otherwise only refreshes on
+  // FIX 2: the header's git segment otherwise only refreshes on
   // TURN_COMPLETED/TOOL_SUCCEEDED/TOOL_FAILED (see turn-event-wiring.ts's
   // refreshGit()) — if the user runs `git init` externally and never submits
   // another turn, the header stays stuck on the startup-time fallback

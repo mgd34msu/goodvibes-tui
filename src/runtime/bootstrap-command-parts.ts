@@ -203,7 +203,7 @@ export function createBootstrapCommandActions(
   } = options;
 
   const showPanel = (panelId: string, pane?: 'top' | 'bottom', target?: PanelDeepLinkTarget) => {
-    // W6.1 (the purge): a MIGRATE-TO-MODAL id resolves to a modal, not a panel.
+    // (the purge): a MIGRATE-TO-MODAL id resolves to a modal, not a panel.
     // panelManager.open() fires the injected openModal callback and returns a
     // no-op sentinel — so skip panelManager.show() (which would reveal an empty
     // panel workspace behind the modal) when this id redirects. Keeps every
@@ -307,7 +307,7 @@ export function createBootstrapCommandActions(
     openMemoryPanel: () => {
       showPanel('memory');
     },
-    // W6.1: remote/subscription migrated to config-modal surfaces. open() hits
+    // remote/subscription migrated to config-modal surfaces. open() hits
     // the modal redirect and invokes the openModal callback — do NOT go through
     // showPanel here, which would additionally reveal + focus an (empty) panel
     // workspace behind the fullscreen modal.

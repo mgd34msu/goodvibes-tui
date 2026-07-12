@@ -4,7 +4,7 @@
  * source these rules catch is emitted (from the SDK) through
  * SystemMessageRouter, so this one funnel is where first-run plumbing is kept
  * out of the user's stream while the information stays reachable elsewhere
- * (fleet panel, /health, /model, activity log). (UX-B item 1.)
+ * (fleet panel, /health, /model, activity log). (item 1.)
  */
 
 export interface NoiseGateDeps {

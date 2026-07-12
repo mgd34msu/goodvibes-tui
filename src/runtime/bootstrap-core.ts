@@ -258,7 +258,7 @@ export async function initializeBootstrapCore(
   services.benchmarkStore.initBenchmarks();
   providerRegistry.initCatalog();
   // Wire cost-utils to the live catalog so cost displays distinguish real
-  // pricing from unpriced (WO-315) instead of silently reading zero for any
+  // pricing from unpriced instead of silently reading zero for any
   // model the small static fallback table doesn't cover.
   setPricingSource(() => providerRegistry.getRawCatalogModels());
   services.keybindingsManager.loadFromDisk();
@@ -424,7 +424,7 @@ export async function initializeBootstrapCore(
   await runBootMemoryFold(memoryStore, services.memoryEmbeddingRegistry, workingDir, logger);
 
   const renderRequestRef = { value: (): void => {} };
-  // R1: Coalescing render scheduler — collapses N requestRender() calls into 1 and
+  // Coalescing render scheduler — collapses N requestRender() calls into 1 and
   // enforces a 16ms minimum interval to cap repaints at ~60fps. renderScheduled stays
   // set for the ENTIRE window (until run() executes), so requestRender() calls arriving
   // on later event-loop ticks within the same 16ms window coalesce into the one
@@ -663,7 +663,7 @@ export async function initializeBootstrapCore(
 
   providerRegistry.startWatching(runtimeBus);
 
-  // W2.3: attach the SAME WebhookNotifier instance that `/notify add|remove|clear`
+  // attach the SAME WebhookNotifier instance that `/notify add|remove|clear`
   // (notify-runtime.ts) keeps live via ctx.services.webhookNotifier, rather than
   // constructing a second, boot-time-only instance here. Before this fix, a
   // webhook URL added mid-session reached long-task notifications (which read

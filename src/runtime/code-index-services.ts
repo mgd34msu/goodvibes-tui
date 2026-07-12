@@ -2,8 +2,7 @@
 // code-index-services.ts — repo source-tree code index (TUI wiring)
 //
 // Constructs the TUI's repo source-tree code index: CodeIndexStore
-// (@pellux/goodvibes-sdk/platform/state, landed on SDK main as wo802/W5.3
-// Stage A). Extracted into its own module rather than built inline in
+// (@pellux/goodvibes-sdk/platform/state). Extracted into its own module rather than built inline in
 // services.ts: services.ts sits at the architecture check's 800-line cap
 // (scripts/check-architecture.ts), so any new service gets its own
 // construction module and a single wiring call there (mirrors
@@ -28,7 +27,7 @@
 // (interactive main.ts, the daemon, and every test fixture) shares one
 // honest, user-visible on/off switch rather than needing to thread a new
 // boolean through every call site. With it off (the default), `/codebase
-// build` is the explicit, visible trigger — exactly the shape wo804's brief
+// build` is the explicit, visible trigger — exactly the shape this design
 // asks for.
 //
 // Shares memoryEmbeddingRegistry with MemoryStore (constructed in
@@ -68,7 +67,7 @@ export interface CodeIndexServicesDeps {
 }
 
 /**
- * Whether Stage B code auto-injection / tool-site reindex may run: the SAME
+ * Whether code auto-injection / tool-site reindex may run: the SAME
  * storage.codeIndexEnabled switch that gates auto-build. Read live so a runtime
  * /config toggle takes effect without restart. (The separate, default-off
  * `agent-passive-code-injection` feature flag gates injection additionally; this
