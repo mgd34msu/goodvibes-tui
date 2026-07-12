@@ -50,6 +50,7 @@ function makeCli(overrides: Partial<GoodVibesCliParseResult> = {}): GoodVibesCli
       fork: undefined,
       yes: false,
       nonInteractive: false,
+      strict: false,
     },
     errors: [],
     warnings: [],
@@ -331,5 +332,127 @@ describe('session lifecycle flags at startup', () => {
     expect(dispatched.some((d) => d.name === 'session' && d.args[0] === 'resume' && d.args[1] === 'user-source-session')).toBe(true);
     // Then: fork is dispatched after resume resolves
     expect(dispatched.some((d) => d.name === 'session' && d.args[0] === 'fork')).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Registration self-records (F13) — no modal is ever raised for it; it only
+// ever fires for an ALREADY-trusted workspace (the owner-boundary rider:
+// self-recording must not widen anything for a workspace that was merely
+// opened read-only, never decided, or explicitly kept restricted).
+// ---------------------------------------------------------------------------
+
+describe('registration self-records at startup (no modal, ever)', () => {
+  function makeWorkspaceCommandContext(opts: {
+    readonly trusted: boolean;
+    readonly offerRegister: boolean;
+  }): { readonly commandContext: CommandContext; readonly registerCalls: Array<string | undefined> } {
+    const registerCalls: Array<string | undefined> = [];
+    const commandContext = {
+      workspace: {
+        workspaceTrustManager: {
+          isTrusted: () => opts.trusted,
+        },
+        workspaceRegistrationManager: {
+          evaluate: async () => ({
+            root: '/project',
+            status: opts.offerRegister ? ('unknown' as const) : ('covered' as const),
+            coveredBy: opts.offerRegister ? null : '/project',
+            viaWorktreeLink: false,
+            broad: false,
+            offerRegister: opts.offerRegister,
+            reason: 'test',
+          }),
+          register: async (label?: string) => {
+            registerCalls.push(label);
+            return { registered: true as const, result: { record: {} as never, alreadyRegistered: false } };
+          },
+        },
+      },
+    } as unknown as CommandContext;
+    return { commandContext, registerCalls };
+  }
+
+  test('self-records (labeled "via TUI") on startup when the workspace is already trusted and unregistered', async () => {
+    const shellPaths = makeShellPaths();
+    writeOnboardingCheckMarker(shellPaths, { scope: 'user', source: 'wizard', mode: 'new' });
+    const { commandContext, registerCalls } = makeWorkspaceCommandContext({ trusted: true, offerRegister: true });
+    const input = { prompt: '', cursorPos: 0, openOnboardingWizard: () => {} } as unknown as InputHandler;
+
+    applyInitialTuiCliState({
+      cli: makeCli(),
+      input,
+      commandRegistry: new CommandRegistry(),
+      commandContext,
+      shellPaths,
+      render: () => {},
+    });
+    // Fire-and-forget — give the microtask queue a turn to run it.
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(registerCalls).toEqual(['via TUI']);
+  });
+
+  test('never self-records for a restricted (not-yet-trusted) workspace', async () => {
+    const shellPaths = makeShellPaths();
+    writeOnboardingCheckMarker(shellPaths, { scope: 'user', source: 'wizard', mode: 'new' });
+    const { commandContext, registerCalls } = makeWorkspaceCommandContext({ trusted: false, offerRegister: true });
+    const input = { prompt: '', cursorPos: 0, openOnboardingWizard: () => {} } as unknown as InputHandler;
+
+    applyInitialTuiCliState({
+      cli: makeCli(),
+      input,
+      commandRegistry: new CommandRegistry(),
+      commandContext,
+      shellPaths,
+      render: () => {},
+    });
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(registerCalls).toEqual([]);
+  });
+
+  test('never self-records when the registry already covers/declines the root, even if trusted', async () => {
+    const shellPaths = makeShellPaths();
+    writeOnboardingCheckMarker(shellPaths, { scope: 'user', source: 'wizard', mode: 'new' });
+    const { commandContext, registerCalls } = makeWorkspaceCommandContext({ trusted: true, offerRegister: false });
+    const input = { prompt: '', cursorPos: 0, openOnboardingWizard: () => {} } as unknown as InputHandler;
+
+    applyInitialTuiCliState({
+      cli: makeCli(),
+      input,
+      commandRegistry: new CommandRegistry(),
+      commandContext,
+      shellPaths,
+      render: () => {},
+    });
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(registerCalls).toEqual([]);
+  });
+
+  test('no selection/modal surface is ever opened for registration — commandContext.openSelection is never called', async () => {
+    const shellPaths = makeShellPaths();
+    writeOnboardingCheckMarker(shellPaths, { scope: 'user', source: 'wizard', mode: 'new' });
+    const { commandContext } = makeWorkspaceCommandContext({ trusted: true, offerRegister: true });
+    let openSelectionCalls = 0;
+    (commandContext as unknown as { openSelection: () => void }).openSelection = () => { openSelectionCalls += 1; };
+    const input = { prompt: '', cursorPos: 0, openOnboardingWizard: () => {} } as unknown as InputHandler;
+
+    applyInitialTuiCliState({
+      cli: makeCli(),
+      input,
+      commandRegistry: new CommandRegistry(),
+      commandContext,
+      shellPaths,
+      render: () => {},
+    });
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(openSelectionCalls).toBe(0);
   });
 });

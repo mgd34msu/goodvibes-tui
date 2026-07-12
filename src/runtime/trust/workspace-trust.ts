@@ -2,18 +2,24 @@
  * workspace-trust.ts — per-workspace trust gate.
  *
  * The first time GoodVibes opens a workspace (a cwd / project root it has no
- * prior state for), that workspace is "restricted": only read-category tools
- * run; write, execute, and delegate tools are denied until the user marks the
- * workspace trusted. This is NOT a parallel permission checker — the decision
- * is consulted by the real permission machinery at its final ask layer (the
- * requestPermission callback wired in bootstrap-core.ts), so it composes with,
- * and cannot drift from, the existing PermissionManager layer chain.
+ * prior decision for), that workspace is "undecided": only read-category
+ * tools run; the first write, execute, or delegate tool request raises the
+ * trust question AT THAT MOMENT — the exact point it has a real consequence —
+ * instead of silently failing or being decided by a side effect of the
+ * product's own droppings. This is NOT a parallel permission checker — the
+ * decision is consulted by the real permission machinery at its final ask
+ * layer (the requestPermission callback wired in bootstrap-core.ts), so it
+ * composes with, and cannot drift from, the existing PermissionManager layer
+ * chain.
  *
- * Trust is persisted per-workspace in <cwd>/.goodvibes/tui/trust.json. A
- * workspace that already carries GoodVibes runtime state (prior sessions,
- * checkpoints, state, memory, or a project onboarding marker) is grandfathered
- * as trusted on first load, so the gate only ever prompts for genuinely new
- * places.
+ * Trust is persisted per-workspace in <cwd>/.goodvibes/tui/trust.json. There
+ * is no more grandfathering: a workspace that already carries prior GoodVibes
+ * runtime state gets no special treatment (that side-effect-based shortcut
+ * used to paper over the fact that the first session's write attempts were
+ * silently denied without ever recording a real decision — now that the first
+ * attempt properly raises the question and persists the answer, the shortcut
+ * is unnecessary and would only hide a decision the user should actually see
+ * once, even on an upgrade).
  */
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
@@ -25,13 +31,41 @@ type AskCallback = (request: PermissionPromptRequest) => Promise<PermissionPromp
 
 /**
  * Wrap the permission machinery's final ask callback with the workspace trust
- * gate: in an untrusted workspace, deny any non-read tool outright instead of
- * asking. This runs inside PermissionManager's own layer chain (it IS the ask
+ * gate. This runs inside PermissionManager's own layer chain (it IS the ask
  * layer), so it composes with — and cannot drift from — the real machinery.
+ *
+ * - Trusted workspace: every category passes through to `ask` unchanged.
+ * - Restricted workspace with an EXPLICIT prior decision: non-read categories
+ *   are denied outright, same as before — that IS what "restricted" means
+ *   once the user has actually chosen it.
+ * - Undecided workspace (no decision yet, ever): the first non-read request
+ *   raises `requestTrustDecision()` — one modal, persisted via `setLevel` —
+ *   and, if the answer is 'trusted', the ORIGINAL request is forwarded to
+ *   `ask` so the very thing the user just approved actually happens instead
+ *   of failing anyway. Concurrent requests that arrive before the first
+ *   decision resolves await the same in-flight prompt rather than opening a
+ *   second one.
  */
-export function trustGatedAsk(manager: Pick<WorkspaceTrustManager, 'isCategoryAllowed'>, ask: AskCallback): AskCallback {
-  return (request) =>
-    manager.isCategoryAllowed(request.category) ? ask(request) : Promise.resolve({ approved: false });
+export function trustGatedAsk(
+  manager: Pick<WorkspaceTrustManager, 'isCategoryAllowed' | 'isDecided' | 'setLevel'>,
+  ask: AskCallback,
+  requestTrustDecision: () => Promise<WorkspaceTrustLevel>,
+): AskCallback {
+  let pendingDecision: Promise<WorkspaceTrustLevel> | null = null;
+  return async (request) => {
+    if (manager.isCategoryAllowed(request.category)) return ask(request);
+    if (!manager.isDecided()) {
+      if (!pendingDecision) {
+        pendingDecision = requestTrustDecision().finally(() => {
+          pendingDecision = null;
+        });
+      }
+      const level = await pendingDecision;
+      await manager.setLevel(level);
+      if (manager.isCategoryAllowed(request.category)) return ask(request);
+    }
+    return { approved: false };
+  };
 }
 
 export type WorkspaceTrustLevel = 'trusted' | 'restricted';
@@ -115,8 +149,6 @@ export function readPersistedWorkspaceTrust(paths: WorkspaceTrustPaths): Persist
 
 export interface WorkspaceTrustManagerOptions {
   readonly shellPaths: WorkspaceTrustPaths;
-  /** Whether the workspace already had prior GoodVibes runtime state at startup. */
-  readonly hadPriorState: boolean;
 }
 
 export class WorkspaceTrustManager {
@@ -124,20 +156,22 @@ export class WorkspaceTrustManager {
   private grandfathered = false;
   private loaded = false;
   private readonly store: JsonFileStore<PersistedWorkspaceTrust>;
-  private readonly hadPriorState: boolean;
 
   constructor(options: WorkspaceTrustManagerOptions) {
     this.store = new JsonFileStore<PersistedWorkspaceTrust>(
       options.shellPaths.resolveProjectPath('tui', TRUST_FILE),
     );
-    this.hadPriorState = options.hadPriorState;
   }
 
   /**
-   * Load the persisted decision. If none exists, grandfather a workspace that
-   * already had prior GoodVibes state (persisting the decision so it is never
-   * re-evaluated); otherwise the workspace stays undecided and the gate treats
-   * it as restricted until the user chooses.
+   * Load the persisted decision, if one exists. No grandfathering: a
+   * workspace with no persisted decision stays undecided (the gate treats it
+   * as restricted, and the first non-read tool request raises the trust
+   * question via `trustGatedAsk`'s `requestTrustDecision` callback) — even
+   * one that already carries prior GoodVibes runtime state. `grandfathered`
+   * on an already-persisted decision is read-only history from before this
+   * fix (status/doctor still report it honestly); nothing new is ever
+   * grandfathered.
    */
   async load(): Promise<void> {
     if (this.loaded) return;
@@ -145,13 +179,6 @@ export class WorkspaceTrustManager {
     if (persisted && (persisted.level === 'trusted' || persisted.level === 'restricted')) {
       this.level = persisted.level;
       this.grandfathered = persisted.grandfathered ?? false;
-      this.loaded = true;
-      return;
-    }
-    if (this.hadPriorState) {
-      this.level = 'trusted';
-      this.grandfathered = true;
-      await this.persist();
     }
     this.loaded = true;
   }

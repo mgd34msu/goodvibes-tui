@@ -509,6 +509,7 @@ describe('product breadth commands', () => {
       getConfiguredProviderIds: () => [],
       getPinned: async () => [],
       render: () => {},
+      trustPromptRef: { requestTrustDecision: async () => 'restricted' as const },
     });
 
     return state;

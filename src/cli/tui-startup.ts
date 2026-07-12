@@ -1,6 +1,7 @@
 import type { CommandContext, CommandRegistry } from '../input/command-registry.ts';
 import type { InputHandler } from '../input/handler.ts';
 import type { SelectionItem } from '../input/selection-modal.ts';
+import type { WorkspaceRegistrationManager } from '../runtime/trust/workspace-registration.ts';
 import { hasResumableWizardProgress, readOnboardingCheckMarker, readWizardProgress } from '../runtime/onboarding/index.ts';
 import { startOnboardingFastPath } from '../runtime/onboarding/fast-path.ts';
 import { readLastSessionPointer } from '@/runtime/index.ts';
@@ -13,111 +14,61 @@ export type TuiStartupShellPaths = Parameters<typeof readOnboardingCheckMarker>[
 
 export type FirstOpenTrustLevel = 'trusted' | 'restricted';
 
-/** The decisions a first-open prompt choice resolves to. Absent halves were not asked. */
-export interface FirstOpenDecision {
-  readonly trust?: FirstOpenTrustLevel;
-  readonly register?: 'yes' | 'no';
+/**
+ * decodeFirstOpenChoice — pure mapping from a chosen selection-item id (or
+ * null on Escape/enter-through) to the trust decision. Kept pure so the
+ * consequence-time trust prompt's semantics (raised by trustGatedAsk, wired
+ * in main.ts's trustPromptRef.requestTrustDecision) are unit-testable
+ * without a live modal. Escape/enter-through (id === null) is the safe
+ * default: 'restricted'.
+ */
+export function decodeFirstOpenChoice(id: string | null): FirstOpenTrustLevel {
+  return id === 'trusted' ? 'trusted' : 'restricted';
 }
 
 /**
- * decodeFirstOpenChoice — pure mapping from a chosen selection-item id (or null
- * on Escape/enter-through) to the trust + registration decisions, given which
- * halves the prompt actually offered. Kept pure so the combined-prompt semantics
- * are unit-testable without a live modal.
- *
- * Escape/enter-through (id === null) is the safe default: an offered trust half
- * settles to 'restricted' (matching the standalone trust prompt), and an offered
- * register half defaults to NO — recorded as a subtree-scoped decline so the
- * directory is not re-asked every startup.
+ * Build the selection rows for the trust prompt. This used to also offer a
+ * "register this directory?" half (a combined 2x2 when both were needed) —
+ * that half is gone: registration self-records (see
+ * selfRecordWorkspaceRegistration below) rather than ever asking a question
+ * about a registry the user hasn't met yet.
  */
-export function decodeFirstOpenChoice(
-  id: string | null,
-  offered: { readonly trustNeeded: boolean; readonly registerNeeded: boolean },
-): FirstOpenDecision {
-  const decision: { trust?: FirstOpenTrustLevel; register?: 'yes' | 'no' } = {};
-  if (offered.trustNeeded && offered.registerNeeded) {
-    // Combined 2x2 choice.
-    const trust: FirstOpenTrustLevel = id === 'trust-register' || id === 'trust-only' ? 'trusted' : 'restricted';
-    const register: 'yes' | 'no' = id === 'trust-register' || id === 'restrict-register' ? 'yes' : 'no';
-    decision.trust = trust;
-    decision.register = register;
-  } else if (offered.trustNeeded) {
-    decision.trust = id === 'trusted' ? 'trusted' : 'restricted';
-  } else if (offered.registerNeeded) {
-    decision.register = id === 'register' ? 'yes' : 'no';
-  }
-  return decision;
-}
-
-/** Build the selection rows for a first-open prompt given which halves apply. */
-export function buildFirstOpenItems(offered: {
-  readonly trustNeeded: boolean;
-  readonly registerNeeded: boolean;
-}): { readonly title: string; readonly items: SelectionItem[] } {
-  if (offered.trustNeeded && offered.registerNeeded) {
-    return {
-      title: 'New workspace — trust level and registration',
-      items: [
-        { id: 'trust-register', label: 'Trust & register this workspace', detail: 'Full capability, and track it in your workspace registry', primaryAction: 'select' },
-        { id: 'trust-only', label: 'Trust, don\'t register', detail: 'Full capability; leave it out of the registry', primaryAction: 'select' },
-        { id: 'restrict-register', label: 'Keep restricted, register', detail: 'Read-only for now; still track it in the registry', primaryAction: 'select' },
-        { id: 'restrict-only', label: 'Keep restricted, don\'t register', detail: 'Read-only exploration; nothing recorded (default)', primaryAction: 'select' },
-      ],
-    };
-  }
-  if (offered.trustNeeded) {
-    return {
-      title: 'New workspace — choose a trust level',
-      items: [
-        { id: 'trusted', label: 'Trust this workspace', detail: 'Full capability — all tools may run', primaryAction: 'select' },
-        { id: 'restricted', label: 'Keep restricted (read-only)', detail: 'Explore safely; writes and commands are denied until trusted', primaryAction: 'select' },
-      ],
-    };
-  }
+export function buildFirstOpenItems(): { readonly title: string; readonly items: SelectionItem[] } {
   return {
-    title: 'Register this directory as a workspace?',
+    title: 'New workspace — choose a trust level',
     items: [
-      { id: 'register', label: 'Register this workspace', detail: 'Track this project root in your workspace registry', primaryAction: 'select' },
-      { id: 'skip', label: 'Don\'t register', detail: 'Leave it out; not asked again for this directory (default)', primaryAction: 'select' },
+      { id: 'trusted', label: 'Trust this workspace', detail: 'Full capability — all tools may run', primaryAction: 'select' },
+      { id: 'restricted', label: 'Keep restricted (read-only)', detail: 'Explore safely; writes and commands are denied until trusted', primaryAction: 'select' },
     ],
   };
 }
 
 /**
- * First-open workspace prompt — one surface folding the TUI-local trust gate and
- * the platform-wide registration half. When GoodVibes opens a workspace it has
- * no trust decision for, and/or one whose registration resolves UNKNOWN, ask
- * once (never two stacked modals): trust level AND "register this directory?".
+ * Registration self-records: a workspace the user actually works in becomes
+ * its own registry entry with no question ever asked (the former "Register
+ * this directory as a workspace?" prompt — sometimes a four-option 2x2 when
+ * trust was undecided too — is gone entirely).
  *
- * The two records are independent: a grandfathered-trusted workspace skips the
- * trust half but may still see the register half once; a covered/declined/broad
- * directory skips the register half. Escape/enter-through takes the safe default
- * (restricted, and a recorded decline for the register half).
+ * "Actually works in" is anchored to TRUST, not mere directory-open: this is
+ * only ever called for a workspace that is (or has just become) trusted,
+ * never for one that's merely been glanced at read-only. Labeled 'via TUI'
+ * in the shared registry so its provenance is honest.
+ *
+ * OWNER-BOUNDARY RIDER (binding): self-recording must not widen the agent's
+ * own registered-workspaces-only checkpoint boundary. The registry this
+ * writes to is the platform-wide SINGLE SOURCE OF TRUTH (see
+ * workspace-registration.ts's file doc) — every write here originates from
+ * an actual TUI session and is labeled as such; the agent's own checkpoint
+ * boundary is a separate, explicit list it owns and is not widened by
+ * anything in this repo.
  */
-async function promptWorkspaceFirstOpen(commandContext: CommandContext, render: () => void): Promise<void> {
-  const trustManager = commandContext.workspace?.workspaceTrustManager;
-  const registrationManager = commandContext.workspace?.workspaceRegistrationManager;
-  const trustNeeded = Boolean(trustManager && !trustManager.isDecided());
-  const evaluation = registrationManager ? await registrationManager.evaluate() : null;
-  const registerNeeded = Boolean(evaluation?.offerRegister);
-  if (!trustNeeded && !registerNeeded) return;
-
-  const offered = { trustNeeded, registerNeeded };
-  const { title, items } = buildFirstOpenItems(offered);
-  commandContext.openSelection?.(
-    title,
-    items,
-    { allowSearch: false, primaryVerbLabel: 'Choose' },
-    (result) => {
-      const decision = decodeFirstOpenChoice(result?.item.id ?? null, offered);
-      const apply = async () => {
-        if (decision.trust && trustManager) await trustManager.setLevel(decision.trust);
-        if (decision.register === 'yes' && registrationManager) await registrationManager.register();
-        else if (decision.register === 'no' && registrationManager) await registrationManager.decline();
-      };
-      void apply().finally(render);
-    },
-  );
+export async function selfRecordWorkspaceRegistration(
+  registrationManager: Pick<WorkspaceRegistrationManager, 'evaluate' | 'register'> | undefined,
+): Promise<void> {
+  if (!registrationManager) return;
+  const evaluation = await registrationManager.evaluate();
+  if (!evaluation.offerRegister) return;
+  await registrationManager.register('via TUI');
 }
 
 export function applyInitialTuiCliState(options: {
@@ -130,6 +81,16 @@ export function applyInitialTuiCliState(options: {
 }): Promise<void> | undefined {
   const { cli, input, commandRegistry, commandContext, shellPaths, render } = options;
   const globalOnboardingMarker = readOnboardingCheckMarker(shellPaths, 'user');
+
+  // Registration self-records on every launch of an already-trusted
+  // workspace (fire-and-forget — never blocks or gates startup, never a
+  // modal). A workspace that is undecided or restricted is never
+  // self-registered here; for one that becomes trusted just now (via the
+  // consequence-time trust prompt), main.ts's trustPromptRef wiring calls
+  // this same helper right after the decision.
+  if (commandContext.workspace?.workspaceTrustManager?.isTrusted()) {
+    void selfRecordWorkspaceRegistration(commandContext.workspace.workspaceRegistrationManager);
+  }
 
   // Seeded prompt is always applied synchronously, regardless of session branch.
   const seededPrompt = cli.flags.prompt ?? (cli.rawCommand === undefined && cli.positionals.length > 0 ? cli.positionals.join(' ') : undefined);
@@ -183,6 +144,9 @@ export function applyInitialTuiCliState(options: {
   } else if (!globalOnboardingMarker.exists) {
     // Fast path: get a brand-new user to a working session in the fewest steps.
     // Falls back to the full wizard when the surface can't detect providers.
+    // Trust stays undecided here on purpose — the first non-read tool
+    // request is what raises the trust question now (see main.ts's
+    // trustPromptRef), not this startup branch.
     startOnboardingFastPath({ input, commandContext, shellPaths, render });
   } else {
     // User has completed onboarding before but left a wizard session in progress.
@@ -202,11 +166,9 @@ export function applyInitialTuiCliState(options: {
           },
         });
       }
-    } else {
-      // Returning user, no wizard to resume: this is the moment to ask, in one
-      // surface, about a genuinely new workspace's trust level and whether to
-      // register it — before they run anything here.
-      void promptWorkspaceFirstOpen(commandContext, render);
     }
+    // Returning user, no wizard to resume, nothing else to do at startup:
+    // trust (if still undecided) is asked at the first non-read tool
+    // request, not here — see main.ts's trustPromptRef wiring.
   }
 }

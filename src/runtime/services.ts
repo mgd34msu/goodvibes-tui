@@ -134,8 +134,6 @@ export interface RuntimeServicesOptions {
   readonly getConversationTitle?: () => string | undefined;
   readonly workingDir: string;
   readonly homeDirectory: string;
-  /** Prior GoodVibes runtime state existed at startup — sampled before any write; seeds the trust gate's grandfathering. */
-  readonly workspaceHadPriorState?: boolean;
 }
 
 export interface RuntimeServices {
@@ -253,7 +251,7 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
     workingDirectory,
     homeDirectory,
   });
-  const workspaceTrustManager = new WorkspaceTrustManager({ shellPaths, hadPriorState: options.workspaceHadPriorState ?? false });
+  const workspaceTrustManager = new WorkspaceTrustManager({ shellPaths });
   const configManager = options.configManager;
   const featureFlags = options.featureFlags ?? createFeatureFlagManager();
   const runtimeDispatch = createDomainDispatch(options.runtimeStore);

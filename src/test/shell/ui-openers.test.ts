@@ -38,6 +38,7 @@ describe('wireShellUiOpeners', () => {
   let render: ReturnType<typeof mock>;
   let testManagers = createTestManagers();
   let fakeEmbeddingRegistry = makeFakeEmbeddingRegistry();
+  let trustPromptRef: { requestTrustDecision: () => Promise<'trusted' | 'restricted'> };
 
   beforeEach(() => {
     testManagers = createTestManagers();
@@ -97,6 +98,62 @@ describe('wireShellUiOpeners', () => {
       getConfiguredProviderIds: () => [],
       getPinned: async () => [],
       render,
+      // wireShellUiOpeners overwrites .requestTrustDecision with the real
+      // implementation below — this placeholder just needs to be a valid ref shape.
+      trustPromptRef: (trustPromptRef = { requestTrustDecision: async () => 'restricted' as const }),
+    });
+  });
+
+  // Trust-at-consequence-time: wireShellUiOpeners patches trustPromptRef with
+  // the real modal-driving implementation. Registration self-records here too
+  // when the answer is 'trusted' — never for 'restricted'.
+  describe('trustPromptRef.requestTrustDecision', () => {
+    test('opens a trust-only selection (two items: trusted, restricted)', () => {
+      void trustPromptRef.requestTrustDecision();
+      expect(input.openSelection).toHaveBeenCalledTimes(1);
+      const [title, items] = (input.openSelection as ReturnType<typeof mock>).mock.calls[0] as [string, Array<{ id: string }>, unknown, unknown];
+      expect(title).toContain('trust');
+      expect(items.map((i) => i.id)).toEqual(['trusted', 'restricted']);
+    });
+
+    test('resolves "restricted" and never self-records when the user keeps the workspace restricted', async () => {
+      const registerCalls: Array<string | undefined> = [];
+      (commandContext as Record<string, unknown>).workspace = {
+        workspaceRegistrationManager: {
+          evaluate: async () => ({ offerRegister: true }),
+          register: async (label?: string) => { registerCalls.push(label); return { registered: true, result: {} }; },
+        },
+      };
+      const decisionPromise = trustPromptRef.requestTrustDecision();
+      const callback = (input.openSelection as ReturnType<typeof mock>).mock.calls[0]![3] as (result: unknown) => void;
+      callback({ item: { id: 'restricted' }, action: 'select' });
+      expect(await decisionPromise).toBe('restricted');
+      await Promise.resolve();
+      expect(registerCalls).toEqual([]);
+    });
+
+    test('resolves "trusted" and self-records (labeled "via TUI") when the user trusts the workspace', async () => {
+      const registerCalls: Array<string | undefined> = [];
+      (commandContext as Record<string, unknown>).workspace = {
+        workspaceRegistrationManager: {
+          evaluate: async () => ({ offerRegister: true }),
+          register: async (label?: string) => { registerCalls.push(label); return { registered: true, result: {} }; },
+        },
+      };
+      const decisionPromise = trustPromptRef.requestTrustDecision();
+      const callback = (input.openSelection as ReturnType<typeof mock>).mock.calls[0]![3] as (result: unknown) => void;
+      callback({ item: { id: 'trusted' }, action: 'select' });
+      expect(await decisionPromise).toBe('trusted');
+      await Promise.resolve();
+      await Promise.resolve();
+      expect(registerCalls).toEqual(['via TUI']);
+    });
+
+    test('Escape/enter-through (null id) defaults to restricted', async () => {
+      const decisionPromise = trustPromptRef.requestTrustDecision();
+      const callback = (input.openSelection as ReturnType<typeof mock>).mock.calls[0]![3] as (result: unknown) => void;
+      callback(null);
+      expect(await decisionPromise).toBe('restricted');
     });
   });
 
@@ -335,6 +392,7 @@ describe('wireShellUiOpeners', () => {
         getConfiguredProviderIds: () => [],
         getPinned: async () => [],
         render,
+        trustPromptRef: { requestTrustDecision: async () => 'restricted' as const },
       });
     }
 

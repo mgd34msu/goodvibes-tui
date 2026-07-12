@@ -33,7 +33,7 @@ import { createWrfcPersistence, type WrfcPersistence } from './wrfc-persistence.
 import type { SystemMessagePriority } from '../core/system-message-router.ts';
 import { SessionSpineClient, SessionUnionCache, TUI_SPINE_PARTICIPANT } from '@pellux/goodvibes-sdk/platform/runtime/session-spine';
 import { SessionInboundInputPoller, createBootstrapInboundInputPoller } from './session-inbound-inputs.ts';
-import { detectPriorWorkspaceState, trustGatedAsk } from './trust/workspace-trust.ts';
+import { trustGatedAsk, type WorkspaceTrustLevel } from './trust/workspace-trust.ts';
 import { syncNotifierQueueIntegrations } from './bootstrap-notifier-sync.ts';
 
 // ---------------------------------------------------------------------------
@@ -105,6 +105,7 @@ export interface BootstrapCoreState {
   readonly runtimeUnsubs: Array<() => void>;
   readonly agentStatusIntervalRef: { value: ReturnType<typeof setInterval> | null };
   readonly permissionPromptRef: { requestPermission: PermissionRequestHandler };
+  readonly trustPromptRef: { requestTrustDecision: () => Promise<WorkspaceTrustLevel> }; // trust-at-consequence-time bridge, patched with the real modal-driving impl once the UI layer exists
   readonly systemMessageRouterRef: { value: SystemMessageRouter | null };
   readonly conversationFollowUpRef: { value: ((item: ConversationFollowUpItem) => void) | null };
   /**
@@ -247,12 +248,9 @@ export async function initializeBootstrapCore(
     runtimeBus,
     runtimeStore: store,
     getConversationTitle: () => getConversationTitle(),
-    workingDir,
-    homeDirectory,
-    // Sampled BEFORE any service writes to <cwd>/.goodvibes so a new workspace isn't misread as used.
-    workspaceHadPriorState: detectPriorWorkspaceState(workingDir),
+    workingDir, homeDirectory,
   });
-  await services.workspaceTrustManager.load(); // settle trust (+ grandfathering) before any tool runs
+  await services.workspaceTrustManager.load(); // settle any already-persisted trust decision before any tool runs
   const providerRegistry = services.providerRegistry;
   providerRegistry.initModelLimits();
   services.benchmarkStore.initBenchmarks();
@@ -467,6 +465,9 @@ export async function initializeBootstrapCore(
   const permissionPromptRef = {
     requestPermission: (async () => ({ approved: false, remember: false })) as PermissionRequestHandler,
   };
+  // Trust-at-consequence-time: raised by trustGatedAsk on the first non-read
+  // request in an undecided workspace; overridden once the UI layer exists — same ref-patching pattern as permissionPromptRef above.
+  const trustPromptRef = { requestTrustDecision: (async () => 'restricted') as () => Promise<WorkspaceTrustLevel> };
   approvalBroker.start().catch((err) => logger.warn('approval broker start failed at bootstrap', { err }));
   sharedSessionBroker.start().catch((err) => logger.warn('shared session broker start failed at bootstrap', { err }));
   const runtimeSessionIdRef = { value: userSessionId };
@@ -708,6 +709,7 @@ export async function initializeBootstrapCore(
           localPrompt: permissionPromptRef.requestPermission,
         }),
       ),
+      () => trustPromptRef.requestTrustDecision(), // indirection through the ref, not bound early — main.ts patches the real impl in later
     ),
     createPermissionConfigReader(configManager),
     policyRuntimeState,
@@ -757,11 +759,7 @@ export async function initializeBootstrapCore(
   }, 'bootstrap.session');
 
   runtimeUnsubs.push(
-    ...registerBootstrapHookBridge({
-      runtimeBus,
-      hookDispatcher,
-      runtime,
-    }),
+    ...registerBootstrapHookBridge({ runtimeBus, hookDispatcher, runtime }),
   );
 
   return {
@@ -783,7 +781,7 @@ export async function initializeBootstrapCore(
     bootstrapUnsubs,
     runtimeUnsubs,
     agentStatusIntervalRef,
-    permissionPromptRef,
+    permissionPromptRef, trustPromptRef,
     systemMessageRouterRef,
     conversationFollowUpRef,
     orchestratorHandleUserInputRef,

@@ -15,6 +15,7 @@ import { AcpManager } from '@pellux/goodvibes-sdk/platform/acp';
 import { getTierPromptSupplement, getTierForContextWindow } from '@pellux/goodvibes-sdk/platform/providers';
 import { logger, summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 import type { PermissionRequestHandler } from '@pellux/goodvibes-sdk/platform/permissions';
+import type { WorkspaceTrustLevel } from './trust/workspace-trust.ts';
 import type { CommandContext } from '../input/command-registry.ts';
 import type { InputHistory } from '../input/input-history.ts';
 import type { GitStatusProvider, GitHeaderInfo } from '../renderer/git-status.ts';
@@ -95,6 +96,8 @@ export type BootstrapContext = RuntimeContext & {
   setRenderRequest: (fn: () => void) => void;
   /** Shell-owned permission prompt bridge that main.ts patches after UI setup. */
   permissionPromptRef: { requestPermission: PermissionRequestHandler };
+  /** Shell-owned trust-decision bridge that main.ts patches after UI setup (trust asks at consequence time). */
+  trustPromptRef: { requestTrustDecision: () => Promise<WorkspaceTrustLevel> };
   /** Load the most recently saved conversation from disk. */
   loadLastConversation: () => { messages: Array<Record<string, unknown>> } | null;
   /** Write the last-session pointer file (used after session resume). */
@@ -172,7 +175,7 @@ export async function bootstrapRuntime(
     bootstrapUnsubs,
     runtimeUnsubs,
     agentStatusIntervalRef,
-    permissionPromptRef,
+    permissionPromptRef, trustPromptRef,
     systemMessageRouterRef,
     conversationFollowUpRef,
     orchestratorHandleUserInputRef,
@@ -254,8 +257,7 @@ export async function bootstrapRuntime(
 
   const acpManager = new AcpManager({
     requestPermission: (request) => permissionPromptRef.requestPermission(request),
-    runtimeBus,
-    hookDispatcher: services.hookDispatcher,
+    runtimeBus, hookDispatcher: services.hookDispatcher,
   });
   const acpTaskAdapter = new AcpTaskAdapter(store);
   const ACP_TASK_SYNC_INTERVAL_MS = 1_000;
@@ -713,7 +715,7 @@ export async function bootstrapRuntime(
     agentStatusIntervalRef,
     orchestratorRefs,
     setRenderRequest,
-    permissionPromptRef,
+    permissionPromptRef, trustPromptRef,
     loadLastConversation: () => loadLastConversation({
       workingDirectory: services.workingDirectory,
       homeDirectory: services.homeDirectory,
