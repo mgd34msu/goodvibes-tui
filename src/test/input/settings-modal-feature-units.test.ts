@@ -1,24 +1,28 @@
 /**
  * Feature-unit presentation in the settings modal.
  *
- * Every feature flag renders as ONE unit — its toggle header plus the config
- * keys that tune it — hosted in a topical category, sourced from the SDK's
- * FEATURE_FLAG_CONFIG map. This locks:
- *   - every flag is reachable in the settings structure (cross-surface item 5);
- *   - a flag's config keys sit under its header, not double-listed as orphans;
- *   - no-config flags land in the Advanced Features bucket as bare toggles;
- *   - toggling a header routes through the feature-flag manager (config effect).
+ * Every platform capability renders as ONE unit in its settings DOMAIN — the
+ * feature's real enablement row as a named header plus the settings keys that
+ * tune it — sourced from the SDK's FEATURE_SETTINGS surface. This locks:
+ *   - every feature is reachable in the settings structure;
+ *   - a header IS the real config row for its enablement key (boolean toggle
+ *     or enum mode choices), never a synthetic key;
+ *   - features sharing one enablement key each keep their own header;
+ *   - a feature's settings keys sit under its header, not double-listed as
+ *     orphans;
+ *   - the separate feature-flag grouping is gone from the category rail.
  */
 import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
 import { mkdirSync, rmSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
 import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
-import { FEATURE_FLAGS, FEATURE_FLAG_CONFIG } from '@pellux/goodvibes-sdk/platform/runtime/state';
+import { FEATURE_SETTINGS, deriveFeatureStates } from '@pellux/goodvibes-sdk/platform/runtime/state';
 import { createFeatureFlagManager } from '@/runtime/index.ts';
 import type { FeatureFlagManager } from '@/runtime/index.ts';
 import { buildSettingGroups } from '../../input/settings-modal-data.ts';
-import { getFeatureUnitHostCategory, ADVANCED_FEATURES_CATEGORY } from '../../input/feature-unit-layout.ts';
+import { getFeatureUnitHostCategory } from '../../input/feature-unit-layout.ts';
+import { SETTINGS_CATEGORIES } from '../../input/settings-modal-types.ts';
 import type { SettingEntry, SettingsCategory } from '../../input/settings-modal-types.ts';
 
 function makeTmpDir(): string {
@@ -26,6 +30,9 @@ function makeTmpDir(): string {
   mkdirSync(dir, { recursive: true });
   return dir;
 }
+
+/** Every enablement key in the feature surface (some are shared by two features). */
+const ENABLEMENT_KEYS = new Set(FEATURE_SETTINGS.map((feature) => feature.enablement.key));
 
 describe('settings modal — feature units', () => {
   const originalCwd = process.cwd();
@@ -40,6 +47,7 @@ describe('settings modal — feature units', () => {
     process.chdir(tmpDir);
     cm = new ConfigManager({ surfaceRoot: 'tui', workingDir: tmpDir, homeDir: tmpDir, configDir: join(tmpDir, '.goodvibes', 'global-tui') });
     ffm = createFeatureFlagManager();
+    ffm.loadFromConfig({ flags: deriveFeatureStates(cm) });
   });
 
   afterEach(() => {
@@ -53,102 +61,114 @@ describe('settings modal — feature units', () => {
     const headers = new Map<string, { category: SettingsCategory; entry: SettingEntry }>();
     for (const [category, entries] of groups) {
       for (const entry of entries) {
-        if (entry.flag) headers.set(entry.flag.flag.id, { category, entry });
+        if (entry.flag) headers.set(entry.flag.feature.id, { category, entry });
       }
     }
     return headers;
   }
 
-  test('every feature flag is reachable as a unit header in the settings structure', () => {
+  test('the separate feature-flag grouping is gone from the category rail', () => {
+    expect((SETTINGS_CATEGORIES as readonly string[]).includes('flags')).toBe(false);
+  });
+
+  test('every capability is reachable as a unit header in the settings structure', () => {
     const groups = buildSettingGroups(cm, ffm);
     const headers = collectHeaders(groups);
-    for (const flag of FEATURE_FLAGS) {
-      expect(headers.has(flag.id)).toBe(true);
+    for (const feature of FEATURE_SETTINGS) {
+      expect(headers.has(feature.id)).toBe(true);
     }
-    // Exactly one header per flag — no flag appears twice.
+    // Exactly one header per feature — features sharing an enablement key
+    // (both compaction strategies, both telemetry modes) each keep their own.
     let headerCount = 0;
     for (const entries of groups.values()) headerCount += entries.filter((e) => e.flag).length;
-    expect(headerCount).toBe(FEATURE_FLAGS.length);
+    expect(headerCount).toBe(FEATURE_SETTINGS.length);
   });
 
-  test('each flag unit is hosted in the category its config namespace maps to', () => {
+  test('each feature unit is hosted in its settings domain', () => {
     const groups = buildSettingGroups(cm, ffm);
     const headers = collectHeaders(groups);
-    for (const flag of FEATURE_FLAGS) {
-      const placed = headers.get(flag.id)!;
-      expect(placed.category).toBe(getFeatureUnitHostCategory(flag.id));
+    for (const feature of FEATURE_SETTINGS) {
+      const placed = headers.get(feature.id)!;
+      expect(placed.category).toBe(feature.domain as SettingsCategory);
+      expect(placed.category).toBe(getFeatureUnitHostCategory(feature.id));
     }
   });
 
-  test("a flag's config keys sit under its header and are not double-listed as orphan rows", () => {
+  test('a header is the REAL config row for its enablement key, with its real option shape', () => {
     const groups = buildSettingGroups(cm, ffm);
-    // Build the set of keys owned by SOME flag.
+    const headers = collectHeaders(groups);
+
+    // Boolean enablement: control-plane-gateway rides controlPlane.gateway.
+    const cpg = headers.get('control-plane-gateway')!.entry;
+    expect(cpg.setting.key).toBe('controlPlane.gateway');
+    expect(cpg.setting.type).toBe('boolean');
+    expect(cpg.currentValue).toBe(true); // defaults on
+    expect(cpg.isDefault).toBe(true);
+    expect(cpg.flag!.state).toBe('enabled');
+
+    // Enum enablement: the header row carries the schema's mode choices.
+    const compaction = headers.get('session-compaction')!.entry;
+    expect(compaction.setting.key).toBe('behavior.compactionStrategy');
+    expect(compaction.setting.type).toBe('enum');
+    expect((compaction.setting.enumValues ?? []).length).toBeGreaterThan(1);
+
+    // Shared enablement key: the distiller feature has its OWN header over the
+    // same row, and its state derives from its own active values.
+    const distiller = headers.get('compaction-distiller-strategy')!.entry;
+    expect(distiller.setting.key).toBe('behavior.compactionStrategy');
+    expect(distiller.flag!.feature.id).toBe('compaction-distiller-strategy');
+    expect(distiller.flag!.state).toBe('disabled'); // stock value is 'structured'
+    expect(compaction.flag!.state).toBe('enabled');
+  });
+
+  test("a feature's settings keys sit under its header and are not double-listed as orphan rows", () => {
+    const groups = buildSettingGroups(cm, ffm);
+    // Keys owned by SOME feature (excluding enablement keys, which are headers).
     const ownedKeys = new Set<string>();
-    for (const assoc of Object.values(FEATURE_FLAG_CONFIG)) for (const k of assoc.configKeys) ownedKeys.add(k);
+    for (const feature of FEATURE_SETTINGS) {
+      for (const key of feature.settings) {
+        if (!ENABLEMENT_KEYS.has(key)) ownedKeys.add(key);
+      }
+    }
 
     // Within each key's HOME (namespace) category, an owned key appears exactly
-    // once, as a sub-option under its unit — never as an un-owned orphan row. The
-    // 'network' category is a deliberate combined cross-list view of
-    // controlPlane/httpListener/web keys (a focused network-config tab that
-    // predates feature units); it is not any key's home category, so it is
-    // excluded from the double-listing rule.
+    // once, as a sub-option under its unit — never as an un-owned orphan row.
+    // The 'network' category is a deliberate combined cross-list view of
+    // controlPlane/httpListener/web keys; it is not any key's home category,
+    // so it is excluded from the double-listing rule.
     const seen = new Map<string, number>();
     for (const [category, entries] of groups) {
       if (category === 'network') continue;
       for (const entry of entries) {
-        if (entry.flag) continue; // header row, not a config key
+        if (entry.flag) continue; // header row
         if (!ownedKeys.has(entry.setting.key)) continue;
-        // An owned config key row MUST be marked as owned (a sub-option).
         expect(entry.ownerFlagId).toBeDefined();
         seen.set(entry.setting.key, (seen.get(entry.setting.key) ?? 0) + 1);
       }
     }
     for (const key of ownedKeys) {
-      // Present exactly once (some owned keys are shared by two flags but listed
-      // under a single owner, so at most once; every owned key that exists in the
-      // schema is listed once).
       expect(seen.get(key) ?? 0).toBeLessThanOrEqual(1);
     }
 
-    // Spot-check a representative unit: exec-sandbox owns sandbox.enabled et al.,
-    // and they render directly after the exec-sandbox header in the sandbox category.
+    // Spot-check a representative unit: exec-sandbox rides sandbox.enabled and
+    // its tuning keys render directly after the header in the sandbox domain.
     const sandbox = groups.get('sandbox') ?? [];
-    const headerIdx = sandbox.findIndex((e) => e.flag?.flag.id === 'exec-sandbox');
+    const headerIdx = sandbox.findIndex((e) => e.flag?.feature.id === 'exec-sandbox');
     expect(headerIdx).toBeGreaterThanOrEqual(0);
+    expect(sandbox[headerIdx]!.setting.key).toBe('sandbox.enabled');
     const next = sandbox[headerIdx + 1];
     expect(next?.ownerFlagId).toBe('exec-sandbox');
     expect(next?.setting.key.startsWith('sandbox.')).toBe(true);
   });
 
-  test('no-config flags land in the Advanced Features bucket as bare toggles', () => {
+  test('enablement keys never appear as plain rows in their home category', () => {
     const groups = buildSettingGroups(cm, ffm);
-    const advanced = groups.get(ADVANCED_FEATURES_CATEGORY) ?? [];
-    // Every entry in Advanced Features is a flag header (no orphan config rows).
-    for (const entry of advanced) expect(entry.flag).toBeDefined();
-    // The no-config flags are exactly the ones with empty FEATURE_FLAG_CONFIG.
-    const advancedIds = new Set(advanced.map((e) => e.flag!.flag.id));
-    for (const flag of FEATURE_FLAGS) {
-      const assoc = FEATURE_FLAG_CONFIG[flag.id];
-      const hasConfig = (assoc?.configKeys.length ?? 0) > 0;
-      expect(advancedIds.has(flag.id)).toBe(!hasConfig);
+    for (const [category, entries] of groups) {
+      if (category === 'network') continue; // combined cross-list view keeps plain copies
+      for (const entry of entries) {
+        if (entry.flag) continue;
+        expect(ENABLEMENT_KEYS.has(entry.setting.key)).toBe(false);
+      }
     }
-  });
-
-  test('a flag header carries its live state and default marker, not a raw boolean key', () => {
-    const groups = buildSettingGroups(cm, ffm);
-    const headers = collectHeaders(groups);
-    // control-plane-gateway defaults ON; with no override it is enabled + at default.
-    const cpg = headers.get('control-plane-gateway')!.entry;
-    expect(cpg.setting.key).toBe('featureFlags.control-plane-gateway');
-    expect(cpg.setting.type).toBe('boolean');
-    expect(cpg.flag!.state).toBe('enabled');
-    expect(cpg.currentValue).toBe(true);
-    expect(cpg.isDefault).toBe(true);
-
-    // fetch-sanitization defaults OFF.
-    const fetch = headers.get('fetch-sanitization')!.entry;
-    expect(fetch.flag!.state).toBe('disabled');
-    expect(fetch.currentValue).toBe(false);
-    expect(fetch.isDefault).toBe(true);
   });
 });

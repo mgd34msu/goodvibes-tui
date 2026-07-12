@@ -1,42 +1,44 @@
 /**
- * Flag-toggle semantics against the live config→flag bridge (SDK 1.6.1).
+ * Feature-toggle semantics against the live settings→gate bridge.
  *
- * Verifies the TUI's toggle path (applyFlagState, used by the settings modal)
- * and the /flags overview keep persisted config and live manager state
- * consistent, and honestly distinguish the two flag classes:
+ * Verifies that a plain domain-settings write (the only write path the
+ * settings modal has) keeps persisted config and live gate state consistent,
+ * and honestly distinguishes the two feature classes:
  *
- *   - runtime-toggleable flag  → applies live (manager state flips) AND is
- *     persisted as an override; no restart pending.
- *   - startup-gated flag       → persisted as an override AND marked
- *     pending-restart; the effective manager state is UNCHANGED until the next
- *     launch (never faked live).
+ *   - runtime-toggleable feature → applies live (gate state flips) AND the
+ *     domain key persists; no restart pending.
+ *   - startup-gated feature      → the domain key persists AND the gate
+ *     records pending-restart; the effective state is UNCHANGED until the
+ *     next launch (never faked live).
  *
- * Uses a real FeatureFlagManager and a real on-disk ConfigManager — no mocks —
- * so the persistence and bridge behavior are exercised for real.
+ * Uses a real FeatureFlagManager and a real on-disk ConfigManager wired with
+ * the SDK's own settings bridge — no mocks — so persistence and bridge
+ * behavior are exercised for real, including through the modal's
+ * toggleSelectedFlag path.
  */
 import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
 import { mkdirSync, rmSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
+import { ConfigManager, ServiceRegistry, SubscriptionManager } from '@pellux/goodvibes-sdk/platform/config';
+import { bindFeatureSettingsBridge, deriveFeatureStates } from '@pellux/goodvibes-sdk/platform/runtime/state';
 import { createFeatureFlagManager } from '../../runtime/index.ts';
 import type { FeatureFlagManager } from '../../runtime/index.ts';
-import { buildFlagEntries } from '../../input/settings-modal-data.ts';
-import { applyFlagState } from '../../input/settings-modal-mutations.ts';
-import { formatFlagsOverview, type FlagSnapshotEntry } from '../../input/commands/flags-runtime.ts';
-import type { FlagEntry } from '../../input/settings-modal-types.ts';
+import { SecretsManager } from '../../config/secrets.ts';
+import { SettingsModal } from '../../input/settings-modal.ts';
 
-// A flag that flips live, and one gated to startup — both default to a known
-// state so the toggle direction is unambiguous.
-const RUNTIME_FLAG = 'hitl-ux-modes'; // runtimeToggleable, default disabled
-const STARTUP_FLAG = 'permissions-policy-engine'; // startup-gated, default disabled
+// A feature that flips live, and one gated to startup — both default OFF so
+// the toggle direction is unambiguous.
+const RUNTIME_FEATURE = 'adaptive-execution-planner'; // planner.adaptive, live, default off
+const STARTUP_FEATURE = 'unified-runtime-task'; // runtime.unifiedTasks, startup-gated, default off
+const STARTUP_ENUM_FEATURE = 'permissions-policy-engine'; // permissions.engine, startup-gated enum
 
-describe('flag-toggle semantics — applyFlagState + config bridge', () => {
+describe('feature-toggle semantics — domain settings writes + gate bridge', () => {
   let tmpDir: string;
   let cm: ConfigManager;
   let manager: FeatureFlagManager;
 
-  const newManager = () =>
+  const newConfigManager = () =>
     new ConfigManager({
       surfaceRoot: 'tui',
       workingDir: tmpDir,
@@ -44,97 +46,136 @@ describe('flag-toggle semantics — applyFlagState + config bridge', () => {
       configDir: join(tmpDir, '.goodvibes', 'global-tui'),
     });
 
-  const overrides = () => cm.getCategory('featureFlags') as Record<string, string>;
-  const entryFor = (id: string): FlagEntry => {
-    const entry = buildFlagEntries(manager).find((e) => e.flag.id === id);
-    if (!entry) throw new Error(`test flag ${id} not registered`);
-    return entry;
-  };
-
   beforeEach(() => {
-    tmpDir = join(tmpdir(), `gv-flag-toggle-${Date.now()}-${Math.random().toString(36).slice(2)}`);
-    mkdirSync(tmpDir, { recursive: true });
-    cm = newManager();
+    tmpDir = join(tmpdir(), `gv-feature-toggle-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+    mkdirSync(join(tmpDir, '.goodvibes', 'tui'), { recursive: true });
+    cm = newConfigManager();
     manager = createFeatureFlagManager();
-    manager.loadFromConfig({ flags: {} });
+    manager.loadFromConfig({ flags: deriveFeatureStates(cm) });
+    bindFeatureSettingsBridge(cm, manager);
   });
 
   afterEach(() => {
     if (existsSync(tmpDir)) rmSync(tmpDir, { recursive: true, force: true });
   });
 
-  test('runtime-toggleable flag: live effect AND persisted, no restart pending', () => {
-    expect(manager.isEnabled(RUNTIME_FLAG)).toBe(false);
-    const entry = entryFor(RUNTIME_FLAG);
+  test('runtime-toggleable feature: live effect AND persisted, no restart pending', () => {
+    expect(manager.isEnabled(RUNTIME_FEATURE)).toBe(false);
 
-    applyFlagState(entry, 'enabled', manager, cm);
+    cm.setDynamic('planner.adaptive', true);
 
-    // Live effect: the manager sees it enabled now.
-    expect(manager.isEnabled(RUNTIME_FLAG)).toBe(true);
-    expect(manager.getState(RUNTIME_FLAG)).toBe('enabled');
-    expect(manager.hasPendingRestart(RUNTIME_FLAG)).toBe(false);
+    // Live effect: the bridge flipped the gate.
+    expect(manager.isEnabled(RUNTIME_FEATURE)).toBe(true);
+    expect(manager.getState(RUNTIME_FEATURE)).toBe('enabled');
+    expect(manager.hasPendingRestart(RUNTIME_FEATURE)).toBe(false);
 
-    // Persisted: the override is written to disk and survives reload.
-    expect(overrides()[RUNTIME_FLAG]).toBe('enabled');
-    const reloaded = newManager();
-    expect((reloaded.getCategory('featureFlags') as Record<string, string>)[RUNTIME_FLAG]).toBe('enabled');
-
-    // The FlagEntry mirrors the manager's real state.
-    expect(entry.state).toBe('enabled');
-    expect(entry.pendingRestart).toBe(false);
-    expect(entry.persistedState).toBe('enabled');
+    // Persisted: the domain key survives reload and seeds the next launch.
+    const reloaded = newConfigManager();
+    expect(reloaded.get('planner.adaptive')).toBe(true);
+    const nextManager = createFeatureFlagManager();
+    nextManager.loadFromConfig({ flags: deriveFeatureStates(reloaded) });
+    expect(nextManager.isEnabled(RUNTIME_FEATURE)).toBe(true);
   });
 
-  test('startup-gated flag: persisted + pendingRestart, effective state unchanged', () => {
-    expect(manager.getState(STARTUP_FLAG)).toBe('disabled');
-    const entry = entryFor(STARTUP_FLAG);
+  test('startup-gated feature: persisted + pendingRestart, effective state unchanged', () => {
+    expect(manager.getState(STARTUP_FEATURE)).toBe('disabled');
 
-    applyFlagState(entry, 'enabled', manager, cm);
+    cm.setDynamic('runtime.unifiedTasks', true);
 
     // Effective state is NOT faked live — still disabled until restart.
-    expect(manager.getState(STARTUP_FLAG)).toBe('disabled');
-    expect(manager.isEnabled(STARTUP_FLAG)).toBe(false);
+    expect(manager.getState(STARTUP_FEATURE)).toBe('disabled');
+    expect(manager.isEnabled(STARTUP_FEATURE)).toBe(false);
 
     // But the change is recorded as pending a restart, with the target value.
-    expect(manager.hasPendingRestart(STARTUP_FLAG)).toBe(true);
-    expect(manager.getPendingRestartState(STARTUP_FLAG)).toBe('enabled');
+    expect(manager.hasPendingRestart(STARTUP_FEATURE)).toBe(true);
+    expect(manager.getPendingRestartState(STARTUP_FEATURE)).toBe('enabled');
 
-    // And it is persisted so the next launch picks it up.
-    expect(overrides()[STARTUP_FLAG]).toBe('enabled');
-    const reloaded = newManager();
-    expect((reloaded.getCategory('featureFlags') as Record<string, string>)[STARTUP_FLAG]).toBe('enabled');
-
-    // The FlagEntry reflects the unchanged effective state plus the pending marker.
-    expect(entry.state).toBe('disabled');
-    expect(entry.pendingRestart).toBe(true);
-    expect(entry.persistedState).toBe('enabled');
+    // And the domain key is persisted so the next launch picks it up cleanly.
+    const reloaded = newConfigManager();
+    expect(reloaded.get('runtime.unifiedTasks')).toBe(true);
+    const nextManager = createFeatureFlagManager();
+    nextManager.loadFromConfig({ flags: deriveFeatureStates(reloaded) });
+    expect(nextManager.getState(STARTUP_FEATURE)).toBe('enabled');
+    expect(nextManager.hasPendingRestart(STARTUP_FEATURE)).toBe(false);
   });
 
-  test('a fresh runtime that loads the persisted startup-gated override applies it with no pending marker', () => {
-    // First session persists the startup-gated flag on.
-    applyFlagState(entryFor(STARTUP_FLAG), 'enabled', manager, cm);
+  test('enum feature: the mode value drives the gate through the same bridge', () => {
+    expect(manager.isEnabled(STARTUP_ENUM_FEATURE)).toBe(false);
 
-    // Next launch: a new manager seeded from the same on-disk config.
-    const reloadedCm = newManager();
-    const nextManager = createFeatureFlagManager();
-    nextManager.loadFromConfig({
-      flags: reloadedCm.getCategory('featureFlags') as Record<string, 'enabled' | 'disabled' | 'killed'>,
+    cm.setDynamic('permissions.engine', 'policy-engine');
+
+    // Startup-gated: pending, not live.
+    expect(manager.isEnabled(STARTUP_ENUM_FEATURE)).toBe(false);
+    expect(manager.hasPendingRestart(STARTUP_ENUM_FEATURE)).toBe(true);
+    expect(manager.getPendingRestartState(STARTUP_ENUM_FEATURE)).toBe('enabled');
+
+    // Back to baseline clears the pending marker (no restart needed anymore).
+    cm.setDynamic('permissions.engine', 'baseline');
+    expect(manager.hasPendingRestart(STARTUP_ENUM_FEATURE)).toBe(false);
+  });
+
+  describe('through the settings modal', () => {
+    let modal: SettingsModal;
+
+    beforeEach(() => {
+      modal = new SettingsModal();
+      const subscriptionManager = new SubscriptionManager(join(tmpDir, '.goodvibes', 'tui', 'subscriptions.json'));
+      const serviceRegistry = new ServiceRegistry(join(tmpDir, '.goodvibes', 'tui', 'services.json'), {
+        secretsManager: new SecretsManager({ projectRoot: tmpDir, globalHome: tmpDir, configManager: cm }),
+        subscriptionManager,
+      });
+      modal.open(cm, manager, subscriptionManager, serviceRegistry);
     });
 
-    // Now the flag is genuinely effective, and nothing is pending.
-    expect(nextManager.getState(STARTUP_FLAG)).toBe('enabled');
-    expect(nextManager.hasPendingRestart(STARTUP_FLAG)).toBe(false);
-  });
+    const selectHeader = (key: string, featureId: string): void => {
+      modal.selectTarget(key);
+      const selected = modal.getSelected();
+      if (selected?.flag?.feature.id !== featureId) {
+        // Shared or reordered rows: walk the category for the exact header.
+        const items = modal.currentItems;
+        const index = items.findIndex((entry) => entry.flag?.feature.id === featureId);
+        expect(index).toBeGreaterThanOrEqual(0);
+        modal.selectedIndex = index;
+      }
+      expect(modal.getSelected()?.flag?.feature.id).toBe(featureId);
+    };
 
-  test('/flags overview surfaces the pending-restart marker for a startup-gated flag', () => {
-    applyFlagState(entryFor(STARTUP_FLAG), 'enabled', manager, cm);
+    test('toggleSelectedFlag on a live boolean feature writes the domain key and flips the gate', () => {
+      selectHeader('planner.adaptive', RUNTIME_FEATURE);
+      modal.toggleSelectedFlag();
 
-    const snapshot: FlagSnapshotEntry[] = Array.from(manager.getAll().values()).map(
-      ({ flag, state, persistedState, pendingRestart }) => ({ flag, state, persistedState, pendingRestart }),
-    );
-    const text = formatFlagsOverview(snapshot);
+      expect(cm.get('planner.adaptive')).toBe(true);
+      expect(manager.isEnabled(RUNTIME_FEATURE)).toBe(true);
+      const entry = modal.getSelected()!;
+      expect(entry.currentValue).toBe(true);
+      expect(entry.flag!.state).toBe('enabled');
+      expect(entry.flag!.pendingRestart).toBe(false);
 
-    expect(text).toContain('restart pending: saved enabled');
-    expect(text).toContain('still disabled until next launch');
+      // Toggle back off through the same path.
+      modal.toggleSelectedFlag();
+      expect(cm.get('planner.adaptive')).toBe(false);
+      expect(manager.isEnabled(RUNTIME_FEATURE)).toBe(false);
+    });
+
+    test('toggleSelectedFlag on a startup-gated feature shows the pending-restart marker at the point of change', () => {
+      selectHeader('runtime.unifiedTasks', STARTUP_FEATURE);
+      modal.toggleSelectedFlag();
+
+      expect(cm.get('runtime.unifiedTasks')).toBe(true);
+      const entry = modal.getSelected()!;
+      // The row's saved value changed; the effective state honestly did not.
+      expect(entry.currentValue).toBe(true);
+      expect(entry.flag!.state).toBe('disabled');
+      expect(entry.flag!.pendingRestart).toBe(true);
+      expect(entry.flag!.persistedState).toBe('enabled');
+    });
+
+    test('toggleSelectedFlag on an enum feature jumps between its stock active mode and its off mode', () => {
+      selectHeader('permissions.engine', STARTUP_ENUM_FEATURE);
+      modal.toggleSelectedFlag();
+      expect(cm.get('permissions.engine')).toBe('policy-engine');
+      modal.toggleSelectedFlag();
+      expect(cm.get('permissions.engine')).toBe('baseline');
+    });
   });
 });

@@ -120,6 +120,13 @@ export class SettingsModal {
 
   /** Current value of the inline edit buffer. */
   public editBuffer = '';
+  /**
+   * Scroll offset (in wrapped lines) of the documentation pane for the
+   * selected row. The renderer clamps it to the pane's real content height
+   * and shows honest more-above/below markers — long feature documentation
+   * scrolls, it never clips. Reset whenever the selection changes.
+   */
+  public contextScroll = 0;
   /** Server awaiting explicit allow-all confirmation, if any. */
   public mcpAllowAllConfirmationTarget: string | null = null;
   /**
@@ -225,7 +232,13 @@ export class SettingsModal {
     this.searchQuery = '';
     this.searchResults = [];
     this.searchFocused = false;
+    this.contextScroll = 0;
     this.active = true;
+  }
+
+  /** Scroll the documentation pane by `delta` wrapped lines (renderer clamps the top end). */
+  scrollContext(delta: number): void {
+    this.contextScroll = Math.max(0, this.contextScroll + delta);
   }
 
   close(): void {
@@ -242,6 +255,7 @@ export class SettingsModal {
     this.searchQuery = '';
     this.searchResults = [];
     this.searchFocused = false;
+    this.contextScroll = 0;
     this.serviceRegistry = null;
     this.secretsManager = null;
     this.onSettingApplied = null;
@@ -266,6 +280,7 @@ export class SettingsModal {
   setSearchQuery(query: string): void {
     this.searchQuery = query;
     this.searchFocused = true;
+    this.contextScroll = 0;
     if (query.trim().length === 0) {
       this.searchResults = [];
     } else {
@@ -286,6 +301,7 @@ export class SettingsModal {
     if (this.editingMode) return;
     this.categoryIndex = (this.categoryIndex + 1) % SETTINGS_CATEGORIES.length;
     this.selectedIndex = 0;
+    this.contextScroll = 0;
     this.subscriptionLogoutConfirmationTarget = null;
     this._reloadTabEntries();
   }
@@ -295,6 +311,7 @@ export class SettingsModal {
     if (this.editingMode) return;
     this.categoryIndex = (this.categoryIndex - 1 + SETTINGS_CATEGORIES.length) % SETTINGS_CATEGORIES.length;
     this.selectedIndex = 0;
+    this.contextScroll = 0;
     this.subscriptionLogoutConfirmationTarget = null;
     this._reloadTabEntries();
   }
@@ -326,6 +343,7 @@ export class SettingsModal {
 
   moveUp(): void {
     if (this.editingMode) return;
+    this.contextScroll = 0;
     if (this.searchFocused) {
       if (this.searchResults.length > 0) {
         this.selectedIndex = (this.selectedIndex - 1 + this.searchResults.length) % this.searchResults.length;
@@ -348,6 +366,7 @@ export class SettingsModal {
 
   moveDown(): void {
     if (this.editingMode) return;
+    this.contextScroll = 0;
     if (this.searchFocused) {
       if (this.searchResults.length > 0) {
         this.selectedIndex = (this.selectedIndex + 1) % this.searchResults.length;
@@ -410,6 +429,7 @@ export class SettingsModal {
   selectTarget(target?: string): void {
     const normalized = target?.trim();
     if (!normalized) return;
+    this.contextScroll = 0;
 
     const categoryIndex = SETTINGS_CATEGORIES.indexOf(normalized as SettingsCategory);
     if (categoryIndex >= 0) {

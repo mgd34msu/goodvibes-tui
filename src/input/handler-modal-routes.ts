@@ -234,6 +234,8 @@ type SettingsRouteState = {
     searchQuery: string;
     commitEdit: () => void;
     toggleSelectedFlag: () => void;
+    /** Scroll the documentation pane (PgUp/PgDn); the renderer clamps and shows honest markers. */
+    scrollContext?: (delta: number) => void;
     activateSelected: () => void;
     handleSubscriptionLogoutKey?: (key: string) => 'confirmed' | 'cancelled' | 'absorbed' | 'inactive';
     adjustSelected: (direction: 'left' | 'right', step?: number) => void;
@@ -414,6 +416,12 @@ export function handleSettingsModalToken(state: SettingsRouteState, token: Input
     else if (token.logicalName === 'r' && !state.settingsModal.editingMode && !state.settingsModal.searchFocused) {
       const reset = state.settingsModal.resetSelected?.();
       if (reset) syncRuntimeAfterSettingReset(state.commandContext, reset.key, reset.value);
+    }
+    else if (token.logicalName === 'pageup' && !state.settingsModal.editingMode) {
+      state.settingsModal.scrollContext?.(-3);
+    }
+    else if (token.logicalName === 'pagedown' && !state.settingsModal.editingMode) {
+      state.settingsModal.scrollContext?.(3);
     }
     else if (token.logicalName === 'tab' && !state.settingsModal.searchFocused) {
       if (state.settingsModal.toggleFocusPane) state.settingsModal.toggleFocusPane();
