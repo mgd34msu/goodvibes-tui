@@ -2,6 +2,7 @@ import type { PanelManager } from '../panel-manager.ts';
 import { FleetPanel } from '../fleet-panel.ts';
 import { createFleetReadModel } from '../fleet-read-model.ts';
 import { LocalAuthPanel } from '../local-auth-panel.ts';
+import { NotificationsPanel } from '../notifications-panel.ts';
 import type { ResolvedBuiltinPanelDeps } from './shared.ts';
 import { requireUiServices } from './shared.ts';
 
@@ -85,6 +86,24 @@ export function registerOperationsPanels(manager: PanelManager, deps: ResolvedBu
   // workspace; both ids now land on fleet directly — alias
   // resolution is a single hop, so this cannot chain through 'incident'.
   manager.registerAlias('forensics', 'fleet');
+
+  // Notifications — the visible home for the panel_only notification
+  // target: anything a NotificationRouter (SDK) routes there (including
+  // burst/batch-collapsed groups, shown with their real running count)
+  // renders here instead of having nowhere to go. See notifications-feed.ts
+  // for why this exists. Not preloaded (only 'tokens' preloads, per the
+  // panel-consolidation cleanup below) — the shared feed singleton
+  // accumulates independently of whether this view has been opened yet, so
+  // nothing is lost by instantiating it lazily on first open like every
+  // other panel here.
+  manager.registerType({
+    id: 'notifications',
+    name: 'Notifications',
+    icon: 'N',
+    category: 'runtime-ops',
+    description: 'Notifications routed to the panel-only target (quiet/balanced-mode operational chatter, burst- and batch-collapsed groups) with their real collapsed counts',
+    factory: () => new NotificationsPanel(),
+  });
 
   // local-auth is a DELIBERATE EXCEPTION to the purge: it stays a
   // registered panel because it is the host for the masked password-entry
