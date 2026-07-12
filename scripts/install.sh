@@ -92,6 +92,57 @@ launchd_daemon_plist_path() { printf '%s' "$HOME/Library/LaunchAgents/$LAUNCHD_D
 # used by the restart path to find and back up a broken unit file on disk.
 systemd_unit_path() { printf '%s' "$HOME/.config/systemd/user/$1"; }
 
+# First line of `systemctl --version` is "systemd NNN (...)"; prints NNN, or
+# nothing when systemctl is absent or the output is unrecognized.
+detect_systemd_major_version() {
+  systemctl --version 2>/dev/null | sed -n '1s/^systemd \([0-9][0-9]*\).*/\1/p'
+}
+
+# RestartSteps=/RestartMaxDelaySec= (escalating restart delays) landed in
+# systemd 254. On older systemd — or when the version cannot be read — the
+# unit degrades to the flat RestartSec retry, which StartLimitIntervalSec=0
+# already keeps retrying forever instead of tombstoning.
+systemd_supports_restart_steps() {
+  _sysd_major="$1"
+  [ -n "$_sysd_major" ] && [ "$_sysd_major" -ge 254 ] 2>/dev/null
+}
+
+# Whether lingering is enabled for the current user — the readback that makes
+# "starts at boot" an observed fact rather than a hope. `loginctl enable-linger`
+# can exit 0 without taking effect in some polkit setups, so the show-user
+# property is the source of truth, checked before and after enabling.
+linger_enabled() {
+  loginctl show-user "$(id -un)" --property=Linger 2>/dev/null | grep -q '^Linger=yes'
+}
+
+# A user unit with WantedBy=default.target only starts when its user logs in.
+# Lingering starts the user's systemd instance at boot, so the daemon comes up
+# on a machine nobody has logged into (the always-on-box case). Returns 0 only
+# when lingering is VERIFIED on; on any failure it prints exactly one honest
+# instruction naming the command to run once, and returns 1 so the caller's
+# closing copy says "on login" instead of "at boot".
+ensure_linger() {
+  if ! command -v loginctl >/dev/null 2>&1; then
+    say "  NOTE: loginctl not found — could not enable lingering, so the daemon starts"
+    say "  at login rather than at boot. Enable it once yourself with:"
+    say "    loginctl enable-linger $(id -un)"
+    return 1
+  fi
+  if linger_enabled; then
+    say "  lingering  already enabled for $(id -un)"
+    return 0
+  fi
+  loginctl enable-linger "$(id -un)" >/dev/null 2>&1 || true
+  if linger_enabled; then
+    say "  lingering  enabled for $(id -un)"
+    return 0
+  fi
+  say "  NOTE: could not enable lingering (polkit may require an interactive session),"
+  say "  so the daemon starts at login rather than at boot. Enable it once yourself with:"
+  say "    loginctl enable-linger $(id -un)"
+  return 1
+}
+
 # --- PATH line (installer-managed, same marker discipline as service units) ---
 #
 # "Start with: goodvibes" must not be a false promise. When
@@ -453,10 +504,27 @@ daemon_running() {
 # faked.
 
 write_systemd_unit() {
-  # write_systemd_unit <path> — writes the installer-managed unit text only,
-  # no activation. Split out so tests can validate the generated text without
-  # touching the host's systemd.
+  # write_systemd_unit <path> [systemd-major-version] — writes the
+  # installer-managed unit text only, no activation. Split out so tests can
+  # validate the generated text without touching the host's systemd; the
+  # optional version argument lets tests pin the systemd feature level instead
+  # of inheriting whatever the host runs.
+  #
+  # Restart posture: StartLimitIntervalSec=0 disables the start-rate limiter,
+  # so a crashing daemon keeps retrying (spaced by the delays below) instead
+  # of landing in the permanent "start-limit-hit" failed state that only a
+  # manual reset-failed clears. On systemd >= 254 the retry delay escalates
+  # from RestartSec up to RestartMaxDelaySec across RestartSteps attempts; on
+  # older systemd those two directives are omitted (they would be ignored with
+  # a warning) and the flat RestartSec applies to every retry.
   _unit_path="$1"
+  _sysd_version="${2:-$(detect_systemd_major_version)}"
+  _restart_escalation=""
+  if systemd_supports_restart_steps "$_sysd_version"; then
+    _restart_escalation="
+RestartSteps=8
+RestartMaxDelaySec=300"
+  fi
   mkdir -p "$(dirname "$_unit_path")"
   cat > "$_unit_path" <<EOF
 # $INSTALLER_MARKER
@@ -466,12 +534,13 @@ write_systemd_unit() {
 [Unit]
 Description=GoodVibes daemon (shared session broker + companion host)
 After=network-online.target
+StartLimitIntervalSec=0
 
 [Service]
 Type=simple
 ExecStart=$INSTALL_DIR/goodvibes-daemon
 Restart=on-failure
-RestartSec=2
+RestartSec=2$_restart_escalation
 
 [Install]
 WantedBy=default.target
@@ -531,9 +600,16 @@ setup_daemon_service_systemd() {
   fi
 
   if systemctl --user enable --now "$SYSTEMD_DAEMON_UNIT" 2>/dev/null; then
+    # Lingering decides whether "enabled" means boot or merely login, so the
+    # closing line below states whichever one was actually verified.
+    if ensure_linger; then
+      _daemon_starts="at boot"
+    else
+      _daemon_starts="on login"
+    fi
     if systemctl --user is-active --quiet "$SYSTEMD_DAEMON_UNIT" 2>/dev/null; then
       say "  started    $SYSTEMD_DAEMON_UNIT (active)"
-      say "  The daemon starts on login and restarts on failure."
+      say "  The daemon starts $_daemon_starts and restarts on failure."
     else
       say "  NOTE: enabled $SYSTEMD_DAEMON_UNIT but it is not active yet. Inspect it with:"
       say "    systemctl --user status $SYSTEMD_DAEMON_UNIT"
