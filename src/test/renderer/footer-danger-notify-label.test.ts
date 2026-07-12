@@ -1,5 +1,5 @@
 /**
- * W0.4(e): the footer's `hitl:${hitlMode}` context-line label shared
+ * The footer's `hitl:${hitlMode}` context-line label shared
  * vocabulary with tool-approval risk, but /mode (aliased /hitl) only governs
  * UX notification verbosity (quiet/balanced/operator) — not auto-approval.
  * A user with hitlMode: 'operator' (careful supervision) could see

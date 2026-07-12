@@ -14,7 +14,7 @@ import { pairingModalGoldenSurface } from '../../../panels/modals/pairing-modal.
 import { planningModalGoldenSurface } from '../../../panels/modals/planning-modal.ts';
 
 // ---------------------------------------------------------------------------
-// Group-B config-modal-surface registration completeness (W6.1 WO-P port).
+// Group-B config-modal-surface registration completeness (port).
 // The 12 ported ConfigModalSurfaces must all exist under their '-modal' names
 // with the required host contract. The panel→modal redirects (including the
 // 'sessions' -> 'sessionPicker' fold) are asserted end-to-end against a live

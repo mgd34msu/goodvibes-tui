@@ -1,7 +1,7 @@
 // ---------------------------------------------------------------------------
-// ecosystem-modals-golden.test.ts — golden frames for the W6.1 group-B
+// ecosystem-modals-golden.test.ts — golden frames for the group-B
 // (ecosystem & governance) modal surfaces, RE-BASELINED through the canonical
-// config-modal host (group-B port, WO-P).
+// config-modal host (group-B port).
 //
 // Each surface is opened in a real ConfigModal and rendered via
 // renderConfigModal → ModalFactory (the exact production render path), rather

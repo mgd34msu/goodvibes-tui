@@ -51,7 +51,7 @@ describe('renderFleetAgentTranscript', () => {
     expect(linesToText(result.lines).some((l) => l.includes('hello frozen'))).toBe(true);
   });
 
-  test("a 'frozen' transcript carries an honest read-only notice (W3.3 design point 4) that a 'live' one does not", () => {
+  test("a 'frozen' transcript carries an honest read-only notice (design point 4) that a 'live' one does not", () => {
     const frozen = renderFleetAgentTranscript(
       [{ role: 'user', content: 'done agent content' }],
       /* isTerminal */ true,
@@ -261,7 +261,7 @@ describe('renderFleetLedgerFallback', () => {
     expect(lines.some((l) => l.includes('turn 29'))).toBe(true);
   });
 
-  test('shows a truncated result preview for a successful tool_execution row (W3.3: "genuinely useful", not just a name)', () => {
+  test('shows a truncated result preview for a successful tool_execution row ("genuinely useful", not just a name)', () => {
     const lines = linesToText(renderFleetLedgerFallback(
       [{ type: 'tool_execution', toolName: 'Read', success: true, resultPreview: 'line one\nline two of file content' }],
       80,
@@ -277,7 +277,7 @@ describe('renderFleetLedgerFallback', () => {
 });
 
 // ---------------------------------------------------------------------------
-// W3.3 — a real fixture matching the SDK writer's exact message vocabulary
+// — a real fixture matching the SDK writer's exact message vocabulary
 // (goodvibes-sdk packages/sdk/src/platform/agents/session.ts's `meta` message
 // and orchestrator-runner.ts's session_config/llm_request/llm_response/
 // tool_execution/session_end messages — see this test's fixture file for the

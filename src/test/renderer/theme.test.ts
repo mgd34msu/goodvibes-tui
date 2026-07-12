@@ -188,7 +188,7 @@ describe('light mode token values differ from dark', () => {
 // ---------------------------------------------------------------------------
 
 // ---------------------------------------------------------------------------
-// resolveUiTones() — chrome-token mode dimension (WO-001)
+// resolveUiTones() — chrome-token mode dimension
 //
 // UI_TONES (ui-primitives.ts) is the dark entry; dark resolution must stay
 // byte-identical (same reference) to that constant. The light entry must be

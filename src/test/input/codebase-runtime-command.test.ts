@@ -134,7 +134,7 @@ describe('/codebase status', () => {
     store.close();
   });
 
-  test('Stage B: auto-injection off by default states BOTH gates (flag off + setting off)', () => {
+  test('auto-injection off by default states BOTH gates (flag off + setting off)', () => {
     const { store, configManager } = makeRealStore();
     const registry = new CommandRegistry();
     registerCodebaseRuntimeCommands(registry);
@@ -148,7 +148,7 @@ describe('/codebase status', () => {
     store.close();
   });
 
-  test('Stage B: auto-injection on when the flag AND storage.codeIndexEnabled are both on', () => {
+  test('auto-injection on when the flag AND storage.codeIndexEnabled are both on', () => {
     const { store, configManager } = makeRealStore();
     configManager.set(CODE_INDEX_ENABLED_CONFIG_KEY as ConfigKey, true as never);
     const registry = new CommandRegistry();
@@ -160,7 +160,7 @@ describe('/codebase status', () => {
     store.close();
   });
 
-  test('Stage B: flag on but setting off states only the setting reason', () => {
+  test('flag on but setting off states only the setting reason', () => {
     const { store, configManager } = makeRealStore();
     const registry = new CommandRegistry();
     registerCodebaseRuntimeCommands(registry);
@@ -174,7 +174,7 @@ describe('/codebase status', () => {
     store.close();
   });
 
-  test('Stage B: last-reindex activity is surfaced honestly (none, then indexed)', () => {
+  test('last-reindex activity is surfaced honestly (none, then indexed)', () => {
     const { store, configManager } = makeRealStore();
     const registry = new CommandRegistry();
     registerCodebaseRuntimeCommands(registry);

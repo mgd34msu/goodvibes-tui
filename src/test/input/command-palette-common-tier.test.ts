@@ -1,5 +1,5 @@
 /**
- * UX-C item 4: the '/' command palette listed all 130+ registered commands in
+ * item 4: the '/' command palette listed all 130+ registered commands in
  * one flat alphabetical block ("the 132-command palette unranked" evaluator
  * finding) — a bare '/' with no filter typed yet gave no signal about which
  * dozen commands actually matter day to day. Fixed by curating a "common"
@@ -26,7 +26,7 @@ function buildSmallRegistry(): CommandRegistry {
   return registry;
 }
 
-describe('CommandRegistry.fuzzyMatch — common tier on empty query (UX-C item 4)', () => {
+describe('CommandRegistry.fuzzyMatch — common tier on empty query (item 4)', () => {
   test('COMMON_COMMAND_NAMES has exactly the curated 12, all real command names', () => {
     expect([...COMMON_COMMAND_NAMES].sort()).toEqual(
       ['checkpoint', 'codebase', 'config', 'help', 'imagine', 'model', 'panel', 'quit', 'recall', 'search', 'sessions', 'workstream'].sort(),
@@ -68,7 +68,7 @@ describe('CommandRegistry.fuzzyMatch — common tier on empty query (UX-C item 4
   });
 });
 
-describe('AutocompleteEngine.commonCount (UX-C item 4)', () => {
+describe('AutocompleteEngine.commonCount (item 4)', () => {
   test('commonCount marks the leading common-tier run only when the query is empty', () => {
     const registry = buildSmallRegistry();
     const engine = new AutocompleteEngine(registry);

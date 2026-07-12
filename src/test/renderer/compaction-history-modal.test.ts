@@ -52,7 +52,7 @@ describe('buildCompactionHistoryText', () => {
 });
 
 // ---------------------------------------------------------------------------
-// formatCompactionEvent — quality-score grade suffix (W5.4/B28)
+// formatCompactionEvent — quality-score grade suffix ()
 // ---------------------------------------------------------------------------
 
 function makeEvent(overrides: Partial<CompactionEvent> = {}): CompactionEvent {

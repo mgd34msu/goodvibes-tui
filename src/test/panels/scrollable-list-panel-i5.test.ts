@@ -2,7 +2,7 @@
 // scrollable-list-panel-i5.test.ts — I5: selection gutter + filter input line
 //
 // Tests the opt-in showSelectionGutter flag and the buildFilterLine helper
-// on ScrollableListPanel (WO-153: SearchableListPanel was deleted once its
+// on ScrollableListPanel (SearchableListPanel was deleted once its
 // last subclasses — skills, memory — converged onto ScrollableListPanel's
 // modal '/' filter; this file now exercises that shared contract directly).
 // ---------------------------------------------------------------------------
@@ -155,7 +155,7 @@ describe('ScrollableListPanel — showSelectionGutter (I5)', () => {
 });
 
 // ---------------------------------------------------------------------------
-// ScrollableListPanel — buildFilterLine (I5, WO-153 converged modal filter)
+// ScrollableListPanel — buildFilterLine (I5, converged modal filter)
 //
 // This is the single pinned rendering contract every filterable list panel
 // shares: 'Filter: ' unfocused / '[Filter] ' focused, literal trailing '_'

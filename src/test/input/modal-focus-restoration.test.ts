@@ -86,7 +86,7 @@ describe('modal focus restoration', () => {
 
   test('escape closes only the top modal and reopens the previous modal', () => {
     const state = buildState();
-    // W6.1 retirement: this exercised the process modal as the "previous" entry
+    // retirement: this exercised the process modal as the "previous" entry
     // in the stack; it now uses the bookmark modal (a surviving reopenable
     // modal) — the escape/reopen focus-restoration logic under test is unchanged.
     state.bookmarkModal.active = true;

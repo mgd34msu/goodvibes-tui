@@ -2,10 +2,10 @@
 // file-dev-panels-ux.test.ts — UX behavior tests for the development-surface
 // panels (git / diff).
 //
-// W6.1 (the purge): this file used to also cover file-explorer, file-preview,
+// (the purge): this file used to also cover file-explorer, file-preview,
 // symbol-outline (all DELETE-disposition) and worktree (RETIRE-INTO-FLEET).
 // Their describe blocks were removed along with the panels — see
-// .goodvibes/audit/2026-07-04-wave6-briefs.json (W6.1).
+// .goodvibes/audit/2026-07-04-wave6-briefs.json.
 //
 // These assert the *user-facing* improvements: at-a-glance counts, status
 // glyphs, context-aware footer hints, and tree icons — not just geometry.
@@ -115,7 +115,7 @@ describe('DiffPanel — at-a-glance change counts', () => {
   });
 });
 
-// W6.1 (the purge): 'DiffPanel — o opens the current file in preview via the
+// (the purge): 'DiffPanel — o opens the current file in preview via the
 // bridge' removed here — 'preview' is DELETE-disposition with no successor
 // surface, and diff-panel.ts no longer has an 'o' key or a
 // handlePanelIntegrationAction hook (see diff-panel.ts's comment at the old

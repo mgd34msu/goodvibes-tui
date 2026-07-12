@@ -55,7 +55,7 @@ const FAKE_MODEL: ModelDefinition = {
   selectable: true,
 };
 
-/** A reviewed, high-confidence record that scores over the relevance floor for the rate-limiting query below (mirrors the SDK's own wo805 turn-loop fixture). */
+/** A reviewed, high-confidence record that scores over the relevance floor for the rate-limiting query below (mirrors the SDK's own turn-loop fixture). */
 function makeRelevantRecord(): MemoryRecord {
   return {
     id: 'mem_ratelimit',
@@ -123,7 +123,7 @@ function makeCapturingProviderRegistry(): { providerRegistry: ProviderRegistry; 
 }
 
 describe('buildSharedOrchestratorCoreServices — the shared setCoreServices payload (seam)', () => {
-  test('derives memoryRegistry.getAll() from the injected memorySpine\'s recall snapshot — the wo805 main-session injection gate', () => {
+  test('derives memoryRegistry.getAll() from the injected memorySpine\'s recall snapshot — the main-session injection gate', () => {
     const record = makeRelevantRecord();
     const payload = buildSharedOrchestratorCoreServices({
       services: makeServicesSource(makeFakeMemorySpine([record])),

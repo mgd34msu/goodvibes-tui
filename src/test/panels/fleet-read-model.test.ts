@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------------
 // fleet-read-model.test.ts
-// W2.2 — fleet read-model: tree building from flat ProcessNode[], sorting,
+// — fleet read-model: tree building from flat ProcessNode[], sorting,
 // tree-prefix correctness, cycle guard, state glyph/tone mapping, and honest
 // cost/token aggregation (never a fabricated $0.00/0-token reading).
 // ---------------------------------------------------------------------------
@@ -409,7 +409,7 @@ describe('fleetStateGlyph / fleetStateTone / isTerminalProcessState / isRunningP
     expect(new Set(kinds.map(fleetKindTag)).size).toBe(kinds.length);
   });
 
-  test("fleetKindTag('code-index') is a distinct, short tag (Wave-5 wo804)", () => {
+  test("fleetKindTag('code-index') is a distinct, short tag", () => {
     expect(fleetKindTag('code-index')).toBe('index');
   });
 });
@@ -421,7 +421,7 @@ describe('fleetStateGlyph / fleetStateTone / isTerminalProcessState / isRunningP
 // real, distinct unit of work, not an arithmetic sum of other rows.
 // ---------------------------------------------------------------------------
 
-describe("buildFleetSnapshot — 'code-index' leaf node (wo804)", () => {
+describe("buildFleetSnapshot — 'code-index' leaf node", () => {
   test('a building code-index node counts toward runningCount and contributes no cost/tokens (it reports none)', () => {
     const node = makeNode({
       id: 'code-index:main',
@@ -460,7 +460,7 @@ describe("buildFleetSnapshot — 'code-index' leaf node (wo804)", () => {
 // and buildFleetRows nesting workstream -> phase -> work-item -> agent.
 // ---------------------------------------------------------------------------
 
-describe('buildFleetSnapshot — workstream/phase/work-item rollup (wo703)', () => {
+describe('buildFleetSnapshot — workstream/phase/work-item rollup', () => {
   function makeUsage(inputTokens: number, outputTokens: number) {
     return { inputTokens, outputTokens, cacheReadTokens: 0, cacheWriteTokens: 0, llmCallCount: 1, turnCount: 1, toolCallCount: 1 };
   }
@@ -689,7 +689,7 @@ describe('createStaticFleetReadModel', () => {
 });
 
 // ---------------------------------------------------------------------------
-// d4 (W6.2): /schedule AutomationManager jobs surface in the fleet tree as
+// d4: /schedule AutomationManager jobs surface in the fleet tree as
 // 'schedule'-kind nodes with the automation-manager source marker. The SDK's
 // adaptAutomationJob (platform/runtime/fleet/adapters/automation.ts) produces
 // the ProcessNode; this mirrors its exact documented output (a job created via

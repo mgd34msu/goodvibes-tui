@@ -5,7 +5,7 @@
  * space from getPromptHeight *before* the real render happens (see
  * src/main.ts's overlayRows computation), so any drift between the two
  * clips or misplaces the conversation viewport. This is the single
- * highest-value regression test for the W1.3 hunk-selection feature
+ * highest-value regression test for the hunk-selection feature
  * (Risk 2 in the work order brief).
  */
 import { describe, expect, test } from 'bun:test';
@@ -77,7 +77,7 @@ describe('PermissionPromptUI.getPromptHeight / createPromptLines parity', () => 
     expect(lines.length).toBe(height);
   });
 
-  // UX-B item 2a/2b: condensed low-risk cards, multi-path fields, and the `d`
+  // item 2a/2b: condensed low-risk cards, multi-path fields, and the `d`
   // details toggle must all keep getPromptHeight and createPromptLines in sync,
   // or the render loop clips the viewport.
   function makeFilesRequest(

@@ -62,7 +62,7 @@ describe('ANSI escape stripping in getDisplayWidth', () => {
   });
 
   test('cross/tick glyph family counts as width 1 (fixes the "✕t" error-line glitch)', () => {
-    // WO UX-A item 4: ✕ (U+2715) / ✖ (U+2716) sit inside the emoji block but
+    // WO item 4: ✕ (U+2715) / ✖ (U+2716) sit inside the emoji block but
     // terminals draw them one cell wide. Counting them as 2 desynced the styled
     // cell grid from the physical glyph and corrupted the following text.
     expect(getDisplayWidth('✕')).toBe(1);

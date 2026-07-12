@@ -184,7 +184,7 @@ describe('operator surfaces gate', () => {
     });
     const ids = manager.getRegisteredTypes().map((entry) => entry.id);
 
-    // W6.1 (the purge) — group B (WO-P): the 12 ecosystem/governance panels
+    // (the purge) — group B: the 12 ecosystem/governance panels
     // migrated to config-modal SURFACES registered centrally in
     // registerBuiltinModals. Each old panel id is gone and redirects to its
     // '-modal' surface; 'sessions' folds into the existing session picker.
@@ -204,12 +204,12 @@ describe('operator surfaces gate', () => {
       expect(manager.getModalSurface(name)?.name).toBe(name);
     }
     expect(ids).toContain('fleet');
-    // W6.1 (WO-A): local-auth stays a registered panel — it is the host for the
+    // local-auth stays a registered panel — it is the host for the
     // masked password-entry sub-mode (LocalAuthPanel.openMaskedEntry) and cannot
     // be retired without regressing that secure input path.
     expect(ids).toContain('local-auth');
 
-    // W6.1 (WO-A, the purge): services, subscription, remote, provider-health,
+    // (the purge): services, subscription, remote, provider-health,
     // settings-sync, and sandbox were MIGRATE-TO-MODAL — no longer registered as
     // panels; each id resolves to a config-modal surface via
     // registerModalRedirect. 'providers'/'accounts' (former provider-health
@@ -228,7 +228,7 @@ describe('operator surfaces gate', () => {
     // local-auth is deliberately NOT redirected (masked-entry host).
     expect(manager.getModalRedirect('local-auth')).toBeUndefined();
 
-    // W6.1 (the purge): communication, cockpit, approval, incident,
+    // (the purge): communication, cockpit, approval, incident,
     // orchestration, and ops were RETIRE-INTO-FLEET — they no longer appear
     // as standalone registered types; each id now resolves (via
     // PanelManager.registerAlias) to the same Fleet instance.
@@ -236,31 +236,31 @@ describe('operator surfaces gate', () => {
       expect(ids).not.toContain(retiredId);
       expect(manager.open(retiredId)).toBe(manager.open('fleet'));
     }
-    // WO-114: the 'forensics' panel merged into the incident console, which
-    // itself later retired into fleet (W6.1) — both ids now resolve straight
+    // the 'forensics' panel merged into the incident console, which
+    // itself later retired into fleet — both ids now resolve straight
     // to fleet (alias resolution is a single hop; forensics does not chain
     // through the also-retired 'incident').
     expect(manager.open('forensics')).toBe(manager.open('fleet'));
-    // WO-110: the 'agent-logs' console merged into inspector, which itself
-    // later retired into fleet (W6.1) — both ids now resolve straight to
+    // the 'agent-logs' console merged into inspector, which itself
+    // later retired into fleet — both ids now resolve straight to
     // fleet.
     expect(manager.open('agent-logs')).toBe(manager.open('fleet'));
     expect(manager.open('inspector')).toBe(manager.open('fleet'));
-    // WRFC retired into fleet alongside inspector (W6.1).
+    // WRFC retired into fleet alongside inspector.
     expect(manager.open('wrfc')).toBe(manager.open('fleet'));
-    // WO-113: the 'context' visualizer merged into the tokens console; the
+    // the 'context' visualizer merged into the tokens console; the
     // retired id survives only as a PanelManager alias.
     expect(manager.open('context')).toBe(manager.open('tokens'));
-    // W6.1 (the purge) — group B: 'sessions' folded into the existing session
+    // (the purge) — group B: 'sessions' folded into the existing session
     // picker modal — no longer a registered panel; redirects to 'sessionPicker'.
     expect(ids).not.toContain('sessions');
     expect(manager.getModalRedirect('sessions')).toBe('sessionPicker');
-    // W6.1: panel-list was DELETE-disposition — it no longer resolves at all
+    // panel-list was DELETE-disposition — it no longer resolves at all
     // (no alias, unlike the RETIRE ids above).
     expect(ids).not.toContain('panel-list');
   });
 
-  test('W6.1: prewarmRegistered() only constructs tokens post-purge (thinking/tools/inspector/wrfc/communication/provider-health/system-messages no longer preload)', () => {
+  test('prewarmRegistered() only constructs tokens after the panel-consolidation cleanup (thinking/tools/inspector/wrfc/communication/provider-health/system-messages no longer preload)', () => {
     const manager = new PanelManager();
     const uiServices = createUiRuntimeServices(runtimeServices);
     const factoryCalls: string[] = [];
@@ -289,13 +289,13 @@ describe('operator surfaces gate', () => {
     expect(factoryCalls).toEqual(['tokens']);
   });
 
-  test('WO-152: cost/memory are always registered and open to a "not configured" state without their optional dependency', () => {
+  test('cost/memory are always registered and open to a "not configured" state without their optional dependency', () => {
     const manager = new PanelManager();
     const uiServices = createUiRuntimeServices(runtimeServices);
     // Deliberately omit memoryRegistry and getOrchestratorUsage — the exact
     // conditions that used to skip registration entirely and make
     // `/panel open <id>` report "Unknown panel".
-    // (W6.1: forensicsRegistry/evalRegistry are also omitted here, but that
+    // (forensicsRegistry/evalRegistry are also omitted here, but that
     // no longer matters for this assertion — incident retired into fleet and
     // eval was deleted outright; see the next assertions below.)
     registerBuiltinPanels(manager, {
@@ -309,7 +309,7 @@ describe('operator surfaces gate', () => {
     });
     const ids = manager.getRegisteredTypes().map((entry) => entry.id);
     expect(ids).toContain('cost');
-    // W6.1 (the purge) — group B: 'memory' migrated to the 'memory-modal'
+    // (the purge) — group B: 'memory' migrated to the 'memory-modal'
     // config-modal surface. It no longer registers as a panel (the modal owns
     // the "not configured" degraded state now — see memory-modal.ts); it redirects.
     expect(ids).not.toContain('memory');
@@ -324,7 +324,7 @@ describe('operator surfaces gate', () => {
       manager.close(id);
     }
 
-    // W6.1 (the purge): 'incident' retired into fleet (no "not configured"
+    // (the purge): 'incident' retired into fleet (no "not configured"
     // empty state anymore — it just opens Fleet); 'eval' was deleted
     // outright (DELETE-disposition, no surviving human surface).
     expect(ids).not.toContain('eval');
@@ -412,7 +412,7 @@ describe('operator surfaces gate', () => {
     const subscription = registry.get('subscription');
     expect(subscription).toBeDefined();
 
-    // W6.1: the subscription panel migrated to a config-modal surface — the bare
+    // the subscription panel migrated to a config-modal surface — the bare
     // command now opens it via ctx.openModal, not ctx.openSubscriptionPanel.
     let openedModal: string | null = null;
     await subscription!.handler([], makeCommandContext('sess-subscription-panel', {
@@ -499,7 +499,7 @@ describe('operator surfaces gate', () => {
     const remote = registry.get('remote');
     expect(remote).toBeDefined();
 
-    // W6.1: the remote panel migrated to a config-modal surface — the bare
+    // the remote panel migrated to a config-modal surface — the bare
     // command now opens it via ctx.openModal, not ctx.openRemotePanel.
     let openedModal: string | null = null;
     await remote!.handler([], makeCommandContext('sess-remote-panel', {

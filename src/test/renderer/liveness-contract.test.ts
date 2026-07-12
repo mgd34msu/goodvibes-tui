@@ -1,8 +1,8 @@
 /**
- * W6.2 c — liveness contract harness, seeded against the settings modal.
+ * c — liveness contract harness, seeded against the settings modal.
  *
  * The reusable assertions live in ../helpers/liveness.ts so the integrator can
- * point them at the WO-A/WO-B provider/MCP modals. Here they are exercised
+ * point them at the provider/MCP modals. Here they are exercised
  * against a real render surface: a settings modal backed by a frozen-but-
  * updatable ConfigManager (deterministic tmp dir — golden-frames excludes the
  * live-config modal for exactly this reason; we inject one). A values-only

@@ -204,7 +204,7 @@ describe('Permission flow — session approval cache', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Per-hunk modifiedArgs contract seam (W1.3)
+// Per-hunk modifiedArgs contract seam
 //
 // The installed @pellux/goodvibes-sdk here is 0.36.0, whose PermissionManager
 // does not yet expose PermissionCheckResult.modifiedArgs — that field lands

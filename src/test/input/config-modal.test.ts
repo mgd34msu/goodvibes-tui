@@ -210,7 +210,7 @@ describe('ConfigModal host', () => {
     expect(modal.fireAction('z', ctx)).toBe(false);
   });
 
-  // DEBT-3: the generic submitInput seam is threaded into the action context so
+  // the generic submitInput seam is threaded into the action context so
   // a surface can hand free-form text to the chat/model turn path.
   test('fireAction threads submitInput into the action context', () => {
     let received: string | null = null;
@@ -289,9 +289,9 @@ function ctxNoop() {
   return { print: () => {}, executeCommand: undefined };
 }
 
-// ── DEBT-5 item 1: config-modal host '/' type-to-filter ─────────────────────
+// ── item 1: config-modal host '/' type-to-filter ─────────────────────
 
-describe('ConfigModal host — type-to-filter (DEBT-5 item 1)', () => {
+describe('ConfigModal host — type-to-filter (item 1)', () => {
   test('/ arms the filter; typed text narrows rows on a real surface (memory-modal)', async () => {
     const modal = new ConfigModal();
     modal.open(await memoryModalGoldenSurface()); // fixture pre-awaits its onOpen refresh, so records are already loaded here
@@ -443,9 +443,9 @@ describe('ConfigModal host — type-to-filter (DEBT-5 item 1)', () => {
   });
 });
 
-// ── DEBT-5 item 2: wrap-clamp the live-label overlay ────────────────────────
+// ── item 2: wrap-clamp the live-label overlay ────────────────────────
 
-describe('ConfigModal host — wrap-clamp overlay (DEBT-5 item 2)', () => {
+describe('ConfigModal host — wrap-clamp overlay (item 2)', () => {
   test('a live label growing past the wrap width is clamped to the frozen line count with an ellipsis; the full label appears after a keypress', () => {
     let label = 'short label';
     const modal = new ConfigModal();

@@ -2,7 +2,7 @@
 // src/test/panels/contract/_shared.ts
 //
 // Shared mocks, fixtures, and the parameterized BasePanel contract runner
-// used by the per-panel modules in this directory (WO-006 decongestion of
+// used by the per-panel modules in this directory (decongestion of
 // the former migrated-panels-contract.test.ts). Every migrated panel must
 // satisfy the BasePanel contract:
 //   1. render() returns exactly `height` lines

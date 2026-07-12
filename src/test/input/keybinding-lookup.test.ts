@@ -45,14 +45,14 @@ describe('KeybindingsManager.lookup()', () => {
     expect(km.lookup({})).toBeNull();
   });
 
-  it('W6.2 b: panel-tab-prev is Ctrl+PageUp and Ctrl+[ (the ESC-byte split-brain) no longer binds it', () => {
+  it('b: panel-tab-prev is Ctrl+PageUp and Ctrl+[ (the ESC-byte split-brain) no longer binds it', () => {
     const km = makeKm();
     expect(km.lookup({ logicalName: 'pageup', ctrl: true })).toBe('panel-tab-prev');
     // Ctrl+[ is byte 0x1B (ESC); it must no longer resolve to panel-tab-prev.
     expect(km.lookup({ logicalName: '[', ctrl: true })).toBeNull();
   });
 
-  it('W6.2 b: panel-tab-next keeps Ctrl+] and gains Ctrl+PageDown', () => {
+  it('b: panel-tab-next keeps Ctrl+] and gains Ctrl+PageDown', () => {
     const km = makeKm();
     expect(km.lookup({ logicalName: ']', ctrl: true })).toBe('panel-tab-next');
     expect(km.lookup({ logicalName: 'pagedown', ctrl: true })).toBe('panel-tab-next');

@@ -5,7 +5,7 @@ import {
   providerNameFromReplay,
 } from '../../core/system-message-noise.ts';
 
-describe('system-message noise classifier (UX-B item 1)', () => {
+describe('system-message noise classifier (item 1)', () => {
   test('1b — provider "from last session" replay lines fold', () => {
     const msg = '[Local] ollama at localhost:11434 (2 models) — from last session';
     expect(classifyNoise(msg, {}).action).toBe('foldProviderReplay');
@@ -45,7 +45,7 @@ describe('system-message noise classifier (UX-B item 1)', () => {
   });
 });
 
-describe('provider-replay folding (UX-B item 1b)', () => {
+describe('provider-replay folding (item 1b)', () => {
   test('extracts a provider name from a replay line', () => {
     expect(providerNameFromReplay('[Local] ollama at localhost:11434 (2 models) — from last session')).toBe('ollama');
   });

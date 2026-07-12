@@ -41,7 +41,7 @@ describe('UI roadmap gate', () => {
     expect(conversation.prevTranscriptEventLine(999, 'tool_result')).toBe(toolLine);
   });
 
-  // UX-C item 1a: showPanel is the command path (every registered caller is a
+  // item 1a: showPanel is the command path (every registered caller is a
   // slash command) — it now opens/shows the panel but leaves keyboard focus
   // in the composer by default ("the user is mid-command-flow"). A chord
   // (F2/Ctrl+O/Ctrl+P/Alt+N) still grabs focus via panelManager.focusPanels()
@@ -100,7 +100,7 @@ describe('UI roadmap gate', () => {
     });
 
     (commandContext as { showPanel?: (panelId: string, pane?: 'top' | 'bottom') => void }).showPanel?.('docs');
-    // UX-C: the command path no longer auto-focuses (focus stays wherever it
+    // the command path no longer auto-focuses (focus stays wherever it
     // already was — the composer, since you can only type a command there).
     expect(panelManager.getFocusTarget()).toBe('prompt');
     expect(visible).toBe(true);

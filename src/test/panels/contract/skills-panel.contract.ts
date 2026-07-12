@@ -9,7 +9,7 @@ runBasePanelContractSuite({
 });
 
 // ---------------------------------------------------------------------------
-// SkillsPanel — ScrollableListPanel modal filter contract (WO-153)
+// SkillsPanel — ScrollableListPanel modal filter contract
 // ---------------------------------------------------------------------------
 
 describe('SkillsPanel — ScrollableListPanel modal filter contract', () => {

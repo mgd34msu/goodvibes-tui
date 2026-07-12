@@ -390,7 +390,7 @@ describe('TokenBudgetPanel', () => {
       expect(text).toContain('CRITICAL');
     });
 
-    test('WO-160: maintenance guidance advertises the C key, not a printed /compact, once C is armed', () => {
+    test('maintenance guidance advertises the C key, not a printed /compact, once C is armed', () => {
       // 92% fill both crosses the default 80% auto-compact threshold (so
       // evaluateSessionMaintenance's nextSteps[0] is '/compact') and the
       // panel's own 70% WARN_YELLOW elevation gate that arms the C key —

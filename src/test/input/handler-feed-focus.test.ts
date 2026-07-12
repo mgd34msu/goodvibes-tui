@@ -1,7 +1,7 @@
 /**
  * Tests for the 'focus' token branch in feedInputTokens (src/input/handler-feed.ts).
  *
- * Covers the W2.3 tokenizer note: focus-reporting sequences (\x1b[I / \x1b[O)
+ * Covers the tokenizer note: focus-reporting sequences (\x1b[I / \x1b[O)
  * arrive through the same input pipeline as every other keystroke, tokenized
  * by the SDK's InputTokenizer, and must be consumed by the FIRST branch in
  * the feed loop — never reaching the composer's text/key routing, and never
@@ -45,7 +45,7 @@ function buildMinimalContext(overrides: Partial<InputFeedContext> = {}): { conte
   return { context, renderCalls };
 }
 
-describe('feedInputTokens — focus token consumption (W2.3)', () => {
+describe('feedInputTokens — focus token consumption', () => {
   test('a focus-in token flips the tracker and does not throw', () => {
     const { context } = buildMinimalContext();
     const tokenizer = new InputTokenizer();

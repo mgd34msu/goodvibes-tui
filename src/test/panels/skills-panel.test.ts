@@ -81,8 +81,8 @@ describe('SkillsPanel', () => {
       worktreeRegistry: services.worktreeRegistry,
       sandboxSessionRegistry: services.sandboxSessionRegistry,
     });
-    // W6.1 (the purge) — group B: skills migrated to the 'skills-modal' config-
-    // modal surface (WO-P). The panel is no longer a registered type; the id
+    // (the purge) — group B: skills migrated to the 'skills-modal' config-
+    // modal surface. The panel is no longer a registered type; the id
     // redirects to the surface (registered in registerBuiltinModals).
     expect(manager.getRegisteredTypes().some((entry) => entry.id === 'skills')).toBe(false);
     expect(manager.getModalRedirect('skills')).toBe('skills-modal');
@@ -203,7 +203,7 @@ describe('SkillsPanel', () => {
     panel.handleInput('/');
     panel.handleInput('b');
     let text = linesText(panel.render(120, 16));
-    // WO-153: converged modal filter — pinned '[Filter] ' + literal '_' cursor contract.
+    // converged modal filter — pinned '[Filter] ' + literal '_' cursor contract.
     expect(text).toContain('[Filter] b');
 
     panel.handleInput('escape');
@@ -242,18 +242,18 @@ describe('SkillsPanel', () => {
     expect(text).toContain('No skills discovered');
   });
 
-  // W6.1 (the purge): Enter used to open the skill's markdown source in the
+  // (the purge): Enter used to open the skill's markdown source in the
   // preview panel via handlePanelIntegrationAction. 'preview' is
   // DELETE-disposition with no successor surface, so that cross-panel jump
   // was removed rather than repointed — Enter is now a no-op key-consume
-  // (browse-only) on this list until WO-B migrates Skills to a modal.
+  // (browse-only) on this list until migrates Skills to a modal.
   test('Enter on a skill row is consumed but no longer opens a preview panel', async () => {
     writeSkill(
       cwd,
       '.goodvibes/tui/skills/alpha/SKILL.md',
       ['---', 'name: alpha', 'description: Alpha skill', '---', ''].join('\n'),
     );
-    // W6.1 (the purge): skills is register-retired (redirects to the modal), so
+    // (the purge): skills is register-retired (redirects to the modal), so
     // construct the retained panel class directly — the same pattern the other
     // tests in this file use — to exercise its Enter/no-preview behavior.
     const skillsPanel = new SkillsPanel({ shellPaths: makeShellPaths(cwd, homeDir) });

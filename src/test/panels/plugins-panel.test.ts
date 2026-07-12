@@ -115,9 +115,9 @@ describe('PluginsPanel', () => {
     expect(secondText).toContain('unsigned');
   });
 
-  // WO-134: e=enable, d=disable (confirm), v=verify, q=lift quarantine (confirm),
+  // e=enable, d=disable (confirm), v=verify, q=lift quarantine (confirm),
   // m=capture quarantined plugin to memory, and selection preserved across onActivate.
-  describe('WO-134 control-room actions', () => {
+  describe('control-room actions', () => {
     const alpha: PluginStatus = {
       name: 'alpha-plugin',
       version: '1.0.0',

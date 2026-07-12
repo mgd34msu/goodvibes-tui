@@ -33,7 +33,7 @@ function footer(opts: {
   ));
 }
 
-describe('footer render truths (UX-B item 5)', () => {
+describe('footer render truths (item 5)', () => {
   test('5c — input-token meter shows "—" (not a false 0) before usage is known', () => {
     const tokenLine = footer({ usageUp: 0 }).find((t) => t.includes('Token Usage'));
     expect(tokenLine).toBeDefined();

@@ -302,7 +302,7 @@ describe('CostTrackerPanel — agent cost attribution on AGENT_COMPLETED', () =>
   });
 
   test('empty agents state points at the b key, not a printed /cost budget command', async () => {
-    // WO-160: 'b' already opens the in-panel budget-entry field from this
+    // 'b' already opens the in-panel budget-entry field from this
     // empty state (see handleInput), so the empty-state hint advertises the
     // key instead of a redundant '/cost budget <usd>' signpost.
     const events = createUiRuntimeEvents(runtimeBus);

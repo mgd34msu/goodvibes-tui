@@ -103,7 +103,7 @@ describe('GitStatusProvider', () => {
     });
   });
 
-  describe('unborn HEAD (repo with no commits) — UX-B 5a', () => {
+  describe('unborn HEAD (repo with no commits) — 5a', () => {
     test('shows "new" instead of "?" for a freshly-initialised repo', async () => {
       const dir = mkdtempSync(join(tmpdir(), 'gv-git-new-'));
       try {
@@ -203,7 +203,7 @@ describe('GitStatusProvider', () => {
   });
 
   // -------------------------------------------------------------------------
-  // W1.6 FIX 2: startPolling / stopPolling
+  // FIX 2: startPolling / stopPolling
   // -------------------------------------------------------------------------
   describe('startPolling / stopPolling', () => {
     const POLL_MS = 20;

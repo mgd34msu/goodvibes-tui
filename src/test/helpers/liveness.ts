@@ -1,12 +1,12 @@
 /**
- * Liveness contract harness (W6.2 c) — reusable, surface-agnostic assertions.
+ * Liveness contract harness (c) — reusable, surface-agnostic assertions.
  *
  * A live-updating modal must mutate VALUES in place: rows never reflow under the
  * cursor mid-edit, and any structural layout change waits for an interaction
  * boundary. These helpers make that contract testable by comparing two rendered
  * frames — A (initial, cursor at row R) and B (after a values-only update).
  *
- * The integrator can point the same helpers at the WO-A/WO-B provider/MCP modals
+ * The integrator can point the same helpers at the provider/MCP modals
  * by rendering the two frames and calling assertFrameLiveness(A, B). It is seeded
  * against the settings modal in liveness-contract.test.ts.
  *

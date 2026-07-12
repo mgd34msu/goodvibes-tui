@@ -7,8 +7,8 @@
  * - stopReason mapping: 'completed' → 'ok', non-completed → 'fail'.
  * - No double-fire across the persist/rotate branches (notification fires
  *   before the auto-save block, not again in the catch/journal path).
- * - W2.3: budget-breach edge-trigger fires once per crossing on TURN_COMPLETED.
- * - W2.3: AGENT_FAILED / WORKFLOW_CHAIN_FAILED fire a desktop alert gated by
+ * - budget-breach edge-trigger fires once per crossing on TURN_COMPLETED.
+ * - AGENT_FAILED / WORKFLOW_CHAIN_FAILED fire a desktop alert gated by
  *   focus + the per-class config keys.
  */
 
@@ -53,7 +53,7 @@ function makeFakeEvents() {
   const agents = makeFakeTurnEventBus();
   const workflows = makeFakeTurnEventBus();
   // UiRuntimeEvents shape: { turns, tools, agents, workflows, ... } — these
-  // four are what wireTurnEventHandlers reads (W2.3 added agents/workflows
+  // four are what wireTurnEventHandlers reads (added agents/workflows
   // for the agent/chain-failure desktop alerts).
   return {
     // @ts-expect-error — duck-typed minimal fake for UiRuntimeEvents
@@ -261,10 +261,10 @@ describe('wireTurnEventHandlers — TURN_COMPLETED notification integration', ()
 });
 
 // ---------------------------------------------------------------------------
-// W2.3 — budget-breach edge trigger on TURN_COMPLETED
+// — budget-breach edge trigger on TURN_COMPLETED
 // ---------------------------------------------------------------------------
 
-describe('wireTurnEventHandlers — budget-breach alert (W2.3)', () => {
+describe('wireTurnEventHandlers — budget-breach alert', () => {
   // 'claude-sonnet-4-6' has real fallback pricing in cost-utils.ts ($3/1M input)
   // so calcSessionCost produces a real, non-zero cost.
   const PRICED_MODEL = 'claude-sonnet-4-6';
@@ -338,10 +338,10 @@ describe('wireTurnEventHandlers — budget-breach alert (W2.3)', () => {
 });
 
 // ---------------------------------------------------------------------------
-// W2.3 — agent/chain-failure desktop alerts
+// — agent/chain-failure desktop alerts
 // ---------------------------------------------------------------------------
 
-describe('wireTurnEventHandlers — agent/chain-failure alerts (W2.3)', () => {
+describe('wireTurnEventHandlers — agent/chain-failure alerts', () => {
   // notifyCompletion (SDK) writes a terminal bell ('\x07') synchronously for
   // any durationMs > 5000 — the alert modules pass FORCE_NOTIFY_DURATION_MS
   // (30_001) precisely so this is observable without mocking the SDK module
@@ -399,7 +399,7 @@ describe('wireTurnEventHandlers — agent/chain-failure alerts (W2.3)', () => {
     spy.mockRestore();
   });
 
-  test('WORKFLOW_CHAIN_FAILED (Wave-0 failure state) rings the bell when unfocused', () => {
+  test('WORKFLOW_CHAIN_FAILED (failure state) rings the bell when unfocused', () => {
     const spy = spyOnStdoutWrite();
     const tracker = new FocusTracker();
     tracker.setFocused(false);
@@ -413,7 +413,7 @@ describe('wireTurnEventHandlers — agent/chain-failure alerts (W2.3)', () => {
     spy.mockRestore();
   });
 
-  test('WORKFLOW_CHAIN_FAILED with failureKind=cancelled still alerts (operator-cancel branch, WO UX-A item 2)', () => {
+  test('WORKFLOW_CHAIN_FAILED with failureKind=cancelled still alerts (operator-cancel branch, WO item 2)', () => {
     // The cancelled branch narrates a cancellation rather than a failure but must
     // still ring the bell when unfocused — the operator asked to stop and wants to
     // know it stopped. (The distinct title is asserted at the SDK narration level;

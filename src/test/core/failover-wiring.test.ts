@@ -630,7 +630,7 @@ describe('wireStreamEventMetrics — failover cost delta notice', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Tests: no-delta stall metrics (W0.7 stall-honesty)
+// Tests: no-delta stall metrics (stall-honesty)
 // ---------------------------------------------------------------------------
 
 describe('wireStreamEventMetrics — stall metrics', () => {

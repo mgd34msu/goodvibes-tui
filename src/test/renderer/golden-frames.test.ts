@@ -537,7 +537,7 @@ describe('golden-frames', () => {
 });
 
 // ---------------------------------------------------------------------------
-// WO-201 — Golden contract expansion
+// — Golden contract expansion
 //
 // Additional surfaces covered below (all new — the surfaces above are
 // untouched):
@@ -1072,7 +1072,7 @@ function renderProfilePickerSurface(width: number, height: number): Line[] {
 
 describeOverlayGolden('profile-picker-modal', renderProfilePickerSurface);
 
-// W6.1 retirement: the agent-detail-modal and process-modal golden surfaces
+// retirement: the agent-detail-modal and process-modal golden surfaces
 // (and their goldens) were removed — those modals were deleted once the F2
 // repoint made them unreachable; the Fleet panel subsumes the live process
 // tree (its own golden is defined below).
@@ -1080,7 +1080,7 @@ describeOverlayGolden('profile-picker-modal', renderProfilePickerSurface);
 // fleet — a deterministic multi-level tree (WRFC owner->engineer->reviewer
 // chain, one exec node, one terminal agent) with a FIXED `now` passed into
 // buildFleetSnapshot (never Date.now()) so elapsed columns never flicker
-// across runs/machines — W2.2 golden fixture.
+// across runs/machines — golden fixture.
 const FIXED_FLEET_NOW = 1_700_000_000_000;
 
 function buildFleetGoldenNodes(): ProcessNode[] {
@@ -1276,7 +1276,7 @@ function renderFleetSteerQueuedSurface(width: number, height: number): Line[] {
 
 describeOverlayGolden('fleet-panel-steer-queued', renderFleetSteerQueuedSurface);
 
-// W3.3 — a terminal agent's tab whose full-fidelity snapshot is unavailable
+// — a terminal agent's tab whose full-fidelity snapshot is unavailable
 // (evicted from the SDK's retention ring, or never registered), degraded to
 // the on-disk ledger fallback. Attaches 'agent-done-01' (row 0 — the same
 // terminal fixture node the base fleet-panel golden already uses) with
@@ -1446,7 +1446,7 @@ describe('golden-frames — shell-footer (compact)', () => {
   });
 });
 
-// ─── 9. W6.1 config-modal surfaces (WO-A) ──────────────────────────────────
+// ─── 9. config-modal surfaces ──────────────────────────────────
 //
 // One normal+hostile golden pair per new MIGRATE-TO-MODAL surface. Each renders
 // a fixed, representative ConfigModalView through the REAL config-modal host
@@ -1624,7 +1624,7 @@ const SANDBOX_VIEW: ConfigModalView = {
 };
 describeOverlayGolden('sandbox-modal', (w, h) => renderConfigSurfaceGolden(SANDBOX_VIEW, w, h));
 
-// ─── DEBT-2 light-theme goldens (one transcript + one modal) ───────────────
+// ─── light-theme goldens (one transcript + one modal) ───────────────
 //
 // The existing goldens above are all dark (headless auto → dark). These two pin
 // the LIGHT rendering of the two surfaces that actually swap tokens: the
@@ -1652,7 +1652,7 @@ function underLight<T>(fn: () => T): T {
   }
 }
 
-describe('golden-frames — light theme (DEBT-2)', () => {
+describe('golden-frames — light theme', () => {
   test('markdown transcript (light) matches committed golden snapshot', () => {
     const lines = underLight(() => renderMarkdownTranscriptSurface());
     expect(lines.length).toBeGreaterThan(0);

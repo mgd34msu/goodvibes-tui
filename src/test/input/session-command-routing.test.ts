@@ -339,7 +339,7 @@ describe('session-command-routing (TASK-032)', () => {
     expect(byAlias).toBe(byName);
   });
 
-  // ── W0.4(g): /sessions resume <id> hygiene ───────────────────────────────────────
+  // ── /sessions resume <id> hygiene ───────────────────────────────────────
   //
   // splash-lines.ts advertises "/sessions resume <id>" (plural, matching the
   // registered command's own name), but the plural /sessions command took

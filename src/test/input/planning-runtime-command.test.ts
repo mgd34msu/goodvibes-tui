@@ -79,7 +79,7 @@ function makeContext(
   return {
     print: (message: string) => out.push(message),
     showPanel: (panelId: string) => { opened.push(panelId); },
-    // W6.1: /plan open now routes to the 'planning' modal via ctx.openModal.
+    // /plan open now routes to the 'planning' modal via ctx.openModal.
     openModal: (name: string) => { opened.push(name); },
     session: {
       runtime: {
@@ -219,7 +219,7 @@ describe('/plan project planning runtime command', () => {
     expect(fake.state()?.openQuestions.length).toBeGreaterThan(0);
   });
 
-  // DEBT-3: `dismiss` and `answer` are REAL subcommands now — they must NOT be
+  // `dismiss` and `answer` are REAL subcommands now — they must NOT be
   // refused as pseudo-verbs, and they must never seed a goal named after themselves.
   test('/plan dismiss with no active plan and no interview state → honest no-op, never seeded', async () => {
     const registry = new CommandRegistry();

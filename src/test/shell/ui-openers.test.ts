@@ -71,7 +71,7 @@ describe('wireShellUiOpeners', () => {
       focusPanels: mock(() => {}),
       focusPrompt: mock(() => {}),
       setOpenModalCallback: mock(() => {}),
-      // W6.1: no config-modal surface registered on this bare mock manager, so
+      // no config-modal surface registered on this bare mock manager, so
       // getModalSurface always resolves to undefined (the honest no-op path).
       getModalSurface: mock(() => undefined),
     };
@@ -100,7 +100,7 @@ describe('wireShellUiOpeners', () => {
     });
   });
 
-  // W6.1 (the purge): 'panel-list' (a picker PANEL) was DELETE-disposition.
+  // (the purge): 'panel-list' (a picker PANEL) was DELETE-disposition.
   // openPanelPicker now opens a selection MODAL built from the live
   // registry instead of force-opening a specific panel — see
   // shell/ui-openers.ts.
@@ -153,14 +153,14 @@ describe('wireShellUiOpeners', () => {
     expect(conversation.setSplashSuppressed).toHaveBeenCalledWith(false);
   });
 
-  // UX-C item 1a: showPanel is exclusively called from the command path
+  // item 1a: showPanel is exclusively called from the command path
   // (/panel open, /tasks, /routes, ...) — it now opens/shows the panel but
   // leaves keyboard focus in the composer by default ("the user is
   // mid-command-flow"). A caller that explicitly opts in with { focus: true }
   // still gets focusPanels() called.
   test('showPanel opens and shows the panel workspace WITHOUT grabbing focus by default', () => {
     (commandContext.showPanel as (panelId: string) => void)('tasks');
-    // Reconciled signature forwards the DEBT-5 deep-link target (undefined here).
+    // Reconciled signature forwards the deep-link target (undefined here).
     expect(panelManager.open).toHaveBeenCalledWith('tasks', undefined, undefined);
     expect(panelManager.show).toHaveBeenCalled();
     expect(panelManager.focusPanels).not.toHaveBeenCalled();
@@ -181,7 +181,7 @@ describe('wireShellUiOpeners', () => {
     expect(render).not.toHaveBeenCalled();
   });
 
-  // W6.1 (the purge): openModal resolves the name to a registered config-modal
+  // (the purge): openModal resolves the name to a registered config-modal
   // surface (PanelManager.getModalSurface). With no surface registered it must
   // stay a safe, honest no-op — an explanatory print, not a throw or a blank
   // modal. The same callback is injected into PanelManager for redirect hits.

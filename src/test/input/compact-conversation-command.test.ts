@@ -1,5 +1,5 @@
 /**
- * W1.4 (WO-403) — TUI-side compaction wiring regression tests.
+ * — TUI-side compaction wiring regression tests.
  *
  * compactConversation() (src/input/commands/runtime-services.ts) previously:
  *  1. Filtered agents down to running/pending only before building

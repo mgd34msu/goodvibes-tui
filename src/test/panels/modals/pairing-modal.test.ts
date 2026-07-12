@@ -54,7 +54,7 @@ describe('pairing modal surface', () => {
     expect((surface.actions ?? []).find((a) => a.id === 'regenerate')?.confirm).toBe(true);
   });
 
-  // DEBT-3: once /qrcode regenerate resolves (it rotated the shared token store),
+  // once /qrcode regenerate resolves (it rotated the shared token store),
   // the modal RE-PULLS the lazy connection-info thunk so the new token + QR show
   // in place — no re-open needed.
   test('regenerate re-pulls the connection info after the command resolves', async () => {

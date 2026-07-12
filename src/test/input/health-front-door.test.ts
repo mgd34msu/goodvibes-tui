@@ -1,5 +1,5 @@
 /**
- * DEBT-5 item 3 (report-vs-modal front doors) — /health has no single modal
+ * item 3 (report-vs-modal front doors) — /health has no single modal
  * that owns its data (it genuinely spans settings/accounts/auth/sandbox/
  * services/etc.), so bare `/health` and `/health report` stay a transcript
  * report; only a hint line was added pointing at the providers domain's real
@@ -22,7 +22,7 @@ import { registerHealthRuntimeCommands } from '../../input/commands/health-runti
 import { CommandRegistry } from '../../input/command-registry.ts';
 import type { CommandContext } from '../../input/command-registry.ts';
 
-describe('/health front door (DEBT-5 item 3)', () => {
+describe('/health front door (item 3)', () => {
   function getCommand() {
     const registry = new CommandRegistry();
     registerHealthRuntimeCommands(registry);

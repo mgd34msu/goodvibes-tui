@@ -4,10 +4,10 @@
 // and RESTARTS it when re-shown (onActivate), so it neither leaks an
 // interval nor polls a hidden panel.
 //
-// W6.1 (the purge): this file used to also cover AgentInspectorPanel
+// (the purge): this file used to also cover AgentInspectorPanel
 // ('inspector', RETIRE-INTO-FLEET — retired into the Fleet panel). Its
 // timer-lifecycle test was removed along with the class — see
-// .goodvibes/audit/2026-07-04-wave6-briefs.json (W6.1).
+// .goodvibes/audit/2026-07-04-wave6-briefs.json.
 // ---------------------------------------------------------------------------
 
 import { describe, test, expect, afterEach } from 'bun:test';

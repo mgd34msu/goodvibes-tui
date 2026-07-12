@@ -279,7 +279,7 @@ describe('Compositor — dual-pane (top + bottom)', () => {
   });
 });
 
-describe('Compositor — R3 buffer reuse (double-buffer, no clone)', () => {
+describe('Compositor — buffer reuse (double-buffer, no clone)', () => {
   test('TerminalBuffer constructor is NOT called on second composite() (buffer is reused)', () => {
     // We track constructor calls by counting .cells allocations via composite calls.
     // The core assertion: lastBufferForTest after N composites always returns a non-null
