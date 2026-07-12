@@ -362,7 +362,7 @@ GoodVibes ships **144** built-in slash commands across **69** categories. Every 
 | `/install` | — | `[review\|bundle export <path>\|bundle inspect <path>]` | Review install posture and export portable install bundles |
 | `/login` | — | `[provider <name> start\|finish <code>\|service <daemon\|listener> <baseUrl> <username> <password> [secretKey]]` | Front-door login flow for provider subscriptions and local service sessions |
 | `/logout` | — | `provider <name>` | Front-door logout flow for provider subscription sessions and supported overrides |
-| `/update` | `/upgrade` | `[check\|apply\|review\|bundle export <path>\|bundle inspect <path>]` | Check for a newer GoodVibes release and, for binary installs, download/verify/apply it |
+| `/update` | `/upgrade` | `[check\|apply\|rollback\|review\|bundle export <path>\|bundle inspect <path>]` | Check for a newer GoodVibes release and, for binary installs, download/verify/apply it or roll back to the kept previous version |
 
 ## Platform Services
 
@@ -498,7 +498,7 @@ GoodVibes ships **144** built-in slash commands across **69** categories. Every 
 | `/compact-history` | `/compaction-history` | — | Show compaction history for this session |
 | `/debug` | — | — | Toggle debug mode |
 | `/effort` | `/e` | `[level]` | Show or set reasoning effort level |
-| `/help` | `/h`, `/?` | `[command]` | Show available commands and keyboard shortcuts |
+| `/help` | `/h`, `/?` | — | Browse every command with its description; picking one runs it |
 | `/keep` | — | `<text>` | Pin text to session memory (survives compaction) |
 | `/keybindings` | `/kb` | — | List current keyboard bindings and their config file path |
 | `/model` | `/m` | `[model-id]` | Select or display the current LLM model |

@@ -496,6 +496,10 @@ export function wireShellUiOpeners(options: WireShellUiOpenersOptions): void {
     render();
   };
 
+  // Registry-driven surfaces built inside command handlers (/help) group by
+  // the same categories as the palette and the generated reference.
+  commandContext.getCommandCategories = () => getCommandCategoryMap();
+
   commandContext.openCommandPalette = () => {
     // The palette is built live from the command registry — never a hardcoded
     // list — so it can never drift from the real command set. Category labels
