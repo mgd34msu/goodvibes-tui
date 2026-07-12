@@ -1,8 +1,16 @@
 /**
- * The legacy `goodvibes-daemon.service` detect/migrate engine, shared
+ * The `goodvibes-daemon.service` detect/migrate engine, shared
  * by the daemon CLI (`src/daemon/service-commands.ts`, the `migrate-service`
  * subcommand) and the interactive TUI's onboarding guided UX
  * (`src/input/handler-onboarding-daemon-adopt.ts`).
+ *
+ * NAMING, load-bearing: this module's identifiers say "legacy" because the
+ * engine migrates AWAY from the `goodvibes-daemon.service` unit name toward
+ * the runtime-managed unit — but that same name is what scripts/install.sh
+ * actively creates for curl-installed hosts TODAY. It is a parallel,
+ * first-class install path, not an obsolete one. User-facing copy therefore
+ * describes it as "the install-script unit" and never labels it legacy or
+ * implies it should be removed unless the user is explicitly migrating.
  *
  * This lives under `src/runtime/` — not `src/daemon/` — specifically so the
  * `input` layer can consume it directly: the architecture gate's
@@ -250,13 +258,15 @@ export function resolveManagedUnitName(status: ManagedServiceStatus): string {
   return basename(status.path).replace(/\.(service|plist)$/, '');
 }
 
-/** Honest one-line disclosure of the legacy unit's presence/state plus a manual migration hint — never auto-acted-on. */
+/** Honest one-line disclosure of the install-script unit's presence/state plus a manual migration hint — never auto-acted-on. */
 export function legacyUnitNote(legacy: LegacyUnitInfo, trackedServiceName: string): string {
   const stateWord = legacy.active ? 'installed and RUNNING' : 'installed (not currently active)';
   return (
-    `note: a service under the legacy name ${LEGACY_SERVICE_UNIT_NAME}.service is ${stateWord} at ${legacy.path} — ` +
-    `this tool manages a different unit name (${trackedServiceName}.service) and will not touch the legacy one automatically. ` +
-    `Remove it yourself when ready: systemctl --user disable --now ${LEGACY_SERVICE_UNIT_NAME}.service && rm ${legacy.path} && systemctl --user daemon-reload`
+    `note: a separate service named ${LEGACY_SERVICE_UNIT_NAME}.service is ${stateWord} at ${legacy.path} — ` +
+    `that unit name is managed by the goodvibes install script (older installs used it too), while this tool manages ` +
+    `${trackedServiceName}.service and will not touch the other unit automatically. Keep whichever one you use; running ` +
+    `both would start two daemons competing for the same port. To retire the install-script unit in favor of this ` +
+    `tool's: systemctl --user disable --now ${LEGACY_SERVICE_UNIT_NAME}.service && rm ${legacy.path} && systemctl --user daemon-reload`
   );
 }
 
@@ -317,7 +327,7 @@ function assertUnitIsNotLegacy(status: ManagedServiceStatus, legacy: LegacyUnitI
   if (status.path === legacy.path || resolveManagedUnitName(status) === LEGACY_SERVICE_UNIT_NAME) {
     throw new Error(
       `refusing to ${action}: the resolved managed unit (${resolveManagedUnitName(status)} at ${status.path}) is the ` +
-        `legacy ${LEGACY_SERVICE_UNIT_NAME}.service unit — this should already have been caught by the pre-flight ` +
+        `install-script ${LEGACY_SERVICE_UNIT_NAME}.service unit — this should already have been caught by the pre-flight ` +
         'collision check in runLegacyDaemonMigration',
     );
   }
@@ -356,7 +366,7 @@ export async function runLegacyDaemonMigration(
         ok: false,
         exitCode: 1,
         lines: [
-          `migrate-service: no legacy ${LEGACY_SERVICE_UNIT_NAME}.service unit was found, but something is already ` +
+          `migrate-service: no install-script ${LEGACY_SERVICE_UNIT_NAME}.service unit was found, but something is already ` +
             `listening on ${params.host}:${params.port}.`,
           "That looks like a process this tool doesn't manage (for example, a manually-started `nohup` daemon) rather " +
             'than a systemd unit — there is nothing here to stop or disable, and this tool will not attempt to kill an ' +
@@ -371,7 +381,7 @@ export async function runLegacyDaemonMigration(
       ok: true,
       exitCode: 0,
       lines: [
-        `migrate-service: no legacy ${LEGACY_SERVICE_UNIT_NAME}.service unit was found and ${params.host}:${params.port} ` +
+        `migrate-service: no install-script ${LEGACY_SERVICE_UNIT_NAME}.service unit was found and ${params.host}:${params.port} ` +
           'is free — there is nothing to migrate.',
         `Run install-service to set up the managed ${resolvedUnitName}.service directly.`,
       ],
@@ -385,8 +395,8 @@ export async function runLegacyDaemonMigration(
       exitCode: 1,
       lines: [
         `migrate-service: this host's detected service platform is '${currentStatus.platform}', not systemd, but a ` +
-          `legacy unit file exists at ${legacy.path}.`,
-        'The legacy unit is systemd-specific and this tool only knows how to migrate a systemd legacy unit today — ' +
+          `unit file with the install-script name exists at ${legacy.path}.`,
+        'That unit is systemd-specific and this tool only knows how to migrate a systemd unit today — ' +
           'nothing was changed.',
       ],
       status: currentStatus,
@@ -409,9 +419,9 @@ export async function runLegacyDaemonMigration(
       exitCode: 1,
       lines: [
         `migrate-service aborted: this host's 'service.serviceName' config key resolves to '${resolvedUnitName}', which ` +
-          `is the exact legacy unit name (${LEGACY_SERVICE_UNIT_NAME}.service at ${legacy.path}) this migration is ` +
+          `is the exact install-script unit name (${LEGACY_SERVICE_UNIT_NAME}.service at ${legacy.path}) this migration is ` +
           'supposed to retire.',
-        'Installing or rolling back a unit under that name would overwrite or delete the legacy unit instead of ' +
+        'Installing or rolling back a unit under that name would overwrite or delete the install-script unit instead of ' +
           'managing a separate one, so nothing has been changed.',
         `Fix: set the 'service.serviceName' config key to something other than '${LEGACY_SERVICE_UNIT_NAME}' (for ` +
           `example, the default '${trackedServiceName}') and re-run migrate-service.`,
@@ -429,7 +439,7 @@ export async function runLegacyDaemonMigration(
         'migrate-service (dry run — re-run with confirmation to execute): this would',
         `  1. install and start the new ${resolvedUnitName}.service unit`,
         '  2. verify it comes up healthy (a fresh, honest systemd is-active check)',
-        `  3. only if that succeeds, stop, disable, and remove the legacy ${LEGACY_SERVICE_UNIT_NAME}.service unit ` +
+        `  3. only if that succeeds, stop, disable, and remove the install-script ${LEGACY_SERVICE_UNIT_NAME}.service unit ` +
           'and run `systemctl --user daemon-reload`',
         'Nothing has been changed. Nothing is migrated automatically — re-run with explicit confirmation ' +
           "(the CLI's -y/--yes flag) to execute this plan.",
@@ -452,7 +462,7 @@ export async function runLegacyDaemonMigration(
       exitCode: 1,
       lines: [
         `migrate-service aborted: could not write the new ${resolvedUnitName}.service unit (${installed.actionError}).`,
-        `The legacy ${LEGACY_SERVICE_UNIT_NAME}.service unit was never touched.`,
+        `The install-script ${LEGACY_SERVICE_UNIT_NAME}.service unit was never touched.`,
       ],
       status: installed,
     };
@@ -473,7 +483,7 @@ export async function runLegacyDaemonMigration(
         `migrate-service aborted: the new ${resolvedUnitName}.service unit did not come up healthy` +
           (started.actionError ? ` (${started.actionError}).` : '.'),
         rollbackNote,
-        `The legacy ${LEGACY_SERVICE_UNIT_NAME}.service unit was never touched and should still be running as before.`,
+        `The install-script ${LEGACY_SERVICE_UNIT_NAME}.service unit was never touched and should still be running as before.`,
       ],
       status: healthCheck,
     };
@@ -496,20 +506,20 @@ export async function runLegacyDaemonMigration(
   const lines = [`migrated: the new ${resolvedUnitName}.service unit is installed, enabled, and running.`];
   if ((stopResult.status ?? 1) !== 0) {
     lines.push(
-      `note: stopping the legacy unit reported a non-zero exit (${stopResult.stderr ?? stopResult.stdout ?? 'no output'}); ` +
+      `note: stopping the install-script unit reported a non-zero exit (${stopResult.stderr ?? stopResult.stdout ?? 'no output'}); ` +
         'it may already have been stopped.',
     );
   }
   if ((disableResult.status ?? 1) !== 0) {
     lines.push(
-      `note: disabling the legacy unit reported a non-zero exit (${disableResult.stderr ?? disableResult.stdout ?? 'no output'}); ` +
+      `note: disabling the install-script unit reported a non-zero exit (${disableResult.stderr ?? disableResult.stdout ?? 'no output'}); ` +
         'it may already have been disabled.',
     );
   }
   if (removeError) {
-    lines.push(`note: could not remove the legacy unit file at ${legacy.path}: ${removeError} — remove it by hand.`);
+    lines.push(`note: could not remove the install-script unit file at ${legacy.path}: ${removeError} — remove it by hand.`);
   } else {
-    lines.push(`the legacy ${LEGACY_SERVICE_UNIT_NAME}.service unit has been stopped, disabled, and removed.`);
+    lines.push(`the install-script ${LEGACY_SERVICE_UNIT_NAME}.service unit has been stopped, disabled, and removed.`);
   }
   lines.push('ran `systemctl --user daemon-reload`.');
   return { ok: true, exitCode: 0, lines, status: healthCheck };

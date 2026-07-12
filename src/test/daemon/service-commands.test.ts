@@ -13,7 +13,7 @@ import {
 } from '../../daemon/service-commands.ts';
 import { resolveConfiguredServiceName } from '../../runtime/legacy-daemon-migration.ts';
 
-describe('resolveConfiguredServiceName (F2 follow-up: config-honest name for pre-manager callers)', () => {
+describe('resolveConfiguredServiceName — config-honest name for pre-manager callers', () => {
   function config(value: unknown): { get(key: string): unknown } {
     return { get: (key: string) => (key === 'service.serviceName' ? value : undefined) };
   }
@@ -223,7 +223,7 @@ describe('runDaemonServiceCli (systemd path, real PlatformServiceManager, stubbe
  * injected `actionRunner` used above — this suite never touches, stops, or
  * modifies a real running service.
  */
-describe('runDaemonServiceCli — legacy unit detection (W3 Finding 4)', () => {
+describe('runDaemonServiceCli — install-script unit detection', () => {
   let dir = '';
 
   beforeEach(() => {
@@ -255,7 +255,7 @@ describe('runDaemonServiceCli — legacy unit detection (W3 Finding 4)', () => {
   }
 
   describe('service-status', () => {
-    test('custom service.serviceName: legacy note names the custom unit, not the hardcoded default (F2)', async () => {
+    test('custom service.serviceName: the install-script unit note names the custom unit, not the hardcoded default', async () => {
       const configManager = new ConfigManager({ workingDir: dir, homeDir: dir, surfaceRoot: 'tui' });
       configManager.setDynamic('service.serviceName', 'my-custom-unit');
       const { runner } = fakeRunner(0, 'active');
@@ -264,8 +264,8 @@ describe('runDaemonServiceCli — legacy unit detection (W3 Finding 4)', () => {
       );
 
       const text = result.lines.join('\n');
-      expect(text).toContain('a different unit name (my-custom-unit.service)');
-      expect(text).not.toContain('a different unit name (goodvibes.service)');
+      expect(text).toContain('this tool manages my-custom-unit.service');
+      expect(text).not.toContain('this tool manages goodvibes.service');
     });
 
     test('legacy unit absent: no legacy note, is-active never queried', async () => {
@@ -285,9 +285,9 @@ describe('runDaemonServiceCli — legacy unit detection (W3 Finding 4)', () => {
 
       expect(result.ok).toBe(true);
       const text = result.lines.join('\n');
-      expect(text).toContain('legacy name goodvibes-daemon.service');
+      expect(text).toContain('named goodvibes-daemon.service');
       expect(text).toContain('installed and RUNNING');
-      expect(text).toContain('will not touch the legacy one automatically');
+      expect(text).toContain('will not touch the other unit automatically');
       expect(calls).toContainEqual(['systemctl', '--user', 'is-active', 'goodvibes-daemon.service']);
       // Any other runner traffic must be read-only status probes of the new unit.
       for (const other of calls.filter((c) => !c.includes('goodvibes-daemon.service'))) {
@@ -307,7 +307,7 @@ describe('runDaemonServiceCli — legacy unit detection (W3 Finding 4)', () => {
   });
 
   describe('install-service', () => {
-    test('custom service.serviceName: refusal message names the custom unit, not the hardcoded default (F2)', async () => {
+    test('custom service.serviceName: refusal message names the custom unit, not the hardcoded default', async () => {
       const configManager = new ConfigManager({ workingDir: dir, homeDir: dir, surfaceRoot: 'tui' });
       configManager.setDynamic('service.serviceName', 'my-custom-unit');
       const { runner } = fakeRunner(0, 'active');
@@ -327,7 +327,7 @@ describe('runDaemonServiceCli — legacy unit detection (W3 Finding 4)', () => {
 
       expect(result.ok).toBe(false);
       expect(result.exitCode).toBe(1);
-      expect(result.lines.join('\n')).toContain('legacy name goodvibes-daemon.service');
+      expect(result.lines.join('\n')).toContain('goodvibes-daemon.service (the unit name the goodvibes install script manages)');
       expect(existsSync(join(dir, '.config', 'systemd', 'user', 'goodvibes.service'))).toBe(false);
       // Only read-only is-active queries ran — no install/enable dispatched.
       expect(calls).toContainEqual(['systemctl', '--user', 'is-active', 'goodvibes-daemon.service']);
@@ -352,7 +352,7 @@ describe('runDaemonServiceCli — legacy unit detection (W3 Finding 4)', () => {
   });
 
   describe('uninstall-service', () => {
-    test('custom service.serviceName: legacy note names the custom unit, not the hardcoded default (F2)', async () => {
+    test('custom service.serviceName: the install-script unit note names the custom unit, not the hardcoded default', async () => {
       const configManager = new ConfigManager({ workingDir: dir, homeDir: dir, surfaceRoot: 'tui' });
       configManager.setDynamic('service.serviceName', 'my-custom-unit');
       await runDaemonServiceCli(
@@ -365,8 +365,8 @@ describe('runDaemonServiceCli — legacy unit detection (W3 Finding 4)', () => {
 
       expect(result.ok).toBe(true);
       const text = result.lines.join('\n');
-      expect(text).toContain('a different unit name (my-custom-unit.service)');
-      expect(text).not.toContain('a different unit name (goodvibes.service)');
+      expect(text).toContain('this tool manages my-custom-unit.service');
+      expect(text).not.toContain('this tool manages goodvibes.service');
     });
 
     test('legacy unit present: mentions it is untouched, still uninstalls the tracked unit', async () => {
@@ -381,8 +381,8 @@ describe('runDaemonServiceCli — legacy unit detection (W3 Finding 4)', () => {
       expect(result.ok).toBe(true);
       expect(existsSync(trackedPath)).toBe(false);
       const text = result.lines.join('\n');
-      expect(text).toContain('legacy name goodvibes-daemon.service');
-      expect(text).toContain('will not touch the legacy one automatically');
+      expect(text).toContain('named goodvibes-daemon.service');
+      expect(text).toContain('will not touch the other unit automatically');
     });
 
     test('legacy unit absent: no legacy note', async () => {
@@ -514,10 +514,10 @@ describe('runDaemonServiceCli — migrate-service', () => {
 
       expect(result.ok).toBe(true);
       const text = result.lines.join('\n');
-      expect(text).toContain('legacy name goodvibes-daemon.service');
+      expect(text).toContain('named goodvibes-daemon.service');
       expect(text).toContain('dry run');
       expect(text).toContain('install and start the new goodvibes.service unit');
-      expect(text).toContain('stop, disable, and remove the legacy');
+      expect(text).toContain('stop, disable, and remove the install-script');
       expect(text).toContain('Nothing has been changed');
       expect(existsSync(join(dir, '.config', 'systemd', 'user', 'goodvibes.service'))).toBe(false);
       // The only tracked-unit traffic allowed here is a read-only status
@@ -528,7 +528,7 @@ describe('runDaemonServiceCli — migrate-service', () => {
       expect(calls.some((c) => c.includes('enable') || c.includes('stop') || c.includes('disable'))).toBe(false);
     });
 
-    test('custom (non-colliding) service.serviceName: the plan names the custom unit, not the hardcoded default (F2)', async () => {
+    test('custom (non-colliding) service.serviceName: the plan names the custom unit, not the hardcoded default', async () => {
       const configManager = new ConfigManager({ workingDir: dir, homeDir: dir, surfaceRoot: 'tui' });
       configManager.setDynamic('service.serviceName', 'my-custom-unit');
       const { runner } = fakeMigrationRunner();
@@ -538,7 +538,7 @@ describe('runDaemonServiceCli — migrate-service', () => {
 
       expect(result.ok).toBe(true);
       const text = result.lines.join('\n');
-      expect(text).toContain('a different unit name (my-custom-unit.service)');
+      expect(text).toContain('this tool manages my-custom-unit.service');
       expect(text).toContain('install and start the new my-custom-unit.service unit');
       expect(text).not.toContain('goodvibes.service');
     });
@@ -657,7 +657,7 @@ describe('runDaemonServiceCli — migrate-service', () => {
       const text = result.lines.join('\n');
       expect(text).toContain('did not come up healthy');
       expect(text).toContain('rolled back');
-      expect(text).toContain('legacy');
+      expect(text).toContain('install-script');
       expect(text).toContain('never touched');
       expect(text).toContain('should still be running as before');
       // Never reached the legacy stop/disable/remove step.

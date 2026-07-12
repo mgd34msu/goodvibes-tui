@@ -290,7 +290,7 @@ export async function runDaemonServiceCli(input: DaemonServiceCliInput): Promise
           ok: false,
           exitCode: 1,
           lines: [
-            `service install refused: a service is already installed under the legacy name ${LEGACY_SERVICE_UNIT_NAME}.service.`,
+            `service install refused: a service is already installed as ${LEGACY_SERVICE_UNIT_NAME}.service (the unit name the goodvibes install script manages).`,
             legacyUnitNote(legacy, resolvedName),
             `Installing this tool's ${resolvedName}.service alongside it risks two daemons competing for the same port.`,
           ],
@@ -313,10 +313,10 @@ export async function runDaemonServiceCli(input: DaemonServiceCliInput): Promise
       if (uninstalled.actionError) return failed('uninstall', uninstalled);
       const extra: string[] = [];
       if (stopped.actionError) extra.push(`(it may not have been running: ${stopped.actionError})`);
-      // W3 Finding 4: this command only ever touches the TRACKED unit
-      // (whatever name/path actually resolved — not necessarily the
-      // SERVICE_NAME constant) above — say so explicitly when a legacy unit
-      // also exists, so its continued presence is never a silent surprise.
+      // This command only ever touches the TRACKED unit (whatever name/path
+      // actually resolved — not necessarily the SERVICE_NAME constant) above —
+      // say so explicitly when an install-script unit also exists, so its
+      // continued presence is never a silent surprise.
       if (legacy.present) extra.push(legacyUnitNote(legacy, resolveManagedUnitName(uninstalled)));
       return ok('uninstall', uninstalled, extra);
     }

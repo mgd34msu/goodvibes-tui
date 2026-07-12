@@ -2204,7 +2204,7 @@ describe('network step: connect to an existing daemon (F1)', () => {
 // Network step, visible only when the runtime snapshot's read-only
 // legacyDaemon detection reports a unit present, confirm-gated by a checklist
 // toggle on top of the engine's own consent requirement.
-describe('network step: migrate legacy daemon service', () => {
+describe('network step: migrate the install-script daemon service', () => {
   test('hides the migration fields when no legacy unit is detected', () => {
     const snapshot = makeOnboardingSnapshot();
     const wizard = new OnboardingWizardController();
@@ -2233,7 +2233,7 @@ describe('network step: migrate legacy daemon service', () => {
     const actionField = networkStep?.fields.find((field) => field.id === 'network.migrate-legacy-daemon');
     expect(detected?.kind).toBe('status');
     expect(detected?.hint).toContain('installed (not currently active)');
-    expect(detected?.hint).toContain('will not touch the legacy one automatically');
+    expect(detected?.hint).toContain('will not touch the other unit automatically');
     expect(confirmField?.kind).toBe('checklist');
     expect(confirmField && confirmField.kind === 'checklist' ? confirmField.defaultValue : null).toBe(false);
     expect(actionField?.kind).toBe('action');
@@ -2241,7 +2241,7 @@ describe('network step: migrate legacy daemon service', () => {
     expect(actionField && actionField.kind === 'action' ? actionField.action : null).toBe('migrate-legacy-daemon-service');
   });
 
-  test('custom service.serviceName (snapshot trackedServiceName): the detection note names the custom unit, not the hardcoded default (F2 follow-up)', () => {
+  test('custom service.serviceName (snapshot trackedServiceName): the detection note names the custom unit, not the hardcoded default', () => {
     const snapshot = makeOnboardingSnapshot({
       legacyDaemon: {
         present: true,
@@ -2257,8 +2257,8 @@ describe('network step: migrate legacy daemon service', () => {
 
     const networkStep = wizard.steps.find((step) => step.id === 'network');
     const detected = networkStep?.fields.find((field) => field.id === 'network.migrate-legacy-daemon-detected');
-    expect(detected?.hint).toContain('a different unit name (my-custom-unit.service)');
-    expect(detected?.hint).not.toContain('a different unit name (goodvibes.service)');
+    expect(detected?.hint).toContain('this tool manages my-custom-unit.service');
+    expect(detected?.hint).not.toContain('this tool manages goodvibes.service');
   });
 
   test('snapshot without trackedServiceName (pre-feature fixture): the detection note falls back to the default unit name', () => {
@@ -2272,7 +2272,7 @@ describe('network step: migrate legacy daemon service', () => {
 
     const networkStep = wizard.steps.find((step) => step.id === 'network');
     const detected = networkStep?.fields.find((field) => field.id === 'network.migrate-legacy-daemon-detected');
-    expect(detected?.hint).toContain('a different unit name (goodvibes.service)');
+    expect(detected?.hint).toContain('this tool manages goodvibes.service');
   });
 
   test('reports the active-and-running wording when the legacy unit is currently active', () => {
@@ -2301,7 +2301,7 @@ describe('network step: migrate legacy daemon service', () => {
 
     const networkStep = wizard.steps.find((step) => step.id === 'network');
     const actionField = networkStep?.fields.find((field) => field.id === 'network.migrate-legacy-daemon');
-    expect(actionField?.label).toBe('Migrate legacy daemon service now');
+    expect(actionField?.label).toBe('Migrate the install-script daemon service now');
     expect(actionField?.hint).toContain('Executes the migration now');
   });
 
@@ -2329,8 +2329,8 @@ describe('network step: migrate legacy daemon service', () => {
       .handleOnboardingAction('migrate-legacy-daemon-service');
 
     const output = prints.join('\n');
-    expect(output).toContain('Migrate legacy daemon service:');
-    expect(output).toContain('no legacy goodvibes-daemon.service unit was found');
+    expect(output).toContain('Migrate install-script daemon service:');
+    expect(output).toContain('no install-script goodvibes-daemon.service unit was found');
     expect(output).toContain('is free');
     expect(output).toContain('Run install-service');
   });
