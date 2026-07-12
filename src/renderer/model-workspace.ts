@@ -395,9 +395,14 @@ export function renderModelWorkspace(picker: ModelPickerModal, width: number, vi
   const bodyRows = safeHeight - 3 - footerRows;
   const maxDetailRows = Math.max(3, bodyRows - 2);
   const minDetailRows = Math.min(6, maxDetailRows);
-  const detailRows = clamp(Math.round(bodyRows * 0.32), minDetailRows, maxDetailRows);
+  const details = detailLines(picker, contentW - 2);
+  // Never drop detail lines (the modal rule: UI-authored descriptive text is
+  // always shown in full). Size the detail band to the ACTUAL content,
+  // growing past the old fixed proportional default up to maxDetailRows —
+  // the ceiling that keeps at least a header row and one list row available —
+  // rather than silently slicing off whatever didn't fit a 32% guess.
+  const detailRows = clamp(Math.max(details.length, Math.round(bodyRows * 0.32)), minDetailRows, maxDetailRows);
   const listRows = Math.max(1, bodyRows - detailRows - 1);
-  const details = detailLines(picker, contentW - 2).slice(0, detailRows);
 
   for (let row = 0; row < bodyRows; row += 1) {
     const inDetail = row < detailRows;
