@@ -13,6 +13,9 @@ This directory contains the current product documentation for `goodvibes-tui`.
 - [Deployment and services](deployment-and-services.md)
   TUI-only mode, compiled binary behavior, in-process daemon/listener hosting, source-run daemon mode, inbound TLS, outbound trust configuration, and control-plane entrypoints.
 
+- [Remote access: a home server setup](remote-access.md)
+  Step-by-step continuity setup: daemon on an always-on box, webui from any browser, TUI over SSH, Tailscale for reachability and TLS, validated by `goodvibes doctor`.
+
 - [Providers and routing](providers-and-routing.md)
   Native providers, compatible/gateway providers, local discovery, synthetic failover, search providers, voice providers, and media providers.
 
