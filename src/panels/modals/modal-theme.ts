@@ -1,7 +1,7 @@
 import { activeUiTones, registerThemeRefresh } from '../../renderer/theme.ts';
 
 // ---------------------------------------------------------------------------
-// Semantic tone tokens for the W6.1 group-B config modals.
+// Semantic tone tokens for the group-B config modals.
 //
 // Derived entirely from the chrome token set so the builders carry NO raw hex
 // color literals (architecture: no-raw-hex-literal-growth). Rebuilt IN PLACE

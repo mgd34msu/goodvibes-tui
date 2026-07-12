@@ -37,15 +37,15 @@ export class PanelManager {
   /** Old/absorbed panel id -> merged target id (WO-1xx console merges). */
   private aliases = new Map<string, string>();
   /**
-   * Retired panel id -> modal name (W6.1 purge, MIGRATE-TO-MODAL surfaces).
+   * Retired panel id -> modal name (panels migrated to config-modal surfaces).
    * Unlike `aliases` (panel -> panel), a hit here means no panel is ever
    * constructed for this id — `open()` invokes `openModalCallback` instead
-   * and returns a sentinel. Registrations are added by WO-A/B; this map and
-   * the open()-time check are WO-C's mechanism only.
+   * and returns a sentinel. This map and the open()-time check are the
+   * sole mechanism for that redirect.
    */
   private modalRedirects = new Map<string, string>();
   /**
-   * Modal name -> the surface the config-modal host renders (W6.1). Built once
+   * Modal name -> the surface the config-modal host renders. Built once
    * in builtin-modals.ts (closing over read-models) and looked up by
    * ui-openers' openModal callback. Distinct from `modalRedirects` (panel id ->
    * modal name): a redirect resolves a legacy panel id to a name; this map
@@ -100,7 +100,7 @@ export class PanelManager {
 
   registerType(registration: PanelRegistration): void {
     const existing = this.registry.findIndex(r => r.id === registration.id);
-    // WO-152: registry-time icon-uniqueness assertion. Tab-bar icons are a
+    // registry-time icon-uniqueness assertion. Tab-bar icons are a
     // single glyph; two panels sharing one silently made the workspace tab
     // strip ambiguous (the historical W/R/U/K/M/Q/Y/J/P collisions). Compare
     // against every OTHER registration (excluding a re-registration of the
@@ -276,7 +276,7 @@ export class PanelManager {
   }
 
   /**
-   * Hand an optional deep-link target (DEBT-5 item 4) to a panel that just
+   * Hand an optional deep-link target (item 4) to a panel that just
    * resolved from open(). Panels without a "node" concept simply don't
    * implement `receiveDeepLink` — the call is a no-op via optional chaining.
    */
@@ -496,7 +496,7 @@ export class PanelManager {
           this.bottomPane.panels.push(panel);
           this.bottomPane.activeIndex = 0;
         } else {
-          // Open a predictable default panel in the bottom pane. W6.1 purge:
+          // Open a predictable default panel in the bottom pane. purge:
           // 'panel-list' was deleted (dead weight over a 5-panel registry —
           // see the DELETE disposition), so the default is explicitly
           // 'fleet' rather than falling back to registry[0] (whatever
@@ -606,7 +606,7 @@ export class PanelManager {
   toggle(): void {
     this._visible = !this._visible;
     // Auto-open a default panel if toggling visible with nothing open.
-    // W6.1 purge: explicitly 'fleet' rather than registry[0] — see the
+    // purge: explicitly 'fleet' rather than registry[0] — see the
     // matching comment in toggleBottomPane() above.
     if (this._visible && this.topPane.panels.length === 0 && this.bottomPane.panels.length === 0) {
       const defaultPanel = this._getRegistration('fleet') ?? this.registry[0];

@@ -55,7 +55,7 @@ export interface BuiltinPanelDeps {
   subscriptionManager?: SubscriptionManager;
   /** Shared service registry for services-backed panels. */
   serviceRegistry?: ServiceRegistry;
-  /** Context window size in tokens. Unused since WO-113 folded ContextVisualizerPanel into TokenBudgetPanel (which reads getCtxWindow instead); kept for source compatibility. */
+  /** Context window size in tokens. Unused since folded ContextVisualizerPanel into TokenBudgetPanel (which reads getCtxWindow instead); kept for source compatibility. */
   contextWindow?: number;
   /** Main Orchestrator instance for TokenBudgetPanel.wire(). */
   orchestrator?: Orchestrator;
@@ -72,7 +72,7 @@ export interface BuiltinPanelDeps {
   /** ForensicsRegistry for the Forensics panel. */
   forensicsRegistry?: import('@/runtime/index.ts').ForensicsRegistry;
   /**
-   * EvalRegistry for the `/eval` command surface. W6.1: 'eval' the panel was
+   * EvalRegistry for the `/eval` command surface.: 'eval' the panel was
    * deleted (DELETE-disposition), but this field is left in place — no
    * builtin panel factory reads it anymore, and it was never wired at
    * bootstrap in production either way (the eval CLI command reads its own
@@ -123,7 +123,7 @@ export interface BuiltinPanelDeps {
   workPlanStore?: import('../../work-plans/work-plan-store.ts').WorkPlanStore;
   /** Explicit UI-facing runtime services for agent/process/WRFC/remote panels and modals. */
   uiServices?: UiRuntimeServices;
-  /** Shared plugin manager for plugin and security panels (widened past the read-only observer surface — WO-134 — so PluginsPanel can drive enable/disable/verify/lift-quarantine). */
+  /** Shared plugin manager for plugin and security panels (widened past the read-only observer surface — — so PluginsPanel can drive enable/disable/verify/lift-quarantine). */
   pluginManager?: PluginManagerControls;
   /** Shared hook dispatcher for the hooks control-room panel. */
   hookDispatcher?: Pick<HookDispatcher, 'listHooks' | 'getChains'>;
@@ -287,7 +287,7 @@ export function requireKnowledgeApi(deps: BuiltinPanelDeps): KnowledgeApi {
 }
 
 // ---------------------------------------------------------------------------
-// WO-152: always-register conditional panels with a "dependency not
+// always-register conditional panels with a "dependency not
 // configured" empty state instead of skipping registration entirely.
 // ---------------------------------------------------------------------------
 

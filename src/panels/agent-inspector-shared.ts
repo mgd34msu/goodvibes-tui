@@ -8,7 +8,7 @@ export type AgentInspectorEntryKind = 'user' | 'assistant' | 'tool_call' | 'tool
 // ---------------------------------------------------------------------------
 // Shared agent status / stall constants
 // Used by the Fleet panel's agent views and read-model consumers (formerly also
-// AgentDetailModal, which was retired in W6.1).
+// AgentDetailModal, which was retired in).
 // ---------------------------------------------------------------------------
 
 /** Terminal statuses — cancel not offered; stall check skipped. */
@@ -127,7 +127,7 @@ export function agentKindStyle(kind: AgentInspectorEntryKind, colors: Record<str
 }
 
 // ---------------------------------------------------------------------------
-// Inspector filter modes (ported from the merged agent-logs console — WO-110)
+// Inspector filter modes (ported from the merged agent-logs console —)
 // ---------------------------------------------------------------------------
 
 export type AgentInspectorFilterType = 'all' | 'assistant' | 'tool' | 'error';
@@ -188,7 +188,7 @@ interface AgentUsageLike {
 
 /**
  * True when a usage object carries actual reported token data rather than
- * being present-but-empty. W0.9: the SDK's AgentRecord.usage is initialised
+ * being present-but-empty.: the SDK's AgentRecord.usage is initialised
  * to an all-zero object at agent spawn (platform/tools/agent/manager.ts) and
  * — in the currently pinned SDK version — is never updated past that, so a
  * plain truthiness check on `rec.usage` treats every agent, including ones
@@ -256,7 +256,7 @@ export function buildWrfcCostSegments(
 }
 
 // ---------------------------------------------------------------------------
-// Agent lifecycle event subscriptions (ported from agent-logs — WO-110)
+// Agent lifecycle event subscriptions (ported from agent-logs —)
 // ---------------------------------------------------------------------------
 
 export interface AgentActivityHooks {

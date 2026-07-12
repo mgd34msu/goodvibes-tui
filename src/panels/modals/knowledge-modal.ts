@@ -9,7 +9,7 @@ import type {
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 
 // ---------------------------------------------------------------------------
-// Knowledge (graph) → config-modal surface (W6.1 group-B port). Two tabs:
+// Knowledge (graph) → config-modal surface (group-B port). Two tabs:
 // 'Browse' (sources/nodes/issues + schedules) and 'Review' (the open-issue
 // queue) — the panel's browse/review toggle, now host tabs. Issue review
 // mutations (accept/reject/resolve/reopen) route to the `/knowledge

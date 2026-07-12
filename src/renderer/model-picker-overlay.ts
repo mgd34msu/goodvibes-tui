@@ -2,7 +2,7 @@
  * Number of fixed chrome lines in the model-picker overlay (title + search + divider + detail×2 + footer).
  * Used by callers to compute maxVisible item rows.
  *
- * WO-206: this file used to also hold `renderModelPickerOverlay`, the
+ * this file used to also hold `renderModelPickerOverlay`, the
  * overlay-style model-picker renderer. It was superseded by
  * `renderModelWorkspace` (model-workspace.ts) — conversation-overlays.ts
  * routes `input.modelPicker.active` there, not here — and had no remaining

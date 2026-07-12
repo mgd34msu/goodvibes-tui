@@ -195,7 +195,7 @@ export class ModalFactory {
     }
 
     // Footer / hint bar. Hint segments join with the shared middle-dot grammar
-    // separator (WO-151) so every modal footer reads as one dialect.
+    // separator so every modal footer reads as one dialect.
     const hintStr = config.hints
       ? config.hints.join(HINT_SEPARATOR)
       : (config.footer ?? '');

@@ -37,7 +37,7 @@ function compactAnswerDetail(text: string): string {
  * recommendedAnswer echoing one of the scope answers verbatim, must not show
  * the same suggested answer twice), then the fixed ask-narrower/custom actions.
  *
- * DEBT-3: dismissing planning is no longer a pseudo answer-row — it is a
+ * dismissing planning is no longer a pseudo answer-row — it is a
  * first-class confirmed modal action (the `d` key), so no dismiss row is
  * produced here. A canned answer records against the current open question via
  * /plan answer; the custom row's free-form text is submitted to chat.

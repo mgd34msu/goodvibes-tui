@@ -38,7 +38,7 @@ interface MarketplaceRow {
 const KINDS: readonly EcosystemEntryKind[] = ['plugin', 'skill', 'hook-pack', 'policy-pack'];
 
 /**
- * Marketplace → config-modal surface (W6.1 group-B port). Local-first
+ * Marketplace → config-modal surface (group-B port). Local-first
  * publish/import catalog (NOT a remote store) with provenance, compatibility,
  * and install posture. Disk catalog loads happen in refresh() (never in
  * buildView), mirroring the panel's explicit render()/refresh() split.

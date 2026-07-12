@@ -21,7 +21,7 @@
  * DEFAULT_PANEL_PALETTE, DEFAULT_STYLE, FULLSCREEN_PALETTE and
  * DEFAULT_OVERLAY_PALETTE all read through ONE mode-resolved path instead of
  * importing the static UI_TONES constant directly. Mode stays 'dark'
- * everywhere until the terminal-bg-probe lands (see WO-001) — the light
+ * everywhere until the terminal-bg-probe lands (see) — the light
  * entry is type-complete, not a shipped light theme.
  */
 
@@ -173,7 +173,7 @@ export const DARK_THEME: Readonly<ThemeTokens> = DARK;
 //
 // UI_TONES (ui-primitives.ts) is the dark entry. The light entry mirrors
 // dark for every role that has no light-appropriate equivalent yet — the
-// WO-001 deliverable is the mode dimension and single read path, not a
+// deliverable is the mode dimension and single read path, not a
 // shipped light chrome theme (see module doc comment above).
 // ---------------------------------------------------------------------------
 
@@ -242,7 +242,7 @@ export function resolveUiTones(mode: ThemeMode): Readonly<UiToneTokens> {
 }
 
 // ===========================================================================
-// Active-mode runtime (DEBT-2 terminal-bg-probe landing).
+// Active-mode runtime (terminal-bg-probe landing).
 //
 // The mode is decided ONCE at startup — from appearance config (display.themeMode
 // forced dark/light) or the terminal-background probe (auto) — and is then stable

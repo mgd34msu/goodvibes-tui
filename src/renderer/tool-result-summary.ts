@@ -4,7 +4,7 @@
  * in conversation-rendering.ts) shows "wrote haiku.txt (532 B)" instead of a
  * raw `{"files_written":1,"bytes_written":532,...}` JSON blob. The full payload
  * stays reachable behind the existing collapse/expand toggle — this only
- * changes the collapsed preview line, never destroys data. (UX-B item 3.)
+ * changes the collapsed preview line, never destroys data. (item 3.)
  *
  * Returning `null` means "no honest summary for this shape" — the caller then
  * falls back to the previous raw-first-line preview, so an unrecognised tool or

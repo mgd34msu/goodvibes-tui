@@ -17,7 +17,7 @@ import type { CompactionQualityScore } from './compaction-quality.ts';
 // ─── formatCompactionEvent ────────────────────────────────────────────────────
 
 /**
- * Exported for direct unit testing (W5.4/B28) — the grade suffix is a pure
+ * Exported for direct unit testing () — the grade suffix is a pure
  * function of the event and an optional score, independent of whichever
  * runtime lookup (getCompactionQualityScore) supplies that score.
  */

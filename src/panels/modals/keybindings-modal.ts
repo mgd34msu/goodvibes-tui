@@ -9,7 +9,7 @@ import type {
 import { KeybindingsManager } from '../../input/keybindings.ts';
 
 // ---------------------------------------------------------------------------
-// Docs + Shortcuts → 'keybindings' config-modal surface (W6.1 group-B port).
+// Docs + Shortcuts → 'keybindings' config-modal surface (group-B port).
 // A MERGE of the retired DocsPanel (tools/models/shortcuts) and the
 // shortcuts-overlay reference. Three tabs: 'Tools', 'Models', and 'Shortcuts'
 // (the categorized keyboard reference — driven live off keybindingsManager so
@@ -112,7 +112,7 @@ class KeybindingsModalSurface implements ConfigModalSurface {
     if (id === 'refresh') { ctx.setStatus('Docs & shortcuts are read live.'); ctx.requestRender(); return; }
     if (id !== 'activate') return;
     if (ctx.tabId === 'tools') {
-      // DEBT-5 item 4: pass the tool name through as a deep-link target.
+      // item 4: pass the tool name through as a deep-link target.
       // Honest caveat (documented, not a bug to silently paper over): fleet's
       // ProcessKind set has no 'tool' node — a docs Tools row names a static
       // tool DEFINITION, not a live process, so FleetPanel.receiveDeepLink

@@ -12,7 +12,7 @@ import type {
 } from '../../input/config-modal-types.ts';
 
 // ---------------------------------------------------------------------------
-// Security → config-modal surface (W6.1 group-B port). Two tabs: 'Tokens' (the
+// Security → config-modal surface (group-B port). Two tabs: 'Tokens' (the
 // token scope/rotation audit list under the governance summary) and
 // 'Governance' (policy preflight, MCP/plugin quarantine, latest incident, and
 // the MCP attack-path review). Read-model-backed, so refresh() is a no-op —

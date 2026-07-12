@@ -18,7 +18,7 @@ import type {
 } from '../../input/config-modal-types.ts';
 
 // ---------------------------------------------------------------------------
-// Policy → config-modal surface (W6.1 group-B port). Governance CONTENT view,
+// Policy → config-modal surface (group-B port). Governance CONTENT view,
 // not a selectable list — current/candidate bundle state, diff, divergence
 // gate, history, permission audit, lint findings, preflight review, and
 // simulation samples render as non-selectable rows (the host windows/scrolls

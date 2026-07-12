@@ -1,7 +1,7 @@
 /**
  * terminal-bg-probe — OSC 11 terminal-background detection for `auto` theme mode.
  *
- * DEBT-2. On startup, when appearance is `auto` and stdout is a TTY, we ask
+ *. On startup, when appearance is `auto` and stdout is a TTY, we ask
  * the terminal for its background colour with an OSC 11 query and classify the
  * reply as light or dark. Everything about this is best-effort and conservative:
  * any timeout, any unparseable reply, any ambiguity resolves to DARK, which is

@@ -9,7 +9,7 @@ import type {
 import { encodeConnectionPayload, generateQrMatrix, renderQrToString } from '@pellux/goodvibes-sdk/platform/pairing';
 
 // ---------------------------------------------------------------------------
-// QR Code → 'pairing' config-modal surface (W6.1 group-B port). Connection
+// QR Code → 'pairing' config-modal surface (group-B port). Connection
 // URL/token/username(/password) plus a scannable QR block — read/navigate only.
 // Token regeneration is a destructive mutation (it invalidates any live
 // companion session) that the panel gated behind an in-panel confirm; per
@@ -18,7 +18,7 @@ import { encodeConnectionPayload, generateQrMatrix, renderQrToString } from '@pe
 // buildView, cached) so a missing daemon home degrades honestly rather than
 // throwing at modal-registration time.
 //
-// DEBT-3: the regenerate action now dispatches the real `/qrcode regenerate`
+// the regenerate action now dispatches the real `/qrcode regenerate`
 // verb (which rotates the shared operator-token store) and, once it resolves,
 // RE-PULLS the lazy connection-info thunk so the modal shows the rotated token +
 // QR in place without being re-opened. `confirm: true` keeps the two-press

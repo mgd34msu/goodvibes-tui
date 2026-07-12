@@ -227,10 +227,10 @@ export abstract class BasePanel implements Panel {
     return consumed;
   }
 
-  /** R2: Mark this panel dirty — it will be re-rendered on the next compositor frame. */
+  /** Mark this panel dirty — it will be re-rendered on the next compositor frame. */
   public invalidate(): void { this.needsRender = true; }
 
-  /** R2: Called by the compositor after a successful render to clear the dirty flag. */
+  /** Called by the compositor after a successful render to clear the dirty flag. */
   public markRendered(): void { this.needsRender = false; }
 
   protected markDirty(): void {

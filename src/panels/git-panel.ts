@@ -77,7 +77,7 @@ const C = extendPalette(DEFAULT_PANEL_PALETTE, {
   commitAuthor: '244',
   selected: '#1c1c1c',
   selectedFg: '#ffffff',
-  diffMeta: DIFF_TONES.hunk, // WO-204: shared diff-hunk token, was a local literal
+  diffMeta: DIFF_TONES.hunk, // shared diff-hunk token, was a local literal
   diffNeutral: '250',
   // Reuses the existing workflow accent token rather than adding a new hex
   // literal (architecture gate ratchets the raw-hex-literal count).
@@ -626,7 +626,7 @@ export class GitPanel extends BasePanel {
         { keys: 'r', label: 'refresh' },
       ], DEFAULT_PANEL_PALETTE),
     ];
-    const emptyStateLines = buildEmptyState(width, ' No git rows', 'This repository has no staged or unstaged changes and no commits to display yet.', [{ command: 'r', summary: 'refresh working-tree status in this panel, or stage changes to populate this view' }], DEFAULT_PANEL_PALETTE); // WO-160: was '/git status' (chat-only, never touches this panel)
+    const emptyStateLines = buildEmptyState(width, ' No git rows', 'This repository has no staged or unstaged changes and no commits to display yet.', [{ command: 'r', summary: 'refresh working-tree status in this panel, or stage changes to populate this view' }], DEFAULT_PANEL_PALETTE); // was '/git status' (chat-only, never touches this panel)
     const rows: Line[] = [];
     for (let i = 0; i < this.items.length; i++) {
       const item = this.items[i];

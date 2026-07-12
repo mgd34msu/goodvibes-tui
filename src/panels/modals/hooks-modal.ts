@@ -16,7 +16,7 @@ import type {
 } from '../../input/config-modal-types.ts';
 
 // ---------------------------------------------------------------------------
-// Hooks → config-modal surface (W6.1 group-B port). Two tabs: 'Hooks' (active
+// Hooks → config-modal surface (group-B port). Two tabs: 'Hooks' (active
 // registrations + contract posture) and 'Activity' (recent runtime activity +
 // managed authoring + last simulation — the panel's expand-activity view, now a
 // dedicated tab). All sources are in-memory (dispatcher/workbench/tracker hold

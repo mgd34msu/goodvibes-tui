@@ -81,7 +81,7 @@ export function renderAutocompleteOverlay(
   }
   const endIdx = Math.min(startIdx + maxVisible, total);
 
-  // UX-C palette curation (item 4): on a bare '/' (query === ''), the results
+  // palette curation (item 4): on a bare '/' (query === ''), the results
   // list is "common tier" (score 2) followed by "alphabetical rest" (score
   // 1) — see CommandRegistry.fuzzyMatch. commonCount marks that boundary;
   // draw a one-row separator there when it falls inside the visible window,
@@ -162,7 +162,7 @@ export function renderAutocompleteOverlay(
   }
 
   const footerLine = createOverlayContentLine(width, layout);
-  // UX-C vocab unification: "Run"/"Close" match the /help selection modal's
+  // vocab unification: "Run"/"Close" match the /help selection modal's
   // hint bar (selection-modal-overlay.ts) — both surfaces execute a command
   // on Enter, so they now say so the same way.
   const hints = '[Tab] Complete  [Up/Down] Navigate  [Enter] Run  [Esc] Close';

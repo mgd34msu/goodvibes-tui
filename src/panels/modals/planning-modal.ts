@@ -18,12 +18,12 @@ import type {
 import { buildAnswerActions, isGenericRecommendation, type PlanningAnswerAction } from '../project-planning-answer-actions.ts';
 
 // ---------------------------------------------------------------------------
-// Project Planning → 'planning' config-modal surface (W6.1 group-B port). Shows
+// Project Planning → 'planning' config-modal surface (group-B port). Shows
 // readiness/questions/decisions/task-graph/handoff — read-only except choosing
 // an answer to the current open question, approving execution, dismissing the
 // plan, or refreshing.
 //
-// DEBT-3 — the seams are now real:
+// — the seams are now real:
 //   - A CANNED answer to a real open question dispatches `/plan answer <id> <text>`
 //     (records it; the open-question gap clears on the next refine).
 //   - The CUSTOM free-form typed answer (and any answer to a synthetic readiness

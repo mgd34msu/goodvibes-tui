@@ -6,14 +6,14 @@ import { CostTrackerPanel } from '../cost-tracker-panel.ts';
 import type { ResolvedBuiltinPanelDeps } from './shared.ts';
 import { requireUiServices, withUnconfiguredFallback } from './shared.ts';
 
-// W6.1 (the purge): plan, intelligence, explorer, preview, and symbols were
+// (the purge): plan, intelligence, explorer, preview, and symbols were
 // registered here before the purge. plan was RETIRE-INTO-FLEET (its
 // execution-plan view is subsumed by Fleet — operations.ts:84); the other
 // four were DELETE-disposition (no surviving human surface — intelligence's
 // read-model still backs the surviving `/intelligence` CLI subcommands, see
 // intelligence-runtime.ts; explorer/preview/symbols had no dedicated
 // read-model to preserve). See .goodvibes/audit/2026-07-04-wave6-briefs.json
-// (W6.1) for the full disposition map.
+// for the full disposition map.
 export function registerDevelopmentPanels(manager: PanelManager, deps: ResolvedBuiltinPanelDeps): void {
   manager.registerType({
     id: 'git',
@@ -56,10 +56,10 @@ export function registerDevelopmentPanels(manager: PanelManager, deps: ResolvedB
     ),
   });
 
-  // WO-110: 'inspector' registration moved to builtin/agent.ts (category
+  // 'inspector' registration moved to builtin/agent.ts (category
   // 'agent') — it now absorbs the merged agent-logs capabilities.
 
-  // WO-152: always registered (was gated behind `if (deps.getOrchestratorUsage)`,
+  // always registered (was gated behind `if (deps.getOrchestratorUsage)`,
   // so `/panel open cost` reported "Unknown panel" on builds without usage
   // tracking wired). Falls back to a "dependency not configured" empty state.
   {

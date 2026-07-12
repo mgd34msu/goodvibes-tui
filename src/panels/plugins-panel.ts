@@ -21,11 +21,11 @@ import {
 } from './polish.ts';
 
 // Base chrome only — title band, state colors, and text tokens all come
-// straight from DEFAULT_PANEL_PALETTE (WO-002).
+// straight from DEFAULT_PANEL_PALETTE.
 const C = DEFAULT_PANEL_PALETTE;
 
 /**
- * WO-134: PluginsPanel drives real plugin-manager mutations (enable/disable/
+ * PluginsPanel drives real plugin-manager mutations (enable/disable/
  * verify/lift-quarantine) from the keyboard, not just read-only inspection.
  * `PluginManagerObserver` alone (the read-only surface most panels need) has
  * no mutation methods, so the constructor param is widened to also require
@@ -87,7 +87,7 @@ export class PluginsPanel extends ScrollableListPanel<PluginStatus> {
       || plugin.version.toLowerCase().includes(q);
   }
 
-  // WO-134: selection is preserved across onActivate — BasePanel's default
+  // selection is preserved across onActivate — BasePanel's default
   // (mark dirty, no index reset) is exactly what we want, so no override.
 
   public override onDestroy(): void {
@@ -149,7 +149,7 @@ export class PluginsPanel extends ScrollableListPanel<PluginStatus> {
   }
 
   /**
-   * WO-134: optional one-key capture-to-memory for a quarantined plugin — 'm'
+   * optional one-key capture-to-memory for a quarantined plugin — 'm'
    * dispatches `/recall capture plugin <name>` (recall-capture.ts:146 pattern)
    * instead of requiring the operator to type the command by hand.
    */

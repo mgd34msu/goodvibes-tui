@@ -1,12 +1,12 @@
 /**
  * EvalRegistry — holds the latest evaluation harness run state.
  *
- * W6.1 (the purge): extracted out of eval-panel.ts. 'eval' was
+ * (the purge): extracted out of eval-panel.ts. 'eval' was
  * DELETE-disposition (no surviving human surface — the evaluation harness
  * is driven and reviewed via the `/eval` CLI command, input/commands/eval.ts)
  * but this registry is still a live consumer of `/eval run` output, so it
  * survives as a standalone read-model rather than being deleted with the
- * view. See .goodvibes/audit/2026-07-04-wave6-briefs.json (W6.1).
+ * view. See .goodvibes/audit/2026-07-04-wave6-briefs.json.
  */
 
 import type { EvalSuiteResult, EvalGateResult } from '@/runtime/index.ts';

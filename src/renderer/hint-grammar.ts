@@ -1,7 +1,7 @@
 /**
  * hint-grammar.ts — the single hint-bar grammar for every overlay footer.
  *
- * WO-151: one grammar across the model picker, settings modal, help/shortcuts
+ * one grammar across the model picker, settings modal, help/shortcuts
  * overlays, and ModalFactory variants so footers stop drifting into three
  * different dialects (verbless brackets, prose sentences, ad-hoc separators).
  *

@@ -460,7 +460,7 @@ export class TokenBudgetPanel extends BasePanel {
 
     if (status.guidanceMode !== 'off' && status.nextSteps.length > 0) {
       const nextStep = status.nextSteps[0]!;
-      // WO-160: when the recommended next step is /compact and C is armed
+      // when the recommended next step is /compact and C is armed
       // (see handleInput's elevated-only C branch and the footer hint),
       // advertise the key instead of the command — pressing C already
       // dispatches it for real, so printing '/compact' here was a redundant

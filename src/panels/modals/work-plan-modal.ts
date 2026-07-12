@@ -7,7 +7,7 @@ import type {
 import type { WorkPlanItemStatus } from '../../work-plans/work-plan-store.ts';
 
 // ---------------------------------------------------------------------------
-// Work Plan → config-modal surface (W6.1 group-B port). Lists the active
+// Work Plan → config-modal surface (group-B port). Lists the active
 // persistent plan's checklist items with a progress summary + status counts.
 // All mutations (add/edit item, cycle/set status, remove, clear-completed)
 // route to the existing `/work-plan` command path (charter: no
@@ -65,8 +65,8 @@ class WorkPlanModalSurface implements ConfigModalSurface {
   private readonly hasRow = (row: ConfigModalRow | null): boolean => row !== null;
 
   /** 'i'/'w' jump to the selected item's linked agent/WRFC chain in Fleet
-   *  (DEBT-5 item 4 — restores the retired WorkPlanPanel's per-item deep-link,
-   *  lost when W6.1 migrated this surface to a modal without it). Gated on
+   *  (item 4 — restores the retired WorkPlanPanel's per-item deep-link,
+   *  lost when migrated this surface to a modal without it). Gated on
    *  the link actually being present, same as the retired panel gated the key
    *  on `item?.linked?.agentId`/`wrfcId` before ever reaching the jump. */
   private readonly hasAgentLink = (row: ConfigModalRow | null): boolean =>
