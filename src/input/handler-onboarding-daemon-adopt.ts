@@ -138,10 +138,10 @@ export async function handleMigrateLegacyDaemonServiceForHandler(handler: InputH
       legacy,
     );
     handler.commandContext?.print?.(
-      ['Migrate legacy daemon service:', ...result.lines.map((line: string) => `  ${line}`)].join('\n'),
+      ['Migrate install-script daemon service:', ...result.lines.map((line: string) => `  ${line}`)].join('\n'),
     );
   } catch (error) {
-    handler.commandContext?.print?.(`Migrate legacy daemon service failed: ${summarizeError(error)}`);
+    handler.commandContext?.print?.(`Migrate install-script daemon service failed: ${summarizeError(error)}`);
   } finally {
     handler.onboardingApplyPending = false;
     handler.requestRender();

@@ -106,7 +106,7 @@ export function pushLegacyDaemonMigrationFields(
   fields.push({
     kind: 'status',
     id: 'network.migrate-legacy-daemon-detected',
-    label: 'Legacy daemon service detected',
+    label: 'Separate install-script daemon service detected',
     // Follow-up: name the unit this host actually resolves (carried on the
     // snapshot from `resolveConfiguredServiceName` at collection time) — the
     // MANAGED_SERVICE_NAME fallback only covers snapshots built without it.
@@ -126,7 +126,7 @@ export function pushLegacyDaemonMigrationFields(
   fields.push({
     kind: 'action',
     id: 'network.migrate-legacy-daemon',
-    label: confirmed ? 'Migrate legacy daemon service now' : 'Preview migration plan',
+    label: confirmed ? 'Migrate the install-script daemon service now' : 'Preview migration plan',
     hint: confirmed
       ? 'Executes the migration now: new-up-then-old-down, never touching the legacy unit until the new one is verified healthy. Result prints to the feed below.'
       : 'Prints the migration plan without changing anything. Check "Confirm migration execution" above to arm the real migration.',
