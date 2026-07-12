@@ -7,7 +7,7 @@ import { createSplitPaneLayout } from './layout-engine.ts';
 import { renderPanelWorkspaceBar } from './panel-workspace-bar.ts';
 
 /**
- * R2: Per-panel render cache for dirty-flag skipping.
+ * Per-panel render cache for dirty-flag skipping.
  *
  * Maintainability hazard — mid-render invalidation race:
  *
@@ -59,7 +59,7 @@ function getRenderGenState(panel: Panel): { gen: number } {
   return state;
 }
 
-/** R2: Render a panel, skipping if nothing changed. Returns cached lines on a skip. */
+/** Render a panel, skipping if nothing changed. Returns cached lines on a skip. */
 export function renderPanel(panel: Panel, width: number, height: number): Line[] {
   const cached = panelRenderCache.get(panel);
   if (cached && !panel.needsRender && cached.width === width && cached.height === height) {

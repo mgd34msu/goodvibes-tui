@@ -7,7 +7,7 @@ import { createProviderRuntimeInspectionQuery } from '../runtime/ui-service-quer
 import { createRuntimeProviderApi } from '@/runtime/index.ts';
 import { copyToClipboard } from '../utils/clipboard.ts';
 import { getOrCreateCompanionToken, buildCompanionConnectionInfo } from '@pellux/goodvibes-sdk/platform/pairing';
-// ── Group A: Providers & Connectivity + Security subset (WO-A) ───────────────
+// ── Providers & Connectivity + Security subset ────────────────────────────────
 import { createServicesModalSurface } from './modals/services-modal.ts';
 import { createSubscriptionModalSurface } from './modals/subscription-modal.ts';
 import { createRemoteModalSurface } from './modals/remote-modal.ts';
@@ -15,7 +15,7 @@ import { createSettingsSyncModalSurface } from './modals/settings-sync-modal.ts'
 import { createProviderHealthModalSurface } from './modals/provider-health-modal.ts';
 import { createLocalAuthModalSurface } from './modals/local-auth-modal.ts';
 import { createSandboxModalSurface } from './modals/sandbox-modal.ts';
-// ── Group B: Ecosystem & Governance (WO-P, this work order) ──────────────────
+// ── Ecosystem & Governance ─────────────────────────────────────────────────
 import { createMarketplaceModalSurface } from './modals/marketplace-modal.ts';
 import { createPluginsModalSurface } from './modals/plugins-modal.ts';
 import { createSkillsModalSurface } from './modals/skills-modal.ts';
@@ -30,22 +30,22 @@ import { createPairingModalSurface, type PairingModalConnectionInfo } from './mo
 import { createPlanningModalSurface } from './modals/planning-modal.ts';
 
 /**
- * Register the config-modal surfaces + their panel-id redirects (W6.1, the
- * purge). Called once at startup from registerBuiltinPanels, AFTER the panels'
+ * Register the config-modal surfaces + their panel-id redirects, from a prior
+ * panel-consolidation cleanup. Called once at startup from registerBuiltinPanels, AFTER the panels'
  * deps are resolved (the surfaces close over the same read-models the retired
- * panels used). For each MIGRATE-TO-MODAL surface this does two things:
+ * panels used). For each surface migrated from a standalone panel this does two things:
  *   1. registerModalSurface — the data + actions the config-modal host renders.
  *   2. registerModalRedirect — so `/panel open <old-id>`, saved layouts, and any
  *      alias still resolve to the modal.
  *
- * Group A (WO-A) is the Providers & Connectivity + Security subset. Group B
- * (WO-P) is the Ecosystem & Governance set — the 12 ported config-modal
+ * The Providers & Connectivity + Security subset is registered first, followed by the
+ * Ecosystem & Governance set — the 12 ported config-modal
  * surfaces plus the `sessions` fold into the existing session-picker modal.
  */
 export function registerBuiltinModals(manager: PanelManager, deps: ResolvedBuiltinPanelDeps): void {
   const ui = requireUiServices(deps);
 
-  // ── Providers & Connectivity (WO-A) ─────────────────────────────────────────
+  // ── Providers & Connectivity ─────────────────────────────────────────────────
   manager.registerModalSurface(createServicesModalSurface(deps.serviceRegistry, deps.subscriptionManager));
   manager.registerModalRedirect('services', 'services-modal');
 
@@ -65,7 +65,7 @@ export function registerBuiltinModals(manager: PanelManager, deps: ResolvedBuilt
   manager.registerModalRedirect('providers', 'providers-modal');
   manager.registerModalRedirect('accounts', 'providers-modal');
 
-  // ── Security & Governance (WO-A subset) ─────────────────────────────────────
+  // ── Security & Governance ────────────────────────────────────────────────────
   manager.registerModalSurface(createSettingsSyncModalSurface(deps.configManager));
   manager.registerModalRedirect('settings-sync', 'settings-sync-modal');
 
@@ -77,7 +77,7 @@ export function registerBuiltinModals(manager: PanelManager, deps: ResolvedBuilt
   manager.registerModalSurface(createSandboxModalSurface(deps.configManager, deps.sandboxSessionRegistry, deps.requestRender));
   manager.registerModalRedirect('sandbox', 'sandbox-modal');
 
-  // ── Ecosystem & Governance (WO-P — group B) ─────────────────────────────────
+  // ── Ecosystem & Governance ───────────────────────────────────────────────────
   manager.registerModalSurface(createMarketplaceModalSurface({
     readModel: ui.readModels.marketplace,
     ecosystemPaths: {

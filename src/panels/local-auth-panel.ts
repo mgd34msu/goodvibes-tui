@@ -21,7 +21,7 @@ import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 import { type ConfirmState, handleConfirmInput } from './confirm-state.ts';
 
 // Base chrome only — state colors and text tokens come straight from
-// DEFAULT_PANEL_PALETTE (WO-002).
+// DEFAULT_PANEL_PALETTE.
 const C = DEFAULT_PANEL_PALETTE;
 
 function formatRoles(roles: readonly string[]): string {

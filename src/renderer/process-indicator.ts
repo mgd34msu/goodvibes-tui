@@ -17,7 +17,7 @@ import { formatHints } from './hint-grammar.ts';
  * Agent-count label. The footer counts only ACTIVE agents, while the fleet
  * lists every node (running, terminal, chains, watchers). Label the count
  * "active" so it is never misread as a grand total — the [Enter] View hint
- * opens the fleet for the full picture. (UX-B item 5d.)
+ * opens the fleet for the full picture. (item 5d.)
  */
 function agentCountLabel(agentCount: number): string {
   return `${agentCount} agent${agentCount !== 1 ? 's' : ''} active`;

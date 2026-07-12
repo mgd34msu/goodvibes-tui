@@ -91,7 +91,7 @@ export function appendSteerText(draft: string, ch: string): string {
  * One attached session tab. `agentId` is the SDK attach handle for
  * `AgentManager.getConversationSnapshot(agentId)` — populated only for
  * 'agent' tabs (agent.ts sets ProcessNode.id = record.id, so node.id IS the
- * agentId; see the W3.1 brief's C2 note). 'wrfc-chain' tabs render a live
+ * agentId; see the brief's C2 note). 'wrfc-chain' tabs render a live
  * member-summary instead of a transcript (a chain has no single conversation
  * of its own — see fleet-transcript.ts renderFleetChainSummary) and carry an
  * empty agentId, unused.

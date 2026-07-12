@@ -1,14 +1,14 @@
 // ---------------------------------------------------------------------------
 // fleet-panel.ts
 //
-// W2.2 — FleetPanel: the live unified observability tree. Renders the
+// — FleetPanel: the live unified observability tree. Renders the
 // registered process fleet (agents incl. WRFC roles, WRFC chains/subtasks,
 // workflow-tool FSMs, watchers, background processes) as a depth-first tree
-// with a selected-row detail region. Session tabs (W3.1 Part C): Enter on an
+// with a selected-row detail region. Session tabs (Part C): Enter on an
 // attachable node (agent/wrfc-chain) opens a tab with that process's
 // transcript/member summary — see fleet-tabs.ts + fleet-transcript.ts. This
 // file owns input dispatch and layout; fleet-deep-link.ts owns the
-// cross-panel jump target (DEBT-5 item 4).
+// cross-panel jump target (item 4).
 // ---------------------------------------------------------------------------
 
 import { readFile } from 'node:fs/promises';
@@ -105,7 +105,7 @@ export class FleetPanel extends ScrollableListPanel<FleetTreeRow> {
    */
   private selectedNodeId: string | null = null;
 
-  /** d1 (W6.2): the "stopping…" write-window overlay tracker (see fleet-stop.ts). */
+  /** d1: the "stopping…" write-window overlay tracker (see fleet-stop.ts). */
   private readonly stopTracker = new FleetStopTracker();
 
   public constructor(
@@ -114,7 +114,7 @@ export class FleetPanel extends ScrollableListPanel<FleetTreeRow> {
     private readonly configManager: ConfigManager | null = null,
   ) {
     super('fleet', 'Fleet', '⊟', 'runtime-ops');
-    this.showSelectionGutter = true; // W0.8: visible ▸ focus indicator
+    this.showSelectionGutter = true; // visible ▸ focus indicator
     this.actions = { ...NOOP_ACTIONS, ...actions };
     this.confirmOverlay = new PanelConfirmOverlay(() => this.markDirty());
     this.unsub = readModel.subscribe(() => {
@@ -232,10 +232,10 @@ export class FleetPanel extends ScrollableListPanel<FleetTreeRow> {
   }
 
   /**
-   * W3.3 (cross-restart honesty): a restart always starts from an empty
+   * (cross-restart honesty): a restart always starts from an empty
    * `AgentManager` Map (no bridge from a prior TUI/daemon registry), so a
    * completed process from a previous session can never reappear here — a
-   * real, permanent limitation (W3.3 brief point 5), documented rather than
+   * real, permanent limitation (brief point 5), documented rather than
    * silently implying "nothing has ever run" or that a restart brings it back.
    */
   protected override getEmptyStateActions(): Array<{ command: string; summary: string }> {
@@ -303,7 +303,7 @@ export class FleetPanel extends ScrollableListPanel<FleetTreeRow> {
     return this.getItems().find((row) => row.node.id === nodeId)?.node ?? null;
   }
 
-  /** DEBT-5 item 4 (see fleet-deep-link.ts). */
+  /** item 4 (see fleet-deep-link.ts). */
   public receiveDeepLink(target: { readonly id: string; readonly kind?: string }): void {
     const idx = resolveFleetDeepLinkIndex(this.getItems(), target);
     if (idx < 0) { this.setError('node no longer present.'); return; }
@@ -391,7 +391,7 @@ export class FleetPanel extends ScrollableListPanel<FleetTreeRow> {
     // owns EVERY key (same full-priority-while-composing contract as
     // git-panel.ts's commitMessage entry) until Enter (submit) or Esc
     // (cancel) — a burst/paste and single hotkeys like 'j'/'s'/'[' all land
-    // in the draft, never as tree/tab navigation (W0.8 focus rule).
+    // in the draft, never as tree/tab navigation (focus rule).
     const composingTab = activeFleetTab(this.tabsState);
     if (composingTab && composingTab.steerDraft !== null) {
       return this.handleSteerInput(composingTab, key);
@@ -491,7 +491,7 @@ export class FleetPanel extends ScrollableListPanel<FleetTreeRow> {
         id: node.id,
         label: `${node.kind} ${shortId}${suffix}`,
         verb: 'Kill',
-        // d1 (W6.2): mark 'stopping…' only once the kill is confirmed, not while
+        // d1: mark 'stopping…' only once the kill is confirmed, not while
         // the confirm overlay is merely armed.
         onConfirm: () => {
           this.actions.kill(node.id, { cascade: true });
@@ -501,7 +501,7 @@ export class FleetPanel extends ScrollableListPanel<FleetTreeRow> {
       return true;
     }
 
-    // d2 (W6.2): 'p' toggles pause<->resume by the selected node's state (see
+    // d2: 'p' toggles pause<->resume by the selected node's state (see
     // toggleFleetPause in fleet-stop.ts).
     if (key === 'p') {
       if (!selected) return false;
@@ -621,7 +621,7 @@ export class FleetPanel extends ScrollableListPanel<FleetTreeRow> {
 
   /**
    * Submit a composed steer message. Returns whether it was queued so the caller
-   * clears the draft only on a confirmed send (WO UX-A item 4): a refusal (target
+   * clears the draft only on a confirmed send (WO item 4): a refusal (target
    * went idle while composing) PRESERVES the typed text and suggests which agents
    * ARE steerable, instead of silently discarding the draft. On a successful queue
    * the ⧗ badge line is the immediate honest acknowledgment.
@@ -718,7 +718,7 @@ export class FleetPanel extends ScrollableListPanel<FleetTreeRow> {
 
     if (tab.kind === 'wrfc-chain') {
       const memberRows = snapshotRows.filter((row) => row.node.parentId === tab.nodeId);
-      // d3 (W6.2): a completed chain prunes its wrapper node, so an empty member
+      // d3: a completed chain prunes its wrapper node, so an empty member
       // list can mean "finished", not "not started yet". Absent (pruned) OR
       // terminal => the honest "completed" wording; present + non-terminal with
       // no members yet => the "not started" wording.

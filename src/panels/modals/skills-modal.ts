@@ -8,7 +8,7 @@ import type { SkillOrigin, SkillRecord } from '../skills-panel.ts';
 import { listInstalledEcosystemEntries, type EcosystemCatalogPathOptions, type ShellPathService } from '@/runtime/index.ts';
 
 // ---------------------------------------------------------------------------
-// Skills → config-modal surface (W6.1 group-B port). Project-local and global
+// Skills → config-modal surface (group-B port). Project-local and global
 // skill-pack discovery. Disk scans happen only in refresh() (never in
 // buildView), mirroring the panel's onActivate()-triggered load. Browse-only:
 // the panel never had a command-routable mutation verb (no /skills delete/remove

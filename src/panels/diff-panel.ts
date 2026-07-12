@@ -27,10 +27,10 @@ import {
 // that shares it, including the workspace-chrome aliases (info/dim/value/
 // empty) so the raw-hex count never grows. The title band itself is NOT
 // overridden — buildPanelWorkspace always falls back to the canonical
-// DEFAULT_PANEL_PALETTE.headerBg (WO-002: one title band everywhere).
+// DEFAULT_PANEL_PALETTE.headerBg (one title band everywhere).
 // ---------------------------------------------------------------------------
 
-// Hunk blue is the shared DIFF_TONES token (WO-204) — diff-view.ts (conversation)
+// Hunk blue is the shared DIFF_TONES token — diff-view.ts (conversation)
 // and git-panel.ts's inline diff converge onto this file's pre-existing value.
 const HUNK_BLUE: string = DIFF_TONES.hunk;
 // Context rows and line-number gutter use the shared theme's muted/dim
@@ -39,7 +39,7 @@ const CONTEXT_GRAY = UI_TONES.fg.muted;
 const FILENAME_WHITE = '#ffffff';
 // Add/del text colors are the shared DIFF_TONES tokens, whose values ARE this
 // panel's shipped colors — this panel is the reference diff look (diff-view
-// was unwired dead code until WO-204, so "majority of surfaces" was a mirage);
+// was unwired dead code until, so "majority of surfaces" was a mirage);
 // the conversation surface converges onto these, not the reverse.
 const ADD_GREEN: string = DIFF_TONES.add;
 const ADD_BG = '#001a0d';
@@ -521,7 +521,7 @@ export class DiffPanel extends BasePanel {
     }
   }
 
-  // W6.1 (the purge): 'o' used to open the currently selected file in the
+  // (the purge): 'o' used to open the currently selected file in the
   // preview panel via a staged pendingOpenPreview flag + a
   // handlePanelIntegrationAction cross-panel hook (the same bridge
   // FileExplorerPanel used). 'preview' is DELETE-disposition with no
@@ -597,7 +597,7 @@ export class DiffPanel extends BasePanel {
             width,
             ' No diff to display.',
             'Load a git diff or select a changed file to populate the workspace. w=working h=HEAD s=staged self-load right here.',
-            // WO-160: corrected — bare /diff loads files changed *this
+            // corrected — bare /diff loads files changed *this
             // session* (falling back to the full HEAD diff when none are
             // tracked yet), not the working-tree diff the w key already
             // loads in-panel; the old summary text described the wrong

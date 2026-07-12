@@ -47,7 +47,7 @@ export interface CompactionAfterOptions {
   /** Number of session memories that survived compaction. */
   readonly pinnedMemoryCount: number;
   /**
-   * Out-of-band quality-score grade for this run (W5.4/B28). Omitted or null
+   * Out-of-band quality-score grade for this run (). Omitted or null
    * when no score was computed (e.g. the small-window compaction path, which
    * has no CompactionEvent to key a score by) — no line is rendered then.
    */

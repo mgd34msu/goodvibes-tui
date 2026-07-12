@@ -19,7 +19,7 @@ export function registerBuiltinPanels(manager: PanelManager, deps: BuiltinPanelD
   registerAgentPanels(manager, resolved);
   registerSessionPanels(manager, resolved);
   registerKnowledgePanels(manager, resolved);
-  // W6.1 (the purge): register MIGRATE-TO-MODAL surfaces + their panel-id
+  // (the purge): register MIGRATE-TO-MODAL surfaces + their panel-id
   // redirects. Must run after the panel registrations so a redirected id wins
   // over any lingering panel registration in open().
   registerBuiltinModals(manager, resolved);

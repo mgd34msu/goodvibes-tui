@@ -562,7 +562,7 @@ export class CostTrackerPanel extends BasePanel {
           width,
           ' No agents spawned this session',
           'Agent-level cost estimates appear here once delegated or background agents start running.',
-          // WO-160: 'b' already opens the in-panel budget-entry field (see
+          // 'b' already opens the in-panel budget-entry field (see
           // handleInput/handleBudgetEntryInput above) and is advertised in
           // the footer's 'b: set budget' hint, so the printed
           // '/cost budget <usd>' command was a redundant action substitute.

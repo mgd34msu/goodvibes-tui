@@ -1,8 +1,8 @@
 /**
  * Per-turn knowledge injection record rendering.
  *
- * The SDK's passive per-turn retrieval engine (wo801, W5.1 —
- * packages/sdk/src/platform/agents/turn-knowledge-injection.ts) stores one
+ * The SDK's passive per-turn retrieval engine
+ * (packages/sdk/src/platform/agents/turn-knowledge-injection.ts) stores one
  * `TurnInjectionRecord` per turn on `AgentRecord.turnInjections` (a bounded
  * ring, default 20 entries) and appends the same record to the agent's
  * session transcript as `{type:'knowledge_injection', turn, ...record}`.
@@ -34,10 +34,11 @@ function fmtN(n: number): string {
 }
 
 /**
- * Annotate each injected id with its source (Stage B). Code-index hits get a
+ * Annotate each injected id with its source. Code-index hits get a
  * ` [code]` tag; memory records are left bare so a memory-only line renders
- * byte-identically to the pre-Stage-B output. `injectedSources` is parallel to
- * `injectedIds`; a missing/short entry defaults to memory (no tag).
+ * byte-identically to the output from before code-index hits existed.
+ * `injectedSources` is parallel to `injectedIds`; a missing/short entry
+ * defaults to memory (no tag).
  */
 function labelInjectedIds(entry: TurnInjectionEntry): string {
   const sources = entry.injectedSources ?? [];
@@ -107,7 +108,7 @@ export function buildTurnInjectionsText(agentId: string, entries: readonly TurnI
 
 /**
  * Render the MAIN interactive session's per-turn injection ring
- * (`Orchestrator.getTurnInjections()`, wo805), most-recent-turn first, with the
+ * (`Orchestrator.getTurnInjections()`), most-recent-turn first, with the
  * same honest empty state as the per-agent path. The main-session counterpart
  * to {@link buildTurnInjectionsText}: no agent id, main-session-appropriate
  * wording, but the identical per-entry rendering (`formatTurnInjectionEntry`).

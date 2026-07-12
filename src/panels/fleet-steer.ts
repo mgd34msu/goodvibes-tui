@@ -34,7 +34,7 @@ export function steerBadgeTone(status: SteerBadgeStatus, palette: PanelPalette):
   }
 }
 
-/** Labels of the currently live, steerable agent nodes other than `excludeNodeId` — offered when a steer target has gone inactive (WO UX-A item 4). */
+/** Labels of the currently live, steerable agent nodes other than `excludeNodeId` — offered when a steer target has gone inactive (WO item 4). */
 export function liveSteerableLabels(nodes: readonly ProcessNode[], excludeNodeId: string): string[] {
   return nodes
     .filter((node) => node.id !== excludeNodeId && node.kind === 'agent' && node.capabilities.steerable && !isTerminalProcessState(node.state))
@@ -49,7 +49,7 @@ export function steerRefusalMessage(reason: string, siblingLabels: readonly stri
   return `${reason}.${suggestion}`;
 }
 
-/** One-line honest status for a tab's steer badge; the queued line names the target and points at the ⧗ delivery badge (WO UX-A item 4). */
+/** One-line honest status for a tab's steer badge; the queued line names the target and points at the ⧗ delivery badge (WO item 4). */
 export function renderSteerBadgeLine(badge: SteerBadge, width: number, palette: PanelPalette, targetLabel?: string): Line {
   const glyph = steerBadgeGlyph(badge.status);
   const tone = steerBadgeTone(badge.status, palette);

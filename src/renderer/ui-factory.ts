@@ -265,7 +265,7 @@ export class UIFactory {
         }
       }
 
-      // UX-C focus visibility (item 1c): when the panel workspace owns focus
+      // focus visibility (item 1c): when the panel workspace owns focus
       // and the composer is empty, name the state and the way back — the
       // dimmed prompt alone (TEXT_COLOR/BG_COLOR above) told you nothing was
       // wrong, but not why keystrokes weren't landing here.

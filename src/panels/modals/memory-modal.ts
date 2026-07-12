@@ -9,7 +9,7 @@ import type {
 import { memoryRecordTemporalStatus } from '@pellux/goodvibes-sdk/platform/state';
 
 // ---------------------------------------------------------------------------
-// Memory → config-modal surface (W6.1 group-B port). Two tabs: 'All Records'
+// Memory → config-modal surface (group-B port). Two tabs: 'All Records'
 // (the full record list) and 'Review Queue' (the operator review queue) — the
 // same split the panel toggled with Tab, now real host tabs. Review-state
 // mutations (reviewed/stale/contradicted/fresh) and record delete route to the

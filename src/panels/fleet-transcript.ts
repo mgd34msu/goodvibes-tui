@@ -70,7 +70,7 @@ export interface FleetTranscriptRender {
 }
 
 /**
- * W3.3 (design point 4) — a 'frozen' transcript is a static capture of a
+ * (design point 4) — a 'frozen' transcript is a static capture of a
  * completed process, not something that will change on the next render. The
  * distinction matters because this wave also introduced kill/interrupt
  * display bugs (elapsed/usage briefly climbing after a terminal state
@@ -257,7 +257,7 @@ function renderLedgerEntry(width: number, entry: Record<string, unknown>, palett
       const toolName = typeof entry['toolName'] === 'string' ? entry['toolName'] : 'tool';
       const success = entry['success'] !== false;
       const bad = palette.bad ?? DEFAULT_PANEL_PALETTE.bad;
-      // W3.3: the writer already truncates this to 500 chars (session.ts's
+      // the writer already truncates this to 500 chars (session.ts's
       // resultPreview field) — passed through verbatim (collapsed to one
       // line), never re-summarized or fabricated, then tail-truncated again
       // to fit the row.

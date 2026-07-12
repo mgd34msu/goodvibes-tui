@@ -267,7 +267,7 @@ export function renderSelectionModalOverlay(
 
   const footerLine = createOverlayContentLine(width, layout, BORDER_FG, DEFAULT_OVERLAY_PALETTE.sectionBg);
   const selectedItem = modal.getSelected();
-  // UX-C vocab unification: a caller-supplied primaryVerbLabel (e.g. /help's
+  // vocab unification: a caller-supplied primaryVerbLabel (e.g. /help's
   // "Run", matching the slash-command palette) wins over the generic
   // per-primaryAction default.
   const primaryVerb = modal.primaryVerbLabel

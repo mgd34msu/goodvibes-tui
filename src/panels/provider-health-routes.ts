@@ -1,7 +1,7 @@
 // ---------------------------------------------------------------------------
 // provider-health-routes.ts
 //
-// Single-source auth-route posture for the provider console (WO-112 merge of
+// Single-source auth-route posture for the provider console (merge of
 // the retired accounts panel into provider-health). All route data flows from
 // ProviderRuntimeInspectionQuery.inspectAll() snapshots; this module only
 // normalizes descriptors (synthesizing them for providers that do not declare
@@ -137,7 +137,7 @@ function pickRoute(
 /**
  * Derive the console's account/auth posture for one inspectAll() snapshot.
  * This is the only route-posture derivation in the TUI (the retired accounts
- * panel's parallel snapshot model was deleted with WO-112).
+ * panel's parallel snapshot model was deleted with).
  */
 export function buildAccountPosture(snapshot: ProviderRuntimeSnapshotLike): ProviderAccountPosture {
   const auth = snapshot.runtime.auth;

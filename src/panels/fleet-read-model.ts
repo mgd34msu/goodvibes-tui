@@ -1,14 +1,14 @@
 // ---------------------------------------------------------------------------
 // fleet-read-model.ts
 //
-// W2.2 (Fleet tree panel) — pure, testable read-model over the SDK's live
+// (Fleet tree panel) — pure, testable read-model over the SDK's live
 // process registry (@pellux/goodvibes-sdk/platform/runtime/fleet, landed on
-// SDK main as W2.1). No BasePanel/rendering dependency: this module owns the
+// SDK main as). No BasePanel/rendering dependency: this module owns the
 // flat ProcessNode[] -> tree transformation, the honest cost/token
 // aggregates, and the state->glyph/tone mapping that FleetPanel renders.
 //
 // Design notes:
-//   - The W2.2 brief predates the real SDK API and sketched a bespoke
+//   - The brief predates the real SDK API and sketched a bespoke
 //     FleetRegistryNode/FleetRegistry adapter pair. The real
 //     createProcessRegistry() ProcessNode already carries elapsedMs,
 //     usage, costUsd, costState, and currentActivity directly, so no
@@ -196,7 +196,7 @@ export function isBlockedOnUserState(state: ProcessState): boolean {
 }
 
 // ---------------------------------------------------------------------------
-// Honest usage/cost helpers (W0.9 convention, ported from agent-inspector-shared.ts)
+// Honest usage/cost helpers (convention, ported from agent-inspector-shared.ts)
 // ---------------------------------------------------------------------------
 
 /**

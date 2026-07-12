@@ -1,7 +1,7 @@
 /**
  * Compaction quality-score bridging.
  *
- * Reality check (wo803): the SDK's `computeQualityScore()`
+ * Reality check: the SDK's `computeQualityScore()`
  * (platform/runtime/compaction/quality-score.ts) is only ever called from a
  * SEPARATE pipeline, `CompactionManager` (platform/runtime/compaction/manager.ts).
  * The TUI's actual `/compact` path never instantiates `CompactionManager` — it

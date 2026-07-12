@@ -17,7 +17,7 @@ export interface PanelIntegrationContext {
 }
 
 /**
- * A cross-panel deep-link target (DEBT-5 item 4): a specific node a panel
+ * A cross-panel deep-link target (item 4): a specific node a panel
  * should select + reveal when opened via `PanelManager.open(id, pane, target)`,
  * e.g. a Fleet tree node keyed by its process id and (optionally) its
  * ProcessKind for disambiguation. Panel-agnostic on purpose — only panels that
@@ -56,7 +56,7 @@ export type NamedKey =
 export type KeyName = NamedKey | (string & {});
 
 /**
- * WO-152: the former single 'monitoring' bucket held 33 panels pre-merge —
+ * the former single 'monitoring' bucket held 33 panels pre-merge —
  * too coarse for the picker to be useful and too large for any one operator
  * mental model. Split into named operator domains so each category holds a
  * bounded, coherent set (no category may exceed 10 registrations):
@@ -97,7 +97,7 @@ export interface Panel {
   isPinned: boolean;
   needsRender: boolean;
 
-  // Dirty-flag contract (R2: activated panel render skipping)
+  // Dirty-flag contract (activated panel render skipping)
   /** Mark this panel as needing a re-render on the next frame. */
   invalidate(): void;
   /** Called by the compositor after a successful render to clear the dirty flag. */
@@ -154,7 +154,7 @@ export interface Panel {
 
   /**
    * Optional: consume a deep-link target handed in by `PanelManager.open(id,
-   * pane, target)` (DEBT-5 item 4) — select + reveal the matching node on the
+   * pane, target)` (item 4) — select + reveal the matching node on the
    * panel's next snapshot. A panel without a "node" concept simply doesn't
    * implement this (the call is a no-op via optional chaining in
    * PanelManager). A panel that DOES implement it owns its own honest
@@ -169,7 +169,7 @@ export interface PanelRegistration extends Pick<Panel, 'id' | 'name' | 'icon' | 
   factory: () => Panel;
   description: string;
   /**
-   * WO-152 lifecycle flags. `preload` and `retainOnClose` are independent —
+   * lifecycle flags. `preload` and `retainOnClose` are independent —
    * a panel can eagerly instantiate without being kept alive on close, or be
    * kept alive on close without eager bootstrap instantiation. They happened
    * to be identical for all builtin panels before this split (both driven by

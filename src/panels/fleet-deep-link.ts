@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// fleet-deep-link.ts — DEBT-5 item 4.
+// fleet-deep-link.ts — item 4.
 //
 // PanelManager.open('fleet', pane, target) hands FleetPanel a
 // PanelDeepLinkTarget (a process id + optional ProcessKind) so a cross-panel

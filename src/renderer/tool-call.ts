@@ -173,7 +173,7 @@ export function renderToolCallBlock(
 
   // Status icon. 'pending' means the tool is still awaiting a decision
   // (e.g. an approval prompt) and has NOT run yet — it uses the hollow idle
-  // glyph so a not-yet-run tool never shows the completed green ✓ (UX-B 2c).
+  // glyph so a not-yet-run tool never shows the completed green ✓ (2c).
   const icon = status === 'done' ? TOOL_STATUS.SUCCESS_ICON
     : status === 'error' ? TOOL_STATUS.FAIL_ICON
     : status === 'pending' ? GLYPHS.status.idle

@@ -22,7 +22,7 @@ export function renderConfigModal(modal: ConfigModal, width: number, height: num
   // rather than overflowing (posture header + separator + chrome ≈ 8 rows).
   const visible = Math.max(3, Math.min(16, height - 8));
   modal.setViewportRows(visible);
-  // DEBT-5 item 2: the list section wraps a row label at (contentW - 2),
+  // item 2: the list section wraps a row label at (contentW - 2),
   // where contentW = boxW - 4 (see ModalFactory._renderListSection). Compute
   // that exact column here so getRenderModel's wrap-clamp measures against
   // reality instead of a fixed guess.

@@ -13,7 +13,7 @@ import type {
 } from '@pellux/goodvibes-sdk/platform/plugins';
 
 // ---------------------------------------------------------------------------
-// Plugins → config-modal surface (W6.1 group-B port). Mirrors the retired
+// Plugins → config-modal surface (group-B port). Mirrors the retired
 // PluginsPanel's read surface (list/capabilities/getTrustRecord/
 // getQuarantineRecord) plus `verify` (a pure read-only signature check).
 // enable/disable/liftQuarantine are DROPPED from the dep shape on purpose:

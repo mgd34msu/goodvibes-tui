@@ -3,7 +3,7 @@ import type { ModalSectionStyle } from '../../renderer/modal-factory.ts';
 import type { ConfigModalRow } from '../../input/config-modal-types.ts';
 
 /**
- * Shared formatting helpers for W6.1 config-modal surfaces. Row styling reuses
+ * Shared formatting helpers for config-modal surfaces. Row styling reuses
  * DEFAULT_PANEL_PALETTE (the retired panels' palette) so a migrated modal reads
  * as the same surface it replaced — the goldens stay panel-consistent.
  */

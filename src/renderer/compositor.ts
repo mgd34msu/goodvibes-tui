@@ -95,7 +95,7 @@ export class Compositor {
 
   public composite(params: CompositeRequest): void {
     const { width, height, header, viewport, footer, selection, search, panel, panelWidth } = params;
-    // R3: Reuse back-buffer instead of allocating each frame
+    // Reuse back-buffer instead of allocating each frame
     if (!this.backBuffer) {
       this.backBuffer = new TerminalBuffer(width, height);
     } else {
@@ -284,7 +284,7 @@ export class Compositor {
     });
 
     // 4. Diff and Render
-    // R3: Diff against front-buffer (last-rendered), then swap front/back — no clone() needed
+    // Diff against front-buffer (last-rendered), then swap front/back — no clone() needed
     const diff = this.diffEngine.diff(this.frontBuffer, newBuffer);
     if (diff) {
       allowTerminalWrite(() => this.stdout.write(diff));

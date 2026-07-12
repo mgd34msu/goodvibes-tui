@@ -5,36 +5,36 @@ import { LocalAuthPanel } from '../local-auth-panel.ts';
 import type { ResolvedBuiltinPanelDeps } from './shared.ts';
 import { requireUiServices } from './shared.ts';
 
-// WO-152: the former single 'monitoring' category (33 panels pre-merge) is
+// the former single 'monitoring' category (33 panels pre-merge) is
 // split into five operator domains, applied per-registration below. Kept in
 // this file's original registration order (rather than physically regrouped
 // by category) because several registrations below close over shared local
 // state — `ui` — defined once near the top of this function.
 //
-// W6.1 (the purge): cockpit, approval, automation, routes, control-plane,
+// (the purge): cockpit, approval, automation, routes, control-plane,
 // worktrees, tasks, orchestration, ops, ops-control, and communication were
 // RETIRE-INTO-FLEET (their live views are subsumed by the Fleet panel below
 // — each id now redirects there via registerAlias); debug and eval were
 // DELETE-disposition (no surviving human surface). See
-// .goodvibes/audit/2026-07-04-wave6-briefs.json (W6.1) for the full
+// .goodvibes/audit/2026-07-04-wave6-briefs.json for the full
 // disposition map. The rosterReadModel/agent-lifecycle wiring that used to
 // feed CockpitPanel exclusively was removed along with it — Fleet reads the
 // process registry directly via fleetReadModel below, not via the roster
 // read-model.
 //
-// W6.1 MIGRATE-TO-MODAL: the Providers & Connectivity group (services,
+// MIGRATE-TO-MODAL: the Providers & Connectivity group (services,
 // subscription, remote, provider-health) and Security group (settings-sync,
 // sandbox) migrated to config-modal surfaces registered in builtin-modals.ts
-// (WO-A); the Ecosystem & Governance group (plugins, skills, hooks, security,
+//; the Ecosystem & Governance group (plugins, skills, hooks, security,
 // marketplace, policy, knowledge, memory, docs, qr-code, work-plan,
-// project-planning) migrated to config-modal surfaces (WO-P). All surfaces AND
+// project-planning) migrated to config-modal surfaces. All surfaces AND
 // their panel-id redirects are registered centrally in registerBuiltinModals
 // (builtin-modals.ts) now — the interim ecosystem redirect bridge was deleted
 // with the group-B port. local-auth is a DELIBERATE EXCEPTION — see below.
 export function registerOperationsPanels(manager: PanelManager, deps: ResolvedBuiltinPanelDeps): void {
   const ui = requireUiServices(deps);
 
-  // W2.2: Fleet — the live unified process tree, read from the single
+  // Fleet — the live unified process tree, read from the single
   // process registry constructed once in runtime/services.ts (shared with
   // every other consumer rather than duplicated here; the registry owns its
   // own coalesced tick, so no manual lifecycle-event wiring is needed).
@@ -45,7 +45,7 @@ export function registerOperationsPanels(manager: PanelManager, deps: ResolvedBu
   manager.registerType({
     id: 'fleet',
     name: 'Fleet',
-    // W2.2: '⊟' verified free against the full icon registry at wiring time.
+    // '⊟' verified free against the full icon registry at wiring time.
     icon: '⊟',
     category: 'runtime-ops',
     description: 'Live unified process tree: agents, WRFC chains, workflows, watchers, and background processes, with interrupt/kill/steer controls',
@@ -82,11 +82,11 @@ export function registerOperationsPanels(manager: PanelManager, deps: ResolvedBu
   manager.registerAlias('communication', 'fleet');
   manager.registerAlias('incident', 'fleet');
   // Re-pointed: forensics used to resolve to the (now-retired) incident
-  // workspace (WO-114); both ids now land on fleet directly — alias
+  // workspace; both ids now land on fleet directly — alias
   // resolution is a single hop, so this cannot chain through 'incident'.
   manager.registerAlias('forensics', 'fleet');
 
-  // local-auth is a DELIBERATE EXCEPTION to the W6.1 purge: it stays a
+  // local-auth is a DELIBERATE EXCEPTION to the purge: it stays a
   // registered panel because it is the host for the masked password-entry
   // sub-mode (LocalAuthPanel.openMaskedEntry, driven by
   // ctx.openLocalAuthMaskedEntry — the only path that keeps a plaintext

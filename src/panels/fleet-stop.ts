@@ -1,7 +1,7 @@
 // ---------------------------------------------------------------------------
 // fleet-stop.ts
 //
-// d1 (W6.2) — the "stopping…" write-window overlay, split out of fleet-panel.ts
+// d1 — the "stopping…" write-window overlay, split out of fleet-panel.ts
 // to keep that file under the architecture 800-line gate (same rationale as
 // fleet-steer.ts). FleetPanel owns nothing here beyond a FleetStopTracker
 // instance; all the state->display logic lives in these pure helpers.
@@ -80,7 +80,7 @@ export interface FleetPauseDeps {
 }
 
 /**
- * d2 (W6.2): 'p' toggles pause<->resume by the node's state. A `paused`
+ * d2: 'p' toggles pause<->resume by the node's state. A `paused`
  * resumable node is resumed (interrupt's inverse); a live pausable node is
  * paused via the registry's interrupt() (its disable path). Honest refusal for
  * non-resumable/non-pausable kinds. Returns true when the key is consumed,
@@ -152,7 +152,7 @@ export function buildFleetTreeHints(
   return hints;
 }
 
-/** K-confirm descendant stats (UX-C item 6): total = every non-terminal descendant (what a cascade kill takes down); active = the individually-killable subset. Was "active only" in an earlier version, undercounting a mixed subtree. */
+/** K-confirm descendant stats (item 6): total = every non-terminal descendant (what a cascade kill takes down); active = the individually-killable subset. Was "active only" in an earlier version, undercounting a mixed subtree. */
 export function countDescendantStats(rows: readonly FleetTreeRow[], nodeId: string): { total: number; active: number } {
   const byParent = new Map<string, string[]>();
   for (const row of rows) {

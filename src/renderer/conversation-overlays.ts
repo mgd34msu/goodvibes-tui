@@ -76,7 +76,7 @@ export function applyConversationOverlays(
     next.push(...renderHistorySearchOverlay(input.historySearch, conversationWidth));
   }
 
-  // W6.1 retirement: the process, agent-detail, and live-tail modal overlays
+  // retirement: the process, agent-detail, and live-tail modal overlays
   // were removed with those modals — F2 now opens the Fleet panel, which
   // subsumes the live process tree.
 
