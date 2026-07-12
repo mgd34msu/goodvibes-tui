@@ -1,5 +1,5 @@
 /**
- * UX-C item 3: SelectionModal-based pickers (/help, /tools, /sessions,
+ * item 3: SelectionModal-based pickers (/help, /tools, /sessions,
  * /bookmarks, TTS provider/voice, ...) used to require pressing '/' before
  * typing would filter the list — any other unclaimed keystroke silently did
  * nothing. /help in particular registers NO customActions, so every letter
@@ -32,7 +32,7 @@ function buildState(modal: SelectionModal, overrides: Record<string, unknown> = 
   };
 }
 
-describe('SelectionModal instant filter (UX-C item 3a)', () => {
+describe('SelectionModal instant filter (item 3a)', () => {
   test('/help-shaped modal (allowSearch, no customActions): an unclaimed letter instantly arms search and starts the query — no /-arming needed', () => {
     const modal = new SelectionModal();
     modal.open('Help — Commands', [
@@ -83,7 +83,7 @@ describe('SelectionModal instant filter (UX-C item 3a)', () => {
   });
 });
 
-describe('SelectionModal single-Escape close (UX-C item 3b)', () => {
+describe('SelectionModal single-Escape close (item 3b)', () => {
   test('ONE Escape closes the modal even mid-search with a non-empty query (was a 3-press sequence: clear query, blur search, close)', () => {
     const modal = new SelectionModal();
     modal.open('Help — Commands', [{ id: '/model', label: '/model' }], { allowSearch: true });

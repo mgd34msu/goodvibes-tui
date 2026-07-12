@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// test-runtime.test.ts — W1.5 /test runner surface coverage:
+// test-runtime.test.ts — /test runner surface coverage:
 //   (a) every Bun.spawn() call reachable from /test captures stderr (same
 //       tty-corruption guard as diff-runtime.test.ts, extended to this file).
 //   (b) no test script in package.json -> honest skip, no process spawned.

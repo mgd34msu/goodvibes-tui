@@ -84,7 +84,7 @@ describe('handlePanelFocusToken', () => {
   });
 
   test('Alt+digit is NOT owned by this route (delegated to the global panel-tab-N action)', () => {
-    // WO-151 promoted Alt+1..9 to real, rebindable KeyActions (panel-tab-1..9)
+    // promoted Alt+1..9 to real, rebindable KeyActions (panel-tab-1..9)
     // routed by handleGlobalShortcutToken, which runs earlier in the feed loop.
     // By the time a meta+digit token reaches this focused-panel route it has
     // already been consumed globally, so here it must fall through (handled:false)
@@ -252,12 +252,12 @@ describe('handlePanelFocusToken', () => {
     expect(result.panelFocused).toBe(true);
   });
 
-  // UX-C item 1d: '/' is a new, explicit transfer verb — consistent with the
+  // item 1d: '/' is a new, explicit transfer verb — consistent with the
   // Invariant (focus only ever moves on an explicit verb, never
   // implicitly) — that returns focus to the composer AND lets the '/' land
   // there to start a command, from any focused panel that isn't itself
   // capturing free text.
-  describe("'/' explicit transfer verb (UX-C item 1d)", () => {
+  describe("'/' explicit transfer verb (item 1d)", () => {
     test("'/' from a non-capturing focused panel returns focus to the composer and is NOT consumed here (falls through to the composer's own '/' handling)", () => {
       const received: string[] = [];
       const state = buildState({
@@ -336,10 +336,10 @@ describe('handlePanelFocusToken', () => {
 });
 
 // ---------------------------------------------------------------------------
-// DEBT-5 item 5 — paste flood guard (rate-based; see panel-paste-flood-guard.ts)
+// item 5 — paste flood guard (rate-based; see panel-paste-flood-guard.ts)
 // ---------------------------------------------------------------------------
 
-describe('handlePanelFocusToken — paste flood guard (DEBT-5 item 5)', () => {
+describe('handlePanelFocusToken — paste flood guard (item 5)', () => {
   function panelManagerWithHandler(received: string[], overrides: { isCapturingTextBurst?: () => boolean } = {}) {
     return {
       isVisible: () => true,

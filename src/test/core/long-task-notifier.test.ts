@@ -292,10 +292,10 @@ describe('maybeNotifyLongTask — webhook delivery', () => {
 });
 
 // ---------------------------------------------------------------------------
-// maybeNotifyLongTask — focus gating (W2.3)
+// maybeNotifyLongTask — focus gating
 // ---------------------------------------------------------------------------
 
-describe('maybeNotifyLongTask — focus gating (W2.3)', () => {
+describe('maybeNotifyLongTask — focus gating', () => {
   test('fires when unfocused and both focusTracker + configGet are supplied', () => {
     const tracker = new FocusTracker();
     tracker.setFocused(false);
@@ -366,7 +366,7 @@ describe('maybeNotifyLongTask — focus gating (W2.3)', () => {
     expect(notifier.send).toHaveBeenCalledTimes(1);
   });
 
-  test('pre-W2.3 behavior preserved: always fires when focusTracker/configGet are both omitted', () => {
+  test('behavior before focus gating existed is preserved: always fires when focusTracker/configGet are both omitted', () => {
     const notifier = makeFakeNotifier(['https://ntfy.sh/topic']);
     const result = maybeNotifyLongTask({
       elapsedMs: 120_000,

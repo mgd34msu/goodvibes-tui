@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// conversation-line-cache.test.ts — WO-209 per-message Line[] cache correctness.
+// conversation-line-cache.test.ts — per-message Line[] cache correctness.
 //
 // CORRECTNESS IS THE ACCEPTANCE. The per-message cache is a pure memoisation: a
 // cache-served rebuild must be BYTE-IDENTICAL to a from-scratch (cold) rebuild in
@@ -106,7 +106,7 @@ function buildMixed(count: number): ConversationMessageSnapshot[] {
 
 // --- proof the cache actually reuses work ----------------------------------
 
-describe('WO-209 per-message cache reuse', () => {
+describe('per-message cache reuse', () => {
   test('unchanged messages reuse the SAME Line[] instances across rebuilds', () => {
     const cm = new ConversationManager(() => 100);
     cm.addUserMessage('first message');
@@ -140,7 +140,7 @@ describe('WO-209 per-message cache reuse', () => {
 
 // --- stale-frame equivalence scenarios -------------------------------------
 
-describe('WO-209 cache-vs-cold equivalence', () => {
+describe('cache-vs-cold equivalence', () => {
   test('append to a large conversation', () => {
     const cm = new ConversationManager(() => 100);
     cm.fromJSON({ messages: buildMixed(300) as never[] });

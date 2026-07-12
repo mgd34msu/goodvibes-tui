@@ -380,7 +380,7 @@ describe('recallCommand', () => {
     expect(printed.some((line) => line.includes('Reviewed mem-1: stale'))).toBe(true);
   });
 
-  // ── DEBT-5 item 3: report-vs-modal front door ─────────────────────────────
+  // ── item 3: report-vs-modal front door ─────────────────────────────
   describe('front door (bare opens the memory-modal; report preserves the old usage output)', () => {
     test('bare /recall opens the memory-modal, prints nothing', async () => {
       const opened: string[] = [];

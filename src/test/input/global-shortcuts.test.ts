@@ -49,10 +49,10 @@ function buildState(overrides: Partial<GlobalShortcutRouteState> = {}): GlobalSh
 }
 
 describe('handleGlobalShortcutToken', () => {
-  test('W0.8 sub-fix A: panel-picker (Ctrl+P) is reachable during an active turn — GlobalShortcutRouteState carries no orchestrator/isThinking field to gate on', () => {
+  test('sub-fix A: panel-picker (Ctrl+P) is reachable during an active turn — GlobalShortcutRouteState carries no orchestrator/isThinking field to gate on', () => {
     // There is no turn/chain busy guard anywhere in this route (confirmed by
     // exhaustive search of the input pipeline for isBusy/isThinking/etc. —
-    // see the W0.8 audit brief). This test locks that in: the shortcut must
+    // see the audit brief). This test locks that in: the shortcut must
     // fire identically regardless of whether a turn is in flight, because
     // the state type this handler receives structurally cannot express
     // "a turn is running" — main.ts's stdin.on('data') handler calls
@@ -110,7 +110,7 @@ describe('handleGlobalShortcutToken', () => {
     expect(closed).toEqual(['system-messages']);
   });
 
-  test('W1.6: panel-close (Ctrl+X) still closes the panel unconditionally during an active turn — unaffected by the Escape cancel-first gate added in handler-feed-routes.ts', () => {
+  test('panel-close (Ctrl+X) still closes the panel unconditionally during an active turn — unaffected by the Escape cancel-first gate added in handler-feed-routes.ts', () => {
     // handleGlobalShortcutToken runs before handlePanelFocusToken in the feed
     // loop (handler-feed.ts) and, like panel-picker above, this route has no
     // isThinking/turn-active field to gate on at all — GlobalShortcutRouteState
@@ -144,7 +144,7 @@ describe('handleGlobalShortcutToken', () => {
     expect(closed).toEqual(['system-messages']);
   });
 
-  test("Wave-3: panel-close (Ctrl+X) gives the active panel's interceptPanelClose() a chance to consume it BEFORE closing (FleetPanel session-tab detach)", () => {
+  test("panel-close (Ctrl+X) gives the active panel's interceptPanelClose() a chance to consume it BEFORE closing (FleetPanel session-tab detach)", () => {
     const closed: string[] = [];
     let intercepted = false;
     const state = buildState({
@@ -171,13 +171,13 @@ describe('handleGlobalShortcutToken', () => {
     expect(handled).toBe(true);
     expect(intercepted).toBe(true);
     expect(closed).toHaveLength(0); // the panel stayed open — Ctrl+X was consumed for the in-panel detach instead
-    // UX-C item 1b: a consumed detach still hands focus back to the composer —
+    // item 1b: a consumed detach still hands focus back to the composer —
     // it used to leave panelFocused untouched (the evaluator's "Ctrl+X detach
     // landed focus in the panel and a typed question became nav keys").
     expect(state.panelFocused).toBe(false);
   });
 
-  test('Wave-3: when interceptPanelClose() returns false (e.g. the root tree tab), Ctrl+X falls through to the ordinary close', () => {
+  test('when interceptPanelClose() returns false (e.g. the root tree tab), Ctrl+X falls through to the ordinary close', () => {
     const closed: string[] = [];
     const state = buildState({
       panelFocused: true,
@@ -277,7 +277,7 @@ describe('handleGlobalShortcutToken', () => {
     expect(state.panelFocused).toBe(false);
   });
 
-  test('panel-tab-N (Alt+digit) jumps to the Nth workspace tab, routed globally, AND grabs focus (UX-C 1a: a chord is "I\'m going panel-driving")', () => {
+  test('panel-tab-N (Alt+digit) jumps to the Nth workspace tab, routed globally, AND grabs focus (1a: a chord is "I\'m going panel-driving")', () => {
     let jumpedTo = -1;
     let focused = false;
     const state = buildState({
@@ -336,7 +336,7 @@ describe('handleGlobalShortcutToken', () => {
     expect(jumped).toBe(false);
   });
 
-  test('panel-ops (Ctrl+O) opens AND focuses the Fleet panel (ops-control retired to a fleet alias, W6.2 b)', () => {
+  test('panel-ops (Ctrl+O) opens AND focuses the Fleet panel (ops-control retired to a fleet alias, b)', () => {
     const opened: string[] = [];
     let focused = false;
     const state = buildState({
@@ -369,7 +369,7 @@ describe('handleGlobalShortcutToken', () => {
     expect(state.requestRender).toHaveBeenCalled();
   });
 
-  // UX-C item 2: F2 and Ctrl+O TOGGLE the Fleet panel — the same chord that
+  // item 2: F2 and Ctrl+O TOGGLE the Fleet panel — the same chord that
   // opens+focuses it also closes it when it is already open and focused. The
   // old behavior only ever opened+focused, which is why "F2 pressed 4x never
   // closed the panel" (evaluator finding): a second press while already
@@ -377,7 +377,7 @@ describe('handleGlobalShortcutToken', () => {
   // ever reach a close branch. F2 is not in the keybinding table (hardcoded,
   // like pageup/pagedown/escape), so these tests drive it via logicalName
   // directly rather than through keybindingsManager.lookup.
-  describe('F2 / Ctrl+O — toggleFleetPanel (UX-C item 2)', () => {
+  describe('F2 / Ctrl+O — toggleFleetPanel (item 2)', () => {
     test('F2 opens AND focuses the Fleet panel when it is not open', () => {
       const opened: string[] = [];
       let focused = false;
@@ -501,7 +501,7 @@ describe('handleGlobalShortcutToken', () => {
     expect(cyclePanelTab).not.toHaveBeenCalled();
   });
 
-  test('Ctrl+PageUp / Ctrl+PageDown reach the keybinding lookup (NOT the scroll fast-path) and cycle tabs (W6.2 b)', () => {
+  test('Ctrl+PageUp / Ctrl+PageDown reach the keybinding lookup (NOT the scroll fast-path) and cycle tabs (b)', () => {
     const scroll = mock((_n: number) => {});
     const cyclePanelTab = mock((_d: 'next' | 'prev') => {});
     const state = buildState({

@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------------
 // fleet-panel.test.ts
-// W2.2 — FleetPanel interaction: navigate/detail/kill-confirm flow with a
+// — FleetPanel interaction: navigate/detail/kill-confirm flow with a
 // stub read-model + stub action callbacks (no live runtime/registry).
 // ---------------------------------------------------------------------------
 
@@ -151,7 +151,7 @@ describe('FleetPanel — navigation', () => {
     expect(text).toContain('No processes tracked yet');
   });
 
-  // W3.3 (cross-restart honesty) — no daemon bridge exists, so a TUI restart
+  // (cross-restart honesty) — no daemon bridge exists, so a TUI restart
   // never resurrects a prior session's processes into this tree; documented
   // in the empty state rather than silently doing nothing (design point 5).
   test('the empty state documents that a previous session\'s processes are not tracked here', () => {
@@ -164,7 +164,7 @@ describe('FleetPanel — navigation', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Enter — attach a session tab (Wave-3, W3.1 Part C)
+// Enter — attach a session tab (Part C)
 // ---------------------------------------------------------------------------
 
 describe('FleetPanel — Enter attaches a session tab', () => {
@@ -225,7 +225,7 @@ describe('FleetPanel — Enter attaches a session tab', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Tab lifecycle — attach / switch / detach (Wave-3, W3.1 Part C)
+// Tab lifecycle — attach / switch / detach (Part C)
 // ---------------------------------------------------------------------------
 
 describe('FleetPanel — session tab lifecycle', () => {
@@ -301,7 +301,7 @@ describe('FleetPanel — session tab lifecycle', () => {
 
 // ---------------------------------------------------------------------------
 // Transcript rendering — running (live) vs completed (frozen) vs evicted
-// (ledger fallback), per a stub snapshot source (Wave-3, W3.1 Part C6)
+// (ledger fallback), per a stub snapshot source (Part C6)
 // ---------------------------------------------------------------------------
 
 describe('FleetPanel — tab transcript rendering', () => {
@@ -327,7 +327,7 @@ describe('FleetPanel — tab transcript rendering', () => {
     expect(text).toContain('frozen content');
   });
 
-  // W3.3 — done/dead process browsability. Every terminal state (not just
+  // — done/dead process browsability. Every terminal state (not just
   // 'done') must attach a READ-ONLY tab: no i/K while a tab is focused
   // (handleInput's activeTabIndex>0 branch returns false for tree-only keys
   // regardless of tab kind), and the content itself is honestly labeled as a
@@ -335,7 +335,7 @@ describe('FleetPanel — tab transcript rendering', () => {
   // running agent's tab.
   describe('terminal-state (done/failed/killed/interrupted) agent nodes attach read-only tabs', () => {
     for (const state of ['done', 'failed', 'killed', 'interrupted'] as const) {
-      test(`Enter on a '${state}' agent node attaches a tab (wo611's Enter path already permits terminal-node attach)`, () => {
+      test(`Enter on a '${state}' agent node attaches a tab ('s Enter path already permits terminal-node attach)`, () => {
         const readModel = createStaticFleetReadModel(buildFleetSnapshot([makeNode({ id: 'a', state })], NOW));
         const actions = makeActions({
           getConversationSnapshot: (id) => (id === 'a' ? [{ role: 'user', content: `content for ${state}` }] : []),
@@ -402,7 +402,7 @@ describe('FleetPanel — tab transcript rendering', () => {
 
 // ---------------------------------------------------------------------------
 // Backpressure — only the FOCUSED tab renders a transcript; per-tab caches
-// are isolated from each other and from switching (Wave-3, W3.1 Part C5)
+// are isolated from each other and from switching (Part C5)
 // ---------------------------------------------------------------------------
 
 describe('FleetPanel — per-tab cache isolation (backpressure)', () => {
@@ -596,7 +596,7 @@ describe('FleetPanel — K arms a kill confirm', () => {
     expect(text).toContain('does not support kill');
   });
 
-  // UX-C item 6: a cascade kill (actions.kill(id, { cascade: true })) takes
+  // item 6: a cascade kill (actions.kill(id, { cascade: true })) takes
   // down every non-terminal descendant regardless of that node's OWN
   // `killable` capability — the old count only tallied `capabilities.killable`
   // descendants ("active leaves"), so a 6-node non-terminal subtree with only
@@ -644,7 +644,7 @@ describe('FleetPanel — K arms a kill confirm', () => {
 });
 
 // ---------------------------------------------------------------------------
-// p — pause (Wave 4, wo703 B4 control parity). Reuses actions.interrupt
+// p — pause (control parity with the other fleet actions). Reuses actions.interrupt
 // verbatim, gated on capabilities.pausable instead of interruptible (which
 // trigger/schedule always report false) — see fleet-panel.ts's handleInput
 // doc comment for why no new action/registry plumbing was needed.
@@ -712,14 +712,14 @@ describe('FleetPanel — p pauses a pausable node', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Wave 4 (wo703) fleet-tree nesting: workstream/phase render as honest,
+// fleet-tree nesting: workstream/phase render as honest,
 // non-attachable aggregate nodes (Enter refuses with the same message as any
 // other transcript-less kind); a work-item still delegates to its live agent
 // for capabilities (per adaptWorkItem), but the node itself stays
 // non-attachable (isAttachableFleetKind — see fleet-tabs.test.ts).
 // ---------------------------------------------------------------------------
 
-describe('FleetPanel — Enter on workstream/phase/work-item nodes (wo703)', () => {
+describe('FleetPanel — Enter on workstream/phase/work-item nodes', () => {
   test('Enter on a workstream, phase, or work-item node refuses with the honest "no transcript" message', () => {
     for (const kind of ['workstream', 'phase', 'work-item'] as const) {
       const node = makeNode({ id: `node-${kind}`, kind, state: 'executing-tool' });
@@ -733,7 +733,7 @@ describe('FleetPanel — Enter on workstream/phase/work-item nodes (wo703)', () 
 });
 
 // ---------------------------------------------------------------------------
-// s — steer composer (Wave-3, W3.2): one-line input on an active attached
+// s — steer composer: one-line input on an active attached
 // tab whose node is steerable. Capability-gated like i/K; submit calls
 // actions.steer with the node id and typed text; refusal renders inline.
 // ---------------------------------------------------------------------------
@@ -747,7 +747,7 @@ describe('FleetPanel — s opens the steer composer on an active, steerable tab'
     expect(panel.getTabsState().tabs[0]!.steerDraft).toBe('');
   });
 
-  test('s IS available from the root tree for a steerable node (batch replay D4 superseded the Wave-3 tab-only contract)', () => {
+  test('s IS available from the root tree for a steerable node (batch replay D4 superseded the tab-only contract)', () => {
     // Before that fix, this asserted 's' was hidden/dead on the tree; steering required
     // an undiscoverable Enter-attach first. Now the tree hints advertise it
     // and 's' attaches-and-steers in one press (see the D4 describe block).
@@ -850,7 +850,7 @@ describe('FleetPanel — s opens the steer composer on an active, steerable tab'
     expect(text).toContain('agent is retrying, try again shortly');
   });
 
-  test('refusal PRESERVES the draft, states why, and suggests live steerable siblings (WO UX-A item 4)', () => {
+  test('refusal PRESERVES the draft, states why, and suggests live steerable siblings (WO item 4)', () => {
     // Target refuses; a second agent IS steerable, so the error should keep the
     // typed text and point at the sibling instead of silently discarding the draft.
     const target = makeNode({ id: 'agent-1', label: 'Builder', state: 'streaming', capabilities: { interruptible: true, killable: true, pausable: false, steerable: true } });
@@ -930,11 +930,11 @@ describe('FleetPanel — steer draft paste normalization', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Focus routing (W0.8): while composing, every key lands in the draft —
+// Focus routing: while composing, every key lands in the draft —
 // never as tree/tab navigation or hotkeys (i/K/f/[/]/enter).
 // ---------------------------------------------------------------------------
 
-describe('FleetPanel — steer draft owns input while composing (W0.8 focus rule)', () => {
+describe('FleetPanel — steer draft owns input while composing (focus rule)', () => {
   test('j/k/i/K/s/[/] all get typed into the draft rather than acting as navigation/hotkeys', () => {
     const { panel, actions } = attachSteerableTab();
     panel.handleInput('s');
@@ -1362,12 +1362,12 @@ describe('FleetPanel — registration', () => {
 });
 
 // ---------------------------------------------------------------------------
-// W6.2 d1/d2 — pause/resume toggle wiring + the 'stopping…' write-window overlay
+// d1/d2 — pause/resume toggle wiring + the 'stopping…' write-window overlay
 // through the real FleetPanel.handleInput/render (the logic itself is unit-
 // tested in fleet-stop.test.ts; these prove the panel wires it end-to-end).
 // ---------------------------------------------------------------------------
 
-describe('FleetPanel — pause/resume + stopping (W6.2 d)', () => {
+describe('FleetPanel — pause/resume + stopping (d)', () => {
   function pausableSchedule(state: ProcessNode['state']) {
     return makeNode({
       id: 'sched-1',
@@ -1414,10 +1414,10 @@ describe('FleetPanel — pause/resume + stopping (W6.2 d)', () => {
 });
 
 // ---------------------------------------------------------------------------
-// receiveDeepLink — DEBT-5 item 4 (fleet deep-links)
+// receiveDeepLink — item 4 (fleet deep-links)
 // ---------------------------------------------------------------------------
 
-describe('FleetPanel — receiveDeepLink (DEBT-5 item 4)', () => {
+describe('FleetPanel — receiveDeepLink (item 4)', () => {
   test('selects and reveals the target node when it exists in the current snapshot', () => {
     const nodes = [makeNode({ id: 'agent-1' }), makeNode({ id: 'agent-2' })];
     const readModel = createStaticFleetReadModel(buildFleetSnapshot(nodes, NOW));

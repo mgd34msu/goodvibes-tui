@@ -1,5 +1,5 @@
 /**
- * W6.2 focus foundation (Invariants A & B). End-to-end through the real path:
+ * focus foundation (Invariants A & B). End-to-end through the real path:
  * InputHandler.feed() -> the SDK's InputTokenizer -> feedInputTokens ->
  * handlePanelFocusToken.
  *
@@ -77,7 +77,7 @@ function buildHandler(activePanel: { id: string; handleInput: (key: string) => b
   return handler;
 }
 
-describe('panel-focus paste/keystroke routing (W6.2 Invariants A & B)', () => {
+describe('panel-focus paste/keystroke routing (Invariants A & B)', () => {
   test('a single keystroke while a panel has focus is dispatched as a panel hotkey', () => {
     const received: string[] = [];
     const handler = buildHandler({ id: 'a', handleInput: (k) => { received.push(k); return true; } });

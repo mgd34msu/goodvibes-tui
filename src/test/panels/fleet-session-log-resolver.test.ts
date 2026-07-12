@@ -1,10 +1,10 @@
 // ---------------------------------------------------------------------------
 // fleet-session-log-resolver.test.ts
 //
-// W3.3 — proves the REAL `resolveSessionLogPath` wiring (not a test stub):
+// — proves the REAL `resolveSessionLogPath` wiring (not a test stub):
 // src/panels/builtin/operations.ts wires FleetPanel's `resolveSessionLogPath`
 // action to `ui.environment.shellPaths.resolveProjectPath('tui', 'sessions',
-// \`${agentId}.jsonl\`)`, which per the W3.3 brief's anchors must land on the
+// \`${agentId}.jsonl\`)`, which per the brief's anchors must land on the
 // exact path goodvibes-sdk's `AgentSession` writes to:
 // `<workingDirectory>/.goodvibes/tui/sessions/<agentId>.jsonl`
 // (see goodvibes-sdk packages/sdk/src/platform/agents/session.ts:56 and

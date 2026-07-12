@@ -216,7 +216,7 @@ describe('tool preview truncation', () => {
   });
 
   // -------------------------------------------------------------------------
-  // Stall-honesty indicator (W0.7): frozen phrase rotation + stalled/
+  // Stall-honesty indicator: frozen phrase rotation + stalled/
   // reconnecting label once real silence has gone on long enough.
   // -------------------------------------------------------------------------
 

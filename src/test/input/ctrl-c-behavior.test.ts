@@ -72,7 +72,7 @@ describe('Ctrl+C behavior', () => {
     expect(cancelGeneration).toHaveBeenCalled();
   });
 
-  // UX-C item 5: the evaluator asked that the first Ctrl+C's "press again to
+  // item 5: the evaluator asked that the first Ctrl+C's "press again to
   // exit" arm hint survive a frame of interleaved async output (a streamed
   // token, a TTS notice) rather than flashing and vanishing. showExitNotice
   // has exactly one write site (handleCtrlCForHandler, via handleCtrlC in
@@ -83,7 +83,7 @@ describe('Ctrl+C behavior', () => {
   // pins that: it simulates the interleaving directly (extra render() calls
   // between the press and the check) and confirms both the state and what the
   // footer would actually paint from it.
-  test('the arm-hint state and rendered text survive an interleaved render between the first Ctrl+C press and the check (UX-C item 5)', () => {
+  test('the arm-hint state and rendered text survive an interleaved render between the first Ctrl+C press and the check (item 5)', () => {
     const { input } = makeInput();
     input.prompt = '';
     input.cursorPos = 0;
@@ -103,10 +103,10 @@ describe('Ctrl+C behavior', () => {
   });
 });
 
-// UX-B item 6b: stopping in-flight speech / aborting the turn must never
+// item 6b: stopping in-flight speech / aborting the turn must never
 // prevent the quit double-press window from advancing. A throw from the async
 // TTS-stop path would otherwise swallow the press and strand the user.
-describe('Ctrl+C exit chord survives a throwing TTS-stop (UX-B 6b)', () => {
+describe('Ctrl+C exit chord survives a throwing TTS-stop (6b)', () => {
   function callHandleCtrlC(
     state: { lastCtrlCTime: number; lastCtrlCTimeoutId: ReturnType<typeof setTimeout> | null; showExitNotice: boolean },
     cancelGeneration: (() => void) | undefined,
@@ -151,12 +151,12 @@ describe('Ctrl+C exit chord survives a throwing TTS-stop (UX-B 6b)', () => {
   });
 });
 
-// W0.4(f): a second empty-prompt Ctrl+C press arriving just inside the 1s
+// A second empty-prompt Ctrl+C press arriving just inside the 1s
 // "press again to exit" window used to leave the FIRST press's hide-timer
 // live — nothing cleared it. If exitApp() isn't perfectly synchronous, that
 // stale timer fires mid-shutdown and flips showExitNotice/requestRender
 // after the user already believes the app is exiting.
-describe('Ctrl+C confirm-window race (W0.4 f): stale hide-timer bookkeeping', () => {
+describe('Ctrl+C confirm-window race (f): stale hide-timer bookkeeping', () => {
   function callHandleCtrlC(
     state: { lastCtrlCTime: number; lastCtrlCTimeoutId: ReturnType<typeof setTimeout> | null; showExitNotice: boolean },
     exitApp: () => void,
@@ -234,7 +234,7 @@ describe('Ctrl+C confirm-window race (W0.4 f): stale hide-timer bookkeeping', ()
     }
   });
 
-  // W6.2 f: pins the exact user-observed contract. Live replay saw two
+  // f: pins the exact user-observed contract. Live replay saw two
   // empty-composer Ctrl+C presses "seconds apart" do nothing while the footer
   // advertised "Ctrl+C quit". That is the intended accidental-exit guard: only
   // a SECOND press WITHIN ~1s of the first exits; presses more than 1s apart

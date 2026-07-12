@@ -498,7 +498,7 @@ describe('shell/blocking-input', () => {
   });
 
   // ---------------------------------------------------------------------------
-  // Hunk-mode routing (W1.3) — pendingPermission.hunkState present.
+  // Hunk-mode routing — pendingPermission.hunkState present.
   //
   // Every non-hunk-mode test above passes `pendingPermission` objects with no
   // `hunkState` property, so they exercise the exact same y/a/n switch as

@@ -1,5 +1,5 @@
 /**
- * UX-C item 1e: Esc-from-focused-panel must always return to the composer —
+ * item 1e: Esc-from-focused-panel must always return to the composer —
  * including after F2, and including when a modal sat on top of the focused
  * panel in the meantime. One evaluator reported Escape working correctly;
  * an earlier one reported a case where it didn't. Static analysis of the
@@ -16,7 +16,7 @@
  * alone, would be caught.
  *
  * Confirmed root causes for the evaluator-reported friction were elsewhere
- * (both fixed as part of UX-C, not here):
+ * (both fixed as part of, not here):
  *   - F2 pressed while already focused used to be silently swallowed by
  *     handlePanelFocusToken before ever reaching F2's toggle logic — see
  *     global-shortcuts.test.ts's "F2 / Ctrl+O — toggleFleetPanel" suite.
@@ -97,7 +97,7 @@ function buildHandler(panelManager: PanelManager): InputHandler {
   );
 }
 
-describe('Esc-from-focused-panel through the real feed() pipeline (UX-C item 1e)', () => {
+describe('Esc-from-focused-panel through the real feed() pipeline (item 1e)', () => {
   test('F2 focuses the panel, then a single Escape (no modal involved) returns focus to the composer', () => {
     const panelManager = new PanelManager();
     panelManager.registerType({
@@ -157,7 +157,7 @@ describe('Esc-from-focused-panel through the real feed() pipeline (UX-C item 1e)
     const handler = buildHandler(panelManager);
 
     // Open the panel but explicitly return focus to the composer first (the
-    // UX-C 1a "command path" posture) before a modal opens.
+    // 1a "command path" posture) before a modal opens.
     handler.feed('\x1bOQ'); // F2
     panelManager.focusPrompt();
     expect(handler.panelFocused).toBe(false);

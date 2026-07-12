@@ -351,13 +351,13 @@ describe('command modal handoff', () => {
     expect(state.nextImageId).toBe(2);
   });
 
-  // UX-C item 1a: the command path ("/panel open <id>" and every other
+  // item 1a: the command path ("/panel open <id>" and every other
   // command that opens a panel) leaves keyboard focus in the composer by
   // default now — "the user is mid-command-flow". This used to force
   // panelFocused=true unconditionally; the evaluator's ranked friction catalog
   // treats an implicit focus grab from a typed command as the same class of
   // bug as chords silently absorbing typed text.
-  test('slash panel commands open the panel but leave focus in the composer by default (UX-C: command path never auto-focuses)', async () => {
+  test('slash panel commands open the panel but leave focus in the composer by default (command path never auto-focuses)', async () => {
     const modalStack = ['command'];
     const registry = new CommandRegistry();
     let showPanelCalled = false;
@@ -403,7 +403,7 @@ describe('command modal handoff', () => {
       name: 'panel',
       description: 'Open panel',
       handler: (_args, ctx) => {
-        // Reconciled signature: (panelId, pane, target, opts) — the DEBT-5 deep-link
+        // Reconciled signature: (panelId, pane, target, opts) — the deep-link
         // target sits at arg 3, so the focus opt-in moves to arg 4 (opts).
         ctx.showPanel?.('git', undefined, undefined, { focus: true });
       },
@@ -576,7 +576,7 @@ describe('command modal handoff', () => {
     }
   });
 
-  // W0.4(c): the '/' -> commandMode transition (handlePromptTextToken) fired
+  // The '/' -> commandMode transition (handlePromptTextToken) fired
   // exactly once, gated on `state.commandRegistry` being non-null at that
   // exact instant. commandRegistry can be transiently null during a modal/
   // overlay handoff (e.g. the help overlay closing while a chain runs) — if
@@ -612,7 +612,7 @@ describe('command modal handoff', () => {
     expect(result.prompt).toBe('/');
   });
 
-  // W0.4(c) safety net: if commandMode somehow still ends up false (registry
+  // Safety net: if commandMode somehow still ends up false (registry
   // desync, or any future regression upstream) but the submitted text is
   // literally slash-prefixed, the enter-key handler must never hand it to
   // submitInput as ordinary chat — it re-derives command intent from the
@@ -723,7 +723,7 @@ describe('command modal handoff', () => {
     expect(logged.some((l) => l.text.includes('Command /boom failed') && l.text.includes('kaboom'))).toBe(true);
   });
 
-  // WO-160 smoke defect: the feed pipeline snapshots the help/shortcuts
+  // smoke defect: the feed pipeline snapshots the help/shortcuts
   // overlay flags and wrote the stale snapshot back after token processing,
   // silently reverting an overlay a command handler had just opened. The
   // overlays never displayed even though the command executed.
@@ -780,7 +780,7 @@ describe('command modal handoff', () => {
   });
 
   // Papercut sweep item 1: the same stale-snapshot write-back class of bug as
-  // WO-160 above, but at the per-token dispatch layer (handler-feed.ts)
+  // above, but at the per-token dispatch layer (handler-feed.ts)
   // rather than the per-feed layer (handler.ts). handleGlobalShortcutToken's
   // 'escape' branch calls context.handleEscape(), which mutates the handler
   // AND immediately syncs the live context (see handler.ts's

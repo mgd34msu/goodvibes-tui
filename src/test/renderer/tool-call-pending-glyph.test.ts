@@ -31,7 +31,7 @@ const render = (messages: unknown[]): string => {
   return lines.map(lineToString).join('\n');
 };
 
-describe('assistant tool-call pending glyph (UX-B item 2c)', () => {
+describe('assistant tool-call pending glyph (item 2c)', () => {
   const assistantWithToolCall = {
     role: 'assistant',
     content: '',

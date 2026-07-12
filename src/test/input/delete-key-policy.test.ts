@@ -14,7 +14,7 @@ import { isTextBackspace, isTextForwardDelete } from '../../input/delete-key-pol
 import { isPanelSearchBackspace } from '../../panels/search-focus.ts';
 import { handleSelectionModalToken } from '../../input/handler-modal-routes.ts';
 import { SelectionModal } from '../../input/selection-modal.ts';
-// W6.1 (the purge) — group B: the ProjectPlanningPanel delete-key/confirm-gate
+// (the purge) — group B: the ProjectPlanningPanel delete-key/confirm-gate
 // tests were removed with the panel (migrated to the 'planning' modal, which
 // uses the host's input model, not the panel's inline draft form). The generic
 // delete-key predicate + selection-modal coverage below is unaffected.

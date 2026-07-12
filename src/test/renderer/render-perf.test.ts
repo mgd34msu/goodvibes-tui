@@ -1,8 +1,8 @@
 // ---------------------------------------------------------------------------
 // render-perf.test.ts — Unit tests for render performance fixes
 //
-// R1: Render coalescing — burst of requestRender() calls produces one render
-// R2: Panel dirty flag — panels skip re-render when needsRender is false
+// Render coalescing — burst of requestRender() calls produces one render
+// Panel dirty flag — panels skip re-render when needsRender is false
 // ---------------------------------------------------------------------------
 
 import { describe, test, expect, mock } from 'bun:test';
@@ -10,10 +10,10 @@ import { TerminalBuffer } from '../../renderer/buffer.ts';
 import type { Panel } from '../../panels/types.ts';
 
 // ---------------------------------------------------------------------------
-// R1: Render coalescing
+// Render coalescing
 // ---------------------------------------------------------------------------
 
-describe('R1: render coalescing via setImmediate', () => {
+describe('render coalescing via setImmediate', () => {
   test('multiple synchronous requestRender() calls collapse into one render', async () => {
     // Simulate the coalescer logic directly
     let renderCount = 0;
@@ -120,7 +120,7 @@ describe('R1: render coalescing via setImmediate', () => {
 });
 
 // ---------------------------------------------------------------------------
-// R2: Panel dirty-flag skipping
+// Panel dirty-flag skipping
 // ---------------------------------------------------------------------------
 
 function makeMockPanel(id: string): Panel & { renderCallCount: number } {
@@ -160,7 +160,7 @@ function renderPanel(panel: Panel, width: number, height: number) {
   return lines;
 }
 
-describe('R2: panel dirty-flag skip', () => {
+describe('panel dirty-flag skip', () => {
   test('panel with needsRender=false is not re-rendered on identical dimensions', () => {
     const panel = makeMockPanel('test-panel');
     renderPanel(panel, 80, 24); // first render
@@ -208,10 +208,10 @@ describe('R2: panel dirty-flag skip', () => {
 });
 
 // ---------------------------------------------------------------------------
-// R3: TerminalBuffer.reset()
+// TerminalBuffer.reset()
 // ---------------------------------------------------------------------------
 
-describe('R3: TerminalBuffer.reset()', () => {
+describe('TerminalBuffer.reset()', () => {
   test('reset() clears cells in-place without reallocation for same dimensions', () => {
     const buf = new TerminalBuffer(10, 5);
     // Set a recognizable char
@@ -237,7 +237,7 @@ describe('R3: TerminalBuffer.reset()', () => {
 });
 
 // ---------------------------------------------------------------------------
-// R3: Compositor buffer identity — verifies the "2 TerminalBuffer instances
+// Compositor buffer identity — verifies the "2 TerminalBuffer instances
 // per session" invariant the review flagged as claimed-but-untested.
 // Rather than spying on the class constructor (fragile across bundlers),
 // we drive the Compositor through N frames and assert the set of buffer
@@ -245,7 +245,7 @@ describe('R3: TerminalBuffer.reset()', () => {
 // cardinality 2 — i.e. the same two instances keep swapping.
 // ---------------------------------------------------------------------------
 
-describe('R3: Compositor front/back buffer identity across frames', () => {
+describe('Compositor front/back buffer identity across frames', () => {
   test('front and back buffer instances are stable across many composite() calls', async () => {
     const { Compositor } = await import('../../renderer/compositor.ts');
     // Stub stdout so composite() does not emit escape codes to the test runner

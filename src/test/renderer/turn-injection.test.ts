@@ -103,7 +103,7 @@ describe('formatTurnInjectionEntry', () => {
     expect(line).not.toContain('lexical');
   });
 
-  test('Stage B: code-index hits are tagged [code]; memory hits stay bare (parallel injectedSources)', () => {
+  test('code-index hits are tagged [code]; memory hits stay bare (parallel injectedSources)', () => {
     const line = formatTurnInjectionEntry(makeEntry({
       injectedIds: ['mem-1', 'src/auth.ts:10-30'],
       injectedSources: ['memory', 'code-index'],
@@ -115,13 +115,13 @@ describe('formatTurnInjectionEntry', () => {
     expect(line).not.toContain('mem-1 [code]');
   });
 
-  test('Stage B: memory-only line renders with no [code] tag (byte-compatible with pre-Stage-B)', () => {
+  test('memory-only line renders with no [code] tag (byte-compatible with the output from before code-index hits existed)', () => {
     const line = formatTurnInjectionEntry(makeEntry({ injectedIds: ['mem-1', 'mem-2'], injectedSources: ['memory', 'memory'], tokenCost: 100 }));
     expect(line).not.toContain('[code]');
     expect(line).toContain('injected mem-1, mem-2');
   });
 
-  test('Stage B: an empty turn states why code was skipped when a code index was queried', () => {
+  test('an empty turn states why code was skipped when a code index was queried', () => {
     const line = formatTurnInjectionEntry(makeEntry({
       injectedIds: [],
       candidatesConsidered: 2,
@@ -161,7 +161,7 @@ describe('buildTurnInjectionsText', () => {
   });
 });
 
-describe('buildMainSessionTurnInjectionsText (wo805)', () => {
+describe('buildMainSessionTurnInjectionsText', () => {
   test('honest empty state for the main session (no agent phrasing, same ambiguity as the agent path)', () => {
     const text = buildMainSessionTurnInjectionsText([]);
     expect(text).toContain('No per-turn injection records for the main session yet');

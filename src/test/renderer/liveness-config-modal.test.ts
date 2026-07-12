@@ -1,6 +1,6 @@
 /**
  * W6 liveness coverage — E's liveness-contract harness (../helpers/liveness.ts)
- * pointed at the WO-A config-modal surfaces through the REAL host render path
+ * pointed at the config-modal surfaces through the REAL host render path
  * (ConfigModal + renderConfigModal + ModalFactory), as the integrator brief
  * requires. A values-only update (mutating a non-selected row's live value while
  * the row-id set is unchanged) must repaint in place: identical skeleton, cursor
@@ -9,7 +9,7 @@
  * Covered: providers-modal (the charter's live-modal exemplar — REQUIRED; its
  * async inspect cache is driven deterministically), remote-modal (a second
  * group-A surface, read-model backed), AND memory-modal (a group-B ported
- * surface — WO-P): a values-only mutation of a non-selected record's live label
+ * surface —): a values-only mutation of a non-selected record's live label
  * repaints in place through the real host path.
  */
 import { describe, test, expect } from 'bun:test';

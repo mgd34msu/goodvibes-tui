@@ -3,14 +3,14 @@ import { handlePanelIntegrationAction } from '../../input/handler.ts';
 import { createTestManagers } from '../helpers/test-managers.ts';
 import type { Panel } from '../../panels/types.ts';
 
-// W6.1 (the purge): this file used to cover an instanceof-based cross-panel
+// (the purge): this file used to cover an instanceof-based cross-panel
 // routing table (explorer -> preview, preview -> symbols, tasks/orchestration
 // -> inspector, approval -> executeCommand, etc.) hardcoded in
 // panel-integration-actions.ts. Every one of those branches targeted a panel
 // class that is now DELETE- or RETIRE-disposition (FileExplorerPanel,
 // FilePreviewPanel, SymbolOutlinePanel, ApprovalPanel, TasksPanel,
 // OrchestrationPanel, AgentInspectorPanel) and was removed along with them —
-// see .goodvibes/audit/2026-07-04-wave6-briefs.json (W6.1). What remains of
+// see .goodvibes/audit/2026-07-04-wave6-briefs.json. What remains of
 // handlePanelIntegrationAction is a thin passthrough to a panel's own
 // `Panel.handlePanelIntegrationAction` hook, which is what this file now
 // tests. Surviving panels that implement the hook (diff-panel.ts,

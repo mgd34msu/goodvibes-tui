@@ -1,5 +1,5 @@
 /**
- * /compact command handler tests (W5.4 capacity-% fix, wo803).
+ * /compact command handler tests (capacity-% fix).
  *
  * shell-core.ts's registered '/compact' handler previously hardcoded
  * contextWindow=0 when building the pre-compact preview, even though the
@@ -46,7 +46,7 @@ function makeContext(printed: string[]): CommandContext {
   } as unknown as CommandContext;
 }
 
-describe('/compact handler — capacity-% plumbing (W5.4)', () => {
+describe('/compact handler — capacity-% plumbing', () => {
   test('the pre-compact preview includes the context-window capacity clause, not the old hardcoded-0 omission', async () => {
     const registry = new CommandRegistry();
     registerShellCoreCommands(registry);

@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { summarizeToolResult } from '../../renderer/tool-result-summary.ts';
 
-describe('summarizeToolResult (UX-B item 3)', () => {
+describe('summarizeToolResult (item 3)', () => {
   test('write — single file names the file and its byte size', () => {
     const content = JSON.stringify({
       files_written: 1,

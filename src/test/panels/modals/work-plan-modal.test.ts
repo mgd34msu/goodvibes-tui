@@ -5,7 +5,7 @@ import { actionCtx, captureCommands, open, tabText } from './modal-surface-test-
 const FIXED = 1735693200000;
 function fixedDeps(): WorkPlanModalDeps {
   const items = [
-    { id: 'wpi-a', title: 'Ship WO-P', status: 'in_progress' as const, owner: 'wo-p', source: 'tui-panel', notes: 'Route mutations to commands.', linked: { agentId: 'agent-1' }, updatedAt: FIXED },
+    { id: 'wpi-a', title: 'Ship the redirect fix', status: 'in_progress' as const, owner: 'alex', source: 'tui-panel', notes: 'Route mutations to commands.', linked: { agentId: 'agent-1' }, updatedAt: FIXED },
     { id: 'wpi-b', title: 'Wire redirects', status: 'pending' as const, updatedAt: FIXED },
     { id: 'wpi-c', title: 'Archive old panel', status: 'done' as const, updatedAt: FIXED },
   ];
@@ -19,8 +19,8 @@ describe('work-plan modal surface', () => {
     const view = open(createWorkPlanModalSurface(fixedDeps()));
     const text = tabText(view, 'items');
     expect(text).toContain('Project /proj');
-    expect(text).toContain('Ship WO-P');
-    expect(text).toContain('@wo-p');
+    expect(text).toContain('Ship the redirect fix');
+    expect(text).toContain('@alex');
     expect(text).toContain('(tui-panel)');
     expect(text).toContain('pending 1  active 1  blocked 0  done 1');
     expect(text).toContain('33%');
@@ -61,7 +61,7 @@ describe('work-plan modal surface', () => {
     expect(cap.calls).toEqual([]);
   });
 
-  // ── DEBT-5 item 4: restored 'i'/'w' agent/WRFC-chain jumps into Fleet ─────
+  // ── item 4: restored 'i'/'w' agent/WRFC-chain jumps into Fleet ─────
   describe('i/w fleet deep-links', () => {
     test('i (jumpAgent) on an item linked to an agent dispatches /panel open fleet --target <agentId>:agent', () => {
       const surface = createWorkPlanModalSurface(fixedDeps());

@@ -1,5 +1,5 @@
 /**
- * WO UX-A item 3 — the always-visible footer shows the TRUE total (main session +
+ * WO item 3 — the always-visible footer shows the TRUE total (main session +
  * fleet), not the main session alone. A cold eval saw the footer read ~$0.046 (main
  * only) while a live WRFC chain cost ~$0.446 (~10x). We render an honest split —
  * "you ~$X · fleet ~$Y" — so it is clear where the cost went.

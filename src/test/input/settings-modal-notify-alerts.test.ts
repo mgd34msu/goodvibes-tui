@@ -1,5 +1,5 @@
 /**
- * Tests for the W2.3 behavior.notifyOn* synthetic settings
+ * Tests for the behavior.notifyOn* synthetic settings
  * (src/input/settings-modal-data.ts: buildNotifyAlertSyntheticEntries,
  * and their injection into buildSettingGroups's 'behavior' category).
  */

@@ -204,7 +204,7 @@ describe('shell surface', () => {
   });
 
   test('prompt box visibly loses focus when the panel workspace is focused, independent of indicatorFocused', () => {
-    // W0.8 sub-fix C: panelFocused is a fallback-only input to buildShellFooter
+    // sub-fix C: panelFocused is a fallback-only input to buildShellFooter
     // (main.ts computes promptFocused itself and passes it explicitly), but the
     // fallback must still agree so any caller that omits promptFocused gets a
     // composer that doesn't contradict the panel's own (correctly wired) focus
@@ -270,7 +270,7 @@ describe('shell surface', () => {
     expect(result.lines[1]![4]!.bg).toBe('#2a2a2a');
   });
 
-  // UX-C item 1c: an unfocused, EMPTY composer names the state and the way
+  // item 1c: an unfocused, EMPTY composer names the state and the way
   // back — the dimmed fill alone told you nothing was wrong, but not why
   // keystrokes weren't landing there.
   test('an unfocused, empty composer shows the "panel focused — Esc returns" hint', () => {

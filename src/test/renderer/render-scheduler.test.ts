@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// render-scheduler.test.ts — WO-208 coalescing semantics.
+// render-scheduler.test.ts — coalescing semantics.
 //
 // Pins the same-tick render coalescer that sits over main.ts's direct render()
 // fan-out: k schedule() calls in one tick collapse to exactly ONE composite,
@@ -21,7 +21,7 @@ function manualQueue() {
   };
 }
 
-describe('render-scheduler: same-tick coalescing (WO-208)', () => {
+describe('render-scheduler: same-tick coalescing', () => {
   test('k schedule() calls within one tick produce exactly one composite', () => {
     let composites = 0;
     const q = manualQueue();

@@ -219,7 +219,7 @@ describe('panel-escape-contract: two-stage escape routing', () => {
   });
 
   describe('Stage 0 — turn active (cancel-first precedence, I6.1)', () => {
-    // W1.6 FIX 1: while a turn is actively streaming, Escape's first job is
+    // FIX 1: while a turn is actively streaming, Escape's first job is
     // always cancel-turn — a focused panel must never be able to swallow the
     // only way to cancel it (an earlier replay finding: panel open + streaming + Esc).
     test('turn active + panel focused + escape: handled true, panelFocused UNCHANGED (stays true)', () => {

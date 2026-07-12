@@ -57,7 +57,7 @@ describe('PanelManager', () => {
     expect(panel.activate).toHaveBeenCalledTimes(2);
   });
 
-  test('WO-152: preload and retainOnClose are independent lifecycle flags', () => {
+  test('preload and retainOnClose are independent lifecycle flags', () => {
     // preload without retainOnClose: eagerly instantiated, but destroyed on close.
     const preloadOnlyManager = new PanelManager();
     const preloadOnlyPanel = makePanel('preload-only', 'Preload Only');
@@ -96,7 +96,7 @@ describe('PanelManager', () => {
     expect(reopenedRetainOnly).toBe(retainOnlyPanel);
   });
 
-  test('WO-152: registerType asserts icon uniqueness across the registry', () => {
+  test('registerType asserts icon uniqueness across the registry', () => {
     const manager = new PanelManager();
     manager.registerType({ id: 'panel-a', name: 'A', icon: 'Z', category: 'runtime-ops', description: '', factory: () => makePanel('panel-a', 'A') });
     expect(() => {
@@ -297,12 +297,12 @@ describe('PanelManager', () => {
 });
 
 // ---------------------------------------------------------------------------
-// W6.1 (the purge) — modal-redirect mechanism (WO-C builds the mechanism;
-// WO-A/B register the actual MIGRATE-TO-MODAL ids against it) and the
+// (the purge) — modal-redirect mechanism (builds the mechanism;
+// B register the actual MIGRATE-TO-MODAL ids against it) and the
 // default-panel retarget away from the now-deleted 'panel-list'.
 // ---------------------------------------------------------------------------
 
-describe('PanelManager — modal redirect mechanism (W6.1)', () => {
+describe('PanelManager — modal redirect mechanism', () => {
   test('open() on a modal-redirected id invokes the callback and returns a sentinel without constructing the real panel', () => {
     const manager = new PanelManager();
     const factory = mock(() => makePanel('providers-modal-victim', 'Should never be built'));
@@ -349,7 +349,7 @@ describe('PanelManager — modal redirect mechanism (W6.1)', () => {
   });
 });
 
-describe('PanelManager — default panel retargets to fleet, not registry[0] (W6.1)', () => {
+describe('PanelManager — default panel retargets to fleet, not registry[0]', () => {
   test('toggle() with nothing open falls back to fleet when present, not the first-registered type', () => {
     const manager = new PanelManager();
     // Register 'git' first (mirrors real registration order — development.ts
@@ -384,7 +384,7 @@ describe('PanelManager — default panel retargets to fleet, not registry[0] (W6
 });
 
 // ---------------------------------------------------------------------------
-// W6.1 — saved-layout tolerance contract. session-workflow.ts's
+// — saved-layout tolerance contract. session-workflow.ts's
 // reopenPanelsFromReturnContext wraps `panelManager.open(id)` in a
 // try/catch per id so a saved layout containing a DELETE-disposition id
 // (no alias, e.g. the old 'panel-list'/'thinking'/'tools') resolves-or-skips
@@ -393,7 +393,7 @@ describe('PanelManager — default panel retargets to fleet, not registry[0] (W6
 // on, without re-implementing the full /session resume command flow.
 // ---------------------------------------------------------------------------
 
-describe('PanelManager — open() contract backing saved-layout tolerance (W6.1)', () => {
+describe('PanelManager — open() contract backing saved-layout tolerance', () => {
   test('open() throws for an id with no registration and no alias (the DELETE-disposition case)', () => {
     const manager = new PanelManager();
     manager.registerType({ id: 'git', name: 'Git', icon: 'G', category: 'development', description: '', factory: () => makePanel('git', 'Git') });

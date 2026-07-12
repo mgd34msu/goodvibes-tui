@@ -1,5 +1,5 @@
 /**
- * W6.2 d1/d2 — fleet-stop.ts: the 'stopping…' write-window overlay tracker and
+ * d1/d2 — fleet-stop.ts: the 'stopping…' write-window overlay tracker and
  * the state-dependent pause<->resume toggle + tree hints, split out of
  * fleet-panel.ts. Pure/isolated, so unit-tested here directly.
  */

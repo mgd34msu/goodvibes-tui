@@ -124,7 +124,7 @@ describe('renderSettingsModal', () => {
   test('category rail and header show the active category count', () => {
     const lines = renderSettingsModal(modal, W);
     const texts = linesToText(lines).join('\n');
-    // 9 = the SDK display keys plus the DEBT-2 synthetic display.themeMode entry.
+    // 9 = the SDK display keys plus the synthetic display.themeMode entry.
     expect(texts).toContain('Display (9)');
   });
 

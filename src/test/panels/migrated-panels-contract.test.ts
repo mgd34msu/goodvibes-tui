@@ -1,7 +1,7 @@
 // ---------------------------------------------------------------------------
 // migrated-panels-contract.test.ts
 //
-// Thin runner (WO-006 decongestion): every migrated panel's BasePanel
+// Thin runner (decongestion): every migrated panel's BasePanel
 // contract test now lives in its own module under
 // src/test/panels/contract/<panel-id>.contract.ts so a work order touching
 // one panel edits only that panel's module. This file imports every
@@ -9,14 +9,14 @@
 // and asserts that the contract-module count matches the expected registry
 // size, preserving the module/registry parity check from before the split.
 //
-// W6.1 (the purge): 13 contract modules were removed along with their
+// (the purge): 13 contract modules were removed along with their
 // panels (RETIRE-INTO-FLEET: incident-review, routes, ops-control,
 // automation-control, approval, communication, worktree, control-plane,
 // wrfc, plan-dashboard, orchestration, tasks; DELETE: system-messages) —
-// see .goodvibes/audit/2026-07-04-wave6-briefs.json (W6.1). Count dropped
+// see .goodvibes/audit/2026-07-04-wave6-briefs.json. Count dropped
 // from 28 to 15.
 //
-// W6.1 (config-modal migration, same wave): services, subscription, and
+// (config-modal migration, same wave): services, subscription, and
 // settings-sync were migrated to config-modal surfaces and their contract
 // modules removed; sandbox, remote, and provider-health were also migrated
 // to modals but never had contract modules of their own. Count dropped
@@ -35,9 +35,9 @@ import './contract/git-panel.contract.ts';
 import './contract/diff-panel.contract.ts';
 import './contract/token-budget-panel.contract.ts';
 
-// W6.1 (the purge) — the two config-modal migrations combined: WO-A removed
+// (the purge) — the two config-modal migrations combined: removed
 // the services/subscription/settings-sync contract modules (sandbox, remote,
-// provider-health had none of their own), and WO-B removed marketplace, hooks,
+// provider-health had none of their own), and removed marketplace, hooks,
 // security, knowledge-graph, memory, and project-planning as those panels
 // migrated to config-modal surfaces under src/panels/modals/ (golden-tested in
 // ecosystem-modals-golden.test.ts + config-modal-surfaces-*.test.ts). The

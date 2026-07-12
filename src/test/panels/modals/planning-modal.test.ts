@@ -53,7 +53,7 @@ describe('planning modal surface', () => {
     const text = tabText(view, 'planning');
     expect(text).toContain('Is execution approved?');
     expect(text).toContain('Approve execution');
-    // DEBT-3: no more reseed approximation note; the answer paths are real now.
+    // no more reseed approximation note; the answer paths are real now.
     expect(text).not.toContain('reseeds the plan goal');
     expect(view.tabs[0]!.rows.some((r) => r.id === 'approve-execution')).toBe(true);
 
@@ -63,7 +63,7 @@ describe('planning modal surface', () => {
     expect(cap.calls).toEqual([['plan', ['approve']]]);
   });
 
-  // DEBT-3: a canned answer to a REAL open question records via /plan answer <id> <text>.
+  // a canned answer to a REAL open question records via /plan answer <id> <text>.
   test('a canned answer to a real open question dispatches /plan answer <id> <text>', async () => {
     const state: ProjectPlanningState = { ...noQuestionState(), readiness: 'needs-user-input', openQuestions: [{ id: 'q1', prompt: 'What is the scope?', status: 'open' }] };
     const surface = await warm(serviceWithState(state));
@@ -77,7 +77,7 @@ describe('planning modal surface', () => {
     expect(args.slice(2).join(' ')).toBe('Use a focused first-pass scope for this goal.');
   });
 
-  // DEBT-3: an answer to a SYNTHETIC readiness question (no open-question record
+  // an answer to a SYNTHETIC readiness question (no open-question record
   // to target) is submitted to chat via submitInput, and the modal CLOSES BEFORE
   // the turn starts (modal-liveness ordering guard). No /plan command is dispatched.
   test('an answer to a synthetic question uses submitInput and closes the modal first', async () => {
@@ -118,7 +118,7 @@ describe('planning modal surface', () => {
     expect(cap.calls).toEqual([['plan', ['approve']]]);
   });
 
-  // DEBT-3: dismiss is now a first-class CONFIRMED action ('d') that dispatches
+  // dismiss is now a first-class CONFIRMED action ('d') that dispatches
   // the real /plan dismiss and closes the panel — not a pseudo answer-row.
   test('the dismiss action dispatches /plan dismiss and closes the panel', async () => {
     const surface = await warm(serviceWithState(noQuestionState()));

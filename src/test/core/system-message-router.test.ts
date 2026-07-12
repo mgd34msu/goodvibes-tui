@@ -6,7 +6,7 @@ import { logger } from '@pellux/goodvibes-sdk/platform/utils';
 // ---------------------------------------------------------------------------
 // Minimal stubs
 //
-// W6.1 (the purge): SystemMessagesPanel was DELETE-disposition and has been
+// (the purge): SystemMessagesPanel was DELETE-disposition and has been
 // removed. SystemMessageRouter no longer takes a panel at all — every
 // message now reaches conversation.addTypedSystemMessage() (see the class
 // doc in system-message-router.ts for why that's the correct behavior, not
@@ -84,7 +84,7 @@ describe('classifyPriority (via routeAuto)', () => {
     expect(conv.addTypedSystemMessage).toHaveBeenCalledWith('[Scan] Found ollama at localhost:11434', 'operational');
   });
 
-  test('[Agents] periodic "N running" snapshots are suppressed; lifecycle lines still reach conversation (UX-B 1d)', () => {
+  test('[Agents] periodic "N running" snapshots are suppressed; lifecycle lines still reach conversation (1d)', () => {
     // The 30s "N running:" snapshot is transcript churn — dropped; the same live
     // detail is shown in the fleet panel and the footer count.
     router.routeAuto('[Agents] 3 running:\n  abc12345: working');
@@ -163,7 +163,7 @@ describe('routeSystemMessage', () => {
     expect(conv.addTypedSystemMessage).toHaveBeenCalledWith('msg', 'system');
   });
 
-  test('panel-targeted routes fall back to conversation (W6.1: no panel exists)', () => {
+  test('panel-targeted routes fall back to conversation (no panel exists)', () => {
     const r = createSystemMessageRouter(conv as unknown as ConversationManager, makeTargetResolver({ system: 'panel' }));
     r.routeSystemMessage('panel fallback', 'low');
     expect(conv.addTypedSystemMessage).toHaveBeenCalledWith('panel fallback', 'system');
@@ -238,7 +238,7 @@ describe('routeAuto classification', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Noise gate integration (UX-B item 1)
+// Noise gate integration (item 1)
 // ---------------------------------------------------------------------------
 
 describe('router noise gate', () => {

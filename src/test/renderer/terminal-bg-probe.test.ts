@@ -2,7 +2,7 @@
  * terminal-bg-probe.test.ts — fake-terminal harness for the OSC 11 background probe.
  *
  * Drives the pure parser/classifier and the TerminalBackgroundProbe stream filter
- * against scripted byte streams (the exact hazards W6.3 scoped): BEL vs ST
+ * against scripted byte streams (the exact hazards scoped): BEL vs ST
  * terminators, rgb: 4-digit / 2-digit / # colour variants, replies split across
  * chunks, replies interleaved with keystrokes (keystrokes MUST survive to the
  * tokenizer, the reply MUST be consumed), timeout → dark, tmux passthrough

@@ -185,7 +185,7 @@ describe('buildCompactionAfterNotice', () => {
   });
 
   // -------------------------------------------------------------------------
-  // qualityScore (W5.4/B28) — additive, optional field
+  // qualityScore () — additive, optional field
   // -------------------------------------------------------------------------
 
   test('omits the quality line entirely when qualityScore is not provided (unchanged existing behaviour)', () => {

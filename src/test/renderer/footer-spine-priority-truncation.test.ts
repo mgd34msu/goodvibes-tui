@@ -1,7 +1,7 @@
 /**
  * footer-spine-priority-truncation.test.ts
  *
- * Wave-3 replay defect: the footer's context-info line put the `spine:online`/
+ * replay defect: the footer's context-info line put the `spine:online`/
  * `spine:offline` segment LAST, so ordinary width pressure clipped it mid-word
  * (e.g. "spi…") — invisible exactly when the daemon-liveness honesty signal
  * matters most. Fix: segments now carry a survival priority. cwd/model are

@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// ensure-goodvibes-gitignore.test.ts — W0.4(g) hygiene fix.
+// ensure-goodvibes-gitignore.test.ts — a hygiene fix.
 //
 // The TUI's own `.goodvibes/` scratch directory (logs, overflow buffers,
 // exec output, cache, session state) was never excluded from a *project's*

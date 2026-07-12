@@ -145,7 +145,7 @@ function simulateTurnError(
   router.high(`[Error] ${message} ${action}`);
 }
 
-// W6.1 (the purge): SystemMessagesPanel was DELETE-disposition and has been
+// (the purge): SystemMessagesPanel was DELETE-disposition and has been
 // removed; SystemMessageRouter no longer takes a panel argument at all (see
 // system-message-router.ts's file doc — every message now reaches
 // conversation.addTypedSystemMessage()). These tests used to also assert on

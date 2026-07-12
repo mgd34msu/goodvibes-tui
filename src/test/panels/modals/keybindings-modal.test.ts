@@ -43,7 +43,7 @@ describe('keybindings modal surface', () => {
     expect(tabText(view, 'shortcuts').toLowerCase()).toContain('keybindings manager not wired');
   });
 
-  test('activate: Tools tab -> /panel open fleet --target <tool>:tool (DEBT-5 deep-link); Models tab -> /model <key>; unselectable model is a no-op', () => {
+  test('activate: Tools tab -> /panel open fleet --target <tool>:tool (deep-link); Models tab -> /model <key>; unselectable model is a no-op', () => {
     const surface = createKeybindingsModalSurface({ toolRegistry: FIXED_TOOLS, providerRegistry: FIXED_MODELS });
     open(surface);
     const fleet = captureCommands();

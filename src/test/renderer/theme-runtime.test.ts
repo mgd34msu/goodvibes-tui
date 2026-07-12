@@ -1,5 +1,5 @@
 /**
- * theme-runtime.test.ts — the DEBT-2 active-mode runtime.
+ * theme-runtime.test.ts — the active-mode runtime.
  *
  * Covers: the active-mode accessors, the in-place palette rebuild registry and
  * its reversibility (light→dark restores byte-identical dark), the transcript

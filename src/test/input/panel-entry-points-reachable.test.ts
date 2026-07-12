@@ -1,13 +1,13 @@
 /**
- * W0.8 sub-fix A: F2 and Enter-on-status (the other two panel/process-modal
+ * sub-fix A: F2 and Enter-on-status (the other two panel/process-modal
  * entry points named in the brief, alongside Ctrl+P covered in
  * global-shortcuts.test.ts) must stay reachable while a turn is active.
  *
- * Root cause finding (see the W0.8 audit brief): no busy/turn guard exists
+ * Root cause finding (see the audit brief): no busy/turn guard exists
  * anywhere in the input pipeline. handlePromptKeyToken's F2 branch and
  * handleIndicatorFocusToken's Enter branch both call openFleetPanel()
- * unconditionally (W6.2 e: F2 was repointed off the retired process modal onto
- * the Fleet panel, joining the footer indicator's W2.2 repoint) — neither
+ * unconditionally (e: F2 was repointed off the retired process modal onto
+ * the Fleet panel, joining the footer indicator's repoint) — neither
  * KeyRouteState nor IndicatorFocusRouteState carries an orchestrator/isThinking
  * field, so there is nothing here that *could* gate on turn state. These tests
  * lock in that reachability so a future change can't accidentally introduce a
@@ -34,7 +34,7 @@ function wrappedPromptInfo() {
 }
 
 describe('panel/process-modal entry points stay reachable during an active turn', () => {
-  test('F2 opens AND focuses the Fleet panel (W6.2 e: fleet subsumes the retired process modal)', () => {
+  test('F2 opens AND focuses the Fleet panel (e: fleet subsumes the retired process modal)', () => {
     const opened: string[] = [];
     const result = handlePromptKeyToken({
       prompt: '',
@@ -70,7 +70,7 @@ describe('panel/process-modal entry points stay reachable during an active turn'
     expect(opened).toEqual(['fleet']);
   });
 
-  test('Enter on the focused status/process indicator opens the Fleet panel (W2.2 repoint; handleIndicatorFocusToken carries no turn-state field to gate on)', () => {
+  test('Enter on the focused status/process indicator opens the Fleet panel (repoint; handleIndicatorFocusToken carries no turn-state field to gate on)', () => {
     const opened: string[] = [];
     const state: IndicatorFocusRouteState = {
       indicatorFocused: true,

@@ -58,7 +58,7 @@ function createConfig(overrides: { controlPlanePort: number; httpListenerPort: n
   };
 }
 
-describe('S3c perf: real adopt-or-start probe cost (post daemon.enabled-by-default)', () => {
+describe('perf: real adopt-or-start probe cost (post daemon.enabled-by-default)', () => {
   test('a compatible external daemon present -> adopt path completes well within the deferred-task budget', async () => {
     const homeDirectory = mkdtempSync(join(tmpdir(), 'spine-delta-adopt-home-'));
     const workingDir = mkdtempSync(join(tmpdir(), 'spine-delta-adopt-wd-'));
@@ -80,7 +80,7 @@ describe('S3c perf: real adopt-or-start probe cost (post daemon.enabled-by-defau
       );
       const elapsedMs = performance.now() - start;
       // eslint-disable-next-line no-console
-      console.log(`[S3c perf] adopt-or-start (adopt external daemon path): ${elapsedMs.toFixed(2)}ms`);
+      console.log(`[perf] adopt-or-start (adopt external daemon path): ${elapsedMs.toFixed(2)}ms`);
 
       expect(handle.daemonStatus.mode).toBe('external');
       // Generous budget: this runs off the deferred (post-first-paint) path,

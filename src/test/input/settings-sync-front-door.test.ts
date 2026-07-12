@@ -1,5 +1,5 @@
 /**
- * DEBT-5 item 3 (report-vs-modal front doors) — /settings-sync has a full
+ * item 3 (report-vs-modal front doors) — /settings-sync has a full
  * modal surface (settings-sync-modal), so the bare command now opens it; the
  * old bare/`review` transcript report moved to an explicit `report`
  * subcommand so scripts calling bare `/settings-sync` for text output keep
@@ -14,7 +14,7 @@ import { CommandRegistry } from '../../input/command-registry.ts';
 import type { CommandContext } from '../../input/command-registry.ts';
 import { registerSettingsSyncRuntimeCommands } from '../../input/commands/settings-sync-runtime.ts';
 
-describe('/settings-sync front door (DEBT-5 item 3)', () => {
+describe('/settings-sync front door (item 3)', () => {
   let root = '';
   let configManager: ConfigManager;
 

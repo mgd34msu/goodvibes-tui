@@ -345,7 +345,7 @@ describe('seam-replay: seam 3 — in-TUI panel resume (createResumeSessionHandle
     expect(existsSync(journalPath)).toBe(false);
   });
 
-  // W0.9: footer token-counter hydration after resume. createResumeSessionHandler
+  // footer token-counter hydration after resume. createResumeSessionHandler
   // must call the optional hydrateSessionUsage callback (wired from
   // bootstrap-shell.ts) after fromJSON()+journal replay are both applied, so the
   // caller can recompute orchestrator.usage from the now-complete history before

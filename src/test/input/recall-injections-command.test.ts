@@ -5,7 +5,7 @@
  * the pure renderer in turn-injection.test.ts) against a fake
  * ShellAgentManagerService, covering the explicit-agent-id path (populated
  * records, the honest empty state, unknown agent id) and the no-id path, which
- * as of wo805 renders the MAIN session's own per-turn injection ring via the
+ * as of renders the MAIN session's own per-turn injection ring via the
  * `session.getMainSessionTurnInjections` accessor (populated from a stub
  * orchestrator, plus the honest empty state when the accessor isn't wired).
  */
@@ -41,7 +41,7 @@ function makeContext(
     session: {
       conversationManager: {} as never,
       runtime: { model: '', provider: '', debugMode: false, systemPrompt: '', reasoningEffort: '', sessionId: 'session-1' },
-      // wo805: when provided, mirrors the real bootstrap wiring of
+      // when provided, mirrors the real bootstrap wiring of
       // Orchestrator.getTurnInjections() onto the command context. When omitted,
       // the accessor is absent — exactly like a context built without an
       // orchestrator — so the no-id path renders the honest empty state.

@@ -3,9 +3,9 @@ import { buildFooterTip, isAgentActive } from '../../renderer/footer-tips.ts';
 
 describe('footer-tips', () => {
   test('default tip leads with panels; F2 names the Fleet panel and quit advertises the double-press honestly', () => {
-    // W6.2 e: F2 opens Fleet (not the retired process modal). W6.2 f: an empty
+    // e: F2 opens Fleet (not the retired process modal). f: an empty
     // composer needs Ctrl+C TWICE within ~1s to exit, so the tip says "x2".
-    // UX-C: Ctrl+P is a TOGGLE (open+focus / hide), not just "panels" —
+    // Ctrl+P is a TOGGLE (open+focus / hide), not just "panels" —
     // naming the verb keeps the tip honest.
     expect(buildFooterTip({ agentActive: false }))
       .toBe('Ctrl+P toggle panels · F2 fleet · ? help · Ctrl+C x2 quit');
