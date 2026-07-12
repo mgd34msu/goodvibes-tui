@@ -16,3 +16,6 @@ export { PluginsPanel } from './plugins-panel.ts';
 export { SkillsPanel } from './skills-panel.ts';
 export { FleetPanel } from './fleet-panel.ts';
 export type { FleetActionCallbacks } from './fleet-panel.ts';
+export { NotificationsPanel } from './notifications-panel.ts';
+export { PanelNotificationFeed, getSharedNotificationFeed } from './notifications-feed.ts';
+export type { PanelFeedEntry } from './notifications-feed.ts';
