@@ -271,7 +271,7 @@ export interface CommandWorkspaceServices
 export interface CommandPlatformConfigServices {
   readonly config: DeepReadonly<GoodVibesConfig>;
   readonly configManager: ConfigManager;
-  /** Feature-flag runtime — backs the `/flags` command's listing and runtime toggling. */
+  /** Capability gate runtime — feature states derive from domain settings keys; surfaces read live/pending state here. */
   readonly featureFlagManager?: FeatureFlagManager;
   readonly voiceProviderRegistry?: VoiceProviderRegistry;
   readonly voiceService?: VoiceService;

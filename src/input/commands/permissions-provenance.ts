@@ -63,7 +63,7 @@ const PERMISSION_KEYS: readonly { readonly key: string; readonly label: string; 
   { key: 'permissions.mode', label: 'Permission mode', note: 'also the current session mode' },
   { key: 'permissions.backgroundAgents', label: 'Background-agent mode' },
   { key: 'behavior.autoApprove', label: 'Auto-approve everything' },
-  { key: 'featureFlags.permissions-policy-engine', label: 'Runtime policy engine (flag)' },
+  { key: 'permissions.engine', label: 'Permission evaluator', note: 'baseline or policy-engine' },
   { key: 'permissions.tools.read', label: 'Tool rule: read' },
   { key: 'permissions.tools.write', label: 'Tool rule: write' },
   { key: 'permissions.tools.edit', label: 'Tool rule: edit' },
