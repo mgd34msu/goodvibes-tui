@@ -130,6 +130,32 @@ export function applyRuntimeConfigDefault(configManager: ConfigManager, key: Con
   applyRuntimeConfigValue(configManager, key, defaultValue);
 }
 
+/**
+ * Every TUI-side config default applied at startup, in one place. Currently:
+ * show token speed ON (the SDK schema default is false). applyRuntimeConfigDefault
+ * reads the global + project settings files and only applies the default
+ * in-memory when the key is absent from both (e.g. a new install); an explicit
+ * user value is respected. No disk write.
+ */
+export function applyTuiRuntimeConfigDefaults(configManager: ConfigManager): void {
+  applyRuntimeConfigDefault(configManager, 'display.showTokenSpeed', true);
+}
+
+/**
+ * Applies the persisted `behavior.hitlMode` config value to the live mode
+ * manager at startup, ignoring unset or unrecognized values. Extracted from
+ * main() verbatim (a plain move, no behavior change).
+ */
+export function applyConfiguredHitlMode(
+  configManager: ConfigManager,
+  modeManager: { setHITLMode(mode: 'quiet' | 'balanced' | 'operator'): void },
+): void {
+  const hitlMode = configManager.get('behavior.hitlMode');
+  if (hitlMode === 'quiet' || hitlMode === 'balanced' || hitlMode === 'operator') {
+    modeManager.setHITLMode(hitlMode);
+  }
+}
+
 export function applyRuntimeConfigValue(configManager: ConfigManager, key: ConfigKey, value: unknown): void {
   const setting = CONFIG_SCHEMA_BY_KEY.get(key);
   if (!setting) {

@@ -1,9 +1,15 @@
 import { describe, expect, test } from 'bun:test';
 import { createHash } from 'node:crypto';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { afterAll } from 'bun:test';
 import {
   applyUpdate,
   checkForUpdate,
   detectDaemonServiceManaged,
+  rollbackUpdate,
+  PREVIOUS_FILE_SUFFIX,
   type ApplyUpdateOptions,
   type RunCommand,
 } from '../../input/commands/update-runtime.ts';
@@ -337,5 +343,156 @@ describe('detectDaemonServiceManaged', () => {
     });
     expect(info.managed).toBe(false);
     expect(called).toBe(false);
+  });
+});
+
+// ─── keep-previous swap + one-command rollback ───────────────────────────────
+
+const scratchDirs: string[] = [];
+function scratchDir(): string {
+  const dir = mkdtempSync(join(tmpdir(), 'gv-update-rollback-'));
+  scratchDirs.push(dir);
+  return dir;
+}
+afterAll(() => {
+  for (const dir of scratchDirs) {
+    try {
+      rmSync(dir, { recursive: true, force: true });
+    } catch {
+      /* ignore */
+    }
+  }
+});
+
+describe('applyUpdate — the real swap keeps the outgoing binary at .previous', () => {
+  test('after an update the target holds the new bytes and .previous holds the old ones', async () => {
+    const dir = scratchDir();
+    const execPath = join(dir, 'goodvibes');
+    writeFileSync(execPath, 'old-app-bytes');
+
+    const appBuffer = Buffer.from('new-app-bytes');
+    const checksumText = `${sha256Hex(appBuffer)}  goodvibes-linux-x64\n`;
+    const printed: string[] = [];
+    // No swap/writeAddon/fileExists seams: this test exercises the REAL
+    // filesystem swap inside a scratch directory (no daemon binary present,
+    // no addon entry in the manifest, so only the app binary swaps).
+    await applyUpdate({
+      fetchImpl: buildStubFetch({ latestTag: 'v1.1.0', checksumText, appBuffer }),
+      execPath,
+      platform: 'linux',
+      arch: 'x64',
+      currentVersion: '1.0.0',
+      print: (line) => printed.push(line),
+      configManager: { get: () => undefined },
+      runCommand: () => ({ status: 3, stdout: '' }),
+    });
+
+    expect(readFileSync(execPath, 'utf-8')).toBe('new-app-bytes');
+    expect(readFileSync(`${execPath}${PREVIOUS_FILE_SUFFIX}`, 'utf-8')).toBe('old-app-bytes');
+    expect(printed.join('\n')).toContain('Updated to v1.1.0.');
+  });
+});
+
+describe('rollbackUpdate — one command back to the version that ran before', () => {
+  const inactiveRunner: RunCommand = () => ({ status: 3, stdout: '' });
+
+  test('exchanges each file with its kept .previous counterpart, so a second rollback rolls forward', () => {
+    const dir = scratchDir();
+    const execPath = join(dir, 'goodvibes');
+    const daemonPath = join(dir, 'goodvibes-daemon');
+    writeFileSync(execPath, 'new-app');
+    writeFileSync(`${execPath}${PREVIOUS_FILE_SUFFIX}`, 'old-app');
+    writeFileSync(daemonPath, 'new-daemon');
+    writeFileSync(`${daemonPath}${PREVIOUS_FILE_SUFFIX}`, 'old-daemon');
+
+    const printed: string[] = [];
+    rollbackUpdate({
+      execPath,
+      platform: 'linux',
+      arch: 'x64',
+      print: (line) => printed.push(line),
+      configManager: { get: () => undefined },
+      runCommand: inactiveRunner,
+    });
+
+    expect(readFileSync(execPath, 'utf-8')).toBe('old-app');
+    expect(readFileSync(`${execPath}${PREVIOUS_FILE_SUFFIX}`, 'utf-8')).toBe('new-app');
+    expect(readFileSync(daemonPath, 'utf-8')).toBe('old-daemon');
+    expect(readFileSync(`${daemonPath}${PREVIOUS_FILE_SUFFIX}`, 'utf-8')).toBe('new-daemon');
+    expect(printed.join('\n')).toContain('Rolled back to the previously installed version.');
+
+    // Roll forward again: the exchange is symmetric.
+    rollbackUpdate({
+      execPath,
+      platform: 'linux',
+      arch: 'x64',
+      print: () => {},
+      configManager: { get: () => undefined },
+      runCommand: inactiveRunner,
+    });
+    expect(readFileSync(execPath, 'utf-8')).toBe('new-app');
+    expect(readFileSync(daemonPath, 'utf-8')).toBe('new-daemon');
+  });
+
+  test('restores the kept vector addon alongside the binaries', () => {
+    const dir = scratchDir();
+    const execPath = join(dir, 'goodvibes');
+    writeFileSync(execPath, 'new-app');
+    writeFileSync(`${execPath}${PREVIOUS_FILE_SUFFIX}`, 'old-app');
+    const addonDir = join(dir, 'lib', 'sqlite-vec-linux-x64');
+    mkdirSync(addonDir, { recursive: true });
+    const addonPath = join(addonDir, 'vec0.so');
+    writeFileSync(addonPath, 'new-addon');
+    writeFileSync(`${addonPath}${PREVIOUS_FILE_SUFFIX}`, 'old-addon');
+
+    const printed: string[] = [];
+    rollbackUpdate({
+      execPath,
+      platform: 'linux',
+      arch: 'x64',
+      print: (line) => printed.push(line),
+      configManager: { get: () => undefined },
+      runCommand: inactiveRunner,
+    });
+
+    expect(readFileSync(addonPath, 'utf-8')).toBe('old-addon');
+    expect(readFileSync(`${addonPath}${PREVIOUS_FILE_SUFFIX}`, 'utf-8')).toBe('new-addon');
+    expect(printed.join('\n')).toContain('vector addon');
+  });
+
+  test('with nothing kept, says so honestly and touches nothing', () => {
+    const dir = scratchDir();
+    const execPath = join(dir, 'goodvibes');
+    writeFileSync(execPath, 'only-version');
+
+    const printed: string[] = [];
+    rollbackUpdate({
+      execPath,
+      platform: 'linux',
+      arch: 'x64',
+      print: (line) => printed.push(line),
+      configManager: { get: () => undefined },
+      runCommand: inactiveRunner,
+    });
+
+    expect(readFileSync(execPath, 'utf-8')).toBe('only-version');
+    expect(printed.join('\n')).toContain('No previous version is kept beside this install');
+  });
+
+  test('non-binary installs are refused with the package-manager alternative', () => {
+    const printed: string[] = [];
+    const renames: string[] = [];
+    rollbackUpdate({
+      execPath: '/home/u/.bun/install/global/node_modules/@pellux/goodvibes-tui/bin/goodvibes',
+      platform: 'linux',
+      arch: 'x64',
+      print: (line) => printed.push(line),
+      configManager: { get: () => undefined },
+      runCommand: inactiveRunner,
+      rename: (from, to) => renames.push(`${from} -> ${to}`),
+      fileExists: () => true,
+    });
+    expect(renames).toEqual([]);
+    expect(printed.join('\n')).toContain('bun add -g @pellux/goodvibes-tui');
   });
 });

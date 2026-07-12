@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { WorkspaceCheckpointManager } from '@pellux/goodvibes-sdk/platform/workspace';
-import { readCheckpointGuardSettings, withCheckpointGuardSettings } from '@/config/tui-extension-settings.ts';
+import { readCheckpointGuardSettings, readUpdateSettings, withCheckpointGuardSettings } from '@/config/tui-extension-settings.ts';
 import type { ConfigManager } from '@/config/index.ts';
 
 // A minimal stand-in for the ConfigManager surface the reader depends on.
@@ -134,5 +134,28 @@ describe('checkpoint root-guard wiring (SDK 1.6.1 options are live)', () => {
     );
     const cp = await overrideMgr.create({ kind: 'manual', label: 'x', retentionClass: 'forensic' });
     expect(cp).not.toBeNull();
+  });
+});
+
+describe('readUpdateSettings', () => {
+  test('returns empty object when the update namespace is absent or malformed', () => {
+    expect(readUpdateSettings(fakeConfig({}))).toEqual({});
+    expect(readUpdateSettings(fakeConfig({ update: 'nope' }))).toEqual({});
+    expect(readUpdateSettings(fakeConfig({ update: null }))).toEqual({});
+  });
+
+  test('reads an explicit autoUpdateAtLaunch=false (the off switch is a real setting)', () => {
+    expect(readUpdateSettings(fakeConfig({ update: { autoUpdateAtLaunch: false } }))).toEqual({ autoUpdateAtLaunch: false });
+  });
+
+  test('drops a wrong-typed autoUpdateAtLaunch so the consumer default (on) applies', () => {
+    expect(readUpdateSettings(fakeConfig({ update: { autoUpdateAtLaunch: 'yes' } }))).toEqual({});
+  });
+
+  test('clamps launchCheckTimeoutMs into [250, 30000] and drops non-positive values', () => {
+    expect(readUpdateSettings(fakeConfig({ update: { launchCheckTimeoutMs: 5 } }))).toEqual({ launchCheckTimeoutMs: 250 });
+    expect(readUpdateSettings(fakeConfig({ update: { launchCheckTimeoutMs: 120000 } }))).toEqual({ launchCheckTimeoutMs: 30000 });
+    expect(readUpdateSettings(fakeConfig({ update: { launchCheckTimeoutMs: 4000 } }))).toEqual({ launchCheckTimeoutMs: 4000 });
+    expect(readUpdateSettings(fakeConfig({ update: { launchCheckTimeoutMs: -1 } }))).toEqual({});
   });
 });

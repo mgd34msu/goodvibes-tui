@@ -99,6 +99,39 @@ export function readStatuslineSettings(configManager: Pick<ConfigManager, 'getRa
   return out;
 }
 
+// ─── update.* — launch-time self-update behavior ─────────────────────────────
+
+/**
+ * User-settable launch-time self-update behavior. The feature itself (check at
+ * launch, install via the checksum-verified download/verify/swap path, restart
+ * onto the new binary) defaults ON for binary installs; the defaults live in
+ * the consumer (src/cli/launch-auto-update.ts), matching this file's rule that
+ * readers return only what the user actually set.
+ */
+export interface UpdateSettings {
+  /** Check for a newer release at TUI launch and install it before starting. Default: true. */
+  readonly autoUpdateAtLaunch?: boolean;
+  /** How long the launch-time version check may take before it is skipped. Defaults to 2500; clamped to [250, 30000]. */
+  readonly launchCheckTimeoutMs?: number;
+}
+
+const LAUNCH_CHECK_MIN_TIMEOUT_MS = 250;
+const LAUNCH_CHECK_MAX_TIMEOUT_MS = 30_000;
+
+/** Read `update.*` from settings.json, validating and clamping the timeout. */
+export function readUpdateSettings(configManager: Pick<ConfigManager, 'getRaw'>): UpdateSettings {
+  const src = readNamespace(configManager, 'update');
+  if (!src) return {};
+  const out: { autoUpdateAtLaunch?: boolean; launchCheckTimeoutMs?: number } = {};
+  const autoUpdateAtLaunch = readBoolean(src, 'autoUpdateAtLaunch');
+  if (autoUpdateAtLaunch !== undefined) out.autoUpdateAtLaunch = autoUpdateAtLaunch;
+  const launchCheckTimeoutMs = readPositiveInt(src, 'launchCheckTimeoutMs');
+  if (launchCheckTimeoutMs !== undefined) {
+    out.launchCheckTimeoutMs = Math.min(LAUNCH_CHECK_MAX_TIMEOUT_MS, Math.max(LAUNCH_CHECK_MIN_TIMEOUT_MS, launchCheckTimeoutMs));
+  }
+  return out;
+}
+
 // ─── checkpoints.* — workspace checkpoint root-guard options ─────────────────
 
 /**
