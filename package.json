@@ -104,8 +104,8 @@
     "@anthropic-ai/vertex-sdk": "^0.16.0",
     "@ast-grep/napi": "^0.42.0",
     "@aws/bedrock-token-generator": "^1.1.0",
-    "@pellux/goodvibes-sdk": "1.7.1",
-    "@pellux/goodvibes-terminal-shell": "1.7.1",
+    "@pellux/goodvibes-sdk": "/home/buzzkill/.claude/jobs/e28eaafb/tmp/sdk-snapshot/packages/sdk/pellux-goodvibes-sdk-1.7.1.tgz",
+    "@pellux/goodvibes-terminal-shell": "/home/buzzkill/.claude/jobs/e28eaafb/tmp/sdk-snapshot/packages/terminal-shell/pellux-goodvibes-terminal-shell-1.7.1.tgz",
     "bash-language-server": "^5.6.0",
     "fuse.js": "^7.1.0",
     "graphql": "^16.13.2",
@@ -138,6 +138,16 @@
   },
   "trustedDependencies": [],
   "overrides": {
-    "minimatch": "^10.2.5"
+    "minimatch": "^10.2.5",
+    "@pellux/goodvibes-contracts": "/home/buzzkill/.claude/jobs/e28eaafb/tmp/sdk-snapshot/packages/contracts/pellux-goodvibes-contracts-1.7.1.tgz",
+    "@pellux/goodvibes-daemon-sdk": "/home/buzzkill/.claude/jobs/e28eaafb/tmp/sdk-snapshot/packages/daemon-sdk/pellux-goodvibes-daemon-sdk-1.7.1.tgz",
+    "@pellux/goodvibes-errors": "/home/buzzkill/.claude/jobs/e28eaafb/tmp/sdk-snapshot/packages/errors/pellux-goodvibes-errors-1.7.1.tgz",
+    "@pellux/goodvibes-operator-sdk": "/home/buzzkill/.claude/jobs/e28eaafb/tmp/sdk-snapshot/packages/operator-sdk/pellux-goodvibes-operator-sdk-1.7.1.tgz",
+    "@pellux/goodvibes-peer-sdk": "/home/buzzkill/.claude/jobs/e28eaafb/tmp/sdk-snapshot/packages/peer-sdk/pellux-goodvibes-peer-sdk-1.7.1.tgz",
+    "@pellux/goodvibes-sdk": "/home/buzzkill/.claude/jobs/e28eaafb/tmp/sdk-snapshot/packages/sdk/pellux-goodvibes-sdk-1.7.1.tgz",
+    "@pellux/goodvibes-terminal-shell": "/home/buzzkill/.claude/jobs/e28eaafb/tmp/sdk-snapshot/packages/terminal-shell/pellux-goodvibes-terminal-shell-1.7.1.tgz",
+    "@pellux/goodvibes-transport-core": "/home/buzzkill/.claude/jobs/e28eaafb/tmp/sdk-snapshot/packages/transport-core/pellux-goodvibes-transport-core-1.7.1.tgz",
+    "@pellux/goodvibes-transport-http": "/home/buzzkill/.claude/jobs/e28eaafb/tmp/sdk-snapshot/packages/transport-http/pellux-goodvibes-transport-http-1.7.1.tgz",
+    "@pellux/goodvibes-transport-realtime": "/home/buzzkill/.claude/jobs/e28eaafb/tmp/sdk-snapshot/packages/transport-realtime/pellux-goodvibes-transport-realtime-1.7.1.tgz"
   }
 }
