@@ -15,7 +15,7 @@
  */
 
 import type { ConfigKey } from '../../config/index.ts';
-import { FEATURE_FLAG_MAP } from '@pellux/goodvibes-sdk/platform/runtime/state';
+import { isFeatureDefaultEnabled } from '../../runtime/feature-settings.ts';
 import type {
   OnboardingWizardControllerLike,
   OnboardingWizardFieldDefinition,
@@ -398,9 +398,9 @@ export function featureSubOptionFieldId(flagId: string, key: string): string {
   return `feature.${flagId}.${key}`;
 }
 
-/** Whether a flag defaults to enabled (drives the toggle's default-checked state). */
+/** Whether a feature defaults to enabled (drives the toggle's default-checked state). */
 export function isFeatureDefaultOn(flagId: string): boolean {
-  return FEATURE_FLAG_MAP.get(flagId)?.defaultState === 'enabled';
+  return isFeatureDefaultEnabled(flagId);
 }
 
 /** Every flag id reachable through the guided feature steps. */
@@ -498,10 +498,12 @@ export function buildFeatureUnitSteps(
 
 /**
  * Fold the guided feature selections into apply operations: for each unit, when
- * the user's choice differs from the flag's default, record the flag override;
- * when the feature is enabled, write its implied config, prerequisite flags, and
- * chosen sub-options. Flag overrides are collected into `overrides` (flushed by
- * the caller with the surface flags); config writes go straight to setConfig.
+ * the user's choice differs from the feature's default, record the desired
+ * state; when the feature is enabled, write its implied config, prerequisite
+ * features, and chosen sub-options. Desired states are collected into
+ * `overrides` (flushed by the caller as plain domain-settings writes on each
+ * feature's enablement key, together with the surface capabilities); other
+ * config writes go straight to setConfig.
  */
 export function applyFeatureUnitOperations(
   controller: OnboardingWizardControllerLike,

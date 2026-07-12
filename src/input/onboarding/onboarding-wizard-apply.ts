@@ -1,6 +1,7 @@
 import type { OnboardingAcknowledgementTarget, OnboardingApplyOperation, OnboardingApplyRequest } from '../../runtime/onboarding/index.ts';
 import { formatProviderModel } from '../../config/provider-model.ts';
 import { getServerSurfaceFeatureFlags } from '../../runtime/surface-feature-flags.ts';
+import { featureEnablementWrite } from '../../runtime/feature-settings.ts';
 import {
   buildCloudflareApiTokenRef,
   buildCloudflareOperationalTokenRef,
@@ -190,12 +191,13 @@ export function buildOnboardingApplyRequest(controller: OnboardingWizardControll
       }
     }
     // Feature units from the guided feature steps (safety, memory & context,
-    // telemetry, automation, provider, advanced): enable/disable each flag the
-    // user changed from its default and write its chosen sub-options.
+    // telemetry, automation, provider, advanced): enable/disable each feature
+    // the user changed from its default and write its chosen sub-options.
     applyFeatureUnitOperations(controller, setConfig, featureFlagOverrides);
 
-    // Surface/server flags are authoritative for the network-exposing flags they
-    // own — apply them last so they win over any feature-step override.
+    // Surface/server capabilities are authoritative for the network-exposing
+    // features they own — apply them last so they win over any feature-step
+    // override.
     for (const surfaceFlag of getServerSurfaceFeatureFlags({
       serverBacked: hasServers,
       web: browserAccess,
@@ -203,8 +205,11 @@ export function buildOnboardingApplyRequest(controller: OnboardingWizardControll
     })) {
       featureFlagOverrides.set(surfaceFlag, 'enabled');
     }
+    // Each selection lands as a plain domain-settings write on the feature's
+    // real enablement key (e.g. sandbox.enabled, controlPlane.gateway).
     for (const flagId of [...featureFlagOverrides.keys()].sort((left, right) => left.localeCompare(right))) {
-      setConfig(`featureFlags.${flagId}`, featureFlagOverrides.get(flagId)!);
+      const write = featureEnablementWrite(flagId, featureFlagOverrides.get(flagId)! === 'enabled');
+      if (write) setConfig(write.key, write.value);
     }
 
     acknowledge('providers', 'providers.reviewed');
