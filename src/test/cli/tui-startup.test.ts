@@ -336,7 +336,7 @@ describe('session lifecycle flags at startup', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Registration self-records (F13) — no modal is ever raised for it; it only
+// Registration self-records — no modal is ever raised for it; it only
 // ever fires for an ALREADY-trusted workspace (the owner-boundary rider:
 // self-recording must not widen anything for a workspace that was merely
 // opened read-only, never decided, or explicitly kept restricted).

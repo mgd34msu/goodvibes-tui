@@ -94,7 +94,7 @@ systemd_unit_path() { printf '%s' "$HOME/.config/systemd/user/$1"; }
 
 # --- PATH line (installer-managed, same marker discipline as service units) ---
 #
-# F12 fix: "Start with: goodvibes" must not be a false promise. When
+# "Start with: goodvibes" must not be a false promise. When
 # $INSTALL_DIR is not on PATH, the installer used to print a session-local
 # `export PATH=...` line the user had to copy-paste themselves — and still
 # ended with "Start with: goodvibes" regardless, which was false on a fresh

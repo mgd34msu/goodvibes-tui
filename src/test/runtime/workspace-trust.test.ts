@@ -63,7 +63,7 @@ describe('WorkspaceTrustManager', () => {
     expect(mgr.isCategoryAllowed('delegate')).toBe(false);
   });
 
-  // The grandfather-by-side-effect is gone (F11): a workspace that already
+  // The grandfather-by-side-effect is gone: a workspace that already
   // carries prior GoodVibes runtime state gets NO special treatment anymore —
   // it stays undecided just like any other new WorkspaceTrustManager, and the
   // first non-read tool request is what raises the real question (via
@@ -157,7 +157,7 @@ describe('trustGatedAsk', () => {
     expect(promptRaised).toBe(false);
   });
 
-  // F11 (the actual fix): an UNDECIDED workspace's first non-read request no
+  // The actual fix: an UNDECIDED workspace's first non-read request no
   // longer silently denies without a prompt — it raises requestTrustDecision,
   // persists the answer via setLevel, and forwards the ORIGINAL request to ask
   // when the answer is 'trusted' (so the thing the user just approved

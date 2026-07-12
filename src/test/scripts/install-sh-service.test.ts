@@ -517,7 +517,7 @@ describe('install.sh — uninstall mode', () => {
   });
 });
 
-// F12 fix: "Start with: goodvibes" must not be a false promise when
+// "Start with: goodvibes" must not be a false promise when
 // $INSTALL_DIR is not on PATH. Covers ensure_path_on_shell_rc() (idempotent,
 // per-shell rc + syntax) and its uninstall-side counterpart
 // uninstall_shell_rc_path_line() (installer-managed marker discipline).
