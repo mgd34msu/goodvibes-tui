@@ -312,7 +312,7 @@ export function renderGoodVibesDaemonHelp(binary = 'goodvibes-daemon'): string {
     '  install-service                Install + enable the daemon as a systemd user service (survives reboots)',
     '  uninstall-service              Disable + remove the daemon systemd user service',
     '  service-status                 Show whether the daemon service is installed / enabled / active',
-    '  migrate-service                Guided takeover of a legacy goodvibes-daemon.service unit; prints a plan',
+    '  migrate-service                Guided migration from an install-script goodvibes-daemon.service unit; prints a plan',
     '                                 unless run with -y/--yes (never auto-migrates)',
     '',
     'Options:',
