@@ -185,35 +185,35 @@ describe('classifyHostTrustTier — blocked: SSRF vectors', () => {
   const noConfig: TrustTierConfig = {};
 
   // Localhost variants
-  it('blocks localhost', () => {
+  it('routes localhost to the per-project approval tier', () => {
     const result = classifyHostTrustTier('localhost', noConfig);
-    expect(result.tier).toBe('blocked');
-    expect(result.isSsrf).toBe(true);
+    expect(result.tier).toBe('localhost');
+    expect(result.isSsrf).toBe(false);
   });
 
-  it('blocks localhost.localdomain', () => {
+  it('routes localhost.localdomain to the per-project approval tier', () => {
     const result = classifyHostTrustTier('localhost.localdomain', noConfig);
-    expect(result.tier).toBe('blocked');
-    expect(result.isSsrf).toBe(true);
+    expect(result.tier).toBe('localhost');
+    expect(result.isSsrf).toBe(false);
   });
 
-  it('blocks ip6-localhost', () => {
+  it('routes ip6-localhost to the per-project approval tier', () => {
     const result = classifyHostTrustTier('ip6-localhost', noConfig);
-    expect(result.tier).toBe('blocked');
-    expect(result.isSsrf).toBe(true);
+    expect(result.tier).toBe('localhost');
+    expect(result.isSsrf).toBe(false);
   });
 
   // Private IPv4
-  it('blocks 127.0.0.1 (loopback)', () => {
+  it('routes 127.0.0.1 (loopback) to the per-project approval tier', () => {
     const result = classifyHostTrustTier('127.0.0.1', noConfig);
-    expect(result.tier).toBe('blocked');
-    expect(result.isSsrf).toBe(true);
+    expect(result.tier).toBe('localhost');
+    expect(result.isSsrf).toBe(false);
   });
 
-  it('blocks 127.255.255.255 (loopback range)', () => {
+  it('routes 127.255.255.255 (loopback range) to the per-project approval tier', () => {
     const result = classifyHostTrustTier('127.255.255.255', noConfig);
-    expect(result.tier).toBe('blocked');
-    expect(result.isSsrf).toBe(true);
+    expect(result.tier).toBe('localhost');
+    expect(result.isSsrf).toBe(false);
   });
 
   it('blocks 10.0.0.1 (RFC 1918)', () => {
@@ -297,8 +297,8 @@ describe('classifyHostTrustTier — blocked: SSRF vectors', () => {
   // IPv6 private ranges
   it('blocks ::1 (IPv6 loopback)', () => {
     const result = classifyHostTrustTier('::1', noConfig);
-    expect(result.tier).toBe('blocked');
-    expect(result.isSsrf).toBe(true);
+    expect(result.tier).toBe('localhost');
+    expect(result.isSsrf).toBe(false);
   });
 
   it('blocks fe80::1 (IPv6 link-local)', () => {
@@ -366,13 +366,17 @@ describe('classifyHostTrustTier — trusted tier', () => {
     expect(result.tier).not.toBe('trusted');
   });
 
-  it('SSRF vectors are blocked even if in trusted list (explicit blocklist wins first, then SSRF)', () => {
-    // SSRF blocks take precedence over trusted list — localhost is always blocked
-    const config: TrustTierConfig = { trustedHosts: ['localhost'] };
-    const result = classifyHostTrustTier('localhost', config);
-    // localhost is an SSRF risk; SSRF check runs before trustlist
-    expect(result.tier).toBe('blocked');
-    expect(result.isSsrf).toBe(true);
+  it('safety tiers win over the trusted list (loopback still needs approval, private IPs stay blocked)', () => {
+    // The trusted list cannot bypass the safety tiers: a trusted 'localhost'
+    // still lands in the per-project approval tier, and a trusted private IP
+    // stays absolutely blocked.
+    const loopback = classifyHostTrustTier('localhost', { trustedHosts: ['localhost'] });
+    expect(loopback.tier).toBe('localhost');
+    expect(loopback.isSsrf).toBe(false);
+
+    const privateIp = classifyHostTrustTier('10.0.0.1', { trustedHosts: ['10.0.0.1'] });
+    expect(privateIp.tier).toBe('blocked');
+    expect(privateIp.isSsrf).toBe(true);
   });
 });
 

@@ -45,7 +45,7 @@ afterAll(() => {
 
 describe('fetch tool - inline auth bearer', () => {
   test('sends Authorization: Bearer header', async () => {
-    const fetchTool = createFetchTool();
+    const fetchTool = createFetchTool({ isLocalhostAllowed: () => true });
     const result = await fetchTool.execute({
       urls: [{
         url: `${base}/echo`,
@@ -60,7 +60,7 @@ describe('fetch tool - inline auth bearer', () => {
   });
 
   test('does not send Authorization when bearer token is missing', async () => {
-    const fetchTool = createFetchTool();
+    const fetchTool = createFetchTool({ isLocalhostAllowed: () => true });
     const result = await fetchTool.execute({
       urls: [{
         url: `${base}/echo`,
@@ -82,7 +82,7 @@ describe('fetch tool - inline auth bearer', () => {
 
 describe('fetch tool - inline auth basic', () => {
   test('sends Authorization: Basic header with base64 username:password', async () => {
-    const fetchTool = createFetchTool();
+    const fetchTool = createFetchTool({ isLocalhostAllowed: () => true });
     const result = await fetchTool.execute({
       urls: [{
         url: `${base}/echo`,
@@ -98,7 +98,7 @@ describe('fetch tool - inline auth basic', () => {
   });
 
   test('handles missing password as empty string', async () => {
-    const fetchTool = createFetchTool();
+    const fetchTool = createFetchTool({ isLocalhostAllowed: () => true });
     const result = await fetchTool.execute({
       urls: [{
         url: `${base}/echo`,
@@ -120,7 +120,7 @@ describe('fetch tool - inline auth basic', () => {
 
 describe('fetch tool - inline auth api-key', () => {
   test('sends X-API-Key header by default', async () => {
-    const fetchTool = createFetchTool();
+    const fetchTool = createFetchTool({ isLocalhostAllowed: () => true });
     const result = await fetchTool.execute({
       urls: [{
         url: `${base}/echo`,
@@ -135,7 +135,7 @@ describe('fetch tool - inline auth api-key', () => {
   });
 
   test('sends custom header when auth.header is specified', async () => {
-    const fetchTool = createFetchTool();
+    const fetchTool = createFetchTool({ isLocalhostAllowed: () => true });
     const result = await fetchTool.execute({
       urls: [{
         url: `${base}/echo`,
@@ -151,7 +151,7 @@ describe('fetch tool - inline auth api-key', () => {
   });
 
   test('does not send api-key header when key is missing', async () => {
-    const fetchTool = createFetchTool();
+    const fetchTool = createFetchTool({ isLocalhostAllowed: () => true });
     const result = await fetchTool.execute({
       urls: [{
         url: `${base}/echo`,
@@ -185,7 +185,7 @@ describe('fetch tool - service registry auth', () => {
           secretsManager: new SecretsManager({ projectRoot: tempDir, globalHome: tempDir }),
           subscriptionManager: new SubscriptionManager(join(tempDir, 'subscriptions.json')),
         });
-        const fetchTool = createFetchTool({ serviceRegistry: registry });
+        const fetchTool = createFetchTool({ serviceRegistry: registry, isLocalhostAllowed: () => true });
         const result = await fetchTool.execute({
           urls: [{
             url: `${base}/echo`,
@@ -216,7 +216,7 @@ describe('fetch tool - service registry auth', () => {
         secretsManager: new SecretsManager({ projectRoot: tempDir, globalHome: tempDir }),
         subscriptionManager: new SubscriptionManager(join(tempDir, 'subscriptions.json')),
       });
-      const fetchTool = createFetchTool({ serviceRegistry: registry });
+      const fetchTool = createFetchTool({ serviceRegistry: registry, isLocalhostAllowed: () => true });
       const result = await fetchTool.execute({
         urls: [{
           url: `${base}/echo`,

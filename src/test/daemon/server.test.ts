@@ -10,7 +10,7 @@ import { GOODVIBES_NTFY_AGENT_TOPIC } from '@pellux/goodvibes-sdk/platform/integ
 import { UserAuthManager } from '@pellux/goodvibes-sdk/platform/security';
 import { RuntimeEventBus } from '@/runtime/index.ts';
 import type { TransportEvent } from '@/runtime/index.ts';
-import { createFeatureFlagManager } from '@/runtime/index.ts';
+import { createFeatureFlagManager, deriveFeatureStates } from '@/runtime/index.ts';
 import { createRuntimeStore } from '../../runtime/store/index.ts';
 import { createRuntimeServices } from '../../runtime/services.ts';
 import { MultimodalService } from '@pellux/goodvibes-sdk/platform/multimodal';
@@ -100,13 +100,16 @@ describe('DaemonServer', () => {
   const makeConfig = () => new ConfigManager({ surfaceRoot: 'tui',  configDir, workingDir, homeDir });
   const makeFeatureFlags = () => {
     const featureFlags = createFeatureFlagManager();
-    const flags = Object.fromEntries([
+    // Seed from a real config (registry-complete), then force the daemon's
+    // capability set on — every id below exists in the registry (unknown ids
+    // now throw; there is no filtering wrapper).
+    const flags = deriveFeatureStates(makeConfig());
+    for (const id of [
       'automation-domain',
       'control-plane-gateway',
       'delivery-engine',
       'hitl-ux-modes',
       'ntfy-surface',
-      'omnichannel-surface-adapters',
       'permission-divergence-dashboard',
       'policy-as-code',
       'route-binding',
@@ -116,7 +119,9 @@ describe('DaemonServer', () => {
       'watcher-framework',
       'web-surface',
       'webhook-surface',
-    ].map((flag) => [flag, 'enabled' as const]));
+    ]) {
+      flags[id] = 'enabled';
+    }
     featureFlags.loadFromConfig({ flags });
     return featureFlags;
   };

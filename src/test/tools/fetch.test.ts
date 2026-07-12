@@ -94,7 +94,9 @@ beforeAll(() => {
 });
 
 beforeAll(() => {
-  fetchTool = createFetchTool();
+  // Test servers bind loopback; approve localhost up front (the per-project
+  // dev-server approval) so the suite exercises fetch behavior, not the ask.
+  fetchTool = createFetchTool({ isLocalhostAllowed: () => true });
 });
 
 afterAll(() => {
