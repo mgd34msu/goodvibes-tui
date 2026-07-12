@@ -36,7 +36,6 @@ import { registerRemoteRuntimeCommands } from './commands/remote-runtime.ts';
 import { registerTeleportRuntimeCommands } from './commands/teleport-runtime.ts';
 import { registerSubscriptionRuntimeCommands } from './commands/subscription-runtime.ts';
 import { registerHooksRuntimeCommands } from './commands/hooks-runtime.ts';
-import { registerFlagsRuntimeCommands } from './commands/flags-runtime.ts';
 import { registerEditorRuntimeCommands } from './commands/editor-runtime.ts';
 import { registerControlRoomRuntimeCommands } from './commands/control-room-runtime.ts';
 import { registerMcpRuntimeCommands } from './commands/mcp-runtime.ts';
@@ -121,7 +120,6 @@ export const BUILTIN_COMMAND_GROUPS: readonly BuiltinCommandGroup[] = [
   { category: 'Remote', register: registerTeleportRuntimeCommands },
   { category: 'Subscriptions', register: registerSubscriptionRuntimeCommands },
   { category: 'Hooks', register: registerHooksRuntimeCommands },
-  { category: 'Feature Flags', register: registerFlagsRuntimeCommands },
   { category: 'Editor', register: registerEditorRuntimeCommands },
   { category: 'Control Room', register: registerControlRoomRuntimeCommands },
   { category: 'MCP', register: registerMcpRuntimeCommands },

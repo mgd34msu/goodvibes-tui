@@ -15,14 +15,13 @@
  */
 
 import type { SlashCommand, CommandContext } from '../command-registry.ts';
-import type { ConfigKey } from '../../config/index.ts';
 import type { RouteExplanation } from '@pellux/goodvibes-sdk/platform/providers';
 import type { FallbackTestResult, FallbackTransition } from '@pellux/goodvibes-sdk/platform/providers';
 import type { ProviderApiModelRecord } from '@pellux/goodvibes-sdk/platform/providers';
 import { requireProviderApi } from './runtime-services.ts';
+import { featureEnablementWrite } from '../../runtime/feature-settings.ts';
 
 const PROVIDER_OPTIMIZER_FLAG = 'provider-optimizer';
-const PROVIDER_OPTIMIZER_CONFIG_KEY = `featureFlags.${PROVIDER_OPTIMIZER_FLAG}` as ConfigKey;
 
 // ---------------------------------------------------------------------------
 // Formatting helpers
@@ -95,9 +94,12 @@ function handleOptimizerToggle(
   const wasEnabled = optimizer.enabled;
   optimizer.setEnabled(enable);
 
-  // Persist to config so the setting survives restart.
-  const flagValue = enable ? 'enabled' : 'disabled';
-  context.platform.configManager.setDynamic(PROVIDER_OPTIMIZER_CONFIG_KEY, flagValue);
+  // Persist to config so the setting survives restart: the optimizer is
+  // governed by the provider.optimizerMode settings key (off = disabled;
+  // manual/auto/pinned = active), and the settings bridge forwards the same
+  // write to the runtime gate.
+  const write = featureEnablementWrite(PROVIDER_OPTIMIZER_FLAG, enable);
+  if (write) context.platform.configManager.setDynamic(write.key, write.value);
 
   if (enable && !wasEnabled) {
     context.print('[provider] Optimizer enabled.');

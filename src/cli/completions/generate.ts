@@ -93,8 +93,8 @@ export const GLOBAL_FLAGS: readonly CompletionFlag[] = [
     takesValue: true,
     description: 'Override a config value (key=value)',
   },
-  { name: '--enable', takesValue: true, description: 'Enable a feature flag for this launch' },
-  { name: '--disable', takesValue: true, description: 'Disable a feature flag for this launch' },
+  { name: '--enable', takesValue: true, description: 'Enable a platform feature for this launch (writes its domain setting)' },
+  { name: '--disable', takesValue: true, description: 'Disable a platform feature for this launch (writes its domain setting)' },
   {
     name: '--prompt',
     short: '-p',
@@ -505,8 +505,8 @@ export function generateZsh(surface: CompletionSurface): string {
   lines.push(`    '--working-dir[Alias for --cd]:dir:_files -/' \\`);
   lines.push(`    '--daemon-home[Override daemon home]:dir:_files -/' \\`);
   lines.push(`    '(-c --config)'{-c,--config}'[Override config value]:key=value:' \\`);
-  lines.push(`    '--enable[Enable feature flag]:feature:' \\`);
-  lines.push(`    '--disable[Disable feature flag]:feature:' \\`);
+  lines.push(`    '--enable[Enable platform feature]:feature:' \\`);
+  lines.push(`    '--disable[Disable platform feature]:feature:' \\`);
   lines.push(`    '(-p --prompt)'{-p,--prompt}'[Run non-interactive prompt]:text:' \\`);
   lines.push(`    '--print[Non-interactive run mode]' \\`);
   lines.push(`    '(-o --output --output-format)'{-o,--output}'[Output format]:format:(text json stream-json)' \\`);

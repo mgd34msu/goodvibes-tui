@@ -75,7 +75,7 @@ function resolveExplainTarget(args: readonly string[]): { tool: string; args: Re
 const LAYER_NAMES: readonly string[] = [
   'Auto-approve override (behavior.autoApprove / --no-worries-just-vibes)',
   'Session permission mode (permissions.mode)',
-  'Runtime policy engine (feature flag: permissions-policy-engine)',
+  'Runtime policy engine (permissions.engine = policy-engine)',
   'Per-tool config rule (permissions.tools.<tool>)',
   'Default read auto-approve (prompt mode)',
   'Session approval cache (remembered [A] decisions)',
@@ -213,7 +213,7 @@ async function explain(options: DoctorSubcommandOptions): Promise<CliCommandOutp
     'Current settings:',
     `  mode        : ${mode} (${permissionModeLabel(mode)})`,
     `  autoApprove : ${autoApprove ? 'yes (behavior.autoApprove)' : 'no'}`,
-    `  policyEngine: ${policyEngineOn ? 'enabled' : 'disabled'} (feature flag permissions-policy-engine)`,
+    `  policyEngine: ${policyEngineOn ? 'enabled' : 'disabled'} (permissions.engine)`,
     '',
     'Analysis (from the platform analyzer):',
     `  risk        : ${a.riskLevel.toUpperCase()} (${a.classification})`,

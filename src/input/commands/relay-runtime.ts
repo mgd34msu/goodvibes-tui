@@ -47,7 +47,7 @@ async function renderStatus(ctx: CommandContext): Promise<void> {
 async function renderPair(ctx: CommandContext): Promise<void> {
   const cfg = relayConfigured(ctx);
   if (!cfg.enabled || !cfg.flagOn) {
-    ctx.print('Relay is disabled — enable relay.enabled and the relay-connect feature flag first (see /config relay, /flags).');
+    ctx.print('Relay is disabled — turn on relay.enabled in /config relay first.');
     return;
   }
   const externalServices = ctx.platform.externalServices;
