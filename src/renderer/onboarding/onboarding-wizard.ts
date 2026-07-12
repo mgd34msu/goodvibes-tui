@@ -295,15 +295,25 @@ function renderWideLayout(
   const centerStart = leftSeparatorX + 1;
   const rightSeparatorX = centerStart + centerWidth;
   const rightStart = rightSeparatorX + 1;
-  const descriptionLines = wrapText(currentStep.description, Math.max(18, centerWidth - 2)).slice(0, 2);
   const summaryLines = [
     currentStep.summaryTitle,
     ...currentStep.summaryLines.slice(0, 2),
     `Fields ${wizard.getCompletedFieldCount(wizard.stepIndex)}/${wizard.getStepFieldCount(wizard.stepIndex)} complete`,
     changedScreensLabel(wizard),
   ];
-  const fieldStartRow = 6;
+  const centerTextWidth = Math.max(18, centerWidth - 2);
+  const descriptionLines = wrapText(currentStep.description, centerTextWidth).slice(0, 2);
   const selectedText = selectedFieldText(wizard);
+  // The selected field's own hint is the direct analog of the reported
+  // defect (descriptive text explaining what the currently-focused option
+  // does) — some hints run past 400 characters, e.g. security-caveat text.
+  // It is never clipped to a single row: it wraps onto as many lines as it
+  // needs, and the field list below starts after it, growing/shrinking the
+  // field-list area rather than losing hint text. Title/description/controls
+  // stay fixed-row (short chrome strings, not the field-specific
+  // explanation), matching prior layout exactly when the hint fits on one line.
+  const hintLines = wrapText(selectedText.hint, centerTextWidth);
+  const fieldStartRow = 5 + hintLines.length;
   const fieldRows = buildFieldRows(wizard, visibleFields, Math.max(0, bodyRows - fieldStartRow));
 
   const topLine = createOverlayFilledBorderLine(
@@ -397,9 +407,9 @@ function renderWideLayout(
         bg: DEFAULT_OVERLAY_PALETTE.selectedBg,
         bold: true,
       });
-    } else if (row === 5) {
+    } else if (row < fieldStartRow) {
       fillWidth(line, centerStart, centerWidth, DEFAULT_OVERLAY_PALETTE.selectedBg);
-      putOverlayText(line, centerStart + 1, centerWidth - 2, truncateDisplay(selectedText.hint, centerWidth - 2), {
+      putOverlayText(line, centerStart + 1, centerWidth - 2, hintLines[row - 5] ?? '', {
         fg: UI_TONES.fg.secondary,
         bg: DEFAULT_OVERLAY_PALETTE.selectedBg,
       });
@@ -481,9 +491,13 @@ function renderCollapsedLayout(
   const bodyBg = UI_TONES.bg.base;
   const innerStart = layout.margin + 1;
   const innerWidth = layout.innerWidth;
-  const descriptionLines = wrapText(currentStep.description, Math.max(14, innerWidth - 2)).slice(0, 2);
-  const fieldStartRow = 6;
+  const innerTextWidth = Math.max(14, innerWidth - 2);
+  const descriptionLines = wrapText(currentStep.description, innerTextWidth).slice(0, 2);
   const selectedText = selectedFieldText(wizard);
+  // Same rule as the wide layout: the selected field's hint wraps onto as
+  // many lines as it needs rather than being clipped to a single row.
+  const hintLines = wrapText(selectedText.hint, innerTextWidth);
+  const fieldStartRow = 5 + hintLines.length;
   const fieldRows = buildFieldRows(wizard, visibleFields, Math.max(0, bodyRows - fieldStartRow));
 
   const topLine = createOverlayFilledBorderLine(
@@ -559,9 +573,9 @@ function renderCollapsedLayout(
         bg: DEFAULT_OVERLAY_PALETTE.selectedBg,
         bold: true,
       });
-    } else if (row === 5) {
+    } else if (row < fieldStartRow) {
       fillWidth(line, innerStart, innerWidth, DEFAULT_OVERLAY_PALETTE.selectedBg);
-      putOverlayText(line, innerStart + 1, innerWidth - 2, truncateDisplay(selectedText.hint, innerWidth - 2), {
+      putOverlayText(line, innerStart + 1, innerWidth - 2, hintLines[row - 5] ?? '', {
         fg: UI_TONES.fg.secondary,
         bg: DEFAULT_OVERLAY_PALETTE.selectedBg,
       });
