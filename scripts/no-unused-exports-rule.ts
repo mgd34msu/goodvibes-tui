@@ -1,9 +1,9 @@
 /**
- * no-unused-exports-rule.ts — WO-206 architecture-gate rule.
+ * no-unused-exports-rule.ts — architecture-gate rule.
  *
  * Bans exported symbols in src/renderer/**\/*.ts that have no non-test
  * import site anywhere in the codebase. This is the guard that would have
- * caught diff-view.ts rotting unwired for 19 versions (WO-204 wired it back
+ * caught diff-view.ts rotting unwired for 19 versions (wired it back
  * up): an export with zero real callers is either dead code that should be
  * deleted, or code that was written but never plugged in.
  *
@@ -95,18 +95,18 @@ export const NO_UNUSED_EXPORTS_EXEMPT: ReadonlySet<string> = new Set([
   // boundaries, tokenizer branches) the wrapper's tests don't isolate.
   'src/renderer/overlay-viewport.ts#getOverlayWidthClass', // wired via getOverlaySurfaceMetrics; width-band boundaries also pinned by a release-gate test
   'src/renderer/panel-composite.ts#renderPanel', // wired via buildPanelCompositeData; dedicated cache/dirty-flag test suite
-  'src/renderer/theme.ts#resolveTheme', // WO-001: documented future call site — markdown.ts's own comment says "replace with resolveTheme(mode) when mode detection lands"
+  'src/renderer/theme.ts#resolveTheme', // documented future call site — markdown.ts's own comment says "replace with resolveTheme(mode) when mode detection lands"
   'src/renderer/theme.ts#resolveUiTones', // mode-explicit resolver: activeUiTones delegates to it internally; light/dark token derivations pinned directly by theme + batch-refutation tests
   'src/renderer/system-message.ts#classifySystemMessage', // wired via renderSystemMessage's default typeOverride; ~30 branch-classification cases tested directly
   'src/renderer/markdown.ts#renderInlineMarkdown', // wired via renderMarkdown/renderMarkdownTracked (called internally); tokenizer branch tests exercise it directly
-  'src/renderer/agent-detail-modal.ts#formatStalledLabel', // WO-203 hardening: minute count derived from MODAL_STALL_THRESHOLD_MS; wired internally, threshold-derivation pinned by dedicated tests
+  'src/renderer/agent-detail-modal.ts#formatStalledLabel', // hardening: minute count derived from MODAL_STALL_THRESHOLD_MS; wired internally, threshold-derivation pinned by dedicated tests
   'src/renderer/term-caps.ts#nearestAnsi256', // wired via downsampleColor; exact 256-index color-math (cube vs grayscale) pinned by dedicated tests
   'src/renderer/term-caps.ts#nearestAnsi16Fg', // wired via downsampleColor; exact 16-color nearest-match pinned by dedicated tests
-  'src/renderer/turn-injection.ts#formatTurnInjectionEntry', // W5.2 (wo803): wired via buildTurnInjectionsText (called internally); per-entry edge cases (empty/relevance-floor/budget-exceeded/fallback-lexical) pinned by dedicated tests
-  'src/renderer/compaction-history-modal.ts#formatCompactionEvent', // W5.4/B28 (wo803): wired via buildCompactionHistoryText (called internally); quality-score grade-suffix present/absent/null branches pinned by dedicated tests, independent of the SDK's own module-level compaction-event singleton
+  'src/renderer/turn-injection.ts#formatTurnInjectionEntry', // wired via buildTurnInjectionsText (called internally); per-entry edge cases (empty/relevance-floor/budget-exceeded/fallback-lexical) pinned by dedicated tests
+  'src/renderer/compaction-history-modal.ts#formatCompactionEvent', //: wired via buildCompactionHistoryText (called internally); quality-score grade-suffix present/absent/null branches pinned by dedicated tests, independent of the SDK's own module-level compaction-event singleton
   'src/renderer/term-caps.ts#SYNC_BEGIN', // wired via wrapSynced; exact DEC 2026 escape sequence pinned by dedicated tests
   'src/renderer/term-caps.ts#SYNC_END', // wired via wrapSynced; exact DEC 2026 escape sequence pinned by dedicated tests
-  // DEBT-2 terminal-bg-probe: the OSC 11 parser/classifier/filter are wired
+  // terminal-bg-probe: the OSC 11 parser/classifier/filter are wired
   // internally via installBackgroundThemeProbe (called from main.ts) and the
   // TerminalBackgroundProbe class, but the fake-terminal harness pins their exact
   // behaviour (BEL vs ST terminators, split/interleaved chunks, rgb/# variants,
@@ -118,7 +118,7 @@ export const NO_UNUSED_EXPORTS_EXEMPT: ReadonlySet<string> = new Set([
   'src/renderer/terminal-bg-probe.ts#classifyBackgroundLuminance',
   'src/renderer/terminal-bg-probe.ts#TerminalBackgroundProbe',
   'src/renderer/terminal-bg-probe.ts#wrapForTmuxPassthrough',
-  // DEBT-2: DARK_THEME is the frozen dark-token singleton (=== resolveTheme('dark')).
+  // DARK_THEME is the frozen dark-token singleton (=== resolveTheme('dark')).
   // Call sites moved to activeTheme(); it stays as the public convenience alias and
   // is pinned by theme.test.ts's identity assertions.
   'src/renderer/theme.ts#DARK_THEME',

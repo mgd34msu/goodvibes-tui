@@ -49,7 +49,7 @@ interface PerfBaseline {
     composite_p95_ms: { measured_ms: number; budget_ms: number; note: string };
     composite_p99_ms: { measured_ms: number; budget_ms: number; note: string };
   };
-  // Line-production benchmarks ABOVE the compositor (WO-202). Keyed by metric id
+  // Line-production benchmarks ABOVE the compositor. Keyed by metric id
   // (matches perf-line-bench LineBenchCase.id). Each entry carries the measured
   // timing statistics, an allocation footprint (retained heap + object count per
   // op), and the budget the gate compares against.
@@ -314,7 +314,7 @@ async function main(): Promise<void> {
           heap_bytes_per_op: Math.round(c.heapBytesPerOp),
           objects_per_op: Math.round(c.objectsPerOp),
           lines: c.linesProduced,
-          note: `${c.label}. Gated on ${stat}. Budget carries CI headroom (runners run 2-4× slower). Ratchet (WO-210): tighten when measured ${stat} drops below budget/2.`,
+          note: `${c.label}. Gated on ${stat}. Budget carries CI headroom (runners run 2-4× slower). Ratchet: tighten when measured ${stat} drops below budget/2.`,
         }];
       })),
     };

@@ -1,5 +1,5 @@
 /**
- * perf-line-bench.ts — Headless line-production micro-benchmarks (WO-202).
+ * perf-line-bench.ts — Headless line-production micro-benchmarks.
  *
  * Measures the cost of building Line[] ABOVE the compositor — the layer the
  * frame bench (perf-frame-bench.ts) does NOT cover. The frame bench measures
@@ -66,22 +66,22 @@ export const LINE_BENCH_CONFIG = {
  * quiet dev linux-x64 box; CI runners run 2-4× slower so budgets carry headroom.
  * The committed perf-baseline.json `line` section is the source of truth the gate
  * compares against — these are the fallback defaults when no baseline exists.
- * Ratchet rule (WO-210): tighten when measured p95 drops below budget/2.
+ * Ratchet rule: tighten when measured p95 drops below budget/2.
  */
 export const LINE_BUDGETS: Readonly<Record<string, number>> = {
   'transcript.build_1k_ms': 400,
-  // WO-209: appending ONE message to a warm 1000-message transcript. The
+  // appending ONE message to a warm 1000-message transcript. The
   // per-message Line[] cache reuses the unchanged 1000 and renders only the new
   // one, so this collapses from the full build_1k cost (~45 ms) to well under
   // 1 ms on a quiet box.
-  // WO-210 ratchet: re-measured post-WO-209 on a quiet linux-x64 box the p50 is
+  // ratchet: re-measured with the per-message cache in place, on a quiet linux-x64 box the p50 is
   // rock-stable at 0.87-0.91 ms across 8 runs. Gate stat is p50 (a robust median
   // over 200 iterations — it does not spike on a single GC pause). Budget
   // tightened 20 -> 6 ms: ~6.7× this-box p50 and ~1.7-3.3× a CI-slowed median
   // (runners run 2-4× slower). A regression that reintroduces the pre-cache full
   // rebuild on append (~45 ms) now fails the gate by ~7.5×.
   'transcript.append_one_ms': 6,
-  // WO-209: a resize invalidates every width-dependent message (all of them), so
+  // a resize invalidates every width-dependent message (all of them), so
   // it still pays a near-full re-render — gated at the same ceiling as build_1k.
   'transcript.resize_1k_ms': 400,
   'panel.two_pane_build_ms': 4,
@@ -291,7 +291,7 @@ function makeConversationContext() {
  * A self-contained, deterministic full-pane content panel for the two-pane
  * composite benchmark. Fills each pane with styled rows (mixed fg tones + a
  * separator) so the compositor does representative per-cell work every frame.
- * W6.1 (the purge) replaced the previously-used DocsPanel here — a migrated,
+ * (the purge) replaced the previously-used DocsPanel here — a migrated,
  * now-deleted panel — with this bench-local implementation so the perf bench
  * never breaks when a domain panel is retired.
  */
@@ -369,11 +369,11 @@ export async function runLineBenches(): Promise<LineBenchCase[]> {
     });
   }
 
-  // --- transcript.append_one (WO-209: warm per-message cache) ----------------
+  // --- transcript.append_one (warm per-message cache) ----------------
   // Seed a 1000-message conversation and warm the per-message Line[] cache with a
   // cold build. Then measure the realistic cost of ONE appended message: add it,
   // rebuild the display (1000 cache hits + 1 miss), and remove it to keep the
-  // conversation size stable across iterations. This is the WO-209 headline: the
+  // conversation size stable across iterations. This is the headline: the
   // same rebuild that costs ~45 ms cold (transcript.build_1k) drops to well under
   // 1 ms because only the appended message is re-rendered.
   {
@@ -401,7 +401,7 @@ export async function runLineBenches(): Promise<LineBenchCase[]> {
     });
   }
 
-  // --- transcript.resize_1k (WO-209: width change invalidates everything) -----
+  // --- transcript.resize_1k (width change invalidates everything) -----
   // A resize changes the render width, which is part of every message's cache
   // key, so it invalidates all 1000 messages and pays a near-full re-render. We
   // toggle between two widths each iteration so no rebuild can reuse the cache —

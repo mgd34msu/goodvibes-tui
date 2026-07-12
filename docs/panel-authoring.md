@@ -43,8 +43,7 @@ BasePanel  (src/panels/base-panel.ts)
 
 `ScrollableListPanel<T>` has an opt-in `'/'`-to-filter affordance (`filterEnabled`,
 `filterMatches()`) that coexists with single-letter action keys — see
-[Opt-in filter](#opt-in-filter) below. There is no separate always-on-search base class;
-WO-153 converged the former `SearchableListPanel<T>` (which intercepted every printable
+[Opt-in filter](#opt-in-filter) below. There is no separate always-on-search base class; converged the former `SearchableListPanel<T>` (which intercepted every printable
 keystroke as search input, with no modal on/off state) onto this same modal `'/'` filter so
 every list panel shares one filter interaction.
 
@@ -200,7 +199,7 @@ non-list-panel class).
 
 ## Canonical example — SkillsPanel
 
-> **W6.1 note (the panel purge).** Most read/navigate surfaces — including
+> **note (the panel purge).** Most read/navigate surfaces — including
 > Skills, Memory, Marketplace, Security, Hooks, Policy, Knowledge, Providers,
 > Services, Remote, Sandbox, Settings-Sync — no longer render as standalone
 > registered panels. They migrated to **config-modal surfaces** rendered through
@@ -213,8 +212,7 @@ non-list-panel class).
 > (`discoverSkills`, `SkillRecord`), not as a registered panel. For a still-live
 > registered `BasePanel` + `extendPalette` example, use a KEEP panel such as
 > `src/panels/cost-tracker-panel.ts` or `src/panels/token-budget-panel.ts`
-> (`memory-panel.ts`, referenced below historically, was deleted in the W6.1
-> migration). The rest of this section stays as the reference `BasePanel`
+> (`memory-panel.ts`, referenced below historically, was deleted in the > migration). The rest of this section stays as the reference `BasePanel`
 > authoring walk-through for the panels that remain.
 
 Adapted from `src/panels/skills-panel.ts` — see `src/panels/cost-tracker-panel.ts` for the canonical `extendPalette` usage on a still-registered panel.
@@ -361,7 +359,7 @@ public render(width: number, height: number): Line[] {
 ```ts
 public handleInput(key: string): boolean {
   // Panel-specific action key — guarded so it still types into the filter
-  // query while the filter is active (WO-153: modal '/' filter coexists
+  // query while the filter is active (modal '/' filter coexists
   // with single-letter action keys).
   if (!this.filterActive && key === 'r') {
     this.cacheDirty = true;
@@ -708,6 +706,6 @@ const EMPTY_SOME_SERVICE = {
 - `src/panels/memory-panel.ts` — A `ScrollableListPanel` example where the filter is only enabled in one of two view modes (`filterEnabled` toggled per mode).
 - `src/panels/panel-list-panel.ts`, `src/panels/docs-panel.ts`, `src/panels/file-explorer-panel.ts` — Panels that mirror the same modal filter contract without extending `ScrollableListPanel` (each has its own private `_handleFilterKey` / `_buildFilterLine`).
 - `src/panels/confirm-state.ts` — `ConfirmState`, `handleConfirmInput`, `renderConfirmLines`.
-- `src/panels/search-focus.ts` — `isPanelSearchBackspace`, `isPanelSearchPrintable`, plus `isPanelSearchCancel`/`isPanelSearchCommit`/`getPanelSearchFocusTransition` (retained for panels outside the WO-153 filter convergence, e.g. `knowledge-graph-panel.ts`, `session-browser-panel.ts`, `git-panel.ts`).
+- `src/panels/search-focus.ts` — `isPanelSearchBackspace`, `isPanelSearchPrintable`, plus `isPanelSearchCancel`/`isPanelSearchCommit`/`getPanelSearchFocusTransition` (retained for panels outside the filter convergence, e.g. `knowledge-graph-panel.ts`, `session-browser-panel.ts`, `git-panel.ts`).
 - `src/panels/builtin-panels.ts` — How built-in panels are grouped into categories and registered with the `PanelManager`.
 - `src/test/panels/migrated-panels-contract.test.ts` — Contract test suite; add a `PanelEntry` here for every new panel.

@@ -111,12 +111,12 @@ Alias: `/sess`. Run `/session` with no arguments to see current session info.
 
 ## Operator surfaces
 
-> **W6.1 note.** Most operator read/navigate surfaces are now reached as
+> **note.** Most operator read/navigate surfaces are now reached as
 > **config-modal surfaces** via `ctx.openModal` (or their panel-id modal
 > redirect), not standalone panels: providers/health, services, subscription,
-> remote, sandbox, settings-sync (WO-A) and marketplace, plugins, skills, hooks,
+> remote, sandbox, settings-sync and marketplace, plugins, skills, hooks,
 > policy, security, knowledge, memory, docs→keybindings, qr-code→pairing,
-> work-plan, project-planning→planning (WO-B). The runtime-ops consoles
+> work-plan, project-planning→planning. The runtime-ops consoles
 > (cockpit, orchestration, tasks, worktrees, approvals, communication, …)
 > redirect to the **Fleet** panel. The command front-doors below are unchanged.
 

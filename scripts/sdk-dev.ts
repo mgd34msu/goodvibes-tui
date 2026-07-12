@@ -4,8 +4,8 @@
  *
  * The canonical local-SDK overlay tool (link/status/restore, all 9 public
  * @pellux workspace packages including goodvibes-contracts) now lives in the
- * SDK checkout itself (goodvibes-sdk/scripts/sdk-dev.ts), consolidated by
- * W6-DEV (Wave 6) to end the three-way drift between this repo's copy and
+ * SDK checkout itself (goodvibes-sdk/scripts/sdk-dev.ts), consolidated
+ * to end the three-way drift between this repo's copy and
  * the agent's and webui's (which never picked up the all-siblings fix and so
  * never refreshed node_modules/@pellux/goodvibes-contracts on link — see the
  * SDK tool's file header). This file only locates that checkout and forwards
