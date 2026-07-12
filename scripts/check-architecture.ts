@@ -10,7 +10,7 @@
  *   6. SDK contract catalog invariants
  *   7. **Import-cycle detection** — Tarjan SCC over the src/ import graph
  *   8. **Layer-boundary rules** — codified allowed dependency directions
- *   9. **Hex-literal ratchet** (WO-001) — bans raw #RRGGBB literals in
+ *   9. **Hex-literal ratchet** — bans raw #RRGGBB literals in
  *      src/panels/**\/*.ts and src/renderer/**\/*.ts except ui-primitives.ts,
  *      theme.ts and syntax-highlighter.ts; a seeded baseline
  *      (scripts/hex-literal-baseline.json) may only shrink, never grow
@@ -55,6 +55,7 @@ import ts from 'typescript';
 import { checkHexLiteralRatchet } from './hex-literal-rule.ts';
 import { checkNoUnusedExports } from './no-unused-exports-rule.ts';
 import { checkSelectedIndexReads } from './selected-index-rule.ts';
+import { checkNoInternalIdentifiers } from './internal-identifier-rule.ts';
 
 const ROOT = join(import.meta.dir, '..');
 const SRC_ROOT = join(ROOT, 'src');
@@ -576,7 +577,7 @@ for (const rule of rules) {
   }
 }
 
-// ─── Hex-literal ratchet (WO-001) ──────────────────────────────────────────────────
+// ─── Hex-literal ratchet ──────────────────────────────────────────────────
 
 const hexLiteralBaseline: Record<string, number> = JSON.parse(
   readFileSync(join(ROOT, 'scripts/hex-literal-baseline.json'), 'utf-8'),
@@ -600,7 +601,7 @@ for (const v of checkSelectedIndexReads(selectedIndexCandidates)) {
   violations.push(v);
 }
 
-// ─── No-unused-exports (WO-206) ────────────────────────────────────────────────
+// ─── No-unused-exports ────────────────────────────────────────────────
 
 const noUnusedExportsTargets = nonTestFiles
   .filter((file) => relative(ROOT, file).split('\\').join('/').startsWith('src/renderer/'))
@@ -697,6 +698,36 @@ for (const cycle of cycles) {
 
 const layerViolations = checkLayerBoundaries(graph, LAYER_BOUNDARY_RULES);
 for (const v of layerViolations) {
+  violations.push(v);
+}
+
+// ─── No internal planning identifiers ─────────────────────────────────────────
+
+function walkMarkdown(dir: string): string[] {
+  if (!existsSync(dir)) return [];
+  const entries = readdirSync(dir, { withFileTypes: true });
+  const files: string[] = [];
+  for (const entry of entries) {
+    const abs = join(dir, entry.name);
+    if (entry.isDirectory()) {
+      files.push(...walkMarkdown(abs));
+      continue;
+    }
+    if (entry.isFile() && abs.endsWith('.md')) {
+      files.push(abs);
+    }
+  }
+  return files;
+}
+
+const internalIdentifierCandidates = [
+  ...allSourceFiles,
+  ...scriptFiles,
+  ...walkMarkdown(join(ROOT, 'docs')),
+  ...(existsSync(join(ROOT, 'action.yml')) ? [join(ROOT, 'action.yml')] : []),
+].map((file) => ({ relPath: relative(ROOT, file).split('\\').join('/'), text: readFileSync(file, 'utf-8') }));
+
+for (const v of checkNoInternalIdentifiers(internalIdentifierCandidates)) {
   violations.push(v);
 }
 
