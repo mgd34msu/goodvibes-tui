@@ -100,8 +100,14 @@ describe('ArtifactStore', () => {
     const root = mkdtempSync(join(tmpdir(), 'gv-artifacts-'));
     roots.push(root);
     const store = new ArtifactStore({ rootDir: root });
+    // Loopback is no longer an SSRF-blocked tier (it has its own per-project
+    // approval flow in the fetch pipeline); private-IP and cloud-metadata
+    // hosts stay absolutely blocked.
     await expect(store.create({
-      uri: 'http://127.0.0.1:12345/private',
+      uri: 'http://169.254.169.254/latest/meta-data/',
+    })).rejects.toThrow('Artifact URI blocked by SSRF policy');
+    await expect(store.create({
+      uri: 'http://10.0.0.1:12345/private',
     })).rejects.toThrow('Artifact URI blocked by SSRF policy');
   });
 

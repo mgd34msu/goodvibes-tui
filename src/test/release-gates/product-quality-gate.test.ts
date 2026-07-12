@@ -2,15 +2,16 @@
  * Product Quality Gate — Release Gate 5
  *
  * Verifies that:
- * - Feature flags exist for all post-v3 capabilities
- * - Flags have correct structure (id, name, description, tier, runtimeToggleable)
+ * - Every platform capability is declared on the FEATURE_SETTINGS surface
+ * - Features have correct structure (id, name, real description, domain,
+ *   enablement shape, settings keys, restartRequired, defaultEnabled)
  * - Notification router suppresses burst traffic (high-signal under burst)
- * - Feature flag manager can enable/disable flags at runtime
- * - All declared flags have unique IDs
+ * - The gate manager can enable/disable capabilities at runtime
+ * - All declared features have unique IDs
  */
 
 import { describe, test, expect } from 'bun:test';
-import { FEATURE_FLAGS } from '@/runtime/index.ts';
+import { FEATURE_SETTINGS } from '@/runtime/index.ts';
 import { createFeatureFlagManager } from '@/runtime/index.ts';
 import { NotificationRouter } from '@/runtime/index.ts';
 
@@ -18,8 +19,8 @@ import { NotificationRouter } from '@/runtime/index.ts';
 // Helpers
 // ---------------------------------------------------------------------------
 
-function findFlag(id: string) {
-  return FEATURE_FLAGS.find(f => f.id === id);
+function findFeature(id: string) {
+  return FEATURE_SETTINGS.find(f => f.id === id);
 }
 
 function makeBurstNotifications(count: number, domain: string) {
@@ -37,75 +38,80 @@ function makeBurstNotifications(count: number, domain: string) {
 // 1. Feature flags: all post-v3 capabilities are declared
 // ---------------------------------------------------------------------------
 
-describe('product quality gate: feature flag declarations', () => {
-  test('FEATURE_FLAGS is non-empty', () => {
-    expect(FEATURE_FLAGS.length).toBeGreaterThan(0);
+describe('product quality gate: feature declarations', () => {
+  test('FEATURE_SETTINGS is non-empty', () => {
+    expect(FEATURE_SETTINGS.length).toBeGreaterThan(0);
   });
 
-  test('all flags have unique IDs', () => {
-    const ids = FEATURE_FLAGS.map(f => f.id);
+  test('all features have unique IDs', () => {
+    const ids = FEATURE_SETTINGS.map(f => f.id);
     const unique = new Set(ids);
     expect(unique.size).toBe(ids.length);
   });
 
-  test('all flags have required fields', () => {
-    for (const flag of FEATURE_FLAGS) {
-      expect(typeof flag.id).toBe('string');
-      expect(flag.id.length).toBeGreaterThan(0);
-      expect(typeof flag.name).toBe('string');
-      expect(typeof flag.description).toBe('string');
-      expect(typeof flag.tier).toBe('number');
-      expect(flag.tier).toBeGreaterThan(0);
-      expect(typeof flag.runtimeToggleable).toBe('boolean');
-      expect(['enabled', 'disabled', 'killed']).toContain(flag.defaultState);
+  test('all features have required fields', () => {
+    for (const feature of FEATURE_SETTINGS) {
+      expect(typeof feature.id).toBe('string');
+      expect(feature.id.length).toBeGreaterThan(0);
+      expect(typeof feature.name).toBe('string');
+      expect(typeof feature.description).toBe('string');
+      expect(feature.description.length).toBeGreaterThan(0);
+      expect(typeof feature.domain).toBe('string');
+      expect(feature.enablement.key.startsWith(`${feature.domain}.`)).toBe(true);
+      expect(['boolean', 'enum', 'constant']).toContain(feature.enablement.kind);
+      expect(feature.settings.length).toBeGreaterThan(0);
+      expect(feature.settings[0]).toBe(feature.enablement.key);
+      expect(typeof feature.restartRequired).toBe('boolean');
+      expect(typeof feature.defaultEnabled).toBe('boolean');
     }
   });
 
-  test('all flag IDs are kebab-case', () => {
-    for (const flag of FEATURE_FLAGS) {
-      expect(flag.id).toMatch(/^[a-z0-9-]+$/);
+  test('all feature IDs are kebab-case', () => {
+    for (const feature of FEATURE_SETTINGS) {
+      expect(feature.id).toMatch(/^[a-z0-9-]+$/);
     }
   });
 
   // Permissions
-  test('permissions-policy-engine flag is declared', () => {
-    expect(findFlag('permissions-policy-engine')).toBeDefined();
+  test('permissions-policy-engine feature is declared', () => {
+    expect(findFeature('permissions-policy-engine')).toBeDefined();
   });
 
-  test('permissions-simulation flag is declared', () => {
-    expect(findFlag('permissions-simulation')).toBeDefined();
+  test('permissions-simulation feature is declared', () => {
+    expect(findFeature('permissions-simulation')).toBeDefined();
   });
 
   // HITL UX modes
-  test('hitl-ux-modes flag is declared', () => {
-    expect(findFlag('hitl-ux-modes')).toBeDefined();
+  test('hitl-ux-modes feature is declared', () => {
+    expect(findFeature('hitl-ux-modes')).toBeDefined();
   });
 
   // Session compaction v2
-  test('session-compaction flag is declared', () => {
-    expect(findFlag('session-compaction')).toBeDefined();
-    expect(findFlag('session-compaction')!.runtimeToggleable).toBe(true);
+  test('session-compaction feature is declared and live-toggleable', () => {
+    expect(findFeature('session-compaction')).toBeDefined();
+    expect(findFeature('session-compaction')!.restartRequired).toBe(false);
   });
 
   // Tool result reconciliation
-  test('tool-result-reconciliation flag is declared', () => {
-    expect(findFlag('tool-result-reconciliation')).toBeDefined();
+  test('tool-result-reconciliation feature is declared', () => {
+    expect(findFeature('tool-result-reconciliation')).toBeDefined();
   });
 
   // Fetch sanitization
-  test('fetch-sanitization flag is declared', () => {
-    expect(findFlag('fetch-sanitization')).toBeDefined();
-    expect(findFlag('fetch-sanitization')!.runtimeToggleable).toBe(true);
+  test('fetch-sanitization feature is declared as an always-on capability', () => {
+    expect(findFeature('fetch-sanitization')).toBeDefined();
+    expect(findFeature('fetch-sanitization')!.enablement.kind).toBe('constant');
+    expect(findFeature('fetch-sanitization')!.restartRequired).toBe(false);
   });
 
   // Budget enforcement
-  test('runtime-tools-budget-enforcement flag is declared', () => {
-    expect(findFlag('runtime-tools-budget-enforcement')).toBeDefined();
+  test('runtime-tools-budget-enforcement feature is declared', () => {
+    expect(findFeature('runtime-tools-budget-enforcement')).toBeDefined();
   });
 
   // OTel foundation
-  test('otel-foundation flag is declared', () => {
-    expect(findFlag('otel-foundation')).toBeDefined();
+  test('otel-foundation feature is declared', () => {
+    expect(findFeature('otel-foundation')).toBeDefined();
   });
 });
 
@@ -124,37 +130,37 @@ describe('product quality gate: feature flag manager lifecycle', () => {
     expect(allFlags.size).toBeGreaterThan(0);
   });
 
-  test('disabled flag reports isEnabled=false initially', () => {
+  test('default-off feature reports isEnabled=false initially', () => {
     const manager = makeManager();
-    expect(manager.isEnabled('fetch-sanitization')).toBe(false);
+    expect(manager.isEnabled('adaptive-execution-planner')).toBe(false);
   });
 
   test('enable → isEnabled returns true', () => {
     const manager = makeManager();
-    manager.enable('fetch-sanitization');
-    expect(manager.isEnabled('fetch-sanitization')).toBe(true);
+    manager.enable('adaptive-execution-planner');
+    expect(manager.isEnabled('adaptive-execution-planner')).toBe(true);
   });
 
   test('disable → isEnabled returns false', () => {
     const manager = makeManager();
-    manager.enable('fetch-sanitization');
-    manager.disable('fetch-sanitization');
-    expect(manager.isEnabled('fetch-sanitization')).toBe(false);
+    manager.enable('adaptive-execution-planner');
+    manager.disable('adaptive-execution-planner');
+    expect(manager.isEnabled('adaptive-execution-planner')).toBe(false);
   });
 
-  test('kill → isKilled returns true and flag cannot be re-enabled', () => {
+  test('kill → isKilled returns true and the gate cannot be re-enabled', () => {
     const manager = makeManager();
-    manager.kill('fetch-sanitization', 'emergency disable');
-    expect(manager.isKilled('fetch-sanitization')).toBe(true);
-    expect(() => manager.enable('fetch-sanitization')).toThrow();
+    manager.kill('adaptive-execution-planner', 'emergency disable');
+    expect(manager.isKilled('adaptive-execution-planner')).toBe(true);
+    expect(() => manager.enable('adaptive-execution-planner')).toThrow();
   });
 
-  test('getAll returns map of all registered flags with their states', () => {
+  test('getAll returns map of all registered features with their states', () => {
     const manager = makeManager();
     const allFlags = manager.getAll();
-    // All FEATURE_FLAGS IDs should be present
-    for (const flag of FEATURE_FLAGS) {
-      expect(allFlags.has(flag.id)).toBe(true);
+    // Every FEATURE_SETTINGS id should be present as a registered gate.
+    for (const feature of FEATURE_SETTINGS) {
+      expect(allFlags.has(feature.id)).toBe(true);
     }
   });
 
@@ -165,19 +171,19 @@ describe('product quality gate: feature flag manager lifecycle', () => {
 
   test('getTransitions records enable/disable history', () => {
     const manager = makeManager();
-    manager.enable('fetch-sanitization');
-    manager.disable('fetch-sanitization');
+    manager.enable('adaptive-execution-planner');
+    manager.disable('adaptive-execution-planner');
     expect(manager.getTransitions().length).toBe(2);
   });
 
-  test('subscribe notifies on flag state change', () => {
+  test('subscribe notifies on gate state change', () => {
     const manager = makeManager();
     const events: string[] = [];
     const unsub = manager.subscribe((id, state) => {
       events.push(`${id}:${state}`);
     });
-    manager.enable('fetch-sanitization');
-    expect(events).toContain('fetch-sanitization:enabled');
+    manager.enable('adaptive-execution-planner');
+    expect(events).toContain('adaptive-execution-planner:enabled');
     unsub();
   });
 });

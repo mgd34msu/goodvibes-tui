@@ -147,7 +147,7 @@ describe('WebSearchService', () => {
       },
     });
 
-    const service = new WebSearchService(registry);
+    const service = new WebSearchService(registry, { isLocalhostAllowed: () => true });
     const urlsOnly = await service.search({
       query: 'test query',
       providerId: 'test-search',
@@ -197,7 +197,7 @@ describe('WebSearchService', () => {
       },
     });
 
-    const service = new WebSearchService(registry);
+    const service = new WebSearchService(registry, { isLocalhostAllowed: () => true });
     const result = await service.search({
       query: 'test query',
       providerId: 'provider-evidence',
