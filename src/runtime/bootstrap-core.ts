@@ -232,10 +232,9 @@ export async function initializeBootstrapCore(
   const homeDirectory = options.homeDirectory;
   const configManager = options.configManager;
 
-  // Gate states derive from the domain settings keys (behavior.*, sandbox.*,
-  // surfaces.*, ...); the bridge keeps live config.set changes flowing into
-  // the manager, recording honest pending-restart markers for startup-gated
-  // features. Mirrors the SDK composition root's owned-manager wiring.
+  // Gate states derive from the domain settings keys; the bridge keeps live
+  // config writes flowing (honest pending-restart markers for startup-gated
+  // features). Mirrors the SDK composition root's owned-manager wiring.
   const featureFlags = createFeatureFlagManager();
   featureFlags.loadFromConfig({ flags: deriveFeatureStates(configManager) });
   bindFeatureSettingsBridge(configManager, featureFlags);

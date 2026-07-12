@@ -59,10 +59,8 @@ import { FEATURE_SETTINGS_BY_ID } from '../runtime/feature-settings.ts';
 // ---------------------------------------------------------------------------
 
 /**
- * Structural equality check for setting default comparisons.
- * Handles scalars, arrays, and plain objects. Does NOT support
- * circular references or non-plain prototypes — config defaults
- * are always JSON-safe primitives, arrays, or plain objects.
+ * Structural equality for setting-default comparisons: scalars, arrays, and
+ * plain objects (config defaults are always JSON-safe; no circular refs).
  */
 export function deepEqual(a: unknown, b: unknown): boolean {
   if (a === b) return true;
@@ -240,11 +238,10 @@ export function buildSettingGroups(
   // the SDK's own descriptions don't carry (see relay-settings-descriptions.ts).
   enrichRelaySettingDescriptions(groups);
 
-  // Feature-unit presentation: turn each capability into ONE unit (its real
-  // enablement row + the settings keys it tunes) hosted in its settings
-  // domain. Sourced from FEATURE_SETTINGS. Runs AFTER synthetic injection so
-  // non-feature-owned rows stay as orphans; skipped on the featureless test
-  // path.
+  // Feature-unit presentation: each capability becomes ONE unit (its real
+  // enablement row + the settings keys it tunes) in its settings domain,
+  // sourced from FEATURE_SETTINGS. Runs AFTER synthetic injection so
+  // non-feature-owned rows stay orphans; skipped on the featureless path.
   if (featureFlagManager) applyFeatureUnitLayout(groups, buildFlagEntries(featureFlagManager));
 
   // learning.consolidation.* is a real SDK config domain now, so its keys arrive

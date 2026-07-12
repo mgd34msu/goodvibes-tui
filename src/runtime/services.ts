@@ -2,8 +2,8 @@ import { join } from 'node:path';
 import { FocusTracker } from '../core/focus-tracker.ts';
 import { ConfigManager, ServiceRegistry, SubscriptionManager, ToolLLM } from '@pellux/goodvibes-sdk/platform/config';
 import { SecretsManager } from '../config/secrets.ts';
-import { AutomationDeliveryManager, AutomationManager, AutomationRouteStore } from '@pellux/goodvibes-sdk/platform/automation';
-import { ChannelDeliveryRouter, ChannelPluginRegistry, ChannelPolicyManager, RouteBindingManager, SurfaceRegistry } from '@pellux/goodvibes-sdk/platform/channels';
+import { AutomationDeliveryManager, AutomationManager } from '@pellux/goodvibes-sdk/platform/automation';
+import { ChannelDeliveryRouter, ChannelPolicyManager, type ChannelPluginRegistry, type RouteBindingManager, type SurfaceRegistry } from '@pellux/goodvibes-sdk/platform/channels';
 import { ApprovalBroker, GatewayMethodCatalog, SharedSessionBroker } from '@pellux/goodvibes-sdk/platform/control-plane';
 import { StepUpService } from '@pellux/goodvibes-sdk/daemon';
 import { attachWsOnlyGatewayVerbHandlers, createArchivableFleetRegistry } from '@pellux/goodvibes-terminal-shell';
@@ -53,6 +53,7 @@ import { BenchmarkStore, CacheHitTracker, FavoritesStore, inferFallbackContextWi
 import { KeybindingsManager } from '../input/keybindings.ts';
 import { AdaptivePlanner, DeterministicReplayEngine, ExecutionPlanManager, SessionLineageTracker, SessionMemoryStore } from '@pellux/goodvibes-sdk/platform/core';
 import { deriveFeatureStates, bindFeatureSettingsBridge } from '@pellux/goodvibes-sdk/platform/runtime/state';
+import { createChannelComposition } from './channel-composition.ts';
 import { applyProviderOptimizerConfigMode, bindProviderOptimizerFeatureFlag } from './provider-optimizer-wiring.ts';
 import { type ArchivableProcessRegistry } from '@pellux/goodvibes-sdk/platform/runtime/fleet';
 import { calcSessionCost, isModelPriced } from '../export/cost-utils.ts';
@@ -60,10 +61,7 @@ import { createWorkstreamServices, type OrchestrationEngine, type WorkstreamComm
 import { wireFleetNeedsInputPush } from './fleet-needs-input-push.ts';
 import { codeIndexDbPath, createCodeIndexServices, isCodeInjectionSettingEnabled } from './code-index-services.ts';
 import { WorkPlanStore } from '../work-plans/work-plan-store.ts';
-import {
-  registerDaemonHandlers,
-  type DaemonHandlerSurfaces,
-} from '../daemon/handlers/index.ts';
+import { registerDaemonHandlers, type DaemonHandlerSurfaces } from '../daemon/handlers/index.ts';
 import type { HandlerContext, HandlerLogger } from '../daemon/handlers/context.ts';
 import { createDaemonCredentialStore } from '../daemon/handlers/credentials.ts';
 import { registerRouting } from '../daemon/handlers/routing/index.ts';
@@ -77,7 +75,6 @@ import { WorkspaceTrustManager } from './trust/workspace-trust.ts';
 
 const REGULAR_KNOWLEDGE_DB_FILE = 'knowledge-wiki.sqlite';
 const HOME_GRAPH_KNOWLEDGE_DB_FILE = 'knowledge-home-graph.sqlite';
-
 function buildFallbackModelDefinition(provider: string, modelId: string): ModelDefinition {
   const providerLower = provider.toLowerCase();
   const isReasoningProvider = providerLower.includes('openai')
@@ -97,8 +94,8 @@ function buildFallbackModelDefinition(provider: string, modelId: string): ModelD
       reasoning: isReasoningProvider,
       multimodal: isReasoningProvider,
     },
-    // Pre-catalog fallback uses the SDK's family-aware inference (SDK 0.35.0+),
-    // matching the post-catalog window so the meter/compaction denominator agrees.
+    // Pre-catalog fallback: SDK family-aware inference, matching the
+    // post-catalog window so the meter/compaction denominator agrees.
     contextWindow: inferFallbackContextWindow(provider, modelId),
     contextWindowProvenance: 'fallback',
     selectable: true,
@@ -256,10 +253,8 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
   const configManager = options.configManager;
   const featureFlags = options.featureFlags ?? createFeatureFlagManager();
   if (options.featureFlags === undefined) {
-    // Gate states derive from domain settings keys; the bridge keeps live
-    // config.set changes flowing. Wired only for a manager this call owns —
-    // callers that pass a manager own its loading and bridging (mirrors the
-    // SDK composition root).
+    // Owned manager: gate states derive from domain settings keys + live
+    // bridge (mirrors the SDK composition root; a passed manager is the caller's to wire).
     featureFlags.loadFromConfig({ flags: deriveFeatureStates(configManager) });
     bindFeatureSettingsBridge(configManager, featureFlags);
   }
@@ -272,24 +267,13 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
   const keybindingsManager = new KeybindingsManager({
     configPath: shellPaths.resolveUserPath('tui', 'keybindings.json'),
   });
-  const routeBindings = new RouteBindingManager({
-    store: new AutomationRouteStore({ configManager }),
+  // Channel/surface wiring: see channel-composition.ts (incl. the recorded surface-gating divergence note).
+  const { routeBindings, surfaceRegistry, channelPlugins } = createChannelComposition({
+    configManager,
     runtimeStore: options.runtimeStore,
     runtimeBus: options.runtimeBus,
     featureFlags,
   });
-  // RECORDED DIVERGENCE from the SDK composition root: SurfaceRegistry and
-  // ChannelPluginRegistry are constructed WITHOUT the gate manager. The SDK's
-  // surface gate map only names six surfaces (web/slack/discord/ntfy/webhook/
-  // homeassistant) and reads every other adapter (telegram, whatsapp, signal,
-  // imessage, msteams, ...) as OFF whenever a manager is present — no
-  // settings key could re-enable them. Until the gate map covers every
-  // adapter, the honest governing switch here stays the surfaces.<id>.enabled
-  // config each adapter already reads, exactly as the feature surface's own
-  // constant-binding rule states.
-  const surfaceRegistry = new SurfaceRegistry(configManager, options.runtimeStore);
-  const channelPlugins = new ChannelPluginRegistry();
-  surfaceRegistry.attachPluginRegistry(channelPlugins);
   const secretsManager = new SecretsManager({
     projectRoot: workingDirectory,
     globalHome: homeDirectory,
@@ -595,11 +579,7 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
   const webhookNotifier = new WebhookNotifier();
   const focusTracker = new FocusTracker();
   const replayEngine = new DeterministicReplayEngine(workingDirectory);
-  const providerOptimizer = new ProviderOptimizer(
-    providerRegistry,
-    providerCapabilityRegistry,
-    false,
-  );
+  const providerOptimizer = new ProviderOptimizer(providerRegistry, providerCapabilityRegistry, false); // dark until its gate flips it (see provider-optimizer-wiring.ts)
   bindProviderOptimizerFeatureFlag(featureFlags, providerOptimizer);
   applyProviderOptimizerConfigMode(configManager, providerOptimizer);
   const sessionMemoryStore = new SessionMemoryStore();
