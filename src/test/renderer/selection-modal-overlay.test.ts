@@ -56,13 +56,23 @@ describe('renderSelectionModalOverlay', () => {
     expect(focused).toContain('█');
   });
 
-  test('wraps detail text onto a follow-on line when the modal is narrow', () => {
+  test('wraps the FULL detail text onto follow-on lines when the modal is narrow, never clipping it', () => {
     const modal = new SelectionModal();
+    const detail = 'detail text that should wrap instead of clipping away in narrow modal widths';
     modal.open('Pick Workspace', [
-      { id: 'a', label: 'Alpha Workspace', detail: 'detail text that should wrap instead of clipping away in narrow modal widths' },
+      { id: 'a', label: 'Alpha Workspace', detail },
     ]);
-    const text = renderSelectionModalOverlay(modal, 44, 18).map(line => line.map(cell => cell.char).join('')).join('\n');
+    // Join with a space (not '\n') and strip box-drawing chars before
+    // collapsing whitespace, so wrapped lines rejoin into the source
+    // sentence — a prior version of this test asserted only the first two
+    // words of `detail` (`toContain('detail text')`), which stayed green
+    // even when everything after those two words was silently clipped.
+    const text = renderSelectionModalOverlay(modal, 44, 18)
+      .map(line => line.map(cell => cell.char).join(''))
+      .join(' ')
+      .replace(/[│┌┐└┘├┤┬┴┼─]/g, ' ')
+      .replace(/\s+/g, ' ');
     expect(text).toContain('Alpha Workspace');
-    expect(text).toContain('detail text');
+    expect(text).toContain(detail);
   });
 });
