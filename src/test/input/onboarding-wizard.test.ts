@@ -75,7 +75,6 @@ function makeOnboardingSnapshot(
     network: structuredClone(DEFAULT_CONFIG.network),
     surfaces: structuredClone(DEFAULT_CONFIG.surfaces),
     service: structuredClone(DEFAULT_CONFIG.service),
-    featureFlags: structuredClone(DEFAULT_CONFIG.featureFlags),
     batch: structuredClone(DEFAULT_CONFIG.batch),
     cloudflare: structuredClone(DEFAULT_CONFIG.cloudflare),
   };
@@ -384,7 +383,9 @@ describe('OnboardingWizardController', () => {
           hostMode: 'network',
           host: '0.0.0.0',
         },
-        web: DEFAULT_CONFIG.web,
+        // Webhook-ONLY posture: the web surface (enabled by default in a
+        // stock config now) is off in this scenario.
+        web: { ...DEFAULT_CONFIG.web, enabled: false },
       },
     });
     const wizard = new OnboardingWizardController();
@@ -662,18 +663,17 @@ describe('OnboardingWizardController', () => {
     expect(configValues.get('httpListener.hostMode')).toBe('custom');
     expect(configValues.get('httpListener.host')).toBe('10.0.0.12');
     expect(configValues.get('httpListener.port')).toBe(4553);
-    expect(configValues.get('featureFlags.control-plane-gateway')).toBe('enabled');
-    expect(configValues.get('featureFlags.service-management')).toBe('enabled');
-    expect(configValues.get('featureFlags.web-surface')).toBe('enabled');
-    expect(configValues.get('featureFlags.route-binding')).toBe('enabled');
-    expect(configValues.get('featureFlags.delivery-engine')).toBe('enabled');
+    expect(configValues.get('controlPlane.gateway')).toBe(true);
+    expect(configValues.get('service.enabled')).toBe(true);
+    expect(configValues.get('web.enabled')).toBe(true);
+    expect(configValues.get('integrations.routeBinding')).toBe(true);
+    expect(configValues.get('integrations.deliveryTracking')).toBe(true);
     expect(configValues.get('provider.model')).toBe('openai:gpt-5-test');
     expect(configValues.get('provider.reasoningEffort')).toBe('high');
     expect(configValues.get('storage.secretPolicy')).toBe('plaintext_allowed');
+    // behavior.hitlMode is the capability's own enablement key — operator is
+    // an active mode, so the single write both selects and enables it.
     expect(configValues.get('behavior.hitlMode')).toBe('operator');
-    // A non-default hitlMode must also enable its gating flag, or ModeManager
-    // never applies the preset and the choice is silently inert.
-    expect(configValues.get('featureFlags.hitl-ux-modes')).toBe('enabled');
     expect(configValues.get('behavior.guidanceMode')).toBe('guided');
     expect(configValues.get('permissions.mode')).toBe('allow-all');
     expect(request.operations).toContainEqual({ kind: 'acknowledge', target: 'providers', acknowledged: true });
@@ -700,10 +700,10 @@ describe('OnboardingWizardController', () => {
         expect(configValues.get(setupField.configKey)).toBe(value);
       }
     }
-    expect(configValues.get('featureFlags.slack-surface')).toBe('enabled');
-    expect(configValues.get('featureFlags.discord-surface')).toBe('enabled');
-    expect(configValues.get('featureFlags.ntfy-surface')).toBe('enabled');
-    expect(configValues.get('featureFlags.webhook-surface')).toBe('enabled');
+    expect(configValues.get('surfaces.slack.enabled')).toBe(true);
+    expect(configValues.get('surfaces.discord.enabled')).toBe(true);
+    expect(configValues.get('surfaces.ntfy.enabled')).toBe(true);
+    expect(configValues.get('surfaces.webhook.enabled')).toBe(true);
   });
 
   // behavior.hitlMode is gated by the hitl-ux-modes feature flag: ModeManager
@@ -722,14 +722,14 @@ describe('OnboardingWizardController', () => {
     }
 
     expect(configValues.get('behavior.hitlMode')).toBe('quiet');
-    expect(configValues.get('featureFlags.hitl-ux-modes')).toBe('enabled');
   });
 
-  test('the default hitlMode does not force the gating flag on', () => {
+  test('the default hitlMode writes the schema default and nothing else', () => {
     const wizard = new OnboardingWizardController();
     wizard.open('new');
-    // Leave experience.hitl at its schema default ('balanced'): the wizard must
-    // not silently flip a feature flag the user never opted into.
+    // Leave experience.hitl at its schema default ('balanced'): the single
+    // behavior.hitlMode write is the whole story — no extra enablement
+    // namespace exists to flip.
     wizard.setFieldValue('experience.hitl', 'balanced');
 
     const configValues = new Map<string, unknown>();
@@ -738,7 +738,6 @@ describe('OnboardingWizardController', () => {
     }
 
     expect(configValues.get('behavior.hitlMode')).toBe('balanced');
-    expect(configValues.has('featureFlags.hitl-ux-modes')).toBe(false);
   });
 
   test('does not block selected external surfaces when setup values are blank', () => {
@@ -1202,8 +1201,10 @@ describe('InputHandler onboarding integration', () => {
     expect(input.onboardingWizard.active).toBe(true);
     expect(input.onboardingWizard.currentStep.id).toBe('network');
     expect(input.onboardingWizard.applyFeedback).toBeNull();
-    expect(uiServices.platform.configManager.get('service.enabled')).toBe(false);
-    expect(uiServices.platform.configManager.get('web.enabled')).toBe(false);
+    // Nothing persisted: both keys still read their stock defaults (which
+    // ship enabled now).
+    expect(uiServices.platform.configManager.get('service.enabled')).toBe(DEFAULT_CONFIG.service.enabled);
+    expect(uiServices.platform.configManager.get('web.enabled')).toBe(DEFAULT_CONFIG.web.enabled);
     expect(prints).toEqual([]);
   });
 
@@ -1240,7 +1241,8 @@ describe('InputHandler onboarding integration', () => {
     expect(input.onboardingWizard.active).toBe(true);
     expect(input.onboardingWizard.currentStep.id).toBe('network');
     expect(input.onboardingWizard.applyFeedback).toBeNull();
-    expect(uiServices.platform.configManager.get('service.enabled')).toBe(false);
+    // Nothing persisted: the key still reads its stock default (enabled now).
+    expect(uiServices.platform.configManager.get('service.enabled')).toBe(DEFAULT_CONFIG.service.enabled);
     expect(prints).toEqual([]);
   });
 
