@@ -4,6 +4,12 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [1.16.1] — 2026-07-12
+
+### Changes
+- 4f54b6e0 fix(renderer): never clip a modal's descriptive text to fit a fixed column or row
+- 64ceb78a fix(install): never restart or skip-setup a systemd unit or bare process that can't actually run
+
 ## [1.16.0] — 2026-07-11
 
 ### Changes
