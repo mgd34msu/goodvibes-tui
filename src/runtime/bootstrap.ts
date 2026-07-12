@@ -267,7 +267,9 @@ export async function bootstrapRuntime(
   bootstrapUnsubs.push(() => clearInterval(acpTaskSyncInterval));
   orchestrator.registerDelegateTool(acpManager);
   const opsTaskManager = createTaskManager(store, runtimeBus, userSessionId);
-  const opsControlPlane = services.featureFlags.isEnabled('operator-control-plane')
+  // Operator interventions ride the control-plane gateway capability
+  // (controlPlane.gateway, on by default; the old never-registered gate id shipped this dead).
+  const opsControlPlane = services.featureFlags.isEnabled('control-plane-gateway')
     ? new OpsControlPlane(opsTaskManager, runtimeBus, store, userSessionId)
     : undefined;
 
@@ -776,10 +778,8 @@ export async function bootstrapRuntime(
     },
   };
 
-  // ── Phase 12b: Operator Control Plane wiring (feature-gated) ──────────────
-  // Wire the OpsControlPlane into CommandContext when the feature flag is enabled.
-  // The store and task manager are created unconditionally so they reflect the
-  // real runtime state (tasks registered before the flag check are visible).
+  // ── Phase 12b: Operator Control Plane wiring (capability-gated); store and
+  // task manager exist unconditionally so pre-gate tasks stay visible. ───────
   ctx.commandContext.ops.acpManager = acpManager;
   if (opsControlPlane) {
     ctx.commandContext.openOpsPanel = () => {
