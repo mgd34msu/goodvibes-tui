@@ -87,7 +87,6 @@ export const CATEGORY_LABELS: Record<(typeof SETTINGS_CATEGORIES)[number], strin
   release: 'Release',
   danger: 'Danger',
   tools: 'Tools',
-  flags: 'Advanced Features',
   network: 'Network',
   relay: 'Relay',
   learning: 'Learning',
@@ -171,9 +170,9 @@ const SETTING_LABELS: Partial<Record<string, string>> = {
 };
 
 export function getSettingLabel(entry: SettingEntry): string {
-  // Feature-unit toggle headers carry the flag's human name, not the raw
-  // `featureFlags.<id>` key tail.
-  if (entry.flag) return entry.flag.flag.name;
+  // Feature-unit headers carry the feature's human name, not the raw
+  // enablement-key tail.
+  if (entry.flag) return entry.flag.feature.name;
   return SETTING_LABELS[entry.setting.key] ?? entry.setting.key.replace(/^[^.]+\./, '');
 }
 

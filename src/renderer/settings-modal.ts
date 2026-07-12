@@ -6,8 +6,9 @@
  */
 
 import type { Line } from '../types/grid.ts';
-import type { SettingsModal, SettingEntry, FlagEntry, McpEntry, SubscriptionEntry, SettingsCategory } from '../input/settings-modal.ts';
+import type { SettingsModal, SettingEntry, McpEntry, SubscriptionEntry, SettingsCategory } from '../input/settings-modal.ts';
 import { SETTINGS_CATEGORIES, SETTINGS_CATEGORY_GROUPS } from '../input/settings-modal.ts';
+import { FEATURE_SETTINGS_BY_ID, isFeatureValueEnabled } from '../runtime/feature-settings.ts';
 import { getDisplayWidth, wrapText } from '../utils/terminal-width.ts';
 import { CATEGORY_LABELS, describeUiRouting, formatValue, getSettingLabel, inferSubscriptionRouteReason, valueColor } from './settings-modal-helpers.ts';
 import { isSecretConfigKey } from '../config/secret-config.ts';
@@ -57,7 +58,6 @@ const CATEGORY_INFO: Record<SettingsCategory, string> = {
   release: 'Release-channel preference.',
   danger: 'High-impact switches for daemon and HTTP listener behavior. These are operational overrides, not normal preferences.',
   tools: 'Tool LLM and helper model routing. Empty provider/model values inherit the active chat route unless a specific helper/tool route is set.',
-  flags: 'Advanced feature toggles with no tuning knobs — internal and startup-gated runtime gates. Features that DO have config sit as units (toggle + settings) in their topical category, not here.',
   network: 'Combined network view for daemon control-plane, HTTP listener, browser web surface, and general outbound network settings.',
   fetch: 'Fetch response sanitization and host trust tiers for the fetch tool: sanitize mode plus default trusted/blocked host lists. Gated by the Fetch Response Sanitization feature.',
   agents: 'Sub-agent context-window awareness and per-turn passive knowledge/code injection: token budget, relevance floor, code-chunk limit, and the compaction threshold. Gated by the agent context/injection features.',
@@ -181,6 +181,13 @@ function buildSettingContext(modal: SettingsModal, entry: SettingEntry): string[
   if (entry.locked) lines.push(`Locked: ${entry.lockReason ?? 'This setting is locked by a higher-priority layer.'}`);
   if (entry.conflict) lines.push(`Conflict: resolve with /settings-sync resolve ${entry.setting.key} local|synced.`);
 
+  // A settings sub-row owned by a feature unit names its feature so "what
+  // does this do" is answerable without scrolling back to the header row.
+  if (entry.ownerFlagId) {
+    const owner = FEATURE_SETTINGS_BY_ID.get(entry.ownerFlagId);
+    if (owner) lines.push(`Part of feature: ${owner.name} (the header row above).`);
+  }
+
   lines.push('', entry.setting.description);
 
   if (
@@ -225,26 +232,86 @@ function buildSettingContext(modal: SettingsModal, entry: SettingEntry): string[
   return lines;
 }
 
-function buildFlagContext(entry: FlagEntry | null): string[] {
-  if (!entry) return ['Feature flags', 'No feature flag is selected.'];
-  return [
-    entry.flag.name,
-    `ID: ${entry.flag.id}`,
-    `State: ${entry.state}`,
-    `Default: ${entry.flag.defaultState}`,
-    `Tier: ${entry.flag.tier}`,
-    `Runtime toggleable: ${entry.flag.runtimeToggleable ? 'yes' : 'no'}`,
-    ...(entry.pendingRestart
-      ? [`Pending restart: saved as ${entry.persistedState}; effective state stays ${entry.state} until the next launch.`]
+/**
+ * The option shape of a feature header, rendered from the same schema the
+ * write path uses: enum headers list every mode choice (marking the current
+ * value and which values keep the feature active), boolean headers state the
+ * two positions.
+ */
+function buildFeatureOptionLines(entry: SettingEntry): string[] {
+  const feature = entry.flag!.feature;
+  const setting = entry.setting;
+  const lines: string[] = [];
+  if (setting.type === 'enum' && setting.enumValues) {
+    lines.push('', `Mode choices for ${setting.key}:`);
+    const activeValues = feature.enablement.enabledValues ?? [];
+    const descriptions = ENUM_VALUE_DESCRIPTIONS[setting.key] ?? {};
+    for (const value of setting.enumValues) {
+      const marks: string[] = [];
+      if (value === String(entry.currentValue)) marks.push('current');
+      if (feature.enablement.kind === 'enum') {
+        marks.push(activeValues.includes(value) ? 'feature on' : 'feature off');
+      }
+      const suffix = marks.length > 0 ? ` (${marks.join(', ')})` : '';
+      lines.push(`${value}${suffix}: ${descriptions[value] ?? `Use ${value} for this setting.`}`);
+    }
+  } else if (setting.type === 'boolean') {
+    lines.push('');
+    lines.push('Possible values:');
+    lines.push('true: the feature is enabled.');
+    lines.push('false: the feature is disabled.');
+  }
+  return lines;
+}
+
+/**
+ * Under-cursor documentation for a feature-unit header, rendered entirely
+ * from the SDK's per-feature settings metadata: full behavior description,
+ * the real option shape, every settings key that tunes the feature, and the
+ * honest live/restart state from the gate manager.
+ */
+function buildFlagContext(entry: SettingEntry | null): string[] {
+  const flagEntry = entry?.flag ?? null;
+  if (!entry || !flagEntry) return ['Features', 'No feature is selected.'];
+  const { feature, flag, state, persistedState, pendingRestart } = flagEntry;
+  const configOn = isFeatureValueEnabled(feature, entry.currentValue);
+  const displayState = state === 'killed' ? 'killed' : configOn ? 'enabled' : 'disabled';
+  const lines: string[] = [
+    feature.name,
+    `Feature: ${feature.id} (${feature.domain} domain)`,
+    `Setting: ${feature.enablement.key} = ${formatValue(entry)}`,
+    `State: ${displayState}`,
+    `Default: ${feature.defaultEnabled ? 'enabled' : 'disabled'}`,
+    `Applies: ${feature.restartRequired ? 'on next launch (startup-gated)' : 'immediately'}`,
+    ...(pendingRestart
+      ? [`Pending restart: saved as ${persistedState}; effective state stays ${state} until the next launch.`]
       : []),
     '',
-    entry.flag.description,
-    ...(entry.state === 'killed' && entry.flag.killReason ? ['', `Kill reason: ${entry.flag.killReason}`] : []),
-    '',
-    entry.flag.runtimeToggleable
-      ? 'Impact: changes apply immediately and are also persisted as an override when they differ from the default.'
-      : 'Impact: this flag is persisted as an override and requires restart before startup-only code sees the new state.',
+    feature.description,
   ];
+
+  lines.push(...buildFeatureOptionLines(entry));
+
+  lines.push('');
+  if (feature.enablement.kind === 'enum') {
+    lines.push(`How it turns on: active while ${feature.enablement.key} is ${(feature.enablement.enabledValues ?? []).join(' or ')}.`);
+  } else if (feature.enablement.kind === 'constant' && entry.setting.type !== 'boolean') {
+    lines.push('How it turns on: always active; the settings listed below tune its behavior directly.');
+  } else {
+    lines.push(`How it turns on: ${feature.enablement.key} set to true.`);
+  }
+
+  if (feature.settings.length > 1) {
+    lines.push('', 'Settings in this feature:');
+    for (const key of feature.settings) {
+      lines.push(key === feature.enablement.key ? `${key} (this row)` : key);
+    }
+  }
+
+  if (state === 'killed' && flag.killReason) {
+    lines.push('', `Kill reason: ${flag.killReason}`);
+  }
+  return lines;
 }
 
 function buildMcpContext(modal: SettingsModal, entry: McpEntry | null): string[] {
@@ -332,9 +399,10 @@ function buildContextLines(modal: SettingsModal, width: number): string[] {
     lines.push(...buildSubscriptionContext(modal, modal.getSelectedSubscription()));
   } else {
     const selected = modal.getSelected();
-    // A feature-unit toggle header shows flag context (tier, default, impact);
-    // its config sub-options and plain settings show the setting context.
-    if (selected?.flag) lines.push(...buildFlagContext(selected.flag));
+    // A feature-unit header shows the feature's documentation (full
+    // description, option shape, settings list, live/restart state); its
+    // settings sub-rows and plain settings show the setting context.
+    if (selected?.flag) lines.push(...buildFlagContext(selected));
     else if (selected) lines.push(...buildSettingContext(modal, selected));
     else lines.push('No setting is selected in this category.');
   }
@@ -355,7 +423,6 @@ function buildContextLines(modal: SettingsModal, width: number): string[] {
 function categoryItemCount(modal: SettingsModal, category: SettingsCategory): number {
   if (category === 'mcp') return modal.mcpEntries.length;
   if (category === 'subscriptions') return modal.subscriptionEntries.length;
-  // 'flags' (Advanced Features) now flows through the normal group path.
   return modal.groups.get(category)?.length ?? 0;
 }
 
@@ -454,15 +521,17 @@ function renderSettingTableRow(
   defaultWidth: number,
 ): string {
   if (entry.flag) {
-    const { flag, state, pendingRestart, persistedState } = entry.flag;
-    const stateMark = state === 'enabled' ? '●' : state === 'killed' ? '✕' : '○';
-    const label = `${stateMark} ${flag.name}`;
-    const source = `tier ${flag.tier} ${flag.runtimeToggleable ? 'live' : 'restart'}`;
-    // A startup-gated flag toggled this session keeps its effective state and
-    // shows the pending value it will take on restart, so the row never implies
-    // the change already took effect.
-    const value = pendingRestart ? `${state} → ${persistedState} on restart` : state;
-    return `${marker} ${padDisplay(label, keyWidth)}  ${padDisplay(value, valueWidth)}  ${padDisplay('feature', typeWidth)}  ${padDisplay(source, sourceWidth)}  ${padDisplay(flag.defaultState, defaultWidth)}`;
+    const { feature, state, pendingRestart } = entry.flag;
+    const configOn = isFeatureValueEnabled(feature, entry.currentValue);
+    const stateMark = state === 'killed' ? '✕' : configOn ? '●' : '○';
+    const label = `${stateMark} ${feature.name}`;
+    const source = feature.restartRequired ? 'restart' : 'live';
+    // A startup-gated feature changed this session shows its saved value with
+    // a restart marker, so the row never implies the change already took
+    // effect; the context pane spells out the full sentence.
+    const rawValue = currentSettingValue(modal, entry, selected);
+    const value = pendingRestart ? `${rawValue} · restart` : rawValue;
+    return `${marker} ${padDisplay(label, keyWidth)}  ${padDisplay(value, valueWidth)}  ${padDisplay('feature', typeWidth)}  ${padDisplay(source, sourceWidth)}  ${padDisplay(feature.defaultEnabled ? 'enabled' : 'disabled', defaultWidth)}`;
   }
   const value = currentSettingValue(modal, entry, selected);
   const source = `${entry.effectiveSource ?? 'default'}${entry.locked ? ' locked' : ''}${entry.conflict ? ' conflict' : ''}`;
@@ -626,9 +695,9 @@ function footerText(modal: SettingsModal, width: number): string {
       { key: 'Enter', verb: 'Edit trust' },
       { key: 'Esc', verb: 'Close' },
     ]));
-  // 'flags' (Advanced Features) and every topical category that now hosts feature
-  // units flow through the default settings footer below — Enter/Space toggles a
-  // feature-unit header exactly as it edits/toggles any setting row.
+  // Every topical category that hosts feature units flows through the default
+  // settings footer below — Enter/Space toggles a feature-unit header exactly
+  // as it edits/toggles any setting row.
   // Default settings pane: tier the reset affordances by available width.
   // W<80:  minimal — only the most critical action survives.
   // W<160: compact but still shows both reset affordances.

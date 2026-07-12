@@ -52,6 +52,7 @@ import {
 } from './settings-modal-types.ts';
 import { enrichRelaySettingDescriptions } from './relay-settings-descriptions.ts';
 import { applyFeatureUnitLayout } from './feature-unit-layout.ts';
+import { FEATURE_SETTINGS_BY_ID } from '../runtime/feature-settings.ts';
 
 // ---------------------------------------------------------------------------
 // deepEqual — structural equality for isDefault comparisons
@@ -98,9 +99,8 @@ export function buildSettingGroups(
   featureFlagManager?: FeatureFlagManager | null,
 ): Map<SettingsCategory, SettingEntry[]> {
   const groups = new Map<SettingsCategory, SettingEntry[]>();
-  // Every category starts empty (including 'flags', now the Advanced Features
-  // bucket, and the new fetch/agents/security/integrations/policy/notifications
-  // namespaces) and is filled from CONFIG_SCHEMA below.
+  // Every category starts empty and is filled from CONFIG_SCHEMA below; the
+  // feature-unit layout pass then folds each capability's rows into one unit.
   for (const cat of SETTINGS_CATEGORIES) groups.set(cat, []);
 
   for (const setting of CONFIG_SCHEMA) {
@@ -240,11 +240,11 @@ export function buildSettingGroups(
   // the SDK's own descriptions don't carry (see relay-settings-descriptions.ts).
   enrichRelaySettingDescriptions(groups);
 
-  // Feature-unit presentation: turn each flag into ONE unit (toggle + the config
-  // keys it tunes) hosted in its topical category, folding no-config flags into
-  // the Advanced Features bucket. Sourced from FEATURE_FLAG_CONFIG. Runs AFTER
-  // synthetic injection so non-flag-owned rows stay as orphans; skipped on the
-  // flagless test path.
+  // Feature-unit presentation: turn each capability into ONE unit (its real
+  // enablement row + the settings keys it tunes) hosted in its settings
+  // domain. Sourced from FEATURE_SETTINGS. Runs AFTER synthetic injection so
+  // non-feature-owned rows stay as orphans; skipped on the featureless test
+  // path.
   if (featureFlagManager) applyFeatureUnitLayout(groups, buildFlagEntries(featureFlagManager));
 
   // learning.consolidation.* is a real SDK config domain now, so its keys arrive
@@ -537,9 +537,13 @@ export function buildCodeIndexEnabledSyntheticEntry(configManager: Pick<ConfigMa
 
 export function buildFlagEntries(featureFlagManager: FeatureFlagManager | null): FlagEntry[] {
   if (!featureFlagManager) return [];
-  return Array.from(featureFlagManager.getAll().values()).map(
-    ({ flag, state, persistedState, pendingRestart }) => ({ flag, state, persistedState, pendingRestart }),
-  );
+  const entries: FlagEntry[] = [];
+  for (const { flag, state, persistedState, pendingRestart } of featureFlagManager.getAll().values()) {
+    const feature = FEATURE_SETTINGS_BY_ID.get(flag.id);
+    if (!feature) continue; // gate with no settings surface (registry/binding drift is SDK test-guarded)
+    entries.push({ feature, flag, state, persistedState, pendingRestart });
+  }
+  return entries;
 }
 
 // ---------------------------------------------------------------------------
