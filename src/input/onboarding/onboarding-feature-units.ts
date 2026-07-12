@@ -15,7 +15,7 @@
  */
 
 import type { ConfigKey } from '../../config/index.ts';
-import { isFeatureDefaultEnabled } from '../../runtime/feature-settings.ts';
+import { getFeatureSetting, isFeatureDefaultEnabled } from '../../runtime/feature-settings.ts';
 import type {
   OnboardingWizardControllerLike,
   OnboardingWizardFieldDefinition,
@@ -94,12 +94,13 @@ export const FEATURE_ONBOARDING_SECTIONS: readonly FeatureSection[] = [
         hint: 'When the exec sandbox leaves a command on ask, a model pass annotates the ask with stated reasons. Never converts allow to deny; never touches the frozen catastrophic block.',
         subOptions: [
           {
-            key: 'auto-approve',
-            configKey: 'sandbox.judgmentAutoApprove' as ConfigKey,
-            label: 'Auto-approve looks-safe verdicts',
-            hint: 'Yes lets a looks-safe judgment auto-approve the ask; No keeps annotate-only (default).',
-            valueType: 'boolean',
-            defaultValue: 'no',
+            key: 'mode',
+            configKey: 'sandbox.judgment' as ConfigKey,
+            label: 'Judgment mode',
+            hint: 'annotate (default) proposes a verdict with stated reasons and the human still decides; auto-approve additionally auto-approves looks-safe verdicts; off keeps plain asks.',
+            valueType: 'enum',
+            options: ['off', 'annotate', 'auto-approve'],
+            defaultValue: 'annotate',
           },
         ],
       },
@@ -283,17 +284,7 @@ export const FEATURE_ONBOARDING_SECTIONS: readonly FeatureSection[] = [
       {
         flagId: 'integration-delivery-slo',
         label: 'Integration delivery SLO',
-        hint: 'Retry with backoff and a dead-letter queue for Slack/Discord/webhook delivery. Exposes /notify dlq and /notify replay.',
-        subOptions: [
-          {
-            key: 'slo',
-            configKey: 'integrations.delivery.sloEnforced' as ConfigKey,
-            label: 'Enforce delivery SLO',
-            hint: 'Yes logs dead-letter events at error level and surfaces them in diagnostics; No is warn-level only (default).',
-            valueType: 'boolean',
-            defaultValue: 'no',
-          },
-        ],
+        hint: 'Retry with backoff and a dead-letter queue for Slack/Discord/webhook delivery, with dead-letter events surfaced in diagnostics. On by default; exposes /notify dlq and /notify replay. Retry bounds are tuned in /settings.',
       },
       {
         flagId: 'adaptive-execution-planner',
@@ -355,10 +346,10 @@ export const FEATURE_ONBOARDING_SECTIONS: readonly FeatureSection[] = [
             key: 'backend',
             configKey: 'tools.overflowSpillBackend' as ConfigKey,
             label: 'Spill backend',
-            hint: 'file (default), ledger, or diagnostics.',
+            hint: 'ledger (default when this feature is on) or diagnostics; file is the baseline used while the feature is off.',
             valueType: 'enum',
             options: ['file', 'ledger', 'diagnostics'],
-            defaultValue: 'file',
+            defaultValue: 'ledger',
           },
         ],
       },
@@ -523,14 +514,23 @@ export function applyFeatureUnitOperations(
       for (const prerequisite of unit.requiresFlags ?? []) overrides.set(prerequisite, 'enabled');
       for (const implied of unit.impliedConfig ?? []) setConfig(implied.key, implied.value);
 
+      const enablementKey = getFeatureSetting(unit.flagId)?.enablement.key;
       for (const sub of unit.subOptions ?? []) {
         const raw = controller.getStringFieldValue(featureSubOptionFieldId(unit.flagId, sub.key), sub.defaultValue);
+        let wrote = true;
         if (sub.valueType === 'boolean') {
           setConfig(sub.configKey, raw === 'yes');
         } else if (sub.valueType === 'text') {
-          if (raw.length > 0) setConfig(sub.configKey, raw);
+          wrote = raw.length > 0;
+          if (wrote) setConfig(sub.configKey, raw);
         } else {
           setConfig(sub.configKey, raw);
+        }
+        // A sub-option that writes the unit's OWN enablement key (e.g. the
+        // provider-optimizer routing mode) is the authoritative enablement
+        // value — drop the pending override so the flush cannot clobber it.
+        if (wrote && enablementKey !== undefined && sub.configKey === enablementKey) {
+          overrides.delete(unit.flagId);
         }
       }
     }

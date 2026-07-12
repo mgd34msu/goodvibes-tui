@@ -20,11 +20,6 @@ import { applyFeatureUnitOperations } from './onboarding-feature-units.ts';
 import { buildGoodVibesSecretKey, buildGoodVibesSecretRef, isLoopbackAddress, isSecretReferenceValue } from './onboarding-wizard-helpers.ts';
 import type { OnboardingWizardControllerLike } from './onboarding-wizard-types.ts';
 
-/** SDK schema default for behavior.hitlMode (schema-domain-core DEFAULT_CONFIG). */
-const HITL_MODE_SCHEMA_DEFAULT = 'balanced';
-/** Feature flag that gates behavior.hitlMode preset application in ModeManager. */
-const HITL_UX_MODES_FEATURE_FLAG = 'hitl-ux-modes';
-
 export function buildOnboardingApplyRequest(controller: OnboardingWizardControllerLike): OnboardingApplyRequest {
     const operations: OnboardingApplyOperation[] = [];
     // Accumulates feature-flag state that onboarding selections require, so the
@@ -133,16 +128,11 @@ export function buildOnboardingApplyRequest(controller: OnboardingWizardControll
     setConfig('provider.reasoningEffort', controller.getStringFieldValue('default-model.reasoning', controller.runtimeSnapshot?.providerRouting.primaryReasoningEffort ?? 'medium'));
     const hitlMode = controller.getStringFieldValue('experience.hitl', controller.runtimeSnapshot?.runtimeDefaults.behavior.hitlMode ?? 'balanced');
     setConfig('behavior.hitlMode', hitlMode);
-    // behavior.hitlMode is gated by the hitl-ux-modes feature flag: ModeManager
-    // only applies the chosen preset to the notification router when the flag is
-    // on. Writing hitlMode without enabling the flag leaves the user's choice
-    // silently inert. When the user picks a non-default mode, enable the gating
-    // flag in the same apply batch so the selection actually takes effect. The
-    // SDK schema default is 'balanced' (schema-domain-core DEFAULT_CONFIG); a
-    // choice equal to the default is left to the flag's own default-off state.
-    if (hitlMode !== HITL_MODE_SCHEMA_DEFAULT) {
-      featureFlagOverrides.set(HITL_UX_MODES_FEATURE_FLAG, 'enabled');
-    }
+    // behavior.hitlMode IS the enablement key of the hitl-ux-modes capability
+    // (active for quiet/balanced/operator, off only at 'off'), so the write
+    // above already carries the enablement — no separate gating write exists,
+    // and adding one here would clobber a non-default choice with the stock
+    // mode when the batch flushes.
     setConfig('behavior.guidanceMode', controller.getStringFieldValue('experience.guidance', controller.runtimeSnapshot?.runtimeDefaults.behavior.guidanceMode ?? 'minimal'));
     setConfig('permissions.mode', controller.getStringFieldValue('experience.permissions', controller.runtimeSnapshot?.runtimeDefaults.permissionsMode ?? 'prompt'));
     setConfig('storage.secretPolicy', controller.getStringFieldValue('external-services.secret-policy', controller.runtimeSnapshot?.runtimeDefaults.secretStoragePolicy ?? 'preferred_secure'));

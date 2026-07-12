@@ -12,6 +12,10 @@ function buildBaseSnapshot(): OnboardingSnapshotState {
   const controlPlane = structuredClone(DEFAULT_CONFIG.controlPlane);
   const httpListener = structuredClone(DEFAULT_CONFIG.httpListener);
   const web = structuredClone(DEFAULT_CONFIG.web);
+  // The web surface ships enabled by default now; the base snapshot models a
+  // minimal local-only posture (nothing switched on yet), so pin it off here
+  // and let individual tests enable it deliberately.
+  web.enabled = false;
 
   return {
     capturedAt: 0,
@@ -34,7 +38,6 @@ function buildBaseSnapshot(): OnboardingSnapshotState {
       network: structuredClone(DEFAULT_CONFIG.network),
       surfaces: structuredClone(DEFAULT_CONFIG.surfaces),
       service: structuredClone(DEFAULT_CONFIG.service),
-      featureFlags: structuredClone(DEFAULT_CONFIG.featureFlags),
       batch: structuredClone(DEFAULT_CONFIG.batch),
       cloudflare: structuredClone(DEFAULT_CONFIG.cloudflare),
     },
