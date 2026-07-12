@@ -29,8 +29,8 @@ const FIXTURE_MODELS: CatalogModel[] = [
   { id: 'claude-haiku-4-5', name: 'Claude Haiku 4.5', provider: 'Anthropic', providerId: 'anthropic', providerEnvVars: ['ANTHROPIC_API_KEY'], pricing: { input: 0.80, output: 4 }, tier: 'paid', contextWindow: 200_000 },
 
   // Paid - Google (premium)
-  { id: 'gemini-2.5-pro', name: 'Gemini 2.5 Pro', provider: 'Google', providerId: 'google', providerEnvVars: ['GOOGLE_API_KEY'], pricing: { input: 1.25, output: 5 }, tier: 'paid', contextWindow: 1_000_000 },
-  { id: 'gemini-3-flash', name: 'Gemini 3 Flash', provider: 'Google', providerId: 'google', providerEnvVars: ['GOOGLE_API_KEY'], pricing: { input: 0.075, output: 0.30 }, tier: 'paid', contextWindow: 1_000_000 },
+  { id: 'gemini-2.5-pro', name: 'Gemini 2.5 Pro', provider: 'Google', providerId: 'gemini', providerEnvVars: ['GOOGLE_API_KEY'], pricing: { input: 1.25, output: 5 }, tier: 'paid', contextWindow: 1_000_000 },
+  { id: 'gemini-3-flash', name: 'Gemini 3 Flash', provider: 'Google', providerId: 'gemini', providerEnvVars: ['GOOGLE_API_KEY'], pricing: { input: 0.075, output: 0.30 }, tier: 'paid', contextWindow: 1_000_000 },
 
   // Paid - OpenAI
   { id: 'gpt-5.4', name: 'GPT-5.4', provider: 'OpenAI', providerId: 'openai', providerEnvVars: ['OPENAI_API_KEY'], pricing: { input: 5, output: 15 }, tier: 'paid', contextWindow: 400_000 },
@@ -129,8 +129,9 @@ describe('getCatalogModelDefinitions', () => {
 
   it('Google models have multimodal: true', () => {
     const defs = getCatalogModelDefinitions();
-    // provider field is the providerId (lowercase), e.g. 'google'
-    const googleModels = defs.filter((d) => d.provider === 'google');
+    // provider field is the providerId (lowercase); the registry's canonical
+    // id for Google models is 'gemini'.
+    const googleModels = defs.filter((d) => d.provider === 'gemini');
     expect(googleModels.length).toBeGreaterThan(0);
     for (const model of googleModels) {
       expect(model.capabilities.multimodal).toBe(true);
@@ -139,7 +140,7 @@ describe('getCatalogModelDefinitions', () => {
 
   it('Google models have large context windows (>=1M)', () => {
     const defs = getCatalogModelDefinitions();
-    const googleModels = defs.filter((d) => d.provider === 'google');
+    const googleModels = defs.filter((d) => d.provider === 'gemini');
     for (const model of googleModels) {
       expect(model.contextWindow).toBeGreaterThanOrEqual(1_000_000);
     }
@@ -235,11 +236,14 @@ describe('getModelRegistry — catalog-sourced models', () => {
     }
   });
 
-  it('registry contains no duplicate model IDs', () => {
+  it('registry contains no duplicate provider-qualified model entries', () => {
+    // The catalog legitimately offers the same bare model id through several
+    // providers (e.g. gpt-5.4 via openai and github-copilot); uniqueness holds
+    // on the provider-qualified pair.
     const models = providerRegistry.listModels();
-    const ids = models.map((m) => m.id);
-    const uniqueIds = new Set(ids);
-    expect(ids.length).toBe(uniqueIds.size);
+    const keys = models.map((m) => `${m.provider}:${m.id}`);
+    const uniqueKeys = new Set(keys);
+    expect(keys.length).toBe(uniqueKeys.size);
   });
 
   it('selectable models are filterable', () => {
@@ -273,11 +277,11 @@ describe('getModelRegistry — discovered servers', () => {
 
   it('discovered servers are excluded when they conflict with catalog models', () => {
     const models = providerRegistry.listModels();
-    // Catalog model IDs should appear only once — not duplicated by a hypothetical
-    // discovered server with the same ID
-    const ids = models.map((m) => m.id);
-    const uniqueIds = new Set(ids);
-    expect(ids.length).toBe(uniqueIds.size);
+    // Provider-qualified catalog entries should appear only once — not
+    // duplicated by a hypothetical discovered server with the same ID.
+    const keys = models.map((m) => `${m.provider}:${m.id}`);
+    const uniqueKeys = new Set(keys);
+    expect(keys.length).toBe(uniqueKeys.size);
   });
 });
 
@@ -353,11 +357,13 @@ describe('Structural verification', () => {
     const catalogDefs = getCatalogModelDefinitions();
 
     for (const def of catalogDefs) {
-      const inRegistry = models.find((m) => m.id === def.id);
-      if (inRegistry) {
-        // Provider should match the catalog definition
-        expect(inRegistry.provider).toBe(def.provider);
-      }
+      const candidates = models.filter((m) => m.id === def.id);
+      if (candidates.length === 0) continue;
+      // Every catalog model in the registry must be served by a real
+      // registered provider. Bare ids can be legitimately ambiguous across
+      // providers now, so resolve the provider-qualified reference.
+      const resolved = providerRegistry.getForModel(`${def.provider}:${def.id}`);
+      expect(candidates.map((m) => m.provider)).toContain(resolved.name);
     }
   });
 });
@@ -462,8 +468,10 @@ describe('ProviderRegistry.getForModel() — explicit provider lock', () => {
       },
     ]);
 
-    expect(() => providerRegistry.getForModel('mercury-2', 'inceptionlabs')).toThrow(
-      "No model 'mercury-2' for provider 'inceptionlabs' in registry.",
+    // inceptionlabs now carries mercury-2 as a dated static model, so pin a
+    // model it genuinely does not offer.
+    expect(() => providerRegistry.getForModel('claude-opus-4-6', 'inceptionlabs')).toThrow(
+      "No model 'claude-opus-4-6' for provider 'inceptionlabs' in registry.",
     );
   });
 });

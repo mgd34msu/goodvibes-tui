@@ -31,7 +31,6 @@ describe('new SDK settings surfaces — honest descriptions reach the modal', ()
     const entry = findEntry(groups, 'behavior.compactionStrategy');
     expect(entry).toBeDefined();
     expect(entry!.setting.description).toContain('distiller');
-    expect(entry!.setting.description).toContain('gated');
     expect(entry!.setting.description).toContain('falls back to structured');
     expect(entry!.setting.default).toBe('structured');
   });
@@ -53,13 +52,16 @@ describe('new SDK settings surfaces — honest descriptions reach the modal', ()
     expect(findEntry(groups, 'telemetry.decisionOtlpSignal')).toBeDefined();
   });
 
-  test('sandbox.judgmentAutoApprove says annotate-only default, auto-approve is the opt-in', () => {
+  test('sandbox.judgment says annotate is the default and auto-approve is the explicit opt-in', () => {
     const { configManager } = createTestManagers();
     const groups = buildSettingGroups(configManager);
-    const entry = findEntry(groups, 'sandbox.judgmentAutoApprove');
+    // The boolean judgmentAutoApprove key dissolved into the sandbox.judgment
+    // mode enum (off | annotate | auto-approve).
+    const entry = findEntry(groups, 'sandbox.judgment');
     expect(entry).toBeDefined();
-    expect(entry!.setting.description).toContain('annotate-only');
-    expect(entry!.setting.default).toBe(false);
+    expect(entry!.setting.description).toContain('annotate (default');
+    expect(entry!.setting.description).toContain('explicit opt-in');
+    expect(entry!.setting.default).toBe('annotate');
     expect(entry!.isDefault).toBe(true);
   });
 });

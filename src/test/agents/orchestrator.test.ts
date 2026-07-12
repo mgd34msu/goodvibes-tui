@@ -266,7 +266,10 @@ describe('AgentOrchestrator', () => {
       const record = makeRecord({ model: 'some-other-model' });
       await orchestrator.runAgent(record);
       expect(record.status).toBe('failed');
-      expect(record.error).toContain("Agent model overrides must be provider-qualified registry keys");
+      // The resolver now names the unknown model and suggests provider-qualified
+      // registry keys instead of a generic qualification lecture.
+      expect(record.error).toContain("Unknown model 'some-other-model'");
+      expect(record.error).toContain('valid model reference');
     });
 
     test('injects agent context and reasoning effort into provider requests', async () => {

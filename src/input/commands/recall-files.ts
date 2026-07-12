@@ -39,7 +39,7 @@ import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 import { requireShellPaths } from './runtime-services.ts';
 import { getMemorySpine } from './recall-query.ts';
 import { readMemoryProjectionDir } from './recall-files-config.ts';
-import { resolveSyncGitSeam } from './recall-files-git.ts';
+import { createSyncGitSeam } from './recall-files-git.ts';
 
 const PROJECTION_LIST_LIMIT = 5000;
 
@@ -58,19 +58,16 @@ export async function handleRecallFilesSync(args: string[], context: CommandCont
 
   const dir = resolveProjectionDir(args, context);
   const records = await memory.list({ limit: PROJECTION_LIST_LIMIT });
-  // Resolve the git seam from the project working directory, not `dir` itself
-  // — `dir` may not exist yet on a first sync, and `git -C <dir>` requires the
-  // directory to already exist. The working directory is always real.
-  const gitSeam = resolveSyncGitSeam(requireShellPaths(context).workingDirectory);
 
   try {
-    const report = projectMemoryToFiles(records, dir, gitSeam ? { git: gitSeam.seam } : {});
+    // The SDK's ownership gate commits only to a repository whose toplevel IS
+    // the projection directory (initializing one there when needed) — never
+    // to a checkout the directory merely sits inside.
+    const report = projectMemoryToFiles(records, dir, { git: createSyncGitSeam() });
     context.print(`[recall] Projected ${report.written.length} record(s) to ${report.dir}`);
-    if (gitSeam) {
-      context.print(report.committed ? `  committed in ${gitSeam.repoRoot}` : '  not committed (git seam did not run)');
-    } else {
-      context.print(`  not committed: ${dir} is not inside a git repository`);
-    }
+    context.print(report.committed
+      ? `  committed in ${report.dir} (the projection's own repository)`
+      : '  not committed (git seam did not run)');
   } catch (error) {
     context.print(`[recall] Projection sync failed: ${summarizeError(error)}`);
   }

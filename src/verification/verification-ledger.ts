@@ -2,6 +2,7 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { CONFIG_SCHEMA } from '@pellux/goodvibes-sdk/platform/config';
 import { FEATURE_SETTINGS } from '@pellux/goodvibes-sdk/platform/runtime/state';
+import { featureEnablementWrite } from '../runtime/feature-settings.ts';
 import { CommandRegistry } from '../input/command-registry.ts';
 import { registerBuiltinCommands } from '../input/commands.ts';
 
@@ -78,8 +79,24 @@ export const FEATURE_KNOB_LOCAL_SETTINGS = [
   'runtime.toolBudget.maxCostUsd',
 ] as const;
 
-/** Settings with real local behavior verification: the authored baseline plus the newly persistence-tested feature-knob keys. */
-const SETTINGS_BEHAVIOR_VERIFIED = SETTINGS_BEHAVIOR_BASELINE + FEATURE_KNOB_LOCAL_SETTINGS.length;
+/**
+ * Every feature's enablement settings key whose on/off writes round-trip
+ * through a REAL on-disk ConfigManager in
+ * `src/test/verification/../input/settings-modal-flag-persistence.test.ts`
+ * ("every feature with an off position round-trips both directions"). These
+ * are first-class schema keys under the dissolved feature model, so they are
+ * genuinely behavior-verified locally. Keys already counted in the
+ * feature-knob list are excluded to keep the sum honest.
+ */
+const ENABLEMENT_KEYS_BEHAVIOR_VERIFIED = new Set(
+  FEATURE_SETTINGS
+    .filter((feature) => featureEnablementWrite(feature.id, true) !== null && featureEnablementWrite(feature.id, false) !== null)
+    .map((feature) => feature.enablement.key)
+    .filter((key) => !(FEATURE_KNOB_LOCAL_SETTINGS as readonly string[]).includes(key)),
+).size;
+
+/** Settings with real local behavior verification: the authored baseline plus the persistence-tested feature-knob and enablement keys. */
+const SETTINGS_BEHAVIOR_VERIFIED = SETTINGS_BEHAVIOR_BASELINE + FEATURE_KNOB_LOCAL_SETTINGS.length + ENABLEMENT_KEYS_BEHAVIOR_VERIFIED;
 
 const EXTERNAL_SLASH_COMMANDS = new Set([
   'auth',
