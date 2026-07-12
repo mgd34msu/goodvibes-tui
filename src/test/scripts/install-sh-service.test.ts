@@ -1,5 +1,15 @@
 import { afterAll, describe, expect, test } from 'bun:test';
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  chmodSync,
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -41,6 +51,56 @@ function stubServiceBin(root: string): string {
     '  esac',
     'done',
     'exit 0',
+    '',
+  ].join('\n');
+  for (const name of ['systemctl', 'launchctl']) {
+    const path = join(bin, name);
+    writeFileSync(path, stub);
+    chmodSync(path, 0o755);
+  }
+  return bin;
+}
+
+/** Write a stateful stub bin dir whose systemctl/launchctl track an
+ * active/inactive state in $STUB_STATE_FILE and answer ExecStart lookups
+ * with $STUB_EXEC_BIN, so the broken-unit detection/replacement path in
+ * restart_systemd_unit can be exercised deterministically: is-active
+ * reflects the state file; disable/stop flip it to inactive; enable/restart
+ * flip it back to active; show -p ExecStart --value prints the systemd
+ * `{ path=... ; argv[]=... ; }` structure with $STUB_EXEC_BIN as the path;
+ * cat reports "no such unit" so detection falls back to the file on disk. */
+function stubStatefulServiceBin(root: string): string {
+  const bin = join(root, 'stubbin-stateful');
+  mkdirSync(bin, { recursive: true });
+  const stub = [
+    '#!/bin/sh',
+    'args="$*"',
+    'case "$args" in',
+    '  *"is-active"*)',
+    '    if [ -f "$STUB_STATE_FILE" ] && grep -q inactive "$STUB_STATE_FILE" 2>/dev/null; then',
+    '      exit 3',
+    '    fi',
+    '    exit 0',
+    '    ;;',
+    '  *"show"*"ExecStart"*)',
+    "    printf '{ path=%s ; argv[]=%s ; }\\n' \"$STUB_EXEC_BIN\" \"$STUB_EXEC_BIN\"",
+    '    exit 0',
+    '    ;;',
+    '  *"cat"*)',
+    '    exit 1',
+    '    ;;',
+    '  *"disable"*|*"stop"*)',
+    '    [ -n "$STUB_STATE_FILE" ] && printf \'inactive\\n\' > "$STUB_STATE_FILE"',
+    '    exit 0',
+    '    ;;',
+    '  *"enable"*|*"restart"*)',
+    '    [ -n "$STUB_STATE_FILE" ] && printf \'active\\n\' > "$STUB_STATE_FILE"',
+    '    exit 0',
+    '    ;;',
+    '  *)',
+    '    exit 0',
+    '    ;;',
+    'esac',
     '',
   ].join('\n');
   for (const name of ['systemctl', 'launchctl']) {
@@ -186,6 +246,193 @@ describe('install.sh — first-run service setup guards', () => {
     // Untouched: the pre-existing contents survive verbatim.
     expect(readFileSync(unitPath, 'utf-8')).toBe(original);
   });
+});
+
+describe('install.sh — restart path validates the target before restarting/relaunching', () => {
+  // Reproduces the owner-hit migration defect: a bun-installed global package
+  // is removed with `bun remove -g` (deletes the binaries, leaves the
+  // bun-era systemd unit and/or its still-running process behind), then the
+  // curl installer runs. Without the fix, restart_systemd_unit restarts a
+  // corpse and setup_daemon_service_systemd then refuses to replace the unit
+  // because "one already exists" — no running daemon, no usable unit, and
+  // nothing said so.
+
+  test('an existing unit pointing at a deleted binary is replaced (backed up) and first-run setup runs', () => {
+    const root = scratch('gv-broken-unit');
+    const home = join(root, 'home');
+    const installDir = join(root, 'bin');
+    const unitDir = join(home, '.config/systemd/user');
+    mkdirSync(installDir, { recursive: true });
+    mkdirSync(unitDir, { recursive: true });
+
+    // Never created — simulates `bun remove -g` having deleted the binary
+    // out from under the bun-era unit.
+    const deletedBin = join(root, 'bun-vendor', 'goodvibes-daemon');
+    const unitPath = join(unitDir, 'goodvibes-daemon.service');
+    writeFileSync(unitPath, `[Service]\nExecStart=${deletedBin}\nRestart=on-failure\n`);
+
+    const stateFile = join(root, 'state');
+    writeFileSync(stateFile, 'active\n');
+
+    const out = runLib('restart_running_daemon; setup_daemon_service', {
+      HOME: home,
+      GOODVIBES_INSTALL_DIR: installDir,
+      PATH: `${stubStatefulServiceBin(root)}:${process.env.PATH ?? ''}`,
+      STUB_STATE_FILE: stateFile,
+      STUB_EXEC_BIN: deletedBin,
+    });
+
+    expect(out.code).toBe(0);
+    expect(out.stdout).toContain(`points at ${deletedBin}`);
+    expect(out.stdout).toContain('no longer exists');
+    expect(out.stdout).toContain('replacing it');
+
+    // Old unit file backed up, never silently destroyed.
+    const backup = readdirSync(unitDir).find((f) => f.startsWith('goodvibes-daemon.service.bak.'));
+    expect(backup).toBeDefined();
+    expect(readFileSync(join(unitDir, backup as string), 'utf-8')).toContain(deletedBin);
+
+    // First-run setup created a fresh installer-managed unit at the original path.
+    expect(existsSync(unitPath)).toBe(true);
+    const newUnit = readFileSync(unitPath, 'utf-8');
+    expect(newUnit).toContain('# managed by goodvibes install.sh');
+    expect(newUnit).toContain(`ExecStart=${installDir}/goodvibes-daemon`);
+    expect(out.stdout).toContain('Setting up the goodvibes daemon as a systemd user service');
+    expect(out.stdout).toContain('started    goodvibes-daemon.service (active)');
+  });
+
+  test('an existing unit whose ExecStart is a different, still-valid binary is restarted and left in place', () => {
+    const root = scratch('gv-valid-foreign-unit');
+    const home = join(root, 'home');
+    const installDir = join(root, 'bin');
+    const unitDir = join(home, '.config/systemd/user');
+    mkdirSync(installDir, { recursive: true });
+    mkdirSync(unitDir, { recursive: true });
+
+    // A genuinely hand-written unit pointing at a DIFFERENT, still-existing binary.
+    const otherBinDir = join(root, 'other-bin');
+    mkdirSync(otherBinDir, { recursive: true });
+    const otherBin = join(otherBinDir, 'custom-goodvibes-daemon');
+    writeFileSync(otherBin, '#!/bin/sh\nexit 0\n');
+    chmodSync(otherBin, 0o755);
+
+    const unitPath = join(unitDir, 'goodvibes-daemon.service');
+    const originalUnit = `[Service]\nExecStart=${otherBin}\n`;
+    writeFileSync(unitPath, originalUnit);
+
+    const stateFile = join(root, 'state');
+    writeFileSync(stateFile, 'active\n');
+
+    const out = runLib(
+      'restart_systemd_unit goodvibes-daemon.service "$GOODVIBES_INSTALL_DIR/goodvibes-daemon"; setup_daemon_service_systemd',
+      {
+        HOME: home,
+        GOODVIBES_INSTALL_DIR: installDir,
+        PATH: `${stubStatefulServiceBin(root)}:${process.env.PATH ?? ''}`,
+        STUB_STATE_FILE: stateFile,
+        STUB_EXEC_BIN: otherBin,
+      },
+    );
+
+    expect(out.code).toBe(0);
+    expect(out.stdout).toContain('Restarting the running goodvibes-daemon (systemd user service)');
+    expect(out.stdout).toContain('restarted  goodvibes-daemon.service');
+    // Mismatch noted (expected_bin is $installDir/goodvibes-daemon, not otherBin) but never overwritten.
+    expect(out.stdout).toContain('does not exec');
+    expect(readdirSync(unitDir).some((f) => f.includes('.bak.'))).toBe(false);
+    expect(readFileSync(unitPath, 'utf-8')).toBe(originalUnit);
+    // Never-overwrite still holds at the setup layer.
+    expect(out.stdout).toContain('already exists');
+  });
+
+  test(
+    'a bare process whose executable is outside $INSTALL_DIR is stopped, not relaunched, and setup proceeds',
+    async () => {
+      const root = scratch('gv-bare-foreign');
+      const home = join(root, 'home');
+      const installDir = join(root, 'bin');
+      const foreignDir = join(root, 'bun-vendor');
+      mkdirSync(installDir, { recursive: true });
+      mkdirSync(foreignDir, { recursive: true });
+
+      // The newly installed binary at the real install path, so first-run
+      // setup below has something valid to point the fresh unit at.
+      const newDaemonBin = join(installDir, 'goodvibes-daemon');
+      writeFileSync(newDaemonBin, '#!/bin/sh\nexit 0\n');
+      chmodSync(newDaemonBin, 0o755);
+
+      // The stale bun-launched process: still running, its real executable a
+      // copy of a real binary living OUTSIDE $INSTALL_DIR, named so it
+      // matches the pgrep pattern restart_bare_processes uses.
+      const foreignBin = join(foreignDir, 'goodvibes-daemon');
+      copyFileSync('/bin/sleep', foreignBin);
+      chmodSync(foreignBin, 0o755);
+      const proc = Bun.spawn([foreignBin, '300'], { stdio: ['ignore', 'ignore', 'ignore'] });
+      const pid = proc.pid;
+
+      const isAlive = () => {
+        try {
+          process.kill(pid, 0);
+          return true;
+        } catch {
+          return false;
+        }
+      };
+
+      try {
+        // Give pgrep a moment to see the process.
+        await new Promise((r) => setTimeout(r, 300));
+
+        // Step 1: the restart path must recognize this pid as foreign (its
+        // real executable is not under $INSTALL_DIR) and refuse to recover
+        // its argv and relaunch it. This assertion holds independent of how
+        // long the process actually takes to honor the TERM the installer
+        // sends it — that grace period (up to 10s, real installer
+        // behavior) is not what this test is checking.
+        const out = runLib('restart_running_daemon', {
+          HOME: home,
+          GOODVIBES_INSTALL_DIR: installDir,
+          PATH: `${stubServiceBin(root)}:${process.env.PATH ?? ''}`,
+        });
+        expect(out.code).toBe(0);
+        expect(out.stdout).toContain(`pid ${pid}`);
+        expect(out.stdout).toContain('not relaunching');
+
+        // Make sure it is actually gone before checking first-run setup —
+        // force it down rather than trusting the installer's own TERM to
+        // have landed within this test's window.
+        if (isAlive()) {
+          try {
+            process.kill(pid, 'SIGKILL');
+          } catch {
+            /* already gone */
+          }
+        }
+        for (let i = 0; i < 30 && isAlive(); i++) {
+          await new Promise((r) => setTimeout(r, 100));
+        }
+        expect(isAlive()).toBe(false);
+
+        // Step 2: with nothing running, first-run setup proceeds.
+        const setupOut = runLib('setup_daemon_service', {
+          HOME: home,
+          GOODVIBES_INSTALL_DIR: installDir,
+          PATH: `${stubServiceBin(root)}:${process.env.PATH ?? ''}`,
+        });
+        expect(setupOut.code).toBe(0);
+        expect(setupOut.stdout).toContain('Setting up the goodvibes daemon as a systemd user service');
+      } finally {
+        if (isAlive()) {
+          try {
+            process.kill(pid, 'SIGKILL');
+          } catch {
+            /* ignore */
+          }
+        }
+      }
+    },
+    20000,
+  );
 });
 
 describe('install.sh — uninstall mode', () => {
