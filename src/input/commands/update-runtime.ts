@@ -12,9 +12,17 @@
  *                                app and daemon binaries, and refresh the
  *                                sqlite-vec native addon in lockstep so the
  *                                vector index never goes stale beside a new
- *                                binary. For any other install kind, prints the
- *                                exact command to run instead — it never
- *                                attempts a swap it can't do safely.
+ *                                binary. Every swap parks the outgoing file
+ *                                at `<path>.previous`, so the replaced
+ *                                version is always kept. For any other
+ *                                install kind, prints the exact command to
+ *                                run instead — it never attempts a swap it
+ *                                can't do safely.
+ *   /update rollback           — exchange each installed file with its kept
+ *                                `.previous` counterpart: one command back to
+ *                                the version that ran before the last update
+ *                                (and, being an exchange, one more command
+ *                                forward again).
  *   /update review              — install/subscription/sandbox posture,
  *                                unrelated to the update mechanics above.
  *   /update bundle export|inspect <path> — portable posture bundle, as before.
@@ -75,17 +83,32 @@ async function downloadBuffer(fetchImpl: UpdateFetchLike, url: string): Promise<
 }
 
 /**
+ * Suffix under which every swap keeps the file it replaced, right beside the
+ * live one. This is what makes rollback a one-command operation instead of a
+ * re-download: the version that ran before the last update is always still
+ * on disk at `<path>.previous`.
+ */
+export const PREVIOUS_FILE_SUFFIX = '.previous';
+
+/**
  * Writes the new binary next to the target, then renames over it — an
  * atomic replace on the same filesystem, so a currently-running process
  * that already opened the old file keeps its old inode (POSIX unlink
  * semantics) instead of executing a half-written file. Same approach as
  * scripts/install.sh's `mv -f "$WORKDIR/$artifact" "$target"`.
+ *
+ * Before the replace, the outgoing file is parked at `<path>.previous`
+ * (overwriting any older parked copy) so `/update rollback` can restore it
+ * without a network round-trip.
  */
 function swapBinaryAtomically(targetPath: string, buffer: Buffer): void {
   const tempPath = `${targetPath}.update-download`;
   writeFileSync(tempPath, buffer);
   if (process.platform !== 'win32') {
     chmodSync(tempPath, 0o755);
+  }
+  if (existsSync(targetPath)) {
+    renameSync(targetPath, `${targetPath}${PREVIOUS_FILE_SUFFIX}`);
   }
   renameSync(tempPath, targetPath);
 }
@@ -96,7 +119,9 @@ function swapBinaryAtomically(targetPath: string, buffer: Buffer): void {
  * dlopen()s a half-written extension. The addon's parent directory
  * (`<execDir>/lib/sqlite-vec-<os>-<arch>/`) is created first because a fresh
  * install may not have a `lib/` tree yet. A shared library needs no execute
- * bit, so this uses 0o644 rather than the binaries' 0o755.
+ * bit, so this uses 0o644 rather than the binaries' 0o755. The outgoing
+ * addon is kept at `<path>.previous`, same as the binaries, so a rollback
+ * restores the addon that matches the restored binary.
  */
 function writeAddonAtomically(targetPath: string, buffer: Buffer): void {
   mkdirSync(dirname(targetPath), { recursive: true });
@@ -104,6 +129,9 @@ function writeAddonAtomically(targetPath: string, buffer: Buffer): void {
   writeFileSync(tempPath, buffer);
   if (process.platform !== 'win32') {
     chmodSync(tempPath, 0o644);
+  }
+  if (existsSync(targetPath)) {
+    renameSync(targetPath, `${targetPath}${PREVIOUS_FILE_SUFFIX}`);
   }
   renameSync(tempPath, targetPath);
 }
@@ -279,6 +307,86 @@ export async function applyUpdate(options: ApplyUpdateOptions): Promise<void> {
   );
 }
 
+export interface RollbackUpdateOptions {
+  readonly execPath: string;
+  readonly platform: NodeJS.Platform;
+  readonly arch: string;
+  readonly print: (line: string) => void;
+  readonly configManager: { get(key: string): unknown };
+  readonly runCommand?: RunCommand;
+  /** Injectable so tests observe the renames without touching a real install. */
+  readonly rename?: (from: string, to: string) => void;
+  readonly fileExists?: (path: string) => boolean;
+}
+
+/**
+ * One-command rollback to the version that ran before the last update: every
+ * installed file (app binary, daemon binary, vector addon) that has a kept
+ * `.previous` counterpart is EXCHANGED with it — the previous version becomes
+ * live, and the version being rolled back is itself kept at `.previous`, so a
+ * second `/update rollback` rolls forward again. Files without a kept
+ * counterpart are reported and left untouched; nothing is downloaded.
+ */
+export function rollbackUpdate(options: RollbackUpdateOptions): void {
+  const installKind: InstallKind = detectInstallKind(options.execPath);
+  if (installKind !== 'binary') {
+    options.print(
+      [
+        `This install is not a self-updatable binary install (detected: ${installKind === 'bun-global-package' ? 'bun/npm package install' : 'running from source'}), so there is no kept previous binary to roll back to.`,
+        `Install a specific version with your package manager instead, e.g.: ${fallbackUpdateCommand(installKind)}`,
+      ].join('\n'),
+    );
+    return;
+  }
+
+  const fileExists = options.fileExists ?? existsSync;
+  const rename = options.rename ?? renameSync;
+  const addon = resolveSqliteVecAsset(options.platform, options.arch);
+  const targets = [
+    { label: 'app binary', path: options.execPath },
+    { label: 'daemon binary', path: join(dirname(options.execPath), 'goodvibes-daemon') },
+    ...(addon ? [{ label: 'vector addon', path: join(dirname(options.execPath), 'lib', addon.dirName, addon.fileName) }] : []),
+  ];
+
+  const restored: string[] = [];
+  for (const target of targets) {
+    const previousPath = `${target.path}${PREVIOUS_FILE_SUFFIX}`;
+    if (!fileExists(previousPath)) continue;
+    if (fileExists(target.path)) {
+      // Three renames exchange the pair; the parking name keeps every step a
+      // same-directory rename (atomic on POSIX), never a copy.
+      const parkingPath = `${target.path}.rollback-exchange`;
+      rename(target.path, parkingPath);
+      rename(previousPath, target.path);
+      rename(parkingPath, previousPath);
+    } else {
+      rename(previousPath, target.path);
+    }
+    restored.push(`  ${target.label}: ${target.path} (the replaced version is kept at ${previousPath})`);
+  }
+
+  if (restored.length === 0) {
+    options.print(
+      `No previous version is kept beside this install (nothing at ${options.execPath}${PREVIOUS_FILE_SUFFIX}). ` +
+      'The previous version is kept from the next update onward.',
+    );
+    return;
+  }
+
+  const serviceInfo = detectDaemonServiceManaged(options.platform, options.configManager, options.runCommand);
+  options.print(
+    [
+      'Rolled back to the previously installed version.',
+      ...restored,
+      '',
+      'Restart goodvibes to run the restored version.',
+      serviceInfo.managed
+        ? `The daemon is managed by systemd — restart it with: ${serviceInfo.restartCommand}`
+        : 'The daemon restarts automatically the next time goodvibes launches.',
+    ].join('\n'),
+  );
+}
+
 interface UpdateBundle {
   readonly version: 1;
   readonly exportedAt: number;
@@ -304,8 +412,8 @@ export function registerUpdateCommand(registry: CommandRegistry): void {
   registry.register({
     name: 'update',
     aliases: ['upgrade'],
-    description: 'Check for a newer GoodVibes release and, for binary installs, download/verify/apply it',
-    usage: '[check|apply|review|bundle export <path>|bundle inspect <path>]',
+    description: 'Check for a newer GoodVibes release and, for binary installs, download/verify/apply it or roll back to the kept previous version',
+    usage: '[check|apply|rollback|review|bundle export <path>|bundle inspect <path>]',
     async handler(args, ctx) {
       const sub = args[0] ?? 'check';
 
@@ -340,6 +448,21 @@ export function registerUpdateCommand(registry: CommandRegistry): void {
         return;
       }
 
+      if (sub === 'rollback') {
+        try {
+          rollbackUpdate({
+            execPath: process.execPath,
+            platform: process.platform,
+            arch: process.arch,
+            print: ctx.print,
+            configManager: ctx.platform.configManager,
+          });
+        } catch (error) {
+          ctx.print(`Rollback failed: ${error instanceof Error ? error.message : String(error)}`);
+        }
+        return;
+      }
+
       if (sub === 'review') {
         const installKind = detectInstallKind(process.execPath);
         const subscriptions = requireSubscriptionManager(ctx);
@@ -358,7 +481,7 @@ export function registerUpdateCommand(registry: CommandRegistry): void {
             `  built-in subscription providers: ${builtinProviders.length}${builtinProviders.length > 0 ? ` (${builtinProviders.join(', ')})` : ''}`,
             `  active subscriptions: ${activeSubscriptions.length}${activeSubscriptions.length > 0 ? ` (${activeSubscriptions.join(', ')})` : ''}`,
             `  sandbox profile: ${sandboxProfile}`,
-            '  use /update check to look for a newer release, /update apply to install it',
+            '  use /update check to look for a newer release, /update apply to install it, /update rollback to return to the kept previous version',
           ].join('\n'),
         );
         return;
@@ -406,7 +529,7 @@ export function registerUpdateCommand(registry: CommandRegistry): void {
         }
       }
 
-      ctx.print('Usage: /update [check|apply|review|bundle export <path>|bundle inspect <path>]');
+      ctx.print('Usage: /update [check|apply|rollback|review|bundle export <path>|bundle inspect <path>]');
     },
   });
 }

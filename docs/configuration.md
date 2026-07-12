@@ -87,3 +87,25 @@ Example (`.goodvibes/tui/settings.json`):
   "session": { "autoTitle": true }
 }
 ```
+
+## `update.*` — launch-time self-update
+
+Binary installs (the `curl … | sh` installer) check for a newer release at
+every TUI launch and, when one exists, install it through the same
+checksum-verified download/verify/swap path as `/update apply`, then restart
+onto the new binary with a receipt line naming both versions. When the check
+cannot complete quickly (offline, slow network) the current version starts
+with one line: `update check skipped: offline`. Every swap keeps the outgoing
+file at `<path>.previous`; `/update rollback` restores it in one command.
+Package-manager and from-source runs never self-update at launch.
+
+| Key | Type | Default | Meaning |
+| --- | --- | --- | --- |
+| `update.autoUpdateAtLaunch` | boolean | `true` | Check for and install a newer release at TUI launch. Set `false` to only update when you run `/update apply` yourself. |
+| `update.launchCheckTimeoutMs` | number | `2500` | Budget for the launch-time version check. Clamped to `[250, 30000]`. A check that outlives it is skipped and the current version starts. |
+
+```json
+{
+  "update": { "autoUpdateAtLaunch": false }
+}
+```

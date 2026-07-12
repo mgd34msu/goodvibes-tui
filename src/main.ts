@@ -32,8 +32,8 @@ import { logger } from '@pellux/goodvibes-sdk/platform/utils';
 import { registerBuiltinPanels } from './panels/builtin-panels.ts';
 import { bootstrapRuntime } from './runtime/bootstrap.ts';
 import type { BootstrapContext } from './runtime/bootstrap.ts';
+import { selfUpdateAtLaunch } from './cli/launch-auto-update.ts';
 import { buildSharedOrchestratorCoreServices, refreshMemoryRecallSnapshot } from './runtime/orchestrator-core-services.ts';
-import type { HITLMode } from '@pellux/goodvibes-sdk/platform/state';
 import { readLastSessionPointer, writeRecoveryFile } from '@/runtime/index.ts';
 import { handleBlockingShellInput, type PendingPermissionState } from './shell/blocking-input.ts';
 import { createPersistRecoverySnapshot, createRecoveryFileOps, createReopenRecoveryPanels, handleErrorAffordanceKey, resolveStartupRecoveryInfo } from './shell/recovery-input-helpers.ts';
@@ -43,7 +43,7 @@ import { buildPersistedSessionContext, formatReturnContextForDisplay, getReturnC
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 import { prepareShellCliRuntime } from './cli/entrypoint.ts';
 import { applyInitialTuiCliState } from './cli/tui-startup.ts';
-import { applyRuntimeConfigDefault, applyRuntimeConfigValue } from './cli/config-overrides.ts';
+import { applyConfiguredHitlMode, applyRuntimeConfigValue, applyTuiRuntimeConfigDefaults } from './cli/config-overrides.ts';
 import { renderToolCallBlock } from './renderer/tool-call.ts';
 import { wireSpokenTurnRuntime } from './audio/spoken-turn-wiring.ts';
 import { attachSpokenTurnModelRouting, createSpokenTurnInputOptions } from './audio/spoken-turn-model-routing.ts';
@@ -78,6 +78,10 @@ async function main() {
     defaultWorkingDirectory: process.env['GOODVIBES_WORKING_DIR'] ?? process.cwd(),
     homeDirectory: homedir(),
   }, 'goodvibes');
+
+  // Launch-time self-update, before any bootstrap or terminal mode change; on
+  // an installed update this restarts onto the swapped binary and never returns.
+  const launchUpdateLines = await selfUpdateAtLaunch({ configManager, stdout });
 
   const ctx: BootstrapContext = await bootstrapRuntime(stdout, {
     configManager,
@@ -120,17 +124,12 @@ async function main() {
   ctx.services.wrfcController.setPlanManager(ctx.services.planManager);
   let activeConversationWidth = stdout.columns || 80;
   conversation.setWidthProvider(() => activeConversationWidth);
-  {
-    const hitlMode = configManager.get('behavior.hitlMode') as HITLMode | undefined;
-    if (hitlMode && (hitlMode === 'quiet' || hitlMode === 'balanced' || hitlMode === 'operator')) {
-      modeManager.setHITLMode(hitlMode);
-    }
-  }
+  // Persisted HITL mode + TUI-side config defaults (doc'd at their definitions).
+  applyConfiguredHitlMode(configManager, modeManager);
+  applyTuiRuntimeConfigDefaults(configManager);
 
-  // TUI default: show token speed ON (SDK schema default is false). applyRuntimeConfigDefault
-  // reads the global + project settings files and only applies the default in-memory when the
-  // key is absent from both (e.g. a new install); an explicit user value is respected. No disk write.
-  applyRuntimeConfigDefault(configManager, 'display.showTokenSpeed', true);
+  // Re-surface pre-TUI launch-update lines in-session (the alt screen wipes stdout).
+  for (const line of launchUpdateLines) systemMessageRouter.high(`[Update] ${line}`);
 
   const panelManager = ctx.services.panelManager;
   const buildSessionContinuityHints = () => {
