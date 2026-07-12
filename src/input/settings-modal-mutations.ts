@@ -1,17 +1,18 @@
 /**
  * settings-modal-mutations — pure mutation helpers for SettingsModal.
  *
- * These functions encapsulate the side-effectful write operations:
- * applying config values, persisting feature flag state, and applying flag
- * runtime toggles. Each function takes its dependencies as explicit arguments
- * rather than accessing class-level state.
+ * These functions encapsulate the side-effectful write operations. Every
+ * write — feature-unit headers included — is a plain domain-settings config
+ * write; the SDK's settings bridge keeps the runtime gate manager in sync
+ * (flipping runtime-toggleable gates live and recording honest
+ * pending-restart markers for startup-gated ones). Each function takes its
+ * dependencies as explicit arguments rather than accessing class-level state.
  */
 
-import type { ConfigKey, PersistedFlagState } from '@pellux/goodvibes-sdk/platform/config';
+import type { ConfigKey } from '@pellux/goodvibes-sdk/platform/config';
 import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import { logger, summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 import type { FeatureFlagManager } from '@/runtime/index.ts';
-import type { FeatureFlag, FlagState } from '@/runtime/index.ts';
 import type { FlagEntry, SettingEntry } from './settings-modal-types.ts';
 import { deepEqual } from './settings-modal-data.ts';
 
@@ -83,10 +84,12 @@ export function applySettingValue({
     };
   }
 
-  // Update the entry in the groups map
+  // Update every entry carrying this key: cross-listed rows (the network
+  // combined view) and feature-unit headers that share one enablement key
+  // (e.g. both compaction features read behavior.compactionStrategy).
   for (const entries of groups.values()) {
-    const entry = entries.find((candidate) => candidate.setting.key === key);
-    if (entry) {
+    for (const entry of entries) {
+      if (entry.setting.key !== key) continue;
       entry.currentValue = configManager.get(key);
       entry.isDefault = deepEqual(entry.currentValue, entry.setting.default);
     }
@@ -110,65 +113,6 @@ export function applySettingValue({
   }
 
   return { restartDomain, effectMessage, changed: previousValue !== value };
-}
-
-// ---------------------------------------------------------------------------
-// persistFlagState — write a flag override to config
-// ---------------------------------------------------------------------------
-
-export function persistFlagState(
-  configManager: ConfigManager,
-  flagId: string,
-  newState: FlagState,
-  defaultState: FlagState,
-): void {
-  if (newState === 'killed') return; // never persist killed state
-
-  try {
-    if (newState === defaultState) {
-      // Back at the default: the override must be REMOVED, not merged.
-      // getCategory clones and mergeCategory only sets keys, so the old
-      // delete-then-merge approach left the stale override on disk and the
-      // flag silently reloaded in the overridden state on the next start.
-      configManager.removeCategoryKey('featureFlags', flagId);
-    } else {
-      configManager.mergeCategory('featureFlags', { [flagId]: newState } as Record<string, PersistedFlagState>);
-    }
-  } catch (e) {
-    logger.error('SettingsModal: failed to persist flag state', { flagId, error: summarizeError(e) });
-  }
-}
-
-// ---------------------------------------------------------------------------
-// applyFlagState — toggle a feature flag (runtime + persist)
-// ---------------------------------------------------------------------------
-
-export function applyFlagState(
-  flagEntry: FlagEntry,
-  newState: FlagState,
-  featureFlagManager: FeatureFlagManager,
-  configManager: ConfigManager,
-): void {
-  const flag: FeatureFlag = flagEntry.flag;
-
-  try {
-    // Persist first so the on-disk override is the source of truth, then apply
-    // the same value to the live manager through applyConfigState. That single
-    // call keeps both paths consistent with the SDK's config→flag bridge:
-    //   - runtime-toggleable flags apply immediately (firing flag subscribers
-    //     exactly as a direct enable()/disable() would), and
-    //   - startup-gated flags are NOT faked live — the effective state is left
-    //     untouched and a pending-restart marker is recorded instead.
-    persistFlagState(configManager, flag.id, newState, flag.defaultState as FlagState);
-    featureFlagManager.applyConfigState(flag.id, newState);
-  } catch (e) {
-    logger.error('SettingsModal: failed to toggle feature flag', { flag: flag.id, error: summarizeError(e) });
-  }
-
-  // Reflect the manager's real state, never the requested target: for a
-  // startup-gated flag `state` stays at the unchanged effective value and
-  // `pendingRestart` reports that a restart is needed for `persistedState`.
-  syncFlagEntryFromManager(flagEntry, featureFlagManager);
 }
 
 /**

@@ -1,9 +1,8 @@
 /**
  * settings-modal-adjustment — pure adjustment helpers for SettingsModal.
  *
- * These functions encapsulate the two directional-adjustment operations:
+ * These functions encapsulate the directional-adjustment operation:
  *   - adjustSelected: cycle enum/boolean/number values via left/right arrow keys
- *   - toggleSelectedFlag: toggle a feature flag between enabled and disabled
  *
  * Each function takes its dependencies as explicit arguments rather than
  * accessing class-level state directly, following the same pattern as
@@ -13,11 +12,9 @@
 import type { ConfigKey } from '@pellux/goodvibes-sdk/platform/config';
 import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import type { FeatureFlagManager } from '@/runtime/index.ts';
-import type { FlagState } from '@/runtime/index.ts';
 import type { FlagEntry, McpEntry, SettingEntry } from './settings-modal-types.ts';
 import { buildMcpEntries } from './settings-modal-data.ts';
 import { getNumericAdjustmentMeta, roundToPrecision } from './settings-modal-behavior.ts';
-import { applyFlagState } from './settings-modal-mutations.ts';
 import type { McpRegistry } from '@pellux/goodvibes-sdk/platform/mcp';
 
 // ---------------------------------------------------------------------------
@@ -45,10 +42,9 @@ export function adjustSelected(
 ): void {
   if (ctx.editingMode) return;
 
-  // Feature-unit toggle headers (setting.type === 'boolean', key featureFlags.<id>)
-  // now live across topical categories, not a single flags tab. They fall through
-  // to the boolean branch below, which routes through setValue → the modal's
-  // flag-toggle chokepoint. No category-special-case is needed here anymore.
+  // Feature-unit headers are the real config rows for their enablement keys
+  // (boolean or enum), so they fall through to the ordinary branches below —
+  // a plain config write the settings bridge forwards to the gate manager.
 
   if (ctx.currentCategory === 'mcp') {
     const entry = ctx.getSelectedMcp();
@@ -95,27 +91,4 @@ export function adjustSelected(
     if (setting.validate && !setting.validate(nextValue)) return;
     ctx.setValue(setting.key as ConfigKey, nextValue);
   }
-}
-
-// ---------------------------------------------------------------------------
-// toggleSelectedFlag
-// ---------------------------------------------------------------------------
-
-export interface ToggleSelectedFlagContext {
-  readonly featureFlagManager: FeatureFlagManager | null;
-  readonly configManager: ConfigManager | null;
-  getSelectedFlag(): FlagEntry | null;
-}
-
-export function toggleSelectedFlag(ctx: ToggleSelectedFlagContext): void {
-  const flagEntry = ctx.getSelectedFlag();
-  if (!flagEntry || !ctx.featureFlagManager || !ctx.configManager) return;
-
-  const { state } = flagEntry;
-
-  // Killed flags are blocked
-  if (state === 'killed') return;
-
-  const newState: FlagState = state === 'enabled' ? 'disabled' : 'enabled';
-  applyFlagState(flagEntry, newState, ctx.featureFlagManager, ctx.configManager);
 }

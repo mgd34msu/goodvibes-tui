@@ -5,9 +5,12 @@
  *   - Active category (Tab to cycle)
  *   - Selected setting index within category (↑↓)
  *   - Editing mode for inline string/number input
- *   - Feature flags tab with runtime toggle support
+ *   - Feature-unit headers (each capability's real enablement row in its domain)
  *
- * Saves changes via configManager.set(key, value) or featureFlagManager methods.
+ * Every save is a plain configManager.set(key, value) on a domain settings
+ * key; the SDK settings bridge keeps the runtime gate manager in sync, and
+ * this modal re-reads the manager after enablement writes so pending-restart
+ * markers are shown honestly at the point of change.
  *
  * Data assembly delegates to settings-modal-data.ts (buildSettingGroups, etc.).
  * Mutation logic delegates to settings-modal-mutations.ts (applySettingValue, etc.).
@@ -41,7 +44,6 @@ import {
 } from './settings-modal-types.ts';
 import {
   buildSettingGroups,
-  buildFlagEntries,
   buildMcpEntries,
   buildSubscriptionEntries,
   buildNetworkFilteredItems,
@@ -51,9 +53,10 @@ import {
 import { getSettingLabel } from '../renderer/settings-modal-helpers.ts';
 import {
   applySettingValue,
-  applyFlagState,
+  syncFlagEntryFromManager,
   type SettingAppliedCallback,
 } from './settings-modal-mutations.ts';
+import { featureEnablementWrite, isFeatureValueEnabled } from '../runtime/feature-settings.ts';
 import {
   activateSelected as _activateSelected,
   handleSubscriptionLogoutKey as _handleSubscriptionLogoutKey,
@@ -140,8 +143,6 @@ export class SettingsModal {
   /** Settings grouped by category. */
   public groups: Map<SettingsCategory, SettingEntry[]> = new Map();
 
-  /** Feature flag entries (populated when flags tab is active). */
-  public flagEntries: FlagEntry[] = [];
   /** MCP server trust entries (populated when mcp tab is active). */
   public mcpEntries: McpEntry[] = [];
   /** Provider subscription entries (populated when subscriptions tab is active). */
@@ -207,7 +208,6 @@ export class SettingsModal {
     this.mcpRegistry = mcpRegistry ?? null;
     this.onSettingApplied = options?.onSettingApplied ?? null;
     this.groups = buildSettingGroups(configManager, featureFlagManager);
-    this.flagEntries = buildFlagEntries(featureFlagManager);
     this.mcpEntries = buildMcpEntries(this.mcpRegistry);
     this.subscriptionEntries = buildSubscriptionEntries(subscriptionManager, serviceRegistry);
     this.categoryIndex = 0;
@@ -334,9 +334,7 @@ export class SettingsModal {
     }
     const items = this._currentItems();
     if (items.length === 0) {
-      if (this.currentCategory === 'flags' && this.flagEntries.length > 0) {
-        this.selectedIndex = (this.selectedIndex - 1 + this.flagEntries.length) % this.flagEntries.length;
-      } else if (this.currentCategory === 'mcp' && this.mcpEntries.length > 0) {
+      if (this.currentCategory === 'mcp' && this.mcpEntries.length > 0) {
         this.selectedIndex = (this.selectedIndex - 1 + this.mcpEntries.length) % this.mcpEntries.length;
       } else if (this.currentCategory === 'subscriptions' && this.subscriptionEntries.length > 0) {
         this.selectedIndex = (this.selectedIndex - 1 + this.subscriptionEntries.length) % this.subscriptionEntries.length;
@@ -358,9 +356,7 @@ export class SettingsModal {
     }
     const items = this._currentItems();
     if (items.length === 0) {
-      if (this.currentCategory === 'flags' && this.flagEntries.length > 0) {
-        this.selectedIndex = (this.selectedIndex + 1) % this.flagEntries.length;
-      } else if (this.currentCategory === 'mcp' && this.mcpEntries.length > 0) {
+      if (this.currentCategory === 'mcp' && this.mcpEntries.length > 0) {
         this.selectedIndex = (this.selectedIndex + 1) % this.mcpEntries.length;
       } else if (this.currentCategory === 'subscriptions' && this.subscriptionEntries.length > 0) {
         this.selectedIndex = (this.selectedIndex + 1) % this.subscriptionEntries.length;
@@ -493,38 +489,21 @@ export class SettingsModal {
   }
 
   /**
-   * Toggle the currently selected feature flag.
-   *
-   * Killed flags cannot be toggled. Non-runtimeToggleable flags toggle in config
-   * only (require restart). runtimeToggleable flags toggle immediately.
+   * Toggle the currently selected feature unit through its real domain
+   * settings key: boolean/constant enablements flip the key, enum enablements
+   * jump between the feature's stock active mode and its off mode. Killed
+   * features cannot be toggled; constant capabilities with no off position
+   * (non-boolean keys) are left to their domain settings.
    */
   toggleSelectedFlag(): void {
     const entry = this.getSelected();
     if (!entry?.flag) return;
     if (entry.flag.state === 'killed') return;
-    this._toggleFlagValue(entry.setting.key as ConfigKey, entry.flag.state !== 'enabled');
-  }
-
-  /**
-   * Toggle the feature flag behind a `featureFlags.<id>` header row. Finds the
-   * header entry, applies the desired state through the flag manager (runtime +
-   * persisted override), and refreshes the header row's value/default marker in
-   * place. Killed flags and no-op toggles are ignored.
-   */
-  private _toggleFlagValue(key: ConfigKey, value: unknown): void {
-    if (!this.featureFlagManager || !this.configManager) return;
-    let target: SettingEntry | null = null;
-    for (const entries of this.groups.values()) {
-      const candidate = entries.find((e) => e.setting.key === key && e.flag);
-      if (candidate) { target = candidate; break; }
-    }
-    if (!target?.flag) return;
-    if (target.flag.state === 'killed') return;
-    const desired = value ? 'enabled' : 'disabled';
-    if (target.flag.state === desired) return;
-    applyFlagState(target.flag, desired, this.featureFlagManager, this.configManager);
-    target.currentValue = target.flag.state === 'enabled';
-    target.isDefault = target.flag.state === target.flag.flag.defaultState;
+    const feature = entry.flag.feature;
+    const currentlyOn = isFeatureValueEnabled(feature, entry.currentValue);
+    const write = featureEnablementWrite(feature.id, !currentlyOn);
+    if (!write) return;
+    this._setValue(write.key, write.value);
   }
 
   /**
@@ -685,11 +664,9 @@ export class SettingsModal {
 
   // ── Private helpers ────────────────────────────────────────────────────────────────
 
-  /** Reload flag/mcp/subscription entries when the active tab changes. */
+  /** Reload mcp/subscription entries when the active tab changes. */
   private _reloadTabEntries(): void {
-    if (this.currentCategory === 'flags') {
-      this.flagEntries = buildFlagEntries(this.featureFlagManager);
-    } else if (this.currentCategory === 'mcp') {
+    if (this.currentCategory === 'mcp') {
       this.mcpEntries = buildMcpEntries(this.mcpRegistry);
     } else if (this.currentCategory === 'subscriptions') {
       this.subscriptionEntries = buildSubscriptionEntries(this.subscriptionManager, this.serviceRegistry);
@@ -698,8 +675,8 @@ export class SettingsModal {
 
   /**
    * Returns [] for the mcp/subscriptions categories (which render their own
-   * entry types). The 'flags' category now flows through the normal group path
-   * — it holds the no-config feature-unit toggles (Advanced Features).
+   * entry types). Every other category flows through the normal group path,
+   * feature-unit headers included.
    */
   private _currentItems(): SettingEntry[] {
     if (
@@ -716,15 +693,6 @@ export class SettingsModal {
   private _setValue(key: ConfigKey, value: unknown): void {
     if (!this.configManager) return;
 
-    // Feature-unit toggle headers write to `featureFlags.<id>`; route those to
-    // the feature-flag manager (runtime toggle + persisted override) instead of
-    // a plain config write. Reset/adjust/activate all funnel a boolean value
-    // here (true = enabled), so this is the single flag-toggle chokepoint.
-    if (typeof key === 'string' && key.startsWith('featureFlags.')) {
-      this._toggleFlagValue(key, value);
-      return;
-    }
-
     const callback: SettingAppliedCallback | null = this.onSettingApplied
       ? (change) => this.onSettingApplied!(change)
       : null;
@@ -740,6 +708,13 @@ export class SettingsModal {
       },
     });
 
+    // Feature-unit headers write plain domain keys; the SDK settings bridge
+    // has already applied the change to the gate manager (live flip for
+    // runtime-toggleable features, pending-restart marker for startup-gated
+    // ones). Re-read the manager for every header bound to this key so the
+    // rows and the context pane show the honest state at the point of change.
+    this._syncFeatureHeadersForKey(key);
+
     if (result.restartDomain !== null) {
       this.lastSaveTriggeredRestart = result.restartDomain;
     }
@@ -747,6 +722,18 @@ export class SettingsModal {
       this.lastSettingEffectMessage = result.effectMessage;
     }
     // No-op (result.changed === false, effectMessage === null): leave lastSettingEffectMessage untouched.
+  }
+
+  /** Refresh live/persisted/pending state for every feature header bound to `key`. */
+  private _syncFeatureHeadersForKey(key: ConfigKey): void {
+    if (!this.featureFlagManager) return;
+    for (const entries of this.groups.values()) {
+      for (const entry of entries) {
+        if (entry.flag && entry.flag.feature.enablement.key === key) {
+          syncFlagEntryFromManager(entry.flag, this.featureFlagManager);
+        }
+      }
+    }
   }
 
 }
