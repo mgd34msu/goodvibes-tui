@@ -1,5 +1,5 @@
 /**
- * Regression tests for the batch live-replay findings (D1/D2/D4/D5): honest
+ * Regression tests for the batch live-replay findings: honest
  * pre-first-token wording, a real /config set verb, attach-and-steer from the
  * fleet tree, and the Ctrl+C chord decoupled from live TTS.
  */
@@ -37,7 +37,7 @@ describe('D1 — pre-first-token silence is not "Stalled"', () => {
   });
 });
 
-describe('D5 — Ctrl+C chord vs live TTS', () => {
+describe('Ctrl+C chord vs live TTS', () => {
   function pressCtrlC(cancelGeneration: (() => boolean | void) | undefined, lastTime = 0) {
     let armed = false;
     let exited = false;

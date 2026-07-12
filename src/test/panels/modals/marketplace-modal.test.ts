@@ -29,12 +29,12 @@ describe('marketplace modal surface', () => {
     expect(createMarketplaceModalSurface({}).name).toBe('marketplace-modal');
   });
 
-  test('B30: honest empty-state copy is byte-preserved (local publish/import catalog, not a remote store)', () => {
+  test('honest empty-state copy is byte-preserved (local publish/import catalog, not a remote store)', () => {
     const { paths, cleanup } = seedCatalog({}); // roots wired, catalog empty
     try {
       const view = open(createMarketplaceModalSurface({ ecosystemPaths: paths }));
       const labels = tabRows(view, 'catalog').map((r) => r.label);
-      // Byte-for-byte: the exact locked B30 copy (curly quotes, em-dashes, alignment spacing).
+      // Byte-for-byte: the exact locked copy (curly quotes, em-dashes, alignment spacing).
       expect(labels).toContain('This is your local plugin, skill, hook-pack, and policy-pack catalog — not a remote store.');
       expect(labels).toContain('It’s empty because nothing has been published or imported into this workspace yet. Entries appear here once you publish a local component or import a bundle.');
       expect(labels).toContain('Populate it');

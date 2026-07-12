@@ -35,7 +35,7 @@ type WireShellUiOpenersOptions = {
   subscriptionManager: SubscriptionManager;
   secretsManager?: Pick<SecretsManager, 'delete' | 'get' | 'set'>;
   serviceRegistry: Pick<ServiceInspectionQuery, 'getAll'>;
-  /** B29: backs the model picker's 'embeddings' target and its own item-list mode. */
+  /** Backs the model picker's 'embeddings' target and its own item-list mode. */
   memoryEmbeddingRegistry: Pick<MemoryEmbeddingProviderRegistry, 'getDefaultProviderId' | 'setDefaultProvider' | 'status'>;
   workingDirectory: string;
   homeDirectory: string;

@@ -268,7 +268,7 @@ describe('SessionUnionCache — honest cross-surface read facade', () => {
     expect(transitions).toEqual([true, false]); // and the flip was reported to the subscriber (-> requestRender)
   });
 
-  describe('generation guard (D7): a superseded reader can never write back after activate()/deactivate() moves on', () => {
+  describe('generation guard: a superseded reader can never write back after activate()/deactivate() moves on', () => {
     /**
      * Let every pending microtask (the .then chain inside raceWithProbeTimeout
      * plus the awaiting performRefresh) drain before asserting on state that a

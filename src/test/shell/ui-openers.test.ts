@@ -288,7 +288,7 @@ describe('wireShellUiOpeners', () => {
     expect(realPm.getModalRedirect('sessions')).toBe('sessionPicker');
   });
 
-  describe('embeddings target (B29)', () => {
+  describe('embeddings target', () => {
     async function openModelPickerAndFlush(): Promise<void> {
       (commandContext.openModelPicker as () => void)();
       // openModelPicker's body is a fire-and-forget async IIFE (`void (async () => ...)()`);
@@ -365,7 +365,7 @@ describe('wireShellUiOpeners', () => {
   // ProviderNotFoundError ("Provider 'google' is not registered."). The picker
   // must intersect against providerRegistry.has() so it never offers a model or
   // provider that cannot work.
-  describe('unregistered-provider filtering (D5)', () => {
+  describe('unregistered-provider filtering', () => {
     const registeredModel = { id: 'gemini-pro', provider: 'gemini', displayName: 'Gemini Pro' };
     const unregisteredModel = { id: 'gemini-2.5-pro', provider: 'google', displayName: 'Gemini 2.5 Pro (catalog)' };
 

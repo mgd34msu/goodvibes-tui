@@ -45,7 +45,7 @@ const KINDS: readonly EcosystemEntryKind[] = ['plugin', 'skill', 'hook-pack', 'p
  * Install/uninstall route to the `/marketplace` command path (charter: no
  * destructive confirm folded into a modal).
  *
- * B30 (honest empty-state): the panel's original "No curated marketplace
+ * Honest empty-state: the panel's original "No curated marketplace
  * entries found yet." copy implied a curated remote catalog. It isn't one —
  * loadEcosystemCatalog only ever reads .goodvibes/ecosystem/<kind>s.json under
  * the project/home, populated solely by `/marketplace publish` and
@@ -118,7 +118,7 @@ class MarketplaceModalSurface implements ConfigModalSurface {
     const snapshot = this.deps.readModel?.getSnapshot();
     const rows: ConfigModalRow[] = [];
 
-    // Honest empty / degraded state (B30). loadError → degraded banner.
+    // Honest empty / degraded state. loadError → degraded banner.
     if (this.loadError) {
       return { title: 'Marketplace', degraded: this.loadError, tabs: [{ id: 'catalog', label: 'Catalog', rows: [] }] };
     }
@@ -205,7 +205,7 @@ export function createMarketplaceModalSurface(deps: MarketplaceModalDeps): Confi
  * Deterministic golden fixture: catalog roots wired at a fresh tmp path that is
  * removed immediately (loadEcosystemCatalog/listInstalledEcosystemEntries guard
  * missing paths with existsSync → [], so refresh() finds nothing and renders the
- * B30 honest empty-state copy). The random tmp path never appears in the
+ * honest empty-state copy). The random tmp path never appears in the
  * rendered lines (the empty-state copy is static), so the golden is byte-stable.
  */
 export function marketplaceModalGoldenSurface(): ConfigModalSurface {
