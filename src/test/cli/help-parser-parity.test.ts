@@ -35,6 +35,7 @@ const PARSER_KNOWN_LONG_FLAGS = [
   '--continue',
   '--yes',
   '--non-interactive',
+  '--strict',
   '--provider',
   '--model',
   '--daemon-home',

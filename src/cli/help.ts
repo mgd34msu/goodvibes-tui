@@ -85,6 +85,7 @@ export function renderGoodVibesHelp(binary = 'goodvibes'): string {
     '      --fork [id]                Fork session (current or specific id) when supported',
     '  -y, --yes                      Auto-confirm prompts (non-interactive)',
     '      --non-interactive          Disable all interactive prompts (implies --yes)',
+    '      --strict                   doctor: also fail on advisory findings, for CI',
     '  -h, --help                     Print help',
     '  -v, --version                  Print version',
     '',
@@ -139,9 +140,9 @@ const COMMAND_HELP: Record<string, CommandHelp> = {
     examples: ['status', 'status --json'],
   },
   doctor: {
-    usage: ['doctor', 'doctor --json', 'doctor explain <tool|command>', 'doctor routing', 'doctor hooks'],
-    summary: 'Print status plus setup warnings, or explain a platform decision: explain (why a tool/command would be allowed/asked/denied under the current mode), routing (which model/provider serves which role), hooks (registered hooks, their source, and validation status).',
-    examples: ['doctor', 'doctor explain "rm -rf build"', 'doctor explain write ./src/app.ts', 'doctor routing', 'doctor hooks --json'],
+    usage: ['doctor', 'doctor --json', 'doctor --strict', 'doctor explain <tool|command>', 'doctor routing', 'doctor hooks'],
+    summary: 'Print status plus setup warnings, or explain a platform decision: explain (why a tool/command would be allowed/asked/denied under the current mode), routing (which model/provider serves which role), hooks (registered hooks, their source, and validation status). Exits 0 when the install is usable (advisory findings render as notes); non-zero only for a must-fix finding. --strict also fails on advisory findings, for CI.',
+    examples: ['doctor', 'doctor --strict', 'doctor explain "rm -rf build"', 'doctor explain write ./src/app.ts', 'doctor routing', 'doctor hooks --json'],
   },
   providers: {
     usage: ['providers [list]', 'providers current', 'providers inspect <provider>', 'providers use <provider> [modelRegistryKey]'],

@@ -46,8 +46,9 @@
 # Uninstall mode (GOODVIBES_UNINSTALL=1) takes precedence over everything else
 # (no downloads happen): it stops the running daemon/agent, removes only the
 # files this installer manages (the three binaries, the sqlite-vec addon dirs,
-# and the service unit/plist ONLY when it carries the installer-managed marker),
-# deliberately preserves ~/.goodvibes user data, and prints a summary.
+# the service unit/plist ONLY when it carries the installer-managed marker,
+# and the PATH line in the shell rc file if one was ever added), deliberately
+# preserves ~/.goodvibes user data, and prints a summary.
 #
 # This file is versioned in the goodvibes-tui repository at scripts/install.sh
 # and published to goodvibes.sh on release. The `/update` command re-runs the
@@ -90,6 +91,87 @@ launchd_daemon_plist_path() { printf '%s' "$HOME/Library/LaunchAgents/$LAUNCHD_D
 # Generic form of the above for any systemd user unit name (daemon or agent) —
 # used by the restart path to find and back up a broken unit file on disk.
 systemd_unit_path() { printf '%s' "$HOME/.config/systemd/user/$1"; }
+
+# --- PATH line (installer-managed, same marker discipline as service units) ---
+#
+# F12 fix: "Start with: goodvibes" must not be a false promise. When
+# $INSTALL_DIR is not on PATH, the installer used to print a session-local
+# `export PATH=...` line the user had to copy-paste themselves — and still
+# ended with "Start with: goodvibes" regardless, which was false on a fresh
+# shell. Instead the installer now writes an idempotent, marker-tagged PATH
+# line into the user's actual shell rc itself (uninstall removes it, same as
+# it does for service units), and the final line states a command that works
+# RIGHT NOW in the current shell (the absolute path), never a promise that
+# depends on a shell restart the user hasn't done yet.
+
+# Resolve the rc file for the user's actual login shell ($SHELL — set by the
+# environment regardless of this script's own #!/bin/sh execution), not a
+# guess. Falls back to .profile for anything unrecognized.
+resolve_shell_rc() {
+  case "${SHELL:-}" in
+    */zsh) printf '%s' "$HOME/.zshrc" ;;
+    */fish) printf '%s' "$HOME/.config/fish/config.fish" ;;
+    */bash)
+      # bash reads .bashrc for the interactive non-login shells most
+      # terminal emulators start; fall back to .bash_profile only when that
+      # already exists and .bashrc does not.
+      if [ -f "$HOME/.bashrc" ] || [ ! -f "$HOME/.bash_profile" ]; then
+        printf '%s' "$HOME/.bashrc"
+      else
+        printf '%s' "$HOME/.bash_profile"
+      fi
+      ;;
+    *) printf '%s' "$HOME/.profile" ;;
+  esac
+}
+
+# The PATH-export line itself, in the syntax the target shell understands.
+path_export_line() {
+  case "${SHELL:-}" in
+    */fish) printf 'set -gx PATH %s $PATH' "$INSTALL_DIR" ;;
+    *) printf 'export PATH="%s:$PATH"' "$INSTALL_DIR" ;;
+  esac
+}
+
+# Set by ensure_path_on_shell_rc() so main() can print an honest final line.
+PATH_LINE_ADDED=0
+RC_FILE_USED=""
+
+# Idempotent: does nothing if $INSTALL_DIR is already on PATH, or if a prior
+# run already added the marker-tagged line (this shell just hasn't re-sourced
+# its rc file yet). Otherwise appends the marker comment + export line.
+ensure_path_on_shell_rc() {
+  case ":$PATH:" in
+    *":$INSTALL_DIR:"*) return 0 ;;
+  esac
+  rc_file=$(resolve_shell_rc)
+  if [ -f "$rc_file" ] && grep -qF "$INSTALLER_MARKER" "$rc_file" 2>/dev/null; then
+    return 0
+  fi
+  mkdir -p "$(dirname "$rc_file")" 2>/dev/null || true
+  printf '\n# %s\n%s\n' "$INSTALLER_MARKER" "$(path_export_line)" >> "$rc_file"
+  PATH_LINE_ADDED=1
+  RC_FILE_USED="$rc_file"
+  say ""
+  say "Added $INSTALL_DIR to PATH in $rc_file (installer-managed; uninstall removes it)."
+}
+
+# Uninstall-side removal of the PATH line: only the marker comment line and
+# the one export/set line immediately after it — the exact two lines
+# ensure_path_on_shell_rc() appended — never anything else in the file.
+uninstall_shell_rc_path_line() {
+  rc_file=$(resolve_shell_rc)
+  [ -f "$rc_file" ] || return 0
+  grep -qF "$INSTALLER_MARKER" "$rc_file" 2>/dev/null || return 0
+  tmp_file="$rc_file.goodvibes-uninstall-tmp"
+  awk -v marker="$INSTALLER_MARKER" '
+    index($0, marker) > 0 { skip = 1; next }
+    skip > 0 { skip--; next }
+    { print }
+  ' "$rc_file" > "$tmp_file" && mv "$tmp_file" "$rc_file"
+  say "  removed    PATH line from $rc_file"
+  record_removed "PATH line in $rc_file (installer-managed)"
+}
 
 # --- platform detection (release asset naming: goodvibes[-daemon]-{linux|macos}-{x64|arm64}) ---
 resolve_platform() {
@@ -758,6 +840,9 @@ run_uninstall() {
   # Drop the lib dir only if the installer left it empty.
   rmdir "$INSTALL_DIR/lib" 2>/dev/null || true
 
+  # The installer-managed PATH line, if one was ever added.
+  uninstall_shell_rc_path_line
+
   say ""
   say "Uninstall summary"
   say "-----------------"
@@ -819,18 +904,12 @@ main() {
     say "  installed  $target"
   done
 
-  case ":$PATH:" in
-    *":$INSTALL_DIR:"*) : ;;
-    *)
-      say ""
-      say "NOTE: $INSTALL_DIR is not on your PATH. Add it with:"
-      say "  export PATH=\"$INSTALL_DIR:\$PATH\""
-      ;;
-  esac
+  ensure_path_on_shell_rc
 
   # Smoke test: the installed binary must at least report its version.
-  # (doctor is a next-step suggestion, not an install gate — it exits non-zero
-  # on advisory findings, which would make healthy installs look broken here.)
+  # (doctor is a next-step suggestion, not an install gate: a healthy install
+  # exits 0 — advisory findings render as notes, not failures — so there is
+  # no "healthy install reports broken" case here to work around.)
   say ""
   if installed_version=$("$INSTALL_DIR/goodvibes" --version 2>/dev/null); then
     say "Installed: $installed_version"
@@ -855,7 +934,16 @@ main() {
   setup_daemon_service
 
   say ""
-  say "Done. Start with: goodvibes   (health check: goodvibes doctor)"
+  if [ "$PATH_LINE_ADDED" = "1" ]; then
+    # $INSTALL_DIR was just added to PATH in $RC_FILE_USED, but THIS shell
+    # session hasn't re-sourced it yet — the bare 'goodvibes' command would
+    # not resolve here. State a command that works RIGHT NOW instead of a
+    # promise that depends on a shell restart the user hasn't done.
+    say "Done. Start with: $INSTALL_DIR/goodvibes   (health check: $INSTALL_DIR/goodvibes doctor)"
+    say "PATH updated in $RC_FILE_USED — open a new shell (or run: . $RC_FILE_USED) to use the plain 'goodvibes' command from then on."
+  else
+    say "Done. Start with: goodvibes   (health check: goodvibes doctor)"
+  fi
   if [ "$WITH_AGENT" = "1" ]; then
     say "Personal agent:   goodvibes-agent"
   fi

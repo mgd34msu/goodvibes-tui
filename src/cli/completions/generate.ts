@@ -139,6 +139,7 @@ export const GLOBAL_FLAGS: readonly CompletionFlag[] = [
   { name: '--fork', takesValue: false, description: 'Fork session when supported' },
   { name: '--yes', short: '-y', takesValue: false, description: 'Auto-confirm prompts (non-interactive)' },
   { name: '--non-interactive', takesValue: false, description: 'Disable all interactive prompts (implies --yes)' },
+  { name: '--strict', takesValue: false, description: 'doctor: also fail on advisory findings, for CI' },
 ] as const;
 
 // ---------------------------------------------------------------------------

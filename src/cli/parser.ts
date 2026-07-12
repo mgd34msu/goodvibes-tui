@@ -87,6 +87,7 @@ function createDefaultFlags(): GoodVibesCliFlags {
     fork: undefined,
     yes: false,
     nonInteractive: false,
+    strict: false,
   };
 }
 
@@ -258,6 +259,10 @@ export function parseGoodVibesCli(
     }
     if (name === '--non-interactive') {
       flags = withFlag(withFlag(flags, 'nonInteractive', true), 'yes', true);
+      continue;
+    }
+    if (name === '--strict') {
+      flags = withFlag(flags, 'strict', true);
       continue;
     }
 

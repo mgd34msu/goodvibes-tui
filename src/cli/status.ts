@@ -502,6 +502,19 @@ export function buildCliDoctorFindings(options: CliStatusOptions): readonly CliD
   return findings;
 }
 
+/**
+ * The doctor command's exit code. Advisory findings (`severity: 'warning'`)
+ * are notes on an otherwise-usable install and must never make a healthy
+ * install report failure — only a must-fix (`severity: 'risk'`) finding
+ * exits non-zero. `strict` (for CI) flips warnings to failures too, so a
+ * pipeline can require a fully clean report instead of just "usable".
+ */
+export function resolveDoctorExitCode(findings: readonly CliDoctorFinding[], strict = false): number {
+  if (findings.some((finding) => finding.severity === 'risk')) return 1;
+  if (strict && findings.length > 0) return 1;
+  return 0;
+}
+
 export function buildCliStatusSnapshot(options: CliStatusOptions): CliStatusSnapshot {
   const config = options.configManager;
   const controlPlaneBinding = resolveRuntimeEndpointBinding(config, 'controlPlane');

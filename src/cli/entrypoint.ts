@@ -21,6 +21,7 @@ import {
   renderGoodVibesHelp,
   renderGoodVibesVersion,
   renderOnboardingCliStatus,
+  resolveDoctorExitCode,
 } from './index.ts';
 import { buildCliServicePosture, getGoodVibesPackageRoot, resolveGoodVibesDaemonExecutable } from './service-posture.ts';
 import { runInstallSelfCheck } from '../runtime/install-self-check.ts';
@@ -232,7 +233,10 @@ export async function prepareShellCliRuntime(
     console.log(cli.command === 'onboarding'
       ? renderOnboardingCliStatus(statusOptions)
       : renderCliStatus(statusOptions));
-    process.exit(cli.command === 'doctor' && snapshot.findings.length > 0 ? 1 : 0);
+    // Advisory findings are notes on an otherwise-usable install and must
+    // never make a healthy install report failure — only a must-fix finding
+    // exits non-zero; --strict (for CI) flips advisories to failures too.
+    process.exit(cli.command === 'doctor' ? resolveDoctorExitCode(snapshot.findings, cli.flags.strict) : 0);
   }
 
   const cliCommandResult = await handleGoodVibesCliCommand({
