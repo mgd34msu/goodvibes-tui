@@ -60,6 +60,8 @@ export interface GoodVibesCliFlags {
   readonly fork: string | true | undefined;
   readonly yes: boolean;
   readonly nonInteractive: boolean;
+  /** `doctor --strict`: advisory findings also fail (exit 1), for CI. Ignored by every other command. */
+  readonly strict: boolean;
 }
 
 export interface GoodVibesCliParseResult {

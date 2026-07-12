@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { buildCliDoctorFindings, buildCliExposureReport, renderCliStatus } from '../../cli/status.ts';
+import { buildCliDoctorFindings, buildCliExposureReport, renderCliStatus, resolveDoctorExitCode } from '../../cli/status.ts';
 import type { CliStatusOptions } from '../../cli/status.ts';
 
 type ConfigValues = Record<string, unknown>;
@@ -280,5 +280,39 @@ describe('CLI doctor risky-combination and install findings', () => {
     expect(mapped).toBeDefined();
     expect(mapped?.area).toBe('install');
     expect(mapped?.action).toBe('Repair this install by running: bun add -g @pellux/goodvibes-tui');
+  });
+});
+
+describe('resolveDoctorExitCode', () => {
+  test('exits 0 with no findings at all', () => {
+    expect(resolveDoctorExitCode([])).toBe(0);
+  });
+
+  test('exits 0 for a healthy install carrying only advisory (warning) findings', () => {
+    // makeOptions()'s default fixture has no onboarding marker, which alone
+    // produces a 'warning'-severity finding — a healthy, usable install must
+    // never report failure for that.
+    const findings = buildCliDoctorFindings(makeOptions());
+    expect(findings.length).toBeGreaterThan(0);
+    expect(findings.every((finding) => finding.severity === 'warning')).toBe(true);
+    expect(resolveDoctorExitCode(findings)).toBe(0);
+  });
+
+  test('exits 1 when any finding is a must-fix (risk) finding, strict or not', () => {
+    const findings = buildCliDoctorFindings(makeOptions({ 'permissions.mode': 'allow-all' }));
+    expect(findings.some((finding) => finding.severity === 'risk')).toBe(true);
+    expect(resolveDoctorExitCode(findings, false)).toBe(1);
+    expect(resolveDoctorExitCode(findings, true)).toBe(1);
+  });
+
+  test('--strict flips advisory-only findings to a failure too', () => {
+    const findings = buildCliDoctorFindings(makeOptions());
+    expect(findings.every((finding) => finding.severity === 'warning')).toBe(true);
+    expect(resolveDoctorExitCode(findings, false)).toBe(0);
+    expect(resolveDoctorExitCode(findings, true)).toBe(1);
+  });
+
+  test('--strict is still 0 when there are truly zero findings', () => {
+    expect(resolveDoctorExitCode([], true)).toBe(0);
   });
 });

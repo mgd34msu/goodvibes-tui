@@ -168,6 +168,27 @@ describe('--non-interactive flag', () => {
 });
 
 // ---------------------------------------------------------------------------
+// --strict (doctor)
+// ---------------------------------------------------------------------------
+
+describe('--strict flag', () => {
+  test('--strict sets strict=true', () => {
+    expect(flags(['--strict']).strict).toBe(true);
+  });
+
+  test('strict defaults to false', () => {
+    expect(flags([]).strict).toBe(false);
+  });
+
+  test('doctor --strict parses cleanly', () => {
+    const result = parse(['doctor', '--strict']);
+    expect(result.command).toBe('doctor');
+    expect(result.flags.strict).toBe(true);
+    expect(result.errors).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Output flag alias consolidation
 // Canonical: --output / -o
 // Aliases: --output-format (deprecated alias), --json (shorthand)

@@ -516,3 +516,138 @@ describe('install.sh — uninstall mode', () => {
     expect(stdout).toContain('Preserved:');
   });
 });
+
+// F12 fix: "Start with: goodvibes" must not be a false promise when
+// $INSTALL_DIR is not on PATH. Covers ensure_path_on_shell_rc() (idempotent,
+// per-shell rc + syntax) and its uninstall-side counterpart
+// uninstall_shell_rc_path_line() (installer-managed marker discipline).
+describe('install.sh — PATH line management', () => {
+  test('bash: adds a marker-tagged export line to .bashrc when $INSTALL_DIR is not on PATH', () => {
+    const root = scratch('gv-path-bash');
+    const home = join(root, 'home');
+    const installDir = join(root, 'bin');
+    mkdirSync(home, { recursive: true });
+    mkdirSync(installDir, { recursive: true });
+
+    const out = runLib('ensure_path_on_shell_rc', {
+      HOME: home,
+      GOODVIBES_INSTALL_DIR: installDir,
+      SHELL: '/bin/bash',
+      PATH: '/usr/bin:/bin',
+    });
+    expect(out.code).toBe(0);
+
+    const rcFile = join(home, '.bashrc');
+    expect(existsSync(rcFile)).toBe(true);
+    const rc = readFileSync(rcFile, 'utf-8');
+    expect(rc).toContain('# managed by goodvibes install.sh');
+    expect(rc).toContain(`export PATH="${installDir}:$PATH"`);
+    expect(out.stdout).toContain(`Added ${installDir} to PATH in ${rcFile}`);
+  });
+
+  test('is idempotent: a second run does not duplicate the PATH line', () => {
+    const root = scratch('gv-path-idempotent');
+    const home = join(root, 'home');
+    const installDir = join(root, 'bin');
+    mkdirSync(home, { recursive: true });
+    mkdirSync(installDir, { recursive: true });
+    const env = { HOME: home, GOODVIBES_INSTALL_DIR: installDir, SHELL: '/bin/bash', PATH: '/usr/bin:/bin' };
+
+    runLib('ensure_path_on_shell_rc', env);
+    const second = runLib('ensure_path_on_shell_rc', env);
+    expect(second.code).toBe(0);
+
+    const rc = readFileSync(join(home, '.bashrc'), 'utf-8');
+    const markerCount = rc.split('managed by goodvibes install.sh').length - 1;
+    expect(markerCount).toBe(1);
+    // The second run recognized the line was already there — it did not
+    // print another "Added ... to PATH" line.
+    expect(second.stdout).not.toContain('Added');
+  });
+
+  test('is a no-op when $INSTALL_DIR is already on PATH — no rc file is touched', () => {
+    const root = scratch('gv-path-already-set');
+    const home = join(root, 'home');
+    const installDir = join(root, 'bin');
+    mkdirSync(home, { recursive: true });
+    mkdirSync(installDir, { recursive: true });
+
+    const out = runLib('ensure_path_on_shell_rc', {
+      HOME: home,
+      GOODVIBES_INSTALL_DIR: installDir,
+      SHELL: '/bin/bash',
+      PATH: `${installDir}:/usr/bin:/bin`,
+    });
+    expect(out.code).toBe(0);
+    expect(existsSync(join(home, '.bashrc'))).toBe(false);
+  });
+
+  test('zsh: writes the export line into .zshrc', () => {
+    const root = scratch('gv-path-zsh');
+    const home = join(root, 'home');
+    const installDir = join(root, 'bin');
+    mkdirSync(home, { recursive: true });
+    mkdirSync(installDir, { recursive: true });
+
+    runLib('ensure_path_on_shell_rc', {
+      HOME: home,
+      GOODVIBES_INSTALL_DIR: installDir,
+      SHELL: '/usr/bin/zsh',
+      PATH: '/usr/bin:/bin',
+    });
+    expect(existsSync(join(home, '.zshrc'))).toBe(true);
+    expect(readFileSync(join(home, '.zshrc'), 'utf-8')).toContain(`export PATH="${installDir}:$PATH"`);
+  });
+
+  test('fish: writes fish-syntax PATH line into config.fish', () => {
+    const root = scratch('gv-path-fish');
+    const home = join(root, 'home');
+    const installDir = join(root, 'bin');
+    mkdirSync(home, { recursive: true });
+    mkdirSync(installDir, { recursive: true });
+
+    runLib('ensure_path_on_shell_rc', {
+      HOME: home,
+      GOODVIBES_INSTALL_DIR: installDir,
+      SHELL: '/usr/bin/fish',
+      PATH: '/usr/bin:/bin',
+    });
+    const rcFile = join(home, '.config/fish/config.fish');
+    expect(existsSync(rcFile)).toBe(true);
+    expect(readFileSync(rcFile, 'utf-8')).toContain(`set -gx PATH ${installDir} $PATH`);
+  });
+
+  test('uninstall_shell_rc_path_line removes exactly the marker line and the line after it, nothing else', () => {
+    const root = scratch('gv-path-uninstall');
+    const home = join(root, 'home');
+    const installDir = join(root, 'bin');
+    mkdirSync(home, { recursive: true });
+    mkdirSync(installDir, { recursive: true });
+    const rcFile = join(home, '.bashrc');
+    writeFileSync(rcFile, '# a pre-existing user line\nalias ll="ls -la"\n');
+
+    runLib('ensure_path_on_shell_rc', { HOME: home, GOODVIBES_INSTALL_DIR: installDir, SHELL: '/bin/bash', PATH: '/usr/bin:/bin' });
+    expect(readFileSync(rcFile, 'utf-8')).toContain('managed by goodvibes install.sh');
+
+    runLib('uninstall_shell_rc_path_line', { HOME: home, GOODVIBES_INSTALL_DIR: installDir, SHELL: '/bin/bash', PATH: '/usr/bin:/bin' });
+    const rc = readFileSync(rcFile, 'utf-8');
+    expect(rc).not.toContain('managed by goodvibes install.sh');
+    expect(rc).not.toContain(`export PATH="${installDir}:$PATH"`);
+    // The user's own pre-existing lines survive untouched.
+    expect(rc).toContain('# a pre-existing user line');
+    expect(rc).toContain('alias ll="ls -la"');
+  });
+
+  test('uninstall_shell_rc_path_line is a safe no-op when no PATH line was ever added', () => {
+    const root = scratch('gv-path-uninstall-noop');
+    const home = join(root, 'home');
+    const installDir = join(root, 'bin');
+    mkdirSync(home, { recursive: true });
+    mkdirSync(installDir, { recursive: true });
+    writeFileSync(join(home, '.bashrc'), '# nothing installer-managed here\n');
+
+    const out = runLib('uninstall_shell_rc_path_line', { HOME: home, GOODVIBES_INSTALL_DIR: installDir, SHELL: '/bin/bash', PATH: '/usr/bin:/bin' });
+    expect(out.code).toBe(0);
+    expect(readFileSync(join(home, '.bashrc'), 'utf-8')).toBe('# nothing installer-managed here\n');
+  });
+});
