@@ -3,6 +3,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { ConfigManager } from '../config/index.ts';
+import { isFeatureConfigEnabled } from '../runtime/feature-settings.ts';
 import {
   applyRuntimeConfigDefault,
   applyRuntimeConfigOverrides,
@@ -34,7 +35,8 @@ async function captureGoodVibesCliCommand(args: readonly string[], configManager
 }
 
 function featureFlagState(configManager: ConfigManager, flagId: string): unknown {
-  return (configManager.getCategory('featureFlags') as Record<string, unknown>)[flagId];
+  // Enablement lives on each feature's domain settings key now.
+  return isFeatureConfigEnabled(configManager, flagId) ? 'enabled' : 'disabled';
 }
 
 describe('parseCliFlags', () => {
@@ -255,26 +257,39 @@ describe('parseCliFlags', () => {
       'behavior.autoApprove=true',
     ]);
     applyRuntimeConfigValue(configManager, 'provider.model', 'openai:gpt-5.2');
-    applyRuntimeFeatureFlagOverrides(configManager, {
+    const featureErrors = applyRuntimeFeatureFlagOverrides(configManager, {
       enableFeatures: ['output-schema-fingerprint'],
-      disableFeatures: ['fetch-sanitization'],
+      disableFeatures: ['agent-passive-knowledge-injection'],
     });
 
     expect(errors).toEqual([]);
+    expect(featureErrors).toEqual([]);
     expect(configManager.get('controlPlane.port')).toBe(4567);
     expect(configManager.get('behavior.autoApprove')).toBe(true);
     expect(configManager.get('provider.model')).toBe('openai:gpt-5.2');
-    expect(configManager.getCategory('featureFlags')).toEqual({
-      'output-schema-fingerprint': 'enabled',
-      'fetch-sanitization': 'disabled',
-    });
+    // Feature overrides land on the real domain settings keys.
+    expect(configManager.get('tools.outputSchemaFingerprints')).toBe(true);
+    expect(configManager.get('agents.passiveInjection.knowledge')).toBe(false);
     expect(existsSync(join(configDir, 'settings.json'))).toBe(false);
 
     const reloaded = new ConfigManager({ surfaceRoot: 'tui', configDir, workingDir: root });
     expect(reloaded.get('controlPlane.port')).toBe(3421);
     expect(reloaded.get('behavior.autoApprove')).toBe(false);
     expect(reloaded.get('provider.model')).not.toBe('openai:gpt-5.2');
-    expect(reloaded.getCategory('featureFlags')).toEqual({});
+    expect(reloaded.get('tools.outputSchemaFingerprints')).toBe(false);
+    expect(reloaded.get('agents.passiveInjection.knowledge')).toBe(true);
+  });
+
+  test('feature overrides report capabilities with no off switch and unknown ids', () => {
+    const root = mkdtempSync(join(tmpdir(), 'goodvibes-cli-feature-errors-'));
+    const configManager = new ConfigManager({ surfaceRoot: 'tui', configDir: join(root, '.goodvibes', 'tui'), workingDir: root });
+    const featureErrors = applyRuntimeFeatureFlagOverrides(configManager, {
+      enableFeatures: ['no-such-feature'],
+      disableFeatures: ['fetch-sanitization'],
+    });
+    expect(featureErrors.length).toBe(2);
+    expect(featureErrors[0]).toContain('unknown feature id');
+    expect(featureErrors[1]).toContain('no off switch');
   });
 
   test('applies endpoint flags for CLI commands without persisting settings', () => {
@@ -461,11 +476,16 @@ describe('parseCliFlags', () => {
     configManager.setDynamic('surfaces.ntfy.chatTopic', 'custom-chat');
     configManager.setDynamic('surfaces.ntfy.agentTopic', 'custom-agent');
     configManager.setDynamic('surfaces.ntfy.remoteTopic', 'custom-remote');
+    // The channel capabilities ship ON; switch two required ones off through
+    // their domain settings keys so the gate report has something honest to say.
+    configManager.setDynamic('controlPlane.gateway', false);
+    configManager.setDynamic('integrations.deliveryTracking', false);
 
     const text = await captureGoodVibesCliCommand(['surfaces', 'check', 'ntfy'], configManager, root);
     expect(text.result).toEqual({ handled: true, exitCode: 1 });
     expect(text.output).toContain('ntfy is enabled but feature gates are disabled:');
-    expect(text.output).toContain('ntfy-surface');
+    expect(text.output).toContain('control-plane-gateway');
+    expect(text.output).toContain('delivery-engine');
     expect(text.output).toContain('chat: custom-chat');
     expect(text.output).toContain('agent: custom-agent');
     expect(text.output).toContain('daemon-only remote: custom-remote');

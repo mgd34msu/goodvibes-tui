@@ -4,7 +4,7 @@ import { join } from 'path';
 import { tmpdir } from 'os';
 import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import { CONFIG_SCHEMA, DEFAULT_CONFIG, isValidConfigKey } from '@pellux/goodvibes-sdk/platform/config';
-import { FEATURE_FLAGS } from '@/runtime/index.ts';
+import { FEATURE_SETTINGS } from '@/runtime/index.ts';
 
 function makeTmpDir(): string {
   const dir = join(tmpdir(), `gv-automation-foundation-${Date.now()}-${Math.random().toString(36).slice(2)}`);
@@ -18,16 +18,19 @@ describe('automation foundation config surface', () => {
     const configDir = join(tmpDir, '.goodvibes', 'tui');
     const mgr = new ConfigManager({ surfaceRoot: 'tui',  workingDir: tmpDir, configDir });
 
-    expect(mgr.get('automation.enabled')).toBe(false);
+    // automation/web/watchers ship ON in a stock configuration now (their
+    // capabilities graduated to enabled defaults); the daemon control plane
+    // stays opt-in.
+    expect(mgr.get('automation.enabled')).toBe(true);
     expect(mgr.get('automation.maxConcurrentRuns')).toBe(DEFAULT_CONFIG.automation.maxConcurrentRuns);
     expect(mgr.get('controlPlane.enabled')).toBe(false);
     expect(mgr.get('controlPlane.streamMode')).toBe('sse');
-    expect(mgr.get('web.enabled')).toBe(false);
+    expect(mgr.get('web.enabled')).toBe(true);
     expect(mgr.get('surfaces.slack.enabled')).toBe(false);
     expect(mgr.get('surfaces.discord.enabled')).toBe(false);
     expect(mgr.get('surfaces.ntfy.baseUrl')).toBe('https://ntfy.sh');
     expect(mgr.get('surfaces.webhook.timeoutMs')).toBe(10_000);
-    expect(mgr.get('watchers.enabled')).toBe(false);
+    expect(mgr.get('watchers.enabled')).toBe(true);
     expect(mgr.get('service.autostart')).toBe(false);
 
     rmSync(tmpDir, { recursive: true, force: true });
@@ -116,8 +119,8 @@ describe('automation foundation config surface', () => {
   });
 });
 
-describe('automation foundation feature flags', () => {
-  test('new automation and omnichannel flags are declared with their documented defaults', () => {
+describe('automation foundation features', () => {
+  test('the automation and omnichannel capabilities are declared with their documented defaults', () => {
     const expected = [
       'automation-domain',
       'control-plane-gateway',
@@ -132,15 +135,14 @@ describe('automation foundation feature flags', () => {
       'service-management',
     ] as const;
 
-    // control-plane-gateway is the single tier-10 flag that
-    // defaults ON (a stock daemon must serve its auth-gated streams). Every other
-    // omnichannel/automation flag stays OFF until individually validated.
-    const enabledByDefault = new Set<string>(['control-plane-gateway']);
-
+    // Every capability in this set now ships ON in a stock configuration —
+    // the automation/omnichannel surfaces graduated to enabled defaults with
+    // the dissolved feature model (each is still governed by its own domain
+    // settings key, e.g. automation.enabled, surfaces.slack.enabled).
     for (const id of expected) {
-      const flag = FEATURE_FLAGS.find((entry) => entry.id === id);
-      expect(flag).toBeDefined();
-      expect(flag?.defaultState).toBe(enabledByDefault.has(id) ? 'enabled' : 'disabled');
+      const feature = FEATURE_SETTINGS.find((entry) => entry.id === id);
+      expect(feature).toBeDefined();
+      expect(feature?.defaultEnabled).toBe(true);
     }
   });
 });

@@ -46,7 +46,7 @@ const ALTERNATE_VALUE: Record<string, unknown> = {
   'integrations.delivery.initialDelayMs': 2000,
   'integrations.delivery.maxDelayMs': 60000,
   'integrations.delivery.maxDlqSize': 1000,
-  'integrations.delivery.sloEnforced': true,
+  'integrations.delivery.sloEnforced': false, // default flipped to true with the enabled-by-default delivery SLO
   'policy.bundleSource': 'file',
   'policy.bundlePath': '/tmp/policy.bundle',
   'agents.passiveInjection.budgetTokens': 1200,

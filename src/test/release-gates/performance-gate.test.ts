@@ -18,7 +18,7 @@ import {
 } from '@/runtime/index.ts';
 import { SloCollector } from '@/runtime/index.ts';
 import { RuntimeEventBus } from '@/runtime/index.ts';
-import { FEATURE_FLAGS } from '@/runtime/index.ts';
+import { FEATURE_SETTINGS } from '@/runtime/index.ts';
 import type { ProviderMessage } from '@pellux/goodvibes-sdk/platform/providers';
 
 // ---------------------------------------------------------------------------
@@ -282,15 +282,17 @@ describe('performance gate: frame micro-bench', () => {
 // 5. Budget enforcement feature flag exists
 // ---------------------------------------------------------------------------
 
-describe('performance gate: budget enforcement flag', () => {
-  test('runtime-tools-budget-enforcement feature flag is declared', () => {
-    const flag = FEATURE_FLAGS.find(f => f.id === 'runtime-tools-budget-enforcement');
-    expect(flag).toBeDefined();
-    expect(flag!.runtimeToggleable).toBe(true);
+describe('performance gate: budget enforcement feature', () => {
+  test('runtime-tools-budget-enforcement is a declared, live-toggleable feature', () => {
+    const feature = FEATURE_SETTINGS.find(f => f.id === 'runtime-tools-budget-enforcement');
+    expect(feature).toBeDefined();
+    expect(feature!.restartRequired).toBe(false);
+    expect(feature!.enablement.key).toBe('runtime.toolBudget.enforced');
   });
 
-  test('compaction feature flags are declared', () => {
-    const compactionFlag = FEATURE_FLAGS.find(f => f.id === 'session-compaction');
-    expect(compactionFlag).toBeDefined();
+  test('the compaction feature is declared with its strategy setting', () => {
+    const compaction = FEATURE_SETTINGS.find(f => f.id === 'session-compaction');
+    expect(compaction).toBeDefined();
+    expect(compaction!.enablement.key).toBe('behavior.compactionStrategy');
   });
 });
