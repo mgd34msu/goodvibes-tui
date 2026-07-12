@@ -19,6 +19,8 @@ import { syncServiceSettingToPlatform } from './service-settings-sync.ts';
 import { setActiveThemeMode } from '../renderer/theme.ts';
 import { THEME_MODE_CONFIG_KEY, coerceThemeModeSetting } from '../renderer/theme-mode-config.ts';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
+import { buildFirstOpenItems, decodeFirstOpenChoice, selfRecordWorkspaceRegistration } from '../cli/tui-startup.ts';
+import type { WorkspaceTrustLevel } from '../runtime/trust/workspace-trust.ts';
 
 type WireShellUiOpenersOptions = {
   commandContext: CommandContext;
@@ -40,6 +42,8 @@ type WireShellUiOpenersOptions = {
   getConfiguredProviderIds: () => string[];
   getPinned: () => Promise<string[]>;
   render: () => void;
+  /** Trust-at-consequence-time bridge — patched here with the real modal-driving implementation. */
+  trustPromptRef: { requestTrustDecision: () => Promise<WorkspaceTrustLevel> };
 };
 
 let commandCategoryMapCache: Map<string, string> | null = null;
@@ -123,7 +127,24 @@ export function wireShellUiOpeners(options: WireShellUiOpenersOptions): void {
     getConfiguredProviderIds,
     getPinned,
     render,
+    trustPromptRef,
   } = options;
+
+  // Trust-at-consequence-time: raised by trustGatedAsk on the first non-read
+  // request in an undecided workspace; the answer persists via setLevel().
+  // Registration self-records here too when trusted (never for restricted —
+  // see selfRecordWorkspaceRegistration's doc).
+  trustPromptRef.requestTrustDecision = () =>
+    new Promise((resolve) => {
+      const { title, items } = buildFirstOpenItems();
+      if (!commandContext.openSelection) { resolve('restricted'); return; } // no selection surface (should not happen live)
+      commandContext.openSelection(title, items, { allowSearch: false, primaryVerbLabel: 'Choose' }, (result) => {
+        const level = decodeFirstOpenChoice(result?.item.id ?? null);
+        resolve(level);
+        if (level === 'trusted') void selfRecordWorkspaceRegistration(commandContext.workspace?.workspaceRegistrationManager);
+        render();
+      });
+    });
 
   /**
    * Pre-resolve which provider IDs have secrets-manager keys (async batch, SDK tier pattern).

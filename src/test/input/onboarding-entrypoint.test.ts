@@ -84,6 +84,7 @@ function makeWiredContext(out: string[]): {
     getConfiguredProviderIds: () => [],
     getPinned: async () => [],
     render: () => {},
+    trustPromptRef: { requestTrustDecision: async () => 'restricted' as const },
   });
 
   return { ctx, inputState };

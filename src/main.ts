@@ -102,7 +102,7 @@ async function main() {
     agentStatusIntervalRef,
     orchestratorRefs,
     setRenderRequest,
-    permissionPromptRef,
+    permissionPromptRef, trustPromptRef,
     _writeLastSessionPointer: writeLastSessionPointer,
     systemMessageRouter,
   } = ctx;
@@ -669,7 +669,7 @@ async function main() {
     homeDirectory,
     getConfiguredProviderIds: ctx._getConfiguredProviderIds,
     getPinned: ctx._getPinned,
-    render,
+    render, trustPromptRef,
   });
 
   const { refreshGit, unsubs: turnUnsubs } = wireTurnEventHandlers({

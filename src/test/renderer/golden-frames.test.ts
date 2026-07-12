@@ -1361,52 +1361,44 @@ function renderSelectionModalSurface(width: number, height: number): Line[] {
 
 describeOverlayGolden('selection-modal-overlay', renderSelectionModalSurface);
 
-// first-open workspace modal — owner-hit defect: option descriptions were
-// clipped to unreadability in this exact modal. Rendered here for all three
-// buildFirstOpenItems() variants (trust+register, trust-only, register-only)
-// at a normal width and a narrow one, asserting every item's FULL detail
-// text survives — never ellipsized, clipped, or overflow-hidden.
-describe('golden-frames — first-open workspace modal (full detail text never clipped)', () => {
-  const offeredVariants: ReadonlyArray<{
-    readonly name: string;
-    readonly offered: { readonly trustNeeded: boolean; readonly registerNeeded: boolean };
-  }> = [
-    { name: 'trust-and-register', offered: { trustNeeded: true, registerNeeded: true } },
-    { name: 'trust-only', offered: { trustNeeded: true, registerNeeded: false } },
-    { name: 'register-only', offered: { trustNeeded: false, registerNeeded: true } },
-  ];
+// Consequence-time trust modal — owner-hit defect: option descriptions were
+// clipped to unreadability in this exact modal (back when it was also the
+// combined first-open trust+register prompt; the registration half has
+// since been dissolved — registration self-records instead, see
+// tui-startup.ts). Rendered at a normal width and a narrow one, asserting
+// every item's FULL detail text survives — never ellipsized, clipped, or
+// overflow-hidden.
+describe('golden-frames — consequence-time trust modal (full detail text never clipped)', () => {
   const widths: ReadonlyArray<{ readonly label: string; readonly width: number }> = [
     { label: 'normal', width: 80 },
     { label: 'narrow', width: 60 },
   ];
 
-  for (const { name, offered } of offeredVariants) {
-    const { title, items } = buildFirstOpenItems(offered);
-    for (const { label, width } of widths) {
-      test(`${name} @ ${label} width (${width}x24): every item's full label and detail text render when reached`, () => {
-        // Reaching an item is what matters — not whether every item is
-        // simultaneously on screen without scrolling (a "(N below)" scroll
-        // hint for the rest of the list is the intended, non-clipping
-        // behavior when everything doesn't fit at once). Navigate the
-        // selection to each item in turn and check that item's own full
-        // label/detail is un-clipped at that point.
-        for (let index = 0; index < items.length; index += 1) {
-          const modal = new SelectionModal();
-          modal.open(title, items, { allowSearch: false, primaryVerbLabel: 'Choose' });
-          modal.selectedIndex = index;
+  const { title, items } = buildFirstOpenItems();
+  for (const { label, width } of widths) {
+    test(`trust prompt @ ${label} width (${width}x24): every item's full label and detail text render when reached`, () => {
+      // Reaching an item is what matters — not whether every item is
+      // simultaneously on screen without scrolling (a "(N below)" scroll
+      // hint for the rest of the list is the intended, non-clipping
+      // behavior when everything doesn't fit at once). Navigate the
+      // selection to each item in turn and check that item's own full
+      // label/detail is un-clipped at that point.
+      for (let index = 0; index < items.length; index += 1) {
+        const modal = new SelectionModal();
+        modal.open(title, items, { allowSearch: false, primaryVerbLabel: 'Choose' });
+        modal.selectedIndex = index;
 
-          const text = renderSelectionModalOverlay(modal, width, 24)
-            .map((line) => line.map((cell) => cell.char).join(''))
-            .join(' ')
-            .replace(/[│┌┐└┘├┤┬┴┼─]/g, ' ')
-            .replace(/\s+/g, ' ');
+        const text = renderSelectionModalOverlay(modal, width, 24)
+          .map((line) => line.map((cell) => cell.char).join(''))
+          .join(' ')
+          .replace(/[│┌┐└┘├┤┬┴┼─]/g, ' ')
+          .replace(/\s+/g, ' ');
 
-          const item = items[index]!;
-          expect(text).toContain(item.label);
-          if (item.detail) expect(text).toContain(item.detail);
-        }
-      });
-    }
+        const item = items[index]!;
+        expect(text).toContain(item.label);
+        if (item.detail) expect(text).toContain(item.detail);
+      }
+    });
   }
 });
 

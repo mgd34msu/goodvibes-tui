@@ -97,6 +97,7 @@ describe('UI roadmap gate', () => {
       getConfiguredProviderIds: () => [],
       getPinned: async () => [],
       render: () => {},
+      trustPromptRef: { requestTrustDecision: async () => 'restricted' as const },
     });
 
     (commandContext as { showPanel?: (panelId: string, pane?: 'top' | 'bottom') => void }).showPanel?.('docs');
