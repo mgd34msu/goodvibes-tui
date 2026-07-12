@@ -1,7 +1,7 @@
 # Decision: the session-spine mode branch (`syncSessionSpineToHostStatus`) is permanent design, not a staging escape hatch — embedded/in-process operation stays
 
 Date: 2026-07-06
-Scope: Wave 6, W6-R2 (scheduled removal 2 — "TUI staged-switch escape hatch")
+Scope: a prior cleanup pass's scheduled removal 2 — "TUI staged-switch escape hatch"
 Status: accepted
 Repo: goodvibes-tui (the mode branch is TUI-owned; the SDK pieces it calls are read-only references)
 
@@ -10,19 +10,19 @@ Repo: goodvibes-tui (the mode branch is TUI-owned; the SDK pieces it calls are r
 Mike's D7a decision shipped detached-daemon-by-default with `daemon.embedInProcess` as an
 explicit, documented, opt-in topology (default `false`, "NOT RECOMMENDED" for the reasons
 in its own description — coupling the daemon's lifetime to one surface — but a real,
-supported mode). Nothing in Wave 6 or any prior wave retired it. The ruling for this brief,
+supported mode). Nothing in that prior cleanup pass or any earlier one retired it. The ruling for this brief,
 recorded here as the premise the rest of this document works from:
 
 > Embedded/in-process daemon operation STAYS. It is a permanent topology, not a staging
-> vestige left over from the Wave-2/Wave-3 spine conversion.
+> vestige left over from the earlier spine conversion.
 
-This closes the "OPEN CALL surfaced to the orchestrator" that the Wave-6 brief left
+This closes the "OPEN CALL surfaced to the orchestrator" that the prior cleanup pass's brief left
 unresolved: whether embedded/in-process operation was being retired at all. It is not.
 
 ## Context
 
-The Wave-6 ledger scheduled a second breaking removal alongside the `danger.daemon` alias
-drop: "the TUI staged spine-client conversion escape hatch (S3/S3b/S3c/S3d landed the
+The prior cleanup pass's ledger scheduled a second breaking removal alongside the `danger.daemon` alias
+drop: "the TUI staged spine-client conversion escape hatch (an earlier multi-step change landed the
 conversion; the mode-driven legacy fallback is the staging residual)." Unlike the
 `danger.daemon` removal, this one shipped with **no decision record** and an explicitly
 flagged ambiguity: there is no boolean flag, env var, or feature flag gating the spine.
@@ -33,7 +33,7 @@ a branch on the daemon's `HostServiceMode` (`'disabled' | 'embedded' | 'external
 
 - `mode !== 'external'` (bootstrap.ts:394-407): the spine stays dormant/deactivated and
   `sessionUnionCache` stays local-only (or marks itself embedded — see below). This is the
-  branch the Wave-6 ledger's provisional language called "legacy fallback."
+  branch the prior cleanup pass's provisional language called "legacy fallback."
 - `mode === 'external'` (bootstrap.ts:408-440): the spine activates against the adopted
   daemon's HTTP transport, folds legacy pre-spine session data in once, and the read
   facade (`sessionUnionCache`) becomes the wire-backed cross-surface union.
@@ -76,13 +76,13 @@ premises:
    of two supported activation modes (the other being the agent's always-live mode). This
    is a designed capability of the shared core, not a leftover half-migrated state.
 
-4. **The "Stage-2 parallel-write" mirror stays a mirror, not authoritative — by design,
+4. **The parallel-write mirror stays a mirror, not authoritative — by design,
    not oversight.** `bootstrap-core.ts:742-745` registers the local session with the spine
    fire-and-forget, alongside (never instead of) the still-authoritative local
    `SharedSessionBroker`. Making the spine authoritative (dropping the local broker as the
    source of truth) is a materially larger architectural change than "retire a staging
    escape hatch," is not implied by anything Mike ruled, and is explicitly out of this
-   brief's scope per the Wave-6 ledger's own risk note ("do NOT smuggle it in without an
+   brief's scope per the prior cleanup pass's own risk note ("do NOT smuggle it in without an
    explicit ruling").
 
 5. **No dead branches, unused exports, or orphaned code found.** Every mode
@@ -102,7 +102,7 @@ premises:
    necessary topologies and the branch that tells them apart is exactly the code that keeps
    the spine honest about which one is live.
 
-2. **Scheduled Removal 2, as literally described in the Wave-6 ledger ("retire the staging
+2. **Scheduled Removal 2, as literally described in the prior cleanup pass's ledger ("retire the staging
    scaffolding so the converted path is the only path"), is ruled a no-op beyond
    documentation.** Per the brief's own honesty bar ("a removed escape hatch must not
    silently change a daemon topology") and Mike's no-deferral rule's real-reason bar for
@@ -110,8 +110,8 @@ premises:
    found no staging residual, not convenience.
 
 3. **Comment cleanup only.** The mode-branch comments in `bootstrap.ts` and
-   `bootstrap-core.ts` carried temporal, conversion-era labels (`S3c`, `S3d`, `Stage-2`)
-   that read as "this is scaffolding from a migration in progress." They are rewritten to
+   `bootstrap-core.ts` carried temporal, conversion-era labels naming internal migration
+   steps that read as "this is scaffolding from a migration in progress." They are rewritten to
    state the permanent design directly: when `embedded` applies (this process IS the
    daemon), when `external` applies (this process adopted a separate daemon and mirrors
    into it), and why the parallel-write posture toward the still-authoritative local broker
@@ -125,10 +125,10 @@ premises:
   are correct, reachable runtime states today, not staging debris.
 - **Make the spine authoritative and drop the local-broker mirror.** Rejected as out of
   scope: this is a materially larger design change (moving the source of truth) than
-  retiring a staging escape hatch, was never ruled by Mike, and the Wave-6 ledger's own
+  retiring a staging escape hatch, was never ruled by Mike, and the prior cleanup pass's own
   risk note explicitly warns against smuggling it into this brief.
 - **Force a deletion somewhere to satisfy "a scheduled removal must land code."** Rejected:
-  the honesty bar this whole wave operates under says a forced deletion that breaks a
+  the honesty bar this whole effort operates under says a forced deletion that breaks a
   correct topology (embedded/offline) is worse than an honestly-documented no-op. The
   no-deferral rule's bar is a *real reason*, which this decision record supplies.
 

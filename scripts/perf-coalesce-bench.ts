@@ -1,12 +1,12 @@
 /**
- * perf-coalesce-bench.ts — WO-208 render-call coalescing, before/after.
+ * perf-coalesce-bench.ts — render-call coalescing, before/after.
  *
- * Measures the streaming-burst scenario the WO-208 acceptance calls for: N ticks,
+ * Measures the streaming-burst scenario the acceptance calls for: N ticks,
  * each firing K render requests (the direct render() fan-out main.ts drives on the
  * streaming/turn hot path).
  *
  *   BEFORE  — every request runs a synchronous Compositor.composite() the instant
- *             it is called (the pre-WO-208 behavior). K composites per tick.
+ *             it is called (the pre-coalescing behavior). K composites per tick.
  *   AFTER   — the same requests route through the same-tick microtask coalescer
  *             (src/runtime/render-scheduler.ts); each tick composites exactly once.
  *
@@ -115,7 +115,7 @@ function main(): void {
   const msPerTickBefore = before.ms / TICKS;
   const msPerTickAfter = after.ms / TICKS;
 
-  console.log('WO-208 render-call coalescing — streaming-burst bench');
+  console.log('render-call coalescing — streaming-burst bench');
   console.log(`  config: ${TICKS} ticks x ${RENDERS_PER_TICK} render()/tick, ${WIDTH}x${HEIGHT} frame`);
   console.log('');
   console.log('  BEFORE (synchronous fan-out):');
