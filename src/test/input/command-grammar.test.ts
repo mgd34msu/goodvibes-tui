@@ -289,15 +289,16 @@ describe('Slash-command grammar lint', () => {
     // alias violation detected on a live registration
     expect((badTwo.aliases ?? []).every(isValidAlias)).toBe(false);
 
-    // Third registration: blank description is detected as empty
-    fresh.register({
-      name: 'bad-three',
-      aliases: [],
-      description: '   ',
-      handler: () => {},
-    });
-    const badThree = fresh.getAll().find((c) => c.name === 'bad-three');
-    if (!badThree) throw new Error('Expected bad-three to be registered');
-    expect(badThree.description.trim().length === 0).toBe(true);
+    // Third registration: a blank description no longer registers at all —
+    // the registry refuses it at the door, which supersedes detect-after-the-fact.
+    expect(() =>
+      fresh.register({
+        name: 'bad-three',
+        aliases: [],
+        description: '   ',
+        handler: () => {},
+      }),
+    ).toThrow(/no description/);
+    expect(fresh.getAll().some((c) => c.name === 'bad-three')).toBe(false);
   });
 });
