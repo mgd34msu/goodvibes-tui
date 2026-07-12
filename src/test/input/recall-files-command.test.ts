@@ -146,7 +146,8 @@ describe('/recall files (memory file projection surface)', () => {
   test('sync writes one markdown file per standing (project/team) record, session scope excluded', async () => {
     await recallCommand.handler(['files', 'sync', '--dir', dir], makeContext(printed, registry, root));
     expect(printed.some((l) => l.includes('Projected 1 record(s)'))).toBe(true);
-    const files = readdirSync(dir);
+    // The projection dir owns a .git now; the projection files are the *.md set.
+    const files = readdirSync(dir).filter((name) => name.endsWith('.md'));
     expect(files.length).toBe(1);
     const content = readFileSync(join(dir, files[0]!), 'utf-8');
     expect(content).toContain('id: mem-1');
@@ -154,12 +155,14 @@ describe('/recall files (memory file projection surface)', () => {
     expect(content).toContain('# Ship dark flags before the review pass.');
   });
 
-  test('sync outside a git repository reports it was not committed, honestly', async () => {
+  test('sync initializes the projection directory as its own repository and commits there', async () => {
     await recallCommand.handler(['files', 'sync', '--dir', dir], makeContext(printed, registry, root));
-    expect(printed.some((l) => l.includes('not committed: ') && l.includes('not inside a git repository'))).toBe(true);
+    expect(printed.some((l) => l.includes("committed in") && l.includes("projection's own repository"))).toBe(true);
+    const log = Bun.spawnSync(['git', '-C', dir, 'log', '--oneline']);
+    expect(new TextDecoder().decode(log.stdout)).toContain('memory projection');
   });
 
-  test('sync inside a git repository commits the projection directory', async () => {
+  test('sync nested inside an enclosing repository never commits into it (ownership gate)', async () => {
     Bun.spawnSync(['git', 'init'], { cwd: root });
     Bun.spawnSync(['git', 'config', 'user.email', 'test@example.com'], { cwd: root });
     Bun.spawnSync(['git', 'config', 'user.name', 'Test'], { cwd: root });
@@ -167,8 +170,11 @@ describe('/recall files (memory file projection surface)', () => {
     await recallCommand.handler(['files', 'sync', '--dir', dir], makeContext(printed, registry, root));
     expect(printed.some((l) => l.includes('committed in'))).toBe(true);
 
-    const log = Bun.spawnSync(['git', 'log', '--oneline'], { cwd: root });
-    expect(new TextDecoder().decode(log.stdout)).toContain('memory projection');
+    // The projection dir got its OWN repository; the enclosing checkout stays clean.
+    const dirLog = Bun.spawnSync(['git', '-C', dir, 'log', '--oneline']);
+    expect(new TextDecoder().decode(dirLog.stdout)).toContain('memory projection');
+    const rootLog = Bun.spawnSync(['git', 'log', '--oneline'], { cwd: root });
+    expect(new TextDecoder().decode(rootLog.stdout)).not.toContain('memory projection');
   });
 
   test('review reports no changes right after a sync', async () => {
@@ -180,7 +186,7 @@ describe('/recall files (memory file projection surface)', () => {
 
   test('review is read-only: an edited file produces an update proposal without mutating the store', async () => {
     await recallCommand.handler(['files', 'sync', '--dir', dir], makeContext(printed, registry, root));
-    const file = join(dir, readdirSync(dir)[0]!);
+    const file = join(dir, readdirSync(dir).filter((name) => name.endsWith('.md'))[0]!);
     const edited = readFileSync(file, 'utf-8').replace('Ship dark flags before the review pass.', 'Ship dark flags before the review pass (edited).');
     writeFileSync(file, edited, 'utf-8');
 
@@ -197,7 +203,7 @@ describe('/recall files (memory file projection surface)', () => {
 
   test('apply mutates the store only for the confirmed id', async () => {
     await recallCommand.handler(['files', 'sync', '--dir', dir], makeContext(printed, registry, root));
-    const file = join(dir, readdirSync(dir)[0]!);
+    const file = join(dir, readdirSync(dir).filter((name) => name.endsWith('.md'))[0]!);
     writeFileSync(file, readFileSync(file, 'utf-8').replace('Ship dark flags before the review pass.', 'Renamed summary.'), 'utf-8');
 
     printed.length = 0;
@@ -217,7 +223,7 @@ describe('/recall files (memory file projection surface)', () => {
 
   test('a deleted projection file proposes (and, on apply, performs) a store delete', async () => {
     await recallCommand.handler(['files', 'sync', '--dir', dir], makeContext(printed, registry, root));
-    const file = join(dir, readdirSync(dir)[0]!);
+    const file = join(dir, readdirSync(dir).filter((name) => name.endsWith('.md'))[0]!);
     rmSync(file);
 
     printed.length = 0;
@@ -232,7 +238,7 @@ describe('/recall files (memory file projection surface)', () => {
 
   test('a temporal-window-only edit applies for real: review proposes it, apply sets validUntil on the record', async () => {
     await recallCommand.handler(['files', 'sync', '--dir', dir], makeContext(printed, registry, root));
-    const file = join(dir, readdirSync(dir)[0]!);
+    const file = join(dir, readdirSync(dir).filter((name) => name.endsWith('.md'))[0]!);
     const withValidUntil = readFileSync(file, 'utf-8').replace('status: active', 'validUntil: 2099-01-01T00:00:00.000Z\nstatus: active');
     writeFileSync(file, withValidUntil, 'utf-8');
 
@@ -256,7 +262,7 @@ describe('/recall files (memory file projection surface)', () => {
     printed.length = 0;
     await recallCommand.handler(['files', 'sync', '--dir', dir], makeContext(printed, registry, root));
 
-    const files = readdirSync(dir);
+    const files = readdirSync(dir).filter((name) => name.endsWith('.md'));
     const file = files.map((f) => join(dir, f)).find((f) => readFileSync(f, 'utf-8').includes('id: mem-3'))!;
     const cleared = readFileSync(file, 'utf-8').split('\n').filter((line) => !line.startsWith('validUntil:')).join('\n');
     writeFileSync(file, cleared, 'utf-8');

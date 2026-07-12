@@ -11,7 +11,7 @@
 |│     Policy-  │ Default: tr|
 |│     Token S  │ Type: boole|
 |│ AI ROUTING   │ Source: def|
-|│     Provide  │           │|
+|│     Provide  │ ▼ 23 more l|
 |│     Subscri  │───────────│|
 |│     Helper   │   Setting  |
 |│     Tools (  │ • stream   |
@@ -682,17 +682,28 @@
 12 15 fg=#64748b
 12 15 bg=#161a22
 12 16 bg=#161a22
+12 17 fg=#e2e8f0
 12 17 bg=#161a22
+12 18 fg=#e2e8f0
 12 18 bg=#161a22
+12 19 fg=#e2e8f0
 12 19 bg=#161a22
+12 20 fg=#e2e8f0
 12 20 bg=#161a22
+12 21 fg=#e2e8f0
 12 21 bg=#161a22
+12 22 fg=#e2e8f0
 12 22 bg=#161a22
+12 23 fg=#e2e8f0
 12 23 bg=#161a22
+12 24 fg=#e2e8f0
 12 24 bg=#161a22
+12 25 fg=#e2e8f0
 12 25 bg=#161a22
+12 26 fg=#e2e8f0
 12 26 bg=#161a22
-12 27 fg=#64748b
+12 27 fg=#e2e8f0
+12 27 bg=#161a22
 13 0 fg=#64748b
 13 1 bg=#18202b
 13 2 fg=#94a3b8

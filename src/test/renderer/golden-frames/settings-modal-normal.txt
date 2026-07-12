@@ -5,27 +5,27 @@
 |│ INTERFACE              │ Display configuration                                                   │|
 |│   ▸ Display (9)        │ stream                                                                  │|
 |│     UI (4)             │ Key: display.stream                                                     │|
-|│     Behavior (24)      │ Current: true                                                           │|
+|│     Behavior (23)      │ Current: true                                                           │|
 |│     Notifications (4)  │ Default: true                                                           │|
-|│     Permissions (21)   │ Type: boolean                                                           │|
-|│     Policy-as-Code (3  │ Source: default                                                         │|
+|│     Permissions (23)   │ Type: boolean                                                           │|
+|│     Policy-as-Code (4  │ Source: default                                                         │|
 |│     Token Security (4  │                                                                         │|
 |│ AI ROUTING             │ Stream LLM tokens as they arrive                                        │|
-|│     Provider (7)       │                                                                         │|
+|│     Provider (7)       │ ▼ 7 more line(s) below — PgDn                                           │|
 |│     Subscriptions (1)  │─────────────────────────────────────────────────────────────────────────│|
 |│     Helper (3)         │   Setting             Value       Type       Source        Default      │|
-|│     Tools (8)          │ • stream              true        boolean    default       true         │|
+|│     Tools (9)          │ • stream              true        boolean    default       true         │|
 |│     TTS (6)            │   lineNumbers         off         enum       default       off          │|
 |│ SERVICE & NETWORK      │   collapseThreshold   30          number     default       30           │|
-|│     Service (7)        │   theme               vaporwave   string     default       vaporwave    │|
+|│     Service (6)        │   theme               vaporwave   string     default       vaporwave    │|
 |│     Daemon (2)         │   showThinking        false       boolean    default       false        │|
-|│     Network (35)       │   showReasoningSumma  false       boolean    default       false        │|
+|│     Network (36)       │   showReasoningSumma  false       boolean    default       false        │|
 |│     Control Plane (18  │   showTokenSpeed      false       boolean    default       false        │|
 |│     HTTP Listener (7)  │   showToolPreview     false       boolean    default       false        │|
-|│     Web (7)            │   themeMode           auto        enum       default       auto         │|
-|│     Relay (6)          │                                                                         │|
+|│     Web (6)            │   themeMode           auto        enum       default       auto         │|
+|│     Relay (5)          │                                                                         │|
 |│ SURFACES & CLOUD       │                                                                         │|
-|│     Surfaces (78)      │                                                                         │|
+|│     Surfaces (73)      │                                                                         │|
 |│     Integration Deliv  │                                                                         │|
 |│ Focus categories · [Up/Down] Choose · [Right/Enter] Settings · [Tab] Pane · [/] Search · [Esc] C │|
 |└──────────────────────────────────────────────────────────────────────────────────────────────────┘|
@@ -1699,34 +1699,63 @@
 12 25 fg=#64748b
 12 25 bg=#161a22
 12 26 bg=#161a22
+12 27 fg=#e2e8f0
 12 27 bg=#161a22
+12 28 fg=#e2e8f0
 12 28 bg=#161a22
+12 29 fg=#e2e8f0
 12 29 bg=#161a22
+12 30 fg=#e2e8f0
 12 30 bg=#161a22
+12 31 fg=#e2e8f0
 12 31 bg=#161a22
+12 32 fg=#e2e8f0
 12 32 bg=#161a22
+12 33 fg=#e2e8f0
 12 33 bg=#161a22
+12 34 fg=#e2e8f0
 12 34 bg=#161a22
+12 35 fg=#e2e8f0
 12 35 bg=#161a22
+12 36 fg=#e2e8f0
 12 36 bg=#161a22
+12 37 fg=#e2e8f0
 12 37 bg=#161a22
+12 38 fg=#e2e8f0
 12 38 bg=#161a22
+12 39 fg=#e2e8f0
 12 39 bg=#161a22
+12 40 fg=#e2e8f0
 12 40 bg=#161a22
+12 41 fg=#e2e8f0
 12 41 bg=#161a22
+12 42 fg=#e2e8f0
 12 42 bg=#161a22
+12 43 fg=#e2e8f0
 12 43 bg=#161a22
+12 44 fg=#e2e8f0
 12 44 bg=#161a22
+12 45 fg=#e2e8f0
 12 45 bg=#161a22
+12 46 fg=#e2e8f0
 12 46 bg=#161a22
+12 47 fg=#e2e8f0
 12 47 bg=#161a22
+12 48 fg=#e2e8f0
 12 48 bg=#161a22
+12 49 fg=#e2e8f0
 12 49 bg=#161a22
+12 50 fg=#e2e8f0
 12 50 bg=#161a22
+12 51 fg=#e2e8f0
 12 51 bg=#161a22
+12 52 fg=#e2e8f0
 12 52 bg=#161a22
+12 53 fg=#e2e8f0
 12 53 bg=#161a22
+12 54 fg=#e2e8f0
 12 54 bg=#161a22
+12 55 fg=#e2e8f0
 12 55 bg=#161a22
 12 56 bg=#161a22
 12 57 bg=#161a22
