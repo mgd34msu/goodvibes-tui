@@ -100,7 +100,7 @@ interface GoldenModalEntry {
 }
 
 const GOLDEN_MODALS: readonly GoldenModalEntry[] = [
-  // marketplace: locks the B30 honest empty-state copy byte-for-byte INSIDE the host render.
+  // marketplace: locks the honest empty-state copy byte-for-byte INSIDE the host render.
   { name: 'marketplace-modal', factory: marketplaceModalGoldenSurface },
   { name: 'plugins-modal', factory: pluginsModalGoldenSurface },
   { name: 'skills-modal', factory: skillsModalGoldenSurface },

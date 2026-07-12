@@ -1,6 +1,6 @@
 /**
  * Tests for the embedding-provider Enter-commit branch added to
- * handleModelPickerToken (B29) — the model picker's 'embeddingProvider' mode
+ * handleModelPickerToken — the model picker's 'embeddingProvider' mode
  * commits through commandContext.completeEmbeddingProviderSelection, never
  * through completeModelSelection (which is ModelDefinition-shaped and would
  * require fabricating a fake model object for an embedding provider).

@@ -473,7 +473,7 @@ describe('ModelPickerModal', () => {
     });
   });
 
-  // ── Embedding provider picker (B29) ──────────────────────────────────────
+  // ── Embedding provider picker ──────────────────────────────────────
 
   describe('openEmbeddingProviders()', () => {
     const PROVIDERS = [
