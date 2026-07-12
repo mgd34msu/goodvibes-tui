@@ -84,7 +84,7 @@ export function handleGlobalShortcutToken(
   // unclaimed key once panelFocused is true and reports it handled). The
   // practical effect was that F2 could OPEN+focus the Fleet panel exactly
   // once; every subsequent press while already focused vanished silently —
-  // "F2 pressed 4x never closed the panel" (UX-C evaluator finding). Routing
+  // "F2 pressed 4x never closed the panel" (evaluator finding). Routing
   // it here, before handlePanelFocusToken ever sees the token, gives F2 the
   // same toggle semantics as Ctrl+O below, matching how Ctrl+P/panel-picker
   // was already reachable regardless of panelFocused.
@@ -139,7 +139,7 @@ export function handleGlobalShortcutToken(
       // in-panel action (FleetPanel session-tab detach) before it closes the
       // panel outright — see Panel.interceptPanelClose's doc comment.
       if (active?.interceptPanelClose?.()) {
-        // UX-C fix: a consumed Ctrl+X (the Fleet panel's session-tab detach)
+        // fix: a consumed Ctrl+X (the Fleet panel's session-tab detach)
         // used to leave panelFocused untouched, so focus stayed on the panel
         // — the evaluator's "Ctrl+X detach landed focus in the panel and a
         // typed question became nav keys". Detach is a leave-taking action:
@@ -203,7 +203,7 @@ export function handleGlobalShortcutToken(
       // Alt+1..9: jump directly to the Nth workspace tab. Routed globally (like
       // panel-tab-next/prev) so the jump works whether focus is on the prompt or
       // the workspace; gated on visibility, matching cyclePanelTab semantics.
-      // UX-C: a chord jump is "I'm going panel-driving" (focus rule 1a) — the
+      // a chord jump is "I'm going panel-driving" (focus rule 1a) — the
       // jump now also grabs keyboard focus, matching F2/Ctrl+O/Ctrl+P, so j/k
       // land in the newly-active tab immediately instead of the composer.
       const pm = state.panelManager;
@@ -218,9 +218,9 @@ export function handleGlobalShortcutToken(
     }
 
     case 'panel-ops': {
-      // Ctrl+O: TOGGLE the Fleet panel (UX-C — same semantics as F2 above; see
+      // Ctrl+O: TOGGLE the Fleet panel (— same semantics as F2 above; see
       // toggleFleetPanel's doc comment). The former Ops Control panel was
-      // retired to an 'ops-control' -> 'fleet' alias (W6.1); rather than route
+      // retired to an 'ops-control' -> 'fleet' alias; rather than route
       // through the now-aliased openOpsPanel callback (which opens without
       // transferring focus), this operates on 'fleet' directly.
       toggleFleetPanel(state);
@@ -403,7 +403,7 @@ export function handleGlobalShortcutToken(
 }
 
 /**
- * toggleFleetPanel — the shared F2 / Ctrl+O TOGGLE (UX-C item 2): if the
+ * toggleFleetPanel — the shared F2 / Ctrl+O TOGGLE (item 2): if the
  * Fleet panel is open AND the panel workspace currently owns keyboard focus
  * with Fleet as the active tab, the chord CLOSES it and returns focus to the
  * composer; if Fleet is open but not the focused/active tab, the chord brings

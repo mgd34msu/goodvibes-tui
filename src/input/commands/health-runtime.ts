@@ -48,7 +48,7 @@ export function registerHealthRuntimeCommands(registry: CommandRegistry): void {
       const readModels = requireReadModels(ctx);
 
       if (sub === 'open' || sub === 'panel' || sub === 'provider') {
-        ctx.openModal?.('providers-modal'); // W6.1: provider-health panel -> config modal
+        ctx.openModal?.('providers-modal'); // provider-health panel -> config modal
         return;
       }
 
@@ -477,7 +477,7 @@ export function registerHealthRuntimeCommands(registry: CommandRegistry): void {
 
       ctx.print([
         'Health Review',
-        // DEBT-5 item 3: /health stays a cross-domain transcript report (it
+        // item 3: /health stays a cross-domain transcript report (it
         // genuinely spans settings/accounts/auth/sandbox/etc — no single
         // modal owns this data), but the providers domain DOES have one, so
         // point at it honestly. "/provider" (no domain) is a DIFFERENT

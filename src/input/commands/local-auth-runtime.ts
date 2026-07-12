@@ -10,7 +10,7 @@ export function handleLocalAuthCommand(args: string[], ctx: CommandContext): voi
   const sub = (args[0] ?? 'review').toLowerCase();
   const auth = requireLocalUserAuthManager(ctx);
   if (sub === 'panel' || sub === 'open') {
-    // W6.1: browse view moved to local-auth-modal. The LocalAuthPanel itself is
+    // browse view moved to local-auth-modal. The LocalAuthPanel itself is
     // kept (masked password-entry host) but is no longer the /local-auth panel
     // destination — masked entry is reached via add-user/rotate-password below.
     ctx.openModal?.('local-auth-modal');

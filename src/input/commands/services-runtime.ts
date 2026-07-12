@@ -16,7 +16,7 @@ export function registerServicesRuntimeCommands(registry: CommandRegistry): void
       const sub = args[0] ?? 'open';
       const shellPaths = requireShellPaths(ctx);
       if (sub === 'open' || sub === 'panel') {
-        ctx.openModal?.('services-modal'); // W6.1: services panel -> config modal
+        ctx.openModal?.('services-modal'); // services panel -> config modal
         return;
       }
       const svcRegistry = requireServiceRegistry(ctx);

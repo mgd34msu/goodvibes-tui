@@ -129,9 +129,9 @@ export interface InputFeedContext {
   inputHistory: InputHistory | null;
   conversationManager: ConversationManager | null;
   readonly killRing: KillRing;
-  /** Terminal focus tracker (W2.3) — updated here from 'focus' tokens, read by the unfocused-alert notifiers in core/. */
+  /** Terminal focus tracker — updated here from 'focus' tokens, read by the unfocused-alert notifiers in core/. */
   readonly focusTracker: FocusTracker;
-  /** DEBT-5 item 5 — the paste-flood guard's persistent state, mutated in place across tokens by handlePanelFocusToken (see panel-paste-flood-guard.ts). Never reallocated. */
+  /** item 5 — the paste-flood guard's persistent state, mutated in place across tokens by handlePanelFocusToken (see panel-paste-flood-guard.ts). Never reallocated. */
   readonly panelBurstGuard: PanelBurstGuardState;
   readonly getHistory: () => InfiniteBuffer;
   readonly getViewportHeight: () => number;
@@ -204,13 +204,13 @@ export function feedInputTokens(context: InputFeedContext, tokens: readonly Inpu
   // several batched into one feed() by render-tick latency — arrive as
   // separate 1-char 'text' tokens. The old per-feed sum misread two quick nav
   // keystrokes (e.g. j then k in one drain) as a "burst" and yanked focus.
-  // DEBT-5 item 5's flood guard reuses that same per-token model but adds
+  // item 5's flood guard reuses that same per-token model but adds
   // real timing: one `now` per feed() call (not per token) is intentional —
   // a genuine flood delivers many tokens in one drain, and they should all
   // measure as arriving "at once", not spread across meaningless sub-ms noise.
   const now = Date.now();
   for (const token of tokens) {
-    // Focus-reporting tokens (CSI ?1004h, W2.3) never reach the composer or any
+    // Focus-reporting tokens (CSI ?1004h) never reach the composer or any
     // modal route — consumed here, first, unconditionally. No render needed.
     if (token.type === 'focus') {
       context.focusTracker.setFocused(token.action === 'in');

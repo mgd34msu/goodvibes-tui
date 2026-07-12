@@ -90,7 +90,7 @@ export interface FeedContextMutableInit {
  *   - `commandRegistry`, `commandContext`, `autocomplete`, `inputHistory`,
  *     `conversationManager` — wired after construction; synced at feed() entry only
  *     (not per-action) since no in-feed action changes them
- *   - `focusTracker` (W2.3) — shared instance from uiServices.platform, mutated
+ *   - `focusTracker` — shared instance from uiServices.platform, mutated
  *     directly by feedInputTokens() on 'focus' tokens; never reallocated
  *
  * **Rationale:** per-feed mutation on a single object avoids per-keystroke GC pressure
@@ -126,7 +126,7 @@ export interface FeedContextStableRefs {
   keybindingsManager: KeybindingsManager;
   killRing: KillRing;
   focusTracker: FocusTracker;
-  /** DEBT-5 item 5 — paste-flood guard state, mutated in place (never reallocated). */
+  /** item 5 — paste-flood guard state, mutated in place (never reallocated). */
   panelBurstGuard: PanelBurstGuardState;
   getHistory: () => InfiniteBuffer;
   getViewportHeight: () => number;

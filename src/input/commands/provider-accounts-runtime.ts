@@ -29,7 +29,7 @@ export function registerProviderAccountsRuntimeCommands(registry: CommandRegistr
     async handler(args, ctx) {
       const sub = (args[0] ?? 'review').toLowerCase();
       if (sub === 'panel' || sub === 'open') {
-        ctx.openModal?.('providers-modal'); // W6.1: accounts alias -> provider-health modal
+        ctx.openModal?.('providers-modal'); // accounts alias -> provider-health modal
         return;
       }
       const snapshot = await loadProviderAccountSnapshot(ctx);

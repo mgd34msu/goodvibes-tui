@@ -147,8 +147,8 @@ export const DEFAULT_KEYBINDINGS: Record<KeyAction, KeyCombo[]> = {
   'panel-tab-8':           [{ key: '8', alt: true }],
   'panel-tab-9':           [{ key: '9', alt: true }],
   // Ctrl+O: TOGGLE the Fleet panel (open+focus / bring-to-front+focus / close
-  // — see toggleFleetPanel in handler-shortcuts.ts, UX-C). The former Ops
-  // Control panel was retired to an 'ops-control' -> 'fleet' alias (W6.1); the
+  // — see toggleFleetPanel in handler-shortcuts.ts). The former Ops
+  // Control panel was retired to an 'ops-control' -> 'fleet' alias; the
   // binding is KEPT (repointed, not removed) so the Ctrl+O muscle memory still
   // lands somewhere useful. Routed globally in handleGlobalShortcutToken.
   'panel-ops':             [{ key: 'o', ctrl: true }],

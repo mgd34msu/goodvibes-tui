@@ -80,7 +80,7 @@ export function registerSubscriptionRuntimeCommands(registry: CommandRegistry): 
     async handler(args, ctx) {
       const shellPaths = requireShellPaths(ctx);
       if (args.length === 0 && ctx.openModal) {
-        ctx.openModal('subscription-modal'); // W6.1: subscription panel -> config modal
+        ctx.openModal('subscription-modal'); // subscription panel -> config modal
         return;
       }
       const sub = (args[0] ?? 'review').toLowerCase();

@@ -3,7 +3,7 @@
 //
 // Explicit-query + transparency surface over the repo source-tree code index
 // (CodeIndexStore, @pellux/goodvibes-sdk/platform/state, landed on SDK main
-// as wo802/W5.3 Stage A) via the TUI's own wiring in
+// with explicit-query build/status/search) via the TUI's own wiring in
 // src/runtime/code-index-services.ts, threaded through
 // CommandContext.session.codeIndexStore exactly like wrfcController/
 // workstreamEngine already are (bootstrap-command-context.ts).
@@ -14,8 +14,8 @@
 // node while it runs), status (counts, skips, degradation state, last
 // build), search <query> (explicit retrieval, results labeled
 // 'lexical'|'semantic' honestly — never implied as more precise than they
-// are). Stage B (now landed) adds passive auto-injection into coding turns and
-// tool-site incremental reindex; `status` surfaces both honestly (the
+// are). Passive auto-injection into coding turns and tool-site incremental
+// reindex followed later; `status` surfaces both honestly (the
 // auto-injection flag+setting gate, and the last reindex activity).
 // ---------------------------------------------------------------------------
 
@@ -35,7 +35,7 @@ function formatBytes(bytes: number): string {
 }
 
 /**
- * Honest one-line auto-injection state (Stage B): both the (default-off)
+ * Honest one-line auto-injection state: both the (default-off)
  * `agent-passive-code-injection` feature flag AND storage.codeIndexEnabled must
  * be on for passive code injection to run — state which is off, and why.
  */
@@ -49,7 +49,7 @@ function renderAutoInjectionState(flagEnabled: boolean, settingEnabled: boolean)
   return `  auto-injection: off (${reasons.join('; ')})`;
 }
 
-/** Honest last-reindex activity line (Stage B tool-site incremental reindex). */
+/** Honest last-reindex activity line (tool-site incremental reindex). */
 function renderReindexActivity(activity: CodeIndexReindexActivity | null, now: number): string {
   if (!activity) return '  last reindex: none this session (writes/edits reindex touched files once the index is built)';
   const agoSec = Math.max(0, Math.round((now - activity.at) / 1000));
@@ -82,7 +82,7 @@ function renderCodeIndexStatus(stats: CodeIndexStats, configManager: Pick<Config
   lines.push(
     `  auto-build on startup: ${autoStart ? 'on' : 'off'} (storage.codeIndexEnabled, default off — /config to change)`,
   );
-  // Stage B surfacing: passive code auto-injection state (flag + setting) and the last tool-site reindex.
+  // Passive code auto-injection state (flag + setting) and the last tool-site reindex.
   lines.push(renderAutoInjectionState(extras.flagEnabled, autoStart));
   lines.push(renderReindexActivity(extras.reindexActivity, extras.now ?? Date.now()));
   lines.push(

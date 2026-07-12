@@ -48,7 +48,7 @@ export function registerRemoteRuntimeCommands(registry: CommandRegistry): void {
     async handler(args, ctx) {
       if (args.length === 0) {
         if (ctx.openModal) {
-          ctx.openModal('remote-modal'); // W6.1: remote panel -> config modal
+          ctx.openModal('remote-modal'); // remote panel -> config modal
           return;
         }
         ctx.print('Remote surface is not available in this runtime.');

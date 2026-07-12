@@ -24,7 +24,7 @@ import { handleRecallFilesApply, handleRecallFilesReview, handleRecallFilesSync 
 // ── Top-level command ─────────────────────────────────────────────────────────
 
 /**
- * DEBT-5 item 3 divergence note (historical): the work order that shipped
+ * item 3 divergence note (historical): the work order that shipped
  * this command named its front door "/memory", but at the time `/memory` was
  * already a distinct, unrelated command (session-pinned sticky notes,
  * src/input/commands/session-content.ts) with no modal surface — so that
@@ -84,7 +84,7 @@ export const recallCommand: SlashCommand = {
   handler: async (args: string[], context: CommandContext): Promise<void> => {
     const [sub, ...rest] = args;
 
-    // DEBT-5 item 3: bare `/recall` opens the memory-modal surface — the old
+    // item 3: bare `/recall` opens the memory-modal surface — the old
     // bare/unknown-subcommand usage block moved to an explicit `report`
     // subcommand (scriptability preserved: /recall report).
     if (sub === undefined) {

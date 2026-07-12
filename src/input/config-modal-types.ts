@@ -1,9 +1,9 @@
 import type { ModalSectionStyle } from '../renderer/modal-factory.ts';
 
 /**
- * Config-modal host — the shared seam every W6.1 MIGRATE-TO-MODAL surface
+ * Config-modal host — the shared seam every MIGRATE-TO-MODAL surface
  * (provider-health, services, subscription, remote, local-auth, settings-sync,
- * sandbox, and the WO-B ecosystem/governance set) is expressed through.
+ * sandbox, and the ecosystem/governance set) is expressed through.
  *
  * A surface is PURE DATA + ACTIONS: it hands the host a `buildView()` that maps
  * live read-models to a tabbed, list-structured view, plus a declarative action
@@ -114,7 +114,7 @@ export interface ConfigModalAction {
    * Trigger key: a single printable char ('r', 'd') or a named key ('enter').
    * Must not collide with the host-reserved nav keys (up/down/left/right/tab/
    * j/k/escape/'/') — those are consumed by the host before actions are
-   * consulted. '/' arms the host's type-to-filter (DEBT-5 item 1); while
+   * consulted. '/' arms the host's type-to-filter (item 1); while
    * filtering, EVERY printable key (not just j/k) is captured by the query
    * instead of firing an action — see handleConfigModalToken.
    */

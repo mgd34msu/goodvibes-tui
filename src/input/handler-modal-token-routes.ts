@@ -227,7 +227,7 @@ export function handleModalTokenRoutes(state: ModalTokenRouteState, token: Input
     return withState(state, true);
   }
 
-  // W6.1 retirement: the live-tail, agent-detail, and process-modal token
+  // retirement: the live-tail, agent-detail, and process-modal token
   // routes were removed with those modals (F2 now opens Fleet, which subsumes
   // the live process tree; the three modals were structurally unreachable after
   // the F2 repoint and were deleted).

@@ -25,7 +25,7 @@ function getStore(ctx: import('../command-registry.ts').CommandContext): WorkPla
 }
 
 function openPanel(ctx: import('../command-registry.ts').CommandContext): void {
-  // W6.1: work-plan migrated to the 'work-plan' modal — open it via the seam.
+  // work-plan migrated to the 'work-plan' modal — open it via the seam.
   openModalCommand(ctx, 'work-plan-modal');
 }
 

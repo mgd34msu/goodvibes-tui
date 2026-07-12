@@ -56,7 +56,7 @@ export interface CommandRuntimeState {
    * Cumulative count of direct terminal writes the output guard intercepted
    * this session — surfaced by /debug. Optional so the SDK's MutableRuntimeState
    * (which has no such field) stays assignable; the guard sets it lazily on the
-   * shared runtime object. (UX-B item 1a.)
+   * shared runtime object. (item 1a.)
    */
   terminalWritesIntercepted?: number;
 }
@@ -139,7 +139,7 @@ export interface CommandShellUiOpeners {
   ) => void;
   openSettingsModal?: (target?: string) => void;
   /**
-   * Open a MIGRATE-TO-MODAL surface by name (W6.1 purge skeleton — WO-A/B
+   * Open a MIGRATE-TO-MODAL surface by name (purge skeleton — B
    * command runtimes call this instead of openCommandPanel once their panel
    * is converted to a ModalFactory config). Threaded from ui-openers.ts the
    * same way openSettingsModal is.
@@ -157,12 +157,12 @@ export interface CommandShellUiOpeners {
    */
   openCommandPalette?: () => void;
   /**
-   * Open (and optionally focus) a panel. UX-C focus rule: the command path is
+   * Open (and optionally focus) a panel. focus rule: the command path is
    * "the user is mid-command-flow" — opening a panel this way leaves keyboard
    * focus in the composer by default. Pass `{ focus: true }` for a caller that
    * genuinely wants to grab focus (chords use panelManager.focusPanels()
    * directly instead of this method, so no current call site needs it — but
-   * the intent is explicit rather than implicit here). `target` (DEBT-5) is a
+   * the intent is explicit rather than implicit here). `target` is a
    * fleet deep-link jump target forwarded to PanelManager.open.
    */
   showPanel?: (panelId: string, pane?: 'top' | 'bottom', target?: PanelDeepLinkTarget, opts?: { focus?: boolean }) => void;
@@ -207,7 +207,7 @@ export interface CommandSessionServices {
    * conversation's current message history. Call after a session resume
    * replays historical messages, before the next render, so the footer's
    * token counter reflects the resumed session's real usage instead of a
-   * fresh Orchestrator's zeroed default (W0.9).
+   * fresh Orchestrator's zeroed default.
    */
   readonly hydrateSessionUsage?: () => void;
   /** The orchestration engine's command-facing facade — see runtime/workstream-services.ts. */
@@ -221,7 +221,7 @@ export interface CommandSessionServices {
   /**
    * The MAIN interactive session's per-turn passive-injection
    * honesty ring — `Orchestrator.getTurnInjections()`, the main-session
-   * counterpart to `AgentRecord.turnInjections` (wo801). `/recall injections`
+   * counterpart to `AgentRecord.turnInjections`. `/recall injections`
    * with no agent id reads this. Optional so command contexts built without an
    * orchestrator (headless, tests) fall back to the honest empty state.
    */
@@ -329,7 +329,7 @@ export interface CommandContext
 }
 
 /**
- * UX-C palette curation (item 4): the "common" first tier the slash-command
+ * palette curation (item 4): the "common" first tier the slash-command
  * autocomplete dropdown shows before the alphabetical rest when it opens with
  * no filter typed yet (bare '/') — the "132-command palette unranked"
  * evaluator finding. Typed filtering (any non-empty query) is completely
@@ -447,7 +447,7 @@ export class CommandRegistry {
       }
 
       if (bestScore > 0 || q === '') {
-        // UX-C: with no query yet, rank the curated common tier (score 2)
+        // with no query yet, rank the curated common tier (score 2)
         // ahead of everything else (score 1) — the tie-break below then sorts
         // each tier alphabetically, so the result is "common tier, then the
         // alphabetical rest" rather than one flat alphabetical list.

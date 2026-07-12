@@ -194,7 +194,7 @@ export class InputHandler implements InputHandlerLike {
   public blockActionsMenu = new BlockActionsMenu();
   public settingsModal = new SettingsModal();
   public configModal = new ConfigModal();
-  /** DEBT-5 item 5 — paste-flood guard state, mutated in place across tokens (never reallocated). */
+  /** item 5 — paste-flood guard state, mutated in place across tokens (never reallocated). */
   private panelBurstGuard: PanelBurstGuardState = { timestamps: [], suspended: false, hintShown: false };
   public mcpWorkspace = new McpWorkspace();
   public onboardingWizard = new OnboardingWizardController();
@@ -277,7 +277,7 @@ export class InputHandler implements InputHandlerLike {
       uiServices.providers.benchmarkStore,
       uiServices.providers.providerRegistry,
     );
-    // W6.1 retirement: ProcessModal/LiveTailModal/AgentDetailModal were removed
+    // retirement: ProcessModal/LiveTailModal/AgentDetailModal were removed
     // — F2 now opens the Fleet panel, which subsumes the live process tree.
     this.bookmarkModal = new BookmarkModal(uiServices.shell.bookmarkManager);
     this.sessionPickerModal = new SessionPickerModal(uiServices.sessions.sessionManager, uiServices.sessions.sessionBroker);

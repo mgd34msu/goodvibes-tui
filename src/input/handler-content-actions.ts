@@ -440,7 +440,7 @@ export function handleCtrlC(
   // double-press window from advancing. A throw from the async TTS-stop path
   // (e.g. killing the audio subprocess) would otherwise swallow this press and
   // strand the user unable to quit while TTS is speaking. Decouple the two: the
-  // press below is recorded no matter how speech-stop fares. (UX-B item 6b.)
+  // press below is recorded no matter how speech-stop fares. (item 6b.)
   let stoppedSpeech = false;
   try {
     stoppedSpeech = cancelGeneration?.() === true;

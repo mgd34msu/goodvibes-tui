@@ -5,7 +5,7 @@ import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 
 /**
  * Parse `--target <id>[:<kind>]` out of the args following `<panel-id>
- * [top|bottom]` (DEBT-5 item 4). Splits the args array in place (removing the
+ * [top|bottom]` (item 4). Splits the args array in place (removing the
  * flag + its value) so positional `pane` parsing downstream is unaffected by
  * where the flag appears. Only `open fleet` currently has a deep-link
  * consumer (FleetPanel.receiveDeepLink) — other panel ids just ignore an
@@ -32,7 +32,7 @@ export function registerOperatorPanelCommand(registry: CommandRegistry): void {
       const pm = requirePanelManager(ctx);
       const sub = args[0]?.toLowerCase() ?? '';
       if (!sub || sub === 'toggle') {
-        // W6.1 (the purge): 'panel-list' (the browse-all-panels picker) was
+        // (the purge): 'panel-list' (the browse-all-panels picker) was
         // DELETE-disposition — a picker over a handful of panels is dead
         // weight now (see the Ctrl+P selectionModal repoint in
         // shell/ui-openers.ts for its interactive replacement). Bare
@@ -71,9 +71,9 @@ export function registerOperatorPanelCommand(registry: CommandRegistry): void {
           // no panel lands in the workspace. Report that honestly rather than
           // claiming "Panel opened: <id>".
           const redirectTarget = pm.getModalRedirect(id);
-          // UX-C focus rule 1a: the command path leaves focus in the composer
+          // focus rule 1a: the command path leaves focus in the composer
           // ("mid-command-flow") — showPanel does not grab panel focus here.
-          // DEBT-5: forward the deep-link target so the panel lands on the row.
+          // forward the deep-link target so the panel lands on the row.
           if (ctx.showPanel) ctx.showPanel(id, pane as 'top' | 'bottom' | undefined, target);
           else {
             pm.open(id, pane as 'top' | 'bottom' | undefined, target);
@@ -169,7 +169,7 @@ export function registerOperatorPanelCommand(registry: CommandRegistry): void {
       } else {
         const id = args[0]!;
         try {
-          // UX-C: bare `/panel <id>` is the same command path as `/panel open
+          // bare `/panel <id>` is the same command path as `/panel open
           // <id>` — composer stays focused.
           if (ctx.showPanel) ctx.showPanel(id);
           else {

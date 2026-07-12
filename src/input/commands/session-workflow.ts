@@ -89,7 +89,7 @@ export function reopenPanelsFromReturnContext(ctx: CommandContext, summary: Sess
   const reopened: string[] = [];
   const movedToModal: string[] = [];
   for (const panelId of summary.openPanels.slice(0, 4)) {
-    // W6.1 (the purge): a MIGRATE-TO-MODAL id has no panel to restore — a modal
+    // (the purge): a MIGRATE-TO-MODAL id has no panel to restore — a modal
     // is not part of the saved panel layout. Skip it (don't pop a modal
     // mid-resume) and note it once, rather than firing openModal + revealing an
     // empty workspace during resume.
@@ -283,7 +283,7 @@ export async function handleSessionWorkflowCommand(args: string[], ctx: CommandC
         },
       });
       // Hydrate the footer's token counters from the resumed (+ journal-replayed)
-      // history now, before ctx.renderRequest() below (W0.9).
+      // history now, before ctx.renderRequest() below.
       ctx.session.hydrateSessionUsage?.();
 
       if (meta.model) {

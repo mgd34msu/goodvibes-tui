@@ -2,14 +2,14 @@ import type { CommandContext } from './command-registry.ts';
 import type { Panel } from '../panels/types.ts';
 import type { PanelManager } from '../panels/panel-manager.ts';
 
-// W6.1 (the purge): every instanceof-routed branch this file used to carry
+// (the purge): every instanceof-routed branch this file used to carry
 // (FileExplorerPanel/FilePreviewPanel/SymbolOutlinePanel — DELETE;
 // ApprovalPanel/TasksPanel/OrchestrationPanel/AgentInspectorPanel —
 // RETIRE-INTO-FLEET) targeted a panel class that no longer exists. Panels
 // migrated onto the formal `Panel.handlePanelIntegrationAction` hook (the
 // preferred seam — see the comment below) are unaffected; this function now
 // only provides that passthrough. See
-// .goodvibes/audit/2026-07-04-wave6-briefs.json (W6.1) for the disposition
+// .goodvibes/audit/2026-07-04-wave6-briefs.json for the disposition
 // map.
 export function handlePanelIntegrationAction(
   panelManager: PanelManager,
