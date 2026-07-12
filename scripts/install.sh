@@ -87,6 +87,9 @@ fail() { printf 'install.sh: %s\n' "$*" >&2; exit 1; }
 # is always honored.
 systemd_daemon_unit_path() { printf '%s' "$HOME/.config/systemd/user/$SYSTEMD_DAEMON_UNIT"; }
 launchd_daemon_plist_path() { printf '%s' "$HOME/Library/LaunchAgents/$LAUNCHD_DAEMON_LABEL.plist"; }
+# Generic form of the above for any systemd user unit name (daemon or agent) —
+# used by the restart path to find and back up a broken unit file on disk.
+systemd_unit_path() { printf '%s' "$HOME/.config/systemd/user/$1"; }
 
 # --- platform detection (release asset naming: goodvibes[-daemon]-{linux|macos}-{x64|arm64}) ---
 resolve_platform() {
@@ -173,20 +176,86 @@ resolve_version() {
 # already-running daemon/agent must be restarted for the upgrade to take
 # effect. systemd-managed services are restarted through their unit; bare
 # processes are stopped and relaunched with their original arguments.
+#
+# A unit or bare process is only a valid restart target when it can actually
+# run the new binary. Before restarting a unit, its ExecStart binary is
+# resolved and checked; before relaunching a bare process, its real
+# executable (/proc/<pid>/exe) must live under $INSTALL_DIR. Either check
+# failing means the old install is treated as gone, not restarted — this is
+# exactly the case left behind by `bun remove -g @pellux/goodvibes-tui
+# @pellux/goodvibes-agent`, which deletes the binaries but can leave the
+# bun-era systemd user unit, and even its still-running process, behind.
+# Falling through in that case lets first-run service setup below bring up a
+# working daemon instead of silently doing nothing.
+
+# proc_belongs_to_install_dir <pid> — true only when the process's executable
+# lives under $INSTALL_DIR, so acting on one install never touches a
+# daemon/agent launched from a different install dir (bun's global bin dir,
+# a different $GOODVIBES_INSTALL_DIR elsewhere on the host, etc.). Shared by
+# the restart path (skip relaunching a foreign process) and uninstall (only
+# stop processes this install actually owns).
+proc_belongs_to_install_dir() {
+  _pid="$1"
+  if [ -r "/proc/$_pid/exe" ]; then
+    _exe=$(readlink -f "/proc/$_pid/exe" 2>/dev/null || true)
+  else
+    _exe=$(ps -o args= -p "$_pid" 2>/dev/null | sed 's/ .*$//')
+  fi
+  case "$_exe" in
+    "$INSTALL_DIR"/*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+# Extract the ExecStart binary path systemd reports for a unit, out of the
+# structured `{ path=... ; argv[]=... ; ... }` that
+# `systemctl show -p ExecStart --value` prints. Empty when it cannot be
+# determined (missing unit, no systemd, unrecognized format) — callers must
+# treat that as "unknown", never as "broken".
+systemd_unit_exec_binary() {
+  _raw=$(systemctl --user show -p ExecStart --value "$1" 2>/dev/null || true)
+  printf '%s' "$_raw" | sed -n 's/.*path=\([^ ;]*\).*/\1/p' | head -1
+}
 
 restart_systemd_unit() {
   # restart_systemd_unit <unit> <expected-binary> — returns 0 if it handled a
-  # running unit (restarted or reported), 1 if no active unit exists.
+  # running unit (restarted, replaced, or reported), 1 if no active unit
+  # exists, or its unit was just replaced because it could no longer run —
+  # either way the caller should fall through to bare-process handling and
+  # then first-run service setup.
   unit="$1"
   expected_bin="$2"
   command -v systemctl >/dev/null 2>&1 || return 1
   systemctl --user is-active --quiet "$unit" 2>/dev/null || return 1
+
+  # A unit whose ExecStart binary no longer exists cannot be brought back by
+  # restarting it — that only "restarts" a corpse. Stop it, back up its unit
+  # file (never silently destroyed), and let the caller fall through so
+  # first-run setup replaces it with a working, installer-managed unit. A
+  # unit whose ExecStart is a DIFFERENT but still-existing binary (a
+  # genuinely hand-written working unit) is untouched by this check — it
+  # keeps the ordinary restart-and-note-the-mismatch behavior below.
+  exec_bin=$(systemd_unit_exec_binary "$unit")
+  if [ -n "$exec_bin" ] && [ ! -x "$exec_bin" ]; then
+    say ""
+    say "${unit} points at $exec_bin, which no longer exists — replacing it."
+    systemctl --user disable --now "$unit" 2>/dev/null ||
+      systemctl --user stop "$unit" 2>/dev/null || true
+    unit_path=$(systemd_unit_path "$unit")
+    if [ -f "$unit_path" ]; then
+      backup="$unit_path.bak.$(date +%Y%m%d%H%M%S)"
+      mv -f "$unit_path" "$backup"
+      say "  moved      $unit_path -> $backup"
+    fi
+    systemctl --user daemon-reload 2>/dev/null || true
+    return 1
+  fi
+
   say ""
   say "Restarting the running ${unit%.service} (systemd user service) ..."
   if systemctl --user restart "$unit" 2>/dev/null; then
     say "  restarted  $unit"
-    exec_start=$(systemctl --user show -p ExecStart --value "$unit" 2>/dev/null || true)
-    case "$exec_start" in
+    case "$exec_bin" in
       ""|*"$expected_bin"*) : ;;
       *)
         say "  NOTE: the service does not exec $expected_bin, so it may still be"
@@ -208,6 +277,29 @@ restart_bare_processes() {
   pids=$(pgrep -f "$pattern" 2>/dev/null || true)
   [ -n "$pids" ] || return 0
   for pid in $pids; do
+    if ! proc_belongs_to_install_dir "$pid"; then
+      # Its real executable is gone or lives outside $INSTALL_DIR — a
+      # leftover from a different install. Recovering its argv and
+      # relaunching would either restart a binary that no longer exists, or
+      # (worse) mangle a foreign process's arguments: the argv[0]-stripping
+      # below assumes argv[0] IS the daemon binary, which is not true for a
+      # process launched through another runtime (e.g. bun). Stop it and let
+      # first-run setup (or a manual start) bring up the new binary instead.
+      say ""
+      say "Stopping ${new_bin##*/} (pid $pid) — its executable is gone or is not $new_bin; not relaunching it."
+      kill "$pid" 2>/dev/null || continue
+      waited=0
+      while kill -0 "$pid" 2>/dev/null && [ "$waited" -lt 10 ]; do
+        sleep 1
+        waited=$((waited + 1))
+      done
+      if kill -0 "$pid" 2>/dev/null; then
+        say "  NOTE: pid $pid did not exit within 10s — stop it yourself: kill $pid"
+      else
+        say "  stopped    pid $pid (start the new binary yourself, or let first-run setup do it: $new_bin)"
+      fi
+      continue
+    fi
     # Recover the original arguments so flags (port, host, home dir) survive.
     if [ -r "/proc/$pid/cmdline" ]; then
       args=$(tr '\0' '\n' < "/proc/$pid/cmdline" | tail -n +2 | tr '\n' ' ')
@@ -521,23 +613,6 @@ record_removed() { UNINSTALL_REMOVED="${UNINSTALL_REMOVED}  $1
 record_kept() { UNINSTALL_KEPT="${UNINSTALL_KEPT}  $1
 "; }
 
-proc_belongs_to_install_dir() {
-  # proc_belongs_to_install_dir <pid> — true only when the process's executable
-  # lives under $INSTALL_DIR, so uninstalling one install never stops a
-  # daemon/agent launched from a different install dir (this is what keeps a
-  # scratch-dir uninstall from touching a real daemon elsewhere on the host).
-  _pid="$1"
-  if [ -r "/proc/$_pid/exe" ]; then
-    _exe=$(readlink -f "/proc/$_pid/exe" 2>/dev/null || true)
-  else
-    _exe=$(ps -o args= -p "$_pid" 2>/dev/null | sed 's/ .*$//')
-  fi
-  case "$_exe" in
-    "$INSTALL_DIR"/*) return 0 ;;
-    *) return 1 ;;
-  esac
-}
-
 stop_bare_processes() {
   # stop_bare_processes <pgrep-pattern> <label> — TERM processes matching the
   # pattern whose executable lives under $INSTALL_DIR. A process that cannot be
@@ -592,8 +667,18 @@ uninstall_systemd_service() {
     say "Stopping $unit (present but not installer-managed) ..."
     systemctl --user stop "$unit" 2>/dev/null || true
     if [ -f "$unit_path" ]; then
-      say "  KEPT       $unit_path is not installer-managed (no marker) — leaving it in place."
-      say "  Remove it yourself:"
+      # A hand-written unit is never removed by uninstall, but it is still
+      # worth saying plainly when its ExecStart binary is already gone (e.g.
+      # a bun-era unit left behind by `bun remove -g`) rather than reporting
+      # it identically to a working hand-written unit.
+      exec_bin=$(systemd_unit_exec_binary "$unit")
+      if [ -n "$exec_bin" ] && [ ! -x "$exec_bin" ]; then
+        say "  NOTE: $unit_path points at $exec_bin, which no longer exists (a broken,"
+        say "  non-installer-managed unit) — it is left in place; remove it yourself:"
+      else
+        say "  KEPT       $unit_path is not installer-managed (no marker) — leaving it in place."
+        say "  Remove it yourself:"
+      fi
       say "    systemctl --user disable --now $unit && rm $unit_path && systemctl --user daemon-reload"
       record_kept "$unit_path (hand-written $unit — not installer-managed)"
     fi
