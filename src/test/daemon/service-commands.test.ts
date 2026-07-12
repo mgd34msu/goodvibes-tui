@@ -403,7 +403,7 @@ describe('runDaemonServiceCli — legacy unit detection (W3 Finding 4)', () => {
  * this suite uses — this describe block never touches a real port, a real
  * systemd unit, or a real filesystem path outside the per-test tempdir.
  */
-describe('runDaemonServiceCli — migrate-service (W4-D1)', () => {
+describe('runDaemonServiceCli — migrate-service', () => {
   let dir = '';
 
   beforeEach(() => {

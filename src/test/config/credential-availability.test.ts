@@ -22,7 +22,7 @@ function reasonOf(availability: CredentialAvailability): string {
   return availability.reason;
 }
 
-describe('deriveCredentialAvailability — honest degrade (W6-C1)', () => {
+describe('deriveCredentialAvailability — honest degrade', () => {
   test('503 CREDENTIAL_STORE_UNAVAILABLE (by machine code) -> unavailable with reason', () => {
     const out = deriveCredentialAvailability({
       ok: false,

@@ -789,8 +789,9 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
     integrationHelpers,
     async rerootStores(newWorkingDir: string): Promise<void> {
       // The memory store is the home-scoped canonical cross-surface store and
-      // deliberately does NOT reroot per-project (that would re-silo memory, the E6
-      // regression). Only working-tree-bound stores (code index, project index) reroot.
+      // deliberately does NOT reroot per-project (that would re-silo memory back
+      // into per-project stores). Only working-tree-bound stores (code index,
+      // project index) reroot.
       await codeIndexStore.reroot(newWorkingDir, codeIndexDbPath(newWorkingDir));
       await projectIndex.reroot(newWorkingDir);
     },

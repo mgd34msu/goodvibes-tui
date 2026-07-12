@@ -2204,7 +2204,7 @@ describe('network step: connect to an existing daemon (F1)', () => {
 // Network step, visible only when the runtime snapshot's read-only
 // legacyDaemon detection reports a unit present, confirm-gated by a checklist
 // toggle on top of the engine's own consent requirement.
-describe('network step: migrate legacy daemon service (W4-D1)', () => {
+describe('network step: migrate legacy daemon service', () => {
   test('hides the migration fields when no legacy unit is detected', () => {
     const snapshot = makeOnboardingSnapshot();
     const wizard = new OnboardingWizardController();

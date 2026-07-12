@@ -466,7 +466,7 @@ describe('wireStreamEventMetrics — synthetic node skipped in failover', () => 
       enabled: true,
       chain: [
         { position: 0, providerId: 'anthropic', modelId: 'claude-3-5-sonnet', capable: true },
-        // synthetic is capable but must be skipped (E11-6: double-indirection, no registryKey verification)
+        // synthetic is capable but must be skipped: it's a double-indirection (a synthetic chain resolving to another chain) with no registryKey to verify
         { position: 1, providerId: 'synthetic', modelId: 'best-free', capable: true },
         // No real alternative beyond synthetic.
       ],
@@ -538,7 +538,7 @@ describe('wireStreamEventMetrics — clearFailoverVisited on new submission', ()
   });
 });
 // ---------------------------------------------------------------------------
-// Tests: failover cost delta notice (E11-4)
+// Tests: failover cost delta notice
 // ---------------------------------------------------------------------------
 
 describe('wireStreamEventMetrics — failover cost delta notice', () => {

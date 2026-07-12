@@ -42,7 +42,7 @@ function isClosedStatus(status: string): boolean {
 }
 
 /**
- * D-TUI/#A2: closed sessions carry an optional, honest reason for WHY they
+ * Closed sessions carry an optional, honest reason for WHY they
  * closed under `metadata.closeReason` (SDK's `SharedSessionCloseReason`,
  * 'closeReason' key — see `@pellux/goodvibes-sdk` platform/control-plane
  * session-broker-sessions.ts's `readSessionCloseReason`). `metadata` is an
@@ -58,7 +58,7 @@ function readCloseReason(record: SharedSessionRecord): string | undefined {
 /**
  * A GC sweep closing an idle session ('idle-reaped') auto-reopens on the next
  * heartbeat — it is NOT the same event as a deliberate user/surface close, so
- * it must never render under the same "closed" badge (W4/#A2). Tolerant of
+ * it must never render under the same "closed" badge. Tolerant of
  * records without the field (pre-feature builds, or a deliberate close).
  */
 function isReapedRecord(record: SharedSessionRecord): boolean {

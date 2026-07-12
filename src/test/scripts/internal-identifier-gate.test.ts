@@ -12,6 +12,9 @@ const debtId = 'DEBT-' + '9';
 const uxId = 'UX-' + 'Z';
 const waveWord = 'Wave' + ' 9';
 const waveRound = 'W9-' + 'R2';
+const findingParen = '(' + 'C6' + ')';
+const findingTitleId = 'D1';
+const findingChain = 'C2' + '/' + 'C6';
 
 describe('checkNoInternalIdentifiers', () => {
   test('passes plain-language text with no internal identifiers', () => {
@@ -113,5 +116,59 @@ describe('checkNoInternalIdentifiers', () => {
       { relPath: 'src/input/handler-shortcuts.ts', text: "if (token.logicalName === 'f2') { openFleetPanel(); }" },
     ]);
     expect(violations).toEqual([]);
+  });
+
+  // Lettered finding/brief ids (A-E + 1-2 digits) — a follow-up sweep, second
+  // occurrence of this class. Only three shapes are banned; see the rule
+  // file's own doc comment for why the bare-token shape stays legal.
+  describe('lettered finding ids (A-E + digits)', () => {
+    test('fails when the id sits alone inside parentheses', () => {
+      const violations = checkNoInternalIdentifiers([
+        { relPath: 'src/panels/example-panel.ts', text: `// Agent transcript ${findingParen}` },
+      ]);
+      expect(violations).toHaveLength(1);
+      expect(violations[0]).toContain(findingParen);
+      expect(violations[0]).toContain('never put wave/work-order/register ids in outward-facing or in-code text');
+    });
+
+    test('fails when a test/describe/it title starts with the id followed by a colon', () => {
+      const violations = checkNoInternalIdentifiers([
+        { relPath: 'src/test/example.test.ts', text: `describe('${findingTitleId}: pre-first-token silence is not "Stalled"', () => {` },
+      ]);
+      expect(violations).toHaveLength(1);
+      expect(violations[0]).toContain('[internal-identifier]');
+    });
+
+    test('fails when a test/describe/it title starts with the id followed by an em-dash', () => {
+      const violations = checkNoInternalIdentifiers([
+        { relPath: 'src/test/example.test.ts', text: `test('${findingTitleId} — offline within one union-probe interval', () => {` },
+      ]);
+      expect(violations).toHaveLength(1);
+    });
+
+    test('fails on a slash-chain of two ids', () => {
+      const violations = checkNoInternalIdentifiers([
+        { relPath: 'src/panels/example-panel.ts', text: `// Chain summary has no single conversation (${findingChain})` },
+      ]);
+      expect(violations).toHaveLength(1);
+      expect(violations[0]).toContain(findingChain);
+    });
+
+    test('does NOT flag a bare id with no delimiter — the shape stays legal (control-character sets, Slack channel ids, IMAP tags, quoted-printable)', () => {
+      const violations = checkNoInternalIdentifiers([
+        { relPath: 'src/core/example.ts', text: '// C0 control characters (0x00-0x1f) and DEL (0x7f).' },
+        { relPath: 'src/test/example.test.ts', text: "expect(routeId).toBe('C1');" },
+        { relPath: 'src/test/example.test.ts', text: "expect(socket.writes[0]).toBe('A1 LOGIN\\r\\n');" },
+        { relPath: 'src/daemon/example.ts', text: '// a single `=C3=A9` pair must decode to one UTF-8 character' },
+      ]);
+      expect(violations).toEqual([]);
+    });
+
+    test('does NOT flag a title where the id is not at the very start of the string', () => {
+      const violations = checkNoInternalIdentifiers([
+        { relPath: 'src/test/example.test.ts', text: "test('a middle-of-sentence C6 reference is not the banned shape', () => {" },
+      ]);
+      expect(violations).toEqual([]);
+    });
   });
 });

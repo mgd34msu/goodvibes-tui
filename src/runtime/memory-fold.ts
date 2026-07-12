@@ -21,7 +21,7 @@ export async function foldTuiLegacyMemory(
 ): Promise<MemoryFoldReport> {
   const legacyTuiProject = join(workingDirectory, '.goodvibes', 'tui', 'memory.sqlite');
   const sources: LegacyMemorySource[] = [
-    { label: `tui:${workingDirectory} (pre-E6)`, dbPath: legacyTuiProject },
+    { label: `tui:${workingDirectory} (legacy per-project store)`, dbPath: legacyTuiProject },
   ];
   return foldMemoryStores(memoryStore, sources, { embeddingRegistry: memoryEmbeddingRegistry });
 }

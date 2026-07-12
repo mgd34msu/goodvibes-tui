@@ -59,7 +59,7 @@ function toneColor(tone: FleetStateTone, palette: PanelPalette): string {
 }
 
 // ---------------------------------------------------------------------------
-// Agent transcript (C6 live/frozen split)
+// Agent transcript (live/frozen split)
 // ---------------------------------------------------------------------------
 
 export type FleetTranscriptMode = 'live' | 'frozen' | 'unavailable';
@@ -157,7 +157,7 @@ export function renderFleetAgentTranscript(
 }
 
 // ---------------------------------------------------------------------------
-// Chain summary — 'wrfc-chain' tabs have no single conversation (C2/C6)
+// Chain summary — 'wrfc-chain' tabs have no single conversation
 // ---------------------------------------------------------------------------
 
 /**
@@ -197,7 +197,7 @@ export function renderFleetChainSummary(
 
 // ---------------------------------------------------------------------------
 // Ledger fallback — degraded activity view for a terminal agent whose
-// full-fidelity snapshot is unavailable (C6 "honest fallback")
+// full-fidelity snapshot is unavailable (an honest fallback)
 // ---------------------------------------------------------------------------
 
 /**
