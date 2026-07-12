@@ -34,11 +34,43 @@ function scratch(prefix: string): string {
   return dir;
 }
 
+/** The loginctl stub shared by both stub bin dirs. Linger state lives in
+ * $STUB_LINGER_STATE_FILE so tests can exercise all three real outcomes:
+ * `show-user` answers Linger=yes only when the state file says so;
+ * `enable-linger` records it unless $STUB_LINGER_DENY=1 simulates a polkit
+ * denial (exits 1 without recording). With neither env var set the stub
+ * behaves as "cannot enable" — show-user always says Linger=no — so a test
+ * that ignores lingering deterministically gets the honest fallback path
+ * instead of reaching the real host's loginctl. */
+const LOGINCTL_STUB = [
+  '#!/bin/sh',
+  'case "$*" in',
+  '  *show-user*)',
+  '    if [ -n "$STUB_LINGER_STATE_FILE" ] && grep -q yes "$STUB_LINGER_STATE_FILE" 2>/dev/null; then',
+  "    printf 'Linger=yes\\n'",
+  '    else',
+  "    printf 'Linger=no\\n'",
+  '    fi',
+  '    exit 0',
+  '    ;;',
+  '  *enable-linger*)',
+  '    [ "$STUB_LINGER_DENY" = "1" ] && exit 1',
+  '    [ -n "$STUB_LINGER_STATE_FILE" ] && printf \'yes\\n\' > "$STUB_LINGER_STATE_FILE"',
+  '    exit 0',
+  '    ;;',
+  '  *)',
+  '    exit 0',
+  '    ;;',
+  'esac',
+  '',
+].join('\n');
+
 /** Write a stub bin dir whose systemctl/launchctl are inert no-ops, so a
  * service-touching code path can be exercised without reaching the real host.
  * `is-active` reports inactive (exit 3); `cat` reports "no such unit" (exit 1),
  * so unit detection falls back to the scratch file on disk; everything else
- * exits 0. */
+ * exits 0. loginctl is stubbed too (see LOGINCTL_STUB) so the linger path
+ * never touches the host. */
 function stubServiceBin(root: string): string {
   const bin = join(root, 'stubbin');
   mkdirSync(bin, { recursive: true });
@@ -58,6 +90,9 @@ function stubServiceBin(root: string): string {
     writeFileSync(path, stub);
     chmodSync(path, 0o755);
   }
+  const loginctlPath = join(bin, 'loginctl');
+  writeFileSync(loginctlPath, LOGINCTL_STUB);
+  chmodSync(loginctlPath, 0o755);
   return bin;
 }
 
@@ -108,6 +143,9 @@ function stubStatefulServiceBin(root: string): string {
     writeFileSync(path, stub);
     chmodSync(path, 0o755);
   }
+  const loginctlPath = join(bin, 'loginctl');
+  writeFileSync(loginctlPath, LOGINCTL_STUB);
+  chmodSync(loginctlPath, 0o755);
   return bin;
 }
 
@@ -155,6 +193,47 @@ describe('install.sh — systemd unit generation', () => {
     expect(unit).toContain('Restart=on-failure');
     expect(unit).toContain('WantedBy=default.target');
     expect(unit).toMatch(/\[Unit\][\s\S]*\[Service\][\s\S]*\[Install\]/);
+    // The start-rate limiter is disabled regardless of systemd version, so a
+    // crash-looping daemon keeps retrying instead of tombstoning permanently.
+    expect(unit).toContain('StartLimitIntervalSec=0');
+  });
+
+  test('systemd >= 254 gets escalating restart delays (RestartSteps/RestartMaxDelaySec)', () => {
+    const root = scratch('gv-unit-254');
+    const home = join(root, 'home');
+    const installDir = join(root, 'bin');
+    mkdirSync(installDir, { recursive: true });
+
+    const unitPath = join(home, '.config/systemd/user/goodvibes-daemon.service');
+    // Version pinned explicitly — the unit shape under test must not depend on
+    // whatever systemd the host running the suite happens to have.
+    const out = runLib(`write_systemd_unit "${unitPath}" 254`, { HOME: home, GOODVIBES_INSTALL_DIR: installDir });
+    expect(out.code).toBe(0);
+
+    const unit = readFileSync(unitPath, 'utf-8');
+    expect(unit).toContain('StartLimitIntervalSec=0');
+    expect(unit).toContain('RestartSec=2');
+    expect(unit).toContain('RestartSteps=8');
+    expect(unit).toContain('RestartMaxDelaySec=300');
+  });
+
+  test('systemd < 254 degrades to the flat RestartSec retry (no unsupported directives)', () => {
+    const root = scratch('gv-unit-253');
+    const home = join(root, 'home');
+    const installDir = join(root, 'bin');
+    mkdirSync(installDir, { recursive: true });
+
+    const unitPath = join(home, '.config/systemd/user/goodvibes-daemon.service');
+    const out = runLib(`write_systemd_unit "${unitPath}" 253`, { HOME: home, GOODVIBES_INSTALL_DIR: installDir });
+    expect(out.code).toBe(0);
+
+    const unit = readFileSync(unitPath, 'utf-8');
+    // StartLimitIntervalSec=0 predates 254 by years and stays; the 254-only
+    // escalation directives are omitted rather than emitted-and-ignored.
+    expect(unit).toContain('StartLimitIntervalSec=0');
+    expect(unit).toContain('RestartSec=2');
+    expect(unit).not.toContain('RestartSteps=');
+    expect(unit).not.toContain('RestartMaxDelaySec=');
   });
 
   test('systemd-analyze verify accepts the generated unit (when available)', () => {
@@ -202,6 +281,54 @@ describe('install.sh — launchd plist generation', () => {
     // KeepAlive/SuccessfulExit=false is launchd's Restart=on-failure equivalent.
     expect(plist).toContain('<key>KeepAlive</key>');
     expect(plist).toContain('<key>SuccessfulExit</key>');
+  });
+});
+
+describe('install.sh — daemon survives without a login (lingering)', () => {
+  function lingerSetup(prefix: string, env: Record<string, string>): { stdout: string; code: number } {
+    const root = scratch(prefix);
+    const home = join(root, 'home');
+    const installDir = join(root, 'bin');
+    mkdirSync(installDir, { recursive: true });
+    const out = runLib('setup_daemon_service_systemd', {
+      HOME: home,
+      GOODVIBES_INSTALL_DIR: installDir,
+      PATH: `${stubStatefulServiceBin(root)}:${process.env.PATH ?? ''}`,
+      STUB_STATE_FILE: join(root, 'stub-state'),
+      STUB_EXEC_BIN: join(installDir, 'goodvibes-daemon'),
+      ...env,
+    });
+    return { stdout: out.stdout, code: out.code };
+  }
+
+  test('lingering is enabled, VERIFIED via loginctl show-user, and the closing copy says "at boot"', () => {
+    const root = scratch('gv-linger-state');
+    const out = lingerSetup('gv-linger-on', { STUB_LINGER_STATE_FILE: join(root, 'linger-state') });
+    expect(out.code).toBe(0);
+    expect(out.stdout).toContain('lingering  enabled for');
+    expect(out.stdout).toContain('The daemon starts at boot and restarts on failure.');
+    expect(out.stdout).not.toContain('starts on login');
+  });
+
+  test('already-lingering users are recognized without re-enabling', () => {
+    const root = scratch('gv-linger-pre-state');
+    const stateFile = join(root, 'linger-state');
+    writeFileSync(stateFile, 'yes\n');
+    const out = lingerSetup('gv-linger-pre', { STUB_LINGER_STATE_FILE: stateFile });
+    expect(out.code).toBe(0);
+    expect(out.stdout).toContain('lingering  already enabled for');
+    expect(out.stdout).toContain('The daemon starts at boot and restarts on failure.');
+  });
+
+  test('a polkit-style denial prints exactly one honest enable-linger instruction and says "on login"', () => {
+    const out = lingerSetup('gv-linger-denied', { STUB_LINGER_DENY: '1' });
+    expect(out.code).toBe(0);
+    // The fallback names the exact command to run once — and only once.
+    const mentions = out.stdout.split('loginctl enable-linger').length - 1;
+    expect(mentions).toBe(1);
+    expect(out.stdout).toContain('could not enable lingering');
+    expect(out.stdout).toContain('The daemon starts on login and restarts on failure.');
+    expect(out.stdout).not.toContain('starts at boot');
   });
 });
 
