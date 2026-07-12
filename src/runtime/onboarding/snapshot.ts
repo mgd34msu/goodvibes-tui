@@ -43,7 +43,6 @@ function buildConfigSnapshot(
     network: config.getCategory('network'),
     surfaces: config.getCategory('surfaces'),
     service: config.getCategory('service'),
-    featureFlags: config.getCategory('featureFlags'),
     batch: config.getCategory('batch'),
     cloudflare: config.getCategory('cloudflare'),
   };

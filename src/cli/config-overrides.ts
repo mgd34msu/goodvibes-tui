@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs';
-import type { ConfigKey, ConfigManager, ConfigSetting, GoodVibesConfig, PersistedFlagState } from '../config/index.ts';
+import type { ConfigKey, ConfigManager, ConfigSetting, GoodVibesConfig } from '../config/index.ts';
 import { CONFIG_SCHEMA, ConfigError } from '../config/index.ts';
+import { featureEnablementWrite, getFeatureSetting } from '../runtime/feature-settings.ts';
 import type { GoodVibesCliCommand, GoodVibesCliFlags } from './types.ts';
 import { RUNTIME_ENDPOINT_CONFIG_KEYS, hostModeForHostname } from './endpoints.ts';
 import type { RuntimeEndpointId } from './endpoints.ts';
@@ -187,23 +188,36 @@ export function applyRuntimeConfigOverrides(
   return errors;
 }
 
+/**
+ * Session-only feature overrides (--enable-feature / --disable-feature).
+ * Each feature is switched through its real domain settings key (e.g.
+ * sandbox.enabled, behavior.compactionStrategy) in the runtime config layer;
+ * features without an off position (constant capabilities on non-boolean
+ * keys) and unknown ids are reported as errors rather than silently ignored.
+ */
 export function applyRuntimeFeatureFlagOverrides(
   configManager: ConfigManager,
   options: {
     readonly enableFeatures: readonly string[];
     readonly disableFeatures: readonly string[];
   },
-): void {
-  if (options.enableFeatures.length === 0 && options.disableFeatures.length === 0) return;
+): readonly string[] {
+  if (options.enableFeatures.length === 0 && options.disableFeatures.length === 0) return [];
   const config = getRuntimeConfig(configManager);
-  const flags = { ...config.featureFlags };
-  for (const feature of options.enableFeatures) {
-    flags[feature] = 'enabled' satisfies PersistedFlagState;
-  }
-  for (const feature of options.disableFeatures) {
-    flags[feature] = 'disabled' satisfies PersistedFlagState;
-  }
-  config.featureFlags = flags;
+  const errors: string[] = [];
+  const apply = (feature: string, enabled: boolean, flagName: string): void => {
+    const write = featureEnablementWrite(feature, enabled);
+    if (!write) {
+      errors.push(getFeatureSetting(feature)
+        ? `${flagName} ${feature}: this capability has no ${enabled ? 'on' : 'off'} switch (its domain settings govern it directly).`
+        : `${flagName} ${feature}: unknown feature id.`);
+      return;
+    }
+    setNestedConfigValue(config, write.key, write.value);
+  };
+  for (const feature of options.enableFeatures) apply(feature, true, '--enable-feature');
+  for (const feature of options.disableFeatures) apply(feature, false, '--disable-feature');
+  return errors;
 }
 
 export function applyRuntimeEndpointFlagOverrides(

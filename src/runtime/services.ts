@@ -52,7 +52,8 @@ import { McpRegistry } from '@pellux/goodvibes-sdk/platform/mcp';
 import { BenchmarkStore, CacheHitTracker, FavoritesStore, inferFallbackContextWindow, type ModelDefinition, ModelLimitsService, ProviderCapabilityRegistry, ProviderOptimizer, ProviderRegistry } from '@pellux/goodvibes-sdk/platform/providers';
 import { KeybindingsManager } from '../input/keybindings.ts';
 import { AdaptivePlanner, DeterministicReplayEngine, ExecutionPlanManager, SessionLineageTracker, SessionMemoryStore } from '@pellux/goodvibes-sdk/platform/core';
-import { isFeatureFlagEnabled } from './surface-feature-flags.ts';
+import { deriveFeatureStates, bindFeatureSettingsBridge } from '@pellux/goodvibes-sdk/platform/runtime/state';
+import { applyProviderOptimizerConfigMode, bindProviderOptimizerFeatureFlag } from './provider-optimizer-wiring.ts';
 import { type ArchivableProcessRegistry } from '@pellux/goodvibes-sdk/platform/runtime/fleet';
 import { calcSessionCost, isModelPriced } from '../export/cost-utils.ts';
 import { createWorkstreamServices, type OrchestrationEngine, type WorkstreamCommandService } from './workstream-services.ts';
@@ -254,6 +255,14 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
   const workspaceTrustManager = new WorkspaceTrustManager({ shellPaths });
   const configManager = options.configManager;
   const featureFlags = options.featureFlags ?? createFeatureFlagManager();
+  if (options.featureFlags === undefined) {
+    // Gate states derive from domain settings keys; the bridge keeps live
+    // config.set changes flowing. Wired only for a manager this call owns —
+    // callers that pass a manager own its loading and bridging (mirrors the
+    // SDK composition root).
+    featureFlags.loadFromConfig({ flags: deriveFeatureStates(configManager) });
+    bindFeatureSettingsBridge(configManager, featureFlags);
+  }
   const runtimeDispatch = createDomainDispatch(options.runtimeStore);
   const gatewayMethods = new GatewayMethodCatalog();
   const panelManager = new PanelManager();
@@ -267,9 +276,10 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
     store: new AutomationRouteStore({ configManager }),
     runtimeStore: options.runtimeStore,
     runtimeBus: options.runtimeBus,
+    featureFlags,
   });
-  const surfaceRegistry = new SurfaceRegistry(configManager, options.runtimeStore);
-  const channelPlugins = new ChannelPluginRegistry();
+  const surfaceRegistry = new SurfaceRegistry(configManager, options.runtimeStore, featureFlags);
+  const channelPlugins = new ChannelPluginRegistry({ featureFlags });
   surfaceRegistry.attachPluginRegistry(channelPlugins);
   const secretsManager = new SecretsManager({
     projectRoot: workingDirectory,
@@ -579,8 +589,10 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
   const providerOptimizer = new ProviderOptimizer(
     providerRegistry,
     providerCapabilityRegistry,
-    isFeatureFlagEnabled(configManager, 'provider-optimizer'),
+    false,
   );
+  bindProviderOptimizerFeatureFlag(featureFlags, providerOptimizer);
+  applyProviderOptimizerConfigMode(configManager, providerOptimizer);
   const sessionMemoryStore = new SessionMemoryStore();
   const sessionLineageTracker = new SessionLineageTracker();
   const sessionChangeTracker = new SessionChangeTracker();

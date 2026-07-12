@@ -29,6 +29,15 @@ function decode(bytes: Uint8Array | undefined): string {
  */
 export function createSyncGitSeam(repoRoot: string): MemoryProjectionGit {
   return {
+    resolveToplevel(dir: string): string | null {
+      return GitService.getRepoRoot(dir);
+    },
+    init(dir: string): void {
+      const result = GitService.initRepo(dir);
+      if (!result.success) {
+        throw new Error(`git init failed: ${result.error ?? 'unknown error'}`);
+      }
+    },
     add(dir: string): void {
       const result = Bun.spawnSync(['git', 'add', dir], { cwd: repoRoot });
       if (result.exitCode !== 0) {

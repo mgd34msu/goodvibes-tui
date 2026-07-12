@@ -1,7 +1,7 @@
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { CONFIG_SCHEMA } from '@pellux/goodvibes-sdk/platform/config';
-import { FEATURE_FLAG_MAP } from '@pellux/goodvibes-sdk/platform/runtime/state';
+import { FEATURE_SETTINGS } from '@pellux/goodvibes-sdk/platform/runtime/state';
 import { CommandRegistry } from '../input/command-registry.ts';
 import { registerBuiltinCommands } from '../input/commands.ts';
 
@@ -181,7 +181,7 @@ export function buildVerificationLedger(root: string): VerificationLedger {
   const slashCommands = slashCommandNames.length;
   const panels = countBuiltinPanels(root);
   const cliCommands = cliCommandNames.length;
-  const featureFlags = FEATURE_FLAG_MAP.size;
+  const featureFlags = FEATURE_SETTINGS.length;
   const settings = CONFIG_SCHEMA.length;
   const externalSlashCommands = slashCommandNames.filter((command) => EXTERNAL_SLASH_COMMANDS.has(command)).length;
   const externalCliCommands = cliCommandNames.filter((command) => EXTERNAL_CLI_COMMANDS.has(command)).length;

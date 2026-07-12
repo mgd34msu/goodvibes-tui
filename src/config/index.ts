@@ -8,7 +8,7 @@
 
 export { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 export type { DeepReadonly } from '@pellux/goodvibes-sdk/platform/config';
-export type { GoodVibesConfig, ConfigKey, ConfigValue, ConfigSetting, PermissionMode, PermissionAction, PermissionsToolConfig, NotificationsConfig, PersistedFlagState } from '@pellux/goodvibes-sdk/platform/config';
+export type { GoodVibesConfig, ConfigKey, ConfigValue, ConfigSetting, PermissionMode, PermissionAction, PermissionsToolConfig, NotificationsConfig } from '@pellux/goodvibes-sdk/platform/config';
 export { DEFAULT_CONFIG, CONFIG_SCHEMA } from '@pellux/goodvibes-sdk/platform/config';
 export { ConfigError } from '@pellux/goodvibes-sdk/platform/types';
 

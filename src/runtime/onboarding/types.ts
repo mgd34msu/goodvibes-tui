@@ -1,6 +1,5 @@
 import type { ConfigManager, ConfigKey, GoodVibesConfig } from '../../config/index.ts';
 import type { SecretsManager, SecretRecord, SecretStorageReview } from '../../config/secrets.ts';
-import type { FeatureFlagConfigKey } from '../surface-feature-flags.ts';
 import type { LocalAuthSnapshot, UserAuthManager } from '@pellux/goodvibes-sdk/platform/security';
 import type { ShellPathService } from '@/runtime/index.ts';
 import type {
@@ -46,7 +45,6 @@ export interface OnboardingConfigSnapshot {
   readonly network: GoodVibesConfig['network'];
   readonly surfaces: GoodVibesConfig['surfaces'];
   readonly service: GoodVibesConfig['service'];
-  readonly featureFlags: GoodVibesConfig['featureFlags'];
   readonly batch: GoodVibesConfig['batch'];
   readonly cloudflare: GoodVibesConfig['cloudflare'];
 }
@@ -267,7 +265,7 @@ export interface OnboardingStepDerivationState {
 export type OnboardingApplyOperation =
   | {
       readonly kind: 'set-config';
-      readonly key: ConfigKey | FeatureFlagConfigKey;
+      readonly key: ConfigKey;
       readonly value: unknown;
       readonly scope?: 'global' | 'project';
     }

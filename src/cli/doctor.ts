@@ -1,8 +1,7 @@
 import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import { PermissionManager, createPermissionConfigReader } from '@pellux/goodvibes-sdk/platform/permissions';
 import type { PermissionCategory, PermissionCheckResult } from '@pellux/goodvibes-sdk/platform/permissions';
-import { PolicyRuntimeState, createFeatureFlagManager } from '@/runtime/index.ts';
-import type { FlagState } from '@/runtime/index.ts';
+import { PolicyRuntimeState, createFeatureFlagManager, deriveFeatureStates } from '@/runtime/index.ts';
 import { getProviderIdFromModel } from '../config/provider-model.ts';
 import type { CliCommandOutput } from './types.ts';
 import type { GoodVibesCliOutputFormat } from './types.ts';
@@ -164,7 +163,7 @@ async function explain(options: DoctorSubcommandOptions): Promise<CliCommandOutp
   // Feature flags come from live config so the policy engine layer is walked
   // exactly when the running app would walk it.
   const featureFlags = createFeatureFlagManager();
-  featureFlags.loadFromConfig({ flags: (config.getCategory('featureFlags') as Record<string, FlagState>) ?? {} });
+  featureFlags.loadFromConfig({ flags: deriveFeatureStates(config) });
   const policyEngineOn = featureFlags.isEnabled('permissions-policy-engine');
   const policyRuntimeState = new PolicyRuntimeState();
   const manager = new PermissionManager(

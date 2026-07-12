@@ -2,7 +2,6 @@ import { existsSync, readFileSync, unlinkSync } from 'node:fs';
 import { atomicWriteFileSync } from '../../config/atomic-write.ts';
 import { isSecretRefInput } from '@pellux/goodvibes-sdk/platform/config';
 import { CONFIG_SCHEMA, DEFAULT_CONFIG } from '../../config/index.ts';
-import type { FeatureFlagConfigKey } from '../surface-feature-flags.ts';
 import {
   getOnboardingRuntimeStatePath,
   readOnboardingRuntimeState,
@@ -133,39 +132,14 @@ function isMalformedGoodVibesSecretReferenceValue(value: string): boolean {
   return normalized.startsWith('goodvibes://') && !isGoodVibesSecretReferenceValue(normalized);
 }
 
-function isFeatureFlagConfigKey(key: string): key is FeatureFlagConfigKey {
-  return key === 'featureFlags' || key.startsWith('featureFlags.');
-}
-
-function validateFeatureFlagConfigValue(operation: Extract<OnboardingApplyOperation, { kind: 'set-config' }>): boolean {
-  if (!isFeatureFlagConfigKey(operation.key)) return false;
-
-  if (operation.key === 'featureFlags') {
-    if (!isPlainObject(operation.value)) throw new Error('featureFlags expects an object value.');
-    for (const [flagId, state] of Object.entries(operation.value)) {
-      if (flagId.trim().length === 0) throw new Error('featureFlags cannot contain an empty feature id.');
-      if (state !== 'enabled' && state !== 'disabled') {
-        throw new Error(`featureFlags.${flagId} expects enabled or disabled.`);
-      }
-    }
-    return true;
-  }
-
-  const flagId = operation.key.slice('featureFlags.'.length);
-  if (flagId.trim().length === 0) throw new Error('featureFlags requires a feature id.');
-  if (operation.value !== 'enabled' && operation.value !== 'disabled') {
-    throw new Error(`Config key ${operation.key} expects enabled or disabled.`);
-  }
-  return true;
-}
-
 function validateConfigValue(operation: Extract<OnboardingApplyOperation, { kind: 'set-config' }>): void {
   if (typeof operation.value === 'string' && isMalformedGoodVibesSecretReferenceValue(operation.value)) {
     throw new Error(`Config key ${operation.key} only accepts goodvibes://secrets/... secret references.`);
   }
 
-  if (validateFeatureFlagConfigValue(operation)) return;
-
+  // Feature enablement arrives as plain domain settings writes (e.g.
+  // sandbox.enabled, controlPlane.gateway), validated by the schema path below
+  // like any other key — there is no separate enablement namespace.
   const schema = CONFIG_SCHEMA.find((entry) => entry.key === operation.key);
   if (!schema) {
     const defaultValue = operation.key.split('.').reduce<unknown>((cursor, part) => (
