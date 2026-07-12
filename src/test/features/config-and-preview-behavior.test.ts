@@ -255,7 +255,7 @@ describe('tool preview truncation', () => {
     }
   });
 
-  it('pre-first-token silence renders "Waiting for model", never "Stalled" (batch replay D1)', () => {
+  it('pre-first-token silence renders "Waiting for model", never "Stalled"', () => {
     const width = 80;
     const lines = UIFactory.createThinkingFragment(
       width, '-', 1000, undefined, undefined, 40, 0, undefined, undefined,

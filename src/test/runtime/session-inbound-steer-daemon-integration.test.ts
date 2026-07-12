@@ -111,7 +111,7 @@ async function listInputsByState(
 // and tears down via try/finally, including any poller it activated — a leftover
 // setInterval or a stale closure over a shared mutable `harness` variable is
 // exactly the class of cross-test flake this file must never reintroduce.
-describe('D3 — live-surface steer delivery against a real bootDaemon', () => {
+describe('live-surface steer delivery against a real bootDaemon', () => {
   test('a webui steer is queued for the surface, collected by the TUI poller, injected, and acked delivered', async () => {
     const harness = await startHarness();
     let poller: SessionInboundInputPoller | null = null;

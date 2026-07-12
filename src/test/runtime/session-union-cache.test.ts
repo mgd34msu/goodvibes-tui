@@ -20,7 +20,7 @@ import {
   type WireSessionReader,
 } from '@pellux/goodvibes-sdk/platform/runtime/session-spine';
 
-describe('deriveSpineFooterStatus (D4 — offline within one union-probe interval)', () => {
+describe('deriveSpineFooterStatus (offline within one union-probe interval)', () => {
   test('not adopted: falls back to the spine client status', () => {
     expect(deriveSpineFooterStatus('online', { mode: 'local', online: false, lastSyncAt: null })).toBe('online');
     expect(deriveSpineFooterStatus('unknown', { mode: 'embedded', online: false, lastSyncAt: null })).toBe('unknown');

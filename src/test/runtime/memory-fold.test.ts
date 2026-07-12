@@ -33,7 +33,7 @@ afterEach(() => {
   rmSync(root, { recursive: true, force: true });
 });
 
-describe('foldTuiLegacyMemory (W6-C2 boot fold)', () => {
+describe('foldTuiLegacyMemory (boot fold)', () => {
   test('a project with no legacy store imports nothing and records the missing source (idempotent, non-fatal)', async () => {
     // `root` has no .goodvibes/tui/memory.sqlite — the legacy source is missing, not an error.
     const workingDir = root;

@@ -67,7 +67,7 @@ export type CreateBootstrapCommandContextOptions = {
   mcpRegistry: McpRegistry;
   voiceProviderRegistry?: VoiceProviderRegistry;
   voiceService?: VoiceService;
-  /** B31: direct-command consumers (`/search`, `/image`) of already-constructed RuntimeServices. */
+  /** Direct-command consumers (`/search`, `/image`) of already-constructed RuntimeServices. */
   webSearchService?: import('@pellux/goodvibes-sdk/platform/web-search').WebSearchService;
   mediaProviders?: import('@pellux/goodvibes-sdk/platform/media').MediaProviderRegistry;
   artifactStore?: import('@pellux/goodvibes-sdk/platform/artifacts').ArtifactStore;

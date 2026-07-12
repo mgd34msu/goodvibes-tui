@@ -344,7 +344,7 @@ describe('foldLegacySpineStore', () => {
   });
 });
 
-describe('SessionSpineClient timer-driven keepalive (D3/#4 — surface never goes stale mid-idle)', () => {
+describe('SessionSpineClient timer-driven keepalive (surface never goes stale mid-idle)', () => {
   test('keepalive re-heartbeats on its own cadence with NO render/turn activity', async () => {
     const fake = makeFakeSessionsClient();
     // Small window so the interval fires quickly in the test.

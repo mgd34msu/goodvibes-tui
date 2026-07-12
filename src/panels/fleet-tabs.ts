@@ -91,17 +91,16 @@ export function appendSteerText(draft: string, ch: string): string {
  * One attached session tab. `agentId` is the SDK attach handle for
  * `AgentManager.getConversationSnapshot(agentId)` — populated only for
  * 'agent' tabs (agent.ts sets ProcessNode.id = record.id, so node.id IS the
- * agentId; see the brief's C2 note). 'wrfc-chain' tabs render a live
- * member-summary instead of a transcript (a chain has no single conversation
- * of its own — see fleet-transcript.ts renderFleetChainSummary) and carry an
- * empty agentId, unused.
+ * agentId). 'wrfc-chain' tabs render a live member-summary instead of a
+ * transcript (a chain has no single conversation of its own — see
+ * fleet-transcript.ts renderFleetChainSummary) and carry an empty agentId,
+ * unused.
  *
- * `lineCache` is a PER-TAB `MessageLineCache` (C5 backpressure): switching
- * tabs must never invalidate or thrash the main session's own cache, and a
- * background (non-focused) tab must render nothing beyond its existing
- * tree-row, so its cache simply stays empty (size 0) until the tab is
- * focused. Disposed (`.clear()`) on detach so a closed tab's rendered
- * Line[] are not retained (brief risk #8).
+ * `lineCache` is a PER-TAB `MessageLineCache`: switching tabs must never
+ * invalidate or thrash the main session's own cache, and a background
+ * (non-focused) tab must render nothing beyond its existing tree-row, so its
+ * cache simply stays empty (size 0) until the tab is focused. Disposed
+ * (`.clear()`) on detach so a closed tab's rendered Line[] are not retained.
  */
 export interface FleetTab {
   readonly nodeId: string;
@@ -111,10 +110,10 @@ export interface FleetTab {
   readonly lineCache: MessageLineCache;
   /**
    * Cached parsed ledger fallback for a terminal agent whose conversation
-   * snapshot has been evicted from the SDK's retention ring (C6 degraded
-   * path). `null` = not yet loaded/attempted; `[]` = loaded and empty (or
-   * the load failed) — both render the same honest "no transcript" state
-   * once loaded is true.
+   * snapshot has been evicted from the SDK's retention ring (the degraded
+   * fallback path). `null` = not yet loaded/attempted; `[]` = loaded and
+   * empty (or the load failed) — both render the same honest "no transcript"
+   * state once loaded is true.
    */
   ledgerEntries: Record<string, unknown>[] | null;
   ledgerLoadStarted: boolean;

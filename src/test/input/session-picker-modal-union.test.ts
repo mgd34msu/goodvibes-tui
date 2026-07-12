@@ -192,7 +192,7 @@ describe('SessionPickerModal — cross-surface union (W3-T2)', () => {
     }
   });
 
-  test('(5) idle-reaped closed session badged "reaped", distinct from a deliberately-closed one badged "closed" (W4/#A2)', async () => {
+  test('(5) idle-reaped closed session badged "reaped", distinct from a deliberately-closed one badged "closed"', async () => {
     const { sessionManager, dir } = makeSessionManager();
     try {
       const local = localReader([

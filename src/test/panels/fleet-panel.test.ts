@@ -301,7 +301,7 @@ describe('FleetPanel — session tab lifecycle', () => {
 
 // ---------------------------------------------------------------------------
 // Transcript rendering — running (live) vs completed (frozen) vs evicted
-// (ledger fallback), per a stub snapshot source (Part C6)
+// (ledger fallback), per a stub snapshot source
 // ---------------------------------------------------------------------------
 
 describe('FleetPanel — tab transcript rendering', () => {
@@ -402,7 +402,7 @@ describe('FleetPanel — tab transcript rendering', () => {
 
 // ---------------------------------------------------------------------------
 // Backpressure — only the FOCUSED tab renders a transcript; per-tab caches
-// are isolated from each other and from switching (Part C5)
+// are isolated from each other and from switching
 // ---------------------------------------------------------------------------
 
 describe('FleetPanel — per-tab cache isolation (backpressure)', () => {
@@ -747,10 +747,10 @@ describe('FleetPanel — s opens the steer composer on an active, steerable tab'
     expect(panel.getTabsState().tabs[0]!.steerDraft).toBe('');
   });
 
-  test('s IS available from the root tree for a steerable node (batch replay D4 superseded the tab-only contract)', () => {
+  test('s IS available from the root tree for a steerable node (superseded the old tab-only contract)', () => {
     // Before that fix, this asserted 's' was hidden/dead on the tree; steering required
     // an undiscoverable Enter-attach first. Now the tree hints advertise it
-    // and 's' attaches-and-steers in one press (see the D4 describe block).
+    // and 's' attaches-and-steers in one press (see the "steer from the tree" describe block below).
     const node = makeNode({ id: 'agent-1', state: 'streaming', capabilities: { interruptible: true, killable: true, pausable: false, steerable: true } });
     const readModel = createStaticFleetReadModel(buildFleetSnapshot([node], NOW));
     const panel = new FleetPanel(readModel);
@@ -1494,7 +1494,7 @@ describe('FleetPanel — batch refutation fixes', () => {
   });
 });
 
-describe('FleetPanel — batch replay D4: steer from the tree', () => {
+describe('FleetPanel — steer from the tree', () => {
   test("'s' on a steerable tree node attaches and opens the steer composer", () => {
     const { panel } = attachSteerableTab();
     // Back to the tree first (attachSteerableTab leaves the tab focused).

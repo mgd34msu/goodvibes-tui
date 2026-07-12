@@ -1,5 +1,5 @@
 /**
- * Tests for the synthetic model chain listing behavior (E11-5 CLI parity).
+ * Tests for the synthetic model chain listing behavior (CLI parity with the TUI picker).
  *
  * Covers:
  *   - Chain output shape: each synthetic model produces id, tier, backendCount, backends[]

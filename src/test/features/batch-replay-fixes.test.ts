@@ -11,7 +11,7 @@ function fragmentText(lines: ReturnType<typeof UIFactory.createThinkingFragment>
   return lines.map((line) => line.map((cell) => cell.char ?? '').join('')).join('\n');
 }
 
-describe('D1 — pre-first-token silence is not "Stalled"', () => {
+describe('pre-first-token silence is not "Stalled"', () => {
   const stallInfo = { msSinceLastDelta: 6_000 };
 
   test('out=0 renders waiting-for-model wording', () => {
