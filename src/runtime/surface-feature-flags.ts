@@ -1,5 +1,16 @@
-import type { ConfigKey, ConfigManager, PersistedFlagState } from '../config/index.ts';
+/**
+ * surface-feature-flags — which platform capabilities a surface/server setup
+ * needs, and how to switch them on through their real domain settings keys.
+ *
+ * Capabilities are configured through first-class domain settings (see
+ * feature-settings.ts); enabling a surface writes keys like
+ * `controlPlane.gateway` or `surfaces.slack.enabled`, never a separate
+ * enablement namespace.
+ */
+
+import type { ConfigManager } from '../config/index.ts';
 import { surfaceFeatureGateId } from '@/runtime/index.ts';
+import { featureEnablementWrite, isFeatureConfigEnabled } from './feature-settings.ts';
 
 export const CONTROL_PLANE_FEATURE_FLAG = 'control-plane-gateway';
 export const ROUTE_BINDING_FEATURE_FLAG = 'route-binding';
@@ -11,8 +22,6 @@ const CORE_CHANNEL_FEATURE_FLAGS = [
   ROUTE_BINDING_FEATURE_FLAG,
   DELIVERY_ENGINE_FEATURE_FLAG,
 ] as const;
-
-export type FeatureFlagConfigKey = 'featureFlags' | `featureFlags.${string}`;
 
 export function getSurfaceFeatureFlag(surfaceId: string): string | null {
   return surfaceFeatureGateId(surfaceId);
@@ -46,20 +55,22 @@ export function getServerSurfaceFeatureFlags(options: {
   return [...flags].sort((left, right) => left.localeCompare(right));
 }
 
-export function isFeatureFlagEnabled(config: Pick<ConfigManager, 'getCategory'>, flagId: string): boolean {
-  const flags = (config.getCategory('featureFlags') as Record<string, PersistedFlagState | undefined>) ?? {};
-  return flags[flagId] === 'enabled';
+/** Whether the live config has the capability on, derived from its domain settings key. */
+export function isFeatureFlagEnabled(config: Pick<ConfigManager, 'get'>, flagId: string): boolean {
+  return isFeatureConfigEnabled(config, flagId);
 }
 
-export function getMissingSurfaceFeatureFlags(config: Pick<ConfigManager, 'getCategory'>, surfaceId: string): readonly string[] {
+export function getMissingSurfaceFeatureFlags(config: Pick<ConfigManager, 'get'>, surfaceId: string): readonly string[] {
   const required = surfaceId === 'web'
     ? getServerSurfaceFeatureFlags({ web: true })
     : getServerSurfaceFeatureFlags({ externalSurfaces: [surfaceId] });
   return required.filter((flagId) => !isFeatureFlagEnabled(config, flagId));
 }
 
+/** Switch each capability on by writing its real enablement settings key. */
 export function enableFeatureFlags(config: Pick<ConfigManager, 'setDynamic'>, flagIds: readonly string[]): void {
   for (const flagId of flagIds) {
-    config.setDynamic(`featureFlags.${flagId}` as ConfigKey, 'enabled');
+    const write = featureEnablementWrite(flagId, true);
+    if (write) config.setDynamic(write.key, write.value);
   }
 }

@@ -4,8 +4,7 @@ import { readFileSync } from 'node:fs';
 import { ConfigManager, resolveDaemonEnabled } from '@pellux/goodvibes-sdk/platform/config';
 import { formatProviderModel, getModelIdFromProviderModel, getProviderIdFromModel } from '../config/provider-model.ts';
 import { RuntimeEventBus, GlobalNetworkTransportInstaller } from '@/runtime/index.ts';
-import { createFeatureFlagManager } from '@/runtime/index.ts';
-import type { FlagState } from '@/runtime/index.ts';
+import { bindFeatureSettingsBridge, createFeatureFlagManager, deriveFeatureStates } from '@/runtime/index.ts';
 import { createRuntimeStore } from '../runtime/store/index.ts';
 import { createRuntimeServices } from '../runtime/services.ts';
 import { DaemonServer, HttpListener } from '@pellux/goodvibes-sdk/platform/daemon';
@@ -190,10 +189,11 @@ async function main(): Promise<void> {
 
   const runtimeBus = new RuntimeEventBus();
   const runtimeStore = createRuntimeStore();
+  // Gate states derive from the domain settings keys; the bridge keeps live
+  // config changes flowing into the manager for the daemon's lifetime.
   const featureFlags = createFeatureFlagManager();
-  featureFlags.loadFromConfig({
-    flags: (config.getCategory('featureFlags') as Record<string, FlagState>) ?? {},
-  });
+  featureFlags.loadFromConfig({ flags: deriveFeatureStates(config) });
+  bindFeatureSettingsBridge(config, featureFlags);
   const runtimeServices = createRuntimeServices({
     configManager: config,
     featureFlags,

@@ -29,8 +29,7 @@ import { readPersistedWorkspaceTrust } from '../runtime/trust/workspace-trust.ts
 import { WorkspaceRegistrationManager } from '../runtime/trust/workspace-registration.ts';
 import type { CliWorkspaceStatus, CliSandboxStatus, CliRelayStatus } from './status.ts';
 import { detectSandboxAvailability, probeSandboxHost } from '@pellux/goodvibes-sdk/platform/tools/exec/sandbox';
-import { createFeatureFlagManager } from '@/runtime/index.ts';
-import type { FlagState } from '@/runtime/index.ts';
+import { createFeatureFlagManager, deriveFeatureStates } from '@/runtime/index.ts';
 import { ensureGoodvibesGitignore } from './ensure-goodvibes-gitignore.ts';
 
 type ShellEntrypointOwnership = {
@@ -118,10 +117,14 @@ export async function prepareShellCliRuntime(
     console.error(overrideErrors.join('\n'));
     process.exit(2);
   }
-  applyRuntimeFeatureFlagOverrides(configManager, {
+  const featureOverrideErrors = applyRuntimeFeatureFlagOverrides(configManager, {
     enableFeatures: cli.flags.enableFeatures,
     disableFeatures: cli.flags.disableFeatures,
   });
+  if (featureOverrideErrors.length > 0) {
+    console.error(featureOverrideErrors.join('\n'));
+    process.exit(2);
+  }
 
   if (cli.flags.provider !== undefined || cli.flags.model !== undefined) {
     const currentModel = configManager.get('provider.model');
@@ -182,9 +185,7 @@ export async function prepareShellCliRuntime(
     // Linux, a no-op elsewhere) is what makes "available" trustworthy.
     const sandboxAvailability = detectSandboxAvailability(probeSandboxHost());
     const sandboxFeatureFlags = createFeatureFlagManager();
-    sandboxFeatureFlags.loadFromConfig({
-      flags: (configManager.getCategory('featureFlags') as Record<string, FlagState>) ?? {},
-    });
+    sandboxFeatureFlags.loadFromConfig({ flags: deriveFeatureStates(configManager) });
     const sandboxStatus: CliSandboxStatus = {
       configEnabled: Boolean(configManager.getCategory('sandbox').enabled),
       featureEnabled: sandboxFeatureFlags.isEnabled('exec-sandbox'),
@@ -193,7 +194,7 @@ export async function prepareShellCliRuntime(
       reason: sandboxAvailability.reason,
       networkIsolationGuaranteed: sandboxAvailability.networkIsolationGuaranteed,
     };
-    // Reuses sandboxFeatureFlags (already loaded from the same featureFlags config category)
+    // Reuses sandboxFeatureFlags (already derived from the same domain settings keys)
     // for the relay-connect gate rather than constructing a second FeatureFlagManager.
     const relayCategory = configManager.getCategory('relay');
     const relayStatus: CliRelayStatus = {

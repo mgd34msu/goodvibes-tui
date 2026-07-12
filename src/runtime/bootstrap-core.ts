@@ -17,7 +17,7 @@ import type { ControlPlaneRecentEvent } from '@pellux/goodvibes-sdk/platform/con
 import type { BootstrapOptions } from './context.ts';
 import { createRuntimeStore, createDomainDispatch, type RuntimeStore } from './store/index.ts';
 import {
-  type MutableRuntimeState, type SessionEvent, createFeatureFlagManager, RuntimeEventBus, ForensicsCollector,
+  type MutableRuntimeState, type SessionEvent, bindFeatureSettingsBridge, createFeatureFlagManager, deriveFeatureStates, RuntimeEventBus, ForensicsCollector,
   ForensicsRegistry, generateUserSessionId, loadBootstrapSystemPrompt, syncConfiguredServices,
   registerBootstrapHookBridge, registerBootstrapRuntimeEvents,
 } from '@/runtime/index.ts';
@@ -232,10 +232,13 @@ export async function initializeBootstrapCore(
   const homeDirectory = options.homeDirectory;
   const configManager = options.configManager;
 
+  // Gate states derive from the domain settings keys (behavior.*, sandbox.*,
+  // surfaces.*, ...); the bridge keeps live config.set changes flowing into
+  // the manager, recording honest pending-restart markers for startup-gated
+  // features. Mirrors the SDK composition root's owned-manager wiring.
   const featureFlags = createFeatureFlagManager();
-  featureFlags.loadFromConfig({
-    flags: (configManager.getCategory('featureFlags') as Record<string, import('@/runtime/index.ts').FlagState>) ?? {},
-  });
+  featureFlags.loadFromConfig({ flags: deriveFeatureStates(configManager) });
+  bindFeatureSettingsBridge(configManager, featureFlags);
 
   const userSessionId = `user-${generateUserSessionId()}`;
   const runtimeBus = new RuntimeEventBus();
