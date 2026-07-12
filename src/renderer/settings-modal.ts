@@ -527,10 +527,11 @@ function renderSettingTableRow(
     const label = `${stateMark} ${feature.name}`;
     const source = feature.restartRequired ? 'restart' : 'live';
     // A startup-gated feature changed this session shows its saved value with
-    // a restart marker, so the row never implies the change already took
-    // effect; the context pane spells out the full sentence.
+    // a compact restart-pending marker (⟳), so the row never implies the
+    // change already took effect; the documentation pane spells out the full
+    // "Pending restart: ..." sentence.
     const rawValue = currentSettingValue(modal, entry, selected);
-    const value = pendingRestart ? `${rawValue} · restart` : rawValue;
+    const value = pendingRestart ? `${rawValue} ⟳` : rawValue;
     return `${marker} ${padDisplay(label, keyWidth)}  ${padDisplay(value, valueWidth)}  ${padDisplay('feature', typeWidth)}  ${padDisplay(source, sourceWidth)}  ${padDisplay(feature.defaultEnabled ? 'enabled' : 'disabled', defaultWidth)}`;
   }
   const value = currentSettingValue(modal, entry, selected);
@@ -708,6 +709,7 @@ function footerText(modal: SettingsModal, width: number): string {
     return formatHints([
       { key: 'Up/Down', verb: 'Move' },
       { key: 'Enter/Space', verb: 'Edit' },
+      { key: 'PgUp/PgDn', verb: 'docs' },
       { key: '⇧R', verb: 'reset cat' },
       { key: '^⇧R', verb: 'reset all' },
       { key: 'Esc', verb: 'Close' },
@@ -716,6 +718,7 @@ function footerText(modal: SettingsModal, width: number): string {
     { key: 'Up/Down', verb: 'Setting' },
     { key: 'Left', verb: 'Categories' },
     { key: 'Enter/Space', verb: 'Edit/toggle' },
+    { key: 'PgUp/PgDn', verb: 'Scroll docs' },
     { key: '⇧R', verb: 'reset cat' },
     { key: '^⇧R', verb: 'reset all' },
     { key: 'Esc', verb: 'Close' },
@@ -733,12 +736,26 @@ export function renderSettingsModal(
   ];
   const metrics = getFullscreenWorkspaceMetrics({ width, height: viewportHeight });
   const categoryRows = renderCategories(modal, metrics.leftWidth - 2, metrics.bodyRows);
-  const contextRows = buildContextLines(modal, metrics.contextWidth).map((text, row): WorkspaceRow => {
+  // Documentation pane: long content SCROLLS (PgUp/PgDn) with honest
+  // more-above/below markers — it is never silently clipped.
+  const allContextLines = buildContextLines(modal, metrics.contextWidth);
+  const visibleContext = metrics.contextRows;
+  const maxContextScroll = Math.max(0, allContextLines.length - visibleContext);
+  const contextOffset = Math.min(Math.max(0, modal.contextScroll ?? 0), maxContextScroll);
+  const windowedContext = allContextLines.slice(contextOffset, contextOffset + visibleContext);
+  if (contextOffset > 0) {
+    windowedContext[0] = `${GLYPHS.navigation.moreAbove} ${contextOffset} more line(s) above — PgUp`;
+  }
+  if (contextOffset + visibleContext < allContextLines.length) {
+    const below = allContextLines.length - contextOffset - visibleContext;
+    windowedContext[windowedContext.length - 1] = `${GLYPHS.navigation.moreBelow} ${below} more line(s) below — PgDn`;
+  }
+  const contextRows = windowedContext.map((text, row): WorkspaceRow => {
     const selectedSetting = modal.getSelected();
-    const isTitle = row === 0 || (selectedSetting !== null && text === getSettingLabel(selectedSetting));
+    const isTitle = (row === 0 && contextOffset === 0) || (selectedSetting !== null && text === getSettingLabel(selectedSetting));
     return {
       text,
-      fg: row === 0 ? PALETTE.title : text.endsWith(':') ? PALETTE.subtitle : PALETTE.text,
+      fg: row === 0 && contextOffset === 0 ? PALETTE.title : text.endsWith(':') ? PALETTE.subtitle : PALETTE.text,
       bold: isTitle,
       dim: text.length === 0,
     };
