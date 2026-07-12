@@ -26,6 +26,20 @@ describe('command reference gate', () => {
     }
   });
 
+  test('red test: a seeded description-less command is refused at registration', () => {
+    // The description invariant must fail CLOSED — a command without a
+    // description can never reach /help, the palette, or the generated
+    // reference as an unexplained row, whether it comes from a built-in group
+    // or a dynamic registration.
+    const { CommandRegistry } = require('@/input/command-registry.ts');
+    const registry = new CommandRegistry();
+    expect(() => registry.register({ name: 'seeded-descriptionless', description: '', handler: () => {} }))
+      .toThrow(/no description/);
+    expect(() => registry.register({ name: 'seeded-blank', description: '   ', handler: () => {} }))
+      .toThrow(/no description/);
+    expect(registry.getAll()).toHaveLength(0);
+  });
+
   test('categorization covers exactly the registry-registered command set', () => {
     // The categorized list must be a complete, duplicate-free enumeration of
     // every command registerBuiltinCommands would register — guards against a

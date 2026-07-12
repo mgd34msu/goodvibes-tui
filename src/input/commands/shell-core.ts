@@ -112,75 +112,48 @@ export function registerShellCoreCommands(registry: CommandRegistry): void {
   registry.register({
     name: 'help',
     aliases: ['h', '?'],
-    description: 'Show available commands and keyboard shortcuts',
-    argsHint: '[command]',
+    description: 'Browse every command with its description; picking one runs it',
     handler(_args, ctx) {
+      // Generated live from the command registry — never a hand-maintained
+      // list — so /help can never drift from the real command set. Category
+      // labels come from the same single source of truth as the generated
+      // reference and the palette (ctx.getCommandCategories; see its doc for
+      // why it is threaded through the context rather than imported here).
+      const commands = registry
+        .getAll()
+        .slice()
+        .sort((a, b) => a.name.localeCompare(b.name));
       if (ctx.openSelection) {
-        const items: SelectionItem[] = [
-          { id: '/model', label: '/model [id]', detail: 'Select LLM model', category: 'Model & Provider' },
-          { id: '/provider', label: '/provider [name]', detail: 'Switch provider', category: 'Model & Provider' },
-          { id: '/effort', label: '/effort [level]', detail: 'Reasoning effort (instant/low/medium/high)', category: 'Model & Provider' },
-          { id: '/context window', label: '/context window [<size>|clear]', detail: 'Show, set, or clear a custom context window for the current model', category: 'Model & Provider' },
-          { id: '/config', label: '/config [category|key]', detail: 'Open fullscreen configuration workspace', category: 'Config & Display' },
-          { id: '/debug', label: '/debug', detail: 'Toggle debug mode', category: 'Config & Display' },
-          { id: '/expand', label: '/expand [type]', detail: 'Expand blocks (all|thinking|tool|code)', category: 'Config & Display' },
-          { id: '/collapse', label: '/collapse [type]', detail: 'Collapse blocks', category: 'Config & Display' },
-          { id: '/bookmarks', label: '/bookmarks', detail: 'List bookmarked blocks', category: 'Config & Display' },
-          { id: '/clear', label: '/clear', detail: 'Clear display (keep context)', category: 'Conversation' },
-          { id: '/reset', label: '/reset', detail: 'Clear display + context', category: 'Conversation' },
-          { id: '/compact', label: '/compact', detail: 'Summarize to free context', category: 'Conversation' },
-          { id: '/export', label: '/export [file]', detail: 'Export as markdown', category: 'Conversation' },
-          { id: '/title', label: '/title [text]', detail: 'Show or set title', category: 'Conversation' },
-          { id: '/save', label: '/save [name]', detail: 'Save session', category: 'Conversation' },
-          { id: '/load', label: '/load <name>', detail: 'Load session', category: 'Conversation' },
-          { id: '/sessions', label: '/sessions', detail: 'List saved sessions', category: 'Conversation' },
-          { id: '/session', label: '/session', detail: 'Current session info', category: 'Conversation' },
-          { id: '/session list', label: '/session list', detail: 'List all sessions', category: 'Conversation' },
-          { id: '/session rename', label: '/session rename <name>', detail: 'Rename current session', category: 'Conversation' },
-          { id: '/resume', label: '/resume [id]', detail: 'Resume a previous session (picker when no id)', category: 'Conversation' },
-          { id: '/session resume', label: '/session resume <id>', detail: 'Load and resume a session', category: 'Conversation' },
-          { id: '/session fork', label: '/session fork [name]', detail: 'Fork current session to new ID', category: 'Conversation' },
-          { id: '/session save', label: '/session save [name]', detail: 'Force-save current session', category: 'Conversation' },
-          { id: '/session info', label: '/session info [id]', detail: 'Show session details', category: 'Conversation' },
-          { id: '/session export', label: '/session export <id> [format]', detail: 'Export session as markdown/text', category: 'Conversation' },
-          { id: '/session search', label: '/session search <query>', detail: 'Search across all sessions', category: 'Conversation' },
-          { id: '/session delete', label: '/session delete <id>', detail: 'Delete a session', category: 'Conversation' },
-          { id: '/undo', label: '/undo', detail: 'Remove last turn', category: 'Conversation' },
-          { id: '/redo', label: '/redo', detail: 'Restore undone turn', category: 'Conversation' },
-          { id: '/retry', label: '/retry [text]', detail: 'Re-send last message', category: 'Conversation' },
-          { id: '/fork', label: '/fork [name]', detail: 'Snapshot conversation as a named branch', category: 'Conversation' },
-          { id: '/branch', label: '/branch [name]', detail: 'List branches or switch to one', category: 'Conversation' },
-          { id: '/merge', label: '/merge <name>', detail: 'Append messages from a branch', category: 'Conversation' },
-          { id: '/template', label: '/template', detail: 'Browse templates', category: 'Templates' },
-          { id: '/template save', label: '/template save <name>', detail: 'Save prompt as template', category: 'Templates' },
-          { id: '/template use', label: '/template use <name>', detail: 'Execute template', category: 'Templates' },
-          { id: '/tools', label: '/tools', detail: 'List available tools', category: 'Tools & System' },
-          { id: '/search', label: '/search <query> [--limit <n>]', detail: 'Search the web and show ranked results', category: 'Tools & System' },
-          { id: '/imagine', label: '/imagine <prompt>', detail: 'Generate an image from a prompt', category: 'Tools & System' },
-          { id: '/paste', label: '/paste', detail: 'Insert clipboard text or image into the prompt', category: 'Tools & System' },
-          { id: '/shortcuts', label: '/shortcuts', detail: 'View keyboard shortcuts reference', category: 'Tools & System' },
-          { id: '/commands', label: '/commands', detail: 'Browse all commands in a scrollable list', category: 'Tools & System' },
-          { id: '/secrets', label: '/secrets set|link|get|test|list|delete', detail: 'Manage encrypted and provider-backed secrets', category: 'Tools & System' },
-          { id: '/help', label: '/help', detail: 'This help', category: 'Tools & System' },
-          { id: '/quit', label: '/quit', detail: 'Exit', category: 'Tools & System' },
-          { id: '/wq', label: '/wq', detail: 'Commit all git changes and then exit', category: 'Tools & System' },
-        ];
+        const categoryByName = ctx.getCommandCategories?.() ?? new Map<string, string>();
+        const items: SelectionItem[] = commands.map((cmd) => {
+          const argsHint = cmd.argsHint ?? cmd.usage;
+          const aliases = cmd.aliases ?? [];
+          return {
+            id: cmd.name,
+            label: argsHint ? `/${cmd.name} ${argsHint}` : `/${cmd.name}`,
+            detail: aliases.length > 0 ? `${cmd.description} [aka ${aliases.map((a) => `/${a}`).join(', ')}]` : cmd.description,
+            category: categoryByName.get(cmd.name) ?? 'Other',
+          };
+        });
         // every item here is a command, and picking one RUNS it — label
         // the verb "Run" (matching the slash-command palette) instead of the
         // generic "Select" default.
         ctx.openSelection('Help  —  Commands', items, { allowSearch: true, primaryVerbLabel: 'Run' }, (result) => {
           if (!result) return;
-          const command = result.item.id;
-          if (command.startsWith('/')) {
-            const parts = command.slice(1).trim().split(/\s+/);
-            const name = parts[0];
-            const cmdArgs = parts.slice(1);
-            void (ctx.executeCommand?.(name, cmdArgs) ?? registry.execute(name, cmdArgs, ctx));
-          }
+          const name = result.item.id;
+          void (ctx.executeCommand?.(name, []) ?? registry.execute(name, [], ctx));
         });
         return;
       }
-      ctx.print('Use /help to open the help modal. Commands: /model, /provider, /config, /template, /tools, /paste, /sessions, /bookmarks, /save, /load, /undo, /redo, /retry, /clear, /reset, /compact, /export, /title, /effort, /expand, /collapse, /debug, /quit, /wq');
+      ctx.print(
+        [
+          'Commands:',
+          ...commands.map((cmd) => {
+            const argsHint = cmd.argsHint ?? cmd.usage;
+            return `  /${cmd.name}${argsHint ? ` ${argsHint}` : ''} — ${cmd.description}`;
+          }),
+        ].join('\n'),
+      );
     },
   });
 

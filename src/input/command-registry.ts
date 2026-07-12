@@ -157,6 +157,15 @@ export interface CommandShellUiOpeners {
    */
   openCommandPalette?: () => void;
   /**
+   * Command name -> reference-category label, from the same single source of
+   * truth as the generated command reference (categorizeBuiltinCommands),
+   * memoized by the shell. Lets registry-driven surfaces built inside command
+   * handlers (/help) group by category without importing the aggregation
+   * module — a static import there would cycle (commands.ts registers those
+   * very handlers).
+   */
+  getCommandCategories?: () => ReadonlyMap<string, string>;
+  /**
    * Open (and optionally focus) a panel. focus rule: the command path is
    * "the user is mid-command-flow" — opening a panel this way leaves keyboard
    * focus in the composer by default. Pass `{ focus: true }` for a caller that
@@ -379,6 +388,13 @@ export class CommandRegistry {
    * statically by the alias lint test).
    */
   register(command: SlashCommand): void {
+    // Every registered command is rendered with its description in /help, the
+    // command palette, and the generated reference (docs/commands-reference.md).
+    // A blank description would ship an unexplained row in all three, so it
+    // fails fast here — the release gate red-tests this invariant.
+    if (!command.description || command.description.trim().length === 0) {
+      throw new Error(`Command registration for "${command.name}" has no description — every command must describe itself.`);
+    }
     const existingByName = this.commands.get(command.name) ?? this.aliasIndex.get(command.name);
     if (existingByName) {
       throw new Error(
