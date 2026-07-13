@@ -118,11 +118,12 @@ describe('checkNoInternalIdentifiers', () => {
     expect(violations).toEqual([]);
   });
 
-  test('exempts the memory-modal golden-frame fixture, which is pinned byte-for-byte against a recorded snapshot', () => {
+  test('scans the memory-modal fixture with no carve-out — an internal identifier there is flagged', () => {
     const violations = checkNoInternalIdentifiers([
       { relPath: 'src/panels/modals/memory-modal.ts', text: `summary: '${wave} batches panel retirements.'` },
     ]);
-    expect(violations).toEqual([]);
+    expect(violations).toHaveLength(1);
+    expect(violations[0]).toContain('src/panels/modals/memory-modal.ts');
   });
 
   test('does not flag the F2 keyboard key or unrelated short tokens', () => {

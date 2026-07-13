@@ -14,14 +14,6 @@
  * version numbers (docs/releases/*.md) instead — so this rule exempts
  * docs/releases/**, which are dated, self-contained historical records.
  *
- * One further exemption: src/panels/modals/memory-modal.ts's
- * memoryModalGoldenSurface fixture data is deliberately-authored sample
- * memory-record text, pinned byte-for-byte against golden-frame snapshots in
- * src/test/renderer/golden-frames/. Editing its exact characters (even to
- * strip a wave/work-order-shaped substring) desyncs the fixture from its
- * recorded frame and breaks the golden test without fixing any real leak —
- * the text is synthetic, not a real internal identifier.
- *
  * Lettered finding/brief ids (a follow-up sweep, second occurrence of this
  * class): a single capital letter in the A-through-E range immediately
  * followed by one or two digits recurs throughout this codebase's comments
@@ -67,11 +59,9 @@ export interface InternalIdentifierCandidate {
   readonly text: string;
 }
 
-const EXEMPT_FILES: readonly string[] = ['src/panels/modals/memory-modal.ts'];
-
 function isExempt(relPath: string): boolean {
   const normalized = relPath.split('\\').join('/');
-  return normalized.startsWith('docs/releases/') || EXEMPT_FILES.includes(normalized);
+  return normalized.startsWith('docs/releases/');
 }
 
 export function checkNoInternalIdentifiers(
