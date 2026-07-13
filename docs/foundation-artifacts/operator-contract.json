@@ -527,7 +527,7 @@
       {
         "id": "approvals.approve",
         "title": "Approve Approval",
-        "description": "Approve a pending approval. Optionally pass selectedHunks (edit-tool approvals only): the daemon filters the approval's own edit list to those hunk indices server-side, so every surface produces identical modified-edit args. Omitting selectedHunks approves the whole request (back-compat). An out-of-range index or a non-edit approval is rejected with a 400.",
+        "description": "Approve a pending approval. Optionally pass selectedHunks (edit-tool approvals only): the daemon filters the approval's own edit list to those hunk indices server-side, so every surface produces identical modified-edit args. Omitting selectedHunks approves the whole request (back-compat). An out-of-range index or a non-edit approval is rejected with a 400. rememberTier generalizes the decision (a generalizing tier persists a durable rule and sweeps queued asks it covers); modifiedArgs carries an argument-modifying approval — e.g. the typed answer to a command's terminal prompt — to the waiting call (selectedHunks supersedes it when both are present). The response's recorded block reports what the broker actually recorded.",
         "category": "approvals",
         "source": "builtin",
         "access": "authenticated",
@@ -558,6 +558,50 @@
               "type": "array",
               "items": {
                 "type": "number"
+              }
+            },
+            "rememberTier": {
+              "type": "string",
+              "enum": [
+                "session",
+                "exact",
+                "command-class",
+                "path",
+                "tool"
+              ]
+            },
+            "reason": {
+              "type": "string"
+            },
+            "modifiedArgs": {
+              "type": "object",
+              "additionalProperties": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "boolean"
+                  },
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "type": "object",
+                    "additionalProperties": {
+                      "$ref": "$.operator.methods[1].inputSchema.properties.modifiedArgs.additionalProperties"
+                    }
+                  },
+                  {
+                    "type": "array",
+                    "items": {
+                      "$ref": "$.operator.methods[1].inputSchema.properties.modifiedArgs.additionalProperties"
+                    }
+                  }
+                ]
               }
             }
           },
@@ -994,6 +1038,44 @@
                 "updatedAt",
                 "metadata",
                 "audit"
+              ],
+              "additionalProperties": false
+            },
+            "recorded": {
+              "type": "object",
+              "properties": {
+                "approved": {
+                  "type": "boolean"
+                },
+                "rememberTier": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "enum": [
+                        "session",
+                        "exact",
+                        "command-class",
+                        "path",
+                        "tool"
+                      ]
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "reasonStored": {
+                  "type": "boolean"
+                },
+                "modifiedArgsDelivered": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "approved",
+                "rememberTier",
+                "reasonStored",
+                "modifiedArgsDelivered"
               ],
               "additionalProperties": false
             }
@@ -1471,6 +1553,44 @@
                 "audit"
               ],
               "additionalProperties": false
+            },
+            "recorded": {
+              "type": "object",
+              "properties": {
+                "approved": {
+                  "type": "boolean"
+                },
+                "rememberTier": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "enum": [
+                        "session",
+                        "exact",
+                        "command-class",
+                        "path",
+                        "tool"
+                      ]
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "reasonStored": {
+                  "type": "boolean"
+                },
+                "modifiedArgsDelivered": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "approved",
+                "rememberTier",
+                "reasonStored",
+                "modifiedArgsDelivered"
+              ],
+              "additionalProperties": false
             }
           },
           "required": [
@@ -1940,6 +2060,44 @@
                 "audit"
               ],
               "additionalProperties": false
+            },
+            "recorded": {
+              "type": "object",
+              "properties": {
+                "approved": {
+                  "type": "boolean"
+                },
+                "rememberTier": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "enum": [
+                        "session",
+                        "exact",
+                        "command-class",
+                        "path",
+                        "tool"
+                      ]
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "reasonStored": {
+                  "type": "boolean"
+                },
+                "modifiedArgsDelivered": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "approved",
+                "rememberTier",
+                "reasonStored",
+                "modifiedArgsDelivered"
+              ],
+              "additionalProperties": false
             }
           },
           "required": [
@@ -1952,7 +2110,7 @@
       {
         "id": "approvals.deny",
         "title": "Deny Approval",
-        "description": "Deny a pending approval.",
+        "description": "Deny a pending approval. rememberTier generalizes the denial (a generalizing tier persists a durable deny rule and sweeps queued asks it covers); reason is the user's free-text feedback, which rides the structured declined result so the model adapts instead of guessing. The response's recorded block reports what the broker actually recorded.",
         "category": "approvals",
         "source": "builtin",
         "access": "authenticated",
@@ -1978,6 +2136,19 @@
             },
             "remember": {
               "type": "boolean"
+            },
+            "rememberTier": {
+              "type": "string",
+              "enum": [
+                "session",
+                "exact",
+                "command-class",
+                "path",
+                "tool"
+              ]
+            },
+            "reason": {
+              "type": "string"
             }
           },
           "required": [
@@ -2413,6 +2584,44 @@
                 "updatedAt",
                 "metadata",
                 "audit"
+              ],
+              "additionalProperties": false
+            },
+            "recorded": {
+              "type": "object",
+              "properties": {
+                "approved": {
+                  "type": "boolean"
+                },
+                "rememberTier": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "enum": [
+                        "session",
+                        "exact",
+                        "command-class",
+                        "path",
+                        "tool"
+                      ]
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "reasonStored": {
+                  "type": "boolean"
+                },
+                "modifiedArgsDelivered": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "approved",
+                "rememberTier",
+                "reasonStored",
+                "modifiedArgsDelivered"
               ],
               "additionalProperties": false
             }
@@ -28770,7 +28979,7 @@
       {
         "id": "control.status",
         "title": "Daemon Status",
-        "description": "Return daemon status and version.",
+        "description": "Return daemon status and version. Pass receipts=consume to also receive undelivered daemon receipts (update/crash/migration notices) and mark them delivered — exactly once across all consuming readers. Without the flag no receipts are returned or consumed, so identity probes and keepalives never eat them.",
         "category": "control-plane",
         "source": "builtin",
         "access": "authenticated",
@@ -28787,7 +28996,15 @@
         },
         "inputSchema": {
           "type": "object",
-          "properties": {},
+          "properties": {
+            "receipts": {
+              "type": "string",
+              "enum": [
+                "consume"
+              ],
+              "description": "Set to \"consume\" to receive undelivered daemon receipts and mark them delivered. Omit for a read that never consumes receipts."
+            }
+          },
           "additionalProperties": false
         },
         "outputSchema": {
@@ -28798,6 +29015,29 @@
             },
             "version": {
               "type": "string"
+            },
+            "receipts": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "text": {
+                    "type": "string"
+                  },
+                  "at": {
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "id",
+                  "text",
+                  "at"
+                ],
+                "additionalProperties": false
+              }
             }
           },
           "required": [
