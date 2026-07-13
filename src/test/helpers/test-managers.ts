@@ -50,6 +50,12 @@ export function patchTestProviderRegistry(providerRegistry: ProviderRegistry): v
     if (!provider.credentialAuthority) {
       (provider as { credentialAuthority?: string }).credentialAuthority = 'resolver';
     }
+    // The sdk's model-source contract likewise refuses a provider that never
+    // declares where its model list comes from. Test doubles that don't care
+    // default to a dated-static list so every existing suite keeps registering.
+    if (!(provider as { modelSource?: unknown }).modelSource) {
+      (provider as { modelSource?: { kind: 'dated-static'; asOf: string } }).modelSource = { kind: 'dated-static', asOf: '2025-01-01' };
+    }
     originalRegister(provider);
     if (provider.models.length === 0) return;
     providerRegistry.registerRuntimeProvider({
