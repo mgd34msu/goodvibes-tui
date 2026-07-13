@@ -1273,7 +1273,7 @@ Maintenance release: SDK 0.22.0 bump + README/gitignore hygiene + test-timeout p
 SDK 0.21.27 → 0.21.35 upgrade. Captures all OBS-05, OBS-06, OBS-14, F3, QA-14, and PERF-08 consumer-side migrations; no 0.19.17 was ever published (tests failed in CI) — this release closes out all of that work.
 
 ### Changed
-- Upgraded `@pellux/goodvibes-sdk` from 0.21.27 to 0.21.35. Wave 4 closeout + Wave 5 + PERF-08 SSE backpressure rebuild.
+- Upgraded `@pellux/goodvibes-sdk` from 0.21.27 to 0.21.35. Panel and provider-routing cleanup, plus the SSE backpressure rebuild.
 - `src/runtime/bootstrap.ts`: `getOrCreateCompanionToken('tui')` call migrated to the F3 signature `getOrCreateCompanionToken('tui', { daemonHomeDir })` with `daemonHomeDir` resolved from `services.homeDirectory`.
 - `src/panels/tool-inspector-panel.ts`:
   - TOOL_SUCCEEDED / TOOL_FAILED handlers simplified after OBS-05. Post-0.21.31 the `.result` field on these events is a `ToolResultSummary` (`{ kind, byteSize, preview? }`), not the raw tool result, so the prior `_policyAudit` extraction is no longer reachable from this event path. Dead lookup removed with an inline note pointing future readers at the approval broker / tool result store as the new channel for policy audit metadata.
@@ -1573,21 +1573,21 @@ Updated `docs/foundation-artifacts/operator-contract.json` SDK version field to 
 
 ## [0.18.23] — 2026-04-16
 
-### Wave 4α+β performance bundle + α review follow-ups + regression fixes
+### Conversation-rendering + feed-context performance bundle, review follow-ups, and regression fixes
 
-Bundles Wave 4α (conversation-rendering double-parse elimination) and Wave 4β
-(feed-context object reuse) into a single release, adds documentation and test
-follow-ups from the 4α review, and fixes two regressions surfaced during that
+Bundles the conversation-rendering double-parse elimination and the feed-context
+object reuse into a single release, adds documentation and test follow-ups from
+the conversation-rendering review, and fixes two regressions surfaced during that
 review.
 
-### Performance (Wave 4α — conversation-rendering)
+### Performance (conversation-rendering)
 
 - **`src/core/conversation-rendering.ts`** — eliminates the legacy `renderMarkdown()`
   duplicate call used for `'code'` mode line counting. The 'all' mode retain its
   intentional measurement pass (see inline comment for rationale); the 'code' mode
   now derives its gutter width from the single `renderMarkdownTracked()` call.
 
-### Performance (Wave 4β — feed-context object reuse)
+### Performance (feed-context object reuse)
 
 - **`src/input/handler.ts`** — `InputHandler` now allocates a single `InputFeedContext`
   at startup (`initFeedContext()`) and mutates only the 14 mutable fields before
@@ -1601,7 +1601,7 @@ review.
 
 ### Regression fixes
 
-- **R1 — `handler.ts` architecture cap** — `handler.ts` was 830 lines after Wave 4β.
+- **R1 — `handler.ts` architecture cap** — `handler.ts` was 830 lines after the feed-context reuse change.
   Extracted factory functions into `src/input/feed-context-factory.ts`; `handler.ts`
   is now exactly 800 lines. `bun run architecture:check` passes.
 - **R2 — `SearchableListPanel.buildFilterInputLine` cursor glyph** — the focused
@@ -1611,7 +1611,7 @@ review.
   `[Label] ` bracket format provides the focused visual affordance without triggering
   the substitution. Fixes the pre-existing test failure from 0.18.22.
 
-### Quality bumps (Wave 4α review follow-ups)
+### Quality bumps (conversation-rendering review follow-ups)
 
 - **F1** — `src/test/input/feed-context-reuse.test.ts`: added mutable-field assertion
   verifying `ctx.prompt` and `ctx.cursorPos` update between feeds (feeds 'a' → 'b',

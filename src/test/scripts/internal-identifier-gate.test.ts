@@ -57,6 +57,20 @@ describe('checkNoInternalIdentifiers', () => {
     expect(numbered[0]).toContain(workOrderNumbered);
   });
 
+  test('fails on digit-then-letter work-order shapes whose trailing letter defeats a digits-only anchor', () => {
+    // These would slip past a `WO-[0-9]{2,4}\b` pattern because the letter after
+    // the digits leaves no word boundary at the digit run's end.
+    const suffixLetter = 'WO-' + '207b';
+    const suffixPlaceholder = 'WO-' + '1xx';
+    for (const token of [suffixLetter, suffixPlaceholder]) {
+      const violations = checkNoInternalIdentifiers([
+        { relPath: 'src/panels/example.ts', text: `// merged target id (${token} console merges)` },
+      ]);
+      expect(violations).toHaveLength(1);
+      expect(violations[0]).toContain(token);
+    }
+  });
+
   test('fails on a debt-register id and a UX-workstream id', () => {
     const debt = checkNoInternalIdentifiers([
       { relPath: 'src/input/example.ts', text: `// this is ${debtId}'s design` },

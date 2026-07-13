@@ -34,7 +34,7 @@ export interface WorkspaceTab {
 export class PanelManager {
   private registry: PanelRegistration[] = [];
   private retainedPanels = new Map<string, Panel>();
-  /** Old/absorbed panel id -> merged target id (WO-1xx console merges). */
+  /** Old/absorbed panel id -> merged target id (from the console panel merges). */
   private aliases = new Map<string, string>();
   /**
    * Retired panel id -> modal name (panels migrated to config-modal surfaces).

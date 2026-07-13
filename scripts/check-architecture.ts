@@ -724,6 +724,9 @@ const internalIdentifierCandidates = [
   ...allSourceFiles,
   ...scriptFiles,
   ...walkMarkdown(join(ROOT, 'docs')),
+  // The root changelog is in-repo, outward-facing text — it is scanned too, so a
+  // planning codename can never land in a release note.
+  ...(existsSync(join(ROOT, 'CHANGELOG.md')) ? [join(ROOT, 'CHANGELOG.md')] : []),
   ...(existsSync(join(ROOT, 'action.yml')) ? [join(ROOT, 'action.yml')] : []),
 ].map((file) => ({ relPath: relative(ROOT, file).split('\\').join('/'), text: readFileSync(file, 'utf-8') }));
 

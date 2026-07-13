@@ -11,7 +11,7 @@ import { UI_TONES } from './ui-primitives.ts';
 
 /**
  * "Modified / active" accent for settings rows — cyan-green, no UI_TONES
- * role matches it (WO-207b: preserved byte-exact as a named constant).
+ * role matches it (preserved byte-exact as a named constant).
  */
 const SETTINGS_ACCENT = '#00ffcc';
 
