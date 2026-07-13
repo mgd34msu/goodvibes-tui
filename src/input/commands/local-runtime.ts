@@ -4,6 +4,7 @@ import { readFile } from 'node:fs/promises';
 import type { CommandRegistry, CommandContext } from '../command-registry.ts';
 import type { SelectionItem } from '../selection-modal.ts';
 import type { ContentPart } from '@pellux/goodvibes-sdk/platform/providers';
+import { formatModelDiscoveryReport } from '@pellux/goodvibes-sdk/platform/providers';
 import { resolveAndValidatePath } from '@pellux/goodvibes-sdk/platform/utils';
 import { BUILTIN_SECRET_PROVIDER_SOURCES, describeSecretRef, isSecretRefInput, resolveSecretRef } from '@pellux/goodvibes-sdk/platform/config';
 import { openCommandPanel, requireBookmarkManager, requireProviderApi, requireSecretsManager } from './runtime-services.ts';
@@ -367,7 +368,24 @@ export function registerLocalRuntimeCommands(registry: CommandRegistry): void {
       } catch (e) {
         ctx.print(`Token limits refresh failed: ${summarizeError(e)}`);
       }
-      if (!catalogOk || !benchmarksOk || !limitsOk) ctx.print('Some refreshes failed — see messages above.');
+      ctx.print('Refreshing live provider model lists...');
+      let discoveryOk = false;
+      try {
+        // Explicit user refresh → force past each provider's TTL cache and
+        // report the delta ("3 new, 1 retired") or the honest fallback reason.
+        const reports = await providerApi.refreshLiveModelDiscovery(undefined, { force: true });
+        discoveryOk = true;
+        if (reports.length === 0) {
+          ctx.print('No providers perform live model discovery.');
+        } else {
+          for (const report of reports) {
+            ctx.print(`  ${formatModelDiscoveryReport(report.providerId, report)}`);
+          }
+        }
+      } catch (e) {
+        ctx.print(`Live model discovery failed: ${summarizeError(e)}`);
+      }
+      if (!catalogOk || !benchmarksOk || !limitsOk || !discoveryOk) ctx.print('Some refreshes failed — see messages above.');
     },
   });
 

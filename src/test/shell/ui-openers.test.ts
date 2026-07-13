@@ -357,6 +357,38 @@ describe('wireShellUiOpeners', () => {
     });
   });
 
+  describe('live model discovery re-check on picker open', () => {
+    test('openModelPicker triggers the registry live-model re-check hook', async () => {
+      const refreshLiveModelDiscovery = mock(async () => []);
+      wireShellUiOpeners({
+        commandContext: commandContext as never,
+        input: input as never,
+        panelManager: panelManager as never,
+        conversation: conversation as never,
+        configManager: testManagers.configManager,
+        providerRegistry: {
+          getSelectableModels: () => [],
+          listModels: () => [],
+          has: () => false,
+          refreshLiveModelDiscovery,
+        } as never,
+        runtime: { model: 'm', provider: 'p' } as never,
+        featureFlags: {} as never,
+        mcpRegistry: {} as never,
+        subscriptionManager: testManagers.subscriptionManager,
+        serviceRegistry: testManagers.serviceRegistry,
+        memoryEmbeddingRegistry: fakeEmbeddingRegistry as never,
+        getConfiguredProviderIds: () => [],
+        getPinned: async () => [],
+        render,
+        trustPromptRef: { requestTrustDecision: async () => 'restricted' as const },
+      });
+      (commandContext.openModelPicker as () => void)();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(refreshLiveModelDiscovery).toHaveBeenCalledTimes(1);
+    });
+  });
+
   // providerRegistry.getSelectableModels()/listModels() are catalog-driven —
   // they include every provider id present in the fetched pricing catalog (e.g.
   // 'google', from Gemini catalog entries) regardless of whether that provider
