@@ -111,27 +111,21 @@ describe('getCostFromPricingCatalog', () => {
     });
   });
 
-  describe('unknown model falls back gracefully', () => {
-    test('completely unknown model returns {0,0}', () => {
-      const result = getCostFromPricingCatalog('totally-unknown-model-xyz', TEST_CATALOG);
-      expect(result.input).toBe(0);
-      expect(result.output).toBe(0);
+  describe('unknown model answers null (honest-unpriced, never a fabricated zero)', () => {
+    test('completely unknown model returns null', () => {
+      expect(getCostFromPricingCatalog('totally-unknown-model-xyz', TEST_CATALOG)).toBeNull();
     });
 
     test('unknown model does not throw', () => {
       expect(() => getCostFromPricingCatalog('nonexistent-model', TEST_CATALOG)).not.toThrow();
     });
 
-    test('empty string model ID returns {0,0}', () => {
-      const result = getCostFromPricingCatalog('', TEST_CATALOG);
-      expect(result.input).toBe(0);
-      expect(result.output).toBe(0);
+    test('empty string model ID returns null', () => {
+      expect(getCostFromPricingCatalog('', TEST_CATALOG)).toBeNull();
     });
 
-    test('unknown model with debug=false does not write to stderr', () => {
-      const result = getCostFromPricingCatalog('unknown-model', TEST_CATALOG, undefined, { debug: false });
-      expect(result.input).toBe(0);
-      expect(result.output).toBe(0);
+    test('unknown model with debug=false does not write to stderr and returns null', () => {
+      expect(getCostFromPricingCatalog('unknown-model', TEST_CATALOG, undefined, { debug: false })).toBeNull();
     });
   });
 
@@ -154,10 +148,9 @@ describe('getCostFromPricingCatalog', () => {
       expect(cost).toBe(0);
     });
 
-    test('zero cost for unknown model (graceful fallback)', () => {
+    test('unknown model yields no pricing at all — callers must carry unpriced forward', () => {
       const pricing = getCostFromPricingCatalog('unknown-model-xyz', TEST_CATALOG);
-      const cost = (1_000_000 * pricing.input + 1_000_000 * pricing.output) / 1_000_000;
-      expect(cost).toBe(0);
+      expect(pricing).toBeNull();
     });
 
     test('catalog returns immutable copy (mutations do not affect catalog)', () => {
@@ -186,10 +179,8 @@ describe('getCostFromPricingCatalog with explicit catalog shapes', () => {
     expect(result.output).toBe(0);
   });
 
-  test('returns zero for empty explicit catalogs', () => {
-    const result = getCostFromPricingCatalog('unknown-model', { models: [] });
-    expect(result.input).toBe(0);
-    expect(result.output).toBe(0);
+  test('returns null for empty explicit catalogs (honest unknown)', () => {
+    expect(getCostFromPricingCatalog('unknown-model', { models: [] })).toBeNull();
   });
 });
 

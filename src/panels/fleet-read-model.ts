@@ -30,6 +30,7 @@
 
 import type {
   ArchivableProcessRegistry,
+  ProcessAttention,
   ProcessCostState,
   ProcessKind,
   ProcessNode,
@@ -136,13 +137,11 @@ const STATE_TONES: Record<ProcessState, FleetStateTone> = {
 const TERMINAL_STATES = new Set<ProcessState>(['done', 'failed', 'killed', 'interrupted']);
 
 /**
- * States that mean "this node is waiting on ME right now" — a user approval or
- * user input. Today the registry derives exactly one such state,
- * `awaiting-approval` (an agent parked at a permission prompt). This is the
- * single place that mapping lives, so if the SDK adds a distinct
- * awaiting-user-input state later it joins here and every "blocked on me"
- * surface (badge, sort, jump) picks it up for free. Kept as a set for that
- * forward-compatibility, not because more than one state qualifies today.
+ * States that mean "this node is waiting on ME right now" via the state field
+ * alone. The registry now also publishes the canonical `needsAttention`
+ * projection (reason 'approval' | 'input' — see fleetNodeAttention below),
+ * which every surface prefers; this set remains only as the fallback mapping
+ * for nodes without the projection, so nothing regresses on older registries.
  */
 const BLOCKED_ON_USER_STATES = new Set<ProcessState>(['awaiting-approval']);
 
@@ -193,6 +192,46 @@ export function isRunningProcessState(state: ProcessState): boolean {
 /** True when a node is waiting on a user approval or user input right now — "blocked on me". */
 export function isBlockedOnUserState(state: ProcessState): boolean {
   return BLOCKED_ON_USER_STATES.has(state);
+}
+
+/**
+ * The node's waiting-on-human classification, preferring the SDK's canonical
+ * `needsAttention` projection (reason 'approval' | 'input' — broader than the
+ * awaiting-approval state alone: it also covers a session waiting on user
+ * input). Falls back to the state-derived mapping for registries that predate
+ * the projection, so nothing regresses. This is THE membership every
+ * "blocked on me" surface (badge, sort, jump) derives from.
+ */
+export function fleetNodeAttention(node: ProcessNode): ProcessAttention | null {
+  if (node.needsAttention) return node.needsAttention;
+  if (isBlockedOnUserState(node.state)) return { reason: 'approval' };
+  return null;
+}
+
+/** True when the node is waiting on the operator right now (approval or input). */
+export function isBlockedOnUserNode(node: ProcessNode): boolean {
+  return fleetNodeAttention(node) !== null;
+}
+
+/** The literal badge text for a waiting-on-human node, by reason. */
+export function fleetAttentionText(attention: ProcessAttention): string {
+  return attention.reason === 'input' ? 'needs your input' : 'blocked on you';
+}
+
+/**
+ * The stall marker for a row — 'quiet Nm' (or 'quiet NhMm' past an hour),
+ * derived from the read-model's stall tell (pure timestamp comparison on the
+ * registry side; a live node whose last observable output is older than the
+ * threshold). Null when the node is not stalled-quiet.
+ */
+export function fleetStallMarker(node: ProcessNode): string | null {
+  const stall = node.stall;
+  if (!stall) return null;
+  const minutes = Math.max(1, Math.floor(stall.quietForMs / 60_000));
+  if (minutes < 60) return `quiet ${minutes}m`;
+  const hours = Math.floor(minutes / 60);
+  const rest = minutes % 60;
+  return rest > 0 ? `quiet ${hours}h${rest}m` : `quiet ${hours}h`;
 }
 
 // ---------------------------------------------------------------------------
@@ -261,7 +300,7 @@ function collectBlockedSubtrees(
     if (cached !== undefined) return cached;
     if (visiting.has(node.id)) return false; // cycle guard
     visiting.add(node.id);
-    let has = isBlockedOnUserState(node.state);
+    let has = isBlockedOnUserNode(node);
     for (const child of childrenByParent.get(node.id) ?? []) {
       if (dfs(child)) has = true;
     }
@@ -458,7 +497,7 @@ export function buildFleetSnapshot(nodes: readonly ProcessNode[], capturedAt: nu
   // Blocked ids in display (row) order so the panel's jump key steps through
   // them top-to-bottom exactly as they appear on screen.
   const blockedNodeIds = rows
-    .filter((row) => isBlockedOnUserState(row.node.state))
+    .filter((row) => isBlockedOnUserNode(row.node))
     .map((row) => row.node.id);
 
   return { rows, totalCost, totalTokens, runningCount, blockedNodeIds, capturedAt };
