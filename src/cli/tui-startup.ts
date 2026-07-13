@@ -54,13 +54,14 @@ export function buildFirstOpenItems(): { readonly title: string; readonly items:
  * never for one that's merely been glanced at read-only. Labeled 'via TUI'
  * in the shared registry so its provenance is honest.
  *
- * OWNER-BOUNDARY RIDER (binding): self-recording must not widen the agent's
- * own registered-workspaces-only checkpoint boundary. The registry this
- * writes to is the platform-wide SINGLE SOURCE OF TRUTH (see
- * workspace-registration.ts's file doc) — every write here originates from
- * an actual TUI session and is labeled as such; the agent's own checkpoint
- * boundary is a separate, explicit list it owns and is not widened by
- * anything in this repo.
+ * OWNER-BOUNDARY RIDER (binding): self-recording must not widen the
+ * checkpoint-owning consumer's boundary. That boundary now reads the SAME
+ * shared registration store this writes to, gated by each record's
+ * `checkpointEligible` flag (absent means false). So the separation is no
+ * longer "a separate list the agent owns" — it is one store, and this self
+ * record stays out of scope by stamping its `origin` ('tui') for honest
+ * provenance while NEVER setting `checkpointEligible`. Only the consumer that
+ * owns checkpointing re-stamps its own roots eligible on boot.
  */
 export async function selfRecordWorkspaceRegistration(
   registrationManager: Pick<WorkspaceRegistrationManager, 'evaluate' | 'register'> | undefined,
@@ -68,7 +69,7 @@ export async function selfRecordWorkspaceRegistration(
   if (!registrationManager) return;
   const evaluation = await registrationManager.evaluate();
   if (!evaluation.offerRegister) return;
-  await registrationManager.register('via TUI');
+  await registrationManager.register('via TUI', 'tui');
 }
 
 export function applyInitialTuiCliState(options: {

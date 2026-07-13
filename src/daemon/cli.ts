@@ -27,7 +27,8 @@ import {
 } from '@pellux/goodvibes-sdk/platform/discovery';
 import { createSafeHostServeFactory } from './safe-serve.ts';
 import { isDaemonServiceSubcommand, resolveInstalledDaemonBinary, runDaemonServiceCli } from './service-commands.ts';
-import { startDaemonAutoUpdate, suppressVersionBlindFacadeAutoUpdater } from './lifecycle.ts';
+import { resolveDaemonUpdateArtifact } from './lifecycle.ts';
+import { VERSION } from '../version.ts';
 
 import {
   parseGoodVibesCli,
@@ -234,12 +235,12 @@ async function main(): Promise<void> {
     userAuth,
     runtimeServices,
     serveFactory: createSafeHostServeFactory('Standalone daemon'),
+    // Hand the facade this binary's real version + exec path so its self-update
+    // lifecycle compares the HOST's version (not the sdk package's). Resolves to
+    // undefined for a non-binary install, so a dev run stays host-managed and
+    // never swaps the interpreter. See lifecycle.ts.
+    updateArtifact: resolveDaemonUpdateArtifact({ version: VERSION }),
   });
-  // The facade's internal auto-updater compares the sdk package's version —
-  // not this binary's — against this repo's releases: permanently "behind",
-  // an hourly re-download/restart loop. Suppress it (marker + receipts stay
-  // active) and run the correctly-versioned loop below. See lifecycle.ts.
-  suppressVersionBlindFacadeAutoUpdater(daemon);
   const listener = new HttpListener({
     hookDispatcher: runtimeServices.hookDispatcher,
     userAuth,
@@ -274,26 +275,15 @@ async function main(): Promise<void> {
     config.get('danger.httpListener') ? listener.start() : Promise.resolve(),
   ]);
 
-  // Hourly self-update fed THIS binary's real version (the daemon checks
-  // hourly and swaps only at an idle moment; the outgoing binary is kept at
-  // `<path>.previous`). Refuses to start for non-binary installs (dev runs).
-  const autoUpdate = startDaemonAutoUpdate({
-    configManager: config,
-    isIdle: () => runtimeServices.sessionBroker.countBusySessions() === 0,
-    homeDirectory,
-    workingDirectory: workingDir,
-  });
-  if (autoUpdate.started) {
-    logger.info('daemon: hourly self-update loop active');
-  } else {
-    logger.info('daemon: self-update loop not started', { reason: autoUpdate.reason });
-  }
+  // The DaemonServer facade owns the hourly self-update loop now (fed this
+  // binary's version + exec path via updateArtifact above); it checks hourly,
+  // swaps only at an idle moment, keeps the outgoing binary at `<path>.previous`,
+  // and stops with the daemon. No separate host loop.
 
   const abortController = new AbortController();
 
   const shutdown = async (): Promise<void> => {
     abortController.abort();
-    autoUpdate.stop();
     const SHUTDOWN_DEADLINE_MS = 15_000;
     const timeout = new Promise<'timeout'>((resolve) =>
       setTimeout(() => resolve('timeout'), SHUTDOWN_DEADLINE_MS)

@@ -137,13 +137,21 @@ export class WorkspaceRegistrationManager {
    * Register the current working directory at its resolved project root. The
    * store refuses broad roots (WorkspaceRegistrationError) — we surface that
    * honestly rather than record a phantom registration.
+   *
+   * `origin` stamps which surface wrote the record (honest provenance). This
+   * NEVER passes `checkpointEligible`: absent means false, so a TUI self-record
+   * can never widen the checkpoint-owning consumer's boundary — only that
+   * consumer stamps its own roots eligible on boot.
    */
-  async register(label?: string): Promise<
+  async register(label?: string, origin?: string): Promise<
     | { readonly registered: true; readonly result: RegisterWorkspaceResult }
     | { readonly registered: false; readonly refusedReason: string }
   > {
+    const opts = label || origin
+      ? { ...(label ? { label } : {}), ...(origin ? { origin } : {}) }
+      : undefined;
     try {
-      const result = await this.store.add(this.workingDirectory, label ? { label } : undefined);
+      const result = await this.store.add(this.workingDirectory, opts);
       return { registered: true, result };
     } catch (error) {
       if (error instanceof WorkspaceRegistrationError) {
