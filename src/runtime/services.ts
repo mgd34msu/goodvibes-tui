@@ -111,6 +111,8 @@ export interface RuntimeServices {
   readonly approvalBroker: ApprovalBroker;
   /** Loopback-fetch approval that rides the approval broker; shared by the tool registry and orchestrator so every surface asks the same way. */
   readonly localhostFetchApproval: ReturnType<typeof buildLocalhostFetchApproval>;
+  /** Terminal prompt-answer handler that rides the approval broker; shared by the tool registry and orchestrator so an interactive command's prompt gets an ask/card on every surface. */
+  readonly execPromptAnswerHandler: ReturnType<typeof buildExecPromptAnswerHandler>;
   /** Routes curated runtime-domain events into the panel_only notification feed (the panel's live producer). */
   readonly notificationDispatcher: NotificationDispatcher;
   /** Durable user-origin permission rules (remembered approvals); permissions.rules.* surface. Mirrors the SDK composition. */
@@ -643,10 +645,11 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
   // broker; "allow for this project" persists and later fetches never ask. Built
   // once and shared with the tool registry (bootstrap-core) so both ask alike.
   const localhostFetchApproval = buildLocalhostFetchApproval({ requestApproval: (input) => approvalBroker.requestApproval(input), configManager });
+  // Exec stuck on a terminal prompt rides the approval broker; the typed answer feeds the continuing run. Built once and shared (like localhostFetchApproval) so the tool registry AND every setDependencies site — incl. the post-clobber rewire in bootstrap-core — install the SAME handler; otherwise a wholesale replace drops it and interactive prompts hang.
+  const execPromptAnswerHandler = buildExecPromptAnswerHandler({ requestApproval: (input) => approvalBroker.requestApproval(input) });
   agentOrchestrator.setDependencies({
     surfaceRoot: 'tui',
-    // Exec stuck on a terminal prompt rides the approval broker; the typed answer feeds the continuing run (SDK exec-prompt-wiring; mirrors the SDK composition).
-    execPromptAnswerHandler: buildExecPromptAnswerHandler({ requestApproval: (input) => approvalBroker.requestApproval(input) }),
+    execPromptAnswerHandler,
     localhostFetchApproval,
     fileCache,
     projectIndex,
@@ -700,6 +703,7 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
     watcherRegistry,
     approvalBroker,
     localhostFetchApproval,
+    execPromptAnswerHandler,
     notificationDispatcher,
     userPermissionRuleStore,
     sessionBroker,

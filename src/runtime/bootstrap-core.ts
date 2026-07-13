@@ -259,8 +259,7 @@ export async function initializeBootstrapCore(
   services.benchmarkStore.initBenchmarks();
   providerRegistry.initCatalog();
   // Wire cost-utils to the live catalog AND the ONE pricing resolver so every
-  // cost surface distinguishes real pricing from unpriced and names its
-  // source ("your price" vs "catalog price, as of <date>") — see cost-utils.
+  // cost surface distinguishes real pricing from unpriced and names its source ("your price" vs "catalog price, as of <date>") — see cost-utils.
   wireCostPricing(providerRegistry);
   services.keybindingsManager.loadFromDisk();
   domainDispatch.syncControlPlaneState({
@@ -353,6 +352,7 @@ export async function initializeBootstrapCore(
   const { fileCache, projectIndex } = registerAllTools(toolRegistry, {
     surfaceRoot: 'tui',
     localhostFetchApproval: services.localhostFetchApproval, // loopback-fetch ask, built once in the services composition
+    execPromptAnswerHandler: services.execPromptAnswerHandler, // terminal prompt-answer path, built once in the services composition
     fileUndoManager: services.fileUndoManager,
     modeManager: services.modeManager,
     processManager: services.processManager,
@@ -382,11 +382,11 @@ export async function initializeBootstrapCore(
     // First contained (sandboxed) command run announces "commands now run contained" once — recorded and surfaced now.
     onSandboxedRun: createSandboxContainmentNotice({ configManager, notify: (text) => conversation.log(`[Sandbox] ${text}`, { fg: '135' }) }),
   });
-  // Note: installWrfcAgentToolGuard is called after routeOrBuffer is defined
-  // (further below) so the onTrace callback can route guard decisions through
-  // the pre-router buffer.
+  // Note: installWrfcAgentToolGuard is called after routeOrBuffer is defined (further below) so the onTrace callback routes guard decisions through the pre-router buffer.
   services.agentOrchestrator.setDependencies({
     surfaceRoot: 'tui',
+    // setDependencies is a wholesale replace: re-install the prompt-answer handler and the loopback-fetch ask here or this rewire silently drops them.
+    execPromptAnswerHandler: services.execPromptAnswerHandler,
     localhostFetchApproval: services.localhostFetchApproval,
     fileCache,
     projectIndex,
