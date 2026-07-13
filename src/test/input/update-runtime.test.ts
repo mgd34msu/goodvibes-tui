@@ -14,6 +14,7 @@ import {
   type RunCommand,
 } from '../../input/commands/update-runtime.ts';
 import type { UpdateFetchLike } from '../../runtime/update-check.ts';
+import type { UpdateFileIo } from '@pellux/goodvibes-sdk/platform/runtime/self-update';
 
 // This suite pins fixture versions ('1.0.0' / '1.1.0' / 'v9.9.9') rather than
 // the live build VERSION, per this repo's rule that tests must never compare
@@ -83,6 +84,40 @@ function sha256Hex(buffer: Buffer): string {
   return createHash('sha256').update(buffer).digest('hex');
 }
 
+/**
+ * In-memory UpdateFileIo — the SDK-backed swap path runs for real against a
+ * virtual filesystem, so the tests observe genuine verify-before-write and
+ * kept-.previous behavior without touching the host.
+ */
+function memoryIo(initialFiles: Record<string, string> = {}) {
+  const files = new Map<string, Buffer>(
+    Object.entries(initialFiles).map(([path, content]) => [path, Buffer.from(content)]),
+  );
+  const mutations: string[] = [];
+  const io: UpdateFileIo = {
+    writeFile: (path, data) => {
+      files.set(path, Buffer.from(data));
+      mutations.push(`write ${path}`);
+    },
+    rename: (from, to) => {
+      const buffer = files.get(from);
+      if (buffer === undefined) throw new Error(`rename of missing file in test io: ${from}`);
+      files.delete(from);
+      files.set(to, buffer);
+      mutations.push(`rename ${from} -> ${to}`);
+    },
+    chmod: () => {},
+    exists: (path) => files.has(path),
+    mkdir: () => {},
+  };
+  return {
+    io,
+    mutations,
+    read: (path: string) => files.get(path)?.toString(),
+    has: (path: string) => files.has(path),
+  };
+}
+
 function baseApplyOptions(overrides: Partial<ApplyUpdateOptions>): ApplyUpdateOptions {
   const printed: string[] = [];
   return {
@@ -93,9 +128,7 @@ function baseApplyOptions(overrides: Partial<ApplyUpdateOptions>): ApplyUpdateOp
     currentVersion: '1.0.0',
     print: (line) => printed.push(line),
     configManager: { get: () => undefined },
-    swap: () => {},
-    writeAddon: () => {},
-    fileExists: () => false,
+    io: memoryIo().io,
     ...overrides,
   };
 }
@@ -161,17 +194,22 @@ describe('applyUpdate — binary install, version comparison', () => {
 });
 
 describe('applyUpdate — binary install, checksum verification', () => {
+  const APP_PATH = '/home/user/.local/bin/goodvibes';
+  const DAEMON_PATH = '/home/user/.local/bin/goodvibes-daemon';
+  const ADDON_PATH = '/home/user/.local/bin/lib/sqlite-vec-linux-x64/vec0.so';
+
   test('a missing manifest entry hard-fails the update and never swaps either binary', async () => {
-    const swapCalls: Array<{ target: string; length: number }> = [];
+    const fs = memoryIo({ [APP_PATH]: 'old-app', [DAEMON_PATH]: 'old-daemon' });
     const checksumText = ''; // no entries at all for either artifact
     const options = baseApplyOptions({
       currentVersion: '1.0.0',
       fetchImpl: buildStubFetch({ latestTag: 'v1.1.0', checksumText }),
-      swap: (target, buffer) => swapCalls.push({ target, length: buffer.length }),
-      fileExists: () => true,
+      io: fs.io,
     });
     await expect(applyUpdate(options)).rejects.toThrow(/no checksum entry for goodvibes-linux-x64/);
-    expect(swapCalls).toEqual([]);
+    expect(fs.mutations).toEqual([]);
+    expect(fs.read(APP_PATH)).toBe('old-app');
+    expect(fs.read(DAEMON_PATH)).toBe('old-daemon');
   });
 
   test('a checksum mismatch on the daemon artifact hard-fails and never swaps either binary, even though the app checksum matched', async () => {
@@ -179,15 +217,16 @@ describe('applyUpdate — binary install, checksum verification', () => {
     const daemonBuffer = Buffer.from('daemon-bytes');
     const appHash = sha256Hex(appBuffer);
     const checksumText = [`${appHash}  goodvibes-linux-x64`, `${'0'.repeat(64)}  goodvibes-daemon-linux-x64`].join('\n');
-    const swapCalls: string[] = [];
+    const fs = memoryIo({ [APP_PATH]: 'old-app', [DAEMON_PATH]: 'old-daemon' });
     const options = baseApplyOptions({
       currentVersion: '1.0.0',
       fetchImpl: buildStubFetch({ latestTag: 'v1.1.0', checksumText, appBuffer, daemonBuffer }),
-      swap: (target) => swapCalls.push(target),
-      fileExists: () => true,
+      io: fs.io,
     });
     await expect(applyUpdate(options)).rejects.toThrow(/checksum mismatch for goodvibes-daemon-linux-x64/);
-    expect(swapCalls).toEqual([]);
+    expect(fs.mutations).toEqual([]);
+    expect(fs.read(APP_PATH)).toBe('old-app');
+    expect(fs.read(DAEMON_PATH)).toBe('old-daemon');
   });
 
   test('matching checksums for both artifacts swap both binaries atomically and place the sqlite-vec addon', async () => {
@@ -199,30 +238,26 @@ describe('applyUpdate — binary install, checksum verification', () => {
       `${sha256Hex(daemonBuffer)}  goodvibes-daemon-linux-x64`,
       `${sha256Hex(addonBuffer)}  sqlite-vec-linux-x64.so`,
     ].join('\n');
-    const swapCalls: Array<{ target: string; content: string }> = [];
-    const addonCalls: Array<{ target: string; content: string }> = [];
+    const fs = memoryIo({ [APP_PATH]: 'old-app-bytes', [DAEMON_PATH]: 'old-daemon-bytes' });
     const printed: string[] = [];
     const options = baseApplyOptions({
-      execPath: '/home/user/.local/bin/goodvibes',
+      execPath: APP_PATH,
       currentVersion: '1.0.0',
       fetchImpl: buildStubFetch({ latestTag: 'v1.1.0', checksumText, appBuffer, daemonBuffer, addonBuffer }),
-      swap: (target, buffer) => swapCalls.push({ target, content: buffer.toString() }),
-      writeAddon: (target, buffer) => addonCalls.push({ target, content: buffer.toString() }),
-      fileExists: () => true,
+      io: fs.io,
       print: (line) => printed.push(line),
     });
     await applyUpdate(options);
-    expect(swapCalls).toEqual([
-      { target: '/home/user/.local/bin/goodvibes', content: 'new-app-bytes' },
-      { target: '/home/user/.local/bin/goodvibes-daemon', content: 'new-daemon-bytes' },
-    ]);
+    expect(fs.read(APP_PATH)).toBe('new-app-bytes');
+    expect(fs.read(DAEMON_PATH)).toBe('new-daemon-bytes');
+    // Every swap keeps the outgoing file at `<path>.previous`.
+    expect(fs.read(`${APP_PATH}${PREVIOUS_FILE_SUFFIX}`)).toBe('old-app-bytes');
+    expect(fs.read(`${DAEMON_PATH}${PREVIOUS_FILE_SUFFIX}`)).toBe('old-daemon-bytes');
     // The addon lands at <execDir>/lib/sqlite-vec-<os>-<arch>/vec0.<suffix> — the
     // exact path the SDK's loader resolves next to the running binary.
-    expect(addonCalls).toEqual([
-      { target: '/home/user/.local/bin/lib/sqlite-vec-linux-x64/vec0.so', content: 'new-addon-bytes' },
-    ]);
+    expect(fs.read(ADDON_PATH)).toBe('new-addon-bytes');
     expect(printed.join('\n')).toContain('Updated to v1.1.0');
-    expect(printed.join('\n')).toContain('/home/user/.local/bin/lib/sqlite-vec-linux-x64/vec0.so');
+    expect(printed.join('\n')).toContain(ADDON_PATH);
   });
 
   test('a target release that predates the sqlite-vec addon (no manifest entry) still swaps the binaries and simply skips the addon', async () => {
@@ -235,21 +270,16 @@ describe('applyUpdate — binary install, checksum verification', () => {
       `${sha256Hex(appBuffer)}  goodvibes-linux-x64`,
       `${sha256Hex(daemonBuffer)}  goodvibes-daemon-linux-x64`,
     ].join('\n');
-    const swapCalls: string[] = [];
-    const addonCalls: string[] = [];
+    const fs = memoryIo({ [APP_PATH]: 'old-app', [DAEMON_PATH]: 'old-daemon' });
     const options = baseApplyOptions({
       currentVersion: '1.0.0',
       fetchImpl: buildStubFetch({ latestTag: 'v1.1.0', checksumText, appBuffer, daemonBuffer }),
-      swap: (target) => swapCalls.push(target),
-      writeAddon: (target) => addonCalls.push(target),
-      fileExists: () => true,
+      io: fs.io,
     });
     await applyUpdate(options);
-    expect(swapCalls).toEqual([
-      '/home/user/.local/bin/goodvibes',
-      '/home/user/.local/bin/goodvibes-daemon',
-    ]);
-    expect(addonCalls).toEqual([]);
+    expect(fs.read(APP_PATH)).toBe('new-app-bytes');
+    expect(fs.read(DAEMON_PATH)).toBe('new-daemon-bytes');
+    expect(fs.has(ADDON_PATH)).toBe(false);
   });
 
   test('a checksum mismatch on the sqlite-vec addon hard-fails and never swaps a binary or writes the addon', async () => {
@@ -261,18 +291,16 @@ describe('applyUpdate — binary install, checksum verification', () => {
       `${sha256Hex(daemonBuffer)}  goodvibes-daemon-linux-x64`,
       `${'0'.repeat(64)}  sqlite-vec-linux-x64.so`,
     ].join('\n');
-    const swapCalls: string[] = [];
-    const addonCalls: string[] = [];
+    const fs = memoryIo({ [APP_PATH]: 'old-app', [DAEMON_PATH]: 'old-daemon' });
     const options = baseApplyOptions({
       currentVersion: '1.0.0',
       fetchImpl: buildStubFetch({ latestTag: 'v1.1.0', checksumText, appBuffer, daemonBuffer, addonBuffer }),
-      swap: (target) => swapCalls.push(target),
-      writeAddon: (target) => addonCalls.push(target),
-      fileExists: () => true,
+      io: fs.io,
     });
     await expect(applyUpdate(options)).rejects.toThrow(/checksum mismatch for sqlite-vec-linux-x64\.so/);
-    expect(swapCalls).toEqual([]);
-    expect(addonCalls).toEqual([]);
+    expect(fs.mutations).toEqual([]);
+    expect(fs.read(APP_PATH)).toBe('old-app');
+    expect(fs.has(ADDON_PATH)).toBe(false);
   });
 
   test('when the daemon binary is not present at its expected sibling location, only the app binary is swapped and the message says so honestly', async () => {
@@ -282,22 +310,20 @@ describe('applyUpdate — binary install, checksum verification', () => {
       `${sha256Hex(appBuffer)}  goodvibes-linux-x64`,
       `${sha256Hex(addonBuffer)}  sqlite-vec-linux-x64.so`,
     ].join('\n');
-    const swapCalls: string[] = [];
-    const addonCalls: string[] = [];
+    const fs = memoryIo({ [APP_PATH]: 'old-app' }); // no daemon binary next to the app binary
     const printed: string[] = [];
     const options = baseApplyOptions({
       currentVersion: '1.0.0',
       fetchImpl: buildStubFetch({ latestTag: 'v1.1.0', checksumText, appBuffer, addonBuffer }),
-      swap: (target) => swapCalls.push(target),
-      writeAddon: (target) => addonCalls.push(target),
-      fileExists: () => false, // no daemon binary next to the app binary
+      io: fs.io,
       print: (line) => printed.push(line),
     });
     await applyUpdate(options);
-    expect(swapCalls).toEqual(['/home/user/.local/bin/goodvibes']);
+    expect(fs.read(APP_PATH)).toBe('new-app-bytes');
+    expect(fs.has(DAEMON_PATH)).toBe(false);
     // The addon is refreshed regardless of whether the daemon binary is present —
     // it serves the app binary too.
-    expect(addonCalls).toEqual(['/home/user/.local/bin/lib/sqlite-vec-linux-x64/vec0.so']);
+    expect(fs.read(ADDON_PATH)).toBe('new-addon-bytes');
     expect(printed.join('\n')).toContain('not found at');
     expect(printed.join('\n')).toContain('left untouched');
   });
@@ -481,7 +507,7 @@ describe('rollbackUpdate — one command back to the version that ran before', (
 
   test('non-binary installs are refused with the package-manager alternative', () => {
     const printed: string[] = [];
-    const renames: string[] = [];
+    const fs = memoryIo({ '/home/u/.bun/install/global/node_modules/@pellux/goodvibes-tui/bin/goodvibes': 'pkg' });
     rollbackUpdate({
       execPath: '/home/u/.bun/install/global/node_modules/@pellux/goodvibes-tui/bin/goodvibes',
       platform: 'linux',
@@ -489,10 +515,9 @@ describe('rollbackUpdate — one command back to the version that ran before', (
       print: (line) => printed.push(line),
       configManager: { get: () => undefined },
       runCommand: inactiveRunner,
-      rename: (from, to) => renames.push(`${from} -> ${to}`),
-      fileExists: () => true,
+      io: fs.io,
     });
-    expect(renames).toEqual([]);
+    expect(fs.mutations).toEqual([]);
     expect(printed.join('\n')).toContain('bun add -g @pellux/goodvibes-tui');
   });
 });

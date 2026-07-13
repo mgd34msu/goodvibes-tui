@@ -20,6 +20,17 @@ function findProviderAccountRecord(
   return snapshot.providers.find((entry) => entry.providerId === providerId);
 }
 
+/**
+ * Renders a structured recommended action (the sdk's
+ * ProviderRecommendedAction: description + optional runnable command) as one
+ * honest line — never the object's default string form.
+ */
+function formatRecommendedAction(action: ProviderAccountRecord['recommendedActions'][number]): string {
+  if (!action.command) return action.description;
+  const argsPart = action.command.args.length > 0 ? ` ${action.command.args.join(' ')}` : '';
+  return `${action.description} — run /${action.command.name}${argsPart}`;
+}
+
 export function registerProviderAccountsRuntimeCommands(registry: CommandRegistry): void {
   registry.register({
     name: 'accounts',
@@ -64,7 +75,7 @@ export function registerProviderAccountsRuntimeCommands(registry: CommandRegistr
           ...(record.fallbackRisk ? [`  fallback: ${record.fallbackRisk}`] : []),
           ...(record.issues.map((issue) => `  issue: ${issue}`)),
           ...(record.recommendedActions.length > 0
-            ? ['  next:', ...record.recommendedActions.map((action) => `    ${action}`)]
+            ? ['  next:', ...record.recommendedActions.map((action) => `    ${formatRecommendedAction(action)}`)]
             : ['  No active repair actions suggested.']),
         ].join('\n'));
         return;
@@ -95,7 +106,7 @@ export function registerProviderAccountsRuntimeCommands(registry: CommandRegistr
           ...record.usageWindows.map((entry) => `  window: ${entry.label} — ${entry.detail}`),
           ...record.issues.map((issue) => `  issue: ${issue}`),
           ...record.notes.map((note) => `  note: ${note}`),
-          ...record.recommendedActions.map((action) => `  next: ${action}`),
+          ...record.recommendedActions.map((action) => `  next: ${formatRecommendedAction(action)}`),
         ].join('\n'));
         return;
       }

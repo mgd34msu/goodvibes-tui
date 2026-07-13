@@ -18,6 +18,9 @@ describe('provider account snapshot', () => {
     testManagers = createTestManagers();
     testManagers.providerRegistry.register({
       name: 'openai',
+      // The sdk's credential-authority contract refuses registration without a
+      // declared authority ('resolver' = env/secrets-backed API key).
+      credentialAuthority: 'resolver',
       models: ['gpt-5'],
       async chat() {
         return {
@@ -107,6 +110,10 @@ describe('provider account snapshot', () => {
     expect(provider?.oauthReady).toBe(true);
     expect(provider?.activeRoute).toBe('unconfigured');
     expect(provider?.issues.some((issue) => issue.includes('missing a usable credential'))).toBe(true);
-    expect(provider?.recommendedActions.some((action) => action.includes('/services'))).toBe(true);
+    // Recommended actions are structured (description + optional runnable
+    // command) since the sdk's provider-accounts round.
+    expect(provider?.recommendedActions.some((action) =>
+      action.description.includes('/services') || action.command?.name === 'services',
+    )).toBe(true);
   });
 });
