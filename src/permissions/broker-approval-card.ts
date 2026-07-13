@@ -39,16 +39,59 @@ export interface BrokerApprovalCardBroker extends ApprovalRequesterLookup {
 }
 
 export interface BrokerApprovalChangeParams {
-  readonly approval: { readonly id: string; readonly callId: string; readonly status: string; readonly request: PermissionPromptRequest };
+  readonly approval: {
+    readonly id: string;
+    readonly callId: string;
+    readonly status: string;
+    readonly request: PermissionPromptRequest;
+    /** Present once an ACCEPTED ask (e.g. a ci:fix-session offer) has spawned its session. */
+    readonly fixSessionId?: string | undefined;
+  };
   readonly getPending: () => PendingPermissionState | null;
   readonly setPending: (pending: PendingPermissionState | null) => void;
   readonly broker: BrokerApprovalCardBroker;
   readonly render: () => void;
+  /**
+   * Fired when a record carries the id of a session an accepted ask spawned
+   * (the CI fix-session). The surface that accepted — attached now — turns this
+   * into a jump/attach affordance. Called each time the field is seen; the
+   * caller de-duplicates by id.
+   */
+  readonly onFixSessionStarted?: (fixSessionId: string) => void;
   /** Defers the open (default queueMicrotask); injectable so tests run it synchronously. */
   readonly defer?: (callback: () => void) => void;
 }
 
 const isActiveStatus = (status: string): boolean => status === 'pending' || status === 'claimed';
+
+/**
+ * Build the jump/attach affordance for a spawned fix-session: the first time a
+ * given session id is seen it surfaces a one-line notice pointing at the real
+ * resume command; repeats are no-ops (de-duplicated by id), so the live record
+ * update and the listApprovals refresh path can both feed it safely.
+ */
+export function buildFixSessionAffordance(notify: (message: string) => void): (fixSessionId: string) => void {
+  const seen = new Set<string>();
+  return (fixSessionId) => {
+    if (seen.has(fixSessionId)) return;
+    seen.add(fixSessionId);
+    notify(`[CI] Fix session started: ${fixSessionId}. Resume it with /session resume ${fixSessionId}`);
+  };
+}
+
+/**
+ * The refresh path: sweep current approval records for spawned fix-sessions and
+ * feed each to the (de-duplicating) affordance. Catches a session stamped before
+ * the live subscription attached, or a record update the subscription missed.
+ */
+export function refreshFixSessionsFromApprovals(
+  listApprovals: () => readonly { readonly fixSessionId?: string | undefined }[],
+  onFixSessionStarted: (fixSessionId: string) => void,
+): void {
+  for (const record of listApprovals()) {
+    if (record.fixSessionId) onFixSessionStarted(record.fixSessionId);
+  }
+}
 
 /**
  * React to one broker approval change: clear the active card when ITS approval
@@ -59,6 +102,12 @@ export function handleBrokerApprovalChange(params: BrokerApprovalChangeParams): 
   const { approval, getPending, setPending, broker, render } = params;
   const defer = params.defer ?? queueMicrotask;
   const active = isActiveStatus(approval.status);
+
+  // An accepted ask that spawned a session (the CI fix-session) publishes its id
+  // as a record update — the live in-process handle to jump to it. It arrives
+  // after the card has resolved and cleared, so surface it independently of the
+  // card lifecycle below.
+  if (approval.fixSessionId) params.onFixSessionStarted?.(approval.fixSessionId);
 
   const pending = getPending();
   if (pending && pending.callId === approval.callId) {
