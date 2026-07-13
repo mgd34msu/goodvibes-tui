@@ -483,9 +483,13 @@ describe('parseCliFlags', () => {
 
     const text = await captureGoodVibesCliCommand(['surfaces', 'check', 'ntfy'], configManager, root);
     expect(text.result).toEqual({ handled: true, exitCode: 1 });
-    expect(text.output).toContain('ntfy is enabled but feature gates are disabled:');
-    expect(text.output).toContain('control-plane-gateway');
-    expect(text.output).toContain('delivery-engine');
+    // User-facing text names the canonical domain settings keys the user can set,
+    // not the internal gate ids ('control-plane-gateway' / 'delivery-engine').
+    expect(text.output).toContain('ntfy is enabled but these settings are off:');
+    expect(text.output).toContain('controlPlane.gateway');
+    expect(text.output).toContain('integrations.deliveryTracking');
+    expect(text.output).not.toContain('control-plane-gateway');
+    expect(text.output).not.toContain('delivery-engine');
     expect(text.output).toContain('chat: custom-chat');
     expect(text.output).toContain('agent: custom-agent');
     expect(text.output).toContain('daemon-only remote: custom-remote');
