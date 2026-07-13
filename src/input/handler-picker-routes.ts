@@ -3,6 +3,7 @@ import type { InputToken } from '@pellux/goodvibes-sdk/platform/core';
 import type { CommandContext } from './command-registry.ts';
 import type { CapabilityFilter, CategoryFilter, ModelPickerModal } from './model-picker.ts';
 import { MODEL_PICKER_CHROME_LINES } from '../renderer/model-picker-overlay.ts';
+import { ensureProviderKeyThenSelect } from './provider-key-intake.ts';
 import { resolveAndValidatePath } from '@pellux/goodvibes-sdk/platform/utils';
 import { logger } from '@pellux/goodvibes-sdk/platform/utils';
 import type { BlockActionId } from '../renderer/block-actions.ts';
@@ -66,15 +67,17 @@ export function handleModelPickerToken(state: ModelPickerRouteState, token: Inpu
           } else {
             const target = state.modelPicker.target;
             const handled = state.onModelPickerCommit?.() ?? false;
-            if (!handled) {
-              state.commandContext?.completeModelSelection?.({
-                model: selected,
-                effort: currentEffort,
-                target,
-              });
-            }
             state.modelPicker.close();
             if (state.modalStack[state.modalStack.length - 1] === 'modelPicker') state.modalStack.pop();
+            const ctx = state.commandContext;
+            if (!handled && ctx) {
+              // Selecting an unconfigured provider captures its key inline
+              // (concealed prompt → secrets manager → live re-register) and
+              // only then completes the original selection.
+              ensureProviderKeyThenSelect(ctx, selected.provider, () => {
+                ctx.completeModelSelection?.({ model: selected, effort: currentEffort, target });
+              });
+            }
           }
         }
       } else if (mode === 'provider') {
@@ -88,12 +91,16 @@ export function handleModelPickerToken(state: ModelPickerRouteState, token: Inpu
       } else if (mode === 'effort') {
         const model = state.modelPicker.pendingModel;
         const effort = state.modelPicker.effortLevels[idx];
-        if (model && effort) {
-          const handled = state.onModelPickerCommit?.() ?? false;
-          if (!handled) state.commandContext?.completeModelSelection?.({ model, effort, target: state.modelPicker.target });
-        }
+        const target = state.modelPicker.target;
+        const handled = model && effort ? (state.onModelPickerCommit?.() ?? false) : false;
         state.modelPicker.close();
         if (state.modalStack[state.modalStack.length - 1] === 'modelPicker') state.modalStack.pop();
+        const ctx = state.commandContext;
+        if (model && effort && !handled && ctx) {
+          ensureProviderKeyThenSelect(ctx, model.provider, () => {
+            ctx.completeModelSelection?.({ model, effort, target });
+          });
+        }
       } else if (mode === 'embeddingProvider') {
         const selectedProvider = state.modelPicker.embeddingProviders[idx];
         if (selectedProvider) {
@@ -113,10 +120,16 @@ export function handleModelPickerToken(state: ModelPickerRouteState, token: Inpu
             state.modelPicker.contextCapError = null;
             const validCap = parsedCap !== null && parsedCap > 0 && parsedCap <= 10_000_000 ? parsedCap : null;
             const effort = state.commandContext?.session.runtime.reasoningEffort ?? 'medium';
+            const target = state.modelPicker.target;
             const handled = state.onModelPickerCommit?.() ?? false;
-            if (!handled) state.commandContext?.completeModelSelection?.({ model: capModel, effort, contextCap: validCap, target: state.modelPicker.target });
             state.modelPicker.close();
             if (state.modalStack[state.modalStack.length - 1] === 'modelPicker') state.modalStack.pop();
+            const ctx = state.commandContext;
+            if (!handled && ctx) {
+              ensureProviderKeyThenSelect(ctx, capModel.provider, () => {
+                ctx.completeModelSelection?.({ model: capModel, effort, contextCap: validCap, target });
+              });
+            }
           }
         } else {
           state.modelPicker.close();

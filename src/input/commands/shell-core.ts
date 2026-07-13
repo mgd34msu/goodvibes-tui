@@ -6,6 +6,7 @@ import { executeWriteQuit } from './quit-shared.ts';
 import { compactConversation, requireKeybindingsManager, requireProviderApi, requireSessionMemoryStore } from './runtime-services.ts';
 import { buildCompactionPreview, buildCompactionAfterNotice, buildPinUsageText, buildPinSuccessText } from '../../renderer/compaction-preview.ts';
 import { buildCompactionHistoryText } from '../../renderer/compaction-history-modal.ts';
+import { ensureProviderKeyThenSelect } from '../provider-key-intake.ts';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 import { logger } from '@pellux/goodvibes-sdk/platform/utils';
 
@@ -32,11 +33,15 @@ export function registerShellCoreCommands(registry: CommandRegistry): void {
         const modelId = args[0];
         try {
           const selected = await providerApi.selectModel(modelId);
-          ctx.session.runtime.model = selected.registryKey;
-          ctx.session.runtime.provider = selected.providerId;
-          ctx.platform.configManager.set('provider.model', selected.registryKey);
-          ctx.print(`Switched to model: ${selected.displayName} (${selected.providerId})`);
-          void providerApi.recordModelUsage(selected.registryKey).catch((err) => { logger.debug('model usage record failed', { err }); });
+          // Capture the key for an unconfigured provider inline before the
+          // selection is announced, so the switch lands ready to chat.
+          ensureProviderKeyThenSelect(ctx, selected.providerId, () => {
+            ctx.session.runtime.model = selected.registryKey;
+            ctx.session.runtime.provider = selected.providerId;
+            ctx.platform.configManager.set('provider.model', selected.registryKey);
+            ctx.print(`Switched to model: ${selected.displayName} (${selected.providerId})`);
+            void providerApi.recordModelUsage(selected.registryKey).catch((err) => { logger.debug('model usage record failed', { err }); });
+          });
         } catch (e) {
           ctx.print(`Error: ${summarizeError(e)}`);
         }
