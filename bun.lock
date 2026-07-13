@@ -11,8 +11,8 @@
         "@anthropic-ai/vertex-sdk": "^0.16.0",
         "@ast-grep/napi": "^0.42.0",
         "@aws/bedrock-token-generator": "^1.1.0",
-        "@pellux/goodvibes-sdk": "/home/buzzkill/.claude/jobs/e28eaafb/tmp/sdk-1d6a85e2/packages/sdk/pellux-goodvibes-sdk-1.7.1.tgz",
-        "@pellux/goodvibes-terminal-shell": "/home/buzzkill/.claude/jobs/e28eaafb/tmp/sdk-1d6a85e2/packages/terminal-shell/pellux-goodvibes-terminal-shell-1.7.1.tgz",
+        "@pellux/goodvibes-sdk": "/home/buzzkill/.claude/sdk-dev-snapshots/sdk-e5cb96b7/packages/sdk/pellux-goodvibes-sdk-1.7.1.tgz",
+        "@pellux/goodvibes-terminal-shell": "/home/buzzkill/.claude/sdk-dev-snapshots/sdk-e5cb96b7/packages/terminal-shell/pellux-goodvibes-terminal-shell-1.7.1.tgz",
         "bash-language-server": "^5.6.0",
         "fuse.js": "^7.1.0",
         "graphql": "^16.13.2",
@@ -46,16 +46,16 @@
     },
   },
   "overrides": {
-    "@pellux/goodvibes-contracts": "/home/buzzkill/.claude/jobs/e28eaafb/tmp/sdk-1d6a85e2/packages/contracts/pellux-goodvibes-contracts-1.7.1.tgz",
-    "@pellux/goodvibes-daemon-sdk": "/home/buzzkill/.claude/jobs/e28eaafb/tmp/sdk-1d6a85e2/packages/daemon-sdk/pellux-goodvibes-daemon-sdk-1.7.1.tgz",
-    "@pellux/goodvibes-errors": "/home/buzzkill/.claude/jobs/e28eaafb/tmp/sdk-1d6a85e2/packages/errors/pellux-goodvibes-errors-1.7.1.tgz",
-    "@pellux/goodvibes-operator-sdk": "/home/buzzkill/.claude/jobs/e28eaafb/tmp/sdk-1d6a85e2/packages/operator-sdk/pellux-goodvibes-operator-sdk-1.7.1.tgz",
-    "@pellux/goodvibes-peer-sdk": "/home/buzzkill/.claude/jobs/e28eaafb/tmp/sdk-1d6a85e2/packages/peer-sdk/pellux-goodvibes-peer-sdk-1.7.1.tgz",
-    "@pellux/goodvibes-sdk": "/home/buzzkill/.claude/jobs/e28eaafb/tmp/sdk-1d6a85e2/packages/sdk/pellux-goodvibes-sdk-1.7.1.tgz",
-    "@pellux/goodvibes-terminal-shell": "/home/buzzkill/.claude/jobs/e28eaafb/tmp/sdk-1d6a85e2/packages/terminal-shell/pellux-goodvibes-terminal-shell-1.7.1.tgz",
-    "@pellux/goodvibes-transport-core": "/home/buzzkill/.claude/jobs/e28eaafb/tmp/sdk-1d6a85e2/packages/transport-core/pellux-goodvibes-transport-core-1.7.1.tgz",
-    "@pellux/goodvibes-transport-http": "/home/buzzkill/.claude/jobs/e28eaafb/tmp/sdk-1d6a85e2/packages/transport-http/pellux-goodvibes-transport-http-1.7.1.tgz",
-    "@pellux/goodvibes-transport-realtime": "/home/buzzkill/.claude/jobs/e28eaafb/tmp/sdk-1d6a85e2/packages/transport-realtime/pellux-goodvibes-transport-realtime-1.7.1.tgz",
+    "@pellux/goodvibes-contracts": "/home/buzzkill/.claude/sdk-dev-snapshots/sdk-e5cb96b7/packages/contracts/pellux-goodvibes-contracts-1.7.1.tgz",
+    "@pellux/goodvibes-daemon-sdk": "/home/buzzkill/.claude/sdk-dev-snapshots/sdk-e5cb96b7/packages/daemon-sdk/pellux-goodvibes-daemon-sdk-1.7.1.tgz",
+    "@pellux/goodvibes-errors": "/home/buzzkill/.claude/sdk-dev-snapshots/sdk-e5cb96b7/packages/errors/pellux-goodvibes-errors-1.7.1.tgz",
+    "@pellux/goodvibes-operator-sdk": "/home/buzzkill/.claude/sdk-dev-snapshots/sdk-e5cb96b7/packages/operator-sdk/pellux-goodvibes-operator-sdk-1.7.1.tgz",
+    "@pellux/goodvibes-peer-sdk": "/home/buzzkill/.claude/sdk-dev-snapshots/sdk-e5cb96b7/packages/peer-sdk/pellux-goodvibes-peer-sdk-1.7.1.tgz",
+    "@pellux/goodvibes-sdk": "/home/buzzkill/.claude/sdk-dev-snapshots/sdk-e5cb96b7/packages/sdk/pellux-goodvibes-sdk-1.7.1.tgz",
+    "@pellux/goodvibes-terminal-shell": "/home/buzzkill/.claude/sdk-dev-snapshots/sdk-e5cb96b7/packages/terminal-shell/pellux-goodvibes-terminal-shell-1.7.1.tgz",
+    "@pellux/goodvibes-transport-core": "/home/buzzkill/.claude/sdk-dev-snapshots/sdk-e5cb96b7/packages/transport-core/pellux-goodvibes-transport-core-1.7.1.tgz",
+    "@pellux/goodvibes-transport-http": "/home/buzzkill/.claude/sdk-dev-snapshots/sdk-e5cb96b7/packages/transport-http/pellux-goodvibes-transport-http-1.7.1.tgz",
+    "@pellux/goodvibes-transport-realtime": "/home/buzzkill/.claude/sdk-dev-snapshots/sdk-e5cb96b7/packages/transport-realtime/pellux-goodvibes-transport-realtime-1.7.1.tgz",
     "minimatch": "^10.2.5",
   },
   "packages": {
@@ -101,9 +101,7 @@
 
     "@aws-crypto/util": ["@aws-crypto/util@4.0.0", "", { "dependencies": { "@aws-sdk/types": "^3.222.0", "@aws-sdk/util-utf8-browser": "^3.0.0", "tslib": "^1.11.1" } }, "sha512-2EnmPy2gsFZ6m8bwUQN4jq+IyXV3quHAcwPOS6ZA3k+geujiqI8aRokO2kFJe+idJ/P3v4qWI186rVMo0+zLDQ=="],
 
-    "@aws-sdk/client-bedrock-runtime": ["@aws-sdk/client-bedrock-runtime@3.1085.0", "", { "dependencies": { "@aws-sdk/core": "^3.975.1", "@aws-sdk/credential-provider-node": "^3.972.66", "@aws-sdk/eventstream-handler-node": "^3.972.26", "@aws-sdk/middleware-eventstream": "^3.972.22", "@aws-sdk/middleware-websocket": "^3.972.39", "@aws-sdk/token-providers": "3.1085.0", "@aws-sdk/types": "^3.974.0", "@smithy/core": "^3.29.2", "@smithy/fetch-http-handler": "^5.6.4", "@smithy/node-http-handler": "^4.9.4", "@smithy/types": "^4.16.0", "tslib": "^2.6.2" } }, "sha512-4v86//ZJzIC7pygme+jZHcBQt9fD5DEUfjsF/ICmnU5nvfoG9GcGMO6FPtyJ6V2JNJuB+lyahxM2XmYTRj1Z8w=="],
-
-    "@aws-sdk/client-cognito-identity": ["@aws-sdk/client-cognito-identity@3.1081.0", "", { "dependencies": { "@aws-sdk/core": "^3.974.29", "@aws-sdk/credential-provider-node": "^3.972.64", "@aws-sdk/types": "^3.973.15", "@smithy/core": "^3.29.0", "@smithy/fetch-http-handler": "^5.6.2", "@smithy/node-http-handler": "^4.9.2", "@smithy/types": "^4.15.1", "tslib": "^2.6.2" } }, "sha512-ipDgvZ3Hy8kaFrkwj62yuoghKkZi5WrWTiJnaqGc/ntbuAuijIkRWhzSb8d1MGEE+qb+vFFTrWVFwGSqt76TCA=="],
+    "@aws-sdk/client-bedrock-runtime": ["@aws-sdk/client-bedrock-runtime@3.1086.0", "", { "dependencies": { "@aws-sdk/core": "^3.975.1", "@aws-sdk/credential-provider-node": "^3.972.67", "@aws-sdk/eventstream-handler-node": "^3.972.26", "@aws-sdk/middleware-eventstream": "^3.972.22", "@aws-sdk/middleware-websocket": "^3.972.39", "@aws-sdk/token-providers": "3.1086.0", "@aws-sdk/types": "^3.974.0", "@smithy/core": "^3.29.2", "@smithy/fetch-http-handler": "^5.6.4", "@smithy/node-http-handler": "^4.9.4", "@smithy/types": "^4.16.0", "tslib": "^2.6.2" } }, "sha512-IuzaMjeJ3P7UnVamYnKlNoR/DAZqybRX4zYEqH7giwm31DuluB2qplydyjSxF07H3/5iuc6lCUbMI7pD/m0yng=="],
 
     "@aws-sdk/core": ["@aws-sdk/core@3.975.1", "", { "dependencies": { "@aws-sdk/types": "^3.974.0", "@aws-sdk/xml-builder": "^3.972.34", "@aws/lambda-invoke-store": "^0.3.0", "@smithy/core": "^3.29.2", "@smithy/signature-v4": "^5.6.3", "@smithy/types": "^4.16.0", "bowser": "^2.11.0", "tslib": "^2.6.2" } }, "sha512-8qh/6EYb7hl/ZwVfQufhbMEZs1gQIc7GbdrIf4eprQJ7cv042+74nE6l3YDfyWNzb9iPXb8fRyYSHkNIk5eE6Q=="],
 
@@ -117,7 +115,7 @@
 
     "@aws-sdk/credential-provider-login": ["@aws-sdk/credential-provider-login@3.972.63", "", { "dependencies": { "@aws-sdk/core": "^3.975.1", "@aws-sdk/nested-clients": "^3.997.31", "@aws-sdk/types": "^3.974.0", "@smithy/core": "^3.29.2", "@smithy/types": "^4.16.0", "tslib": "^2.6.2" } }, "sha512-GREWRrMj0XnNKMaVa/Mauoaui26qBEHu71WWqXbwZOu/jFQOnPZjTf7u0KtGKC8VGa6VUs9kDWGgocrKNLS9vw=="],
 
-    "@aws-sdk/credential-provider-node": ["@aws-sdk/credential-provider-node@3.972.66", "", { "dependencies": { "@aws-sdk/credential-provider-env": "^3.972.57", "@aws-sdk/credential-provider-http": "^3.972.59", "@aws-sdk/credential-provider-ini": "^3.973.1", "@aws-sdk/credential-provider-process": "^3.972.57", "@aws-sdk/credential-provider-sso": "^3.973.1", "@aws-sdk/credential-provider-web-identity": "^3.972.63", "@aws-sdk/types": "^3.974.0", "@smithy/core": "^3.29.2", "@smithy/credential-provider-imds": "^4.4.7", "@smithy/types": "^4.16.0", "tslib": "^2.6.2" } }, "sha512-f+qjRXZpz7sgzbc4QB+6nLKfyKFgRRXzWdXbsKPv/VhVRyHsDyq4yBWC/B75BAJpFIcUeI2XR/3gdWJ677zB4A=="],
+    "@aws-sdk/credential-provider-node": ["@aws-sdk/credential-provider-node@3.972.67", "", { "dependencies": { "@aws-sdk/credential-provider-env": "^3.972.57", "@aws-sdk/credential-provider-http": "^3.972.59", "@aws-sdk/credential-provider-ini": "^3.973.1", "@aws-sdk/credential-provider-process": "^3.972.57", "@aws-sdk/credential-provider-sso": "^3.973.1", "@aws-sdk/credential-provider-web-identity": "^3.972.63", "@aws-sdk/types": "^3.974.0", "@smithy/core": "^3.29.2", "@smithy/credential-provider-imds": "^4.4.7", "@smithy/types": "^4.16.0", "tslib": "^2.6.2" } }, "sha512-oYlzWst56rlhhjbYnexwv5hVLYe1cW4liLObhDfxDLI4RAQzleMVHQgQgx7XsC4HKj4e3kjT8v9DId+Pi/dndw=="],
 
     "@aws-sdk/credential-provider-process": ["@aws-sdk/credential-provider-process@3.972.57", "", { "dependencies": { "@aws-sdk/core": "^3.975.1", "@aws-sdk/types": "^3.974.0", "@smithy/core": "^3.29.2", "@smithy/types": "^4.16.0", "tslib": "^2.6.2" } }, "sha512-TiVQhuU0pbhIZAUZacbPHMyzrIdiH+lnx+PMY/Pu/b93dJrq3wdZwzUJ0TPpvNxaqbHsxJvQZW3/h/beLiKq7Q=="],
 
@@ -125,7 +123,7 @@
 
     "@aws-sdk/credential-provider-web-identity": ["@aws-sdk/credential-provider-web-identity@3.972.63", "", { "dependencies": { "@aws-sdk/core": "^3.975.1", "@aws-sdk/nested-clients": "^3.997.31", "@aws-sdk/types": "^3.974.0", "@smithy/core": "^3.29.2", "@smithy/types": "^4.16.0", "tslib": "^2.6.2" } }, "sha512-8qZLFhM69eKcS37m459ctPR05Qimycm/74OPVioe6wNZabMT54GYhwBju0+J656RkMasNSawWQu+c8CmBe3TUQ=="],
 
-    "@aws-sdk/credential-providers": ["@aws-sdk/credential-providers@3.1081.0", "", { "dependencies": { "@aws-sdk/client-cognito-identity": "3.1081.0", "@aws-sdk/core": "^3.974.29", "@aws-sdk/credential-provider-cognito-identity": "^3.972.54", "@aws-sdk/credential-provider-env": "^3.972.55", "@aws-sdk/credential-provider-http": "^3.972.57", "@aws-sdk/credential-provider-ini": "^3.972.62", "@aws-sdk/credential-provider-login": "^3.972.61", "@aws-sdk/credential-provider-node": "^3.972.64", "@aws-sdk/credential-provider-process": "^3.972.55", "@aws-sdk/credential-provider-sso": "^3.972.61", "@aws-sdk/credential-provider-web-identity": "^3.972.61", "@aws-sdk/nested-clients": "^3.997.29", "@aws-sdk/types": "^3.973.15", "@smithy/core": "^3.29.0", "@smithy/credential-provider-imds": "^4.4.5", "@smithy/types": "^4.15.1", "tslib": "^2.6.2" } }, "sha512-UHWvxd1F5nfBXBRXtQaXWoNT8CYKXZovLQOyz6XZlgFTGc2mWzzPGspOfnh49jwvB2qzsdH046i9jnnmND+64w=="],
+    "@aws-sdk/credential-providers": ["@aws-sdk/credential-providers@3.1086.0", "", { "dependencies": { "@aws-sdk/core": "^3.975.1", "@aws-sdk/credential-provider-cognito-identity": "^3.972.56", "@aws-sdk/credential-provider-env": "^3.972.57", "@aws-sdk/credential-provider-http": "^3.972.59", "@aws-sdk/credential-provider-ini": "^3.973.1", "@aws-sdk/credential-provider-login": "^3.972.63", "@aws-sdk/credential-provider-node": "^3.972.67", "@aws-sdk/credential-provider-process": "^3.972.57", "@aws-sdk/credential-provider-sso": "^3.973.1", "@aws-sdk/credential-provider-web-identity": "^3.972.63", "@aws-sdk/nested-clients": "^3.997.31", "@aws-sdk/types": "^3.974.0", "@smithy/core": "^3.29.2", "@smithy/credential-provider-imds": "^4.4.7", "@smithy/types": "^4.16.0", "tslib": "^2.6.2" } }, "sha512-4Vewvblp1JXL9Qtf9+srAsksBp1PmAJGk6T0hM0YcZdYDrbSE9Lpy9iTraumJqQACSTTkjqXSlaISrEGn2c5hw=="],
 
     "@aws-sdk/eventstream-handler-node": ["@aws-sdk/eventstream-handler-node@3.972.26", "", { "dependencies": { "@aws-sdk/types": "^3.974.0", "@smithy/core": "^3.29.2", "@smithy/types": "^4.16.0", "tslib": "^2.6.2" } }, "sha512-RE1fu7Nn05vG0EUJM+8Sde2GFecC658WGaC/asPzLF6K4x3H5ZaDBcQtHRE67Gdgb1VZpyUUliYejHFK1qt0Uw=="],
 
@@ -137,7 +135,7 @@
 
     "@aws-sdk/signature-v4-multi-region": ["@aws-sdk/signature-v4-multi-region@3.996.39", "", { "dependencies": { "@aws-sdk/types": "^3.974.0", "@smithy/signature-v4": "^5.6.3", "@smithy/types": "^4.16.0", "tslib": "^2.6.2" } }, "sha512-8+srXqYIF8KYMLC4FxMLEM5Ek7kUNibJu1R4m8/fUhhNYIZZz26oGtKkCr8I/HiG2fFQxBvaGgQZT4/mqRCSnA=="],
 
-    "@aws-sdk/token-providers": ["@aws-sdk/token-providers@3.1085.0", "", { "dependencies": { "@aws-sdk/core": "^3.975.1", "@aws-sdk/nested-clients": "^3.997.31", "@aws-sdk/types": "^3.974.0", "@smithy/core": "^3.29.2", "@smithy/types": "^4.16.0", "tslib": "^2.6.2" } }, "sha512-+QxFprsPw7GTCuRN86OFhDYowgkoT/+Gn0L7feWY1kpIwUoOgzLi24esQ6PgG6pf3tHE/vs5qFmO7QcFMP82TQ=="],
+    "@aws-sdk/token-providers": ["@aws-sdk/token-providers@3.1086.0", "", { "dependencies": { "@aws-sdk/core": "^3.975.1", "@aws-sdk/nested-clients": "^3.997.31", "@aws-sdk/types": "^3.974.0", "@smithy/core": "^3.29.2", "@smithy/types": "^4.16.0", "tslib": "^2.6.2" } }, "sha512-/d1uB//QrUnIuHmYsB+VByGvezOwiICHZU1JFxLxCcDrmR/zZlfV5sjh91SPvRiK04ckL3GhPeO6L2qG33TKeQ=="],
 
     "@aws-sdk/types": ["@aws-sdk/types@3.974.0", "", { "dependencies": { "@smithy/types": "^4.16.0", "tslib": "^2.6.2" } }, "sha512-QIBrw90CDm4O0UaIIzkU6DrFdeJzEb2Va5EPEVpyldj6sHJxB6cshhStJuhZxk3wR3PmjJlYsjPmY1kNb+KGBg=="],
 
@@ -209,25 +207,25 @@
 
     "@one-ini/wasm": ["@one-ini/wasm@0.2.0", "", {}, "sha512-n+L/BvrwKUn7q5O3wHGo+CJZAqfewh38+37sk+eBzv/39lM9pPgPRd4sOZRvSRzo0ukLxzyXso4WlGj2oKZ5hA=="],
 
-    "@pellux/goodvibes-contracts": ["@pellux/goodvibes-contracts@/home/buzzkill/.claude/jobs/e28eaafb/tmp/sdk-1d6a85e2/packages/contracts/pellux-goodvibes-contracts-1.7.1.tgz", { "dependencies": { "zod": "^4.3.6" } }, "sha512-ReW0k7WKp+VXqz51yW59EAcyiqaUJr1ByYf3+COqNxNRJR00eogFUNQyifAIIHWSHkyBv60Tnhw8lPuppnfu4w=="],
+    "@pellux/goodvibes-contracts": ["@pellux/goodvibes-contracts@/home/buzzkill/.claude/sdk-dev-snapshots/sdk-e5cb96b7/packages/contracts/pellux-goodvibes-contracts-1.7.1.tgz", { "dependencies": { "zod": "^4.3.6" } }, "sha512-4KgJ4uehgWjWFuqp5Hd30euzXVnrJ3jfOe5/sHQYEMd7ENiV0TkcGGeTQpoNNpLcA63GT661x7dtxkBxwD4y7Q=="],
 
-    "@pellux/goodvibes-daemon-sdk": ["@pellux/goodvibes-daemon-sdk@/home/buzzkill/.claude/jobs/e28eaafb/tmp/sdk-1d6a85e2/packages/daemon-sdk/pellux-goodvibes-daemon-sdk-1.7.1.tgz", { "dependencies": { "@pellux/goodvibes-contracts": "1.7.0", "@pellux/goodvibes-errors": "1.7.0", "@pellux/goodvibes-transport-core": "1.7.0" }, "bin": { "goodvibes-relay": "./dist/relay-server-entry.js" } }, "sha512-KyuwjxeKiiy6hWp+5k5TaHk4Rlh6Jynbg8Oge33fQ/97fA5iK36RyB+9d5e0WJ9yqcvjzksQFMJAKCLw6RP6jQ=="],
+    "@pellux/goodvibes-daemon-sdk": ["@pellux/goodvibes-daemon-sdk@/home/buzzkill/.claude/sdk-dev-snapshots/sdk-e5cb96b7/packages/daemon-sdk/pellux-goodvibes-daemon-sdk-1.7.1.tgz", { "dependencies": { "@pellux/goodvibes-contracts": "1.7.0", "@pellux/goodvibes-errors": "1.7.0", "@pellux/goodvibes-transport-core": "1.7.0" }, "bin": { "goodvibes-relay": "./dist/relay-server-entry.js" } }, "sha512-KyuwjxeKiiy6hWp+5k5TaHk4Rlh6Jynbg8Oge33fQ/97fA5iK36RyB+9d5e0WJ9yqcvjzksQFMJAKCLw6RP6jQ=="],
 
-    "@pellux/goodvibes-errors": ["@pellux/goodvibes-errors@/home/buzzkill/.claude/jobs/e28eaafb/tmp/sdk-1d6a85e2/packages/errors/pellux-goodvibes-errors-1.7.1.tgz", {}, "sha512-qaxohbQs+WlDQObHca8Ru2XQ5NPtfn5ibU7IFeMnP6wzqjgm67h9xBl0DDFCrLldLGQDMYH4eX8ianjct9Eh+A=="],
+    "@pellux/goodvibes-errors": ["@pellux/goodvibes-errors@/home/buzzkill/.claude/sdk-dev-snapshots/sdk-e5cb96b7/packages/errors/pellux-goodvibes-errors-1.7.1.tgz", {}, "sha512-qaxohbQs+WlDQObHca8Ru2XQ5NPtfn5ibU7IFeMnP6wzqjgm67h9xBl0DDFCrLldLGQDMYH4eX8ianjct9Eh+A=="],
 
-    "@pellux/goodvibes-operator-sdk": ["@pellux/goodvibes-operator-sdk@/home/buzzkill/.claude/jobs/e28eaafb/tmp/sdk-1d6a85e2/packages/operator-sdk/pellux-goodvibes-operator-sdk-1.7.1.tgz", { "dependencies": { "@pellux/goodvibes-contracts": "1.7.0", "@pellux/goodvibes-errors": "1.7.0", "@pellux/goodvibes-transport-http": "1.7.0", "zod": "^4.3.6" } }, "sha512-DsVUdNAUJJQK9cHUCwFM8txkXbUNnQr0M1N6VFFauWafLoGHYZHwZfEXH3tPVbd4SQ3vsQVpipLpVtRz7WgbHw=="],
+    "@pellux/goodvibes-operator-sdk": ["@pellux/goodvibes-operator-sdk@/home/buzzkill/.claude/sdk-dev-snapshots/sdk-e5cb96b7/packages/operator-sdk/pellux-goodvibes-operator-sdk-1.7.1.tgz", { "dependencies": { "@pellux/goodvibes-contracts": "1.7.0", "@pellux/goodvibes-errors": "1.7.0", "@pellux/goodvibes-transport-http": "1.7.0", "zod": "^4.3.6" } }, "sha512-DsVUdNAUJJQK9cHUCwFM8txkXbUNnQr0M1N6VFFauWafLoGHYZHwZfEXH3tPVbd4SQ3vsQVpipLpVtRz7WgbHw=="],
 
-    "@pellux/goodvibes-peer-sdk": ["@pellux/goodvibes-peer-sdk@/home/buzzkill/.claude/jobs/e28eaafb/tmp/sdk-1d6a85e2/packages/peer-sdk/pellux-goodvibes-peer-sdk-1.7.1.tgz", { "dependencies": { "@pellux/goodvibes-contracts": "1.7.0", "@pellux/goodvibes-errors": "1.7.0", "@pellux/goodvibes-transport-http": "1.7.0" } }, "sha512-7rmvBh70YVm4Q7P8UA8D8kris3hxfTBPFKKVDkM2ruH/Z4jeFN8z7GVbAL0fYjSa3JK9e5uvQorfDfibak/5lQ=="],
+    "@pellux/goodvibes-peer-sdk": ["@pellux/goodvibes-peer-sdk@/home/buzzkill/.claude/sdk-dev-snapshots/sdk-e5cb96b7/packages/peer-sdk/pellux-goodvibes-peer-sdk-1.7.1.tgz", { "dependencies": { "@pellux/goodvibes-contracts": "1.7.0", "@pellux/goodvibes-errors": "1.7.0", "@pellux/goodvibes-transport-http": "1.7.0" } }, "sha512-7rmvBh70YVm4Q7P8UA8D8kris3hxfTBPFKKVDkM2ruH/Z4jeFN8z7GVbAL0fYjSa3JK9e5uvQorfDfibak/5lQ=="],
 
-    "@pellux/goodvibes-sdk": ["@pellux/goodvibes-sdk@/home/buzzkill/.claude/jobs/e28eaafb/tmp/sdk-1d6a85e2/packages/sdk/pellux-goodvibes-sdk-1.7.1.tgz", { "dependencies": { "@pellux/goodvibes-contracts": "1.7.0", "@pellux/goodvibes-daemon-sdk": "1.7.0", "@pellux/goodvibes-errors": "1.7.0", "@pellux/goodvibes-operator-sdk": "1.7.0", "@pellux/goodvibes-peer-sdk": "1.7.0", "@pellux/goodvibes-transport-core": "1.7.0", "@pellux/goodvibes-transport-http": "1.7.0", "@pellux/goodvibes-transport-realtime": "1.7.0" }, "optionalDependencies": { "@agentclientprotocol/sdk": "^0.21.0", "@anthropic-ai/bedrock-sdk": "^0.29.1", "@anthropic-ai/sdk": "^0.92.0", "@ast-grep/napi": "^0.42.0", "@mozilla/readability": "^0.6.0", "bash-language-server": "^5.6.0", "bplist-parser": "^0.3.2", "cloudflare": "6.0.0", "fuse.js": "^7.1.0", "google-auth-library": "10.6.2", "graphql": "^16.13.2", "jsdom": "^29.1.0", "jszip": "^3.10.1", "node-edge-tts": "^1.2.10", "openai": "6.46.0", "pdfjs-dist": "5.7.284", "pyright": "^1.1.408", "simple-git": "^3.33.0", "sql.js": "^1.14.1", "sqlite-vec": "^0.1.9", "tree-sitter-css": "^0.25.0", "tree-sitter-javascript": "^0.25.0", "tree-sitter-json": "^0.24.8", "tree-sitter-python": "^0.25.0", "tree-sitter-typescript": "^0.23.2", "typescript-language-server": "^5.1.3", "vscode-langservers-extracted": "^4.10.0", "web-tree-sitter": "^0.26.7", "zustand": "^5.0.12" }, "peerDependencies": { "expo-secure-store": ">=13.0.0", "react-native-keychain": ">=8.0.0" }, "optionalPeers": ["expo-secure-store", "react-native-keychain"] }, "sha512-k61UWrRPn8lU/j6J71+Qen6IVdLowhhQrVvJH/l2fDuN1JQDmYusHHXgvok79Vgu0WZznl12Ogua2nu/8O6nrw=="],
+    "@pellux/goodvibes-sdk": ["@pellux/goodvibes-sdk@/home/buzzkill/.claude/sdk-dev-snapshots/sdk-e5cb96b7/packages/sdk/pellux-goodvibes-sdk-1.7.1.tgz", { "dependencies": { "@pellux/goodvibes-contracts": "1.7.0", "@pellux/goodvibes-daemon-sdk": "1.7.0", "@pellux/goodvibes-errors": "1.7.0", "@pellux/goodvibes-operator-sdk": "1.7.0", "@pellux/goodvibes-peer-sdk": "1.7.0", "@pellux/goodvibes-transport-core": "1.7.0", "@pellux/goodvibes-transport-http": "1.7.0", "@pellux/goodvibes-transport-realtime": "1.7.0" }, "optionalDependencies": { "@agentclientprotocol/sdk": "^0.21.0", "@anthropic-ai/bedrock-sdk": "^0.29.1", "@anthropic-ai/sdk": "^0.92.0", "@ast-grep/napi": "^0.42.0", "@mozilla/readability": "^0.6.0", "bash-language-server": "^5.6.0", "bplist-parser": "^0.3.2", "cloudflare": "6.0.0", "fuse.js": "^7.1.0", "google-auth-library": "10.6.2", "graphql": "^16.13.2", "jsdom": "^29.1.0", "jszip": "^3.10.1", "node-edge-tts": "^1.2.10", "openai": "6.46.0", "pdfjs-dist": "5.7.284", "pyright": "^1.1.408", "simple-git": "^3.33.0", "sql.js": "^1.14.1", "sqlite-vec": "^0.1.9", "tree-sitter-css": "^0.25.0", "tree-sitter-javascript": "^0.25.0", "tree-sitter-json": "^0.24.8", "tree-sitter-python": "^0.25.0", "tree-sitter-typescript": "^0.23.2", "typescript-language-server": "^5.1.3", "vscode-langservers-extracted": "^4.10.0", "web-tree-sitter": "^0.26.7", "zustand": "^5.0.12" }, "peerDependencies": { "expo-secure-store": ">=13.0.0", "react-native-keychain": ">=8.0.0" }, "optionalPeers": ["expo-secure-store", "react-native-keychain"] }, "sha512-o1JdfLzy+7JeheZpyF2s2V2MHKgCETJgmZr+ZWIfiQ7ggekk9qC+0rMsI/cGVa/Iye/dsvmDFyKPAH9FFglxFA=="],
 
-    "@pellux/goodvibes-terminal-shell": ["@pellux/goodvibes-terminal-shell@/home/buzzkill/.claude/jobs/e28eaafb/tmp/sdk-1d6a85e2/packages/terminal-shell/pellux-goodvibes-terminal-shell-1.7.1.tgz", { "dependencies": { "@pellux/goodvibes-contracts": "1.7.0", "@pellux/goodvibes-sdk": "1.7.0" } }, "sha512-AW61k5GTcdmio8XG02TqT2F8rXnTiYXpB7KbELjLbWCXFxRiBskO2wCxy1v7cCg9rH7Nc17vcSGVqQfiKuhusQ=="],
+    "@pellux/goodvibes-terminal-shell": ["@pellux/goodvibes-terminal-shell@/home/buzzkill/.claude/sdk-dev-snapshots/sdk-e5cb96b7/packages/terminal-shell/pellux-goodvibes-terminal-shell-1.7.1.tgz", { "dependencies": { "@pellux/goodvibes-contracts": "1.7.0", "@pellux/goodvibes-sdk": "1.7.0" } }, "sha512-AW61k5GTcdmio8XG02TqT2F8rXnTiYXpB7KbELjLbWCXFxRiBskO2wCxy1v7cCg9rH7Nc17vcSGVqQfiKuhusQ=="],
 
-    "@pellux/goodvibes-transport-core": ["@pellux/goodvibes-transport-core@/home/buzzkill/.claude/jobs/e28eaafb/tmp/sdk-1d6a85e2/packages/transport-core/pellux-goodvibes-transport-core-1.7.1.tgz", { "dependencies": { "@pellux/goodvibes-errors": "1.7.0" } }, "sha512-H6pUWOXPGZl1BvNIarutGZPLtgmcAScKFFh82T8XcN6qEwPzmyHRMHTWpdugDCvd3ZaXa17/BD8wq/12BVx96A=="],
+    "@pellux/goodvibes-transport-core": ["@pellux/goodvibes-transport-core@/home/buzzkill/.claude/sdk-dev-snapshots/sdk-e5cb96b7/packages/transport-core/pellux-goodvibes-transport-core-1.7.1.tgz", { "dependencies": { "@pellux/goodvibes-errors": "1.7.0" } }, "sha512-H6pUWOXPGZl1BvNIarutGZPLtgmcAScKFFh82T8XcN6qEwPzmyHRMHTWpdugDCvd3ZaXa17/BD8wq/12BVx96A=="],
 
-    "@pellux/goodvibes-transport-http": ["@pellux/goodvibes-transport-http@/home/buzzkill/.claude/jobs/e28eaafb/tmp/sdk-1d6a85e2/packages/transport-http/pellux-goodvibes-transport-http-1.7.1.tgz", { "dependencies": { "@pellux/goodvibes-contracts": "1.7.0", "@pellux/goodvibes-errors": "1.7.0", "@pellux/goodvibes-transport-core": "1.7.0", "zod": "^4.3.6" } }, "sha512-tSsyV9s6/6obToijBRF7fTcvQ/C/tBQsumOGPCwUq+/bfOJOngEiHZO9aqQA3x7P18NJb5Wi2le1jeYwZzd8FA=="],
+    "@pellux/goodvibes-transport-http": ["@pellux/goodvibes-transport-http@/home/buzzkill/.claude/sdk-dev-snapshots/sdk-e5cb96b7/packages/transport-http/pellux-goodvibes-transport-http-1.7.1.tgz", { "dependencies": { "@pellux/goodvibes-contracts": "1.7.0", "@pellux/goodvibes-errors": "1.7.0", "@pellux/goodvibes-transport-core": "1.7.0", "zod": "^4.3.6" } }, "sha512-tSsyV9s6/6obToijBRF7fTcvQ/C/tBQsumOGPCwUq+/bfOJOngEiHZO9aqQA3x7P18NJb5Wi2le1jeYwZzd8FA=="],
 
-    "@pellux/goodvibes-transport-realtime": ["@pellux/goodvibes-transport-realtime@/home/buzzkill/.claude/jobs/e28eaafb/tmp/sdk-1d6a85e2/packages/transport-realtime/pellux-goodvibes-transport-realtime-1.7.1.tgz", { "dependencies": { "@pellux/goodvibes-contracts": "1.7.0", "@pellux/goodvibes-errors": "1.7.0", "@pellux/goodvibes-transport-core": "1.7.0", "@pellux/goodvibes-transport-http": "1.7.0" } }, "sha512-/4QcQYbSGYzDJ9UlqK+N+DZkkoEx+vGdDTCk5SvPNoY4CfXuvTIqoW01129KHFmNg2axZbCKKYpWCMQvj8lOkg=="],
+    "@pellux/goodvibes-transport-realtime": ["@pellux/goodvibes-transport-realtime@/home/buzzkill/.claude/sdk-dev-snapshots/sdk-e5cb96b7/packages/transport-realtime/pellux-goodvibes-transport-realtime-1.7.1.tgz", { "dependencies": { "@pellux/goodvibes-contracts": "1.7.0", "@pellux/goodvibes-errors": "1.7.0", "@pellux/goodvibes-transport-core": "1.7.0", "@pellux/goodvibes-transport-http": "1.7.0" } }, "sha512-/4QcQYbSGYzDJ9UlqK+N+DZkkoEx+vGdDTCk5SvPNoY4CfXuvTIqoW01129KHFmNg2axZbCKKYpWCMQvj8lOkg=="],
 
     "@pellux/goodvibes-tui-darwin-arm64": ["@pellux/goodvibes-tui-darwin-arm64@1.16.1", "", { "os": "darwin", "cpu": "arm64" }, "sha512-NRq+Hyv7YtTmteHHAcRkBc7qv2NXdzycdJbgGAGvP6RcZaQ6+eDdYPAcV6+0VCCMXuXRct//VNhWL+wVXeiYgA=="],
 
@@ -437,7 +435,7 @@
 
     "function-bind": ["function-bind@1.1.2", "", {}, "sha512-7XHNxH7qX9xG5mIwxkhumTox/MIRNcOgDrxWsMt2pAr23WHp6MrRlN7FBSFpCpr+oVO0F744iUgR82nJMfG2SA=="],
 
-    "fuse.js": ["fuse.js@7.4.2", "", {}, "sha512-LVbzjD4WA6UP5B1UnP8wuaXJiLnqMdM/E4fiJXTJ5haJ5b/MBNsK29h2fm6swEoQaVQjvYFWKLE2RanyZIoRVQ=="],
+    "fuse.js": ["fuse.js@7.5.0", "", {}, "sha512-sQtrEfA+ez/3G0cCZecF70oqpCRttCexYUG4mUrtWL49ULUzUyxokt5kyqwtKzj1270RaKih+hcP3qLcumccow=="],
 
     "fuzzy-search": ["fuzzy-search@3.2.1", "", {}, "sha512-vAcPiyomt1ioKAsAL2uxSABHJ4Ju/e4UeDM+g1OlR0vV4YhLGMNsdLNvZTpEDY4JCSt0E4hASCNM5t2ETtsbyg=="],
 
@@ -701,8 +699,6 @@
 
     "zustand": ["zustand@5.0.14", "", { "peerDependencies": { "@types/react": ">=18.0.0", "immer": ">=9.0.6", "react": ">=18.0.0", "use-sync-external-store": ">=1.2.0" }, "optionalPeers": ["@types/react", "immer", "react", "use-sync-external-store"] }, "sha512-/8tAspM5LMPr28b3fwLYrtdj77ECpfZviaP75CMTnwO8ISyaE4GDIG/9rDDYq/cH9D2Xw2A2RXglLInmVBQB/g=="],
 
-    "@anthropic-ai/bedrock-sdk/@anthropic-ai/sdk": ["@anthropic-ai/sdk@0.92.0", "", { "dependencies": { "json-schema-to-ts": "^3.1.1" }, "peerDependencies": { "zod": "^3.25.0 || ^4.0.0" }, "optionalPeers": ["zod"], "bin": { "anthropic-ai-sdk": "bin/cli" } }, "sha512-l653JFC83wCglH8H83t1xpgDurCyPyslYW1maPRdCsfuNuGbLvQjQ81sWd3Go3LWRm0jNspzAhuqAYV8r9joSw=="],
-
     "@anthropic-ai/vertex-sdk/@anthropic-ai/sdk": ["@anthropic-ai/sdk@0.92.0", "", { "dependencies": { "json-schema-to-ts": "^3.1.1" }, "peerDependencies": { "zod": "^3.25.0 || ^4.0.0" }, "optionalPeers": ["zod"], "bin": { "anthropic-ai-sdk": "bin/cli" } }, "sha512-l653JFC83wCglH8H83t1xpgDurCyPyslYW1maPRdCsfuNuGbLvQjQ81sWd3Go3LWRm0jNspzAhuqAYV8r9joSw=="],
 
     "@aws-crypto/crc32/@aws-crypto/util": ["@aws-crypto/util@3.0.0", "", { "dependencies": { "@aws-sdk/types": "^3.222.0", "@aws-sdk/util-utf8-browser": "^3.0.0", "tslib": "^1.11.1" } }, "sha512-2OJlpeJpCR48CC8r+uKVChzs9Iungj9wkZrl8Z041DWEWvyIHILYKCPNzJghKsivj+S3mLo6BVc7mBNzdxA46w=="],
@@ -710,10 +706,6 @@
     "@aws-sdk/client-bedrock-runtime/@smithy/types": ["@smithy/types@4.16.1", "", { "dependencies": { "tslib": "^2.6.2" } }, "sha512-0JFs3V2y2M9tKW5na/qxe69Zv+uxLMO7QBbhxF/FHu/Gp2NFZAAL9tWl9PU02xxo07pb3G9FTyjNc6D5uZrJIg=="],
 
     "@aws-sdk/client-bedrock-runtime/tslib": ["tslib@2.8.1", "", {}, "sha512-oJFu94HQb+KVduSUQL7wnpmqnfmLsOA/nAh6b6EH0wCEoK0/mPeXU6c3wKDV83MkOuHPRHtSXKKU99IBazS/2w=="],
-
-    "@aws-sdk/client-cognito-identity/@smithy/types": ["@smithy/types@4.16.1", "", { "dependencies": { "tslib": "^2.6.2" } }, "sha512-0JFs3V2y2M9tKW5na/qxe69Zv+uxLMO7QBbhxF/FHu/Gp2NFZAAL9tWl9PU02xxo07pb3G9FTyjNc6D5uZrJIg=="],
-
-    "@aws-sdk/client-cognito-identity/tslib": ["tslib@2.8.1", "", {}, "sha512-oJFu94HQb+KVduSUQL7wnpmqnfmLsOA/nAh6b6EH0wCEoK0/mPeXU6c3wKDV83MkOuHPRHtSXKKU99IBazS/2w=="],
 
     "@aws-sdk/core/@smithy/signature-v4": ["@smithy/signature-v4@5.6.4", "", { "dependencies": { "@smithy/core": "^3.29.3", "@smithy/types": "^4.16.1", "tslib": "^2.6.2" } }, "sha512-B89bpf2t/y/wia6LZ+4JfHXYQT9PnVftsH05rgJKKIStS7r/4XSs9HOjtPoLtgcA6HCW9jVqX5DBbq7E0PAkiQ=="],
 
@@ -802,6 +794,8 @@
     "@aws-sdk/xml-builder/@smithy/types": ["@smithy/types@4.16.1", "", { "dependencies": { "tslib": "^2.6.2" } }, "sha512-0JFs3V2y2M9tKW5na/qxe69Zv+uxLMO7QBbhxF/FHu/Gp2NFZAAL9tWl9PU02xxo07pb3G9FTyjNc6D5uZrJIg=="],
 
     "@aws-sdk/xml-builder/tslib": ["tslib@2.8.1", "", {}, "sha512-oJFu94HQb+KVduSUQL7wnpmqnfmLsOA/nAh6b6EH0wCEoK0/mPeXU6c3wKDV83MkOuHPRHtSXKKU99IBazS/2w=="],
+
+    "@aws/bedrock-token-generator/@smithy/types": ["@smithy/types@3.7.2", "", { "dependencies": { "tslib": "^2.6.2" } }, "sha512-bNwBYYmN8Eh9RyjS1p2gW6MIhSO2rl7X9QeLM8iTdcGRP+eDiIWDt66c9IysCc22gefKszZv+ubV9qZc7hdESg=="],
 
     "@pellux/goodvibes-sdk/@agentclientprotocol/sdk": ["@agentclientprotocol/sdk@0.21.1", "", { "peerDependencies": { "zod": "^3.25.0 || ^4.0.0" } }, "sha512-ZTLH+o9QxcZDLX/9ww+W7C2iExnXFM+vD/uGFVSlR61Kzj9FaxUqBC6Rv/kwgA7qVWYUEI9c5ZNqCuO9PM4rKg=="],
 
@@ -932,6 +926,8 @@
     "vscode-languageserver-protocol/vscode-languageserver-types": ["vscode-languageserver-types@3.17.2", "", {}, "sha512-zHhCWatviizPIq9B7Vh9uvrH6x3sK8itC84HkamnBWoDFJtzBf7SWlpLCZUit72b3os45h6RWQNC9xHRDF8dRA=="],
 
     "vscode-markdown-languageservice/vscode-languageserver-protocol": ["vscode-languageserver-protocol@3.18.2", "", { "dependencies": { "vscode-jsonrpc": "9.0.1", "vscode-languageserver-types": "3.18.0" } }, "sha512-XRyDbT0Pp3sSNti3JmxVEUMySWCSi1hhM+/KUlCy1hV1zmrqpM1OwO12EAki8blhmLuIMpaJrYbo0OzGVfK2Qg=="],
+
+    "@aws/bedrock-token-generator/@smithy/types/tslib": ["tslib@2.8.1", "", {}, "sha512-oJFu94HQb+KVduSUQL7wnpmqnfmLsOA/nAh6b6EH0wCEoK0/mPeXU6c3wKDV83MkOuHPRHtSXKKU99IBazS/2w=="],
 
     "@pellux/goodvibes-sdk/google-auth-library/gaxios": ["gaxios@7.2.0", "", { "dependencies": { "extend": "^3.0.2", "https-proxy-agent": "^7.0.1", "node-fetch": "^3.3.2" } }, "sha512-CUVb4wcYe+771XevyH6HtGmXFAGGKkIC3kswAP8Z1JCe0j80JMaTPZH930DWFrvo0atjh18Arc0pEyUCWa5bfg=="],
 
