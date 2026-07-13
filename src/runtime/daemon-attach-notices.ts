@@ -10,7 +10,7 @@
  * This mirrors the daemon's own /status?receipts=consume fold, done in-process
  * for the embedded daemon.
  */
-import { FeatureAnnouncementStore, featureAnnouncementsPath } from '@pellux/goodvibes-sdk/platform/runtime/feature-announcements';
+import { FeatureAnnouncementStore, featureAnnouncementsPath, createSandboxContainmentAnnouncer } from '@pellux/goodvibes-sdk/platform/runtime/feature-announcements';
 import type { ConfigManager } from '../config/index.ts';
 
 /** A daemon receipt line (already a human one-liner, e.g. "restarted after a crash at 14:32"). */
@@ -49,4 +49,18 @@ export function consumeDaemonAttachNotices(deps: DaemonAttachNoticesDeps): strin
     if (announcement.text.trim().length > 0) notices.push(announcement.text);
   }
   return notices;
+}
+
+/**
+ * The "commands now run contained" first-run announcer for the sandboxed exec
+ * path. Returns the callback registerAllTools calls on each contained run: the
+ * FIRST call records the announce-once line (so any later attach-time consume
+ * also sees it) and surfaces it now via `notify`; every later run is silent.
+ */
+export function createSandboxContainmentNotice(deps: {
+  readonly configManager: Pick<ConfigManager, 'getControlPlaneConfigDir'>;
+  readonly notify: (text: string) => void;
+}): () => void {
+  const store = new FeatureAnnouncementStore(featureAnnouncementsPath(deps.configManager));
+  return createSandboxContainmentAnnouncer(store, (announcement) => deps.notify(announcement.text));
 }
