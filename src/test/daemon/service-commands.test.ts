@@ -141,9 +141,16 @@ describe('runDaemonServiceCli (systemd path, real PlatformServiceManager, stubbe
     expect(contents).toContain('--port 3421');
     // install() only writes the file; install-service also calls start() to
     // preserve the old shim's "install implies enabled + running" behavior.
-    // The SDK's status() now also issues read-only `is-active` probes for the
-    // new unit through the same runner — filter those out of the action check.
-    const actions = calls.filter((c) => !c.includes('is-active'));
+    // The SDK's status() now also issues read-only `is-active` probes, and
+    // install() enforces the unit's survival contract via loginctl
+    // (show-user probe, enable-linger when lingering is off) — filter both
+    // out of the mutating action check and pin the linger calls' shape.
+    const lingerCalls = calls.filter((c) => c[0] === 'loginctl');
+    for (const call of lingerCalls) {
+      expect(['show-user', 'enable-linger']).toContain(call[1]!);
+    }
+    // `systemctl --version` is the SDK's read-only capability probe.
+    const actions = calls.filter((c) => !c.includes('is-active') && !c.includes('--version') && c[0] !== 'loginctl');
     expect(actions).toEqual([['systemctl', '--user', 'enable', '--now', 'goodvibes.service']]);
     for (const probe of calls.filter((c) => c.includes('is-active'))) {
       expect(probe).toEqual(['systemctl', '--user', 'is-active', 'goodvibes.service']);

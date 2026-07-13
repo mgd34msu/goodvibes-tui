@@ -32,7 +32,7 @@ export interface ResumeSessionOptions {
   readonly sessionManager: SessionManager;
   readonly panelManager: PanelManager;
   readonly configManager: Pick<ConfigManager, 'get' | 'getCategory'>;
-  readonly providerRegistry: Pick<ProviderRegistry, 'get' | 'getCurrentModel' | 'getForModel' | 'require'>;
+  readonly providerRegistry: Pick<ProviderRegistry, 'get' | 'getCurrentModel' | 'getForModel' | 'require' | 'resolveModelPricing'>;
   readonly homeDirectory: string;
   /** See CommandSessionServices.hydrateSessionUsage (command-registry.ts). */
   readonly hydrateSessionUsage?: () => void;

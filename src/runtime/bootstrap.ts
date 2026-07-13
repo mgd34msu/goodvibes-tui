@@ -35,6 +35,7 @@ import { createTuiSpineTransport, type SpineSessionsClient } from './session-spi
 import { syncMemorySpineToHostStatus, type MemorySpineActiveRef } from './memory-spine-transport.ts';
 import { pruneStaleOperatorTokens } from '@pellux/goodvibes-sdk/platform/pairing';
 import { resolveDaemonCompanionToken, workspaceOperatorTokenCandidates } from './operator-token-cleanup.ts';
+import { suppressVersionBlindFacadeAutoUpdater } from '../daemon/lifecycle.ts';
 import type { UiRuntimeServices } from './ui-services.ts';
 import { initializeBootstrapCore } from './bootstrap-core.ts';
 import { createBootstrapShell } from './bootstrap-shell.ts';
@@ -481,12 +482,21 @@ export async function bootstrapRuntime(
 
   const createExternalServiceFactories = (sharedDaemonToken: string): ExternalServiceFactories => ({
     sharedDaemonToken,
-    createDaemonServer: (bus, userAuth, runtimeServices) => new DaemonServer({
-      runtimeBus: bus,
-      userAuth,
-      runtimeServices,
-      serveFactory: createSafeHostServeFactory('Embedded daemon'),
-    }),
+    createDaemonServer: (bus, userAuth, runtimeServices) => {
+      const daemonServer = new DaemonServer({
+        runtimeBus: bus,
+        userAuth,
+        runtimeServices,
+        serveFactory: createSafeHostServeFactory('Embedded daemon'),
+      });
+      // The facade's internal auto-updater compares the sdk package's version
+      // — not this binary's — so inside the interactive session it would loop
+      // hourly and exit the user's process on "restart". Clients update at
+      // launch (cli/launch-auto-update.ts); the embedded daemon runs no
+      // update loop at all. See daemon/lifecycle.ts.
+      suppressVersionBlindFacadeAutoUpdater(daemonServer);
+      return daemonServer;
+    },
     createHttpListener: (dispatcher, userAuth, configManager) => new HttpListener({
       hookDispatcher: dispatcher,
       userAuth,

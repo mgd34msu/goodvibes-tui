@@ -29,6 +29,11 @@ const WS_ONLY_METHOD_IDS = [
   'sessions.search',
   'push.vapid.get',
   'push.subscriptions.list',
+  // Durable remembered-approval rules (SDK round adopting the pricing
+  // resolver / approval-rule store): read/delete only by design — rules are
+  // written by remembered approval decisions, never by a verb.
+  'permissions.rules.list',
+  'permissions.rules.delete',
 ] as const;
 
 describe('ws-only gateway verbs are invokable on the vendored runtime', () => {
@@ -72,5 +77,22 @@ describe('ws-only gateway verbs are invokable on the vendored runtime', () => {
     } as never) as { capturedAt: number; nodes: unknown[] };
     expect(Array.isArray(result.nodes)).toBe(true);
     expect(result.nodes).toHaveLength(0);
+  });
+
+  test('permissions.rules.list invokes end-to-end (empty rule set on a fresh runtime)', async () => {
+    const result = await services.gatewayMethods.invoke('permissions.rules.list', {
+      methodId: 'permissions.rules.list',
+      body: {},
+    } as never) as { rules: unknown[] };
+    expect(Array.isArray(result.rules)).toBe(true);
+    expect(result.rules).toHaveLength(0);
+  });
+
+  test('permissions.rules.delete invokes end-to-end and answers honestly for an unknown rule', async () => {
+    const result = await services.gatewayMethods.invoke('permissions.rules.delete', {
+      methodId: 'permissions.rules.delete',
+      body: { ruleId: 'no-such-rule' },
+    } as never) as { deleted: boolean };
+    expect(result.deleted).toBe(false);
   });
 });

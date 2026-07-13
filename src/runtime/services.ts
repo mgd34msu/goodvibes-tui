@@ -25,7 +25,11 @@ import { MediaProviderRegistry, ensureBuiltinMediaProviders } from '@pellux/good
 import { MultimodalService } from '@pellux/goodvibes-sdk/platform/multimodal';
 import { AgentMessageBus, AgentOrchestrator, ArchetypeLoader, WrfcController } from '@pellux/goodvibes-sdk/platform/agents';
 import { AgentManager, ContextAccountingHolder, OverflowHandler, ProcessManager, createWorkflowServices, type WorkflowServices } from '@pellux/goodvibes-sdk/platform/tools';
-import { FileStateCache, FileUndoManager, MemoryEmbeddingProviderRegistry, MemoryRegistry, MemoryStore, ModeManager, ProjectIndex, resolveCanonicalMemoryDbPath, type CodeIndexStore, type CodeIndexReindexScheduler } from '@pellux/goodvibes-sdk/platform/state';
+import { FileStateCache, FileUndoManager, MemoryEmbeddingProviderRegistry, MemoryRegistry, MemoryStore, ModeManager, ProjectIndex, resolveCanonicalMemoryDbPath, resolveMemoryVectorDbPath, type CodeIndexStore, type CodeIndexReindexScheduler } from '@pellux/goodvibes-sdk/platform/state';
+import { StoreSnapshotScheduler } from '@pellux/goodvibes-sdk/platform/state/store-snapshots';
+import { UserPermissionRuleStore } from '@pellux/goodvibes-sdk/platform/permissions';
+import { buildExecPromptAnswerHandler } from '@pellux/goodvibes-sdk/platform/runtime/permissions/exec-prompt-wiring';
+import { logger, summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 import { MemorySpineClient, createLocalMemoryAccess } from '@pellux/goodvibes-sdk/platform/runtime/memory-spine';
 import { WorkspaceCheckpointManager } from '@pellux/goodvibes-sdk/platform/workspace';
 import { createWorkspaceCheckpointing } from './workspace-checkpointing.ts';
@@ -49,14 +53,13 @@ import { SessionManager, CrossSessionTaskRegistry, SessionChangeTracker } from '
 import { ApiTokenAuditor, UserAuthManager } from '@pellux/goodvibes-sdk/platform/security';
 import { WebhookNotifier } from '@pellux/goodvibes-sdk/platform/integrations';
 import { McpRegistry } from '@pellux/goodvibes-sdk/platform/mcp';
-import { BenchmarkStore, CacheHitTracker, FavoritesStore, inferFallbackContextWindow, type ModelDefinition, ModelLimitsService, ProviderCapabilityRegistry, ProviderOptimizer, ProviderRegistry } from '@pellux/goodvibes-sdk/platform/providers';
+import { BenchmarkStore, CacheHitTracker, computeUsageCostUsd, FavoritesStore, inferFallbackContextWindow, type ModelDefinition, ModelLimitsService, ProviderCapabilityRegistry, ProviderOptimizer, ProviderRegistry } from '@pellux/goodvibes-sdk/platform/providers';
 import { KeybindingsManager } from '../input/keybindings.ts';
 import { AdaptivePlanner, DeterministicReplayEngine, ExecutionPlanManager, SessionLineageTracker, SessionMemoryStore } from '@pellux/goodvibes-sdk/platform/core';
 import { deriveFeatureStates, bindFeatureSettingsBridge } from '@pellux/goodvibes-sdk/platform/runtime/state';
 import { createChannelComposition } from './channel-composition.ts';
 import { applyProviderOptimizerConfigMode, bindProviderOptimizerFeatureFlag } from './provider-optimizer-wiring.ts';
 import { type ArchivableProcessRegistry } from '@pellux/goodvibes-sdk/platform/runtime/fleet';
-import { calcSessionCost, isModelPriced } from '../export/cost-utils.ts';
 import { createWorkstreamServices, type OrchestrationEngine, type WorkstreamCommandService } from './workstream-services.ts';
 import { wireFleetNeedsInputPush } from './fleet-needs-input-push.ts';
 import { codeIndexDbPath, createCodeIndexServices, isCodeInjectionSettingEnabled } from './code-index-services.ts';
@@ -151,6 +154,8 @@ export interface RuntimeServices {
   readonly channelDeliveryRouter: ChannelDeliveryRouter;
   readonly watcherRegistry: WatcherRegistry;
   readonly approvalBroker: ApprovalBroker;
+  /** Durable user-origin permission rules (remembered approvals); permissions.rules.* surface. Mirrors the SDK composition. */
+  readonly userPermissionRuleStore: UserPermissionRuleStore;
   readonly sessionBroker: SharedSessionBroker;
   readonly deliveryManager: AutomationDeliveryManager;
   readonly automationManager: AutomationManager;
@@ -230,6 +235,8 @@ export interface RuntimeServices {
   /** The repo source-tree code index — see runtime/code-index-services.ts. */
   readonly codeIndexStore: CodeIndexStore;
   readonly codeIndexReindexScheduler: CodeIndexReindexScheduler; // tool-site reindex
+  /** Daily snapshots of every SQLite store this runtime writes, with bounded retention; unref'd timers (mirrors the SDK composition — hosts that tear down a runtime stop() it themselves). */
+  readonly storeSnapshotScheduler: StoreSnapshotScheduler;
   /** Unified live process registry (agents, WRFC chains, workflows, watchers, background processes) backing the Fleet panel; archive-aware — finished subtrees can be moved to the session archive view. */
   readonly processRegistry: ArchivableProcessRegistry;
   readonly modeManager: ModeManager;
@@ -308,6 +315,12 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
   });
   ensureConfiguredModelIsRoutable(providerRegistry, configManager);
   providerRegistry.initCustomProviders();
+  // ONE credential chain (env -> secrets -> subscription), mirroring the SDK
+  // composition: boot applies secrets-backed keys; every secrets write/delete
+  // re-registers builtins LIVE (no restart) — badges/picker/chat read the
+  // same instances.
+  secretsManager.onDidChange(() => void providerRegistry.refreshProviderCredentials().catch((error) => logger.warn('live credential refresh failed', { error: summarizeError(error) })));
+  void providerRegistry.refreshProviderCredentials().catch((error) => logger.warn('boot credential refresh failed', { error: summarizeError(error) }));
   const toolLLM = new ToolLLM({
     configManager,
     providerRegistry,
@@ -610,6 +623,23 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
   // with MemoryStore above. Auto-build is config-gated (default off) — see
   // code-index-services.ts's header doc.
   const { codeIndexStore, codeIndexReindexScheduler } = createCodeIndexServices({ workingDirectory, configManager, memoryEmbeddingRegistry });
+  // Data safety with no discipline (mirrors the SDK composition): a daily
+  // snapshot of every SQLite store this runtime writes, bounded by the
+  // retention engine. Timers are unref'd so an undisposed scheduler cannot
+  // pin the event loop.
+  const storeSnapshotScheduler = new StoreSnapshotScheduler({
+    stores: [
+      { name: 'memory store', dbPath: memoryDbPath },
+      { name: 'memory vector index', dbPath: resolveMemoryVectorDbPath(memoryDbPath) },
+      { name: 'code index store', dbPath: codeIndexDbPath(workingDirectory) },
+    ],
+  });
+  storeSnapshotScheduler.start();
+  // Durable user-origin permission rules (remembered approvals): one store per
+  // project, shared by every PermissionManager built on this runtime;
+  // permissions.rules.* lists/deletes. Background init is fail-safe.
+  const userPermissionRuleStore = new UserPermissionRuleStore(join(configManager.getControlPlaneConfigDir(), 'permission-rules.json'));
+  void userPermissionRuleStore.init().catch((error) => logger.warn('user permission rule store init failed; asks will prompt', { error: summarizeError(error) }));
   const codeInjectionOrchestratorDeps = { codeIndex: codeIndexStore, isCodeInjectionSettingEnabled: () => isCodeInjectionSettingEnabled(configManager), codeIndexReindexScheduler }; // Code-injection seam (agent here; main via orchestrator-core-services.ts)
   // Shared, archive-aware fleet registry — see gateway-verbs.ts's factory doc.
   const processRegistry = createArchivableFleetRegistry({
@@ -625,12 +655,12 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
     messageBus: agentMessageBus, // Backs steer()/`steerable` (the Fleet steer composer builds on top)
     automationManager, // Folds /schedule AutomationJobs into the fleet as 'schedule' nodes
     runtimeBus: options.runtimeBus,
-    // Honest pricing: never fabricate a cost for an unrecognized model.
-    priceUsage: (model, usage) => {
-      const modelId = model ?? 'unknown';
-      if (!isModelPriced(modelId)) return null;
-      return calcSessionCost(usage.inputTokens, usage.outputTokens, usage.cacheReadTokens, usage.cacheWriteTokens, modelId);
-    },
+    // Honest-unpriced: usage prices through the ONE model pricing resolver
+    // (manual -> registration -> provider-served -> catalog -> unknown; any
+    // resolvable model). Unknown/subscription yields null (costState
+    // 'unpriced'), never $0. Mirrors the SDK composition so fleet cost totals
+    // and budget checks share a single cost source of truth.
+    priceUsage: (model, usage) => (model ? computeUsageCostUsd(providerRegistry.resolveModelPricing(model), usage) : null),
   });
   const modeManager = new ModeManager();
   const fileUndoManager = new FileUndoManager();
@@ -640,7 +670,7 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
   // family without it. principals.*/channels.profiles.*/ci.* register unconditionally; checkin.* only with
   // channelDeliveryRouter/providerRegistry/automationManager/sessionLister ALL present; fleet needs-input push gated by
   // runtimeBus/sessionPresence (fleet-needs-input-push.ts). conversationRewindPort serves conversation-scope rewind live.
-  attachWsOnlyGatewayVerbHandlers(gatewayMethods, { processRegistry, workspaceCheckpointManager, conversationRewindPort: createSessionConversationRewindPort(), sessionBroker, secretsManager, stepUpService, approvalBroker, shellPaths, configManager, runtimeStore: options.runtimeStore, channelDeliveryRouter, providerRegistry, automationManager, sessionLister: sessionBroker, ...wireFleetNeedsInputPush({ registry: processRegistry, runtimeBus: options.runtimeBus, sessionBroker }) });
+  attachWsOnlyGatewayVerbHandlers(gatewayMethods, { processRegistry, workspaceCheckpointManager, conversationRewindPort: createSessionConversationRewindPort(), sessionBroker, secretsManager, stepUpService, approvalBroker, requestApproval: (input) => approvalBroker.requestApproval(input), watcherRegistry, userPermissionRuleStore, shellPaths, configManager, runtimeStore: options.runtimeStore, channelDeliveryRouter, providerRegistry, automationManager, sessionLister: sessionBroker, sessionIntake: sessionBroker, workingDirectory, memoryRegistry, ...wireFleetNeedsInputPush({ registry: processRegistry, runtimeBus: options.runtimeBus, sessionBroker }) });
   const integrationHelpers = new IntegrationHelperService({
     workingDirectory,
     homeDirectory,
@@ -661,8 +691,17 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
     subscriptionManager,
     secretsManager,
   });
+  // An exec command blocked on a terminal prompt (host-key confirmation,
+  // credential ask) rides the same broker as every other ask: the pending
+  // prompt surfaces through every surface's approval machinery and the typed
+  // answer feeds the same continuing run. (Wiring lives in the SDK's
+  // permissions/exec-prompt-wiring.ts; mirrors the SDK composition.)
+  const execPromptAnswerHandler = buildExecPromptAnswerHandler({
+    requestApproval: (input) => approvalBroker.requestApproval(input),
+  });
   agentOrchestrator.setDependencies({
     surfaceRoot: 'tui',
+    execPromptAnswerHandler,
     fileCache,
     projectIndex,
     workingDirectory,
@@ -708,6 +747,7 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
     channelDeliveryRouter,
     watcherRegistry,
     approvalBroker,
+    userPermissionRuleStore,
     sessionBroker,
     deliveryManager,
     automationManager,
@@ -783,6 +823,7 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
     workstreamCommands,
     codeIndexStore,
     codeIndexReindexScheduler,
+    storeSnapshotScheduler,
     processRegistry,
     modeManager,
     fileUndoManager,

@@ -717,6 +717,10 @@ export async function initializeBootstrapCore(
     policyRuntimeState,
     services.hookDispatcher,
     featureFlags,
+    // Durable user-origin rules (mirrors the SDK composition): remembered
+    // approval decisions persist and generalize across sessions;
+    // permissions.rules.* lists/deletes them.
+    services.userPermissionRuleStore,
   );
   await hookWorkbench.loadAndApplyManagedHooks();
 
