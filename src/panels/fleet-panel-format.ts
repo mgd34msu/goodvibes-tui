@@ -11,7 +11,7 @@ import type { ProcessCostState, ProcessNode, ProcessUsage } from '@pellux/goodvi
 import type { Line } from '../types/grid.ts';
 import { formatAgentCost } from './agent-inspector-shared.ts';
 import { buildPanelLine, DEFAULT_PANEL_PALETTE, type ColumnSpec, type PanelPalette } from './polish.ts';
-import { fleetUsageTokens, hasFleetCost, type FleetStateTone } from './fleet-read-model.ts';
+import { fleetAttentionText, fleetNodeAttention, fleetStallMarker, fleetUsageTokens, hasFleetCost, type FleetStateTone } from './fleet-read-model.ts';
 import { fleetStateDisplay } from './fleet-stop.ts';
 import { formatElapsed } from '../utils/format-elapsed.ts';
 import { truncateDisplay } from '../utils/terminal-width.ts';
@@ -96,16 +96,39 @@ export function renderFleetRowLine(
     ? ` [attempt ${node.attemptGroup.index + 1}/${node.attemptGroup.total}${node.attemptGroup.held ? ', held' : ''}]`
     : '';
   const label = `${row.treePrefix}${node.label}${attemptBadge}`;
-  // Activity column doubles as the badge slot: 'blocked on you' shouts the
-  // wait louder than the raw currentActivity text ('awaiting approval …').
+  // Activity column doubles as the badge slot, in priority order:
+  //   stopping > waiting-on-human text ('blocked on you' / 'needs your input')
+  //   > the read-model HEADLINE (derived from task/phase identity only —
+  //   replaced in place, never a scrolling feed) with the stall marker
+  //   ('quiet Nm') appended when the node has gone observably silent.
+  // Nodes without a headline fall back to the live currentActivity text.
+  const attention = fleetNodeAttention(node);
+  const stallMarker = fleetStallMarker(node);
+  const steadyText = node.headline?.text ?? node.currentActivity?.text ?? '';
+  // The stall marker must survive the 20-char activity cell: budget the
+  // headline around it (the marker is the honesty signal; a stalled node must
+  // never render as if it were healthily mid-headline).
+  const steadyWithStall = stallMarker
+    ? (steadyText
+        ? `${truncateDisplay(steadyText, Math.max(1, ACTIVITY_W - stallMarker.length - 3))} · ${stallMarker}`
+        : stallMarker)
+    : steadyText;
   const activity = stopping
     ? disp.label
     : blocked
-      ? 'blocked on you'
+      ? fleetAttentionText(attention ?? { reason: 'approval' })
       : badge
-        ? `${steerBadgeGlyph(badge.status)} ${node.currentActivity?.text ?? ''}`.trimEnd()
-        : (node.currentActivity?.text ?? '');
-  const activityColor = stopping ? color : blocked ? color : badge ? steerBadgeTone(badge.status, C) : C.dim;
+        ? `${steerBadgeGlyph(badge.status)} ${steadyWithStall}`.trimEnd()
+        : steadyWithStall;
+  const activityColor = stopping
+    ? color
+    : blocked
+      ? color
+      : badge
+        ? steerBadgeTone(badge.status, C)
+        : stallMarker
+          ? (C.warn ?? DEFAULT_PANEL_PALETTE.warn)
+          : C.dim;
 
   return buildAlignedRow(
     width,
@@ -160,6 +183,19 @@ export function renderFleetDetailLines(
     ['  cost ', C.label],
     [formatFleetCost(node.costUsd, node.costState), C.value],
   ]);
+  // The headline (task/phase identity, replaced in place) gets its own row
+  // when present, with the stall marker appended — the detail block mirrors
+  // exactly what the tree row's steady slot shows.
+  const stallMarker = fleetStallMarker(node);
+  const headlineText = node.headline
+    ? `${node.headline.text}${stallMarker ? ` · ${stallMarker}` : ''}`
+    : stallMarker;
+  const headlineLine = headlineText
+    ? [buildPanelLine(width, [
+        [' headline ', C.label],
+        [truncateDisplay(headlineText, Math.max(0, width - 11)), stallMarker ? (C.warn ?? DEFAULT_PANEL_PALETTE.warn) : C.value],
+      ])]
+    : [];
   const activityText = node.currentActivity
     ? `${node.currentActivity.kind}: ${node.currentActivity.text}`
     : '(no recent activity)';
@@ -170,5 +206,5 @@ export function renderFleetDetailLines(
   // Approval history attaches here once session tabs land.
   const line4 = buildPanelLine(width, [[' approvals ', C.label], ['—', C.dim]]);
   const isolationDetail = node.kind === 'work-item' ? formatWorkItemIsolationDetailFromRaw(node.raw) : null;
-  return [line1, line2, line3, line4, ...(isolationDetail ? [buildPanelLine(width, [[' isolation ', C.label], [isolationDetail, C.dim]])] : [])];
+  return [line1, line2, ...headlineLine, line3, line4, ...(isolationDetail ? [buildPanelLine(width, [[' isolation ', C.label], [isolationDetail, C.dim]])] : [])];
 }

@@ -21,7 +21,7 @@ import { PanelConfirmOverlay } from './panel-confirm-overlay.ts';
 import { isPanelSearchBackspace, isPanelSearchCancel, isPanelSearchCommit, isPanelSearchPrintable } from './search-focus.ts';
 import { buildKeyboardHints, buildPanelWorkspace, buildSearchInputLine, DEFAULT_PANEL_PALETTE, getPanelWorkspaceContentBudget, type PanelPalette } from './polish.ts';
 import {
-  isBlockedOnUserState,
+  isBlockedOnUserNode,
   isRunningProcessState,
   isTerminalProcessState,
   type FleetReadModel,
@@ -644,7 +644,7 @@ export class FleetPanel extends ScrollableListPanel<FleetTreeRow> {
     // Display-only overrides (stopping wins, then blocked-on-user) are derived
     // here from panel state and passed into the pure row renderer.
     const stopping = this.stopTracker.isStopping(row.node.id);
-    const blocked = !stopping && isBlockedOnUserState(row.node.state);
+    const blocked = !stopping && isBlockedOnUserNode(row.node);
     return renderFleetRowLine(row, width, stopping, blocked, this.steerBadgeForNode(row.node.id), C);
   }
 
@@ -658,7 +658,7 @@ export class FleetPanel extends ScrollableListPanel<FleetTreeRow> {
     // Mirror the tree row's display-only overrides (stopping wins, then blocked)
     // so the detail's literal state text never contradicts the row glyph.
     const stopping = this.stopTracker.isStopping(node.id);
-    const blocked = !stopping && isBlockedOnUserState(node.state);
+    const blocked = !stopping && isBlockedOnUserNode(node);
     return renderFleetDetailLines(node, width, stopping, blocked, C);
   }
 
