@@ -41,7 +41,7 @@ import { createBootstrapShell } from './bootstrap-shell.ts';
 import { announceResumeState } from './resume-notice.ts';
 import { announceInstallSelfCheck } from './install-self-check-startup.ts';
 import { buildSharedOrchestratorCoreServices, refreshMemoryRecallSnapshot } from './orchestrator-core-services.ts';
-import { consumeDaemonAttachNotices } from './daemon-attach-notices.ts';
+import { consumeDaemonAttachNotices, consumeExternalDaemonAttachNotices } from './daemon-attach-notices.ts';
 import { createContextAccountingSource } from './context-accounting-source.ts';
 import { createEmbeddedServiceFactories } from './embedded-service-factories.ts';
 import { buildRelayExternalServiceMethods } from './relay-reachability-bridge.ts';
@@ -195,9 +195,8 @@ export async function bootstrapRuntime(
     pluginManager,
   } = services;
 
-  // A liveness flip is only PAINTED once something calls requestRender();
-  // without this, the footer's spine segment sat correct-but-undrawn until
-  // incidental activity redrew it (minutes, during an idle stretch).
+  // A liveness flip is only PAINTED once something calls requestRender(); without
+  // this, the footer's spine segment sat correct-but-undrawn until incidental activity redrew it (minutes, during an idle stretch).
   sessionUnionCache.setOnTransition(() => requestRender());
 
   // ── Phase 6: Orchestrator + AcpManager ───────────────────────────────────
@@ -522,17 +521,18 @@ export async function bootstrapRuntime(
       externalServices = await externalServicesPromise;
       controlPlaneRecentEventsRef.value = (limit) => externalServices.listRecentControlPlaneEvents(limit);
       syncSessionSpineToHostStatus(externalServices.daemonStatus, companionTokenRecord.token);
-      renderDaemonAttachNotices();
+      await renderDaemonAttachNotices(companionTokenRecord.token);
       requestRender();
       return inspectExternalServices();
     },
   };
-  // The attach-time consuming read: drain the daemon's receipts + pending announcements exactly once as notices.
-  const renderDaemonAttachNotices = (): void => {
-    for (const notice of consumeDaemonAttachNotices({
-      configManager,
-      collectReceipts: () => platformExternalServices.externalServices.collectDaemonReceipts(),
-    })) systemMessageRouter.high(`[Daemon] ${notice}`);
+  // The attach-time consuming read, exactly once as notices. An adopted EXTERNAL daemon has no in-process handle (daemonServer null), so read its own /status?receipts=consume over HTTP; the embedded daemon keeps the in-process fold.
+  const renderDaemonAttachNotices = async (daemonToken: string): Promise<void> => {
+    const daemonStatus = externalServices.daemonStatus;
+    const notices = daemonStatus.mode === 'external' && daemonStatus.baseUrl
+      ? await consumeExternalDaemonAttachNotices({ baseUrl: daemonStatus.baseUrl, authToken: daemonToken })
+      : consumeDaemonAttachNotices({ configManager, collectReceipts: () => platformExternalServices.externalServices.collectDaemonReceipts() });
+    for (const notice of notices) systemMessageRouter.high(`[Daemon] ${notice}`);
   };
   deferredStartup.schedule({
     label: 'plugins',
@@ -594,7 +594,7 @@ export async function bootstrapRuntime(
       externalServices = await externalServicesPromise;
       controlPlaneRecentEventsRef.value = (limit) => externalServices.listRecentControlPlaneEvents(limit);
       syncSessionSpineToHostStatus(externalServices.daemonStatus, companionTokenRecord.token);
-      renderDaemonAttachNotices();
+      await renderDaemonAttachNotices(companionTokenRecord.token);
       requestRender();
     },
     onError: (error) => {

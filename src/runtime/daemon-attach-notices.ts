@@ -51,6 +51,60 @@ export function consumeDaemonAttachNotices(deps: DaemonAttachNoticesDeps): strin
   return notices;
 }
 
+/** Milliseconds an external-daemon receipts read waits before giving up. */
+const EXTERNAL_RECEIPTS_TIMEOUT_MS = 1500;
+
+export interface ExternalDaemonAttachNoticesDeps {
+  /** The adopted daemon's base URL, e.g. "http://127.0.0.1:3421". */
+  readonly baseUrl: string;
+  /** The shared bearer the adopted daemon authenticates (the companion-pairing token). */
+  readonly authToken: string;
+  /** Injectable fetch for tests; defaults to the global fetch. */
+  readonly fetchImpl?: typeof fetch;
+  /** Injectable timeout (ms); defaults to EXTERNAL_RECEIPTS_TIMEOUT_MS. */
+  readonly timeoutMs?: number;
+}
+
+/**
+ * Consume — exactly once — a separately-hosted (external/systemd) daemon's
+ * undelivered receipts AND drained announcements over HTTP, returning the
+ * one-line notices to render. The default deployment adopts such a daemon with
+ * no in-process handle (daemonServer is null), so the embedded in-process fold
+ * sees nothing; this hits the daemon's own consuming endpoint instead —
+ * GET <baseUrl>/status?receipts=consume with the shared bearer. The daemon
+ * marks the served receipts delivered as it responds (its own exactly-once
+ * store), so a second attach with nothing new returns []. Any transport, auth,
+ * or parse failure yields no notices rather than throwing into the attach path.
+ */
+export async function consumeExternalDaemonAttachNotices(
+  deps: ExternalDaemonAttachNoticesDeps,
+): Promise<string[]> {
+  const fetchImpl = deps.fetchImpl ?? fetch;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), deps.timeoutMs ?? EXTERNAL_RECEIPTS_TIMEOUT_MS);
+  try {
+    const headers = new Headers();
+    if (deps.authToken.trim()) headers.set('Authorization', `Bearer ${deps.authToken.trim()}`);
+    const url = `${deps.baseUrl.replace(/\/+$/, '')}/status?receipts=consume`;
+    const response = await fetchImpl(url, { headers, signal: controller.signal });
+    if (!response.ok) return [];
+    const body = (await response.json()) as { receipts?: unknown } | null;
+    const receipts = Array.isArray(body?.receipts) ? body.receipts : [];
+    const notices: string[] = [];
+    for (const entry of receipts) {
+      if (entry && typeof (entry as { text?: unknown }).text === 'string') {
+        const text = (entry as { text: string }).text;
+        if (text.trim().length > 0) notices.push(text);
+      }
+    }
+    return notices;
+  } catch {
+    return [];
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 /**
  * The "commands now run contained" first-run announcer for the sandboxed exec
  * path. Returns the callback registerAllTools calls on each contained run: the
