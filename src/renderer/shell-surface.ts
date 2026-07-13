@@ -65,6 +65,8 @@ export interface ShellFooterBuildOptions {
    * embedded/local mode so no segment renders.
    */
   readonly sessionSpineStatus?: 'online' | 'offline';
+  /** The web surface's reachable URL, when that surface is enabled; a persistent footer segment. */
+  readonly webSurfaceUrl?: string;
 }
 
 export interface ShellFooterBuildResult {
@@ -144,6 +146,7 @@ export function buildShellFooter(
     options.compact ?? false,
     options.sessionSpineStatus,
     options.permissionMode,
+    options.webSurfaceUrl,
   );
   // Compact posture drops the process indicator and context hint entirely so
   // the footer fits within ~5 rows on short terminals.

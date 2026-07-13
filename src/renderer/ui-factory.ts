@@ -202,6 +202,9 @@ export class UIFactory {
     // Session permission mode (config value). Rendered as a leading pill in the
     // posture block; undefined suppresses the pill (e.g. bare test callers).
     permissionMode?: string,
+    // The web surface's reachable URL, when that surface is enabled — a
+    // persistent low-priority context segment; undefined suppresses it.
+    webSurfaceUrl?: string,
   ): Line[] {
     const lines: Line[] = [];
     const promptLines = prompt.split('\n');
@@ -466,6 +469,8 @@ export class UIFactory {
       }
       // Cross-surface spine posture — plain words, no blame. Adopted mode only.
       if (sessionSpineStatus) ctxParts.push({ text: `spine:${sessionSpineStatus}`, priority: 1 });
+      // Web surface reachability — plain, persistent; dropped first under width pressure.
+      if (webSurfaceUrl) ctxParts.push({ text: `web:${webSurfaceUrl}`, priority: 2 });
       if (toolCount) ctxParts.push({ text: `${toolCount} tools`, priority: 2 });
       // Labeled "notify" (not "hitl") — /mode (aliased /hitl) governs UX
       // notification verbosity (quiet/balanced/operator), not tool
