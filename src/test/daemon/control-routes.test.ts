@@ -43,7 +43,9 @@ describe('daemon control routes', () => {
       },
     }));
 
-    const statusResponse = await handlers.getStatus();
+    // getStatus now takes the Request so it can honor the explicit
+    // receipts=consume flag; a plain status read is receipt-neutral.
+    const statusResponse = await handlers.getStatus(new Request('http://127.0.0.1/api/control-plane/status'));
     expect(statusResponse.status).toBe(200);
     const status = await statusResponse.json() as { version: string };
     expect(status.version).toBe('0.18.2');
