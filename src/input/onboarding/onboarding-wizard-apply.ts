@@ -18,6 +18,7 @@ import {
 } from './onboarding-wizard-external-surfaces.ts';
 import { applyFeatureUnitOperations } from './onboarding-feature-units.ts';
 import { buildGoodVibesSecretKey, buildGoodVibesSecretRef, isLoopbackAddress, isSecretReferenceValue } from './onboarding-wizard-helpers.ts';
+import { deriveProviderKeyCaptureTargets, providerKeyFieldId } from '../../runtime/onboarding/provider-key-capture.ts';
 import type { OnboardingWizardControllerLike } from './onboarding-wizard-types.ts';
 
 export function buildOnboardingApplyRequest(controller: OnboardingWizardControllerLike): OnboardingApplyRequest {
@@ -137,7 +138,12 @@ export function buildOnboardingApplyRequest(controller: OnboardingWizardControll
     setConfig('permissions.mode', controller.getStringFieldValue('experience.permissions', controller.runtimeSnapshot?.runtimeDefaults.permissionsMode ?? 'prompt'));
     setConfig('storage.secretPolicy', controller.getStringFieldValue('external-services.secret-policy', controller.runtimeSnapshot?.runtimeDefaults.secretStoragePolicy ?? 'preferred_secure'));
 
-    setSecret('OPENAI_API_KEY', controller.getStringFieldValue('providers.openai-api-key', ''));
+    // Provider-agnostic key capture: store each entered key under the provider's
+    // own declared secret key. Empty fields are skipped (setSecret no-ops), so
+    // a blank field keeps any existing key untouched.
+    for (const target of deriveProviderKeyCaptureTargets(controller.runtimeSnapshot?.providerAccounts?.providers)) {
+      setSecret(target.apiKeyEnvVar, controller.getStringFieldValue(providerKeyFieldId(target.providerId), ''));
+    }
 
     if (shouldShowCloudflareStep(controller)) {
       addCloudflareOperations(controller, operations, setSecret);

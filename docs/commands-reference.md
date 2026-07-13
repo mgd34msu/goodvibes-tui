@@ -250,7 +250,7 @@ GoodVibes ships **143** built-in slash commands across **68** categories. Every 
 
 | Command | Aliases | Usage | Description |
 | --- | --- | --- | --- |
-| `/provider` | `/p` | `[add <name> <baseURL> [apiKey] \| remove <name> \| <provider-name>]` | Switch provider or manage custom providers (add/remove) |
+| `/provider` | `/p` | `[add <name> <baseURL> \| remove <name> \| <provider-name>]` | Switch provider or manage custom providers (add/remove) |
 
 ## Local Runtime
 

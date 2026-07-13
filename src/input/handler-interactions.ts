@@ -1,4 +1,5 @@
 import { buildProviderAccountSnapshot } from '@/runtime/index.ts';
+import { enrichProviderAccountsSnapshot } from '../runtime/onboarding/provider-key-capture.ts';
 import type { OnboardingWizardMode } from './onboarding/onboarding-wizard.ts';
 import { collectOnboardingSnapshot } from '../runtime/onboarding/index.ts';
 import { cleanupMarkerRegistry, expandPrompt, findMarkerAtPos, handleBlockCopy, handleBlockRerun, handleBlockSave, handleBlockToggle, handleBookmark, handleClipboardPaste, handleCopy, handleCtrlC, handleDiffApply, registerPaste } from './handler-content-actions.ts';
@@ -37,12 +38,12 @@ export async function hydrateOnboardingWizardFromRuntimeForHandler(handler: Inpu
           list: () => handler.uiServices.platform.surfaceRegistry.syncConfiguredSurfaces(),
         },
         providerAccounts: {
-          loadSnapshot: () => buildProviderAccountSnapshot({
+          loadSnapshot: async () => enrichProviderAccountsSnapshot(await buildProviderAccountSnapshot({
             providerRegistry: handler.uiServices.providers.providerRegistry,
             serviceRegistry: handler.uiServices.platform.serviceRegistry,
             subscriptionManager: handler.uiServices.platform.subscriptionManager,
             secretsManager: handler.uiServices.platform.secretsManager,
-          }),
+          }), handler.uiServices.providers.providerRegistry),
         },
       });
       if (!handler.onboardingWizard.active || hydrationSerial !== handler.onboardingHydrationSerial) return;

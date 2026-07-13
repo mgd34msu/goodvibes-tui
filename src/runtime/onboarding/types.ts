@@ -155,6 +155,14 @@ export interface OnboardingProviderAccountRecord {
   readonly availableRoutes: readonly string[];
   readonly activeRoute: string;
   readonly authFreshness: string;
+  /**
+   * The secrets-store key this provider reads its API key from — its declared
+   * auth env var, read from the live provider's registration-time auth state.
+   * Present only for providers that accept an API key; absent for keyless /
+   * subscription-only providers. Used to offer provider-agnostic key entry in
+   * onboarding, and as the storage key when the entered value is saved.
+   */
+  readonly apiKeyEnvVar?: string;
 }
 
 export interface OnboardingProviderAccountsSnapshot {

@@ -3,6 +3,7 @@ import { beginOpenAICodexLogin, exchangeOpenAICodexCode } from '@pellux/goodvibe
 import { summarizeError, openExternalUrl } from '@pellux/goodvibes-sdk/platform/utils';
 import { getProviderIdFromModel } from '../config/provider-model.ts';
 import { buildProviderAccountSnapshot } from '@/runtime/index.ts';
+import { enrichProviderAccountsSnapshot } from '../runtime/onboarding/provider-key-capture.ts';
 import { handleConnectExistingDaemonForHandler, handleMigrateLegacyDaemonServiceForHandler } from './handler-onboarding-daemon-adopt.ts';
 import { detectLegacyUnit, resolveConfiguredServiceName } from '../runtime/legacy-daemon-migration.ts';
 import { OnboardingWizardController, type OnboardingWizardAction, type OnboardingWizardApplyFeedback } from './onboarding/onboarding-wizard.ts';
@@ -376,12 +377,12 @@ export async function refreshOnboardingHydrationForHandler(handler: InputHandler
           list: () => handler.uiServices.platform.surfaceRegistry.syncConfiguredSurfaces(),
         },
         providerAccounts: {
-          loadSnapshot: () => buildProviderAccountSnapshot({
+          loadSnapshot: async () => enrichProviderAccountsSnapshot(await buildProviderAccountSnapshot({
             providerRegistry: handler.uiServices.providers.providerRegistry,
             serviceRegistry: handler.uiServices.platform.serviceRegistry,
             subscriptionManager: handler.uiServices.platform.subscriptionManager,
             secretsManager: handler.uiServices.platform.secretsManager,
-          }),
+          }), handler.uiServices.providers.providerRegistry),
         },
         legacyDaemon: {
           detect: () => ({ ...detectLegacyUnit({ homeDir: handler.uiServices.environment.homeDirectory }), trackedServiceName: resolveConfiguredServiceName(handler.uiServices.platform.configManager) }),

@@ -581,6 +581,33 @@ describe('OnboardingWizardController', () => {
   test('maps editable wizard settings to apply operations', () => {
     const wizard = new OnboardingWizardController();
     wizard.open('new');
+    // A provider that accepts an api-key drives a provider-agnostic key field;
+    // its declared secret key is where the entered value is stored at apply.
+    wizard.hydrateRuntimeState(
+      {
+        snapshot: makeOnboardingSnapshot({
+          providerAccounts: {
+            capturedAt: 0,
+            configuredCount: 0,
+            issueCount: 0,
+            providers: [
+              {
+                providerId: 'openai',
+                configured: false,
+                active: false,
+                oauthReady: false,
+                pendingLogin: false,
+                availableRoutes: ['api-key'],
+                activeRoute: 'unconfigured',
+                authFreshness: 'unconfigured',
+                apiKeyEnvVar: 'OPENAI_API_KEY',
+              },
+            ],
+          },
+        }),
+      },
+      { resetValues: true },
+    );
     wizard.setFieldValue('capabilities.browser-access', true);
     wizard.setFieldValue('capabilities.network-access', true);
     wizard.setFieldValue('capabilities.webhook-events', true);
@@ -597,7 +624,7 @@ describe('OnboardingWizardController', () => {
     wizard.setFieldValue('accounts.admin-password', 'admin-pass');
     wizard.setFieldValue('accounts.subscriptions', true);
     wizard.setFieldValue('accounts.auth', true);
-    wizard.setFieldValue('providers.openai-api-key', 'sk-test-openai');
+    wizard.setFieldValue('providers.api-key.openai', 'sk-test-openai');
     wizard.setFieldValue('providers.reviewed', true);
     wizard.applyModelSelection('main', { providerId: 'openai', modelId: 'gpt-5-test', enabled: true });
     wizard.setFieldValue('default-model.reasoning', 'high');

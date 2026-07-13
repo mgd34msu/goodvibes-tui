@@ -10,6 +10,8 @@ import {
 } from './onboarding-wizard-external-surfaces.ts';
 import { buildFeatureUnitSteps } from './onboarding-feature-units.ts';
 import { countSelected, modelSelectionLabel, normalizeText } from './onboarding-wizard-helpers.ts';
+import { deriveProviderKeyCaptureTargets } from '../../runtime/onboarding/provider-key-capture.ts';
+import { buildProviderKeyInventoryField, buildProviderKeyMaskedFields } from './onboarding-provider-key-fields.ts';
 import { getDaemonSource, pushDaemonAdoptionFields, pushLegacyDaemonMigrationFields } from './onboarding-wizard-network-adopt.ts';
 import type { OnboardingWizardControllerLike } from './onboarding-wizard-types.ts';
 import type { OnboardingWizardAcknowledgementFieldDefinition, OnboardingWizardActionFieldDefinition, OnboardingWizardChecklistFieldDefinition, OnboardingWizardExternalSurfaceStepId, OnboardingWizardFieldDefinition, OnboardingWizardModelPickerFieldDefinition, OnboardingWizardRadioFieldDefinition, OnboardingWizardRadioOption, OnboardingWizardStepDefinition } from './onboarding-wizard-types.ts';
@@ -152,8 +154,11 @@ export function buildProvidersStep(controller: OnboardingWizardControllerLike): 
     const pendingSubscriptions = controller.runtimeSnapshot?.subscriptions.pending ?? [];
     const openAiActive = activeSubscriptions.some((subscription) => subscription.provider === 'openai');
     const openAiPending = pendingSubscriptions.some((subscription) => subscription.provider === 'openai');
-    const providerSecretCount = controller.runtimeSnapshot?.secrets.records.filter((record) => record.key.endsWith('_API_KEY') || record.key.endsWith('_TOKEN')).length ?? 0;
-    const openAiApiKeyConfigured = controller.runtimeSnapshot?.secrets.records.some((record) => record.key === 'OPENAI_API_KEY') ?? false;
+    // Provider-agnostic key capture: one field per provider the registry knows
+    // accepts an API key (derived from registration truth — never a hardcoded
+    // vendor list). No provider is named as the only option.
+    const keyTargets = deriveProviderKeyCaptureTargets(controller.runtimeSnapshot?.providerAccounts?.providers);
+    const configuredKeyCount = keyTargets.filter((target) => target.configured).length;
     const providerReviewField: OnboardingWizardAcknowledgementFieldDefinition = {
       kind: 'acknowledgement',
       id: 'providers.reviewed',
@@ -177,25 +182,10 @@ export function buildProvidersStep(controller: OnboardingWizardControllerLike): 
             : 'No OpenAI subscription session was found in the current runtime state.',
         defaultValue: openAiActive ? 'Active' : openAiPending ? 'Pending' : 'Not detected',
       },
-      {
-        kind: 'status',
-        id: 'providers.api-key-inventory',
-        label: 'Provider API key inventory',
-        hint: providerSecretCount > 0
-          ? `${providerSecretCount} provider credential reference(s) were found. Values stay masked.`
-          : 'No provider API key references were detected in the current runtime state.',
-        defaultValue: providerSecretCount > 0 ? `${providerSecretCount} configured` : 'None detected',
-      },
-      {
-        kind: 'masked',
-        id: 'providers.openai-api-key',
-        label: 'OpenAI API key',
-        hint: openAiApiKeyConfigured
-          ? 'An OpenAI API key is already stored. Leave blank to keep it; enter a new key to replace it through the secret manager.'
-          : 'Optional: enter an OpenAI API key now. The value is stored through the secret manager, not in config.',
-        placeholder: openAiApiKeyConfigured ? 'already configured' : 'sk-...',
-        defaultValue: '',
-      },
+      buildProviderKeyInventoryField(keyTargets),
+      // One masked field per key-accepting provider. Entered values are stored
+      // through the secret manager at apply and the provider re-registers live.
+      ...buildProviderKeyMaskedFields(keyTargets),
       ...(openAiActive ? [] : [
         {
           kind: 'action' as const,
@@ -239,12 +229,13 @@ export function buildProvidersStep(controller: OnboardingWizardControllerLike): 
       id: 'provider-access',
       title: 'AI provider access',
       shortLabel: 'Providers',
-      description: 'Review subscription posture and optionally add an OpenAI API key directly through the wizard.',
+      description: 'Review subscription posture and optionally add an API key for any provider that accepts one, directly through the wizard.',
       summaryTitle: 'Provider access summary',
       summaryLines: [
         `OpenAI subscription: ${openAiActive ? 'active' : openAiPending ? 'pending' : 'not detected'}`,
-        `OpenAI API key: ${openAiApiKeyConfigured ? 'configured' : 'not detected'}`,
-        `Provider credential references: ${providerSecretCount}`,
+        keyTargets.length === 0
+          ? 'Provider API keys: no key-accepting providers registered'
+          : `Provider API keys: ${configuredKeyCount}/${keyTargets.length} configured`,
         `Review: ${controller.getFieldValueLabel(providerReviewField)}`,
       ],
       fields,
