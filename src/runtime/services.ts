@@ -269,6 +269,10 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
   });
   ensureConfiguredModelIsRoutable(providerRegistry, configManager);
   providerRegistry.initCustomProviders();
+  // Kick off the background, TTL-respecting live model discovery sweep so
+  // provider model lists refresh from their own listing APIs — matching the
+  // SDK and agent compositions (this call was the one omitted here).
+  providerRegistry.initProviderModelDiscovery();
   const toolLLM = new ToolLLM({
     configManager,
     providerRegistry,

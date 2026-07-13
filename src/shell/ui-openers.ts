@@ -269,6 +269,13 @@ export function wireShellUiOpeners(options: WireShellUiOpenersOptions): void {
   };
 
   commandContext.openModelPicker = () => {
+    // Picker-open re-check: re-verify each provider's live model list (TTL-
+    // respecting) so a freshly-opened picker reflects models the provider
+    // started or stopped serving. Fire-and-forget; a completed refresh re-renders
+    // so the list updates in place without blocking the open.
+    void providerRegistry.refreshLiveModelDiscovery?.().then((reports) => {
+      if (reports.some((report) => report.added.length > 0 || report.removed.length > 0)) render();
+    }).catch(() => {});
     void (async () => {
       // getSelectableModels() is catalog-driven and can list models whose
       // `provider` id (e.g. 'google', sourced from the pricing catalog) was never
