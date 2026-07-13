@@ -25,7 +25,7 @@ import { readExecEnvScrubAllowlist } from '../input/exec-env-scrub-config.ts';
 import { createSandboxExecAsk, sandboxExecAskDepsFromRuntime } from '../permissions/sandbox-exec-gate.ts';
 import { createRuntimeServices, type RuntimeServices } from './services.ts';
 import { runBootMemoryFold } from './memory-fold.ts';
-import { setModelPricingResolver, setPricingSource } from '../export/cost-utils.ts';
+import { wireCostPricing } from '../export/cost-utils.ts';
 import { createUiRuntimeServices, type UiRuntimeServices } from './ui-services.ts';
 import { join } from 'node:path';
 import { installWrfcAgentToolGuard } from '../tools/wrfc-agent-guard.ts';
@@ -257,15 +257,10 @@ export async function initializeBootstrapCore(
   providerRegistry.initModelLimits();
   services.benchmarkStore.initBenchmarks();
   providerRegistry.initCatalog();
-  // Wire cost-utils to the live catalog so cost displays distinguish real
-  // pricing from unpriced instead of silently reading zero for any
-  // model the small static fallback table doesn't cover.
-  setPricingSource(() => providerRegistry.getRawCatalogModels());
-  // And to the ONE pricing resolver (manual pricing.modelPrices ->
-  // registration -> provider-served -> catalog -> honest unknown), so every
-  // cost surface sees a manually-set price immediately and can name its
-  // source ("your price" vs "catalog price, as of <date>").
-  setModelPricingResolver((modelId) => providerRegistry.resolveModelPricing(modelId));
+  // Wire cost-utils to the live catalog AND the ONE pricing resolver so every
+  // cost surface distinguishes real pricing from unpriced and names its
+  // source ("your price" vs "catalog price, as of <date>") — see cost-utils.
+  wireCostPricing(providerRegistry);
   services.keybindingsManager.loadFromDisk();
   domainDispatch.syncControlPlaneState({
     enabled: Boolean(configManager.get('controlPlane.enabled')),
@@ -704,8 +699,7 @@ export async function initializeBootstrapCore(
   await syncConfiguredServices(domainDispatch.syncIntegration, services.serviceRegistry);
 
   const permissionManager = new PermissionManager(
-    // Composed ask layer: the workspace trust gate (outer) wraps the sandbox-aware
-    // exec gate (inner); see sandbox-exec-gate.ts. The catastrophic block is untouched.
+    // Composed ask layer: the workspace trust gate (outer) wraps the sandbox-aware exec gate (inner); see sandbox-exec-gate.ts. The catastrophic block is untouched.
     trustGatedAsk(
       services.workspaceTrustManager,
       createSandboxExecAsk(
@@ -722,10 +716,7 @@ export async function initializeBootstrapCore(
     policyRuntimeState,
     services.hookDispatcher,
     featureFlags,
-    // Durable user-origin rules (mirrors the SDK composition): remembered
-    // approval decisions persist and generalize across sessions;
-    // permissions.rules.* lists/deletes them.
-    services.userPermissionRuleStore,
+    services.userPermissionRuleStore, // durable remembered approvals (mirrors the SDK composition); permissions.rules.* lists/deletes them
   );
   await hookWorkbench.loadAndApplyManagedHooks();
 

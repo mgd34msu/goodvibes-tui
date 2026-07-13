@@ -81,7 +81,7 @@ describe('shell/blocking-input', () => {
     expect(rendered).toBe(1);
   });
 
-  test('denies pending permission on escape and aborts turn', () => {
+  test('denies pending permission on escape without aborting the turn (deny is feedback; Ctrl+C is the hard abort)', () => {
     const resolved: Array<[boolean, boolean | undefined]> = [];
     const { conversation } = makeConversation();
     const { router } = makeRouter();
@@ -113,7 +113,8 @@ describe('shell/blocking-input', () => {
     expect(result.handled).toBe(true);
     expect(result.pendingPermission).toBeNull();
     expect(resolved).toEqual([[false, false]]);
-    expect(aborted).toBe(1);
+    // Deny is feedback, not a turn abort: only Ctrl+C hard-aborts the turn.
+    expect(aborted).toBe(0);
     expect(rendered).toBe(1);
   });
 

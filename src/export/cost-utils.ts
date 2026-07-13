@@ -97,6 +97,20 @@ export function setModelPricingResolver(resolver: ((modelId: string) => Resolved
   modelPricingResolver = resolver;
 }
 
+/**
+ * One-call bootstrap wiring: the live catalog as the legacy source AND the
+ * registry's ONE pricing resolver (manual pricing.modelPrices -> registration
+ * -> provider-served -> catalog -> honest unknown) as the primary, so every
+ * cost surface sees a manually-set price immediately and can name its source.
+ */
+export function wireCostPricing(registry: {
+  getRawCatalogModels(): readonly CatalogModel[];
+  resolveModelPricing(modelRef: string): ResolvedModelPricing;
+}): void {
+  setPricingSource(() => registry.getRawCatalogModels());
+  setModelPricingResolver((modelId) => registry.resolveModelPricing(modelId));
+}
+
 function findInCatalog(modelId: string, models: readonly CatalogModel[]): ModelPricing | null {
   const exact = models.find((m) => m.id === modelId);
   if (exact) return exact.tier === 'free' ? { input: 0, output: 0 } : exact.pricing;

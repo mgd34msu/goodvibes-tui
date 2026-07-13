@@ -1,4 +1,4 @@
-import type { PermissionAttribution, PermissionPromptRequest } from '@pellux/goodvibes-sdk/platform/permissions';
+import type { PermissionAttribution, PermissionPromptRequest, RememberTier } from '@pellux/goodvibes-sdk/platform/permissions';
 
 /**
  * Per-hunk accept/reject at the approval gate (v1).
@@ -48,6 +48,16 @@ export interface PermissionPromptDecisionWithModifiedArgs {
   approved: boolean;
   remember?: boolean;
   modifiedArgs?: Record<string, unknown>;
+  /** Generalizing remember tier: 'session' | 'exact' | 'command-class' | 'path' | 'tool'. */
+  rememberTier?: RememberTier;
+  /** Free-text from the user; most useful on deny — rides the structured "user declined" tool result. */
+  reason?: string;
+}
+
+/** Extra decision fields a resolve call can carry beyond approve/remember/modifiedArgs. */
+export interface PermissionResolveExtras {
+  readonly rememberTier?: RememberTier;
+  readonly reason?: string;
 }
 
 export interface HunkKeyResult {
@@ -247,14 +257,28 @@ export function buildPendingPermissionExtras(
   now: number = Date.now(),
 ): {
   hunkState: HunkSelectionState | undefined;
-  resolve: (approved: boolean, remember?: boolean, modifiedArgs?: Record<string, unknown>) => void;
+  resolve: (approved: boolean, remember?: boolean, modifiedArgs?: Record<string, unknown>, extras?: PermissionResolveExtras) => void;
   openedAt: number;
   requestedBy: string | undefined;
+  replyMode: 'exec-answer' | undefined;
+  replyBuffer: string | undefined;
 } {
+  // An exec-prompt ask (a running command waiting on stdin) opens straight in
+  // answer mode: every printable key types the answer — a run whose prompt
+  // needs a literal 'y' must never have it eaten as a card command key.
+  const isExecPrompt = request.attribution?.kind === 'exec-prompt';
   return {
     hunkState: isHunkSelectable(request) ? buildHunkSelectionState(request) : undefined,
-    resolve: (approved, remember = false, modifiedArgs) => resolvePromise({ approved, remember, modifiedArgs }),
+    resolve: (approved, remember = false, modifiedArgs, extras) => resolvePromise({
+      approved,
+      remember,
+      modifiedArgs,
+      ...(extras?.rememberTier ? { rememberTier: extras.rememberTier } : {}),
+      ...(extras?.reason ? { reason: extras.reason } : {}),
+    }),
     openedAt: now,
     requestedBy: resolveApprovalRequester(broker, request.callId, request.attribution) ?? undefined,
+    replyMode: isExecPrompt ? 'exec-answer' : undefined,
+    replyBuffer: isExecPrompt ? '' : undefined,
   };
 }

@@ -546,7 +546,7 @@ async function main() {
     // Calculate how many rows are consumed by overlays (thinking, permissions, queue, file picker)
     let overlayRows = 0;
     if (orchestrator.isThinking) overlayRows += 2; // spinner + blank
-    if (pendingPermission) overlayRows += PermissionPromptUI.getPromptHeight(pendingPermission, pendingPermission.hunkState, pendingPermission.detailsExpanded, pendingPermission.requestedBy);
+    if (pendingPermission) overlayRows += PermissionPromptUI.getPromptHeight(pendingPermission, pendingPermission.hunkState, pendingPermission.detailsExpanded, pendingPermission.requestedBy, PermissionPromptUI.promptViewState(pendingPermission, conversationWidth, approvalBroker));
     overlayRows += orchestrator.messageQueue.length * 3; // queued messages
     // File picker and model picker overlay rows computed from actual rendered line count below
     // Selection modal overlay rows are computed from actual rendered line count below
@@ -596,7 +596,7 @@ async function main() {
     }
 
     if (pendingPermission) {
-      viewport.push(...PermissionPromptUI.createPromptLines(conversationWidth, pendingPermission, pendingPermission.hunkState, pendingPermission.detailsExpanded, pendingPermission.requestedBy));
+      viewport.push(...PermissionPromptUI.createPromptLines(conversationWidth, pendingPermission, pendingPermission.hunkState, pendingPermission.detailsExpanded, pendingPermission.requestedBy, PermissionPromptUI.promptViewState(pendingPermission, conversationWidth, approvalBroker)));
     }
 
     orchestrator.messageQueue.forEach(msg => {

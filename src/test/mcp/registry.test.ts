@@ -29,6 +29,11 @@ rl.on('line', (line) => {
     process.stdout.write(JSON.stringify({ jsonrpc: '2.0', id, result: {} }) + '\\n');
   } else if (msg.method === 'notifications/initialized') {
     // no-op
+  } else if (id !== undefined) {
+    // Answer unknown REQUESTS with method-not-found (never notifications).
+    // The sdk's era detection probes server/discover before initialize; a
+    // silent stub would burn the whole probe timeout on every connect.
+    process.stdout.write(JSON.stringify({ jsonrpc: '2.0', id, error: { code: -32601, message: 'Method not found' } }) + '\\n');
   }
 });
 `;
@@ -255,9 +260,11 @@ describe('McpRegistry — with stub server', () => {
     await registry.connectServer(stubServerConfig('x'));
     await registry.connectServer(stubServerConfig('y'));
     await registry.disconnectAll();
+    // listServers now also reports transport + negotiated protocol identity
+    // (undefined after disconnect on the legacy handshake path).
     expect(registry.listServers()).toEqual([
-      { name: 'x', connected: false },
-      { name: 'y', connected: false },
+      { name: 'x', connected: false, transport: 'stdio', protocolEra: undefined, protocolVersion: undefined },
+      { name: 'y', connected: false, transport: 'stdio', protocolEra: undefined, protocolVersion: undefined },
     ]);
     registry = createRegistry(); // avoid double-disconnect in afterEach
   });

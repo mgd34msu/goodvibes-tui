@@ -3,6 +3,8 @@ import { UIFactory } from '../renderer/ui-factory.ts';
 import type { PermissionCategory, PermissionRequestAnalysis } from '@pellux/goodvibes-sdk/platform/permissions';
 import { buildPermissionApprovalBrief, getDisplayArg } from '@pellux/goodvibes-sdk/platform/permissions';
 import { DIFF_TONES, UI_TONES } from '../renderer/ui-primitives.ts';
+import { renderDiffView } from '../renderer/diff-view.ts';
+import { wrapText } from '../utils/terminal-width.ts';
 import type { HunkSelectionState } from './hunk-selection.ts';
 import { readSandboxAskAnnotation } from './sandbox-exec-gate.ts';
 export { buildPendingPermissionExtras } from './hunk-selection.ts';
@@ -15,6 +17,25 @@ const MAX_VISIBLE_HUNKS = 8;
 
 /** Path rows shown before collapsing to a "N files: a, b, +K more" line (2a). */
 const MAX_PATH_ROWS = 3;
+
+/** Diff rows shown for a write/edit ask before the "+N more" trailer. */
+const MAX_DIFF_LINES = 10;
+
+/** Field-label column width shared by every "   Label     : value" row. */
+const FIELD_PREFIX_LEN = 16;
+
+/**
+ * View-only state the card renders beyond the request itself: the typed-reply
+ * mode/draft (deny-with-reason, exec-prompt answer), the honest count of
+ * OTHER broker asks still waiting, and the terminal width getPromptHeight
+ * needs for wrap-dependent rows (createPromptLines takes width positionally).
+ */
+export interface PromptViewState {
+  readonly replyMode?: 'deny-reason' | 'exec-answer' | undefined;
+  readonly replyBuffer?: string | undefined;
+  readonly queueCount?: number | undefined;
+  readonly width?: number | undefined;
+}
 
 /** Trailing filename for compact display of a long/absolute path. */
 function baseName(p: string): string {
@@ -166,6 +187,9 @@ export class PermissionPromptUI {
     // warrant scrutiny even when the risk model rates them low. Only mundane
     // low-risk filesystem reads/writes condense. (2b.)
     if (request.category === 'execute' || request.category === 'delegate') return false;
+    // Remember tiers are one-key choices that must be visible to be usable —
+    // a request carrying rememberOptions always shows the full card.
+    if (request.rememberOptions && request.rememberOptions.length > 0) return false;
     const analysis = this.fallbackAnalysis(request);
     if (analysis.riskLevel !== 'low') return false;
     const scope = analysis.blastRadius;
@@ -197,32 +221,179 @@ export class PermissionPromptUI {
     return `${prefix}${shown}${suffix}`;
   }
 
+  /**
+   * The remember block's row texts: one row per SDK remember tier (numbered,
+   * most specific first) when the request carries rememberOptions, else the
+   * legacy single [A] session-preview row. Hunk mode has no whole-request
+   * remember choice at all. Shared by getPromptHeight and createPromptLines.
+   */
+  private static rememberRowTexts(
+    request: PermissionPromptRequest,
+    hunkState: HunkSelectionState | undefined,
+    width: number,
+  ): string[] {
+    if (hunkState) return [];
+    const options = request.rememberOptions ?? [];
+    if (options.length === 0) return [this.rememberPreviewText(request, width)];
+    const clamp = (s: string): string => (s.length > width ? `${s.slice(0, Math.max(0, width - 3))}...` : s);
+    return options.map((option, index) => {
+      const labelCol = index === 0 ? 'Remember ' : ' '.repeat(9);
+      return clamp(`   ${labelCol}: [${index + 1}] ${option.label} — ${option.detail}`);
+    });
+  }
+
+  /**
+   * The FULL command of an execute ask, wrapped across as many rows as it
+   * needs — never truncated. Empty for non-execute asks and for asks without
+   * a string command. Shared by getPromptHeight and createPromptLines.
+   */
+  private static commandRowTexts(request: PermissionPromptRequest, width: number): string[] {
+    if (request.category !== 'execute') return [];
+    // Exec-prompt asks render their command via execPromptRowTexts instead.
+    if (request.attribution?.kind === 'exec-prompt') return [];
+    const command = typeof request.args?.command === 'string'
+      ? request.args.command
+      : typeof request.args?.cmd === 'string'
+        ? request.args.cmd
+        : '';
+    if (command.length === 0) return [];
+    const budget = Math.max(10, width - FIELD_PREFIX_LEN);
+    const wrapped = command.split('\n').flatMap((line) => (line.length > 0 ? wrapText(line, budget) : ['']));
+    return wrapped.map((row, index) => (index === 0 ? `   Command   : ${row}` : `${' '.repeat(FIELD_PREFIX_LEN - 1)}${row}`));
+  }
+
+  /**
+   * Unified-diff text lines for a write/edit ask (real colored rendering via
+   * renderDiffView), capped at MAX_DIFF_LINES with a context trailer naming
+   * how much is hidden. Null when the ask carries nothing diffable. Hunk-mode
+   * asks render the interactive hunk list instead. Shared by getPromptHeight
+   * and createPromptLines.
+   */
+  private static writeDiffLines(request: PermissionPromptRequest, hunkState: HunkSelectionState | undefined): string[] | null {
+    if (hunkState || request.category !== 'write') return null;
+    const args = request.args ?? {};
+    const target = typeof args.path === 'string' ? args.path : typeof args.file === 'string' ? args.file : '';
+    const out: string[] = [];
+    if (typeof args.content === 'string') {
+      const contentLines = args.content.split('\n');
+      out.push(`+++ ${target || '(new content)'}`);
+      for (const line of contentLines.slice(0, MAX_DIFF_LINES)) out.push(`+${line}`);
+      if (contentLines.length > MAX_DIFF_LINES) out.push(` … +${contentLines.length - MAX_DIFF_LINES} more lines`);
+      return out;
+    }
+    if (Array.isArray(args.edits)) {
+      let budget = MAX_DIFF_LINES;
+      let hidden = 0;
+      for (const edit of args.edits) {
+        if (!edit || typeof edit !== 'object') continue;
+        const e = edit as { path?: unknown; find?: unknown; replace?: unknown };
+        if (typeof e.find !== 'string' || typeof e.replace !== 'string') continue;
+        const findLines = e.find.split('\n');
+        const replaceLines = e.replace.split('\n');
+        const need = 1 + findLines.length + replaceLines.length;
+        if (budget < need) {
+          hidden += 1;
+          continue;
+        }
+        out.push(`@@ ${typeof e.path === 'string' ? e.path : target} @@`);
+        for (const line of findLines) out.push(`-${line}`);
+        for (const line of replaceLines) out.push(`+${line}`);
+        budget -= need;
+      }
+      if (out.length === 0) return null;
+      if (hidden > 0) out.push(` … +${hidden} more edits`);
+      return out;
+    }
+    return null;
+  }
+
+  /**
+   * Rows for an exec-prompt ask (a running command waiting on stdin): the
+   * command and the terminal prompt text, both wrapped in full. Shared by
+   * getPromptHeight and createPromptLines.
+   */
+  private static execPromptRowTexts(request: PermissionPromptRequest, width: number): string[] {
+    const attribution = request.attribution;
+    if (attribution?.kind !== 'exec-prompt') return [];
+    const budget = Math.max(10, width - FIELD_PREFIX_LEN);
+    const rows: string[] = [];
+    const pushWrapped = (label: string, text: string): void => {
+      const wrapped = text.split('\n').flatMap((line) => (line.length > 0 ? wrapText(line, budget) : ['']));
+      wrapped.forEach((row, index) => {
+        rows.push(index === 0 ? `   ${label.padEnd(9)}: ${row}` : `${' '.repeat(FIELD_PREFIX_LEN - 1)}${row}`);
+      });
+    };
+    if (typeof attribution.command === 'string' && attribution.command.length > 0) pushWrapped('Running', attribution.command);
+    if (typeof attribution.prompt === 'string' && attribution.prompt.length > 0) pushWrapped('Asks', attribution.prompt);
+    return rows;
+  }
+
+  /** The typed-reply input row text (deny reason / exec answer), or null when no reply mode is active. */
+  private static replyRowText(view: PromptViewState | undefined, width: number): string | null {
+    if (!view?.replyMode) return null;
+    const label = view.replyMode === 'exec-answer' ? 'Answer   ' : 'Reason   ';
+    const draft = view.replyBuffer ?? '';
+    const budget = Math.max(6, width - FIELD_PREFIX_LEN - 1);
+    const shown = draft.length > budget ? `...${draft.slice(-(budget - 3))}` : draft;
+    return `   ${label}: ${shown}█`;
+  }
+
+  /**
+   * Assemble the card's view state from the pending-permission slot and the
+   * broker's live queue (the honest count of OTHER pending asks — coalesced
+   * asks share one record, so they are never double-counted). One helper so
+   * main.ts passes identical state to getPromptHeight and createPromptLines.
+   */
+  static promptViewState(
+    pending: { readonly callId: string; readonly replyMode?: 'deny-reason' | 'exec-answer' | undefined; readonly replyBuffer?: string | undefined },
+    width: number,
+    broker?: { listApprovals(limit?: number): ReadonlyArray<{ readonly callId: string; readonly status: string }> } | null,
+  ): PromptViewState {
+    let queueCount = 0;
+    try {
+      queueCount = broker?.listApprovals().filter((record) => record.status === 'pending' && record.callId !== pending.callId).length ?? 0;
+    } catch {
+      queueCount = 0; // an unreadable broker never blocks the card
+    }
+    return { replyMode: pending.replyMode, replyBuffer: pending.replyBuffer, queueCount, width };
+  }
+
   static getPromptHeight(
     request: PermissionPromptRequest,
     hunkState?: HunkSelectionState,
     detailsExpanded = false,
     requestedBy?: string,
+    view?: PromptViewState,
   ): number {
-    // Attribution line (only when known) + the always-present remember-scope
-    // preview line are added to BOTH card shapes; keep in sync with
-    // createPromptLines. A hunk-selection prompt has no single [A] remember key,
-    // so the preview line is suppressed there (see createPromptLines).
+    const width = view?.width ?? 80;
+    // Attribution line (only when known) + the remember block (tier rows when
+    // the request carries rememberOptions, else the legacy one-line preview)
+    // are added to BOTH card shapes; keep in sync with createPromptLines.
     const attributionLines = requestedBy ? 1 : 0;
-    const previewLines = hunkState ? 0 : 1;
+    const rememberLines = this.rememberRowTexts(request, hunkState, width).length;
     // Condensed low-risk card: top separator, title, [attribution], [preview],
     // summary, choices, bottom separator — see createPromptLines' condensed branch.
-    if (this.isCondensed(request, hunkState, detailsExpanded)) return 5 + attributionLines + previewLines;
+    if (this.isCondensed(request, hunkState, detailsExpanded)) return 5 + attributionLines + rememberLines;
     const analysis = this.fallbackAnalysis(request);
     const { annotation: judgmentAnnotation, rest: reasonsMinusJudgment } = extractModelJudgmentAnnotation(analysis.reasons);
     const reasonLines = Math.min(2, Math.max(1, reasonsMinusJudgment.length));
     const extraLines = (analysis.host ? 1 : 0) + (analysis.surface ? 1 : 0) + (analysis.sideEffects && analysis.sideEffects.length > 0 ? 1 : 0) + (readSandboxAskAnnotation(request) ? 1 : 0) + (judgmentAnnotation ? 1 : 0);
     const hunkLines = hunkState ? hunkListRowCount(hunkState) : 0;
+    // Item-adopted blocks, each computed by the SAME helper createPromptLines
+    // renders from, so the two functions cannot drift: the full wrapped
+    // command (execute), the colored diff (write), the exec-prompt rows, and
+    // the typed-reply input row.
+    const commandLines = this.commandRowTexts(request, width).length;
+    const diffLines = this.writeDiffLines(request, hunkState)?.length ?? 0;
+    const execPromptLines = this.execPromptRowTexts(request, width).length;
+    const replyLines = this.replyRowText(view, width) ? 1 : 0;
     // Base 12 counted a single arg line; the Path field now spans `pathRows`
     // lines and the full card adds one raw-args row (2a reachability), so the
     // arg allotment becomes pathRows + 1 → base 12 + pathRows (12 already
     // included one of those). See createPromptLines' full branch.
     const pathRows = this.pathRowTexts(this.resolvedTargets(request), 999).length;
-    return 12 + pathRows + reasonLines + extraLines + hunkLines + attributionLines + previewLines;
+    return 12 + pathRows + reasonLines + extraLines + hunkLines + attributionLines + rememberLines
+      + commandLines + diffLines + execPromptLines + replyLines;
   }
 
   /** Returns the key argument to display for a given tool invocation. */
@@ -258,6 +429,7 @@ export class PermissionPromptUI {
     hunkState?: HunkSelectionState,
     detailsExpanded = false,
     requestedBy?: string,
+    view?: PromptViewState,
   ): Line[] {
     const lines: Line[] = [];
     const { tool, args, category } = request;
@@ -270,17 +442,25 @@ export class PermissionPromptUI {
     const TEXT   = '252';
     const DIM    = '244';
 
-    // Attribution line (which agent/process is asking) and the remember-scope
-    // preview line ([A] writes exactly this key). Both are shared by the
-    // condensed and full cards; the preview is suppressed for a hunk-selection
-    // prompt, which has no single whole-request [A] remember key.
+    // Honest queue: how many OTHER broker asks are waiting behind this one.
+    // They surface in turn as each is answered; the count keeps that visible.
+    const queueSuffix = view?.queueCount && view.queueCount > 0
+      ? ` — ${view.queueCount} more waiting`
+      : '';
+
+    // Attribution line (which agent/process is asking) and the remember block
+    // (numbered tier rows from the SDK's rememberOptions, or the legacy [A]
+    // session-preview row). Both are shared by the condensed and full cards;
+    // the remember block is suppressed for a hunk-selection prompt, which has
+    // no single whole-request remember key.
     const pushAttribution = (): void => {
       if (!requestedBy) return;
       lines.push(UIFactory.stringToLine(`   Requested by: ${requestedBy}`.padEnd(width), width, { fg: DIM }));
     };
-    const pushRememberPreview = (): void => {
-      if (hunkState) return;
-      lines.push(UIFactory.stringToLine(this.rememberPreviewText(request, width).padEnd(width), width, { fg: DIM }));
+    const pushRememberBlock = (): void => {
+      for (const rowText of this.rememberRowTexts(request, hunkState, width)) {
+        lines.push(UIFactory.stringToLine(rowText.padEnd(width), width, { fg: DIM }));
+      }
     };
 
     const maxArgLen = Math.max(10, width - 16);
@@ -290,12 +470,12 @@ export class PermissionPromptUI {
     // (scope)) plus the choices. Full block is one `d` away. (2b.)
     if (this.isCondensed(request, hunkState, detailsExpanded)) {
       lines.push(UIFactory.stringToLine('─'.repeat(width), width, { fg: ACCENT, dim: true }));
-      lines.push(UIFactory.stringToLine(` [${label}] ${brief.title} `.padEnd(width), width, { fg: WARN, bold: true }));
+      lines.push(UIFactory.stringToLine(` [${label}] ${brief.title}${queueSuffix} `.padEnd(width), width, { fg: WARN, bold: true }));
       pushAttribution();
       const scopeText = analysis.blastRadius ? ` (${analysis.blastRadius})` : '';
       const summaryLine = `   ${categoryVerb(category)} → ${pathRows[0]}${scopeText}`;
       lines.push(UIFactory.stringToLine(summaryLine.padEnd(width), width, { fg: TEXT }));
-      pushRememberPreview();
+      pushRememberBlock();
       lines.push(UIFactory.stringToLine(
         `   [Y] Allow once    [A] Allow always (session)    [N] Deny    [d] details`.padEnd(width),
         width, { fg: ACCENT, bold: true }));
@@ -306,9 +486,9 @@ export class PermissionPromptUI {
     // Top separator
     lines.push(UIFactory.stringToLine('─'.repeat(width), width, { fg: ACCENT, dim: true }));
 
-    // Title bar: category badge + title
+    // Title bar: category badge + title (+ honest waiting count)
     const titleText = brief.title;
-    const titleLine = ` [${label}] ${titleText} `;
+    const titleLine = ` [${label}] ${titleText}${queueSuffix} `;
     lines.push(UIFactory.stringToLine(titleLine.padEnd(width), width, { fg: WARN, bold: true }));
 
     // Requester attribution (which agent/process raised this request).
@@ -325,6 +505,18 @@ export class PermissionPromptUI {
       const labelCol = i === 0 ? brief.subjectLabel.padEnd(9) : ' '.repeat(9);
       lines.push(UIFactory.stringToLine(`   ${labelCol}: ${rowText}`.padEnd(width), width, { fg: TEXT }));
     });
+
+    // The FULL command of an execute ask, wrapped — never truncated. The Path
+    // row above stays as the one-line subject; this block is the whole truth.
+    for (const rowText of this.commandRowTexts(request, width)) {
+      lines.push(UIFactory.stringToLine(rowText.padEnd(width), width, { fg: TEXT }));
+    }
+
+    // Exec-prompt attribution: the running command and the terminal prompt it
+    // is stuck on, wrapped in full — the typed answer feeds this run's stdin.
+    for (const rowText of this.execPromptRowTexts(request, width)) {
+      lines.push(UIFactory.stringToLine(rowText.padEnd(width), width, { fg: WARN }));
+    }
 
     // Working directory row
     const cwd = request.workingDirectory ?? '(unknown)';
@@ -416,6 +608,13 @@ export class PermissionPromptUI {
     // Blank spacer
     lines.push(UIFactory.stringToLine(' '.repeat(width), width));
 
+    // Real colored diff for a write/edit ask (adds green, removals red, hunk
+    // headers blue — the same diff-view machinery the transcript uses).
+    const diffTextLines = this.writeDiffLines(request, hunkState);
+    if (diffTextLines) {
+      lines.push(...renderDiffView(diffTextLines.join('\n'), width));
+    }
+
     if (hunkState) {
       // Hunk list — see hunkListRowCount() for the row-count contract this
       // block must match exactly (Risk 2: getPromptHeight/createPromptLines
@@ -450,15 +649,31 @@ export class PermissionPromptUI {
       lines.push(UIFactory.stringToLine(trailerLine.padEnd(width), width, { fg: DIM }));
     }
 
-    // Remember-scope preview: exactly what [A] will write (omitted for hunk mode).
-    pushRememberPreview();
+    // Remember block: numbered tier rows (rememberOptions) or the legacy [A]
+    // session preview (omitted for hunk mode).
+    pushRememberBlock();
+
+    // Typed-reply input row: the deny reason (Enter denies with it as
+    // feedback) or the exec-prompt answer (Enter feeds the running command).
+    const replyRow = this.replyRowText(view, width);
+    if (replyRow) {
+      lines.push(UIFactory.stringToLine(replyRow.padEnd(width), width, { fg: TEXT, bold: true }));
+    }
 
     // Choices row. A condensable card shown in full is the expanded form, so it
     // offers `[d]` to collapse back; other full cards omit the details toggle.
     const collapseHint = this.isCondensed(request, hunkState, false) ? '    [d] hide details' : '';
-    const choicesLine = hunkState
-      ? `   [j/k] Navigate  [Space] Toggle  [A] All  [Enter] Apply selected  [N] Deny`
-      : `   [Y] Allow once    [A] Allow always (session)    [N] Deny${collapseHint}`;
+    const tierCount = hunkState ? 0 : (request.rememberOptions?.length ?? 0);
+    const rememberHint = tierCount > 0
+      ? `    [1${tierCount > 1 ? `-${tierCount}` : ''}] Allow + remember`
+      : '    [A] Allow always (session)';
+    const choicesLine = view?.replyMode === 'exec-answer'
+      ? `   [Enter] Send answer    [Esc] ${((view.replyBuffer ?? '').length > 0) ? 'Clear' : 'Decline'}    [Ctrl+C] Abort turn`
+      : view?.replyMode === 'deny-reason'
+        ? `   [Enter] Deny with this reason    [Esc] Back    [Ctrl+C] Abort turn`
+        : hunkState
+          ? `   [j/k] Navigate  [Space] Toggle  [A] All  [Enter] Apply selected  [N] Deny`
+          : `   [Y] Allow once${rememberHint}    [N] Deny    type a reason to deny${collapseHint}`;
     lines.push(UIFactory.stringToLine(choicesLine.padEnd(width), width, { fg: ACCENT, bold: true }));
 
     // Bottom separator
