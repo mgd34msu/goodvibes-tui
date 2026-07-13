@@ -44,8 +44,10 @@ export interface BrokerApprovalChangeParams {
     readonly callId: string;
     readonly status: string;
     readonly request: PermissionPromptRequest;
-    /** Present once an ACCEPTED ask (e.g. a ci:fix-session offer) has spawned its session. */
+    /** The REAL attachable session id once an ACCEPTED ask (e.g. a ci:fix-session offer) has spawned its session. */
     readonly fixSessionId?: string | undefined;
+    /** The honest failure when an accepted ask's spawn did NOT produce an attachable session — mutually exclusive with fixSessionId. */
+    readonly fixSessionError?: string | undefined;
   };
   readonly getPending: () => PendingPermissionState | null;
   readonly setPending: (pending: PendingPermissionState | null) => void;
@@ -58,6 +60,13 @@ export interface BrokerApprovalChangeParams {
    * caller de-duplicates by id.
    */
   readonly onFixSessionStarted?: (fixSessionId: string) => void;
+  /**
+   * Fired when a record carries the honest failure from an accepted ask whose
+   * spawn produced no attachable session. The surface renders it as an error
+   * line with NO action to jump to (there is no session). Called each time the
+   * field is seen; the caller de-duplicates.
+   */
+  readonly onFixSessionError?: (fixSessionError: string) => void;
   /** Defers the open (default queueMicrotask); injectable so tests run it synchronously. */
   readonly defer?: (callback: () => void) => void;
 }
@@ -86,6 +95,21 @@ export function buildFixSessionAffordance(deps: FixSessionAffordanceDeps): (fixS
     seen.add(fixSessionId);
     deps.arm(fixSessionId);
     deps.notify('[CI] Fix session ready — press j to jump to it.');
+  };
+}
+
+/**
+ * Build the honest failure notice for an accepted fix-session offer whose spawn
+ * produced no attachable session: one error line, NO jump action (there is no
+ * session to attach to). De-duplicated by the error text so the live record
+ * update and the listApprovals refresh path can both feed it safely.
+ */
+export function buildFixSessionErrorNotice(notify: (message: string) => void): (fixSessionError: string) => void {
+  const seen = new Set<string>();
+  return (fixSessionError) => {
+    if (seen.has(fixSessionError)) return;
+    seen.add(fixSessionError);
+    notify(`[CI] Fix session could not start: ${fixSessionError}`);
   };
 }
 
@@ -118,11 +142,13 @@ export function handleFixSessionAttachKey(data: string, deps: FixSessionAttachKe
  * the live subscription attached, or a record update the subscription missed.
  */
 export function refreshFixSessionsFromApprovals(
-  listApprovals: () => readonly { readonly fixSessionId?: string | undefined }[],
+  listApprovals: () => readonly { readonly fixSessionId?: string | undefined; readonly fixSessionError?: string | undefined }[],
   onFixSessionStarted: (fixSessionId: string) => void,
+  onFixSessionError?: (fixSessionError: string) => void,
 ): void {
   for (const record of listApprovals()) {
     if (record.fixSessionId) onFixSessionStarted(record.fixSessionId);
+    else if (record.fixSessionError && onFixSessionError) onFixSessionError(record.fixSessionError);
   }
 }
 
@@ -136,11 +162,13 @@ export function handleBrokerApprovalChange(params: BrokerApprovalChangeParams): 
   const defer = params.defer ?? queueMicrotask;
   const active = isActiveStatus(approval.status);
 
-  // An accepted ask that spawned a session (the CI fix-session) publishes its id
-  // as a record update — the live in-process handle to jump to it. It arrives
-  // after the card has resolved and cleared, so surface it independently of the
-  // card lifecycle below.
+  // An accepted ask that spawned a session (the CI fix-session) publishes its
+  // REAL session id as a record update — the live in-process handle to jump to
+  // it — or, when the spawn failed, an honest error instead of a dead id
+  // (mutually exclusive). Both arrive after the card has resolved and cleared,
+  // so surface them independently of the card lifecycle below.
   if (approval.fixSessionId) params.onFixSessionStarted?.(approval.fixSessionId);
+  else if (approval.fixSessionError) params.onFixSessionError?.(approval.fixSessionError);
 
   const pending = getPending();
   if (pending && pending.callId === approval.callId) {
