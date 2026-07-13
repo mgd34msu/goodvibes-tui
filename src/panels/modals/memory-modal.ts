@@ -227,9 +227,9 @@ export async function memoryModalGoldenSurface(): Promise<ConfigModalSurface> {
   const records: readonly MemoryRecordLike[] = [
     {
       id: 'mem-0000001a', scope: 'project', cls: 'decision',
-      summary: 'Wave-6 batches panel retirements behind modal builders.',
-      detail: 'Applies to KNOWLEDGE, MEMORY, WORK-PLAN in WO-B.',
-      tags: ['wave-6', 'modals'], reviewState: 'reviewed', confidence: 90,
+      summary: 'Panel retirements are batched behind modal builders.',
+      detail: 'Applies to the knowledge, memory, and work-plan modals.',
+      tags: ['panels', 'modals'], reviewState: 'reviewed', confidence: 90,
       reviewedAt: FIXED_CREATED_AT + 3600000, reviewedBy: 'operator', createdAt: FIXED_CREATED_AT,
       provenance: [{ kind: 'session', ref: 'session-fixed-1' }],
     },

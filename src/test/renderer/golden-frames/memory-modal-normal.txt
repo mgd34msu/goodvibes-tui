@@ -3,8 +3,8 @@
 |    │ [ALL RECORDS]  Review Queue                                              │                    |
 |    │ records 2  review queue 2                                                │                    |
 |    ├──────────────────────────────────────────────────────────────────────────┤                    |
-|    │ ▸ [P/DEC] 0000001a  2025-01-01 00:00  Wave-6 batches panel retirements   │                    |
-|    │   behind modal builders.  #wave-6 #modals                                │                    |
+|    │ ▸ [P/DEC] 0000001a  2025-01-01 00:00  Panel retirements are batched      │                    |
+|    │   behind modal builders.  #panels #modals                                │                    |
 |    │   [S/RIS] 0000002b  2025-01-02 00:00  Modal review actions must not call │                    |
 |    │   mutation APIs directly.  #charter                                      │                    |
 |    │                                                                          │                    |
