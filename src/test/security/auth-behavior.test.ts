@@ -105,10 +105,14 @@ function loginRequest(
   });
 }
 
-// Port range: 39700–39799 (isolated from standalone-routes 39600+)
-let portCounter = 39700;
+// Ephemeral port per listener: a fixed 39700+ range collided intermittently
+// with lingering sockets from concurrent test files (flaky "port in use"
+// startup failures). Ask the OS for a genuinely free port instead.
 function nextPort(): number {
-  return portCounter++;
+  const probe = Bun.serve({ port: 0, fetch: () => new Response('') });
+  const port = probe.port;
+  probe.stop(true);
+  return port;
 }
 
 // ---------------------------------------------------------------------------
