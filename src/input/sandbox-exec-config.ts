@@ -59,14 +59,14 @@ export const SANDBOX_EGRESS_ALLOWLIST_SYNTHETIC_SETTING: ConfigSetting = {
   key: SANDBOX_EGRESS_ALLOWLIST_CONFIG_KEY,
   type: 'string',
   default: [],
-  description: 'Comma-separated command base names (or "*" for all) whose network access is re-enabled inside the per-command exec sandbox boundary, as a named escalation the approval flow surfaces ("wants network"). Empty = the sandbox disables network for every command. Only takes effect when sandbox.enabled is on, the graduation-tracked exec-sandbox feature flag is on, and bubblewrap is available (Linux only — reports unavailable elsewhere).',
+  description: 'Comma-separated command base names (or "*" for all) whose network access is re-enabled inside the per-command exec sandbox boundary, as a named escalation the approval flow surfaces ("wants network"). Empty = the sandbox disables network for every command. Only takes effect when sandbox.enabled is on, the exec-sandbox setting is on, and bubblewrap is available (Linux only — reports unavailable elsewhere).',
 };
 
 export const SANDBOX_WORKSPACE_WRITABLE_SYNTHETIC_SETTING: ConfigSetting = {
   key: SANDBOX_WORKSPACE_WRITABLE_CONFIG_KEY,
   type: 'string',
   default: [],
-  description: 'Comma-separated absolute paths outside the workspace bound writable into the per-command exec sandbox boundary, as a named escalation the approval flow surfaces ("wants path outside workspace"). Empty = only the workspace (and an isolated /tmp) is writable. Only takes effect when sandbox.enabled is on, the graduation-tracked exec-sandbox feature flag is on, and bubblewrap is available (Linux only — reports unavailable elsewhere).',
+  description: 'Comma-separated absolute paths outside the workspace bound writable into the per-command exec sandbox boundary, as a named escalation the approval flow surfaces ("wants path outside workspace"). Empty = only the workspace (and an isolated /tmp) is writable. Only takes effect when sandbox.enabled is on, the exec-sandbox setting is on, and bubblewrap is available (Linux only — reports unavailable elsewhere).',
 };
 
 function buildSandboxExecListEntry(configManager: Pick<ConfigManager, 'get'>, setting: ConfigSetting): SettingEntry {
