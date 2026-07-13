@@ -4,6 +4,84 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [1.17.0] — 2026-07-13
+
+### Changes
+- a7780e18 Pin @pellux/goodvibes-sdk and goodvibes-terminal-shell to published 1.8.0
+- 08d4c409 Sync foundation artifacts and test provider doubles to the round-10 SDK contract
+- 39134bb2 Complete the CI fix-session affordance: one-key attach to the real session, honest error line on a failed spawn
+- ce1b14bd Re-link the local SDK tarballs to the round-10 build carrying the real fix-session id contract
+- 2acbba55 Offer a one-key jump to a spawned CI fix session instead of a resume command to retype
+- 52faa61d Rewrite the memory-modal sample record in plain language and drop its identifier-check carve-out
+- 92a9649c Name domain settings keys, not internal gate ids, in surface readiness output
+- e96dda8e Read an adopted external daemon's attach-time receipts over HTTP so the default deployment gets the same one-line notices
+- 5890e1f9 Wire the interactive-exec prompt-answer handler into the tool registry and post-clobber orchestrator so terminal prompts get an ask
+- 071255cb Thread the provider registry into agent and automation managers so bare model ids resolve
+- 3a86ac34 Footer: persistent web-surface URL segment when the web surface is enabled
+- b20005a2 Sandbox: announce 'commands now run contained' on the first contained run
+- fb45c2a7 Daemon attach-time receipts + announcements consume as one-line notices
+- b783622a Slim main.ts: extract the session-continuity-hints builder
+- 715c414c dev-link: re-link to sdk 1d6a85e2, wire ci fix-session jump affordance
+- f94d08e8 Automation: how-to-create-first-routine empty state with a real command pointer
+- f0e6fb18 Re-link fixups: regenerate foundation artifacts, mock resolveModelPricing
+- c0ccbd6c Daemon self-update via facade host-version wiring; workspace self-record provenance
+- b30e1008 dev-link: re-link to sdk d494938c
+- 21e82f3c Render broker-originated approval asks (including ci:fix-session) as cards
+- d40901bc Give the panel_only notification target a live producer
+- 40cfa261 Permissions settings: list and revoke remembered approval rules
+- b4ffb403 Approval card: pass scroll, mouse, and Esc through to input
+- e939b20c Run live model discovery in the TUI: init, picker-open re-check, /refresh-models delta
+- f3d6a079 Wire the localhost-fetch approval into tools and both orchestrator sites
+- 17b66695 Generalize onboarding subscription rows; close codename-scanner holes
+- 794bf9f4 Provider-agnostic onboarding key capture
+- 017a9c09 Provider key intake at selection, and executable provider repair rows
+- 9e6544b8 dev-link: re-link to sdk 9be5fecd (committed export entries, receipt-consumption contract)
+- 60465227 daemon parity: pin the ci-watch recurring poller's attachment
+- e7ae78e5 approval card: remember tiers, colored diffs, whole commands, typed replies, an honest queue
+- 3b12178f costs and budgets: dollars name their source, unknown prices carry the one-key fix, manual prices persist live
+- ecbb4f91 fleet: per-node headlines, the quiet-Nm stall marker, and the canonical waiting-on-human classification
+- 7881abfc update mechanism: one canonical policy module everywhere
+- ef1cc4d8 onboarding fast path: copy generated from registration truth
+- b90f2615 daemon composition: mirror the sdk runtime-services round (approval rules, snapshots, pricing resolver, live credentials, exec prompts, update lifecycle)
+- b459c3b5 dev-link: four more sdk export subpaths for the daemon lifecycle family
+- b10a610f dev-link: expose store-snapshots and self-update subpaths on the sdk tarball
+- b5b22fbb dev-link: refresh sdk tarballs to snapshot 4d8d90ee
+- 5a698519 auth-behavior test: OS-assigned ports end the port-in-use flake
+- 8d1c019e ops interventions: gate on the real control-plane gateway capability, proven live
+- 8d857c55 composition trims for the line cap; channel wiring in its own module
+- ff47c4aa onboarding: enablement-key coherence fixes surfaced by the coverage tests
+- 1fc2230b tests + recall sync: adopt new SDK contracts (catalog, models, projection ownership)
+- 637a7506 tests: adopt new SDK contracts across gates, automation, cli, fetch consumers
+- e0121015 tests: daemon flag seeding and fetch localhost-approval tier
+- 6bac548d in-product feature docs: full documentation under the cursor, scrolling pane
+- 1572c8d0 onboarding: guided feature steps write domain settings keys
+- afa41a18 remove the flags command family; surviving surfaces speak domain settings
+- e08c7a65 settings modal: capabilities as feature units in their domains
+- 03d1d65c feature settings adoption: runtime plumbing on domain settings keys
+- 0865b52f dev-link: point sdk packages at local snapshot tarballs
+- f3b5b8e0 auto-update: end-to-end proof of the whole launch loop with real processes
+- e0da9c5f grammar lint fixture: blank-description registration now asserts the refusal
+- 3d6d1965 docs: remote-access guide — daemon on an always-on box, reached from anywhere
+- 861a7fb3 daemon CLI help: migrate-service copy matches the reconciled unit naming
+- 2256372e /help: generate the in-product command reference from the registry
+- 3415db60 service copy: stop labeling the install script's unit 'legacy'
+- b7e80a8b auto-update at launch: land on the newest release before the TUI starts
+- 71a599e2 install.sh: daemon survives boots without a login and never tombstones
+- 6424950a chore: sweep lettered finding/brief ids and ban the recurring shapes
+- 0430a889 chore: remove finding-id shorthand from comments and test names
+- 48ebd188 chore: ignore the local test scratch directory
+- 3d3af085 chore: strip plan-label references from comments added in the last two rounds
+- e91976a0 fix(trust): ask trust at the moment it has a consequence, and self-record registration
+- 5ab801a6 fix(cli,install): doctor exits honestly, and the installer makes its own last line true
+- f676ef72 feat(panels): give panel-only-routed notifications a real, visible home
+- f315552c fix(renderer): never clip the command-palette description or the model workspace's detail lines
+- c59ddc8c Add an architecture-check rule banning internal planning identifiers
+- caad649a Remove internal planning-shorthand ids from docs and remaining scripts
+- c4f11597 Remove internal planning-shorthand ids from test comments and test names
+- e32b5c08 Remove internal planning-shorthand ids from panels/renderer comments
+- 1e99067c Remove internal planning-shorthand ids from input-layer comments
+- 072b2ca2 Remove internal planning-shorthand ids from core/runtime comments
+
 ## [1.16.1] — 2026-07-12
 
 ### Changes
