@@ -7,6 +7,8 @@ All notable changes to GoodVibes TUI.
 ## [1.17.0] — 2026-07-13
 
 ### Changes
+- fix(smoke): opt the daemon post-build smoke out of service boot promotion so the daemon under test stays in-process
+- fix(daemon): print this binary's real version in the connection banner instead of the v0.0.0 default
 - a7780e18 Pin @pellux/goodvibes-sdk and goodvibes-terminal-shell to published 1.8.0
 - 08d4c409 Sync foundation artifacts and test provider doubles to the round-10 SDK contract
 - 39134bb2 Complete the CI fix-session affordance: one-key attach to the real session, honest error line on a failed spawn

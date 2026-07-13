@@ -325,6 +325,9 @@ async function main(): Promise<void> {
     daemonUrl,
     token: companionTokenRecord.token,
     password: bootstrapPassword,
+    // Without this the SDK defaults the printed banner header to v0.0.0 —
+    // the visible version must be this binary's real version.
+    version: VERSION,
     surface: 'tui',
   });
   const payload = encodeConnectionPayload(connectionInfo);
