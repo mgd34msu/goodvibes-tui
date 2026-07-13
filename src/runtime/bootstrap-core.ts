@@ -6,6 +6,7 @@ import { ConfigManager, getConfiguredSystemPrompt } from '../config/index.ts';
 import { getProviderIdFromModel } from '../config/provider-model.ts';
 import { ToolRegistry } from '@pellux/goodvibes-sdk/platform/tools';
 import { registerAllTools } from '@pellux/goodvibes-sdk/platform/tools';
+import { createSandboxContainmentNotice } from './daemon-attach-notices.ts';
 import { PermissionManager, createPermissionConfigReader } from '@pellux/goodvibes-sdk/platform/permissions';
 import { Notifier } from '@pellux/goodvibes-sdk/platform/integrations';
 import { Compositor } from '../renderer/compositor.ts';
@@ -374,13 +375,12 @@ export async function initializeBootstrapCore(
     serviceRegistry: services.serviceRegistry,
     overflowHandler: services.overflowHandler,
     changeTracker: services.sessionChangeTracker,
-    // Master switch stays on (SDK default); this only widens the allowlist of
-    // credential-looking variable NAMES kept. See exec-env-scrub-config.ts.
+    // Widens the allowlist of credential-looking variable NAMES kept (master switch stays on). See exec-env-scrub-config.ts.
     credentialEnvScrub: { allowlist: readExecEnvScrubAllowlist(configManager) },
-    // Register context_accounting against OUR holder (the Orchestrator-backed
-    // source bound at bootstrap.ts), not a fresh internal one. See
-    // runtime/context-accounting-source.ts.
+    // Register context_accounting against OUR holder (the Orchestrator-backed source bound at bootstrap.ts). See runtime/context-accounting-source.ts.
     contextAccountingHolder: services.contextAccountingHolder,
+    // First contained (sandboxed) command run announces "commands now run contained" once — recorded and surfaced now.
+    onSandboxedRun: createSandboxContainmentNotice({ configManager, notify: (text) => conversation.log(`[Sandbox] ${text}`, { fg: '135' }) }),
   });
   // Note: installWrfcAgentToolGuard is called after routeOrBuffer is defined
   // (further below) so the onTrace callback can route guard decisions through
