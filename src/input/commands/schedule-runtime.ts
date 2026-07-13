@@ -10,6 +10,7 @@ import type { AutomationManager } from '@pellux/goodvibes-sdk/platform/automatio
 import type { AutomationJob } from '@pellux/goodvibes-sdk/platform/automation';
 import type { AutomationScheduleDefinition } from '@pellux/goodvibes-sdk/platform/automation';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
+import { buildAutomationEmptyState } from '@pellux/goodvibes-sdk/platform/runtime/feature-announcements';
 import { parseNaturalLanguageSchedule } from './schedule-nl.ts';
 import type {
   AutomationExecutionPolicy,
@@ -106,13 +107,19 @@ export function registerScheduleRuntimeCommands(registry: CommandRegistry): void
       if (!sub || sub === 'list') {
         const jobs = manager.listJobs();
         if (jobs.length === 0) {
-          ctx.print(
-            'No automation jobs.\n'
-            + 'Use:\n'
-            + '  /schedule add cron "*/30 * * * *" "check build status"\n'
-            + '  /schedule add every 15m "summarize open PRs"\n'
-            + '  /schedule add at 2026-04-10T09:00:00 "send release reminder"'
-          );
+          // The SDK owns the presence + title of the how-to-create-your-first-
+          // routine empty state (shown while automation is on and idle). Its
+          // body points at a command name this registry doesn't have, so we
+          // render its title with THIS surface's real /schedule commands — a
+          // command pointer that actually exists in the registry.
+          const emptyState = buildAutomationEmptyState({ enabled: true, routineCount: jobs.length });
+          ctx.print([
+            emptyState ? emptyState.title : 'No automation jobs.',
+            'Automation is on and idle. Create your first routine with:',
+            '  /schedule add cron "*/30 * * * *" "check build status"',
+            '  /schedule add every 15m "summarize open PRs"',
+            '  /schedule add at 2026-04-10T09:00:00 "send release reminder"',
+          ].join('\n'));
           return;
         }
         const lines = ['Automation jobs:', ''];
