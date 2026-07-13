@@ -81,11 +81,10 @@ describe('shell/blocking-input', () => {
     expect(rendered).toBe(1);
   });
 
-  test('denies pending permission on escape without aborting the turn (deny is feedback; Ctrl+C is the hard abort)', () => {
+  test('escape drops focus only — passes through to input, keeps the card pending, never denies', () => {
     const resolved: Array<[boolean, boolean | undefined]> = [];
     const { conversation } = makeConversation();
     const { router } = makeRouter();
-    let rendered = 0;
     let aborted = 0;
 
     const pendingPermission = {
@@ -104,18 +103,78 @@ describe('shell/blocking-input', () => {
       abortTurn: () => { aborted++; },
       conversation: conversation as never,
       systemMessageRouter: router as never,
-      render: () => { rendered++; },
+      render: () => {},
       loadRecoveryConversation: () => null,
       deleteRecoveryFile: () => {},
       ...JOURNAL_STUBS,
     });
 
-    expect(result.handled).toBe(true);
-    expect(result.pendingPermission).toBeNull();
-    expect(resolved).toEqual([[false, false]]);
-    // Deny is feedback, not a turn abort: only Ctrl+C hard-aborts the turn.
+    // Esc is not a card answer: it passes through to input (handled:false) so
+    // the normal handler drops focus. The request stays pending; nothing denies
+    // or aborts.
+    expect(result.handled).toBe(false);
+    expect(result.pendingPermission).toBe(pendingPermission);
+    expect(resolved).toEqual([]);
     expect(aborted).toBe(0);
-    expect(rendered).toBe(1);
+  });
+
+  test('scroll, mouse, and PageUp keys pass through to input while a card is up (transcript stays scrollable)', () => {
+    const { conversation } = makeConversation();
+    const { router } = makeRouter();
+
+    const pendingPermission = {
+      id: 'perm-scroll',
+      toolName: 'write',
+      reason: 'Need approval',
+      resolve: () => { throw new Error('scroll/mouse must never resolve the request'); },
+    } as unknown as PendingPermissionState;
+
+    // PageUp, PageDown, an SGR mouse-wheel event, and an arrow key.
+    for (const data of ['\x1b[5~', '\x1b[6~', '\x1b[<64;10;5M', '\x1b[A']) {
+      const result = handleBlockingShellInput({
+        data,
+        pendingPermission,
+        recoveryPending: false,
+        abortTurn: () => { throw new Error('scroll/mouse must never abort'); },
+        conversation: conversation as never,
+        systemMessageRouter: router as never,
+        render: () => {},
+        loadRecoveryConversation: () => null,
+        deleteRecoveryFile: () => {},
+        ...JOURNAL_STUBS,
+      });
+      // Not consumed: falls through to input.feed. The card is untouched.
+      expect(result.handled).toBe(false);
+      expect(result.pendingPermission).toBe(pendingPermission);
+    }
+  });
+
+  test('answer keys still act while a card is up (passthrough does not swallow y/n)', () => {
+    const { conversation } = makeConversation();
+    const { router } = makeRouter();
+    const resolved: Array<[boolean, boolean | undefined]> = [];
+    const pendingPermission = {
+      id: 'perm-answer',
+      toolName: 'write',
+      reason: 'Need approval',
+      resolve: (approved: boolean, remember?: boolean) => { resolved.push([approved, remember]); },
+    } as unknown as PendingPermissionState;
+
+    const approve = handleBlockingShellInput({
+      data: 'y',
+      pendingPermission,
+      recoveryPending: false,
+      abortTurn: () => {},
+      conversation: conversation as never,
+      systemMessageRouter: router as never,
+      render: () => {},
+      loadRecoveryConversation: () => null,
+      deleteRecoveryFile: () => {},
+      ...JOURNAL_STUBS,
+    });
+    expect(approve.handled).toBe(true);
+    expect(approve.pendingPermission).toBeNull();
+    expect(resolved).toEqual([[true, false]]);
   });
 
   test('restores recovery snapshot on ctrl-r', () => {

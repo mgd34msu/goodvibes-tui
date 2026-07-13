@@ -198,6 +198,15 @@ export function handleBlockingShellInput(
       return { handled: true, pendingPermission, recoveryPending };
     }
 
+    // Scroll, mouse, PageUp/Down, arrow, and panel-navigation keys — plus a
+    // bare Esc — are not card answers. Pass them through to the normal input
+    // handler so the transcript stays scrollable and Esc only drops focus. The
+    // request stays pending (answer it with y/n or a remember tier when ready);
+    // Ctrl+C above is still the hard abort, and 'n' still denies.
+    if (data.startsWith('\x1b')) {
+      return { handled: false, pendingPermission, recoveryPending };
+    }
+
     const key = data.toLowerCase().trim();
 
     if (key === 'y') {
@@ -227,9 +236,10 @@ export function handleBlockingShellInput(
       return { handled: true, pendingPermission, recoveryPending };
     }
 
-    if (key === 'n' || data === '\x1b') {
+    if (key === 'n') {
       // Plain deny — feedback to the model (the SDK renders an honest "user
-      // declined" result), never a turn abort. Ctrl+C above is the hard stop.
+      // declined" result), never a turn abort. Ctrl+C above is the hard stop;
+      // Esc drops focus (handled above) rather than denying.
       req.resolve(false, false);
       render();
       return { handled: true, pendingPermission: null, recoveryPending };
