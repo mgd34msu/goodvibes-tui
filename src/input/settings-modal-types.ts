@@ -6,6 +6,7 @@ export type SettingsCategory =
   | 'display'
   | 'ui'
   | 'provider'
+  | 'pricing'
   | 'subscriptions'
   | 'behavior'
   | 'storage'
@@ -44,6 +45,7 @@ export type SettingsCategory =
   | 'policy'
   | 'notifications'
   | 'release'
+  | 'update'
   | 'danger';
 
 export type SettingsFocusPane = 'categories' | 'settings';
@@ -53,12 +55,12 @@ export const SETTINGS_CATEGORY_GROUPS: ReadonlyArray<{
   readonly categories: readonly SettingsCategory[];
 }> = [
   { label: 'Interface', categories: ['display', 'ui', 'behavior', 'notifications', 'permissions', 'policy', 'security'] },
-  { label: 'AI Routing', categories: ['provider', 'subscriptions', 'helper', 'tools', 'tts'] },
+  { label: 'AI Routing', categories: ['provider', 'pricing', 'subscriptions', 'helper', 'tools', 'tts'] },
   { label: 'Service & Network', categories: ['service', 'daemon', 'network', 'controlPlane', 'httpListener', 'web', 'relay'] },
   { label: 'Surfaces & Cloud', categories: ['surfaces', 'integrations', 'mcp', 'cloudflare'] },
   { label: 'Automation', categories: ['batch', 'automation', 'checkin', 'watchers', 'orchestration', 'planner', 'wrfc'] },
   { label: 'Runtime & Data', categories: ['storage', 'atRest', 'sandbox', 'fetch', 'agents', 'runtime', 'cache', 'telemetry', 'diagnostics', 'learning'] },
-  { label: 'Advanced', categories: ['release', 'danger'] },
+  { label: 'Advanced', categories: ['release', 'update', 'danger'] },
 ];
 
 export const SETTINGS_CATEGORIES: SettingsCategory[] = SETTINGS_CATEGORY_GROUPS.flatMap(group => group.categories);

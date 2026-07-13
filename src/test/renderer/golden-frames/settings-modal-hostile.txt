@@ -12,11 +12,11 @@
 |│     Token S  │ Type: boole|
 |│ AI ROUTING   │ Source: def|
 |│     Provide  │ ▼ 23 more l|
-|│     Subscri  │───────────│|
-|│     Helper   │   Setting  |
-|│     Tools (  │ • stream   |
-|│     TTS (6)  │   lineNumbe|
-|│ SERVICE & N  │ ▼ 7 more se|
+|│     Pricing  │───────────│|
+|│     Subscri  │   Setting  |
+|│     Helper   │ • stream   |
+|│     Tools (  │   lineNumbe|
+|│     TTS (6)  │ ▼ 7 more se|
 |│ Focus categories · [Up/D │|
 |└──────────────────────────┘|
 @STYLES
@@ -898,39 +898,28 @@
 16 27 bg=#11131a
 17 0 fg=#64748b
 17 1 bg=#18202b
-17 2 fg=#93c5fd
+17 2 fg=#94a3b8
 17 2 bg=#18202b
-17 2 bold=1
-17 3 fg=#93c5fd
+17 3 fg=#94a3b8
 17 3 bg=#18202b
-17 3 bold=1
-17 4 fg=#93c5fd
+17 4 fg=#94a3b8
 17 4 bg=#18202b
-17 4 bold=1
-17 5 fg=#93c5fd
+17 5 fg=#94a3b8
 17 5 bg=#18202b
-17 5 bold=1
-17 6 fg=#93c5fd
+17 6 fg=#94a3b8
 17 6 bg=#18202b
-17 6 bold=1
-17 7 fg=#93c5fd
+17 7 fg=#94a3b8
 17 7 bg=#18202b
-17 7 bold=1
-17 8 fg=#93c5fd
+17 8 fg=#94a3b8
 17 8 bg=#18202b
-17 8 bold=1
-17 9 fg=#93c5fd
+17 9 fg=#94a3b8
 17 9 bg=#18202b
-17 9 bold=1
-17 10 fg=#93c5fd
+17 10 fg=#94a3b8
 17 10 bg=#18202b
-17 10 bold=1
-17 11 fg=#93c5fd
+17 11 fg=#94a3b8
 17 11 bg=#18202b
-17 11 bold=1
-17 12 fg=#93c5fd
+17 12 fg=#94a3b8
 17 12 bg=#18202b
-17 12 bold=1
 17 13 bg=#18202b
 17 14 bg=#18202b
 17 15 fg=#64748b

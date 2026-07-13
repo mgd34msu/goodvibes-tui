@@ -31,6 +31,14 @@ export function formatValue(entry: SettingEntry): string {
   // Array-backed settings (e.g. worktree.setup.commands) display as a
   // comma-separated list, matching how they're edited (see worktree-setup-config.ts).
   if (Array.isArray(val)) return val.length > 0 ? val.join(', ') : '(empty)';
+  // Object-backed settings (e.g. pricing.modelPrices) display their JSON when
+  // short, or an honest entry count — never the useless "[object Object]".
+  if (typeof val === 'object') {
+    const keys = Object.keys(val as Record<string, unknown>);
+    if (keys.length === 0) return '(none set)';
+    const json = JSON.stringify(val);
+    return json.length <= 64 ? json : `${keys.length} entr${keys.length === 1 ? 'y' : 'ies'} (Enter to edit as JSON)`;
+  }
   return String(val);
 }
 
@@ -57,6 +65,8 @@ export const CATEGORY_LABELS: Record<(typeof SETTINGS_CATEGORIES)[number], strin
   display: 'Display',
   ui: 'UI',
   provider: 'Provider',
+  pricing: 'Pricing',
+  update: 'Updates',
   subscriptions: 'Subscriptions',
   behavior: 'Behavior',
   storage: 'Storage',

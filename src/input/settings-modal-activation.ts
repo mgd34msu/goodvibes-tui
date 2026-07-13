@@ -92,6 +92,11 @@ export function activateSelected(ctx: ActivateSelectedContext): void {
     const idx = setting.enumValues.indexOf(entry.currentValue as string);
     const nextIdx = (idx + 1) % setting.enumValues.length;
     ctx.setValue(setting.key as ConfigKey, setting.enumValues[nextIdx]);
+  } else if (setting.type === 'object') {
+    // Object-typed keys (e.g. pricing.modelPrices) edit as JSON: seed the
+    // buffer with the current value's JSON so the edit starts from truth.
+    ctx.setEditingMode(true);
+    ctx.setEditBuffer(JSON.stringify(entry.currentValue ?? {}));
   } else if (setting.type === 'string' || setting.type === 'number') {
     // Enter inline edit mode
     ctx.setEditingMode(true);

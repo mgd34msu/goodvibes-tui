@@ -585,6 +585,18 @@ export class SettingsModal {
       }
     }
 
+    if (setting.type === 'object') {
+      // Object-typed keys (e.g. pricing.modelPrices) edit as JSON; the
+      // schema's validate() below still rules on the parsed shape.
+      try {
+        parsed = JSON.parse(this.editBuffer);
+      } catch {
+        this.editingMode = false;
+        this.editBuffer = '';
+        return false;
+      }
+    }
+
     if (setting.validate && !setting.validate(parsed)) {
       this.editingMode = false;
       this.editBuffer = '';

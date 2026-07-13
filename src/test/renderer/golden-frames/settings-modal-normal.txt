@@ -6,27 +6,27 @@
 |│   ▸ Display (9)        │ stream                                                                  │|
 |│     UI (4)             │ Key: display.stream                                                     │|
 |│     Behavior (23)      │ Current: true                                                           │|
-|│     Notifications (4)  │ Default: true                                                           │|
+|│     Notifications (7)  │ Default: true                                                           │|
 |│     Permissions (23)   │ Type: boolean                                                           │|
 |│     Policy-as-Code (4  │ Source: default                                                         │|
 |│     Token Security (4  │                                                                         │|
 |│ AI ROUTING             │ Stream LLM tokens as they arrive                                        │|
 |│     Provider (7)       │ ▼ 7 more line(s) below — PgDn                                           │|
-|│     Subscriptions (1)  │─────────────────────────────────────────────────────────────────────────│|
-|│     Helper (3)         │   Setting             Value       Type       Source        Default      │|
-|│     Tools (9)          │ • stream              true        boolean    default       true         │|
-|│     TTS (6)            │   lineNumbers         off         enum       default       off          │|
-|│ SERVICE & NETWORK      │   collapseThreshold   30          number     default       30           │|
-|│     Service (6)        │   theme               vaporwave   string     default       vaporwave    │|
-|│     Daemon (2)         │   showThinking        false       boolean    default       false        │|
-|│     Network (36)       │   showReasoningSumma  false       boolean    default       false        │|
-|│     Control Plane (18  │   showTokenSpeed      false       boolean    default       false        │|
-|│     HTTP Listener (7)  │   showToolPreview     false       boolean    default       false        │|
-|│     Web (6)            │   themeMode           auto        enum       default       auto         │|
+|│     Pricing (1)        │─────────────────────────────────────────────────────────────────────────│|
+|│     Subscriptions (1)  │   Setting             Value       Type       Source        Default      │|
+|│     Helper (3)         │ • stream              true        boolean    default       true         │|
+|│     Tools (9)          │   lineNumbers         off         enum       default       off          │|
+|│     TTS (6)            │   collapseThreshold   30          number     default       30           │|
+|│ SERVICE & NETWORK      │   theme               vaporwave   string     default       vaporwave    │|
+|│     Service (6)        │   showThinking        false       boolean    default       false        │|
+|│     Daemon (2)         │   showReasoningSumma  false       boolean    default       false        │|
+|│     Network (36)       │   showTokenSpeed      false       boolean    default       false        │|
+|│     Control Plane (18  │   showToolPreview     false       boolean    default       false        │|
+|│     HTTP Listener (7)  │   themeMode           auto        enum       default       auto         │|
+|│     Web (6)            │                                                                         │|
 |│     Relay (5)          │                                                                         │|
 |│ SURFACES & CLOUD       │                                                                         │|
-|│     Surfaces (73)      │                                                                         │|
-|│     Integration Deliv  │                                                                         │|
+|│     Surfaces (96)      │                                                                         │|
 |│ Focus categories · [Up/Down] Choose · [Right/Enter] Settings · [Tab] Pane · [/] Search · [Esc] C │|
 |└──────────────────────────────────────────────────────────────────────────────────────────────────┘|
 @STYLES
@@ -1833,17 +1833,11 @@
 13 15 bg=#18202b
 13 16 fg=#94a3b8
 13 16 bg=#18202b
-13 17 fg=#94a3b8
 13 17 bg=#18202b
-13 18 fg=#94a3b8
 13 18 bg=#18202b
-13 19 fg=#94a3b8
 13 19 bg=#18202b
-13 20 fg=#94a3b8
 13 20 bg=#18202b
-13 21 fg=#94a3b8
 13 21 bg=#18202b
-13 22 fg=#94a3b8
 13 22 bg=#18202b
 13 23 bg=#18202b
 13 24 bg=#18202b
@@ -1952,12 +1946,19 @@
 14 14 bg=#18202b
 14 15 fg=#94a3b8
 14 15 bg=#18202b
+14 16 fg=#94a3b8
 14 16 bg=#18202b
+14 17 fg=#94a3b8
 14 17 bg=#18202b
+14 18 fg=#94a3b8
 14 18 bg=#18202b
+14 19 fg=#94a3b8
 14 19 bg=#18202b
+14 20 fg=#94a3b8
 14 20 bg=#18202b
+14 21 fg=#94a3b8
 14 21 bg=#18202b
+14 22 fg=#94a3b8
 14 22 bg=#18202b
 14 23 bg=#18202b
 14 24 bg=#18202b
@@ -2136,6 +2137,7 @@
 15 13 bg=#18202b
 15 14 fg=#94a3b8
 15 14 bg=#18202b
+15 15 fg=#94a3b8
 15 15 bg=#18202b
 15 16 bg=#18202b
 15 17 bg=#18202b
@@ -2317,7 +2319,9 @@
 16 11 bg=#18202b
 16 12 fg=#94a3b8
 16 12 bg=#18202b
+16 13 fg=#94a3b8
 16 13 bg=#18202b
+16 14 fg=#94a3b8
 16 14 bg=#18202b
 16 15 bg=#18202b
 16 16 bg=#18202b
@@ -2478,57 +2482,34 @@
 16 99 fg=#64748b
 17 0 fg=#64748b
 17 1 bg=#18202b
-17 2 fg=#93c5fd
+17 2 fg=#94a3b8
 17 2 bg=#18202b
-17 2 bold=1
-17 3 fg=#93c5fd
+17 3 fg=#94a3b8
 17 3 bg=#18202b
-17 3 bold=1
-17 4 fg=#93c5fd
+17 4 fg=#94a3b8
 17 4 bg=#18202b
-17 4 bold=1
-17 5 fg=#93c5fd
+17 5 fg=#94a3b8
 17 5 bg=#18202b
-17 5 bold=1
-17 6 fg=#93c5fd
+17 6 fg=#94a3b8
 17 6 bg=#18202b
-17 6 bold=1
-17 7 fg=#93c5fd
+17 7 fg=#94a3b8
 17 7 bg=#18202b
-17 7 bold=1
-17 8 fg=#93c5fd
+17 8 fg=#94a3b8
 17 8 bg=#18202b
-17 8 bold=1
-17 9 fg=#93c5fd
+17 9 fg=#94a3b8
 17 9 bg=#18202b
-17 9 bold=1
-17 10 fg=#93c5fd
+17 10 fg=#94a3b8
 17 10 bg=#18202b
-17 10 bold=1
-17 11 fg=#93c5fd
+17 11 fg=#94a3b8
 17 11 bg=#18202b
-17 11 bold=1
-17 12 fg=#93c5fd
+17 12 fg=#94a3b8
 17 12 bg=#18202b
-17 12 bold=1
-17 13 fg=#93c5fd
 17 13 bg=#18202b
-17 13 bold=1
-17 14 fg=#93c5fd
 17 14 bg=#18202b
-17 14 bold=1
-17 15 fg=#93c5fd
 17 15 bg=#18202b
-17 15 bold=1
-17 16 fg=#93c5fd
 17 16 bg=#18202b
-17 16 bold=1
-17 17 fg=#93c5fd
 17 17 bg=#18202b
-17 17 bold=1
-17 18 fg=#93c5fd
 17 18 bg=#18202b
-17 18 bold=1
 17 19 bg=#18202b
 17 20 bg=#18202b
 17 21 bg=#18202b
@@ -2684,38 +2665,57 @@
 17 99 fg=#64748b
 18 0 fg=#64748b
 18 1 bg=#18202b
-18 2 fg=#94a3b8
+18 2 fg=#93c5fd
 18 2 bg=#18202b
-18 3 fg=#94a3b8
+18 2 bold=1
+18 3 fg=#93c5fd
 18 3 bg=#18202b
-18 4 fg=#94a3b8
+18 3 bold=1
+18 4 fg=#93c5fd
 18 4 bg=#18202b
-18 5 fg=#94a3b8
+18 4 bold=1
+18 5 fg=#93c5fd
 18 5 bg=#18202b
-18 6 fg=#94a3b8
+18 5 bold=1
+18 6 fg=#93c5fd
 18 6 bg=#18202b
-18 7 fg=#94a3b8
+18 6 bold=1
+18 7 fg=#93c5fd
 18 7 bg=#18202b
-18 8 fg=#94a3b8
+18 7 bold=1
+18 8 fg=#93c5fd
 18 8 bg=#18202b
-18 9 fg=#94a3b8
+18 8 bold=1
+18 9 fg=#93c5fd
 18 9 bg=#18202b
-18 10 fg=#94a3b8
+18 9 bold=1
+18 10 fg=#93c5fd
 18 10 bg=#18202b
-18 11 fg=#94a3b8
+18 10 bold=1
+18 11 fg=#93c5fd
 18 11 bg=#18202b
-18 12 fg=#94a3b8
+18 11 bold=1
+18 12 fg=#93c5fd
 18 12 bg=#18202b
-18 13 fg=#94a3b8
+18 12 bold=1
+18 13 fg=#93c5fd
 18 13 bg=#18202b
-18 14 fg=#94a3b8
+18 13 bold=1
+18 14 fg=#93c5fd
 18 14 bg=#18202b
-18 15 fg=#94a3b8
+18 14 bold=1
+18 15 fg=#93c5fd
 18 15 bg=#18202b
-18 16 fg=#94a3b8
+18 15 bold=1
+18 16 fg=#93c5fd
 18 16 bg=#18202b
+18 16 bold=1
+18 17 fg=#93c5fd
 18 17 bg=#18202b
+18 17 bold=1
+18 18 fg=#93c5fd
 18 18 bg=#18202b
+18 18 bold=1
 18 19 bg=#18202b
 18 20 bg=#18202b
 18 21 bg=#18202b
@@ -2899,6 +2899,7 @@
 19 14 bg=#18202b
 19 15 fg=#94a3b8
 19 15 bg=#18202b
+19 16 fg=#94a3b8
 19 16 bg=#18202b
 19 17 bg=#18202b
 19 18 bg=#18202b
@@ -3085,9 +3086,7 @@
 20 14 bg=#18202b
 20 15 fg=#94a3b8
 20 15 bg=#18202b
-20 16 fg=#94a3b8
 20 16 bg=#18202b
-20 17 fg=#94a3b8
 20 17 bg=#18202b
 20 18 bg=#18202b
 20 19 bg=#18202b
@@ -3277,15 +3276,10 @@
 21 16 bg=#18202b
 21 17 fg=#94a3b8
 21 17 bg=#18202b
-21 18 fg=#94a3b8
 21 18 bg=#18202b
-21 19 fg=#94a3b8
 21 19 bg=#18202b
-21 20 fg=#94a3b8
 21 20 bg=#18202b
-21 21 fg=#94a3b8
 21 21 bg=#18202b
-21 22 fg=#94a3b8
 21 22 bg=#18202b
 21 23 bg=#18202b
 21 24 bg=#18202b
@@ -3653,15 +3647,25 @@
 23 11 bg=#18202b
 23 12 fg=#94a3b8
 23 12 bg=#18202b
+23 13 fg=#94a3b8
 23 13 bg=#18202b
+23 14 fg=#94a3b8
 23 14 bg=#18202b
+23 15 fg=#94a3b8
 23 15 bg=#18202b
+23 16 fg=#94a3b8
 23 16 bg=#18202b
+23 17 fg=#94a3b8
 23 17 bg=#18202b
+23 18 fg=#94a3b8
 23 18 bg=#18202b
+23 19 fg=#94a3b8
 23 19 bg=#18202b
+23 20 fg=#94a3b8
 23 20 bg=#18202b
+23 21 fg=#94a3b8
 23 21 bg=#18202b
+23 22 fg=#94a3b8
 23 22 bg=#18202b
 23 23 bg=#18202b
 23 24 bg=#18202b
@@ -3836,9 +3840,7 @@
 24 11 bg=#18202b
 24 12 fg=#94a3b8
 24 12 bg=#18202b
-24 13 fg=#94a3b8
 24 13 bg=#18202b
-24 14 fg=#94a3b8
 24 14 bg=#18202b
 24 15 bg=#18202b
 24 16 bg=#18202b
@@ -3928,54 +3930,35 @@
 24 99 fg=#64748b
 25 0 fg=#64748b
 25 1 bg=#18202b
-25 2 fg=#93c5fd
+25 2 fg=#94a3b8
 25 2 bg=#18202b
-25 2 bold=1
-25 3 fg=#93c5fd
+25 3 fg=#94a3b8
 25 3 bg=#18202b
-25 3 bold=1
-25 4 fg=#93c5fd
+25 4 fg=#94a3b8
 25 4 bg=#18202b
-25 4 bold=1
-25 5 fg=#93c5fd
+25 5 fg=#94a3b8
 25 5 bg=#18202b
-25 5 bold=1
-25 6 fg=#93c5fd
+25 6 fg=#94a3b8
 25 6 bg=#18202b
-25 6 bold=1
-25 7 fg=#93c5fd
+25 7 fg=#94a3b8
 25 7 bg=#18202b
-25 7 bold=1
-25 8 fg=#93c5fd
+25 8 fg=#94a3b8
 25 8 bg=#18202b
-25 8 bold=1
-25 9 fg=#93c5fd
+25 9 fg=#94a3b8
 25 9 bg=#18202b
-25 9 bold=1
-25 10 fg=#93c5fd
+25 10 fg=#94a3b8
 25 10 bg=#18202b
-25 10 bold=1
-25 11 fg=#93c5fd
+25 11 fg=#94a3b8
 25 11 bg=#18202b
-25 11 bold=1
-25 12 fg=#93c5fd
+25 12 fg=#94a3b8
 25 12 bg=#18202b
-25 12 bold=1
-25 13 fg=#93c5fd
+25 13 fg=#94a3b8
 25 13 bg=#18202b
-25 13 bold=1
-25 14 fg=#93c5fd
+25 14 fg=#94a3b8
 25 14 bg=#18202b
-25 14 bold=1
-25 15 fg=#93c5fd
 25 15 bg=#18202b
-25 15 bold=1
-25 16 fg=#93c5fd
 25 16 bg=#18202b
-25 16 bold=1
-25 17 fg=#93c5fd
 25 17 bg=#18202b
-25 17 bold=1
 25 18 bg=#18202b
 25 19 bg=#18202b
 25 20 bg=#18202b
@@ -4061,39 +4044,54 @@
 25 99 fg=#64748b
 26 0 fg=#64748b
 26 1 bg=#18202b
-26 2 fg=#94a3b8
+26 2 fg=#93c5fd
 26 2 bg=#18202b
-26 3 fg=#94a3b8
+26 2 bold=1
+26 3 fg=#93c5fd
 26 3 bg=#18202b
-26 4 fg=#94a3b8
+26 3 bold=1
+26 4 fg=#93c5fd
 26 4 bg=#18202b
-26 5 fg=#94a3b8
+26 4 bold=1
+26 5 fg=#93c5fd
 26 5 bg=#18202b
-26 6 fg=#94a3b8
+26 5 bold=1
+26 6 fg=#93c5fd
 26 6 bg=#18202b
-26 7 fg=#94a3b8
+26 6 bold=1
+26 7 fg=#93c5fd
 26 7 bg=#18202b
-26 8 fg=#94a3b8
+26 7 bold=1
+26 8 fg=#93c5fd
 26 8 bg=#18202b
-26 9 fg=#94a3b8
+26 8 bold=1
+26 9 fg=#93c5fd
 26 9 bg=#18202b
-26 10 fg=#94a3b8
+26 9 bold=1
+26 10 fg=#93c5fd
 26 10 bg=#18202b
-26 11 fg=#94a3b8
+26 10 bold=1
+26 11 fg=#93c5fd
 26 11 bg=#18202b
-26 12 fg=#94a3b8
+26 11 bold=1
+26 12 fg=#93c5fd
 26 12 bg=#18202b
-26 13 fg=#94a3b8
+26 12 bold=1
+26 13 fg=#93c5fd
 26 13 bg=#18202b
-26 14 fg=#94a3b8
+26 13 bold=1
+26 14 fg=#93c5fd
 26 14 bg=#18202b
-26 15 fg=#94a3b8
+26 14 bold=1
+26 15 fg=#93c5fd
 26 15 bg=#18202b
-26 16 fg=#94a3b8
+26 15 bold=1
+26 16 fg=#93c5fd
 26 16 bg=#18202b
-26 17 fg=#94a3b8
+26 16 bold=1
+26 17 fg=#93c5fd
 26 17 bg=#18202b
-26 18 fg=#94a3b8
+26 17 bold=1
 26 18 bg=#18202b
 26 19 bg=#18202b
 26 20 bg=#18202b
@@ -4213,13 +4211,9 @@
 27 17 bg=#18202b
 27 18 fg=#94a3b8
 27 18 bg=#18202b
-27 19 fg=#94a3b8
 27 19 bg=#18202b
-27 20 fg=#94a3b8
 27 20 bg=#18202b
-27 21 fg=#94a3b8
 27 21 bg=#18202b
-27 22 fg=#94a3b8
 27 22 bg=#18202b
 27 23 bg=#18202b
 27 24 bg=#18202b

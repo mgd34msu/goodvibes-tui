@@ -24,7 +24,14 @@ const CORE_CHANNEL_FEATURE_FLAGS = [
 ] as const;
 
 export function getSurfaceFeatureFlag(surfaceId: string): string | null {
-  return surfaceFeatureGateId(surfaceId);
+  // Onboarding surface ids may be camelCase ('googleChat'); the SDK's gate
+  // map is keyed by the kebab-case ChannelSurface id ('google-chat'). Try the
+  // literal id first, then the kebab-case form, so choosing Google Chat in
+  // onboarding really flips google-chat-surface.
+  const literal = surfaceFeatureGateId(surfaceId);
+  if (literal) return literal;
+  const kebab = surfaceId.replace(/[A-Z]/g, (ch) => `-${ch.toLowerCase()}`);
+  return kebab === surfaceId ? null : surfaceFeatureGateId(kebab);
 }
 
 export function getServerSurfaceFeatureFlags(options: {
