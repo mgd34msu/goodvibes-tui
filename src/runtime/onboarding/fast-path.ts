@@ -7,15 +7,24 @@
  *   - If a provider API key is already configured (env / secrets), skip
  *     onboarding entirely — write the check marker and drop straight into a
  *     working session. ZERO steps.
- *   - Otherwise ask exactly one question: start now on the free default model,
- *     or run the full guided setup. Dismissing (Esc) starts now — so it is
- *     always skippable.
+ *   - Otherwise ask exactly one question: start now on the default model, or
+ *     run the full guided setup. Dismissing (Esc) starts now — so it is
+ *     always skippable. The start-now copy is GENERATED from the default
+ *     model's registered auth state (buildOnboardingModelCopy), so a
+ *     "no API key needed" promise can only render when the provider is
+ *     genuinely keyless-ready.
  *
  * The full wizard remains one keystroke away (the "Full guided setup" choice,
  * or `/onboarding` at any time). If the command context can't answer whether a
  * provider is configured (e.g. a headless/test surface), we fall back to the
  * classic behavior of opening the wizard, so nothing regresses.
  */
+import {
+  buildOnboardingModelCopy,
+  resolveDefaultModelReadiness,
+  type ModelProviderSource,
+  type OnboardingModelCopy,
+} from '@pellux/goodvibes-sdk/platform/providers';
 import type { CommandContext } from '../../input/command-registry.ts';
 import type { SelectionItem } from '../../input/selection-modal.ts';
 import { writeOnboardingCheckMarker } from './markers.ts';
@@ -44,6 +53,27 @@ function readConfiguredProviderIds(commandContext: CommandContext): string[] | n
 const MARKER_OPTIONS: WriteOnboardingCheckMarkerOptions = { source: 'command' };
 
 /**
+ * Copy for the "start now" choice, GENERATED from the default model's live
+ * registration state (never hand-written): a "no API key needed" promise can
+ * only appear when the provider's own auth state proves keyless readiness.
+ * Surfaces that cannot answer (no registry / no getForModel) resolve to the
+ * honest 'unresolvable' copy rather than a fabricated keyless claim.
+ */
+function resolveStartCopy(commandContext: CommandContext): OnboardingModelCopy {
+  const modelKey = String(commandContext.platform?.config?.provider?.model ?? '').trim();
+  const registry = commandContext.provider?.providerRegistry;
+  const source: ModelProviderSource =
+    registry && typeof (registry as Partial<ModelProviderSource>).getForModel === 'function'
+      ? registry
+      : {
+          getForModel: () => {
+            throw new Error('provider registry unavailable on this surface');
+          },
+        };
+  return buildOnboardingModelCopy(resolveDefaultModelReadiness(source, modelKey));
+}
+
+/**
  * Run the fast-path first-run flow. Returns nothing; side effects (wizard open,
  * marker write, modal) happen through the injected deps.
  */
@@ -68,8 +98,9 @@ export function startOnboardingFastPath(deps: OnboardingFastPathDeps): void {
     return;
   }
 
+  const startCopy = resolveStartCopy(commandContext);
   const items: SelectionItem[] = [
-    { id: 'start-now', label: 'Start now', detail: 'Use the free default model — no API key needed', primaryAction: 'select' },
+    { id: 'start-now', label: startCopy.headline, detail: startCopy.detail, primaryAction: 'select' },
     { id: 'full-setup', label: 'Full guided setup', detail: 'Choose provider, model, channels, and more', primaryAction: 'select' },
   ];
   commandContext.openSelection(
@@ -82,10 +113,12 @@ export function startOnboardingFastPath(deps: OnboardingFastPathDeps): void {
         return;
       }
       // Start now (or dismissed): mark first-run done and drop into a working
-      // session on the free default model.
+      // session on the default model. The status line reuses the generated
+      // copy so it can never promise keyless readiness the registration
+      // state does not prove.
       writeOnboardingCheckMarker(shellPaths, MARKER_OPTIONS);
       commandContext.print?.(
-        'You\'re on the free default model. Add a provider key anytime with /provider, or run /onboarding for full setup.',
+        `${startCopy.detail}. Add a provider key anytime with /provider, or run /onboarding for full setup.`,
       );
       render();
     },
