@@ -141,4 +141,14 @@ describe('initiative gateway verb families are live on the vendored runtime', ()
     expect(rendered).toContain('Check-in config:');
     expect(rendered).toContain('enabled:         no');
   });
+
+  // The ci-watch recurring poll attaches to the composed daemon's watcher
+  // registry when watchers are enabled (the default): red runs surface
+  // fix-this offers without anyone running the manual verb. If this watcher
+  // stops attaching, CI watches silently degrade to manual-only — this test
+  // names that regression.
+  test('the ci-watch recurring poller is registered on the composed watcher registry', () => {
+    const watchers = services.watcherRegistry.list();
+    expect(watchers.some((watcher) => watcher.id === 'ci-watch-poller')).toBe(true);
+  });
 });
