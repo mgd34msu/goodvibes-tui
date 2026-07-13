@@ -29,6 +29,7 @@ import { FileStateCache, FileUndoManager, MemoryEmbeddingProviderRegistry, Memor
 import type { StoreSnapshotScheduler } from '@pellux/goodvibes-sdk/platform/state/store-snapshots';
 import type { UserPermissionRuleStore } from '@pellux/goodvibes-sdk/platform/permissions';
 import { buildExecPromptAnswerHandler } from '@pellux/goodvibes-sdk/platform/runtime/permissions/exec-prompt-wiring';
+import { buildLocalhostFetchApproval } from '@pellux/goodvibes-sdk/platform/runtime/permissions/localhost-fetch-approval';
 import { createDurabilityServices } from './durability-services.ts';
 import { MemorySpineClient, createLocalMemoryAccess } from '@pellux/goodvibes-sdk/platform/runtime/memory-spine';
 import { WorkspaceCheckpointManager } from '@pellux/goodvibes-sdk/platform/workspace';
@@ -627,6 +628,9 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
     surfaceRoot: 'tui',
     // Exec stuck on a terminal prompt rides the approval broker; the typed answer feeds the continuing run (SDK exec-prompt-wiring; mirrors the SDK composition).
     execPromptAnswerHandler: buildExecPromptAnswerHandler({ requestApproval: (input) => approvalBroker.requestApproval(input) }),
+    // A loopback fetch that isn't allow-listed asks once through the approval
+    // broker; "allow for this project" persists and later fetches never ask.
+    localhostFetchApproval: buildLocalhostFetchApproval({ requestApproval: (input) => approvalBroker.requestApproval(input), configManager }),
     fileCache,
     projectIndex,
     workingDirectory,

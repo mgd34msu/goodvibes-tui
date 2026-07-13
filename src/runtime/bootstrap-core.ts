@@ -6,6 +6,7 @@ import { ConfigManager, getConfiguredSystemPrompt } from '../config/index.ts';
 import { getProviderIdFromModel } from '../config/provider-model.ts';
 import { ToolRegistry } from '@pellux/goodvibes-sdk/platform/tools';
 import { registerAllTools } from '@pellux/goodvibes-sdk/platform/tools';
+import { buildLocalhostFetchApproval } from '@pellux/goodvibes-sdk/platform/runtime/permissions/localhost-fetch-approval';
 import { PermissionManager, createPermissionConfigReader } from '@pellux/goodvibes-sdk/platform/permissions';
 import { Notifier } from '@pellux/goodvibes-sdk/platform/integrations';
 import { Compositor } from '../renderer/compositor.ts';
@@ -349,8 +350,17 @@ export async function initializeBootstrapCore(
   const selection = new SelectionManager();
 
   const toolRegistry = new ToolRegistry();
+  // A loopback fetch that isn't already allow-listed asks once through the
+  // approval card; "allow for this project" persists via configManager and the
+  // fetch proceeds without another prompt. Shared by the interactive tool
+  // registry and the subagent orchestrator below so both ask the same way.
+  const localhostFetchApproval = buildLocalhostFetchApproval({
+    requestApproval: (input) => approvalBroker.requestApproval(input),
+    configManager,
+  });
   const { fileCache, projectIndex } = registerAllTools(toolRegistry, {
     surfaceRoot: 'tui',
+    localhostFetchApproval,
     fileUndoManager: services.fileUndoManager,
     modeManager: services.modeManager,
     processManager: services.processManager,
@@ -388,6 +398,7 @@ export async function initializeBootstrapCore(
   // the pre-router buffer.
   services.agentOrchestrator.setDependencies({
     surfaceRoot: 'tui',
+    localhostFetchApproval,
     fileCache,
     projectIndex,
     workingDirectory: services.workingDirectory,
