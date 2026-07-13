@@ -13,7 +13,7 @@ import { FileUndoManager } from '@pellux/goodvibes-sdk/platform/state';
 import { PermissionManager } from '@pellux/goodvibes-sdk/platform/permissions';
 import { AcpManager } from '@pellux/goodvibes-sdk/platform/acp';
 import { PermissionPromptUI, buildPendingPermissionExtras } from './permissions/prompt.ts';
-import { handleBrokerApprovalChange, buildFixSessionAffordance, handleFixSessionAttachKey, refreshFixSessionsFromApprovals } from './permissions/broker-approval-card.ts';
+import { handleBrokerApprovalChange, buildFixSessionAffordance, buildFixSessionErrorNotice, handleFixSessionAttachKey, refreshFixSessionsFromApprovals } from './permissions/broker-approval-card.ts';
 import { CommandRegistry } from './input/command-registry.ts';
 import type { CommandContext } from './input/command-registry.ts';
 import { renderProcessIndicator } from './renderer/process-indicator.ts';
@@ -145,18 +145,19 @@ async function main() {
     notify: (message) => { systemMessageRouter.high(message); render(); },
     arm: (fixSessionId) => { fixSessionAttachArmed = fixSessionId; },
   });
+  // A failed fix-session spawn stamps an error instead of a dead id: render it honestly, no jump armed.
+  const onFixSessionError = buildFixSessionErrorNotice((message) => { systemMessageRouter.high(message); render(); });
   commandContext.armFixSessionAttach = onFixSessionStarted;
   approvalBroker.subscribe((approval) => handleBrokerApprovalChange({
-    approval, broker: approvalBroker, render, onFixSessionStarted,
+    approval, broker: approvalBroker, render, onFixSessionStarted, onFixSessionError,
     getPending: () => pendingPermission,
     setPending: (next) => { pendingPermission = next; },
   }));
-  refreshFixSessionsFromApprovals(() => approvalBroker.listApprovals(), onFixSessionStarted); // catch pre-subscription stamps
+  refreshFixSessionsFromApprovals(() => approvalBroker.listApprovals(), onFixSessionStarted, onFixSessionError); // catch pre-subscription stamps
 
   let scrollTop = 0;
   let scrollLocked = true;
-  // Cached from the overlay-aware clamp the renderer computes (conversation-layout) each
-  // frame so scroll() clamps against exactly what is displayed, not a footer estimate.
+  // Cached from the overlay-aware clamp the renderer computes (conversation-layout) each frame so scroll() clamps against exactly what is displayed, not a footer estimate.
   let lastMaxScroll: number | null = null;
   // Stream and tool-timer state; mutated by wireStreamEventMetrics handlers, read during render.
   const streamMetrics: StreamMetrics = {
@@ -179,8 +180,7 @@ async function main() {
     const currentModel = providerRegistry.getCurrentModel();
     const contextWindow = providerRegistry.getContextWindowForModel(currentModel);
     const rows = stdout.rows || 24;
-    // Compact threshold must match buildShellFooter's `compact: height < 30` posture below,
-    // else estimateShellFooterHeight's cached-height fast path answers with the wrong mode.
+    // Compact threshold must match buildShellFooter's `compact: height < 30` posture below, else estimateShellFooterHeight's cached-height fast path answers with the wrong mode.
     return rows - 2 - estimateShellFooterHeight(promptLines, contextWindow, rows < 30);
   };
 
