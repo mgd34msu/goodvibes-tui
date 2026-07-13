@@ -1,5 +1,10 @@
 import { describe, expect, test } from 'bun:test';
-import { handleBrokerApprovalChange, type BrokerApprovalCardBroker } from '../../permissions/broker-approval-card.ts';
+import {
+  handleBrokerApprovalChange,
+  buildFixSessionAffordance,
+  refreshFixSessionsFromApprovals,
+  type BrokerApprovalCardBroker,
+} from '../../permissions/broker-approval-card.ts';
 import type { PendingPermissionState } from '../../shell/blocking-input.ts';
 
 function makeRequest(callId: string, tool = 'ci-fix') {
@@ -78,6 +83,45 @@ describe('broker-originated approval cards', () => {
 
     expect(pending).toBeNull();
     expect(renders).toBe(1);
+  });
+
+  test('a record carrying a spawned fix-session id surfaces the jump/attach affordance', () => {
+    let pending: PendingPermissionState | null = null;
+    const started: string[] = [];
+    const broker = makeBroker({});
+
+    // The accepted ci:fix-session record is stamped with the spawned id and
+    // republished (status resolved, card already cleared).
+    handleBrokerApprovalChange({
+      approval: { id: 'ap-9', callId: 'call-9', status: 'approved', request: makeRequest('call-9'), fixSessionId: 'sess-abc' },
+      getPending: () => pending,
+      setPending: (next) => { pending = next; },
+      broker,
+      render: () => {},
+      onFixSessionStarted: (id) => { started.push(id); },
+      defer: (cb) => cb(),
+    });
+
+    expect(started).toEqual(['sess-abc']);
+  });
+
+  test('buildFixSessionAffordance notifies once per id with a real resume command; refresh path dedupes', () => {
+    const messages: string[] = [];
+    const affordance = buildFixSessionAffordance((m) => messages.push(m));
+
+    affordance('sess-xyz');
+    affordance('sess-xyz'); // repeat — no second notice
+    expect(messages).toHaveLength(1);
+    expect(messages[0]).toContain('sess-xyz');
+    expect(messages[0]).toContain('/session resume sess-xyz');
+
+    // The listApprovals refresh path feeds the same de-duplicating affordance.
+    refreshFixSessionsFromApprovals(
+      () => [{ fixSessionId: 'sess-xyz' }, { fixSessionId: 'sess-new' }, {}],
+      affordance,
+    );
+    expect(messages).toHaveLength(2);
+    expect(messages[1]).toContain('/session resume sess-new');
   });
 
   test('a resolved ask that is not the active card is ignored', () => {
