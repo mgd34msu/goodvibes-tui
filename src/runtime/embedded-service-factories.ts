@@ -12,7 +12,6 @@
  */
 import { DaemonServer, HttpListener } from '@pellux/goodvibes-sdk/platform/daemon';
 import { createSafeHostServeFactory } from '../daemon/safe-serve.ts';
-import { suppressVersionBlindFacadeAutoUpdater } from '../daemon/lifecycle.ts';
 import type { startExternalServices } from '@/runtime/index.ts';
 
 export type ExternalServiceFactories = NonNullable<Parameters<typeof startExternalServices>[4]>;
@@ -21,13 +20,14 @@ export function createEmbeddedServiceFactories(sharedDaemonToken: string): Exter
   return {
     sharedDaemonToken,
     createDaemonServer: (bus, userAuth, runtimeServices) => {
+      // No updateArtifact: the embedded daemon keeps updates host-managed (the
+      // TUI client updates itself), so the facade runs no self-update loop.
       const daemonServer = new DaemonServer({
         runtimeBus: bus,
         userAuth,
         runtimeServices,
         serveFactory: createSafeHostServeFactory('Embedded daemon'),
       });
-      suppressVersionBlindFacadeAutoUpdater(daemonServer);
       return daemonServer;
     },
     createHttpListener: (dispatcher, userAuth, configManager) => new HttpListener({

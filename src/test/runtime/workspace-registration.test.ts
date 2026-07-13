@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { WorkspaceRegistrationStore } from '@pellux/goodvibes-sdk/platform/workspace';
 import { WorkspaceRegistrationManager } from '../../runtime/trust/workspace-registration.ts';
+import { selfRecordWorkspaceRegistration } from '../../cli/tui-startup.ts';
 
 let home: string;
 
@@ -117,5 +118,35 @@ describe('WorkspaceRegistrationManager', () => {
     expect(await mgr.describe()).toContain('never asked');
     await mgr.register();
     expect(await mgr.describe()).toContain('registered');
+  });
+
+  it('register stamps origin and never marks a record checkpoint-eligible', async () => {
+    const project = join(home, 'projects', 'app');
+    mkdirSync(project, { recursive: true });
+    const store = memoryStore(home);
+    const mgr = new WorkspaceRegistrationManager({ shellPaths: makeShellPaths(home, project), store });
+
+    await mgr.register('via TUI', 'tui');
+
+    const record = (await store.snapshot()).workspaces.find((w) => w.root.endsWith('/app'));
+    expect(record).toBeDefined();
+    expect(record!.origin).toBe('tui');
+    expect(record!.label).toBe('via TUI');
+    // Absent means false — a TUI self-record must never widen the checkpoint boundary.
+    expect(record!.checkpointEligible ?? false).toBe(false);
+  });
+
+  it('a TUI self-record stamps origin "tui" and stays checkpoint-ineligible', async () => {
+    const project = join(home, 'projects', 'app');
+    mkdirSync(project, { recursive: true });
+    const store = memoryStore(home);
+    const mgr = new WorkspaceRegistrationManager({ shellPaths: makeShellPaths(home, project), store });
+
+    await selfRecordWorkspaceRegistration(mgr);
+
+    const record = (await store.snapshot()).workspaces.find((w) => w.root.endsWith('/app'));
+    expect(record).toBeDefined();
+    expect(record!.origin).toBe('tui');
+    expect(record!.checkpointEligible ?? false).toBe(false);
   });
 });
