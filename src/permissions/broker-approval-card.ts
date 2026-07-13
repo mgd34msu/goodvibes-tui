@@ -64,19 +64,52 @@ export interface BrokerApprovalChangeParams {
 
 const isActiveStatus = (status: string): boolean => status === 'pending' || status === 'claimed';
 
+export interface FixSessionAffordanceDeps {
+  /** Announce the ready fix session as one actionable line — never a retype instruction. */
+  readonly notify: (message: string) => void;
+  /** Arm the one-key jump with the spawned session id; the surface consumes it on the jump key. */
+  readonly arm: (fixSessionId: string) => void;
+}
+
 /**
- * Build the jump/attach affordance for a spawned fix-session: the first time a
- * given session id is seen it surfaces a one-line notice pointing at the real
- * resume command; repeats are no-ops (de-duplicated by id), so the live record
- * update and the listApprovals refresh path can both feed it safely.
+ * Build the one-key jump/attach affordance for a spawned fix-session: the first
+ * time a given session id is seen it ARMS the jump (the surface attaches on the
+ * jump key — the machine does the resume, the user never retypes an id) and
+ * surfaces a one-line actionable notice. Repeats are no-ops (de-duplicated by
+ * id), so the live record update and the listApprovals refresh path can both
+ * feed it safely.
  */
-export function buildFixSessionAffordance(notify: (message: string) => void): (fixSessionId: string) => void {
+export function buildFixSessionAffordance(deps: FixSessionAffordanceDeps): (fixSessionId: string) => void {
   const seen = new Set<string>();
   return (fixSessionId) => {
     if (seen.has(fixSessionId)) return;
     seen.add(fixSessionId);
-    notify(`[CI] Fix session started: ${fixSessionId}. Resume it with /session resume ${fixSessionId}`);
+    deps.arm(fixSessionId);
+    deps.notify('[CI] Fix session ready — press j to jump to it.');
   };
+}
+
+export interface FixSessionAttachKeyDeps {
+  /** The armed fix-session id (the surface clears the arm before calling this). */
+  readonly armedFixSessionId: string;
+  /** Attach/jump to the fix session — runs the resume so the user never retypes an id. */
+  readonly attach: (fixSessionId: string) => void;
+  readonly render: () => void;
+}
+
+/**
+ * Consume the keypress that follows an armed fix-session notice: the jump key
+ * ('j') attaches to the armed session; any other key just falls through (the
+ * caller has already cleared the arm, so the affordance is one-shot). Returns
+ * true only when it performed the jump.
+ */
+export function handleFixSessionAttachKey(data: string, deps: FixSessionAttachKeyDeps): boolean {
+  if (data === 'j') {
+    deps.attach(deps.armedFixSessionId);
+    deps.render();
+    return true;
+  }
+  return false;
 }
 
 /**

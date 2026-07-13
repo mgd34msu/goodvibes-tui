@@ -155,8 +155,12 @@ export function registerCiRuntimeCommands(registry: CommandRegistry): void {
             const result = await rpc.sdk.operator.invoke('ci.watches.run', { watchId: runId });
             const lines = [renderReport(result.report)];
             lines.push(`notified: ${result.notified ? 'yes' : 'no'}${result.notificationId ? ` (${result.notificationId})` : ''}`);
-            lines.push(`fix-session triggered: ${result.fixSessionTriggered ? 'yes' : 'no'}${result.fixSessionId ? ` (${result.fixSessionId})` : ''}`);
+            lines.push(`fix-session triggered: ${result.fixSessionTriggered ? 'yes' : 'no'}`);
             ctx.print(lines.join('\n'));
+            // Route the spawned session through the shared one-key jump affordance
+            // instead of printing the id for the user to retype — same attach flow
+            // as the accepted fix-this card.
+            if (result.fixSessionId) ctx.armFixSessionAttach?.(result.fixSessionId);
           } catch (error) {
             ctx.print(`[ci watches run] ${describeOperatorRpcError(error)}`);
           }
