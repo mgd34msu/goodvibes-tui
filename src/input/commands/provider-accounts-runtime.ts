@@ -30,7 +30,7 @@ function findProviderAccountRecord(
  * stay as plain (non-executing) rows. When there is no interactive selection
  * surface, each action is printed honestly instead.
  */
-function presentRecommendedActions(
+export function presentRecommendedActions(
   ctx: CommandContext,
   providerId: string,
   actions: readonly RecommendedAction[],

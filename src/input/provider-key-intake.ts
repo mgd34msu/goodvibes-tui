@@ -139,15 +139,25 @@ export function ensureProviderKeyThenSelect(
   providerId: string,
   proceed: () => void,
 ): void {
-  const registry = ctx.provider?.providerRegistry;
-  const provider = registry?.tryGet?.(providerId);
+  // Resolve the live provider defensively: a command context that routes only
+  // through the provider API (no raw registry access) leaves the intake a no-op
+  // and the selection completes unchanged.
+  let registry: CommandContext['provider']['providerRegistry'] | undefined;
+  let provider: ReturnType<CommandContext['provider']['providerRegistry']['tryGet']> | undefined;
+  try {
+    registry = ctx.provider?.providerRegistry;
+    provider = registry?.tryGet?.(providerId);
+  } catch {
+    registry = undefined;
+    provider = undefined;
+  }
   runProviderKeyIntake(
     providerId,
     {
       provider,
       secretsManager: ctx.platform?.secretsManager,
       refreshProviderCredentials: registry
-        ? () => registry.refreshProviderCredentials()
+        ? () => registry!.refreshProviderCredentials()
         : undefined,
       beginConcealedInput: ctx.beginConcealedInput,
       print: (text) => ctx.print(text),
