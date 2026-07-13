@@ -36,6 +36,7 @@ import type { BootstrapContext } from './runtime/bootstrap.ts';
 import { selfUpdateAtLaunch } from './cli/launch-auto-update.ts';
 import { buildSharedOrchestratorCoreServices, refreshMemoryRecallSnapshot } from './runtime/orchestrator-core-services.ts';
 import { createSessionContinuityHintsBuilder } from './runtime/session-continuity-hints.ts';
+import { resolveWebSurfaceUrl } from '@pellux/goodvibes-sdk/platform/runtime/feature-announcements';
 import { readLastSessionPointer, writeRecoveryFile } from '@/runtime/index.ts';
 import { handleBlockingShellInput, type PendingPermissionState } from './shell/blocking-input.ts';
 import { createPersistRecoverySnapshot, createRecoveryFileOps, createReopenRecoveryPanels, handleErrorAffordanceKey, resolveStartupRecoveryInfo } from './shell/recovery-input-helpers.ts';
@@ -487,6 +488,7 @@ async function main() {
       hitlMode: modeManager.getHITLMode(),
       // Cross-surface spine posture segment (adopted-daemon mode only).
       sessionSpineStatus: (() => { const s = uiServices.platform.externalServices?.inspect(); return s?.sessionSpineActive && s.sessionSpineStatus && s.sessionSpineStatus !== 'unknown' ? s.sessionSpineStatus : undefined; })(), runningAgentCount, runningProcessCount,
+      webSurfaceUrl: configManager.get('web.enabled') ? resolveWebSurfaceUrl(configManager) : undefined,
       // Composer must not read as focused while the panel/process indicator owns keyboard focus.
       promptFocused: !input.panelFocused && !input.indicatorFocused,
       indicatorFocused: input.indicatorFocused,
