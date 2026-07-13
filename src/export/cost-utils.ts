@@ -15,18 +15,30 @@
 //      honest "unpriced" state instead of a silent $0.
 // ---------------------------------------------------------------------------
 
-import type { CatalogModel } from '@pellux/goodvibes-sdk/platform/providers';
+import { computeUsageCostUsd, type CatalogModel, type ResolvedModelPricing } from '@pellux/goodvibes-sdk/platform/providers';
 
 export interface ModelPricing {
   input: number;
   output: number;
 }
 
+/**
+ * Where a resolved price came from, for the render-side source distinction:
+ * 'user' = the manual pricing.modelPrices entry ("your price"), 'provider' =
+ * served by the provider API, 'catalog' = the live model catalog (dated),
+ * 'fallback' = this module's small built-in safety net.
+ */
+export type PricingSourceKind = 'user' | 'provider' | 'catalog' | 'fallback';
+
 /** Result of a pricing lookup: the resolved (possibly zero) price, and whether it's real. */
 export interface PricingResult {
   pricing: ModelPricing;
-  /** False when no source (catalog or static fallback) recognized the model — the zero pricing is a placeholder, not a real price. */
+  /** False when no source recognized the model — the zero pricing is a placeholder, not a real price. */
   priced: boolean;
+  /** Which source priced the model (present only when priced). */
+  source?: PricingSourceKind;
+  /** ISO date (YYYY-MM-DD) of the catalog/provider snapshot the price came from, when known. */
+  asOf?: string;
 }
 
 // Hand-maintained safety net, used only when the live catalog has no source
@@ -71,6 +83,20 @@ export function setPricingSource(source: (() => readonly CatalogModel[]) | null)
   pricingSource = source;
 }
 
+// The ONE model pricing resolver (manual pricing.modelPrices -> registration
+// -> provider-served -> catalog -> honest unknown), wired from
+// bootstrap-core.ts as ProviderRegistry.resolveModelPricing once the runtime
+// exists. When set, it is consulted FIRST so a manual price the user sets is
+// visible to every cost surface immediately; the legacy catalog/static chain
+// below remains the fallback for resolver-unknown models and for surfaces
+// (tests, headless) that never wire a registry.
+let modelPricingResolver: ((modelId: string) => ResolvedModelPricing) | null = null;
+
+/** Wire (or clear, with null) the registry's resolveModelPricing as the primary pricing source. */
+export function setModelPricingResolver(resolver: ((modelId: string) => ResolvedModelPricing) | null): void {
+  modelPricingResolver = resolver;
+}
+
 function findInCatalog(modelId: string, models: readonly CatalogModel[]): ModelPricing | null {
   const exact = models.find((m) => m.id === modelId);
   if (exact) return exact.tier === 'free' ? { input: 0, output: 0 } : exact.pricing;
@@ -97,18 +123,58 @@ function findInStaticFallback(modelId: string): ModelPricing | null {
  * header for the full resolution order.
  */
 export function resolvePricing(modelId: string): PricingResult {
-  if (modelId.endsWith(':free')) return { pricing: { input: 0, output: 0 }, priced: true };
+  if (modelId.endsWith(':free')) return { pricing: { input: 0, output: 0 }, priced: true, source: 'catalog' };
+
+  // The ONE resolver first: manual price -> registration -> provider-served
+  // -> catalog. A 'priced' answer carries its source (and snapshot date when
+  // known) so render surfaces can say "your price" vs "catalog price, as of
+  // <date>". Unknown/subscription answers fall through to the legacy chain
+  // so nothing regresses while the catalog is still loading.
+  if (modelPricingResolver) {
+    const resolved = modelPricingResolver(modelId);
+    if (resolved.status === 'priced') {
+      return {
+        pricing: { input: resolved.rates.inputPerMTok, output: resolved.rates.outputPerMTok },
+        priced: true,
+        source: resolved.source,
+        ...(resolved.asOf ? { asOf: resolved.asOf } : {}),
+      };
+    }
+  }
 
   const models = pricingSource?.() ?? [];
   const catalogHit = findInCatalog(modelId, models);
-  if (catalogHit) return { pricing: catalogHit, priced: true };
+  if (catalogHit) return { pricing: catalogHit, priced: true, source: 'catalog' };
 
   const fallbackHit = findInStaticFallback(modelId);
-  if (fallbackHit) return { pricing: fallbackHit, priced: true };
+  if (fallbackHit) return { pricing: fallbackHit, priced: true, source: 'fallback' };
 
   // Genuinely unknown — no source recognizes this model. Report honestly
   // rather than collapsing into the same zero a free model would return.
   return { pricing: { input: 0, output: 0 }, priced: false };
+}
+
+/**
+ * The render-side source distinction for a priced model: "your price" for a
+ * manual pricing.modelPrices entry, "catalog price, as of <date>" (or
+ * provider-served/built-in equivalents) otherwise. Null when the model is
+ * unpriced — callers render the explicit "price unknown" marker instead.
+ */
+export function describePricingSource(modelId: string): string | null {
+  const result = resolvePricing(modelId);
+  if (!result.priced) return null;
+  switch (result.source) {
+    case 'user':
+      return 'your price';
+    case 'provider':
+      return result.asOf ? `provider price, as of ${result.asOf}` : 'provider price';
+    case 'catalog':
+      return result.asOf ? `catalog price, as of ${result.asOf}` : 'catalog price';
+    case 'fallback':
+      return 'built-in price';
+    default:
+      return 'catalog price';
+  }
 }
 
 /**
@@ -146,6 +212,20 @@ export function calcSessionCost(
   cacheWrite: number,
   modelId: string,
 ): number {
+  // Through the ONE resolver when wired: computeUsageCostUsd applies the
+  // source's explicit cache rates (or the published per-provider ratio)
+  // instead of billing cache traffic at the full input rate.
+  if (modelPricingResolver) {
+    const resolved = modelPricingResolver(modelId);
+    if (resolved.status === 'priced') {
+      return computeUsageCostUsd(resolved, {
+        inputTokens,
+        outputTokens,
+        cacheReadTokens: cacheRead,
+        cacheWriteTokens: cacheWrite,
+      }) ?? 0;
+    }
+  }
   const pricing = getPricing(modelId);
   // Cache reads/writes count toward billable input side (same convention as panel)
   const billableInput = inputTokens + cacheRead + cacheWrite;
@@ -194,4 +274,32 @@ export function readBudgetAlertUsd(configGet: (key: string) => unknown): number 
   const raw = configGet(BUDGET_ALERT_USD_CONFIG_KEY);
   const parsed = typeof raw === 'number' ? raw : Number(raw);
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : BUDGET_ALERT_USD_DEFAULT;
+}
+
+/**
+ * The SDK settings key holding the user's manual per-model prices — the
+ * highest-precedence source in the ONE pricing resolver. Object map of
+ * `provider:model` -> { input, output, cacheRead?, cacheWrite? } in USD per
+ * 1M tokens.
+ */
+export const MODEL_PRICES_CONFIG_KEY = 'pricing.modelPrices';
+
+/**
+ * Persist a manual price for one `provider:model` key into
+ * pricing.modelPrices, preserving every other entry. The registry's resolver
+ * reads the key live per call, so the new price is visible to every cost
+ * surface on the next render — no restart.
+ */
+export function writeManualModelPrice(
+  config: BudgetAlertConfigAccess,
+  modelKey: string,
+  price: { input: number; output: number },
+): void {
+  const current = config.get(MODEL_PRICES_CONFIG_KEY);
+  const map: Record<string, unknown> =
+    current && typeof current === 'object' && !Array.isArray(current)
+      ? { ...(current as Record<string, unknown>) }
+      : {};
+  map[modelKey] = { input: price.input, output: price.output };
+  config.set(MODEL_PRICES_CONFIG_KEY, map);
 }

@@ -283,6 +283,23 @@ const SURFACE_OVERLAYS: readonly SurfaceOverlay[] = [
     ],
   },
   {
+    onboardingId: 'telephony',
+    sdkSurface: 'telephony',
+    label: 'Telephony surface',
+    hint: 'Enable SMS/voice notification delivery — direct Twilio, or a self-hosted bridge.',
+    fields: [
+      { configKey: 'surfaces.telephony.provider', label: 'Telephony provider', hint: 'twilio for direct Twilio delivery, bridge for a self-hosted telephony bridge.', placeholder: 'twilio' },
+      { configKey: 'surfaces.telephony.mode', label: 'Telephony mode', hint: 'sms, voice (call with spoken text), or bridge.', placeholder: 'sms' },
+      { configKey: 'surfaces.telephony.accountSid', label: 'Twilio account SID', hint: 'Account SID for direct Twilio delivery.', placeholder: 'AC...' },
+      { configKey: 'surfaces.telephony.authToken', label: 'Twilio auth token', hint: 'Auth token for direct Twilio delivery.', placeholder: 'auth token' },
+      { configKey: 'surfaces.telephony.fromNumber', label: 'From number', hint: 'The E.164 number outbound SMS/calls originate from.', placeholder: '+15551234567' },
+      { configKey: 'surfaces.telephony.defaultRecipient', label: 'Default recipient', hint: 'Fallback E.164 number for outbound delivery.', placeholder: '+15557654321' },
+      { configKey: 'surfaces.telephony.bridgeUrl', label: 'Bridge URL', hint: 'Base URL of the self-hosted telephony bridge (bridge provider only).', placeholder: 'https://telephony-bridge.example.test' },
+      { configKey: 'surfaces.telephony.token', label: 'Bridge token', hint: 'Token used to authenticate with the telephony bridge.', placeholder: 'bridge token' },
+      { configKey: 'surfaces.telephony.webhookSecret', label: 'Webhook secret', hint: 'Secret used to verify inbound telephony webhooks.', placeholder: 'webhook secret' },
+    ],
+  },
+  {
     onboardingId: 'matrix',
     sdkSurface: 'matrix',
     label: 'Matrix surface',

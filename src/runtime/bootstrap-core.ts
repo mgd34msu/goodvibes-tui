@@ -25,7 +25,7 @@ import { readExecEnvScrubAllowlist } from '../input/exec-env-scrub-config.ts';
 import { createSandboxExecAsk, sandboxExecAskDepsFromRuntime } from '../permissions/sandbox-exec-gate.ts';
 import { createRuntimeServices, type RuntimeServices } from './services.ts';
 import { runBootMemoryFold } from './memory-fold.ts';
-import { setPricingSource } from '../export/cost-utils.ts';
+import { setModelPricingResolver, setPricingSource } from '../export/cost-utils.ts';
 import { createUiRuntimeServices, type UiRuntimeServices } from './ui-services.ts';
 import { join } from 'node:path';
 import { installWrfcAgentToolGuard } from '../tools/wrfc-agent-guard.ts';
@@ -261,6 +261,11 @@ export async function initializeBootstrapCore(
   // pricing from unpriced instead of silently reading zero for any
   // model the small static fallback table doesn't cover.
   setPricingSource(() => providerRegistry.getRawCatalogModels());
+  // And to the ONE pricing resolver (manual pricing.modelPrices ->
+  // registration -> provider-served -> catalog -> honest unknown), so every
+  // cost surface sees a manually-set price immediately and can name its
+  // source ("your price" vs "catalog price, as of <date>").
+  setModelPricingResolver((modelId) => providerRegistry.resolveModelPricing(modelId));
   services.keybindingsManager.loadFromDisk();
   domainDispatch.syncControlPlaneState({
     enabled: Boolean(configManager.get('controlPlane.enabled')),

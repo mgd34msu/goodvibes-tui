@@ -292,6 +292,11 @@ export const FEATURE_ONBOARDING_SECTIONS: readonly FeatureSection[] = [
         hint: 'Score single/cohort/background/remote strategies each turn and pick the best. Exposes /plan commands.',
       },
       {
+        flagId: 'daemon-auto-update',
+        label: 'Daemon auto-update',
+        hint: 'The daemon checks for a new release hourly, checksum-verifies it, swaps binaries only at a no-active-work moment, and keeps the previous binary for one-command rollback. On by default; update.auto turns it off and update.intervalMinutes tunes the cadence in /settings.',
+      },
+      {
         flagId: 'relay-connect',
         label: 'Outbound zero-knowledge relay',
         hint: 'Let the daemon reach out to a self-hostable, end-to-end-encrypted relay so surfaces can reach it from outside the LAN. Enabling this turns on relay.enabled; set the relay URL below or later in /settings.',

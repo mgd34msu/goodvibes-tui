@@ -7,7 +7,7 @@ import type { TurnEvent } from '@/runtime/index.ts';
 import type { UiEventFeed } from '../runtime/ui-events.ts';
 import type { UiReadModel, UiSessionSnapshot } from '../runtime/ui-read-models.ts';
 import type { SessionMemoryQuery } from '../runtime/ui-service-queries.ts';
-import { calcSessionCost, isModelPriced } from '../export/cost-utils.ts';
+import { calcSessionCost, describePricingSource, isModelPriced } from '../export/cost-utils.ts';
 import { type ConfirmState, handleConfirmInput, renderConfirmLines } from './confirm-state.ts';
 import type { PanelIntegrationContext } from './types.ts';
 import {
@@ -618,9 +618,17 @@ export class TokenBudgetPanel extends BasePanel {
       const modelId = this.getCurrentModelId();
       const priced = isModelPriced(modelId);
       const cost = calcSessionCost(u.input, u.output, u.cacheRead, u.cacheWrite, modelId);
+      // Dollars carry their source; an unknown price renders the explicit
+      // marker (never $0.00) and names the one-key fix on the cost panel.
+      const source = priced ? describePricingSource(modelId) : null;
       lines.push(buildStyledPanelLine(width, [
         { text: '  Cost:       ', fg: C.label },
-        { text: priced ? `$${cost.toFixed(4)}` : 'unpriced', fg: C.value, bold: true },
+        { text: priced ? `$${cost.toFixed(4)}` : 'price unknown', fg: C.value, bold: true },
+        ...(priced && source
+          ? [{ text: ` (${source})`, fg: C.dim }]
+          : priced
+            ? []
+            : [{ text: ' — set it with p on the cost panel', fg: C.dim }]),
       ]));
     }
 

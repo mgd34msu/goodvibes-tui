@@ -22,15 +22,15 @@ import {
   DEFAULT_PANEL_PALETTE,
   type PanelWorkspaceSection,
 } from './polish.ts';
-import { calcSessionCost, isModelPriced, computeBudgetBreach, readBudgetAlertUsd, BUDGET_ALERT_USD_CONFIG_KEY, type BudgetAlertConfigAccess } from '../export/cost-utils.ts';
+import { calcSessionCost, describePricingSource, isModelPriced, computeBudgetBreach, readBudgetAlertUsd, writeManualModelPrice, BUDGET_ALERT_USD_CONFIG_KEY, type BudgetAlertConfigAccess } from '../export/cost-utils.ts';
 import { abbreviateCount } from '../utils/format-number.ts';
 import { isTextBackspace } from '../input/delete-key-policy.ts';
 
 // Pricing lookups are provided by ../export/cost-utils.ts (single source of truth).
 
-/** unpriced=true renders an honest "unpriced" marker instead of a $0.00 that could be mistaken for a real zero cost. */
+/** unpriced=true renders the explicit "price unknown" marker instead of a $0.00 that could be mistaken for a real zero cost. */
 function formatCost(usd: number, unpriced = false): string {
-  if (unpriced) return 'unpriced';
+  if (unpriced) return 'price unknown';
   if (usd === 0) return '$0.00';
   if (usd < 0.0001) return '<$0.0001';
   if (usd < 0.01) return `$${usd.toFixed(4)}`;
@@ -126,6 +126,12 @@ export class CostTrackerPanel extends BasePanel {
   // entry is active; unlike LocalAuthPanel's masked entry, the value is not
   // secret so it is echoed directly.
   private budgetEntry: string | null = null;
+
+  // Draft buffer for the in-panel manual-price entry mode ('p' key): the one
+  // action away from any price display (and from the "price unknown" marker).
+  // Format: "input,output" in USD per 1M tokens; persists to the
+  // pricing.modelPrices settings key live on Enter.
+  private priceEntry: string | null = null;
 
   // Scroll offset for agent list
   private scrollOffset = 0;
@@ -347,15 +353,26 @@ export class CostTrackerPanel extends BasePanel {
    * `Panel.isCapturingTextBurst`.
    */
   isCapturingTextBurst(): boolean {
-    return this.budgetEntry !== null;
+    return this.budgetEntry !== null || this.priceEntry !== null;
   }
 
   handleInput(key: string): boolean {
     if (this.budgetEntry !== null) return this.handleBudgetEntryInput(key);
+    if (this.priceEntry !== null) return this.handlePriceEntryInput(key);
 
     if (key === 'b') {
       const threshold = this.currentBudgetThreshold();
       this.budgetEntry = threshold > 0 ? String(threshold) : '';
+      this.markDirty();
+      return true;
+    }
+
+    if (key === 'p') {
+      // One action from any price display: edit the manual price for the
+      // session's provider:model. Needs a wired config (production path) —
+      // without one the key falls through rather than opening a dead editor.
+      if (!this.configAccess) return false;
+      this.priceEntry = '';
       this.markDirty();
       return true;
     }
@@ -402,6 +419,52 @@ export class CostTrackerPanel extends BasePanel {
     return true; // absorb everything else while entry is active
   }
 
+  /** True when the session model can carry a manual price (pricing.modelPrices keys are `provider:model`). */
+  private canEditSessionModelPrice(): boolean {
+    return this.sessionModel !== 'unknown' && this.sessionModel.includes(':');
+  }
+
+  private handlePriceEntryInput(key: string): boolean {
+    if (key === 'escape') {
+      this.priceEntry = null;
+      this.markDirty();
+      return true;
+    }
+    if (key === 'enter' || key === 'return') {
+      const raw = (this.priceEntry ?? '').trim();
+      if (!this.canEditSessionModelPrice()) {
+        // The prompt already explains why; Enter just closes it.
+        this.priceEntry = null;
+        this.markDirty();
+        return true;
+      }
+      const parts = raw.split(/[\s,]+/).filter((part) => part.length > 0);
+      const input = Number(parts[0]);
+      const output = Number(parts[1]);
+      if (parts.length === 2 && Number.isFinite(input) && input >= 0 && Number.isFinite(output) && output >= 0) {
+        writeManualModelPrice(this.configAccess!, this.sessionModel, { input, output });
+        this.priceEntry = null;
+      }
+      // Malformed input keeps the editor open so the draft can be corrected.
+      this.markDirty();
+      return true;
+    }
+    if (isTextBackspace(key)) {
+      if (this.priceEntry && this.priceEntry.length > 0) {
+        this.priceEntry = this.priceEntry.slice(0, -1);
+        this.markDirty();
+      }
+      return true;
+    }
+    // Two USD amounts separated by a comma (or space) — digits, dots, comma, space.
+    if (key.length === 1 && /[0-9., ]/.test(key)) {
+      this.priceEntry = (this.priceEntry ?? '') + key;
+      this.markDirty();
+      return true;
+    }
+    return true; // absorb everything else while entry is active
+  }
+
   /**
    * Scroll the agent list. Over-consumption fix: only absorbs the key (and
    * only advances) when the agent list is actually long enough to scroll —
@@ -427,20 +490,29 @@ export class CostTrackerPanel extends BasePanel {
   render(width: number, height: number): Line[] {
     if (height <= 0 || width <= 0) return [];
     if (this.budgetEntry !== null) return this.renderBudgetEntryPrompt(width, height);
+    if (this.priceEntry !== null) return this.renderPriceEntryPrompt(width, height);
 
     const totalInputTokens = this.sessionUsage.input + this.sessionUsage.cacheRead + this.sessionUsage.cacheWrite;
     const sessionCost = calcSessionCost(this.sessionUsage.input, this.sessionUsage.output, this.sessionUsage.cacheRead, this.sessionUsage.cacheWrite, this.sessionModel);
     const budgetThreshold = this.currentBudgetThreshold();
     const overBudget = computeBudgetBreach(sessionCost, budgetThreshold);
     const sparkline = buildSparkline(this.costHistory);
-    const costStr = formatCost(sessionCost, !isModelPriced(this.sessionModel));
+    const sessionPriced = isModelPriced(this.sessionModel);
+    const costStr = formatCost(sessionCost, !sessionPriced);
     const costFg = overBudget ? C.bad : C.cost;
+    // Dollars carry their source: "your price" for a manual entry,
+    // "catalog price, as of <date>" for the dated catalog, etc. The
+    // "price unknown" marker carries the one-key action to fix it instead.
+    const sourceDescription = sessionPriced ? describePricingSource(this.sessionModel) : null;
+    const sourceStr = sessionPriced
+      ? (sourceDescription ? ` (${sourceDescription})` : '')
+      : ' — press p to set a price';
     const budgetStr = budgetThreshold > 0
       ? ` / ${formatCost(budgetThreshold)}`
       : '';
     const alertStr = overBudget ? ' ! OVER BUDGET' : '';
     const sessionLines: Line[] = [
-      this.renderKeyValue(width, ' Total', `${costStr}${budgetStr}${alertStr}`, costFg),
+      this.renderKeyValue(width, ' Total', `${costStr}${budgetStr}${alertStr}${sourceStr}`, costFg),
     ];
     // Budget meter — the single most important glance for this panel: how much
     // of the configured budget the session has consumed. Only shown when a
@@ -455,6 +527,13 @@ export class CostTrackerPanel extends BasePanel {
         { filled: meterFg, empty: C.separator, label: C.label },
         { prefix: ' Budget [', suffix: `] ${pctStr}` },
       ));
+      // Unpriced-spend honesty wherever budget state shows: a meter over a
+      // partially-unpriced session must say the % undercounts real spend.
+      const anyUnpricedSpend = (!sessionPriced && (totalInputTokens > 0 || this.sessionUsage.output > 0))
+        || Array.from(this.agents.values()).some((agent) => agent.inputTokens > 0 && !isModelPriced(agent.model));
+      if (anyUnpricedSpend) {
+        sessionLines.push(this.renderKeyValue(width, '', 'some spend has no known price and is not counted above', C.warn));
+      }
     }
     if (sparkline.length > 0) sessionLines.push(this.renderLabeledLine(width, ' Trend', sparkline, C.good));
     sessionLines.push(this.renderKeyValue(width, ' Input',  formatTokens(this.sessionUsage.input),  C.label));
@@ -481,9 +560,11 @@ export class CostTrackerPanel extends BasePanel {
           { keys: 'Up/Down', label: 'scroll agents' },
           { keys: 'PgUp/PgDn', label: 'page' },
           { keys: 'b', label: 'set budget' },
+          { keys: 'p', label: 'set model price' },
         ], DEFAULT_PANEL_PALETTE)
       : buildKeyboardHints(width, [
           { keys: 'b', label: 'set budget alert' },
+          { keys: 'p', label: 'set model price' },
         ], DEFAULT_PANEL_PALETTE);
     if (agentList.length > 0) {
       const planCost = agentList.reduce((sum, a) => sum + a.cost, 0);
@@ -619,6 +700,42 @@ export class CostTrackerPanel extends BasePanel {
     const workspace = buildPanelWorkspace(width, height, {
       title: ' Cost Tracker — Budget',
       intro: 'Type a USD amount and press Enter to set the budget alert threshold.',
+      sections: [{ lines: promptLines }],
+      palette: DEFAULT_PANEL_PALETTE,
+    });
+    while (workspace.length < height) workspace.push(createEmptyLine(width));
+    return workspace.slice(0, height);
+  }
+
+  // Non-masked entry for the 'p' manual-price key. Two USD-per-1M-token
+  // amounts (input,output); persists to pricing.modelPrices for the session's
+  // provider:model live. A model without a provider prefix cannot carry a
+  // manual price (the settings key is keyed provider:model) — the prompt says
+  // so instead of accepting a value it could not store.
+  private renderPriceEntryPrompt(width: number, height: number): Line[] {
+    const editable = this.canEditSessionModelPrice();
+    const draft = this.priceEntry ?? '';
+    const display = `${draft}█`;
+    const promptLines: Line[] = editable
+      ? [
+          buildPanelLine(width, [[` Set your manual price for ${this.sessionModel} (USD per 1M tokens).`, C.label]]),
+          buildPanelLine(width, [[' Format: input,output — for example 3.00,15.00', C.dim]]),
+          buildPanelLine(width, [['', C.label]]),
+          buildPanelLine(width, [[' Price  ', C.label], [display, C.cost]]),
+          buildPanelLine(width, [['', C.label]]),
+          buildPanelLine(width, [[' [Enter] Save   [Esc] Cancel   [Backspace] Delete char', C.dim]]),
+        ]
+      : [
+          buildPanelLine(width, [[` The current model (${this.sessionModel}) has no provider prefix, so a`, C.label]]),
+          buildPanelLine(width, [[' manual price cannot be stored for it (prices are keyed provider:model).', C.label]]),
+          buildPanelLine(width, [['', C.label]]),
+          buildPanelLine(width, [[' [Esc] Close', C.dim]]),
+        ];
+    const workspace = buildPanelWorkspace(width, height, {
+      title: ' Cost Tracker — Model Price',
+      intro: editable
+        ? 'Your price wins over provider and catalog prices, immediately and everywhere.'
+        : 'Manual prices are stored per provider:model.',
       sections: [{ lines: promptLines }],
       palette: DEFAULT_PANEL_PALETTE,
     });
