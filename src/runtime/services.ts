@@ -312,6 +312,9 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
     messageBus: agentMessageBus,
     executor: agentOrchestrator,
     configManager,
+    // The live registry lets a bare model id in a spawn() override resolve
+    // through the shared resolver instead of being rejected as unqualified.
+    providerRegistry,
   });
   const contextAccountingHolder = new ContextAccountingHolder();
   agentOrchestrator.setConversationSink({ // Conversation-snapshot bridge (mirrors the SDK's own createRuntimeServices)
@@ -389,6 +392,9 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
     runtimeStore: options.runtimeStore,
     runtimeBus: options.runtimeBus,
     deliveryManager,
+    // Same live registry: a bare model id on an automation job resolves through
+    // the shared resolver instead of a format-only rejection.
+    providerRegistry,
     spawnTask: (input) => {
       const record = agentManager.spawn({
         mode: 'spawn',
