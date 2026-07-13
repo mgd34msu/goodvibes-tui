@@ -206,6 +206,12 @@ function createHarness() {
         const cost = pricing.get(modelId);
         return cost ? { prompt: cost.input, completion: cost.output } : null;
       },
+      resolveModelPricing: (modelRef: string) => {
+        const cost = pricing.get(modelRef);
+        return cost
+          ? { status: 'priced' as const, source: 'catalog' as const, rates: { inputPerMTok: cost.input, outputPerMTok: cost.output } }
+          : { status: 'unknown' as const };
+      },
       has: (id: string) => providers.has(id),
       require: (id: string) => {
         const provider = providers.get(id);
