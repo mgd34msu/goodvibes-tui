@@ -5,7 +5,7 @@ import {
   GOODVIBES_NTFY_REMOTE_TOPIC,
   resolveGoodVibesNtfyTopics,
 } from '@pellux/goodvibes-sdk/platform/integrations';
-import { enableFeatureFlags, getMissingSurfaceFeatureFlags, getServerSurfaceFeatureFlags } from '../runtime/surface-feature-flags.ts';
+import { enableFeatureFlags, getMissingSurfaceFeatureFlags, getServerSurfaceFeatureFlags, surfaceFeatureGateSettingsKeys } from '../runtime/surface-feature-flags.ts';
 import { resolveRuntimeEndpointBinding } from './endpoints.ts';
 import { classifyBindPosture, isNetworkFacing } from './network-posture.ts';
 import type { CliCommandRuntime } from './types.ts';
@@ -147,7 +147,7 @@ export async function handleSurfacesCommand(runtime: CliCommandRuntime): Promise
       readinessIssues.push(`${surface.label} is enabled but missing ${surface.missing.join(', ')}.`);
     }
     if (surface.missingFeatureFlags.length > 0) {
-      readinessIssues.push(`${surface.label} is enabled but feature gates are disabled: ${surface.missingFeatureFlags.join(', ')}.`);
+      readinessIssues.push(`${surface.label} is enabled but these settings are off: ${surfaceFeatureGateSettingsKeys(surface.missingFeatureFlags).join(', ')}.`);
     }
   }
   const value = {
@@ -185,7 +185,7 @@ export async function handleSurfacesCommand(runtime: CliCommandRuntime): Promise
     `  http-listener: ${yesNo(value.httpListener.enabled)} (${value.httpListener.hostMode} ${value.httpListener.host}:${value.httpListener.port})${includeProbe ? ` reachable=${yesNo(value.httpListener.reachable)}` : ''}`,
     '',
     'External surfaces:',
-    ...value.surfaces.map((surface) => `  ${surface.label.padEnd(16)} enabled=${yesNo(surface.enabled)} ready=${yesNo(surface.ready)}${surface.enabled && surface.missing.length > 0 ? ` missing=${surface.missing.join(',')}` : ''}${surface.enabled && surface.missingFeatureFlags.length > 0 ? ` featureGates=${surface.missingFeatureFlags.join(',')}` : ''}`),
+    ...value.surfaces.map((surface) => `  ${surface.label.padEnd(16)} enabled=${yesNo(surface.enabled)} ready=${yesNo(surface.ready)}${surface.enabled && surface.missing.length > 0 ? ` missing=${surface.missing.join(',')}` : ''}${surface.enabled && surface.missingFeatureFlags.length > 0 ? ` settingsOff=${surfaceFeatureGateSettingsKeys(surface.missingFeatureFlags).join(',')}` : ''}`),
     ...(filteredSurfaces.some((surface) => surface.id === 'ntfy') ? [
       '',
       'ntfy inbound topics:',
@@ -260,7 +260,7 @@ export async function buildListenerTestResult(runtime: CliCommandRuntime): Promi
   if (isNetworkFacing(enabled, binding) && auth.bootstrapCredentialPresent) issues.push('Network-facing listener still has a bootstrap credential file.');
   for (const surface of surfaces) {
     if (surface.missing.length > 0) issues.push(`${surface.label} is enabled but missing ${surface.missing.join(', ')}.`);
-    if (surface.missingFeatureFlags.length > 0) issues.push(`${surface.label} is enabled but feature gates are disabled: ${surface.missingFeatureFlags.join(', ')}.`);
+    if (surface.missingFeatureFlags.length > 0) issues.push(`${surface.label} is enabled but these settings are off: ${surfaceFeatureGateSettingsKeys(surface.missingFeatureFlags).join(', ')}.`);
   }
   return { enabled, ...binding, posture, reachable, service, auth, surfaces, issues };
 }
@@ -276,7 +276,7 @@ export function formatListenerTestResult(runtime: CliCommandRuntime, value: List
     `  local auth users: ${value.auth.userStorePresent ? 'present' : 'missing'}`,
     `  bootstrap credential: ${value.auth.bootstrapCredentialPresent ? 'present' : 'missing'}`,
     value.surfaces.length === 0 ? '  enabled webhook surfaces: none' : '  enabled webhook surfaces:',
-    ...value.surfaces.map((surface) => `    ${surface.label}: ready=${yesNo(surface.ready)}${surface.missing.length > 0 ? ` missing=${surface.missing.join(',')}` : ''}${surface.missingFeatureFlags.length > 0 ? ` featureGates=${surface.missingFeatureFlags.join(',')}` : ''}`),
+    ...value.surfaces.map((surface) => `    ${surface.label}: ready=${yesNo(surface.ready)}${surface.missing.length > 0 ? ` missing=${surface.missing.join(',')}` : ''}${surface.missingFeatureFlags.length > 0 ? ` settingsOff=${surfaceFeatureGateSettingsKeys(surface.missingFeatureFlags).join(',')}` : ''}`),
     value.issues.length === 0 ? '  readiness: ready' : '  readiness: needs attention',
     ...value.issues.map((issue) => `    - ${issue}`),
   ].join('\n'));

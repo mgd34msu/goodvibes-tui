@@ -10,7 +10,7 @@
 
 import type { ConfigManager } from '../config/index.ts';
 import { surfaceFeatureGateId } from '@/runtime/index.ts';
-import { featureEnablementWrite, isFeatureConfigEnabled } from './feature-settings.ts';
+import { featureEnablementWrite, getFeatureSetting, isFeatureConfigEnabled } from './feature-settings.ts';
 
 export const CONTROL_PLANE_FEATURE_FLAG = 'control-plane-gateway';
 export const ROUTE_BINDING_FEATURE_FLAG = 'route-binding';
@@ -65,6 +65,19 @@ export function getServerSurfaceFeatureFlags(options: {
 /** Whether the live config has the capability on, derived from its domain settings key. */
 export function isFeatureFlagEnabled(config: Pick<ConfigManager, 'get'>, flagId: string): boolean {
   return isFeatureConfigEnabled(config, flagId);
+}
+
+/**
+ * Translate internal feature-gate ids (e.g. 'control-plane-gateway') to the
+ * canonical domain settings keys the user actually sets (e.g.
+ * 'controlPlane.gateway') — matching the SDK's own gate errors, which name the
+ * settings key. A gate with no mapped setting falls back to its id. Deduped and
+ * sorted for stable output.
+ */
+export function surfaceFeatureGateSettingsKeys(flagIds: readonly string[]): string[] {
+  const keys = new Set<string>();
+  for (const flagId of flagIds) keys.add(getFeatureSetting(flagId)?.enablement.key ?? flagId);
+  return [...keys].sort((left, right) => left.localeCompare(right));
 }
 
 export function getMissingSurfaceFeatureFlags(config: Pick<ConfigManager, 'get'>, surfaceId: string): readonly string[] {
