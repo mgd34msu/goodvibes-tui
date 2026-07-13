@@ -13,7 +13,7 @@ import { FileUndoManager } from '@pellux/goodvibes-sdk/platform/state';
 import { PermissionManager } from '@pellux/goodvibes-sdk/platform/permissions';
 import { AcpManager } from '@pellux/goodvibes-sdk/platform/acp';
 import { PermissionPromptUI, buildPendingPermissionExtras } from './permissions/prompt.ts';
-import { handleBrokerApprovalChange, buildFixSessionAffordance, refreshFixSessionsFromApprovals } from './permissions/broker-approval-card.ts';
+import { handleBrokerApprovalChange, buildFixSessionAffordance, handleFixSessionAttachKey, refreshFixSessionsFromApprovals } from './permissions/broker-approval-card.ts';
 import { CommandRegistry } from './input/command-registry.ts';
 import type { CommandContext } from './input/command-registry.ts';
 import { renderProcessIndicator } from './renderer/process-indicator.ts';
@@ -138,7 +138,14 @@ async function main() {
   const buildSessionContinuityHints = createSessionContinuityHintsBuilder({ readModels: uiServices.readModels, panelManager });
 
   let pendingPermission: PendingPermissionState | null = null;
-  const onFixSessionStarted = buildFixSessionAffordance((message) => { systemMessageRouter.high(message); render(); });
+  // One-key jump/attach to a spawned CI fix-session: the affordance ARMS the id; the next 'j' runs the resume so the user never retypes it.
+  let fixSessionAttachArmed: string | null = null;
+  const attachToFixSession = (fixSessionId: string) => { void commandContext.executeCommand?.('session', ['resume', fixSessionId]); };
+  const onFixSessionStarted = buildFixSessionAffordance({
+    notify: (message) => { systemMessageRouter.high(message); render(); },
+    arm: (fixSessionId) => { fixSessionAttachArmed = fixSessionId; },
+  });
+  commandContext.armFixSessionAttach = onFixSessionStarted;
   approvalBroker.subscribe((approval) => handleBrokerApprovalChange({
     approval, broker: approvalBroker, render, onFixSessionStarted,
     getPending: () => pendingPermission,
@@ -740,11 +747,16 @@ async function main() {
     if (blocking.handled) {
       return;
     }
-
     // One-key retry affordance: armed after a user-visible TURN_ERROR; any key other than r/m dismisses it and routes normally.
     if (errorAffordanceActive) {
       errorAffordanceActive = false;
       if (handleErrorAffordanceKey(data, { retryArmed: retryCtx !== null, retry: retryTurn, openModelPicker: () => commandContext.openModelPicker?.(), render })) return;
+    }
+    // One-key jump to a spawned CI fix-session: 'j' attaches, any other key dismisses and routes normally.
+    if (fixSessionAttachArmed !== null) {
+      const armedFixSessionId = fixSessionAttachArmed;
+      fixSessionAttachArmed = null;
+      if (handleFixSessionAttachKey(data, { armedFixSessionId, attach: attachToFixSession, render })) return;
     }
 
     input.feed(data);

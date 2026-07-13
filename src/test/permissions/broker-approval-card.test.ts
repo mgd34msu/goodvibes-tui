@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import {
   handleBrokerApprovalChange,
   buildFixSessionAffordance,
+  handleFixSessionAttachKey,
   refreshFixSessionsFromApprovals,
   type BrokerApprovalCardBroker,
 } from '../../permissions/broker-approval-card.ts';
@@ -105,15 +106,22 @@ describe('broker-originated approval cards', () => {
     expect(started).toEqual(['sess-abc']);
   });
 
-  test('buildFixSessionAffordance notifies once per id with a real resume command; refresh path dedupes', () => {
+  test('buildFixSessionAffordance arms the one-key jump once per id (no retype instruction); refresh path dedupes', () => {
     const messages: string[] = [];
-    const affordance = buildFixSessionAffordance((m) => messages.push(m));
+    const armed: string[] = [];
+    const affordance = buildFixSessionAffordance({
+      notify: (m) => messages.push(m),
+      arm: (id) => armed.push(id),
+    });
 
     affordance('sess-xyz');
-    affordance('sess-xyz'); // repeat — no second notice
+    affordance('sess-xyz'); // repeat — no second notice/arm
     expect(messages).toHaveLength(1);
-    expect(messages[0]).toContain('sess-xyz');
-    expect(messages[0]).toContain('/session resume sess-xyz');
+    expect(armed).toEqual(['sess-xyz']);
+    // The notice offers a one-key jump, never a command for the user to retype.
+    expect(messages[0]).toContain('press j to jump');
+    expect(messages[0]).not.toContain('/session resume');
+    expect(messages[0]).not.toContain('sess-xyz');
 
     // The listApprovals refresh path feeds the same de-duplicating affordance.
     refreshFixSessionsFromApprovals(
@@ -121,7 +129,22 @@ describe('broker-originated approval cards', () => {
       affordance,
     );
     expect(messages).toHaveLength(2);
-    expect(messages[1]).toContain('/session resume sess-new');
+    expect(armed).toEqual(['sess-xyz', 'sess-new']);
+  });
+
+  test('handleFixSessionAttachKey: the jump key attaches to the armed session; other keys fall through', () => {
+    const attached: string[] = [];
+    let renders = 0;
+    const deps = { armedFixSessionId: 'sess-jump', attach: (id: string) => attached.push(id), render: () => { renders += 1; } };
+
+    // A non-jump key does nothing (the surface has already cleared the arm).
+    expect(handleFixSessionAttachKey('x', deps)).toBe(false);
+    expect(attached).toEqual([]);
+
+    // 'j' attaches to the armed session — the machine runs the resume, no retype.
+    expect(handleFixSessionAttachKey('j', deps)).toBe(true);
+    expect(attached).toEqual(['sess-jump']);
+    expect(renders).toBe(1);
   });
 
   test('a resolved ask that is not the active card is ignored', () => {

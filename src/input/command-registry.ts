@@ -81,6 +81,8 @@ export interface CommandUiActions {
     marker?: string;
   };
   executeCommand?: (name: string, args: string[]) => Promise<boolean>;
+  /** Arm the one-key jump to a spawned CI fix-session (the surface attaches on the jump key; the user never retypes an id). */
+  armFixSessionAttach?: (fixSessionId: string) => void;
   cancelGeneration?: () => void;
   /** True while an LLM turn is actively streaming. Used to give Escape
    *  cancel-turn precedence over a focused panel's own escape handling. */
