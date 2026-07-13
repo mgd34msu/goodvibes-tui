@@ -35,6 +35,7 @@ import { bootstrapRuntime } from './runtime/bootstrap.ts';
 import type { BootstrapContext } from './runtime/bootstrap.ts';
 import { selfUpdateAtLaunch } from './cli/launch-auto-update.ts';
 import { buildSharedOrchestratorCoreServices, refreshMemoryRecallSnapshot } from './runtime/orchestrator-core-services.ts';
+import { createSessionContinuityHintsBuilder } from './runtime/session-continuity-hints.ts';
 import { readLastSessionPointer, writeRecoveryFile } from '@/runtime/index.ts';
 import { handleBlockingShellInput, type PendingPermissionState } from './shell/blocking-input.ts';
 import { createPersistRecoverySnapshot, createRecoveryFileOps, createReopenRecoveryPanels, handleErrorAffordanceKey, resolveStartupRecoveryInfo } from './shell/recovery-input-helpers.ts';
@@ -133,22 +134,7 @@ async function main() {
   for (const line of launchUpdateLines) systemMessageRouter.high(`[Update] ${line}`);
 
   const panelManager = ctx.services.panelManager;
-  const buildSessionContinuityHints = () => {
-    const sessionSnapshot = uiServices.readModels.session.getSnapshot();
-    const tasksSnapshot = uiServices.readModels.tasks.getSnapshot();
-    const remoteSnapshot = uiServices.readModels.remote.getSnapshot();
-    const worktreeSnapshot = uiServices.readModels.worktrees.getSnapshot();
-    return {
-      pendingApprovals: sessionSnapshot.pendingApproval ? 1 : 0,
-      activeTasks: tasksSnapshot.tasks.filter((task) => task.status === 'running' || task.status === 'queued').length,
-      blockedTasks: tasksSnapshot.tasks.filter((task) => task.status === 'blocked').length,
-      remoteContracts: remoteSnapshot.contracts.length,
-      remoteRunners: remoteSnapshot.contracts.slice(0, 4).map((contract) => contract.runnerId),
-      worktreeCount: worktreeSnapshot.records.length,
-      worktreePaths: worktreeSnapshot.records.slice(0, 3).map((record) => record.path),
-      openPanels: panelManager.getAllOpen().map((panel) => panel.id),
-    };
-  };
+  const buildSessionContinuityHints = createSessionContinuityHintsBuilder({ readModels: uiServices.readModels, panelManager });
 
   let pendingPermission: PendingPermissionState | null = null;
   const onFixSessionStarted = buildFixSessionAffordance((message) => { systemMessageRouter.high(message); render(); });
