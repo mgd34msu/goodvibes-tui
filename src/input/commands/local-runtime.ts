@@ -200,8 +200,40 @@ export function registerLocalRuntimeCommands(registry: CommandRegistry): void {
         const flags = new Set(rest.filter((value) => value.startsWith('--')));
         const valueParts = rest.filter((value) => !value.startsWith('--'));
         const [key, ...rawValueParts] = valueParts;
-        if (!key || valueParts.length === 0) {
+        if (!key) {
           ctx.print(`[secrets] Usage: /secrets ${sub} <KEY> <${sub === 'link' ? 'secret-ref' : 'value'}> [--user|--project] [--secure|--plaintext]`);
+          return;
+        }
+        const scope = flags.has('--user') ? 'user' : 'project';
+        const medium = flags.has('--plaintext') ? 'plaintext' : 'secure';
+        // /secrets set KEY (no value) drops into the concealed prompt so the
+        // value is typed with the keystrokes masked and never enters history.
+        if (sub === 'set' && rawValueParts.length === 0) {
+          if (!ctx.beginConcealedInput) {
+            ctx.print('[secrets] Usage: /secrets set <KEY> <value> [--user|--project] [--secure|--plaintext]');
+            return;
+          }
+          ctx.print(`[secrets] Enter value for ${key} (input is masked; press Enter to store, Esc to cancel).`);
+          ctx.beginConcealedInput({
+            label: key,
+            onSubmit: (value) => {
+              if (value.length === 0) {
+                ctx.print(`[secrets] ${key} not set (empty value).`);
+                return;
+              }
+              void (async () => {
+                try {
+                  await mgr.set(key, value, { scope, medium });
+                  ctx.print(`[secrets] Stored: ${key} (${scope}, ${medium})`);
+                } catch (error) {
+                  ctx.print(`[secrets] Could not store ${key}: ${summarizeError(error)}`);
+                }
+              })();
+            },
+            onCancel: () => {
+              ctx.print(`[secrets] ${key} cancelled.`);
+            },
+          });
           return;
         }
         const value = rawValueParts.join(' ');
@@ -213,8 +245,6 @@ export function registerLocalRuntimeCommands(registry: CommandRegistry): void {
           ctx.print('[secrets] Invalid secret reference. Use /secrets providers for examples.');
           return;
         }
-        const scope = flags.has('--user') ? 'user' : 'project';
-        const medium = flags.has('--plaintext') ? 'plaintext' : 'secure';
         await mgr.set(key, value, { scope, medium });
         ctx.print(sub === 'link'
           ? `[secrets] Linked: ${key} -> ${describeSecretRef(value)} (${scope}, ${medium})`
