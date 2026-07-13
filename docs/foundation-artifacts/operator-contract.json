@@ -407,7 +407,35 @@
                   "recommendedActions": {
                     "type": "array",
                     "items": {
-                      "type": "string"
+                      "type": "object",
+                      "properties": {
+                        "description": {
+                          "type": "string"
+                        },
+                        "command": {
+                          "type": "object",
+                          "properties": {
+                            "name": {
+                              "type": "string"
+                            },
+                            "args": {
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              }
+                            }
+                          },
+                          "required": [
+                            "name",
+                            "args"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "required": [
+                        "description"
+                      ],
+                      "additionalProperties": false
                     }
                   },
                   "routeRecords": {
@@ -765,6 +793,36 @@
                           "additionalProperties": false
                         }
                       ]
+                    },
+                    "rememberOptions": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "tier": {
+                            "type": "string",
+                            "enum": [
+                              "session",
+                              "exact",
+                              "command-class",
+                              "path",
+                              "tool"
+                            ]
+                          },
+                          "label": {
+                            "type": "string"
+                          },
+                          "detail": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "tier",
+                          "label",
+                          "detail"
+                        ],
+                        "additionalProperties": false
+                      }
                     }
                   },
                   "required": [
@@ -802,6 +860,19 @@
                     },
                     "remember": {
                       "type": "boolean"
+                    },
+                    "rememberTier": {
+                      "type": "string",
+                      "enum": [
+                        "session",
+                        "exact",
+                        "command-class",
+                        "path",
+                        "tool"
+                      ]
+                    },
+                    "reason": {
+                      "type": "string"
                     },
                     "modifiedArgs": {
                       "type": "object",
@@ -1197,6 +1268,36 @@
                           "additionalProperties": false
                         }
                       ]
+                    },
+                    "rememberOptions": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "tier": {
+                            "type": "string",
+                            "enum": [
+                              "session",
+                              "exact",
+                              "command-class",
+                              "path",
+                              "tool"
+                            ]
+                          },
+                          "label": {
+                            "type": "string"
+                          },
+                          "detail": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "tier",
+                          "label",
+                          "detail"
+                        ],
+                        "additionalProperties": false
+                      }
                     }
                   },
                   "required": [
@@ -1234,6 +1335,19 @@
                     },
                     "remember": {
                       "type": "boolean"
+                    },
+                    "rememberTier": {
+                      "type": "string",
+                      "enum": [
+                        "session",
+                        "exact",
+                        "command-class",
+                        "path",
+                        "tool"
+                      ]
+                    },
+                    "reason": {
+                      "type": "string"
                     },
                     "modifiedArgs": {
                       "type": "object",
@@ -1623,6 +1737,36 @@
                           "additionalProperties": false
                         }
                       ]
+                    },
+                    "rememberOptions": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "tier": {
+                            "type": "string",
+                            "enum": [
+                              "session",
+                              "exact",
+                              "command-class",
+                              "path",
+                              "tool"
+                            ]
+                          },
+                          "label": {
+                            "type": "string"
+                          },
+                          "detail": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "tier",
+                          "label",
+                          "detail"
+                        ],
+                        "additionalProperties": false
+                      }
                     }
                   },
                   "required": [
@@ -1660,6 +1804,19 @@
                     },
                     "remember": {
                       "type": "boolean"
+                    },
+                    "rememberTier": {
+                      "type": "string",
+                      "enum": [
+                        "session",
+                        "exact",
+                        "command-class",
+                        "path",
+                        "tool"
+                      ]
+                    },
+                    "reason": {
+                      "type": "string"
                     },
                     "modifiedArgs": {
                       "type": "object",
@@ -2055,6 +2212,36 @@
                           "additionalProperties": false
                         }
                       ]
+                    },
+                    "rememberOptions": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "tier": {
+                            "type": "string",
+                            "enum": [
+                              "session",
+                              "exact",
+                              "command-class",
+                              "path",
+                              "tool"
+                            ]
+                          },
+                          "label": {
+                            "type": "string"
+                          },
+                          "detail": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "tier",
+                          "label",
+                          "detail"
+                        ],
+                        "additionalProperties": false
+                      }
                     }
                   },
                   "required": [
@@ -2092,6 +2279,19 @@
                     },
                     "remember": {
                       "type": "boolean"
+                    },
+                    "rememberTier": {
+                      "type": "string",
+                      "enum": [
+                        "session",
+                        "exact",
+                        "command-class",
+                        "path",
+                        "tool"
+                      ]
+                    },
+                    "reason": {
+                      "type": "string"
                     },
                     "modifiedArgs": {
                       "type": "object",
@@ -2315,6 +2515,8 @@
                     "session_cached_approval",
                     "session_cached_denial",
                     "safety_guardrail",
+                    "user_rule_allow",
+                    "user_rule_deny",
                     "user_approved",
                     "user_denied"
                   ]
@@ -2327,6 +2529,7 @@
                     "runtime_mode",
                     "session_override",
                     "safety_check",
+                    "user_rule",
                     "user_prompt"
                   ]
                 },
@@ -2603,6 +2806,36 @@
                             "additionalProperties": false
                           }
                         ]
+                      },
+                      "rememberOptions": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "tier": {
+                              "type": "string",
+                              "enum": [
+                                "session",
+                                "exact",
+                                "command-class",
+                                "path",
+                                "tool"
+                              ]
+                            },
+                            "label": {
+                              "type": "string"
+                            },
+                            "detail": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "tier",
+                            "label",
+                            "detail"
+                          ],
+                          "additionalProperties": false
+                        }
                       }
                     },
                     "required": [
@@ -2640,6 +2873,19 @@
                       },
                       "remember": {
                         "type": "boolean"
+                      },
+                      "rememberTier": {
+                        "type": "string",
+                        "enum": [
+                          "session",
+                          "exact",
+                          "command-class",
+                          "path",
+                          "tool"
+                        ]
+                      },
+                      "reason": {
+                        "type": "string"
                       },
                       "modifiedArgs": {
                         "type": "object",
@@ -65596,6 +65842,118 @@
         "invokable": true
       },
       {
+        "id": "permissions.rules.delete",
+        "title": "Delete a Durable Permission Rule",
+        "description": "Delete one durable user-origin permission rule by id. The matching asks prompt again afterwards — deleting a grant is how a remembered decision is revoked. deleted:false when no rule with that id exists (an honest miss, not an error).",
+        "category": "permissions",
+        "source": "builtin",
+        "access": "authenticated",
+        "transport": [
+          "ws"
+        ],
+        "scopes": [
+          "write:sessions"
+        ],
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "ruleId": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "ruleId"
+          ],
+          "additionalProperties": false
+        },
+        "outputSchema": {
+          "type": "object",
+          "properties": {
+            "deleted": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "deleted"
+          ],
+          "additionalProperties": false
+        },
+        "invokable": true
+      },
+      {
+        "id": "permissions.rules.list",
+        "title": "List Durable Permission Rules",
+        "description": "List the durable user-origin permission rules written by remembered approval decisions (exact command / command class / path scope / whole tool), newest first — the persistent grants and denials the permission manager consults before ever prompting. Project-scoped.",
+        "category": "permissions",
+        "source": "builtin",
+        "access": "authenticated",
+        "transport": [
+          "ws"
+        ],
+        "scopes": [
+          "read:sessions"
+        ],
+        "inputSchema": {
+          "type": "object",
+          "properties": {},
+          "additionalProperties": false
+        },
+        "outputSchema": {
+          "type": "object",
+          "properties": {
+            "rules": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "effect": {
+                    "type": "string",
+                    "enum": [
+                      "allow",
+                      "deny"
+                    ]
+                  },
+                  "tier": {
+                    "type": "string",
+                    "enum": [
+                      "exact",
+                      "command-class",
+                      "path",
+                      "tool"
+                    ]
+                  },
+                  "tool": {
+                    "type": "string"
+                  },
+                  "description": {
+                    "type": "string"
+                  },
+                  "createdAt": {
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "id",
+                  "effect",
+                  "tier",
+                  "tool",
+                  "createdAt"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": [
+            "rules"
+          ],
+          "additionalProperties": false
+        },
+        "invokable": true
+      },
+      {
         "id": "principals.create",
         "title": "Create Principal",
         "description": "Create a named principal from a name, kind, and optional channel identities. Fails with a conflict when any identity is already mapped to a different principal.",
@@ -65666,13 +66024,13 @@
                   {
                     "type": "object",
                     "additionalProperties": {
-                      "$ref": "$.operator.methods[272].inputSchema.properties.metadata.additionalProperties"
+                      "$ref": "$.operator.methods[274].inputSchema.properties.metadata.additionalProperties"
                     }
                   },
                   {
                     "type": "array",
                     "items": {
-                      "$ref": "$.operator.methods[272].inputSchema.properties.metadata.additionalProperties"
+                      "$ref": "$.operator.methods[274].inputSchema.properties.metadata.additionalProperties"
                     }
                   }
                 ]
@@ -65750,13 +66108,13 @@
                       {
                         "type": "object",
                         "additionalProperties": {
-                          "$ref": "$.operator.methods[272].outputSchema.properties.principal.properties.metadata.additionalProperties"
+                          "$ref": "$.operator.methods[274].outputSchema.properties.principal.properties.metadata.additionalProperties"
                         }
                       },
                       {
                         "type": "array",
                         "items": {
-                          "$ref": "$.operator.methods[272].outputSchema.properties.principal.properties.metadata.additionalProperties"
+                          "$ref": "$.operator.methods[274].outputSchema.properties.principal.properties.metadata.additionalProperties"
                         }
                       }
                     ]
@@ -65925,13 +66283,13 @@
                       {
                         "type": "object",
                         "additionalProperties": {
-                          "$ref": "$.operator.methods[274].outputSchema.properties.principal.properties.metadata.additionalProperties"
+                          "$ref": "$.operator.methods[276].outputSchema.properties.principal.properties.metadata.additionalProperties"
                         }
                       },
                       {
                         "type": "array",
                         "items": {
-                          "$ref": "$.operator.methods[274].outputSchema.properties.principal.properties.metadata.additionalProperties"
+                          "$ref": "$.operator.methods[276].outputSchema.properties.principal.properties.metadata.additionalProperties"
                         }
                       }
                     ]
@@ -66046,13 +66404,13 @@
                         {
                           "type": "object",
                           "additionalProperties": {
-                            "$ref": "$.operator.methods[275].outputSchema.properties.principals.items.properties.metadata.additionalProperties"
+                            "$ref": "$.operator.methods[277].outputSchema.properties.principals.items.properties.metadata.additionalProperties"
                           }
                         },
                         {
                           "type": "array",
                           "items": {
-                            "$ref": "$.operator.methods[275].outputSchema.properties.principals.items.properties.metadata.additionalProperties"
+                            "$ref": "$.operator.methods[277].outputSchema.properties.principals.items.properties.metadata.additionalProperties"
                           }
                         }
                       ]
@@ -66177,13 +66535,13 @@
                       {
                         "type": "object",
                         "additionalProperties": {
-                          "$ref": "$.operator.methods[276].outputSchema.properties.principal.properties.metadata.additionalProperties"
+                          "$ref": "$.operator.methods[278].outputSchema.properties.principal.properties.metadata.additionalProperties"
                         }
                       },
                       {
                         "type": "array",
                         "items": {
-                          "$ref": "$.operator.methods[276].outputSchema.properties.principal.properties.metadata.additionalProperties"
+                          "$ref": "$.operator.methods[278].outputSchema.properties.principal.properties.metadata.additionalProperties"
                         }
                       }
                     ]
@@ -66286,13 +66644,13 @@
                   {
                     "type": "object",
                     "additionalProperties": {
-                      "$ref": "$.operator.methods[277].inputSchema.properties.metadata.additionalProperties"
+                      "$ref": "$.operator.methods[279].inputSchema.properties.metadata.additionalProperties"
                     }
                   },
                   {
                     "type": "array",
                     "items": {
-                      "$ref": "$.operator.methods[277].inputSchema.properties.metadata.additionalProperties"
+                      "$ref": "$.operator.methods[279].inputSchema.properties.metadata.additionalProperties"
                     }
                   }
                 ]
@@ -66369,13 +66727,13 @@
                       {
                         "type": "object",
                         "additionalProperties": {
-                          "$ref": "$.operator.methods[277].outputSchema.properties.principal.properties.metadata.additionalProperties"
+                          "$ref": "$.operator.methods[279].outputSchema.properties.principal.properties.metadata.additionalProperties"
                         }
                       },
                       {
                         "type": "array",
                         "items": {
-                          "$ref": "$.operator.methods[277].outputSchema.properties.principal.properties.metadata.additionalProperties"
+                          "$ref": "$.operator.methods[279].outputSchema.properties.principal.properties.metadata.additionalProperties"
                         }
                       }
                     ]
@@ -67958,13 +68316,13 @@
                             {
                               "type": "object",
                               "additionalProperties": {
-                                "$ref": "$.operator.methods[290].outputSchema.properties.contract.properties.endpoints.items.properties.inputSchema.additionalProperties"
+                                "$ref": "$.operator.methods[292].outputSchema.properties.contract.properties.endpoints.items.properties.inputSchema.additionalProperties"
                               }
                             },
                             {
                               "type": "array",
                               "items": {
-                                "$ref": "$.operator.methods[290].outputSchema.properties.contract.properties.endpoints.items.properties.inputSchema.additionalProperties"
+                                "$ref": "$.operator.methods[292].outputSchema.properties.contract.properties.endpoints.items.properties.inputSchema.additionalProperties"
                               }
                             }
                           ]
@@ -67989,13 +68347,13 @@
                             {
                               "type": "object",
                               "additionalProperties": {
-                                "$ref": "$.operator.methods[290].outputSchema.properties.contract.properties.endpoints.items.properties.outputSchema.additionalProperties"
+                                "$ref": "$.operator.methods[292].outputSchema.properties.contract.properties.endpoints.items.properties.outputSchema.additionalProperties"
                               }
                             },
                             {
                               "type": "array",
                               "items": {
-                                "$ref": "$.operator.methods[290].outputSchema.properties.contract.properties.endpoints.items.properties.outputSchema.additionalProperties"
+                                "$ref": "$.operator.methods[292].outputSchema.properties.contract.properties.endpoints.items.properties.outputSchema.additionalProperties"
                               }
                             }
                           ]
@@ -68045,13 +68403,13 @@
                       {
                         "type": "object",
                         "additionalProperties": {
-                          "$ref": "$.operator.methods[290].outputSchema.properties.contract.properties.metadata.additionalProperties"
+                          "$ref": "$.operator.methods[292].outputSchema.properties.contract.properties.metadata.additionalProperties"
                         }
                       },
                       {
                         "type": "array",
                         "items": {
-                          "$ref": "$.operator.methods[290].outputSchema.properties.contract.properties.metadata.additionalProperties"
+                          "$ref": "$.operator.methods[292].outputSchema.properties.contract.properties.metadata.additionalProperties"
                         }
                       }
                     ]
@@ -68130,13 +68488,13 @@
                   {
                     "type": "object",
                     "additionalProperties": {
-                      "$ref": "$.operator.methods[291].inputSchema.properties.metadata.additionalProperties"
+                      "$ref": "$.operator.methods[293].inputSchema.properties.metadata.additionalProperties"
                     }
                   },
                   {
                     "type": "array",
                     "items": {
-                      "$ref": "$.operator.methods[291].inputSchema.properties.metadata.additionalProperties"
+                      "$ref": "$.operator.methods[293].inputSchema.properties.metadata.additionalProperties"
                     }
                   }
                 ]
@@ -68257,13 +68615,13 @@
                       {
                         "type": "object",
                         "additionalProperties": {
-                          "$ref": "$.operator.methods[291].outputSchema.properties.request.properties.metadata.additionalProperties"
+                          "$ref": "$.operator.methods[293].outputSchema.properties.request.properties.metadata.additionalProperties"
                         }
                       },
                       {
                         "type": "array",
                         "items": {
-                          "$ref": "$.operator.methods[291].outputSchema.properties.request.properties.metadata.additionalProperties"
+                          "$ref": "$.operator.methods[293].outputSchema.properties.request.properties.metadata.additionalProperties"
                         }
                       }
                     ]
@@ -68429,13 +68787,13 @@
                       {
                         "type": "object",
                         "additionalProperties": {
-                          "$ref": "$.operator.methods[291].outputSchema.properties.peer.properties.metadata.additionalProperties"
+                          "$ref": "$.operator.methods[293].outputSchema.properties.peer.properties.metadata.additionalProperties"
                         }
                       },
                       {
                         "type": "array",
                         "items": {
-                          "$ref": "$.operator.methods[291].outputSchema.properties.peer.properties.metadata.additionalProperties"
+                          "$ref": "$.operator.methods[293].outputSchema.properties.peer.properties.metadata.additionalProperties"
                         }
                       }
                     ]
@@ -68599,13 +68957,13 @@
                         {
                           "type": "object",
                           "additionalProperties": {
-                            "$ref": "$.operator.methods[292].outputSchema.properties.requests.items.properties.metadata.additionalProperties"
+                            "$ref": "$.operator.methods[294].outputSchema.properties.requests.items.properties.metadata.additionalProperties"
                           }
                         },
                         {
                           "type": "array",
                           "items": {
-                            "$ref": "$.operator.methods[292].outputSchema.properties.requests.items.properties.metadata.additionalProperties"
+                            "$ref": "$.operator.methods[294].outputSchema.properties.requests.items.properties.metadata.additionalProperties"
                           }
                         }
                       ]
@@ -68687,13 +69045,13 @@
                   {
                     "type": "object",
                     "additionalProperties": {
-                      "$ref": "$.operator.methods[293].inputSchema.properties.metadata.additionalProperties"
+                      "$ref": "$.operator.methods[295].inputSchema.properties.metadata.additionalProperties"
                     }
                   },
                   {
                     "type": "array",
                     "items": {
-                      "$ref": "$.operator.methods[293].inputSchema.properties.metadata.additionalProperties"
+                      "$ref": "$.operator.methods[295].inputSchema.properties.metadata.additionalProperties"
                     }
                   }
                 ]
@@ -68814,13 +69172,13 @@
                       {
                         "type": "object",
                         "additionalProperties": {
-                          "$ref": "$.operator.methods[293].outputSchema.properties.request.properties.metadata.additionalProperties"
+                          "$ref": "$.operator.methods[295].outputSchema.properties.request.properties.metadata.additionalProperties"
                         }
                       },
                       {
                         "type": "array",
                         "items": {
-                          "$ref": "$.operator.methods[293].outputSchema.properties.request.properties.metadata.additionalProperties"
+                          "$ref": "$.operator.methods[295].outputSchema.properties.request.properties.metadata.additionalProperties"
                         }
                       }
                     ]
@@ -69033,13 +69391,13 @@
                       {
                         "type": "object",
                         "additionalProperties": {
-                          "$ref": "$.operator.methods[294].outputSchema.properties.peer.properties.metadata.additionalProperties"
+                          "$ref": "$.operator.methods[296].outputSchema.properties.peer.properties.metadata.additionalProperties"
                         }
                       },
                       {
                         "type": "array",
                         "items": {
-                          "$ref": "$.operator.methods[294].outputSchema.properties.peer.properties.metadata.additionalProperties"
+                          "$ref": "$.operator.methods[296].outputSchema.properties.peer.properties.metadata.additionalProperties"
                         }
                       }
                     ]
@@ -69112,13 +69470,13 @@
                 {
                   "type": "object",
                   "additionalProperties": {
-                    "$ref": "$.operator.methods[295].inputSchema.properties.payload"
+                    "$ref": "$.operator.methods[297].inputSchema.properties.payload"
                   }
                 },
                 {
                   "type": "array",
                   "items": {
-                    "$ref": "$.operator.methods[295].inputSchema.properties.payload"
+                    "$ref": "$.operator.methods[297].inputSchema.properties.payload"
                   }
                 }
               ]
@@ -69171,13 +69529,13 @@
                   {
                     "type": "object",
                     "additionalProperties": {
-                      "$ref": "$.operator.methods[295].inputSchema.properties.metadata.additionalProperties"
+                      "$ref": "$.operator.methods[297].inputSchema.properties.metadata.additionalProperties"
                     }
                   },
                   {
                     "type": "array",
                     "items": {
-                      "$ref": "$.operator.methods[295].inputSchema.properties.metadata.additionalProperties"
+                      "$ref": "$.operator.methods[297].inputSchema.properties.metadata.additionalProperties"
                     }
                   }
                 ]
@@ -69258,13 +69616,13 @@
                     {
                       "type": "object",
                       "additionalProperties": {
-                        "$ref": "$.operator.methods[295].outputSchema.properties.work.properties.payload"
+                        "$ref": "$.operator.methods[297].outputSchema.properties.work.properties.payload"
                       }
                     },
                     {
                       "type": "array",
                       "items": {
-                        "$ref": "$.operator.methods[295].outputSchema.properties.work.properties.payload"
+                        "$ref": "$.operator.methods[297].outputSchema.properties.work.properties.payload"
                       }
                     }
                   ]
@@ -69325,13 +69683,13 @@
                     {
                       "type": "object",
                       "additionalProperties": {
-                        "$ref": "$.operator.methods[295].outputSchema.properties.work.properties.result"
+                        "$ref": "$.operator.methods[297].outputSchema.properties.work.properties.result"
                       }
                     },
                     {
                       "type": "array",
                       "items": {
-                        "$ref": "$.operator.methods[295].outputSchema.properties.work.properties.result"
+                        "$ref": "$.operator.methods[297].outputSchema.properties.work.properties.result"
                       }
                     }
                   ]
@@ -69421,13 +69779,13 @@
                       {
                         "type": "object",
                         "additionalProperties": {
-                          "$ref": "$.operator.methods[295].outputSchema.properties.work.properties.metadata.additionalProperties"
+                          "$ref": "$.operator.methods[297].outputSchema.properties.work.properties.metadata.additionalProperties"
                         }
                       },
                       {
                         "type": "array",
                         "items": {
-                          "$ref": "$.operator.methods[295].outputSchema.properties.work.properties.metadata.additionalProperties"
+                          "$ref": "$.operator.methods[297].outputSchema.properties.work.properties.metadata.additionalProperties"
                         }
                       }
                     ]
@@ -69631,13 +69989,13 @@
                         {
                           "type": "object",
                           "additionalProperties": {
-                            "$ref": "$.operator.methods[296].outputSchema.properties.peers.items.properties.metadata.additionalProperties"
+                            "$ref": "$.operator.methods[298].outputSchema.properties.peers.items.properties.metadata.additionalProperties"
                           }
                         },
                         {
                           "type": "array",
                           "items": {
-                            "$ref": "$.operator.methods[296].outputSchema.properties.peers.items.properties.metadata.additionalProperties"
+                            "$ref": "$.operator.methods[298].outputSchema.properties.peers.items.properties.metadata.additionalProperties"
                           }
                         }
                       ]
@@ -69848,13 +70206,13 @@
                       {
                         "type": "object",
                         "additionalProperties": {
-                          "$ref": "$.operator.methods[297].outputSchema.properties.peer.properties.metadata.additionalProperties"
+                          "$ref": "$.operator.methods[299].outputSchema.properties.peer.properties.metadata.additionalProperties"
                         }
                       },
                       {
                         "type": "array",
                         "items": {
-                          "$ref": "$.operator.methods[297].outputSchema.properties.peer.properties.metadata.additionalProperties"
+                          "$ref": "$.operator.methods[299].outputSchema.properties.peer.properties.metadata.additionalProperties"
                         }
                       }
                     ]
@@ -70067,13 +70425,13 @@
                       {
                         "type": "object",
                         "additionalProperties": {
-                          "$ref": "$.operator.methods[298].outputSchema.properties.peer.properties.metadata.additionalProperties"
+                          "$ref": "$.operator.methods[300].outputSchema.properties.peer.properties.metadata.additionalProperties"
                         }
                       },
                       {
                         "type": "array",
                         "items": {
-                          "$ref": "$.operator.methods[298].outputSchema.properties.peer.properties.metadata.additionalProperties"
+                          "$ref": "$.operator.methods[300].outputSchema.properties.peer.properties.metadata.additionalProperties"
                         }
                       }
                     ]
@@ -70550,13 +70908,13 @@
                             {
                               "type": "object",
                               "additionalProperties": {
-                                "$ref": "$.operator.methods[299].outputSchema.properties.distributed.properties.pairRequests.items.properties.metadata.additionalProperties"
+                                "$ref": "$.operator.methods[301].outputSchema.properties.distributed.properties.pairRequests.items.properties.metadata.additionalProperties"
                               }
                             },
                             {
                               "type": "array",
                               "items": {
-                                "$ref": "$.operator.methods[299].outputSchema.properties.distributed.properties.pairRequests.items.properties.metadata.additionalProperties"
+                                "$ref": "$.operator.methods[301].outputSchema.properties.distributed.properties.pairRequests.items.properties.metadata.additionalProperties"
                               }
                             }
                           ]
@@ -70725,13 +71083,13 @@
                             {
                               "type": "object",
                               "additionalProperties": {
-                                "$ref": "$.operator.methods[299].outputSchema.properties.distributed.properties.peers.items.properties.metadata.additionalProperties"
+                                "$ref": "$.operator.methods[301].outputSchema.properties.distributed.properties.peers.items.properties.metadata.additionalProperties"
                               }
                             },
                             {
                               "type": "array",
                               "items": {
-                                "$ref": "$.operator.methods[299].outputSchema.properties.distributed.properties.peers.items.properties.metadata.additionalProperties"
+                                "$ref": "$.operator.methods[301].outputSchema.properties.distributed.properties.peers.items.properties.metadata.additionalProperties"
                               }
                             }
                           ]
@@ -70820,13 +71178,13 @@
                           {
                             "type": "object",
                             "additionalProperties": {
-                              "$ref": "$.operator.methods[299].outputSchema.properties.distributed.properties.work.items.properties.payload"
+                              "$ref": "$.operator.methods[301].outputSchema.properties.distributed.properties.work.items.properties.payload"
                             }
                           },
                           {
                             "type": "array",
                             "items": {
-                              "$ref": "$.operator.methods[299].outputSchema.properties.distributed.properties.work.items.properties.payload"
+                              "$ref": "$.operator.methods[301].outputSchema.properties.distributed.properties.work.items.properties.payload"
                             }
                           }
                         ]
@@ -70887,13 +71245,13 @@
                           {
                             "type": "object",
                             "additionalProperties": {
-                              "$ref": "$.operator.methods[299].outputSchema.properties.distributed.properties.work.items.properties.result"
+                              "$ref": "$.operator.methods[301].outputSchema.properties.distributed.properties.work.items.properties.result"
                             }
                           },
                           {
                             "type": "array",
                             "items": {
-                              "$ref": "$.operator.methods[299].outputSchema.properties.distributed.properties.work.items.properties.result"
+                              "$ref": "$.operator.methods[301].outputSchema.properties.distributed.properties.work.items.properties.result"
                             }
                           }
                         ]
@@ -70983,13 +71341,13 @@
                             {
                               "type": "object",
                               "additionalProperties": {
-                                "$ref": "$.operator.methods[299].outputSchema.properties.distributed.properties.work.items.properties.metadata.additionalProperties"
+                                "$ref": "$.operator.methods[301].outputSchema.properties.distributed.properties.work.items.properties.metadata.additionalProperties"
                               }
                             },
                             {
                               "type": "array",
                               "items": {
-                                "$ref": "$.operator.methods[299].outputSchema.properties.distributed.properties.work.items.properties.metadata.additionalProperties"
+                                "$ref": "$.operator.methods[301].outputSchema.properties.distributed.properties.work.items.properties.metadata.additionalProperties"
                               }
                             }
                           ]
@@ -71077,13 +71435,13 @@
                             {
                               "type": "object",
                               "additionalProperties": {
-                                "$ref": "$.operator.methods[299].outputSchema.properties.distributed.properties.audit.items.properties.metadata.additionalProperties"
+                                "$ref": "$.operator.methods[301].outputSchema.properties.distributed.properties.audit.items.properties.metadata.additionalProperties"
                               }
                             },
                             {
                               "type": "array",
                               "items": {
-                                "$ref": "$.operator.methods[299].outputSchema.properties.distributed.properties.audit.items.properties.metadata.additionalProperties"
+                                "$ref": "$.operator.methods[301].outputSchema.properties.distributed.properties.audit.items.properties.metadata.additionalProperties"
                               }
                             }
                           ]
@@ -71222,13 +71580,13 @@
                     {
                       "type": "object",
                       "additionalProperties": {
-                        "$ref": "$.operator.methods[300].outputSchema.properties.work.properties.payload"
+                        "$ref": "$.operator.methods[302].outputSchema.properties.work.properties.payload"
                       }
                     },
                     {
                       "type": "array",
                       "items": {
-                        "$ref": "$.operator.methods[300].outputSchema.properties.work.properties.payload"
+                        "$ref": "$.operator.methods[302].outputSchema.properties.work.properties.payload"
                       }
                     }
                   ]
@@ -71289,13 +71647,13 @@
                     {
                       "type": "object",
                       "additionalProperties": {
-                        "$ref": "$.operator.methods[300].outputSchema.properties.work.properties.result"
+                        "$ref": "$.operator.methods[302].outputSchema.properties.work.properties.result"
                       }
                     },
                     {
                       "type": "array",
                       "items": {
-                        "$ref": "$.operator.methods[300].outputSchema.properties.work.properties.result"
+                        "$ref": "$.operator.methods[302].outputSchema.properties.work.properties.result"
                       }
                     }
                   ]
@@ -71385,13 +71743,13 @@
                       {
                         "type": "object",
                         "additionalProperties": {
-                          "$ref": "$.operator.methods[300].outputSchema.properties.work.properties.metadata.additionalProperties"
+                          "$ref": "$.operator.methods[302].outputSchema.properties.work.properties.metadata.additionalProperties"
                         }
                       },
                       {
                         "type": "array",
                         "items": {
-                          "$ref": "$.operator.methods[300].outputSchema.properties.work.properties.metadata.additionalProperties"
+                          "$ref": "$.operator.methods[302].outputSchema.properties.work.properties.metadata.additionalProperties"
                         }
                       }
                     ]
@@ -71514,13 +71872,13 @@
                       {
                         "type": "object",
                         "additionalProperties": {
-                          "$ref": "$.operator.methods[301].outputSchema.properties.work.items.properties.payload"
+                          "$ref": "$.operator.methods[303].outputSchema.properties.work.items.properties.payload"
                         }
                       },
                       {
                         "type": "array",
                         "items": {
-                          "$ref": "$.operator.methods[301].outputSchema.properties.work.items.properties.payload"
+                          "$ref": "$.operator.methods[303].outputSchema.properties.work.items.properties.payload"
                         }
                       }
                     ]
@@ -71581,13 +71939,13 @@
                       {
                         "type": "object",
                         "additionalProperties": {
-                          "$ref": "$.operator.methods[301].outputSchema.properties.work.items.properties.result"
+                          "$ref": "$.operator.methods[303].outputSchema.properties.work.items.properties.result"
                         }
                       },
                       {
                         "type": "array",
                         "items": {
-                          "$ref": "$.operator.methods[301].outputSchema.properties.work.items.properties.result"
+                          "$ref": "$.operator.methods[303].outputSchema.properties.work.items.properties.result"
                         }
                       }
                     ]
@@ -71677,13 +72035,13 @@
                         {
                           "type": "object",
                           "additionalProperties": {
-                            "$ref": "$.operator.methods[301].outputSchema.properties.work.items.properties.metadata.additionalProperties"
+                            "$ref": "$.operator.methods[303].outputSchema.properties.work.items.properties.metadata.additionalProperties"
                           }
                         },
                         {
                           "type": "array",
                           "items": {
-                            "$ref": "$.operator.methods[301].outputSchema.properties.work.items.properties.metadata.additionalProperties"
+                            "$ref": "$.operator.methods[303].outputSchema.properties.work.items.properties.metadata.additionalProperties"
                           }
                         }
                       ]
@@ -72304,13 +72662,13 @@
                   {
                     "type": "object",
                     "additionalProperties": {
-                      "$ref": "$.operator.methods[305].inputSchema.properties.metadata.additionalProperties"
+                      "$ref": "$.operator.methods[307].inputSchema.properties.metadata.additionalProperties"
                     }
                   },
                   {
                     "type": "array",
                     "items": {
-                      "$ref": "$.operator.methods[305].inputSchema.properties.metadata.additionalProperties"
+                      "$ref": "$.operator.methods[307].inputSchema.properties.metadata.additionalProperties"
                     }
                   }
                 ]
@@ -72438,13 +72796,13 @@
                   {
                     "type": "object",
                     "additionalProperties": {
-                      "$ref": "$.operator.methods[305].outputSchema.properties.metadata.additionalProperties"
+                      "$ref": "$.operator.methods[307].outputSchema.properties.metadata.additionalProperties"
                     }
                   },
                   {
                     "type": "array",
                     "items": {
-                      "$ref": "$.operator.methods[305].outputSchema.properties.metadata.additionalProperties"
+                      "$ref": "$.operator.methods[307].outputSchema.properties.metadata.additionalProperties"
                     }
                   }
                 ]
@@ -72661,13 +73019,13 @@
                         {
                           "type": "object",
                           "additionalProperties": {
-                            "$ref": "$.operator.methods[307].outputSchema.properties.bindings.items.properties.metadata.additionalProperties"
+                            "$ref": "$.operator.methods[309].outputSchema.properties.bindings.items.properties.metadata.additionalProperties"
                           }
                         },
                         {
                           "type": "array",
                           "items": {
-                            "$ref": "$.operator.methods[307].outputSchema.properties.bindings.items.properties.metadata.additionalProperties"
+                            "$ref": "$.operator.methods[309].outputSchema.properties.bindings.items.properties.metadata.additionalProperties"
                           }
                         }
                       ]
@@ -72769,13 +73127,13 @@
                   {
                     "type": "object",
                     "additionalProperties": {
-                      "$ref": "$.operator.methods[308].inputSchema.properties.metadata.additionalProperties"
+                      "$ref": "$.operator.methods[310].inputSchema.properties.metadata.additionalProperties"
                     }
                   },
                   {
                     "type": "array",
                     "items": {
-                      "$ref": "$.operator.methods[308].inputSchema.properties.metadata.additionalProperties"
+                      "$ref": "$.operator.methods[310].inputSchema.properties.metadata.additionalProperties"
                     }
                   }
                 ]
@@ -72897,13 +73255,13 @@
                   {
                     "type": "object",
                     "additionalProperties": {
-                      "$ref": "$.operator.methods[308].outputSchema.properties.metadata.additionalProperties"
+                      "$ref": "$.operator.methods[310].outputSchema.properties.metadata.additionalProperties"
                     }
                   },
                   {
                     "type": "array",
                     "items": {
-                      "$ref": "$.operator.methods[308].outputSchema.properties.metadata.additionalProperties"
+                      "$ref": "$.operator.methods[310].outputSchema.properties.metadata.additionalProperties"
                     }
                   }
                 ]
@@ -73078,13 +73436,13 @@
                         {
                           "type": "object",
                           "additionalProperties": {
-                            "$ref": "$.operator.methods[309].outputSchema.properties.bindings.items.properties.metadata.additionalProperties"
+                            "$ref": "$.operator.methods[311].outputSchema.properties.bindings.items.properties.metadata.additionalProperties"
                           }
                         },
                         {
                           "type": "array",
                           "items": {
-                            "$ref": "$.operator.methods[309].outputSchema.properties.bindings.items.properties.metadata.additionalProperties"
+                            "$ref": "$.operator.methods[311].outputSchema.properties.bindings.items.properties.metadata.additionalProperties"
                           }
                         }
                       ]
@@ -73202,13 +73560,13 @@
                         {
                           "type": "object",
                           "additionalProperties": {
-                            "$ref": "$.operator.methods[310].outputSchema.properties.surfaces.items.properties.metadata.additionalProperties"
+                            "$ref": "$.operator.methods[312].outputSchema.properties.surfaces.items.properties.metadata.additionalProperties"
                           }
                         },
                         {
                           "type": "array",
                           "items": {
-                            "$ref": "$.operator.methods[310].outputSchema.properties.surfaces.items.properties.metadata.additionalProperties"
+                            "$ref": "$.operator.methods[312].outputSchema.properties.surfaces.items.properties.metadata.additionalProperties"
                           }
                         }
                       ]
@@ -75449,13 +75807,13 @@
                       {
                         "type": "object",
                         "additionalProperties": {
-                          "$ref": "$.operator.methods[320].outputSchema.properties.session.properties.metadata.additionalProperties"
+                          "$ref": "$.operator.methods[322].outputSchema.properties.session.properties.metadata.additionalProperties"
                         }
                       },
                       {
                         "type": "array",
                         "items": {
-                          "$ref": "$.operator.methods[320].outputSchema.properties.session.properties.metadata.additionalProperties"
+                          "$ref": "$.operator.methods[322].outputSchema.properties.session.properties.metadata.additionalProperties"
                         }
                       }
                     ]
@@ -75711,13 +76069,13 @@
                       {
                         "type": "object",
                         "additionalProperties": {
-                          "$ref": "$.operator.methods[322].outputSchema.properties.session.properties.metadata.additionalProperties"
+                          "$ref": "$.operator.methods[324].outputSchema.properties.session.properties.metadata.additionalProperties"
                         }
                       },
                       {
                         "type": "array",
                         "items": {
-                          "$ref": "$.operator.methods[322].outputSchema.properties.session.properties.metadata.additionalProperties"
+                          "$ref": "$.operator.methods[324].outputSchema.properties.session.properties.metadata.additionalProperties"
                         }
                       }
                     ]
@@ -75961,13 +76319,13 @@
                       {
                         "type": "object",
                         "additionalProperties": {
-                          "$ref": "$.operator.methods[324].outputSchema.properties.session.properties.metadata.additionalProperties"
+                          "$ref": "$.operator.methods[326].outputSchema.properties.session.properties.metadata.additionalProperties"
                         }
                       },
                       {
                         "type": "array",
                         "items": {
-                          "$ref": "$.operator.methods[324].outputSchema.properties.session.properties.metadata.additionalProperties"
+                          "$ref": "$.operator.methods[326].outputSchema.properties.session.properties.metadata.additionalProperties"
                         }
                       }
                     ]
@@ -76263,13 +76621,13 @@
                           {
                             "type": "object",
                             "additionalProperties": {
-                              "$ref": "$.operator.methods[325].outputSchema.properties.session.anyOf[0].properties.metadata.additionalProperties"
+                              "$ref": "$.operator.methods[327].outputSchema.properties.session.anyOf[0].properties.metadata.additionalProperties"
                             }
                           },
                           {
                             "type": "array",
                             "items": {
-                              "$ref": "$.operator.methods[325].outputSchema.properties.session.anyOf[0].properties.metadata.additionalProperties"
+                              "$ref": "$.operator.methods[327].outputSchema.properties.session.anyOf[0].properties.metadata.additionalProperties"
                             }
                           }
                         ]
@@ -76358,13 +76716,13 @@
                       {
                         "type": "object",
                         "additionalProperties": {
-                          "$ref": "$.operator.methods[325].outputSchema.properties.message.properties.metadata.additionalProperties"
+                          "$ref": "$.operator.methods[327].outputSchema.properties.message.properties.metadata.additionalProperties"
                         }
                       },
                       {
                         "type": "array",
                         "items": {
-                          "$ref": "$.operator.methods[325].outputSchema.properties.message.properties.metadata.additionalProperties"
+                          "$ref": "$.operator.methods[327].outputSchema.properties.message.properties.metadata.additionalProperties"
                         }
                       }
                     ]
@@ -76468,13 +76826,13 @@
                       {
                         "type": "object",
                         "additionalProperties": {
-                          "$ref": "$.operator.methods[325].outputSchema.properties.input.properties.metadata.additionalProperties"
+                          "$ref": "$.operator.methods[327].outputSchema.properties.input.properties.metadata.additionalProperties"
                         }
                       },
                       {
                         "type": "array",
                         "items": {
-                          "$ref": "$.operator.methods[325].outputSchema.properties.input.properties.metadata.additionalProperties"
+                          "$ref": "$.operator.methods[327].outputSchema.properties.input.properties.metadata.additionalProperties"
                         }
                       }
                     ]
@@ -76782,13 +77140,13 @@
                       {
                         "type": "object",
                         "additionalProperties": {
-                          "$ref": "$.operator.methods[326].outputSchema.properties.session.properties.metadata.additionalProperties"
+                          "$ref": "$.operator.methods[328].outputSchema.properties.session.properties.metadata.additionalProperties"
                         }
                       },
                       {
                         "type": "array",
                         "items": {
-                          "$ref": "$.operator.methods[326].outputSchema.properties.session.properties.metadata.additionalProperties"
+                          "$ref": "$.operator.methods[328].outputSchema.properties.session.properties.metadata.additionalProperties"
                         }
                       }
                     ]
@@ -76874,13 +77232,13 @@
                         {
                           "type": "object",
                           "additionalProperties": {
-                            "$ref": "$.operator.methods[326].outputSchema.properties.messages.items.properties.metadata.additionalProperties"
+                            "$ref": "$.operator.methods[328].outputSchema.properties.messages.items.properties.metadata.additionalProperties"
                           }
                         },
                         {
                           "type": "array",
                           "items": {
-                            "$ref": "$.operator.methods[326].outputSchema.properties.messages.items.properties.metadata.additionalProperties"
+                            "$ref": "$.operator.methods[328].outputSchema.properties.messages.items.properties.metadata.additionalProperties"
                           }
                         }
                       ]
@@ -77034,13 +77392,13 @@
                       {
                         "type": "object",
                         "additionalProperties": {
-                          "$ref": "$.operator.methods[327].outputSchema.properties.input.properties.metadata.additionalProperties"
+                          "$ref": "$.operator.methods[329].outputSchema.properties.input.properties.metadata.additionalProperties"
                         }
                       },
                       {
                         "type": "array",
                         "items": {
-                          "$ref": "$.operator.methods[327].outputSchema.properties.input.properties.metadata.additionalProperties"
+                          "$ref": "$.operator.methods[329].outputSchema.properties.input.properties.metadata.additionalProperties"
                         }
                       }
                     ]
@@ -77300,13 +77658,13 @@
                       {
                         "type": "object",
                         "additionalProperties": {
-                          "$ref": "$.operator.methods[328].outputSchema.properties.input.properties.metadata.additionalProperties"
+                          "$ref": "$.operator.methods[330].outputSchema.properties.input.properties.metadata.additionalProperties"
                         }
                       },
                       {
                         "type": "array",
                         "items": {
-                          "$ref": "$.operator.methods[328].outputSchema.properties.input.properties.metadata.additionalProperties"
+                          "$ref": "$.operator.methods[330].outputSchema.properties.input.properties.metadata.additionalProperties"
                         }
                       }
                     ]
@@ -77599,13 +77957,13 @@
                       {
                         "type": "object",
                         "additionalProperties": {
-                          "$ref": "$.operator.methods[329].outputSchema.properties.session.properties.metadata.additionalProperties"
+                          "$ref": "$.operator.methods[331].outputSchema.properties.session.properties.metadata.additionalProperties"
                         }
                       },
                       {
                         "type": "array",
                         "items": {
-                          "$ref": "$.operator.methods[329].outputSchema.properties.session.properties.metadata.additionalProperties"
+                          "$ref": "$.operator.methods[331].outputSchema.properties.session.properties.metadata.additionalProperties"
                         }
                       }
                     ]
@@ -77718,13 +78076,13 @@
                         {
                           "type": "object",
                           "additionalProperties": {
-                            "$ref": "$.operator.methods[329].outputSchema.properties.inputs.items.properties.metadata.additionalProperties"
+                            "$ref": "$.operator.methods[331].outputSchema.properties.inputs.items.properties.metadata.additionalProperties"
                           }
                         },
                         {
                           "type": "array",
                           "items": {
-                            "$ref": "$.operator.methods[329].outputSchema.properties.inputs.items.properties.metadata.additionalProperties"
+                            "$ref": "$.operator.methods[331].outputSchema.properties.inputs.items.properties.metadata.additionalProperties"
                           }
                         }
                       ]
@@ -78102,13 +78460,13 @@
                         {
                           "type": "object",
                           "additionalProperties": {
-                            "$ref": "$.operator.methods[331].outputSchema.properties.sessions.items.properties.metadata.additionalProperties"
+                            "$ref": "$.operator.methods[333].outputSchema.properties.sessions.items.properties.metadata.additionalProperties"
                           }
                         },
                         {
                           "type": "array",
                           "items": {
-                            "$ref": "$.operator.methods[331].outputSchema.properties.sessions.items.properties.metadata.additionalProperties"
+                            "$ref": "$.operator.methods[333].outputSchema.properties.sessions.items.properties.metadata.additionalProperties"
                           }
                         }
                       ]
@@ -78431,13 +78789,13 @@
                               {
                                 "type": "object",
                                 "additionalProperties": {
-                                  "$ref": "$.operator.methods[332].outputSchema.anyOf[1].properties.session.anyOf[0].properties.metadata.additionalProperties"
+                                  "$ref": "$.operator.methods[334].outputSchema.anyOf[1].properties.session.anyOf[0].properties.metadata.additionalProperties"
                                 }
                               },
                               {
                                 "type": "array",
                                 "items": {
-                                  "$ref": "$.operator.methods[332].outputSchema.anyOf[1].properties.session.anyOf[0].properties.metadata.additionalProperties"
+                                  "$ref": "$.operator.methods[334].outputSchema.anyOf[1].properties.session.anyOf[0].properties.metadata.additionalProperties"
                                 }
                               }
                             ]
@@ -78526,13 +78884,13 @@
                           {
                             "type": "object",
                             "additionalProperties": {
-                              "$ref": "$.operator.methods[332].outputSchema.anyOf[1].properties.message.properties.metadata.additionalProperties"
+                              "$ref": "$.operator.methods[334].outputSchema.anyOf[1].properties.message.properties.metadata.additionalProperties"
                             }
                           },
                           {
                             "type": "array",
                             "items": {
-                              "$ref": "$.operator.methods[332].outputSchema.anyOf[1].properties.message.properties.metadata.additionalProperties"
+                              "$ref": "$.operator.methods[334].outputSchema.anyOf[1].properties.message.properties.metadata.additionalProperties"
                             }
                           }
                         ]
@@ -78636,13 +78994,13 @@
                           {
                             "type": "object",
                             "additionalProperties": {
-                              "$ref": "$.operator.methods[332].outputSchema.anyOf[1].properties.input.properties.metadata.additionalProperties"
+                              "$ref": "$.operator.methods[334].outputSchema.anyOf[1].properties.input.properties.metadata.additionalProperties"
                             }
                           },
                           {
                             "type": "array",
                             "items": {
-                              "$ref": "$.operator.methods[332].outputSchema.anyOf[1].properties.input.properties.metadata.additionalProperties"
+                              "$ref": "$.operator.methods[334].outputSchema.anyOf[1].properties.input.properties.metadata.additionalProperties"
                             }
                           }
                         ]
@@ -78958,13 +79316,13 @@
                       {
                         "type": "object",
                         "additionalProperties": {
-                          "$ref": "$.operator.methods[333].outputSchema.properties.session.properties.metadata.additionalProperties"
+                          "$ref": "$.operator.methods[335].outputSchema.properties.session.properties.metadata.additionalProperties"
                         }
                       },
                       {
                         "type": "array",
                         "items": {
-                          "$ref": "$.operator.methods[333].outputSchema.properties.session.properties.metadata.additionalProperties"
+                          "$ref": "$.operator.methods[335].outputSchema.properties.session.properties.metadata.additionalProperties"
                         }
                       }
                     ]
@@ -79050,13 +79408,13 @@
                         {
                           "type": "object",
                           "additionalProperties": {
-                            "$ref": "$.operator.methods[333].outputSchema.properties.messages.items.properties.metadata.additionalProperties"
+                            "$ref": "$.operator.methods[335].outputSchema.properties.messages.items.properties.metadata.additionalProperties"
                           }
                         },
                         {
                           "type": "array",
                           "items": {
-                            "$ref": "$.operator.methods[333].outputSchema.properties.messages.items.properties.metadata.additionalProperties"
+                            "$ref": "$.operator.methods[335].outputSchema.properties.messages.items.properties.metadata.additionalProperties"
                           }
                         }
                       ]
@@ -79427,13 +79785,13 @@
                       {
                         "type": "object",
                         "additionalProperties": {
-                          "$ref": "$.operator.methods[336].outputSchema.properties.session.properties.metadata.additionalProperties"
+                          "$ref": "$.operator.methods[338].outputSchema.properties.session.properties.metadata.additionalProperties"
                         }
                       },
                       {
                         "type": "array",
                         "items": {
-                          "$ref": "$.operator.methods[336].outputSchema.properties.session.properties.metadata.additionalProperties"
+                          "$ref": "$.operator.methods[338].outputSchema.properties.session.properties.metadata.additionalProperties"
                         }
                       }
                     ]
@@ -79641,13 +79999,13 @@
                       {
                         "type": "object",
                         "additionalProperties": {
-                          "$ref": "$.operator.methods[337].outputSchema.properties.session.properties.metadata.additionalProperties"
+                          "$ref": "$.operator.methods[339].outputSchema.properties.session.properties.metadata.additionalProperties"
                         }
                       },
                       {
                         "type": "array",
                         "items": {
-                          "$ref": "$.operator.methods[337].outputSchema.properties.session.properties.metadata.additionalProperties"
+                          "$ref": "$.operator.methods[339].outputSchema.properties.session.properties.metadata.additionalProperties"
                         }
                       }
                     ]
@@ -79852,13 +80210,13 @@
                         {
                           "type": "object",
                           "additionalProperties": {
-                            "$ref": "$.operator.methods[338].outputSchema.properties.sessions.items.properties.metadata.additionalProperties"
+                            "$ref": "$.operator.methods[340].outputSchema.properties.sessions.items.properties.metadata.additionalProperties"
                           }
                         },
                         {
                           "type": "array",
                           "items": {
-                            "$ref": "$.operator.methods[338].outputSchema.properties.sessions.items.properties.metadata.additionalProperties"
+                            "$ref": "$.operator.methods[340].outputSchema.properties.sessions.items.properties.metadata.additionalProperties"
                           }
                         }
                       ]
@@ -80165,13 +80523,13 @@
                           {
                             "type": "object",
                             "additionalProperties": {
-                              "$ref": "$.operator.methods[339].outputSchema.properties.session.anyOf[0].properties.metadata.additionalProperties"
+                              "$ref": "$.operator.methods[341].outputSchema.properties.session.anyOf[0].properties.metadata.additionalProperties"
                             }
                           },
                           {
                             "type": "array",
                             "items": {
-                              "$ref": "$.operator.methods[339].outputSchema.properties.session.anyOf[0].properties.metadata.additionalProperties"
+                              "$ref": "$.operator.methods[341].outputSchema.properties.session.anyOf[0].properties.metadata.additionalProperties"
                             }
                           }
                         ]
@@ -80260,13 +80618,13 @@
                       {
                         "type": "object",
                         "additionalProperties": {
-                          "$ref": "$.operator.methods[339].outputSchema.properties.message.properties.metadata.additionalProperties"
+                          "$ref": "$.operator.methods[341].outputSchema.properties.message.properties.metadata.additionalProperties"
                         }
                       },
                       {
                         "type": "array",
                         "items": {
-                          "$ref": "$.operator.methods[339].outputSchema.properties.message.properties.metadata.additionalProperties"
+                          "$ref": "$.operator.methods[341].outputSchema.properties.message.properties.metadata.additionalProperties"
                         }
                       }
                     ]
@@ -80370,13 +80728,13 @@
                       {
                         "type": "object",
                         "additionalProperties": {
-                          "$ref": "$.operator.methods[339].outputSchema.properties.input.properties.metadata.additionalProperties"
+                          "$ref": "$.operator.methods[341].outputSchema.properties.input.properties.metadata.additionalProperties"
                         }
                       },
                       {
                         "type": "array",
                         "items": {
-                          "$ref": "$.operator.methods[339].outputSchema.properties.input.properties.metadata.additionalProperties"
+                          "$ref": "$.operator.methods[341].outputSchema.properties.input.properties.metadata.additionalProperties"
                         }
                       }
                     ]
@@ -80716,13 +81074,13 @@
                           {
                             "type": "object",
                             "additionalProperties": {
-                              "$ref": "$.operator.methods[341].outputSchema.anyOf[1].properties.conflicts.items.properties.localValue"
+                              "$ref": "$.operator.methods[343].outputSchema.anyOf[1].properties.conflicts.items.properties.localValue"
                             }
                           },
                           {
                             "type": "array",
                             "items": {
-                              "$ref": "$.operator.methods[341].outputSchema.anyOf[1].properties.conflicts.items.properties.localValue"
+                              "$ref": "$.operator.methods[343].outputSchema.anyOf[1].properties.conflicts.items.properties.localValue"
                             }
                           }
                         ]
@@ -80744,13 +81102,13 @@
                           {
                             "type": "object",
                             "additionalProperties": {
-                              "$ref": "$.operator.methods[341].outputSchema.anyOf[1].properties.conflicts.items.properties.incomingValue"
+                              "$ref": "$.operator.methods[343].outputSchema.anyOf[1].properties.conflicts.items.properties.incomingValue"
                             }
                           },
                           {
                             "type": "array",
                             "items": {
-                              "$ref": "$.operator.methods[341].outputSchema.anyOf[1].properties.conflicts.items.properties.incomingValue"
+                              "$ref": "$.operator.methods[343].outputSchema.anyOf[1].properties.conflicts.items.properties.incomingValue"
                             }
                           }
                         ]
@@ -80853,13 +81211,13 @@
                               {
                                 "type": "object",
                                 "additionalProperties": {
-                                  "$ref": "$.operator.methods[341].outputSchema.anyOf[1].properties.stagedManagedBundle.properties.changes.items.properties.previousValue"
+                                  "$ref": "$.operator.methods[343].outputSchema.anyOf[1].properties.stagedManagedBundle.properties.changes.items.properties.previousValue"
                                 }
                               },
                               {
                                 "type": "array",
                                 "items": {
-                                  "$ref": "$.operator.methods[341].outputSchema.anyOf[1].properties.stagedManagedBundle.properties.changes.items.properties.previousValue"
+                                  "$ref": "$.operator.methods[343].outputSchema.anyOf[1].properties.stagedManagedBundle.properties.changes.items.properties.previousValue"
                                 }
                               }
                             ]
@@ -80881,13 +81239,13 @@
                               {
                                 "type": "object",
                                 "additionalProperties": {
-                                  "$ref": "$.operator.methods[341].outputSchema.anyOf[1].properties.stagedManagedBundle.properties.changes.items.properties.nextValue"
+                                  "$ref": "$.operator.methods[343].outputSchema.anyOf[1].properties.stagedManagedBundle.properties.changes.items.properties.nextValue"
                                 }
                               },
                               {
                                 "type": "array",
                                 "items": {
-                                  "$ref": "$.operator.methods[341].outputSchema.anyOf[1].properties.stagedManagedBundle.properties.changes.items.properties.nextValue"
+                                  "$ref": "$.operator.methods[343].outputSchema.anyOf[1].properties.stagedManagedBundle.properties.changes.items.properties.nextValue"
                                 }
                               }
                             ]
@@ -80971,13 +81329,13 @@
                             {
                               "type": "object",
                               "additionalProperties": {
-                                "$ref": "$.operator.methods[341].outputSchema.anyOf[1].properties.rollbackHistory.items.properties.previousValues.additionalProperties"
+                                "$ref": "$.operator.methods[343].outputSchema.anyOf[1].properties.rollbackHistory.items.properties.previousValues.additionalProperties"
                               }
                             },
                             {
                               "type": "array",
                               "items": {
-                                "$ref": "$.operator.methods[341].outputSchema.anyOf[1].properties.rollbackHistory.items.properties.previousValues.additionalProperties"
+                                "$ref": "$.operator.methods[343].outputSchema.anyOf[1].properties.rollbackHistory.items.properties.previousValues.additionalProperties"
                               }
                             }
                           ]
@@ -81061,13 +81419,13 @@
                   {
                     "type": "object",
                     "additionalProperties": {
-                      "$ref": "$.operator.methods[342].inputSchema.properties.metadata.additionalProperties"
+                      "$ref": "$.operator.methods[344].inputSchema.properties.metadata.additionalProperties"
                     }
                   },
                   {
                     "type": "array",
                     "items": {
-                      "$ref": "$.operator.methods[342].inputSchema.properties.metadata.additionalProperties"
+                      "$ref": "$.operator.methods[344].inputSchema.properties.metadata.additionalProperties"
                     }
                   }
                 ]
@@ -81112,13 +81470,13 @@
                       {
                         "type": "object",
                         "additionalProperties": {
-                          "$ref": "$.operator.methods[342].outputSchema.properties.skill.properties.metadata.additionalProperties"
+                          "$ref": "$.operator.methods[344].outputSchema.properties.skill.properties.metadata.additionalProperties"
                         }
                       },
                       {
                         "type": "array",
                         "items": {
-                          "$ref": "$.operator.methods[342].outputSchema.properties.skill.properties.metadata.additionalProperties"
+                          "$ref": "$.operator.methods[344].outputSchema.properties.skill.properties.metadata.additionalProperties"
                         }
                       }
                     ]
@@ -81256,13 +81614,13 @@
                       {
                         "type": "object",
                         "additionalProperties": {
-                          "$ref": "$.operator.methods[344].outputSchema.properties.skill.properties.metadata.additionalProperties"
+                          "$ref": "$.operator.methods[346].outputSchema.properties.skill.properties.metadata.additionalProperties"
                         }
                       },
                       {
                         "type": "array",
                         "items": {
-                          "$ref": "$.operator.methods[344].outputSchema.properties.skill.properties.metadata.additionalProperties"
+                          "$ref": "$.operator.methods[346].outputSchema.properties.skill.properties.metadata.additionalProperties"
                         }
                       }
                     ]
@@ -81347,13 +81705,13 @@
                         {
                           "type": "object",
                           "additionalProperties": {
-                            "$ref": "$.operator.methods[345].outputSchema.properties.skills.items.properties.metadata.additionalProperties"
+                            "$ref": "$.operator.methods[347].outputSchema.properties.skills.items.properties.metadata.additionalProperties"
                           }
                         },
                         {
                           "type": "array",
                           "items": {
-                            "$ref": "$.operator.methods[345].outputSchema.properties.skills.items.properties.metadata.additionalProperties"
+                            "$ref": "$.operator.methods[347].outputSchema.properties.skills.items.properties.metadata.additionalProperties"
                           }
                         }
                       ]
@@ -81428,13 +81786,13 @@
                   {
                     "type": "object",
                     "additionalProperties": {
-                      "$ref": "$.operator.methods[346].inputSchema.properties.metadata.additionalProperties"
+                      "$ref": "$.operator.methods[348].inputSchema.properties.metadata.additionalProperties"
                     }
                   },
                   {
                     "type": "array",
                     "items": {
-                      "$ref": "$.operator.methods[346].inputSchema.properties.metadata.additionalProperties"
+                      "$ref": "$.operator.methods[348].inputSchema.properties.metadata.additionalProperties"
                     }
                   }
                 ]
@@ -81477,13 +81835,13 @@
                       {
                         "type": "object",
                         "additionalProperties": {
-                          "$ref": "$.operator.methods[346].outputSchema.properties.skill.properties.metadata.additionalProperties"
+                          "$ref": "$.operator.methods[348].outputSchema.properties.skill.properties.metadata.additionalProperties"
                         }
                       },
                       {
                         "type": "array",
                         "items": {
-                          "$ref": "$.operator.methods[346].outputSchema.properties.skill.properties.metadata.additionalProperties"
+                          "$ref": "$.operator.methods[348].outputSchema.properties.skill.properties.metadata.additionalProperties"
                         }
                       }
                     ]
@@ -81678,13 +82036,13 @@
                     {
                       "type": "object",
                       "additionalProperties": {
-                        "$ref": "$.operator.methods[347].outputSchema.properties.task.properties.result"
+                        "$ref": "$.operator.methods[349].outputSchema.properties.task.properties.result"
                       }
                     },
                     {
                       "type": "array",
                       "items": {
-                        "$ref": "$.operator.methods[347].outputSchema.properties.task.properties.result"
+                        "$ref": "$.operator.methods[349].outputSchema.properties.task.properties.result"
                       }
                     }
                   ]
@@ -81903,13 +82261,13 @@
                   {
                     "type": "object",
                     "additionalProperties": {
-                      "$ref": "$.operator.methods[348].inputSchema.properties.metadata.additionalProperties"
+                      "$ref": "$.operator.methods[350].inputSchema.properties.metadata.additionalProperties"
                     }
                   },
                   {
                     "type": "array",
                     "items": {
-                      "$ref": "$.operator.methods[348].inputSchema.properties.metadata.additionalProperties"
+                      "$ref": "$.operator.methods[350].inputSchema.properties.metadata.additionalProperties"
                     }
                   }
                 ]
@@ -82136,13 +82494,13 @@
                     {
                       "type": "object",
                       "additionalProperties": {
-                        "$ref": "$.operator.methods[349].outputSchema.properties.task.properties.result"
+                        "$ref": "$.operator.methods[351].outputSchema.properties.task.properties.result"
                       }
                     },
                     {
                       "type": "array",
                       "items": {
-                        "$ref": "$.operator.methods[349].outputSchema.properties.task.properties.result"
+                        "$ref": "$.operator.methods[351].outputSchema.properties.task.properties.result"
                       }
                     }
                   ]
@@ -82476,13 +82834,13 @@
                     {
                       "type": "object",
                       "additionalProperties": {
-                        "$ref": "$.operator.methods[351].outputSchema.properties.task.properties.result"
+                        "$ref": "$.operator.methods[353].outputSchema.properties.task.properties.result"
                       }
                     },
                     {
                       "type": "array",
                       "items": {
-                        "$ref": "$.operator.methods[351].outputSchema.properties.task.properties.result"
+                        "$ref": "$.operator.methods[353].outputSchema.properties.task.properties.result"
                       }
                     }
                   ]
@@ -82770,13 +83128,13 @@
                       {
                         "type": "object",
                         "additionalProperties": {
-                          "$ref": "$.operator.methods[353].outputSchema.properties.items.items.properties.payload"
+                          "$ref": "$.operator.methods[355].outputSchema.properties.items.items.properties.payload"
                         }
                       },
                       {
                         "type": "array",
                         "items": {
-                          "$ref": "$.operator.methods[353].outputSchema.properties.items.items.properties.payload"
+                          "$ref": "$.operator.methods[355].outputSchema.properties.items.items.properties.payload"
                         }
                       }
                     ]
@@ -82800,13 +83158,13 @@
                         {
                           "type": "object",
                           "additionalProperties": {
-                            "$ref": "$.operator.methods[353].outputSchema.properties.items.items.properties.attributes.additionalProperties"
+                            "$ref": "$.operator.methods[355].outputSchema.properties.items.items.properties.attributes.additionalProperties"
                           }
                         },
                         {
                           "type": "array",
                           "items": {
-                            "$ref": "$.operator.methods[353].outputSchema.properties.items.items.properties.attributes.additionalProperties"
+                            "$ref": "$.operator.methods[355].outputSchema.properties.items.items.properties.attributes.additionalProperties"
                           }
                         }
                       ]
@@ -83110,13 +83468,13 @@
                       {
                         "type": "object",
                         "additionalProperties": {
-                          "$ref": "$.operator.methods[354].outputSchema.properties.items.items.properties.payload"
+                          "$ref": "$.operator.methods[356].outputSchema.properties.items.items.properties.payload"
                         }
                       },
                       {
                         "type": "array",
                         "items": {
-                          "$ref": "$.operator.methods[354].outputSchema.properties.items.items.properties.payload"
+                          "$ref": "$.operator.methods[356].outputSchema.properties.items.items.properties.payload"
                         }
                       }
                     ]
@@ -83140,13 +83498,13 @@
                         {
                           "type": "object",
                           "additionalProperties": {
-                            "$ref": "$.operator.methods[354].outputSchema.properties.items.items.properties.attributes.additionalProperties"
+                            "$ref": "$.operator.methods[356].outputSchema.properties.items.items.properties.attributes.additionalProperties"
                           }
                         },
                         {
                           "type": "array",
                           "items": {
-                            "$ref": "$.operator.methods[354].outputSchema.properties.items.items.properties.attributes.additionalProperties"
+                            "$ref": "$.operator.methods[356].outputSchema.properties.items.items.properties.attributes.additionalProperties"
                           }
                         }
                       ]
@@ -83703,12 +84061,12 @@
                       "type": "null"
                     },
                     {
-                      "$ref": "$.operator.methods[356].outputSchema.properties.resourceLogs.items"
+                      "$ref": "$.operator.methods[358].outputSchema.properties.resourceLogs.items"
                     },
                     {
                       "type": "array",
                       "items": {
-                        "$ref": "$.operator.methods[356].outputSchema.properties.resourceLogs.items.additionalProperties"
+                        "$ref": "$.operator.methods[358].outputSchema.properties.resourceLogs.items.additionalProperties"
                       }
                     }
                   ]
@@ -83818,12 +84176,12 @@
                       "type": "null"
                     },
                     {
-                      "$ref": "$.operator.methods[357].outputSchema.properties.resourceMetrics.items"
+                      "$ref": "$.operator.methods[359].outputSchema.properties.resourceMetrics.items"
                     },
                     {
                       "type": "array",
                       "items": {
-                        "$ref": "$.operator.methods[357].outputSchema.properties.resourceMetrics.items.additionalProperties"
+                        "$ref": "$.operator.methods[359].outputSchema.properties.resourceMetrics.items.additionalProperties"
                       }
                     }
                   ]
@@ -83933,12 +84291,12 @@
                       "type": "null"
                     },
                     {
-                      "$ref": "$.operator.methods[358].outputSchema.properties.resourceSpans.items"
+                      "$ref": "$.operator.methods[360].outputSchema.properties.resourceSpans.items"
                     },
                     {
                       "type": "array",
                       "items": {
-                        "$ref": "$.operator.methods[358].outputSchema.properties.resourceSpans.items.additionalProperties"
+                        "$ref": "$.operator.methods[360].outputSchema.properties.resourceSpans.items.additionalProperties"
                       }
                     }
                   ]
@@ -84420,13 +84778,13 @@
                               {
                                 "type": "object",
                                 "additionalProperties": {
-                                  "$ref": "$.operator.methods[359].outputSchema.properties.recent.properties.events.properties.items.items.properties.payload"
+                                  "$ref": "$.operator.methods[361].outputSchema.properties.recent.properties.events.properties.items.items.properties.payload"
                                 }
                               },
                               {
                                 "type": "array",
                                 "items": {
-                                  "$ref": "$.operator.methods[359].outputSchema.properties.recent.properties.events.properties.items.items.properties.payload"
+                                  "$ref": "$.operator.methods[361].outputSchema.properties.recent.properties.events.properties.items.items.properties.payload"
                                 }
                               }
                             ]
@@ -84450,13 +84808,13 @@
                                 {
                                   "type": "object",
                                   "additionalProperties": {
-                                    "$ref": "$.operator.methods[359].outputSchema.properties.recent.properties.events.properties.items.items.properties.attributes.additionalProperties"
+                                    "$ref": "$.operator.methods[361].outputSchema.properties.recent.properties.events.properties.items.items.properties.attributes.additionalProperties"
                                   }
                                 },
                                 {
                                   "type": "array",
                                   "items": {
-                                    "$ref": "$.operator.methods[359].outputSchema.properties.recent.properties.events.properties.items.items.properties.attributes.additionalProperties"
+                                    "$ref": "$.operator.methods[361].outputSchema.properties.recent.properties.events.properties.items.items.properties.attributes.additionalProperties"
                                   }
                                 }
                               ]
@@ -84685,13 +85043,13 @@
                               {
                                 "type": "object",
                                 "additionalProperties": {
-                                  "$ref": "$.operator.methods[359].outputSchema.properties.recent.properties.errors.properties.items.items.properties.payload"
+                                  "$ref": "$.operator.methods[361].outputSchema.properties.recent.properties.errors.properties.items.items.properties.payload"
                                 }
                               },
                               {
                                 "type": "array",
                                 "items": {
-                                  "$ref": "$.operator.methods[359].outputSchema.properties.recent.properties.errors.properties.items.items.properties.payload"
+                                  "$ref": "$.operator.methods[361].outputSchema.properties.recent.properties.errors.properties.items.items.properties.payload"
                                 }
                               }
                             ]
@@ -84715,13 +85073,13 @@
                                 {
                                   "type": "object",
                                   "additionalProperties": {
-                                    "$ref": "$.operator.methods[359].outputSchema.properties.recent.properties.errors.properties.items.items.properties.attributes.additionalProperties"
+                                    "$ref": "$.operator.methods[361].outputSchema.properties.recent.properties.errors.properties.items.items.properties.attributes.additionalProperties"
                                   }
                                 },
                                 {
                                   "type": "array",
                                   "items": {
-                                    "$ref": "$.operator.methods[359].outputSchema.properties.recent.properties.errors.properties.items.items.properties.attributes.additionalProperties"
+                                    "$ref": "$.operator.methods[361].outputSchema.properties.recent.properties.errors.properties.items.items.properties.attributes.additionalProperties"
                                   }
                                 }
                               ]
@@ -84948,13 +85306,13 @@
                                 {
                                   "type": "object",
                                   "additionalProperties": {
-                                    "$ref": "$.operator.methods[359].outputSchema.properties.recent.properties.spans.properties.items.items.properties.attributes.additionalProperties"
+                                    "$ref": "$.operator.methods[361].outputSchema.properties.recent.properties.spans.properties.items.items.properties.attributes.additionalProperties"
                                   }
                                 },
                                 {
                                   "type": "array",
                                   "items": {
-                                    "$ref": "$.operator.methods[359].outputSchema.properties.recent.properties.spans.properties.items.items.properties.attributes.additionalProperties"
+                                    "$ref": "$.operator.methods[361].outputSchema.properties.recent.properties.spans.properties.items.items.properties.attributes.additionalProperties"
                                   }
                                 }
                               ]
@@ -84990,13 +85348,13 @@
                                       {
                                         "type": "object",
                                         "additionalProperties": {
-                                          "$ref": "$.operator.methods[359].outputSchema.properties.recent.properties.spans.properties.items.items.properties.events.items.properties.attributes.additionalProperties"
+                                          "$ref": "$.operator.methods[361].outputSchema.properties.recent.properties.spans.properties.items.items.properties.events.items.properties.attributes.additionalProperties"
                                         }
                                       },
                                       {
                                         "type": "array",
                                         "items": {
-                                          "$ref": "$.operator.methods[359].outputSchema.properties.recent.properties.spans.properties.items.items.properties.events.items.properties.attributes.additionalProperties"
+                                          "$ref": "$.operator.methods[361].outputSchema.properties.recent.properties.spans.properties.items.items.properties.events.items.properties.attributes.additionalProperties"
                                         }
                                       }
                                     ]
@@ -85434,13 +85792,13 @@
                         {
                           "type": "object",
                           "additionalProperties": {
-                            "$ref": "$.operator.methods[361].outputSchema.properties.items.items.properties.attributes.additionalProperties"
+                            "$ref": "$.operator.methods[363].outputSchema.properties.items.items.properties.attributes.additionalProperties"
                           }
                         },
                         {
                           "type": "array",
                           "items": {
-                            "$ref": "$.operator.methods[361].outputSchema.properties.items.items.properties.attributes.additionalProperties"
+                            "$ref": "$.operator.methods[363].outputSchema.properties.items.items.properties.attributes.additionalProperties"
                           }
                         }
                       ]
@@ -85476,13 +85834,13 @@
                               {
                                 "type": "object",
                                 "additionalProperties": {
-                                  "$ref": "$.operator.methods[361].outputSchema.properties.items.items.properties.events.items.properties.attributes.additionalProperties"
+                                  "$ref": "$.operator.methods[363].outputSchema.properties.items.items.properties.events.items.properties.attributes.additionalProperties"
                                 }
                               },
                               {
                                 "type": "array",
                                 "items": {
-                                  "$ref": "$.operator.methods[361].outputSchema.properties.items.items.properties.events.items.properties.attributes.additionalProperties"
+                                  "$ref": "$.operator.methods[363].outputSchema.properties.items.items.properties.events.items.properties.attributes.additionalProperties"
                                 }
                               }
                             ]
@@ -85686,13 +86044,13 @@
                   {
                     "type": "object",
                     "additionalProperties": {
-                      "$ref": "$.operator.methods[363].inputSchema.properties.metadata.additionalProperties"
+                      "$ref": "$.operator.methods[365].inputSchema.properties.metadata.additionalProperties"
                     }
                   },
                   {
                     "type": "array",
                     "items": {
-                      "$ref": "$.operator.methods[363].inputSchema.properties.metadata.additionalProperties"
+                      "$ref": "$.operator.methods[365].inputSchema.properties.metadata.additionalProperties"
                     }
                   }
                 ]
@@ -85744,13 +86102,13 @@
                   {
                     "type": "object",
                     "additionalProperties": {
-                      "$ref": "$.operator.methods[363].outputSchema.properties.metadata.additionalProperties"
+                      "$ref": "$.operator.methods[365].outputSchema.properties.metadata.additionalProperties"
                     }
                   },
                   {
                     "type": "array",
                     "items": {
-                      "$ref": "$.operator.methods[363].outputSchema.properties.metadata.additionalProperties"
+                      "$ref": "$.operator.methods[365].outputSchema.properties.metadata.additionalProperties"
                     }
                   }
                 ]
@@ -85844,13 +86202,13 @@
                         {
                           "type": "object",
                           "additionalProperties": {
-                            "$ref": "$.operator.methods[364].outputSchema.properties.providers.items.properties.metadata.additionalProperties"
+                            "$ref": "$.operator.methods[366].outputSchema.properties.providers.items.properties.metadata.additionalProperties"
                           }
                         },
                         {
                           "type": "array",
                           "items": {
-                            "$ref": "$.operator.methods[364].outputSchema.properties.providers.items.properties.metadata.additionalProperties"
+                            "$ref": "$.operator.methods[366].outputSchema.properties.providers.items.properties.metadata.additionalProperties"
                           }
                         }
                       ]
@@ -85946,13 +86304,13 @@
                       {
                         "type": "object",
                         "additionalProperties": {
-                          "$ref": "$.operator.methods[365].inputSchema.properties.audio.properties.metadata.additionalProperties"
+                          "$ref": "$.operator.methods[367].inputSchema.properties.audio.properties.metadata.additionalProperties"
                         }
                       },
                       {
                         "type": "array",
                         "items": {
-                          "$ref": "$.operator.methods[365].inputSchema.properties.audio.properties.metadata.additionalProperties"
+                          "$ref": "$.operator.methods[367].inputSchema.properties.audio.properties.metadata.additionalProperties"
                         }
                       }
                     ]
@@ -85994,13 +86352,13 @@
                   {
                     "type": "object",
                     "additionalProperties": {
-                      "$ref": "$.operator.methods[365].inputSchema.properties.metadata.additionalProperties"
+                      "$ref": "$.operator.methods[367].inputSchema.properties.metadata.additionalProperties"
                     }
                   },
                   {
                     "type": "array",
                     "items": {
-                      "$ref": "$.operator.methods[365].inputSchema.properties.metadata.additionalProperties"
+                      "$ref": "$.operator.methods[367].inputSchema.properties.metadata.additionalProperties"
                     }
                   }
                 ]
@@ -86067,13 +86425,13 @@
                   {
                     "type": "object",
                     "additionalProperties": {
-                      "$ref": "$.operator.methods[365].outputSchema.properties.metadata.additionalProperties"
+                      "$ref": "$.operator.methods[367].outputSchema.properties.metadata.additionalProperties"
                     }
                   },
                   {
                     "type": "array",
                     "items": {
-                      "$ref": "$.operator.methods[365].outputSchema.properties.metadata.additionalProperties"
+                      "$ref": "$.operator.methods[367].outputSchema.properties.metadata.additionalProperties"
                     }
                   }
                 ]
@@ -86147,13 +86505,13 @@
                   {
                     "type": "object",
                     "additionalProperties": {
-                      "$ref": "$.operator.methods[366].inputSchema.properties.metadata.additionalProperties"
+                      "$ref": "$.operator.methods[368].inputSchema.properties.metadata.additionalProperties"
                     }
                   },
                   {
                     "type": "array",
                     "items": {
-                      "$ref": "$.operator.methods[366].inputSchema.properties.metadata.additionalProperties"
+                      "$ref": "$.operator.methods[368].inputSchema.properties.metadata.additionalProperties"
                     }
                   }
                 ]
@@ -86211,13 +86569,13 @@
                       {
                         "type": "object",
                         "additionalProperties": {
-                          "$ref": "$.operator.methods[366].outputSchema.properties.audio.properties.metadata.additionalProperties"
+                          "$ref": "$.operator.methods[368].outputSchema.properties.audio.properties.metadata.additionalProperties"
                         }
                       },
                       {
                         "type": "array",
                         "items": {
-                          "$ref": "$.operator.methods[366].outputSchema.properties.audio.properties.metadata.additionalProperties"
+                          "$ref": "$.operator.methods[368].outputSchema.properties.audio.properties.metadata.additionalProperties"
                         }
                       }
                     ]
@@ -86250,13 +86608,13 @@
                   {
                     "type": "object",
                     "additionalProperties": {
-                      "$ref": "$.operator.methods[366].outputSchema.properties.metadata.additionalProperties"
+                      "$ref": "$.operator.methods[368].outputSchema.properties.metadata.additionalProperties"
                     }
                   },
                   {
                     "type": "array",
                     "items": {
-                      "$ref": "$.operator.methods[366].outputSchema.properties.metadata.additionalProperties"
+                      "$ref": "$.operator.methods[368].outputSchema.properties.metadata.additionalProperties"
                     }
                   }
                 ]
@@ -86329,13 +86687,13 @@
                   {
                     "type": "object",
                     "additionalProperties": {
-                      "$ref": "$.operator.methods[367].inputSchema.properties.metadata.additionalProperties"
+                      "$ref": "$.operator.methods[369].inputSchema.properties.metadata.additionalProperties"
                     }
                   },
                   {
                     "type": "array",
                     "items": {
-                      "$ref": "$.operator.methods[367].inputSchema.properties.metadata.additionalProperties"
+                      "$ref": "$.operator.methods[369].inputSchema.properties.metadata.additionalProperties"
                     }
                   }
                 ]
@@ -86438,13 +86796,13 @@
                         {
                           "type": "object",
                           "additionalProperties": {
-                            "$ref": "$.operator.methods[368].outputSchema.properties.voices.items.properties.metadata.additionalProperties"
+                            "$ref": "$.operator.methods[370].outputSchema.properties.voices.items.properties.metadata.additionalProperties"
                           }
                         },
                         {
                           "type": "array",
                           "items": {
-                            "$ref": "$.operator.methods[368].outputSchema.properties.voices.items.properties.metadata.additionalProperties"
+                            "$ref": "$.operator.methods[370].outputSchema.properties.voices.items.properties.metadata.additionalProperties"
                           }
                         }
                       ]
@@ -86528,13 +86886,13 @@
                   {
                     "type": "object",
                     "additionalProperties": {
-                      "$ref": "$.operator.methods[369].inputSchema.properties.metadata.additionalProperties"
+                      "$ref": "$.operator.methods[371].inputSchema.properties.metadata.additionalProperties"
                     }
                   },
                   {
                     "type": "array",
                     "items": {
-                      "$ref": "$.operator.methods[369].inputSchema.properties.metadata.additionalProperties"
+                      "$ref": "$.operator.methods[371].inputSchema.properties.metadata.additionalProperties"
                     }
                   }
                 ]
@@ -86625,13 +86983,13 @@
                       {
                         "type": "object",
                         "additionalProperties": {
-                          "$ref": "$.operator.methods[369].outputSchema.properties.source.properties.metadata.additionalProperties"
+                          "$ref": "$.operator.methods[371].outputSchema.properties.source.properties.metadata.additionalProperties"
                         }
                       },
                       {
                         "type": "array",
                         "items": {
-                          "$ref": "$.operator.methods[369].outputSchema.properties.source.properties.metadata.additionalProperties"
+                          "$ref": "$.operator.methods[371].outputSchema.properties.source.properties.metadata.additionalProperties"
                         }
                       }
                     ]
@@ -86689,13 +87047,13 @@
                   {
                     "type": "object",
                     "additionalProperties": {
-                      "$ref": "$.operator.methods[369].outputSchema.properties.metadata.additionalProperties"
+                      "$ref": "$.operator.methods[371].outputSchema.properties.metadata.additionalProperties"
                     }
                   },
                   {
                     "type": "array",
                     "items": {
-                      "$ref": "$.operator.methods[369].outputSchema.properties.metadata.additionalProperties"
+                      "$ref": "$.operator.methods[371].outputSchema.properties.metadata.additionalProperties"
                     }
                   }
                 ]
@@ -86851,13 +87209,13 @@
                             {
                               "type": "object",
                               "additionalProperties": {
-                                "$ref": "$.operator.methods[371].outputSchema.properties.watchers.items.properties.source.properties.metadata.additionalProperties"
+                                "$ref": "$.operator.methods[373].outputSchema.properties.watchers.items.properties.source.properties.metadata.additionalProperties"
                               }
                             },
                             {
                               "type": "array",
                               "items": {
-                                "$ref": "$.operator.methods[371].outputSchema.properties.watchers.items.properties.source.properties.metadata.additionalProperties"
+                                "$ref": "$.operator.methods[373].outputSchema.properties.watchers.items.properties.source.properties.metadata.additionalProperties"
                               }
                             }
                           ]
@@ -86915,13 +87273,13 @@
                         {
                           "type": "object",
                           "additionalProperties": {
-                            "$ref": "$.operator.methods[371].outputSchema.properties.watchers.items.properties.metadata.additionalProperties"
+                            "$ref": "$.operator.methods[373].outputSchema.properties.watchers.items.properties.metadata.additionalProperties"
                           }
                         },
                         {
                           "type": "array",
                           "items": {
-                            "$ref": "$.operator.methods[371].outputSchema.properties.watchers.items.properties.metadata.additionalProperties"
+                            "$ref": "$.operator.methods[373].outputSchema.properties.watchers.items.properties.metadata.additionalProperties"
                           }
                         }
                       ]
@@ -87035,13 +87393,13 @@
                       {
                         "type": "object",
                         "additionalProperties": {
-                          "$ref": "$.operator.methods[372].outputSchema.properties.source.properties.metadata.additionalProperties"
+                          "$ref": "$.operator.methods[374].outputSchema.properties.source.properties.metadata.additionalProperties"
                         }
                       },
                       {
                         "type": "array",
                         "items": {
-                          "$ref": "$.operator.methods[372].outputSchema.properties.source.properties.metadata.additionalProperties"
+                          "$ref": "$.operator.methods[374].outputSchema.properties.source.properties.metadata.additionalProperties"
                         }
                       }
                     ]
@@ -87099,13 +87457,13 @@
                   {
                     "type": "object",
                     "additionalProperties": {
-                      "$ref": "$.operator.methods[372].outputSchema.properties.metadata.additionalProperties"
+                      "$ref": "$.operator.methods[374].outputSchema.properties.metadata.additionalProperties"
                     }
                   },
                   {
                     "type": "array",
                     "items": {
-                      "$ref": "$.operator.methods[372].outputSchema.properties.metadata.additionalProperties"
+                      "$ref": "$.operator.methods[374].outputSchema.properties.metadata.additionalProperties"
                     }
                   }
                 ]
@@ -87212,13 +87570,13 @@
                       {
                         "type": "object",
                         "additionalProperties": {
-                          "$ref": "$.operator.methods[373].outputSchema.properties.source.properties.metadata.additionalProperties"
+                          "$ref": "$.operator.methods[375].outputSchema.properties.source.properties.metadata.additionalProperties"
                         }
                       },
                       {
                         "type": "array",
                         "items": {
-                          "$ref": "$.operator.methods[373].outputSchema.properties.source.properties.metadata.additionalProperties"
+                          "$ref": "$.operator.methods[375].outputSchema.properties.source.properties.metadata.additionalProperties"
                         }
                       }
                     ]
@@ -87276,13 +87634,13 @@
                   {
                     "type": "object",
                     "additionalProperties": {
-                      "$ref": "$.operator.methods[373].outputSchema.properties.metadata.additionalProperties"
+                      "$ref": "$.operator.methods[375].outputSchema.properties.metadata.additionalProperties"
                     }
                   },
                   {
                     "type": "array",
                     "items": {
-                      "$ref": "$.operator.methods[373].outputSchema.properties.metadata.additionalProperties"
+                      "$ref": "$.operator.methods[375].outputSchema.properties.metadata.additionalProperties"
                     }
                   }
                 ]
@@ -87389,13 +87747,13 @@
                       {
                         "type": "object",
                         "additionalProperties": {
-                          "$ref": "$.operator.methods[374].outputSchema.properties.source.properties.metadata.additionalProperties"
+                          "$ref": "$.operator.methods[376].outputSchema.properties.source.properties.metadata.additionalProperties"
                         }
                       },
                       {
                         "type": "array",
                         "items": {
-                          "$ref": "$.operator.methods[374].outputSchema.properties.source.properties.metadata.additionalProperties"
+                          "$ref": "$.operator.methods[376].outputSchema.properties.source.properties.metadata.additionalProperties"
                         }
                       }
                     ]
@@ -87453,13 +87811,13 @@
                   {
                     "type": "object",
                     "additionalProperties": {
-                      "$ref": "$.operator.methods[374].outputSchema.properties.metadata.additionalProperties"
+                      "$ref": "$.operator.methods[376].outputSchema.properties.metadata.additionalProperties"
                     }
                   },
                   {
                     "type": "array",
                     "items": {
-                      "$ref": "$.operator.methods[374].outputSchema.properties.metadata.additionalProperties"
+                      "$ref": "$.operator.methods[376].outputSchema.properties.metadata.additionalProperties"
                     }
                   }
                 ]
@@ -87542,13 +87900,13 @@
                   {
                     "type": "object",
                     "additionalProperties": {
-                      "$ref": "$.operator.methods[375].inputSchema.properties.metadata.additionalProperties"
+                      "$ref": "$.operator.methods[377].inputSchema.properties.metadata.additionalProperties"
                     }
                   },
                   {
                     "type": "array",
                     "items": {
-                      "$ref": "$.operator.methods[375].inputSchema.properties.metadata.additionalProperties"
+                      "$ref": "$.operator.methods[377].inputSchema.properties.metadata.additionalProperties"
                     }
                   }
                 ]
@@ -87636,13 +87994,13 @@
                       {
                         "type": "object",
                         "additionalProperties": {
-                          "$ref": "$.operator.methods[375].outputSchema.properties.source.properties.metadata.additionalProperties"
+                          "$ref": "$.operator.methods[377].outputSchema.properties.source.properties.metadata.additionalProperties"
                         }
                       },
                       {
                         "type": "array",
                         "items": {
-                          "$ref": "$.operator.methods[375].outputSchema.properties.source.properties.metadata.additionalProperties"
+                          "$ref": "$.operator.methods[377].outputSchema.properties.source.properties.metadata.additionalProperties"
                         }
                       }
                     ]
@@ -87700,13 +88058,13 @@
                   {
                     "type": "object",
                     "additionalProperties": {
-                      "$ref": "$.operator.methods[375].outputSchema.properties.metadata.additionalProperties"
+                      "$ref": "$.operator.methods[377].outputSchema.properties.metadata.additionalProperties"
                     }
                   },
                   {
                     "type": "array",
                     "items": {
-                      "$ref": "$.operator.methods[375].outputSchema.properties.metadata.additionalProperties"
+                      "$ref": "$.operator.methods[377].outputSchema.properties.metadata.additionalProperties"
                     }
                   }
                 ]
@@ -87919,13 +88277,13 @@
                         {
                           "type": "object",
                           "additionalProperties": {
-                            "$ref": "$.operator.methods[377].outputSchema.properties.results.items.properties.metadata.additionalProperties"
+                            "$ref": "$.operator.methods[379].outputSchema.properties.results.items.properties.metadata.additionalProperties"
                           }
                         },
                         {
                           "type": "array",
                           "items": {
-                            "$ref": "$.operator.methods[377].outputSchema.properties.results.items.properties.metadata.additionalProperties"
+                            "$ref": "$.operator.methods[379].outputSchema.properties.results.items.properties.metadata.additionalProperties"
                           }
                         }
                       ]
@@ -87976,13 +88334,13 @@
                               {
                                 "type": "object",
                                 "additionalProperties": {
-                                  "$ref": "$.operator.methods[377].outputSchema.properties.results.items.properties.evidence.items.properties.metadata.additionalProperties"
+                                  "$ref": "$.operator.methods[379].outputSchema.properties.results.items.properties.evidence.items.properties.metadata.additionalProperties"
                                 }
                               },
                               {
                                 "type": "array",
                                 "items": {
-                                  "$ref": "$.operator.methods[377].outputSchema.properties.results.items.properties.evidence.items.properties.metadata.additionalProperties"
+                                  "$ref": "$.operator.methods[379].outputSchema.properties.results.items.properties.evidence.items.properties.metadata.additionalProperties"
                                 }
                               }
                             ]
@@ -88072,13 +88430,13 @@
                       {
                         "type": "object",
                         "additionalProperties": {
-                          "$ref": "$.operator.methods[377].outputSchema.properties.instantAnswer.properties.metadata.additionalProperties"
+                          "$ref": "$.operator.methods[379].outputSchema.properties.instantAnswer.properties.metadata.additionalProperties"
                         }
                       },
                       {
                         "type": "array",
                         "items": {
-                          "$ref": "$.operator.methods[377].outputSchema.properties.instantAnswer.properties.metadata.additionalProperties"
+                          "$ref": "$.operator.methods[379].outputSchema.properties.instantAnswer.properties.metadata.additionalProperties"
                         }
                       }
                     ]
@@ -88111,13 +88469,13 @@
                   {
                     "type": "object",
                     "additionalProperties": {
-                      "$ref": "$.operator.methods[377].outputSchema.properties.metadata.additionalProperties"
+                      "$ref": "$.operator.methods[379].outputSchema.properties.metadata.additionalProperties"
                     }
                   },
                   {
                     "type": "array",
                     "items": {
-                      "$ref": "$.operator.methods[377].outputSchema.properties.metadata.additionalProperties"
+                      "$ref": "$.operator.methods[379].outputSchema.properties.metadata.additionalProperties"
                     }
                   }
                 ]
@@ -90412,10 +90770,10 @@
       }
     ],
     "schemaCoverage": {
-      "methods": 384,
-      "typedInputs": 384,
+      "methods": 386,
+      "typedInputs": 386,
       "genericInputs": 0,
-      "typedOutputs": 384,
+      "typedOutputs": 386,
       "genericOutputs": 0
     },
     "eventCoverage": {
@@ -90424,8 +90782,8 @@
       "withWireEvents": 32
     },
     "validationCoverage": {
-      "methods": 384,
-      "validated": 382,
+      "methods": 386,
+      "validated": 384,
       "skippedGeneric": 0,
       "skippedUntyped": 2
     }

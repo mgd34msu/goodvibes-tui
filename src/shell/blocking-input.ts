@@ -1,5 +1,5 @@
 import type { ConversationManager } from '../core/conversation';
-import type { PermissionRequest } from '@pellux/goodvibes-sdk/platform/permissions';
+import type { PermissionRequest, RememberTier } from '@pellux/goodvibes-sdk/platform/permissions';
 import type { SessionSnapshot } from '@/runtime/index.ts';
 import type { SystemMessageRouter } from '../core/system-message-router.ts';
 import type { ConversationMessageSnapshot } from '@pellux/goodvibes-sdk/platform/core';
@@ -7,11 +7,20 @@ import { replayJournalForSession } from '../core/session-recovery.ts';
 import { applyHunkKey, buildModifiedEditArgs, type HunkSelectionState } from '../permissions/hunk-selection.ts';
 
 export type PendingPermissionState = PermissionRequest & {
-  resolve: (approved: boolean, remember?: boolean, modifiedArgs?: Record<string, unknown>) => void;
+  resolve: (approved: boolean, remember?: boolean, modifiedArgs?: Record<string, unknown>, extras?: { rememberTier?: RememberTier; reason?: string }) => void;
   /** Present only when isHunkSelectable(request) was true when the prompt was opened. */
   hunkState?: HunkSelectionState;
   /** True once the user pressed `d` to expand a condensed low-risk card. (2b.) */
   detailsExpanded?: boolean;
+  /**
+   * Active typed-reply mode: 'deny-reason' (started by typing while the card
+   * is up — Enter denies with the typed reason as feedback) or 'exec-answer'
+   * (an exec-prompt ask; Enter approves with the typed answer feeding the
+   * running command's stdin). Undefined = plain card keys.
+   */
+  replyMode?: 'deny-reason' | 'exec-answer';
+  /** The reply draft while replyMode is active. */
+  replyBuffer?: string;
   /**
    * Epoch ms when the prompt first appeared. Keystrokes that arrive within
    * APPROVAL_INPUT_DEBOUNCE_MS of this are swallowed (not interpreted as an
@@ -135,6 +144,60 @@ export function handleBlockingShellInput(
       return { handled: true, pendingPermission: { ...req, hunkState: state }, recoveryPending };
     }
 
+    // Ctrl+C is ALWAYS the hard abort: deny and kill the turn, in every mode.
+    if (data === '\x03') {
+      req.resolve(false, false);
+      abortTurn();
+      render();
+      return { handled: true, pendingPermission: null, recoveryPending };
+    }
+
+    // Typed-reply mode: deny-with-reason (started by typing on any card) or
+    // exec-answer (an exec-prompt ask opens in this mode). Every printable
+    // key is text here — nothing is a card command.
+    if (req.replyMode) {
+      const buffer = req.replyBuffer ?? '';
+      if (data === '\r' || data === '\n') {
+        if (req.replyMode === 'exec-answer') {
+          // The typed answer feeds the running command's stdin via the
+          // decision's modifiedArgs (SDK exec-prompt wiring contract).
+          req.resolve(true, false, { answer: buffer });
+        } else {
+          // Deny is feedback: the reason rides the structured "user declined"
+          // tool result so the model can adapt — the turn is NOT aborted.
+          req.resolve(false, false, undefined, { reason: buffer });
+        }
+        render();
+        return { handled: true, pendingPermission: null, recoveryPending };
+      }
+      if (data === '\x1b') {
+        if (req.replyMode === 'exec-answer') {
+          // Esc on an exec-prompt: clear a draft first; with nothing typed it
+          // declines the prompt (the run gets the honest unanswered result).
+          if (buffer.length > 0) {
+            render();
+            return { handled: true, pendingPermission: { ...req, replyBuffer: '' }, recoveryPending };
+          }
+          req.resolve(false, false);
+          render();
+          return { handled: true, pendingPermission: null, recoveryPending };
+        }
+        // Esc leaves deny-reason mode back to the plain card.
+        render();
+        return { handled: true, pendingPermission: { ...req, replyMode: undefined, replyBuffer: undefined }, recoveryPending };
+      }
+      if (data === '\x7f' || data === '\b') {
+        render();
+        return { handled: true, pendingPermission: { ...req, replyBuffer: buffer.slice(0, -1) }, recoveryPending };
+      }
+      if (data.length >= 1 && !data.startsWith('\x1b') && data >= ' ') {
+        render();
+        return { handled: true, pendingPermission: { ...req, replyBuffer: buffer + data }, recoveryPending };
+      }
+      render();
+      return { handled: true, pendingPermission, recoveryPending };
+    }
+
     const key = data.toLowerCase().trim();
 
     if (key === 'y') {
@@ -144,14 +207,30 @@ export function handleBlockingShellInput(
     }
 
     if (key === 'a') {
-      req.resolve(true, true);
+      // Legacy always-this-session choice — the 'session' remember tier.
+      req.resolve(true, true, undefined, { rememberTier: 'session' });
       render();
       return { handled: true, pendingPermission: null, recoveryPending };
     }
 
-    if (key === 'n' || data === '\x1b' || data === '\x03') {
+    // Numbered remember tiers ([1]..[N], most specific first) from the SDK's
+    // rememberOptions: approve AND remember at that tier. A generalizing tier
+    // writes a durable user-origin rule; 'session' only caches in memory.
+    if (/^[1-9]$/.test(key) && req.rememberOptions && req.rememberOptions.length > 0) {
+      const option = req.rememberOptions[Number(key) - 1];
+      if (option) {
+        req.resolve(true, option.tier === 'session', undefined, { rememberTier: option.tier });
+        render();
+        return { handled: true, pendingPermission: null, recoveryPending };
+      }
+      render();
+      return { handled: true, pendingPermission, recoveryPending };
+    }
+
+    if (key === 'n' || data === '\x1b') {
+      // Plain deny — feedback to the model (the SDK renders an honest "user
+      // declined" result), never a turn abort. Ctrl+C above is the hard stop.
       req.resolve(false, false);
-      abortTurn();
       render();
       return { handled: true, pendingPermission: null, recoveryPending };
     }
@@ -164,6 +243,13 @@ export function handleBlockingShellInput(
         pendingPermission: { ...req, detailsExpanded: !req.detailsExpanded },
         recoveryPending,
       };
+    }
+
+    // Any other printable key starts deny-with-reason: what the user types
+    // becomes the denial feedback, seeded with this first character.
+    if (data.length === 1 && data >= ' ') {
+      render();
+      return { handled: true, pendingPermission: { ...req, replyMode: 'deny-reason', replyBuffer: data }, recoveryPending };
     }
 
     render();

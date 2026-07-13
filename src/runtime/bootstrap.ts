@@ -35,7 +35,6 @@ import { createTuiSpineTransport, type SpineSessionsClient } from './session-spi
 import { syncMemorySpineToHostStatus, type MemorySpineActiveRef } from './memory-spine-transport.ts';
 import { pruneStaleOperatorTokens } from '@pellux/goodvibes-sdk/platform/pairing';
 import { resolveDaemonCompanionToken, workspaceOperatorTokenCandidates } from './operator-token-cleanup.ts';
-import { suppressVersionBlindFacadeAutoUpdater } from '../daemon/lifecycle.ts';
 import type { UiRuntimeServices } from './ui-services.ts';
 import { initializeBootstrapCore } from './bootstrap-core.ts';
 import { createBootstrapShell } from './bootstrap-shell.ts';
@@ -43,8 +42,7 @@ import { announceResumeState } from './resume-notice.ts';
 import { announceInstallSelfCheck } from './install-self-check-startup.ts';
 import { buildSharedOrchestratorCoreServices, refreshMemoryRecallSnapshot } from './orchestrator-core-services.ts';
 import { createContextAccountingSource } from './context-accounting-source.ts';
-import { DaemonServer, HttpListener } from '@pellux/goodvibes-sdk/platform/daemon';
-import { createSafeHostServeFactory } from '../daemon/safe-serve.ts';
+import { createEmbeddedServiceFactories } from './embedded-service-factories.ts';
 import { buildRelayExternalServiceMethods } from './relay-reachability-bridge.ts';
 import { startMcpConfigAutoReload } from '../mcp/runtime-reload.ts';
 
@@ -480,30 +478,9 @@ export async function bootstrapRuntime(
     ]);
   };
 
-  const createExternalServiceFactories = (sharedDaemonToken: string): ExternalServiceFactories => ({
-    sharedDaemonToken,
-    createDaemonServer: (bus, userAuth, runtimeServices) => {
-      const daemonServer = new DaemonServer({
-        runtimeBus: bus,
-        userAuth,
-        runtimeServices,
-        serveFactory: createSafeHostServeFactory('Embedded daemon'),
-      });
-      // The facade's internal auto-updater compares the sdk package's version
-      // — not this binary's — so inside the interactive session it would loop
-      // hourly and exit the user's process on "restart". Clients update at
-      // launch (cli/launch-auto-update.ts); the embedded daemon runs no
-      // update loop at all. See daemon/lifecycle.ts.
-      suppressVersionBlindFacadeAutoUpdater(daemonServer);
-      return daemonServer;
-    },
-    createHttpListener: (dispatcher, userAuth, configManager) => new HttpListener({
-      hookDispatcher: dispatcher,
-      userAuth,
-      configManager,
-      serveFactory: createSafeHostServeFactory('Embedded HTTP listener'),
-    }),
-  });
+  // Embedded DaemonServer/HttpListener factories (incl. the facade auto-update
+  // suppression) — see embedded-service-factories.ts.
+  const createExternalServiceFactories = createEmbeddedServiceFactories;
 
   let externalServices: ExternalServicesHandle = {
     daemonServer: null, httpListener: null,

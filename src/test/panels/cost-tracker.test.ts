@@ -236,10 +236,11 @@ describe('CostTrackerPanel — agent cost attribution on AGENT_COMPLETED', () =>
     const lines = panel.render(80, 20);
     const text = lines.map((l) => l.map((c) => c.char ?? ' ').join('')).join('\n');
     // Agent entry is present; session model is still 'unknown' (no real data
-    // available yet), so the Total line shows the honest unpriced marker
-    // rather than a $0.00 that could be mistaken for a genuinely free model.
+    // available yet), so the Total line shows the explicit "price unknown"
+    // marker — with the one-key fix — rather than a $0.00 that could be
+    // mistaken for a genuinely free model.
     expect(text).toContain('agt-1');
-    expect(text).toContain('unpriced');
+    expect(text).toContain('Total    : price unknown — press p to set a price');
   });
 
   test('agent entry populates real tokens and cost when getAgentStatus returns usage', async () => {

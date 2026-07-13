@@ -44,6 +44,12 @@ export function buildTestModelDefinition(provider: string, modelId: string): Mod
 export function patchTestProviderRegistry(providerRegistry: ProviderRegistry): void {
   const originalRegister = providerRegistry.register.bind(providerRegistry);
   providerRegistry.register = ((provider: LLMProvider): void => {
+    // The sdk's credential-authority contract refuses registration without a
+    // declared authority. Test doubles that don't care default to 'resolver'
+    // (env/secrets-backed key) so every existing suite keeps registering.
+    if (!provider.credentialAuthority) {
+      (provider as { credentialAuthority?: string }).credentialAuthority = 'resolver';
+    }
     originalRegister(provider);
     if (provider.models.length === 0) return;
     providerRegistry.registerRuntimeProvider({
