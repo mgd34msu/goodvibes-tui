@@ -124,6 +124,14 @@ writeFileSync(
   JSON.stringify({
     controlPlane: { port: SMOKE_PORT, enabled: true },
     danger: { daemon: true },
+    // A compiled standalone daemon self-promotes at its first idle moment:
+    // it installs a service unit and exits 0, handing over to the supervised
+    // instance (SDK DaemonServer boot promotion). In this smoke that idle
+    // moment arrives immediately after startup, so the daemon would die
+    // between the readiness poll and the health check. service.enabled=false
+    // is the SDK's designed opt-out — the smoke validates that the binary
+    // boots and serves HTTP, not service adoption.
+    service: { enabled: false },
   }, null, 2),
   'utf-8',
 );
