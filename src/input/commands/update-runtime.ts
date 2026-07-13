@@ -1,8 +1,11 @@
 /**
- * `/update` — a real self-update path for binary installs, mirroring
- * scripts/install.sh's download-verify-swap semantics (that file is the
- * tested reference for release-asset naming and checksum verification; keep
- * this in lockstep with it).
+ * `/update` — a real self-update path for binary installs. The
+ * download-verify-swap mechanics are the SDK's canonical update policy
+ * module (platform/runtime/self-update — hoisted from this file's
+ * semantics), the same mechanism the daemon's hourly loop and
+ * scripts/install.sh follow: one update mechanism everywhere. This file owns
+ * only the /update UX: install-kind gating, target selection, and the
+ * printed report.
  *
  * Subcommands:
  *   /update [check]           — resolve the latest release tag and report
@@ -34,9 +37,16 @@
  * (scripts/release.ts) does not publish separate stable/preview channels,
  * so there is no real channel selection to wire it to.
  */
-import { chmodSync, existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { spawnSync } from 'node:child_process';
+import {
+  applyVerifiedUpdate,
+  realUpdateFileIo,
+  rollbackKeptPrevious,
+  type UpdateFileIo,
+  type UpdateTarget,
+} from '@pellux/goodvibes-sdk/platform/runtime/self-update';
 import type { CommandRegistry } from '../command-registry.ts';
 import { VERSION } from '../../version.ts';
 import { listBuiltinSubscriptionProviders } from '@pellux/goodvibes-sdk/platform/config';
@@ -45,8 +55,6 @@ import {
   parseChecksumFile,
   resolveArtifactNames,
   resolveSqliteVecAsset,
-  sha256,
-  verifyChecksum,
 } from '../../runtime/release-artifacts.ts';
 import {
   compareVersions,
@@ -74,67 +82,13 @@ async function downloadText(fetchImpl: UpdateFetchLike, url: string): Promise<st
   return await response.text();
 }
 
-async function downloadBuffer(fetchImpl: UpdateFetchLike, url: string): Promise<Buffer> {
-  const response = await fetchImpl(url);
-  if (!response.ok) {
-    throw new Error(`download failed (${response.status}) for ${url}`);
-  }
-  return Buffer.from(await response.arrayBuffer());
-}
-
 /**
- * Suffix under which every swap keeps the file it replaced, right beside the
- * live one. This is what makes rollback a one-command operation instead of a
- * re-download: the version that ran before the last update is always still
- * on disk at `<path>.previous`.
+ * Suffix under which every swap keeps the file it replaced — re-exported
+ * from the SDK's canonical update policy module so rollback and swap share
+ * one definition everywhere.
  */
-export const PREVIOUS_FILE_SUFFIX = '.previous';
-
-/**
- * Writes the new binary next to the target, then renames over it — an
- * atomic replace on the same filesystem, so a currently-running process
- * that already opened the old file keeps its old inode (POSIX unlink
- * semantics) instead of executing a half-written file. Same approach as
- * scripts/install.sh's `mv -f "$WORKDIR/$artifact" "$target"`.
- *
- * Before the replace, the outgoing file is parked at `<path>.previous`
- * (overwriting any older parked copy) so `/update rollback` can restore it
- * without a network round-trip.
- */
-function swapBinaryAtomically(targetPath: string, buffer: Buffer): void {
-  const tempPath = `${targetPath}.update-download`;
-  writeFileSync(tempPath, buffer);
-  if (process.platform !== 'win32') {
-    chmodSync(tempPath, 0o755);
-  }
-  if (existsSync(targetPath)) {
-    renameSync(targetPath, `${targetPath}${PREVIOUS_FILE_SUFFIX}`);
-  }
-  renameSync(tempPath, targetPath);
-}
-
-/**
- * Writes the sqlite-vec native addon into place with the same temp-write +
- * atomic-rename discipline as the binaries, so a running process never
- * dlopen()s a half-written extension. The addon's parent directory
- * (`<execDir>/lib/sqlite-vec-<os>-<arch>/`) is created first because a fresh
- * install may not have a `lib/` tree yet. A shared library needs no execute
- * bit, so this uses 0o644 rather than the binaries' 0o755. The outgoing
- * addon is kept at `<path>.previous`, same as the binaries, so a rollback
- * restores the addon that matches the restored binary.
- */
-function writeAddonAtomically(targetPath: string, buffer: Buffer): void {
-  mkdirSync(dirname(targetPath), { recursive: true });
-  const tempPath = `${targetPath}.update-download`;
-  writeFileSync(tempPath, buffer);
-  if (process.platform !== 'win32') {
-    chmodSync(tempPath, 0o644);
-  }
-  if (existsSync(targetPath)) {
-    renameSync(targetPath, `${targetPath}${PREVIOUS_FILE_SUFFIX}`);
-  }
-  renameSync(tempPath, targetPath);
-}
+export { PREVIOUS_FILE_SUFFIX } from '@pellux/goodvibes-sdk/platform/runtime/self-update';
+import { PREVIOUS_FILE_SUFFIX } from '@pellux/goodvibes-sdk/platform/runtime/self-update';
 
 export interface DaemonServiceRestartInfo {
   readonly managed: boolean;
@@ -197,19 +151,19 @@ export interface ApplyUpdateOptions {
   readonly print: (line: string) => void;
   readonly configManager: { get(key: string): unknown };
   readonly runCommand?: RunCommand;
-  /** Injectable so tests can observe/skip the actual filesystem swap. */
-  readonly swap?: (targetPath: string, buffer: Buffer) => void;
-  /** Injectable so tests can observe/skip writing the sqlite-vec addon. */
-  readonly writeAddon?: (targetPath: string, buffer: Buffer) => void;
-  readonly fileExists?: (path: string) => boolean;
+  /** Injectable filesystem seam (the SDK's UpdateFileIo) so tests observe swaps in memory. */
+  readonly io?: UpdateFileIo;
 }
 
 /**
- * The real self-update path. For a binary install: resolve the latest tag,
- * compare to the running version, and if newer, download + verify both
- * artifacts BEFORE swapping either one (so a checksum failure on the second
- * artifact never leaves a mismatched pair installed), then atomically swap
- * each in place. For any other install kind, never attempts a swap — it
+ * The real self-update path, delegating the download-verify-swap mechanics
+ * to the SDK's canonical update policy module (applyVerifiedUpdate — the
+ * same mechanism the daemon's hourly loop uses). For a binary install:
+ * resolve the latest tag, compare to the running version, and if newer,
+ * download + checksum-verify EVERY artifact before swapping any one (so a
+ * checksum failure never leaves a mismatched pair installed), then
+ * atomically swap each in place with the outgoing file kept at
+ * `<path>.previous`. For any other install kind, never attempts a swap — it
  * prints the exact command for that install method instead.
  */
 export async function applyUpdate(options: ApplyUpdateOptions): Promise<void> {
@@ -239,22 +193,10 @@ export async function applyUpdate(options: ApplyUpdateOptions): Promise<void> {
   options.print(`Update available: ${latestTag} (running v${normalizeVersion(options.currentVersion)}). Downloading and verifying...`);
 
   const baseUrl = releaseDownloadBaseUrl(latestTag);
-  const checksumText = await downloadText(options.fetchImpl, `${baseUrl}/${CHECKSUM_MANIFEST_NAME}`);
-  const checksums = parseChecksumFile(checksumText);
-
+  const io = options.io ?? realUpdateFileIo;
   const appBinaryPath = options.execPath;
   const daemonBinaryPath = join(dirname(appBinaryPath), 'goodvibes-daemon');
-  const fileExists = options.fileExists ?? existsSync;
-  const daemonBinaryPresent = fileExists(daemonBinaryPath);
-
-  const appBuffer = await downloadBuffer(options.fetchImpl, `${baseUrl}/${artifacts.app}`);
-  verifyChecksum(artifacts.app, sha256(appBuffer), checksums.get(artifacts.app));
-
-  let daemonBuffer: Buffer | null = null;
-  if (daemonBinaryPresent) {
-    daemonBuffer = await downloadBuffer(options.fetchImpl, `${baseUrl}/${artifacts.daemon}`);
-    verifyChecksum(artifacts.daemon, sha256(daemonBuffer), checksums.get(artifacts.daemon));
-  }
+  const daemonBinaryPresent = io.exists(daemonBinaryPath);
 
   // The sqlite-vec native addon travels with the binaries: refresh it in the
   // same download-verify-swap pass so /update never leaves a new binary beside a
@@ -265,28 +207,36 @@ export async function applyUpdate(options: ApplyUpdateOptions): Promise<void> {
   // swap), while an absent entry means the target predates the addon and is
   // skipped rather than blocking an otherwise-valid binary update. On macOS the
   // file is refreshed for consistency even though the platform blocks extension
-  // loading.
+  // loading. This inclusion decision needs one manifest pre-read; the swap
+  // itself re-verifies every included artifact inside applyVerifiedUpdate.
+  const checksumText = await downloadText(options.fetchImpl, `${baseUrl}/${CHECKSUM_MANIFEST_NAME}`);
+  const checksums = parseChecksumFile(checksumText);
   const addon = resolveSqliteVecAsset(options.platform, options.arch);
-  const addonExpected = addon ? checksums.get(addon.assetName) : undefined;
-  let addonBuffer: Buffer | null = null;
-  if (addon && addonExpected !== undefined) {
-    addonBuffer = await downloadBuffer(options.fetchImpl, `${baseUrl}/${addon.assetName}`);
-    verifyChecksum(addon.assetName, sha256(addonBuffer), addonExpected);
-  }
-
-  // All downloads verified before any write — an update must not apply partially.
-  const swap = options.swap ?? swapBinaryAtomically;
-  swap(appBinaryPath, appBuffer);
-  if (daemonBuffer) {
-    swap(daemonBinaryPath, daemonBuffer);
-  }
-  const addonTargetPath = addon && addonBuffer
+  const addonIncluded = addon !== null && checksums.get(addon.assetName) !== undefined;
+  const addonTargetPath = addon && addonIncluded
     ? join(dirname(appBinaryPath), 'lib', addon.dirName, addon.fileName)
     : null;
-  if (addonBuffer && addonTargetPath) {
-    const writeAddon = options.writeAddon ?? writeAddonAtomically;
-    writeAddon(addonTargetPath, addonBuffer);
-  }
+
+  const targets: UpdateTarget[] = [
+    { label: 'app binary', path: appBinaryPath, assetName: artifacts.app, executable: true },
+    ...(daemonBinaryPresent
+      ? [{ label: 'daemon binary', path: daemonBinaryPath, assetName: artifacts.daemon, executable: true }]
+      : []),
+    ...(addon && addonTargetPath
+      ? [{ label: 'vector addon', path: addonTargetPath, assetName: addon.assetName, executable: false }]
+      : []),
+  ];
+
+  // One mechanism everywhere: downloads + verifies ALL targets before any
+  // write, then swaps each atomically with the outgoing file kept at
+  // `<path>.previous`.
+  await applyVerifiedUpdate({
+    fetchImpl: options.fetchImpl,
+    downloadBaseUrl: baseUrl,
+    targets,
+    io,
+    platform: options.platform,
+  });
 
   const serviceInfo = detectDaemonServiceManaged(options.platform, options.configManager, options.runCommand);
 
@@ -314,18 +264,19 @@ export interface RollbackUpdateOptions {
   readonly print: (line: string) => void;
   readonly configManager: { get(key: string): unknown };
   readonly runCommand?: RunCommand;
-  /** Injectable so tests observe the renames without touching a real install. */
-  readonly rename?: (from: string, to: string) => void;
-  readonly fileExists?: (path: string) => boolean;
+  /** Injectable filesystem seam (the SDK's UpdateFileIo) so tests observe renames in memory. */
+  readonly io?: UpdateFileIo;
 }
 
 /**
- * One-command rollback to the version that ran before the last update: every
- * installed file (app binary, daemon binary, vector addon) that has a kept
- * `.previous` counterpart is EXCHANGED with it — the previous version becomes
- * live, and the version being rolled back is itself kept at `.previous`, so a
- * second `/update rollback` rolls forward again. Files without a kept
- * counterpart are reported and left untouched; nothing is downloaded.
+ * One-command rollback to the version that ran before the last update,
+ * delegating the exchange mechanics to the SDK's rollbackKeptPrevious (the
+ * same module the swap uses): every installed file (app binary, daemon
+ * binary, vector addon) that has a kept `.previous` counterpart is EXCHANGED
+ * with it — the previous version becomes live, and the version being rolled
+ * back is itself kept at `.previous`, so a second `/update rollback` rolls
+ * forward again. Files without a kept counterpart are reported and left
+ * untouched; nothing is downloaded.
  */
 export function rollbackUpdate(options: RollbackUpdateOptions): void {
   const installKind: InstallKind = detectInstallKind(options.execPath);
@@ -339,8 +290,7 @@ export function rollbackUpdate(options: RollbackUpdateOptions): void {
     return;
   }
 
-  const fileExists = options.fileExists ?? existsSync;
-  const rename = options.rename ?? renameSync;
+  const io = options.io ?? realUpdateFileIo;
   const addon = resolveSqliteVecAsset(options.platform, options.arch);
   const targets = [
     { label: 'app binary', path: options.execPath },
@@ -348,24 +298,8 @@ export function rollbackUpdate(options: RollbackUpdateOptions): void {
     ...(addon ? [{ label: 'vector addon', path: join(dirname(options.execPath), 'lib', addon.dirName, addon.fileName) }] : []),
   ];
 
-  const restored: string[] = [];
-  for (const target of targets) {
-    const previousPath = `${target.path}${PREVIOUS_FILE_SUFFIX}`;
-    if (!fileExists(previousPath)) continue;
-    if (fileExists(target.path)) {
-      // Three renames exchange the pair; the parking name keeps every step a
-      // same-directory rename (atomic on POSIX), never a copy.
-      const parkingPath = `${target.path}.rollback-exchange`;
-      rename(target.path, parkingPath);
-      rename(previousPath, target.path);
-      rename(parkingPath, previousPath);
-    } else {
-      rename(previousPath, target.path);
-    }
-    restored.push(`  ${target.label}: ${target.path} (the replaced version is kept at ${previousPath})`);
-  }
-
-  if (restored.length === 0) {
+  const result = rollbackKeptPrevious(targets, io);
+  if (result.restored.length === 0) {
     options.print(
       `No previous version is kept beside this install (nothing at ${options.execPath}${PREVIOUS_FILE_SUFFIX}). ` +
       'The previous version is kept from the next update onward.',
@@ -377,7 +311,7 @@ export function rollbackUpdate(options: RollbackUpdateOptions): void {
   options.print(
     [
       'Rolled back to the previously installed version.',
-      ...restored,
+      ...result.restored.map((target) => `  ${target.label}: ${target.path} (the replaced version is kept at ${target.path}${PREVIOUS_FILE_SUFFIX})`),
       '',
       'Restart goodvibes to run the restored version.',
       serviceInfo.managed
