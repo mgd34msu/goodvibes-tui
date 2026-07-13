@@ -115,11 +115,11 @@ function isStreamRetryLikePayload(payload: unknown): payload is StreamRetryLikeP
 
 /**
  * Minimal cost lookup surface for attaching cost-delta information to failover notices.
- * Returns USD-per-1M-token pricing for the given model ID.
- * The implementation may consult a catalog; if the model is unknown both fields are 0.
+ * Returns USD-per-1M-token pricing for the given model ID, or null when the
+ * catalog honestly does not know the model (never a fabricated zero).
  */
 export interface FailoverCostLookup {
-  getCostFromCatalog(modelId: string): { readonly input: number; readonly output: number };
+  getCostFromCatalog(modelId: string): { readonly input: number; readonly output: number } | null;
 }
 
 export interface WireStreamEventMetricsOptions {
@@ -219,9 +219,11 @@ function buildCostDeltaSuffix(
   // Registry key format: `provider:modelId` — modelId may itself contain `:`.
   const fromModelId = fromRegistryKey ? fromRegistryKey.split(':').slice(1).join(':') : '';
   const toModelId = toRegistryKey.split(':').slice(1).join(':');
-  const fromCost = fromModelId ? lookup.getCostFromCatalog(fromModelId) : { input: 0, output: 0 };
-  const toCost = lookup.getCostFromCatalog(toModelId);
-  // Report unavailable when either side has zero pricing (unknown model).
+  // A null catalog answer means honestly unknown — treated exactly like the
+  // legacy zero-pricing sentinel below.
+  const fromCost = (fromModelId ? lookup.getCostFromCatalog(fromModelId) : null) ?? { input: 0, output: 0 };
+  const toCost = lookup.getCostFromCatalog(toModelId) ?? { input: 0, output: 0 };
+  // Report unavailable when either side has no pricing (unknown model).
   if (fromCost.input === 0 && fromCost.output === 0 && !fromModelId) {
     return ' [cost data unavailable]';
   }

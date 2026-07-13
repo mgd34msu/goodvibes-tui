@@ -110,10 +110,17 @@ describe('PlatformServiceManager', () => {
     manager.restart();
 
     // The SDK's status() now honestly queries `systemctl --user is-active`
-    // (through the same injected runner), so filter those read-only status
-    // probes out and assert the mutating action sequence separately.
+    // (through the same injected runner), and install() enforces the unit's
+    // survival contract via loginctl (show-user probe, enable-linger when
+    // lingering is off) so the user unit outlives logout. Filter both out
+    // and assert the mutating systemctl action sequence separately.
     const statusQueries = calls.filter((c) => c.args.includes('is-active'));
-    const actions = calls.filter((c) => !c.args.includes('is-active'));
+    const lingerCalls = calls.filter((c) => c.command === 'loginctl');
+    for (const call of lingerCalls) {
+      expect(['show-user', 'enable-linger']).toContain(call.args[0]!);
+    }
+    // `systemctl --version` is the SDK's read-only capability probe.
+    const actions = calls.filter((c) => !c.args.includes('is-active') && !c.args.includes('--version') && c.command !== 'loginctl');
     expect(actions).toEqual([
       { command: 'systemctl', args: ['--user', 'enable', '--now', 'gv-ops.service'] },
       { command: 'systemctl', args: ['--user', 'stop', 'gv-ops.service'] },

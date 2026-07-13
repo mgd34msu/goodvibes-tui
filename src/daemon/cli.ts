@@ -27,6 +27,7 @@ import {
 } from '@pellux/goodvibes-sdk/platform/discovery';
 import { createSafeHostServeFactory } from './safe-serve.ts';
 import { isDaemonServiceSubcommand, resolveInstalledDaemonBinary, runDaemonServiceCli } from './service-commands.ts';
+import { startDaemonAutoUpdate, suppressVersionBlindFacadeAutoUpdater } from './lifecycle.ts';
 
 import {
   parseGoodVibesCli,
@@ -234,6 +235,11 @@ async function main(): Promise<void> {
     runtimeServices,
     serveFactory: createSafeHostServeFactory('Standalone daemon'),
   });
+  // The facade's internal auto-updater compares the sdk package's version —
+  // not this binary's — against this repo's releases: permanently "behind",
+  // an hourly re-download/restart loop. Suppress it (marker + receipts stay
+  // active) and run the correctly-versioned loop below. See lifecycle.ts.
+  suppressVersionBlindFacadeAutoUpdater(daemon);
   const listener = new HttpListener({
     hookDispatcher: runtimeServices.hookDispatcher,
     userAuth,
@@ -268,10 +274,26 @@ async function main(): Promise<void> {
     config.get('danger.httpListener') ? listener.start() : Promise.resolve(),
   ]);
 
+  // Hourly self-update fed THIS binary's real version (the daemon checks
+  // hourly and swaps only at an idle moment; the outgoing binary is kept at
+  // `<path>.previous`). Refuses to start for non-binary installs (dev runs).
+  const autoUpdate = startDaemonAutoUpdate({
+    configManager: config,
+    isIdle: () => runtimeServices.sessionBroker.countBusySessions() === 0,
+    homeDirectory,
+    workingDirectory: workingDir,
+  });
+  if (autoUpdate.started) {
+    logger.info('daemon: hourly self-update loop active');
+  } else {
+    logger.info('daemon: self-update loop not started', { reason: autoUpdate.reason });
+  }
+
   const abortController = new AbortController();
 
   const shutdown = async (): Promise<void> => {
     abortController.abort();
+    autoUpdate.stop();
     const SHUTDOWN_DEADLINE_MS = 15_000;
     const timeout = new Promise<'timeout'>((resolve) =>
       setTimeout(() => resolve('timeout'), SHUTDOWN_DEADLINE_MS)
