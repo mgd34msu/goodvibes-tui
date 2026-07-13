@@ -30,6 +30,7 @@ import type { StoreSnapshotScheduler } from '@pellux/goodvibes-sdk/platform/stat
 import type { UserPermissionRuleStore } from '@pellux/goodvibes-sdk/platform/permissions';
 import { buildExecPromptAnswerHandler } from '@pellux/goodvibes-sdk/platform/runtime/permissions/exec-prompt-wiring';
 import { buildLocalhostFetchApproval } from '@pellux/goodvibes-sdk/platform/runtime/permissions/localhost-fetch-approval';
+import { createNotificationDispatcher, wireRuntimeNotificationBridge, type NotificationDispatcher } from './notification-dispatch.ts';
 import { createDurabilityServices } from './durability-services.ts';
 import { MemorySpineClient, createLocalMemoryAccess } from '@pellux/goodvibes-sdk/platform/runtime/memory-spine';
 import { WorkspaceCheckpointManager } from '@pellux/goodvibes-sdk/platform/workspace';
@@ -110,6 +111,8 @@ export interface RuntimeServices {
   readonly approvalBroker: ApprovalBroker;
   /** Loopback-fetch approval that rides the approval broker; shared by the tool registry and orchestrator so every surface asks the same way. */
   readonly localhostFetchApproval: ReturnType<typeof buildLocalhostFetchApproval>;
+  /** Routes curated runtime-domain events into the panel_only notification feed (the panel's live producer). */
+  readonly notificationDispatcher: NotificationDispatcher;
   /** Durable user-origin permission rules (remembered approvals); permissions.rules.* surface. Mirrors the SDK composition. */
   readonly userPermissionRuleStore: UserPermissionRuleStore;
   readonly sessionBroker: SharedSessionBroker;
@@ -666,6 +669,12 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
     contextAccountingHolder,
   });
 
+  // Give the panel_only notification target a live producer: curated
+  // runtime-domain events route through the notification router into the shared
+  // panel feed (panel_only and burst-collapsed decisions land there).
+  const notificationDispatcher = createNotificationDispatcher(configManager);
+  wireRuntimeNotificationBridge(options.runtimeBus, notificationDispatcher);
+
   return {
     workingDirectory,
     homeDirectory,
@@ -685,6 +694,7 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
     watcherRegistry,
     approvalBroker,
     localhostFetchApproval,
+    notificationDispatcher,
     userPermissionRuleStore,
     sessionBroker,
     deliveryManager,
