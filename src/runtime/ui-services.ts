@@ -77,6 +77,8 @@ export interface UiPlatformServices {
       readonly sessionSpineActive?: boolean;
       readonly sessionSpineStatus?: 'unknown' | 'online' | 'offline';
     };
+    /** Undelivered daemon receipts (update/crash/migration) for the attach-time consuming read; empty when no daemon runs. */
+    collectDaemonReceipts(): readonly { readonly id: string; readonly text: string; readonly at: number }[];
     restart(): Promise<{
       readonly daemonRunning: boolean;
       readonly daemonPortInUse?: boolean;

@@ -41,6 +41,7 @@ import { createBootstrapShell } from './bootstrap-shell.ts';
 import { announceResumeState } from './resume-notice.ts';
 import { announceInstallSelfCheck } from './install-self-check-startup.ts';
 import { buildSharedOrchestratorCoreServices, refreshMemoryRecallSnapshot } from './orchestrator-core-services.ts';
+import { consumeDaemonAttachNotices } from './daemon-attach-notices.ts';
 import { createContextAccountingSource } from './context-accounting-source.ts';
 import { createEmbeddedServiceFactories } from './embedded-service-factories.ts';
 import { buildRelayExternalServiceMethods } from './relay-reachability-bridge.ts';
@@ -496,6 +497,9 @@ export async function bootstrapRuntime(
   platformExternalServices.externalServices = {
     ...buildRelayExternalServiceMethods(() => externalServices.daemonServer),
     inspect: inspectExternalServices,
+    // Undelivered daemon receipts (update/crash/migration) for the attach-time
+    // consuming read; empty when no daemon runs. Marked delivered once served.
+    collectDaemonReceipts: () => (externalServices.daemonServer as { collectDaemonReceipts?: () => readonly { id: string; text: string; at: number }[] } | null)?.collectDaemonReceipts?.() ?? [],
     restart: async () => {
       if (externalServicesPromise) {
         try {
@@ -518,9 +522,17 @@ export async function bootstrapRuntime(
       externalServices = await externalServicesPromise;
       controlPlaneRecentEventsRef.value = (limit) => externalServices.listRecentControlPlaneEvents(limit);
       syncSessionSpineToHostStatus(externalServices.daemonStatus, companionTokenRecord.token);
+      renderDaemonAttachNotices();
       requestRender();
       return inspectExternalServices();
     },
+  };
+  // The attach-time consuming read: drain the daemon's receipts + pending announcements exactly once as notices.
+  const renderDaemonAttachNotices = (): void => {
+    for (const notice of consumeDaemonAttachNotices({
+      configManager,
+      collectReceipts: () => platformExternalServices.externalServices.collectDaemonReceipts(),
+    })) systemMessageRouter.high(`[Daemon] ${notice}`);
   };
   deferredStartup.schedule({
     label: 'plugins',
@@ -582,6 +594,7 @@ export async function bootstrapRuntime(
       externalServices = await externalServicesPromise;
       controlPlaneRecentEventsRef.value = (limit) => externalServices.listRecentControlPlaneEvents(limit);
       syncSessionSpineToHostStatus(externalServices.daemonStatus, companionTokenRecord.token);
+      renderDaemonAttachNotices();
       requestRender();
     },
     onError: (error) => {
