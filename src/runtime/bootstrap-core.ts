@@ -6,7 +6,6 @@ import { ConfigManager, getConfiguredSystemPrompt } from '../config/index.ts';
 import { getProviderIdFromModel } from '../config/provider-model.ts';
 import { ToolRegistry } from '@pellux/goodvibes-sdk/platform/tools';
 import { registerAllTools } from '@pellux/goodvibes-sdk/platform/tools';
-import { buildLocalhostFetchApproval } from '@pellux/goodvibes-sdk/platform/runtime/permissions/localhost-fetch-approval';
 import { PermissionManager, createPermissionConfigReader } from '@pellux/goodvibes-sdk/platform/permissions';
 import { Notifier } from '@pellux/goodvibes-sdk/platform/integrations';
 import { Compositor } from '../renderer/compositor.ts';
@@ -350,17 +349,9 @@ export async function initializeBootstrapCore(
   const selection = new SelectionManager();
 
   const toolRegistry = new ToolRegistry();
-  // A loopback fetch that isn't already allow-listed asks once through the
-  // approval card; "allow for this project" persists via configManager and the
-  // fetch proceeds without another prompt. Shared by the interactive tool
-  // registry and the subagent orchestrator below so both ask the same way.
-  const localhostFetchApproval = buildLocalhostFetchApproval({
-    requestApproval: (input) => approvalBroker.requestApproval(input),
-    configManager,
-  });
   const { fileCache, projectIndex } = registerAllTools(toolRegistry, {
     surfaceRoot: 'tui',
-    localhostFetchApproval,
+    localhostFetchApproval: services.localhostFetchApproval, // loopback-fetch ask, built once in the services composition
     fileUndoManager: services.fileUndoManager,
     modeManager: services.modeManager,
     processManager: services.processManager,
@@ -384,13 +375,11 @@ export async function initializeBootstrapCore(
     overflowHandler: services.overflowHandler,
     changeTracker: services.sessionChangeTracker,
     // Master switch stays on (SDK default); this only widens the allowlist of
-    // variable NAMES kept even though they look credential-bearing. See
-    // exec-env-scrub-config.ts (permissions.execEnvScrubAllowlist).
+    // credential-looking variable NAMES kept. See exec-env-scrub-config.ts.
     credentialEnvScrub: { allowlist: readExecEnvScrubAllowlist(configManager) },
-    // Registers the context_accounting tool on this (the real, interactive)
-    // registry against OUR holder rather than a fresh internal one, so the
-    // Orchestrator-backed source bound at bootstrap.ts is what the tool
-    // actually reads from. See runtime/context-accounting-source.ts.
+    // Register context_accounting against OUR holder (the Orchestrator-backed
+    // source bound at bootstrap.ts), not a fresh internal one. See
+    // runtime/context-accounting-source.ts.
     contextAccountingHolder: services.contextAccountingHolder,
   });
   // Note: installWrfcAgentToolGuard is called after routeOrBuffer is defined
@@ -398,7 +387,7 @@ export async function initializeBootstrapCore(
   // the pre-router buffer.
   services.agentOrchestrator.setDependencies({
     surfaceRoot: 'tui',
-    localhostFetchApproval,
+    localhostFetchApproval: services.localhostFetchApproval,
     fileCache,
     projectIndex,
     workingDirectory: services.workingDirectory,

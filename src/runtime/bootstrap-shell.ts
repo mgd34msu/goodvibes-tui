@@ -307,6 +307,7 @@ export function createBootstrapShell(options: BootstrapShellOptions): BootstrapS
     adaptivePlanner: services.adaptivePlanner,
     sessionOrchestration: services.sessionOrchestration,
     operatorClient: directTransport.operator,
+    userPermissionRuleStore: services.userPermissionRuleStore,
     peerClient: directTransport.peer,
     knowledgeApi,
     // /recall's browse/link/queue/export/import subcommands and the per-turn

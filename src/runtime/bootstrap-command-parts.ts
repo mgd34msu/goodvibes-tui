@@ -139,6 +139,7 @@ export interface BootstrapCommandSectionOptions {
   readonly remoteRuntime?: RemoteCommandService;
   readonly planRuntime?: PlanRuntimeService;
   readonly operatorClient?: OperatorClient;
+  readonly userPermissionRuleStore?: import('@pellux/goodvibes-sdk/platform/permissions').UserPermissionRuleStore;
   readonly peerClient?: PeerClient;
   readonly providerApi?: ProviderApi;
   readonly knowledgeApi?: KnowledgeApi;
@@ -435,11 +436,12 @@ export function createBootstrapCommandExtensionsSection(
 export function createBootstrapCommandClientsSection(
   options: Pick<
     BootstrapCommandSectionOptions,
-    'operatorClient' | 'peerClient' | 'providerApi' | 'knowledgeApi' | 'memorySpine' | 'hookApi' | 'mcpApi' | 'opsApi' | 'directTransport'
+    'operatorClient' | 'userPermissionRuleStore' | 'peerClient' | 'providerApi' | 'knowledgeApi' | 'memorySpine' | 'hookApi' | 'mcpApi' | 'opsApi' | 'directTransport'
   >,
 ): BootstrapCommandClientSection {
   return {
     operator: options.operatorClient,
+    userPermissionRuleStore: options.userPermissionRuleStore,
     peer: options.peerClient,
     providerApi: options.providerApi,
     knowledgeApi: options.knowledgeApi,

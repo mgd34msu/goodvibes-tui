@@ -334,6 +334,13 @@ export interface CommandContext
     readonly mcpApi?: McpApi;
     readonly opsApi?: OpsApi;
     readonly transport?: DirectTransport;
+    /**
+     * Durable user-origin permission rules (the persistent form of remembered
+     * approvals). The same in-process store the permission evaluator reads, so
+     * /permissions rules lists and revokes rules that take effect live. Served
+     * by the daemon's permissions.rules.list/.delete verbs to other surfaces.
+     */
+    readonly userPermissionRuleStore?: import('@pellux/goodvibes-sdk/platform/permissions').UserPermissionRuleStore;
   };
 }
 

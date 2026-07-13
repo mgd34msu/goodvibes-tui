@@ -113,6 +113,7 @@ export type CreateBootstrapCommandContextOptions = {
   adaptivePlanner?: AdaptivePlanner;
   sessionOrchestration?: ShellSessionOrchestrationService;
   operatorClient?: OperatorClient;
+  userPermissionRuleStore?: import('@pellux/goodvibes-sdk/platform/permissions').UserPermissionRuleStore;
   peerClient?: PeerClient;
   knowledgeApi?: KnowledgeApi;
   memorySpine?: MemorySpineClient;
@@ -206,6 +207,7 @@ export function createBootstrapCommandContext(
     adaptivePlanner,
     sessionOrchestration,
     operatorClient,
+    userPermissionRuleStore,
     peerClient,
     knowledgeApi,
     memorySpine,
@@ -293,6 +295,7 @@ export function createBootstrapCommandContext(
   }, shellServices);
   const clients = createBootstrapCommandClientsSection({
     operatorClient,
+    userPermissionRuleStore,
     peerClient,
     providerApi,
     knowledgeApi,

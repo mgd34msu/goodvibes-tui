@@ -108,6 +108,8 @@ export interface RuntimeServices {
   readonly channelDeliveryRouter: ChannelDeliveryRouter;
   readonly watcherRegistry: WatcherRegistry;
   readonly approvalBroker: ApprovalBroker;
+  /** Loopback-fetch approval that rides the approval broker; shared by the tool registry and orchestrator so every surface asks the same way. */
+  readonly localhostFetchApproval: ReturnType<typeof buildLocalhostFetchApproval>;
   /** Durable user-origin permission rules (remembered approvals); permissions.rules.* surface. Mirrors the SDK composition. */
   readonly userPermissionRuleStore: UserPermissionRuleStore;
   readonly sessionBroker: SharedSessionBroker;
@@ -628,13 +630,15 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
     subscriptionManager,
     secretsManager,
   });
+  // A loopback fetch that isn't allow-listed asks once through the approval
+  // broker; "allow for this project" persists and later fetches never ask. Built
+  // once and shared with the tool registry (bootstrap-core) so both ask alike.
+  const localhostFetchApproval = buildLocalhostFetchApproval({ requestApproval: (input) => approvalBroker.requestApproval(input), configManager });
   agentOrchestrator.setDependencies({
     surfaceRoot: 'tui',
     // Exec stuck on a terminal prompt rides the approval broker; the typed answer feeds the continuing run (SDK exec-prompt-wiring; mirrors the SDK composition).
     execPromptAnswerHandler: buildExecPromptAnswerHandler({ requestApproval: (input) => approvalBroker.requestApproval(input) }),
-    // A loopback fetch that isn't allow-listed asks once through the approval
-    // broker; "allow for this project" persists and later fetches never ask.
-    localhostFetchApproval: buildLocalhostFetchApproval({ requestApproval: (input) => approvalBroker.requestApproval(input), configManager }),
+    localhostFetchApproval,
     fileCache,
     projectIndex,
     workingDirectory,
@@ -680,6 +684,7 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
     channelDeliveryRouter,
     watcherRegistry,
     approvalBroker,
+    localhostFetchApproval,
     userPermissionRuleStore,
     sessionBroker,
     deliveryManager,
