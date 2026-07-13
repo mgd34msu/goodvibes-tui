@@ -13,6 +13,7 @@ import { FileUndoManager } from '@pellux/goodvibes-sdk/platform/state';
 import { PermissionManager } from '@pellux/goodvibes-sdk/platform/permissions';
 import { AcpManager } from '@pellux/goodvibes-sdk/platform/acp';
 import { PermissionPromptUI, buildPendingPermissionExtras } from './permissions/prompt.ts';
+import { handleBrokerApprovalChange } from './permissions/broker-approval-card.ts';
 import { CommandRegistry } from './input/command-registry.ts';
 import type { CommandContext } from './input/command-registry.ts';
 import { renderProcessIndicator } from './renderer/process-indicator.ts';
@@ -150,13 +151,11 @@ async function main() {
   };
 
   let pendingPermission: PendingPermissionState | null = null;
-  approvalBroker.subscribe((approval) => {
-    if (!pendingPermission) return;
-    if (pendingPermission.callId !== approval.callId) return;
-    if (approval.status === 'pending' || approval.status === 'claimed') return;
-    pendingPermission = null;
-    render();
-  });
+  approvalBroker.subscribe((approval) => handleBrokerApprovalChange({
+    approval, broker: approvalBroker, render,
+    getPending: () => pendingPermission,
+    setPending: (next) => { pendingPermission = next; },
+  }));
 
   let scrollTop = 0;
   let scrollLocked = true;
