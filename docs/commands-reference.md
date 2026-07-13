@@ -332,7 +332,7 @@ GoodVibes ships **143** built-in slash commands across **68** categories. Every 
 
 | Command | Aliases | Usage | Description |
 | --- | --- | --- | --- |
-| `/permissions` | `/perms` | — | Show permission settings in effect and where each value came from (provenance) |
+| `/permissions` | `/perms` | `[rules \| revoke <rule-id>]` | Show permission settings and provenance, and list or revoke remembered approval rules |
 
 ## Planning
 
