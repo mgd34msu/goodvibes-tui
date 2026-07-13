@@ -88,3 +88,39 @@ export function deriveProviderKeyCaptureTargets(
 export function providerKeyFieldId(providerId: string): string {
   return `providers.api-key.${providerId}`;
 }
+
+/** A subscription-capable provider and its current subscription posture. */
+export interface SubscriptionStatusTarget {
+  readonly providerId: string;
+  readonly active: boolean;
+  readonly pending: boolean;
+}
+
+/**
+ * The providers onboarding shows a subscription-status row for: every provider
+ * that declares a subscription route (registration truth), plus any provider
+ * with an active or pending subscription session — so a live session is never
+ * hidden just because its account record was absent. Ordered by provider id.
+ */
+export function deriveSubscriptionStatusTargets(
+  providers: readonly OnboardingProviderAccountRecord[] | undefined,
+  activeProviderIds: readonly string[],
+  pendingProviderIds: readonly string[],
+): SubscriptionStatusTarget[] {
+  const active = new Set(activeProviderIds);
+  const pending = new Set(pendingProviderIds);
+  const ids = new Set<string>();
+  for (const record of providers ?? []) {
+    if (record.availableRoutes.includes('subscription')) ids.add(record.providerId);
+  }
+  for (const id of active) ids.add(id);
+  for (const id of pending) ids.add(id);
+  return [...ids]
+    .sort((a, b) => a.localeCompare(b))
+    .map((providerId) => ({ providerId, active: active.has(providerId), pending: pending.has(providerId) }));
+}
+
+/** The wizard field id of a provider's subscription-status row. */
+export function subscriptionStatusFieldId(providerId: string): string {
+  return `providers.subscription.${providerId}`;
+}

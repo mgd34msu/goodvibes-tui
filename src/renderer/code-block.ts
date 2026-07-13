@@ -11,11 +11,11 @@ import { UI_TONES } from './ui-primitives.ts';
  * property/comment) are pinned to the same values as the tree-sitter
  * Vaporwave palette in syntax-highlighter.ts's TOKEN_STYLES map, so a code
  * block that starts on the regex fallback and gets replaced by the async
- * tree-sitter parse doesn't visibly shift color mid-stream (WO-207c).
+ * tree-sitter parse doesn't visibly shift color mid-stream.
  * `accent` and `bg` are chrome (the language-label header bar and the body
  * background), not syntax tokens, and keep their original VS Code Dark+
  * values — folded here from two separate literals (one in the header, one
- * duplicated on the footer line) into a single named source (WO-207b).
+ * duplicated on the footer line) into a single named source.
  */
 const FALLBACK_THEME = {
   string: '#00ff88',

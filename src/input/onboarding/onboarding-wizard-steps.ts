@@ -11,7 +11,7 @@ import {
 import { buildFeatureUnitSteps } from './onboarding-feature-units.ts';
 import { countSelected, modelSelectionLabel, normalizeText } from './onboarding-wizard-helpers.ts';
 import { deriveProviderKeyCaptureTargets } from '../../runtime/onboarding/provider-key-capture.ts';
-import { buildProviderKeyInventoryField, buildProviderKeyMaskedFields } from './onboarding-provider-key-fields.ts';
+import { buildProviderKeyInventoryField, buildProviderKeyMaskedFields, buildSubscriptionPosture } from './onboarding-provider-key-fields.ts';
 import { getDaemonSource, pushDaemonAdoptionFields, pushLegacyDaemonMigrationFields } from './onboarding-wizard-network-adopt.ts';
 import type { OnboardingWizardControllerLike } from './onboarding-wizard-types.ts';
 import type { OnboardingWizardAcknowledgementFieldDefinition, OnboardingWizardActionFieldDefinition, OnboardingWizardChecklistFieldDefinition, OnboardingWizardExternalSurfaceStepId, OnboardingWizardFieldDefinition, OnboardingWizardModelPickerFieldDefinition, OnboardingWizardRadioFieldDefinition, OnboardingWizardRadioOption, OnboardingWizardStepDefinition } from './onboarding-wizard-types.ts';
@@ -152,8 +152,15 @@ export function buildProvidersStep(controller: OnboardingWizardControllerLike): 
     const providerAck = controller.runtimeDerived.reopenEditAcknowledgements.providers;
     const activeSubscriptions = controller.runtimeSnapshot?.subscriptions.active ?? [];
     const pendingSubscriptions = controller.runtimeSnapshot?.subscriptions.pending ?? [];
-    const openAiActive = activeSubscriptions.some((subscription) => subscription.provider === 'openai');
-    const openAiPending = pendingSubscriptions.some((subscription) => subscription.provider === 'openai');
+    // Provider-agnostic subscription posture: one status row per
+    // subscription-capable provider (registration truth), plus any provider with
+    // a live/pending session, and which provider's in-wizard sign-in applies now.
+    const subscription = buildSubscriptionPosture(
+      activeSubscriptions.map((entry) => entry.provider),
+      pendingSubscriptions.map((entry) => entry.provider),
+      controller.runtimeSnapshot?.providerAccounts?.providers,
+    );
+    const signInPending = subscription.signInPending;
     // Provider-agnostic key capture: one field per provider the registry knows
     // accepts an API key (derived from registration truth — never a hardcoded
     // vendor list). No provider is named as the only option.
@@ -171,31 +178,21 @@ export function buildProvidersStep(controller: OnboardingWizardControllerLike): 
     };
 
     const fields: OnboardingWizardFieldDefinition[] = [
-      {
-        kind: 'status',
-        id: 'providers.openai-subscription',
-        label: 'OpenAI subscription status',
-        hint: openAiActive
-          ? 'An OpenAI subscription session is already available.'
-          : openAiPending
-            ? 'An OpenAI subscription login is pending.'
-            : 'No OpenAI subscription session was found in the current runtime state.',
-        defaultValue: openAiActive ? 'Active' : openAiPending ? 'Pending' : 'Not detected',
-      },
+      ...subscription.statusFields,
       buildProviderKeyInventoryField(keyTargets),
       // One masked field per key-accepting provider. Entered values are stored
       // through the secret manager at apply and the provider re-registers live.
       ...buildProviderKeyMaskedFields(keyTargets),
-      ...(openAiActive ? [] : [
+      ...(!subscription.signInProviderId ? [] : [
         {
           kind: 'action' as const,
           id: 'providers.openai-subscription-start',
           action: 'start-openai-subscription' as const,
-          label: openAiPending ? 'Restart OpenAI subscription sign-in' : 'Start OpenAI subscription sign-in',
+          label: signInPending ? 'Restart OpenAI subscription sign-in' : 'Start OpenAI subscription sign-in',
           hint: 'Opens the OpenAI sign-in flow from the wizard and records pending login state here.',
-          defaultValue: openAiPending ? 'Restart' : 'Start',
+          defaultValue: signInPending ? 'Restart' : 'Start',
         },
-        ...(openAiPending ? [
+        ...(signInPending ? [
           {
             kind: 'text' as const,
             id: 'providers.openai-authorization-url',
@@ -232,7 +229,7 @@ export function buildProvidersStep(controller: OnboardingWizardControllerLike): 
       description: 'Review subscription posture and optionally add an API key for any provider that accepts one, directly through the wizard.',
       summaryTitle: 'Provider access summary',
       summaryLines: [
-        `OpenAI subscription: ${openAiActive ? 'active' : openAiPending ? 'pending' : 'not detected'}`,
+        subscription.summaryLine,
         keyTargets.length === 0
           ? 'Provider API keys: no key-accepting providers registered'
           : `Provider API keys: ${configuredKeyCount}/${keyTargets.length} configured`,

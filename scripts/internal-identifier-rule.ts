@@ -52,7 +52,7 @@ const INTERNAL_IDENTIFIER_PATTERNS: readonly RegExp[] = [
   /\bW[0-9]{1,2}\.[0-9]{1,2}\b/g, // wave.item id: a capital W, 1-2 digits, a dot, 1-2 digits
   /\bwo[0-9]{3,4}\b/gi, // numeric work-order id: lowercase "wo" followed by 3-4 digits
   /\bWO-[A-Z]\b/g, // lettered work-order id: "WO-" followed by one capital letter
-  /\bWO-[0-9]{2,4}\b/g, // numbered work-order id: "WO-" followed by 2-4 digits
+  /\bWO-[0-9]{1,4}[A-Za-z]*\b/g, // numbered work-order id: "WO-" then 1-4 digits, with an optional letter suffix — catches digit-then-letter shapes whose trailing letter otherwise defeats a digits-only \b anchor
   /\bDEBT-[0-9]+\b/g, // debt-register id: "DEBT-" followed by digits
   /\bUX-[A-Z]\b/g, // UX-workstream id: "UX-" followed by one capital letter
   /\bWave[- ][0-9]+\b/g, // wave word-form: "Wave" plus a hyphen or space plus digits
