@@ -6,6 +6,8 @@ import { AutomationDeliveryManager, AutomationManager } from '@pellux/goodvibes-
 import { ChannelDeliveryRouter, ChannelPolicyManager, type ChannelPluginRegistry, type RouteBindingManager, type SurfaceRegistry } from '@pellux/goodvibes-sdk/platform/channels';
 import { ApprovalBroker, GatewayMethodCatalog, SessionLiveTurnControlsHolder, SharedSessionBroker } from '@pellux/goodvibes-sdk/platform/control-plane';
 import { PowerManager, wireRuntimePower } from '@pellux/goodvibes-sdk/platform/power';
+import { FeatureAnnouncementStore, featureAnnouncementsPath } from '@pellux/goodvibes-sdk/platform/runtime/feature-announcements';
+import { formatConsolidationReceipt } from '../core/consolidation-receipt.ts';
 import { StepUpService } from '@pellux/goodvibes-sdk/daemon';
 import { PairingTokenManager } from '@pellux/goodvibes-sdk/platform/pairing';
 import { resolvePairingWebOrigin } from '../core/pairing-origin.ts';
@@ -635,10 +637,19 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
   // the sessions.toolCalls.cancel / sessions.queuedMessages.* wire verbs — all
   // mirroring the SDK's own createRuntimeServices composition so every surface
   // exposes the same verbs and shares the same idle/wake behaviour.
+  // Consolidation receipts ride the SAME attach-time queue every other receipt
+  // uses: a run that changed something records a one-line notice into the
+  // file-backed feature-announcement store, drained (and rendered as a
+  // "[Daemon] …" line) on the next surface attach. A quiet run records nothing.
+  const consolidationReceiptStore = new FeatureAnnouncementStore(featureAnnouncementsPath(configManager));
   const memoryConsolidationScheduler = new MemoryConsolidationScheduler({
     memoryRegistry,
     configSource: configManager,
     isIdle: () => sessionBroker.countBusySessions() === 0,
+    onReceipt: (receipt) => {
+      const text = formatConsolidationReceipt(receipt);
+      if (text) consolidationReceiptStore.record(receipt.runId, text);
+    },
   });
   memoryConsolidationScheduler.start();
   const sessionLiveTurnControls = new SessionLiveTurnControlsHolder();
