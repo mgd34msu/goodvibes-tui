@@ -599,7 +599,7 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
   // Store snapshots + durable remembered-approval rules + the live credential
   // chain, mirroring the SDK composition — see durability-services.ts.
   const { storeSnapshotScheduler, userPermissionRuleStore } = createDurabilityServices({
-    configManager, secretsManager, providerRegistry, memoryDbPath, codeIndexDbPath: codeIndexDbPath(workingDirectory),
+    configManager, secretsManager, providerRegistry, memoryDbPath, codeIndexDbPath: codeIndexDbPath(workingDirectory), workingDirectory, surfaceRoot: 'tui', homeDirectory, shellPaths, // + retention-sweep roots & live config watch (mirrors the SDK)
   });
   const codeInjectionOrchestratorDeps = { codeIndex: codeIndexStore, isCodeInjectionSettingEnabled: () => isCodeInjectionSettingEnabled(configManager), codeIndexReindexScheduler }; // Code-injection seam (agent here; main via orchestrator-core-services.ts)
   const { processRegistry } = createFleetServices({ // Shared archive-aware fleet registry (+ daemon observed rows) — see fleet-services.ts

@@ -14,19 +14,36 @@
  *  - One credential chain (env -> secrets -> subscription): boot applies
  *    secrets-backed keys; every secrets write/delete re-registers builtins
  *    LIVE (no restart) — badges/picker/chat read the same instances.
+ *  - Start-time retention janitor: one best-effort append-only sweep over
+ *    EVERY root the composition knows (working dir, surface root, home,
+ *    logDir, telemetryDir) — omitting logDir/telemetryDir/home would silently
+ *    skip the activity-log, telemetry-ledger, and recovery-snapshot stores.
+ *  - Live config-file watch: external edits to the settings file apply through
+ *    the same subscribe() pipeline an in-process set() uses — no restart. The
+ *    underlying watchers are unref'd, so this never pins the event loop.
  */
 import { join } from 'node:path';
+import { operations } from '@pellux/goodvibes-sdk/platform/runtime';
 import { resolveMemoryVectorDbPath } from '@pellux/goodvibes-sdk/platform/state';
 import { StoreSnapshotScheduler } from '@pellux/goodvibes-sdk/platform/state/store-snapshots';
 import { UserPermissionRuleStore } from '@pellux/goodvibes-sdk/platform/permissions';
 import { logger, summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 
 export interface DurabilityServicesInput {
-  readonly configManager: { getControlPlaneConfigDir(): string };
+  readonly configManager: {
+    getControlPlaneConfigDir(): string;
+    get(key: never): unknown;
+    watchConfigFiles(options?: { intervalMs?: number }): () => void;
+  };
   readonly secretsManager: { onDidChange(listener: (key: string) => void): () => void };
   readonly providerRegistry: { refreshProviderCredentials(): Promise<void> };
   readonly memoryDbPath: string;
   readonly codeIndexDbPath: string;
+  /** Retention-sweep roots (mirrors the SDK's own createRuntimeServices roots). */
+  readonly workingDirectory: string;
+  readonly surfaceRoot: string;
+  readonly homeDirectory: string;
+  readonly shellPaths: { resolveUserPath(...segments: string[]): string };
 }
 
 export interface DurabilityServices {
@@ -47,6 +64,24 @@ export function createDurabilityServices(input: DurabilityServicesInput): Durabi
     ],
   });
   storeSnapshotScheduler.start();
+
+  // Start-time retention janitor: pass EVERY root the composition knows so the
+  // activity-log, telemetry-ledger, and recovery-snapshot stores are all swept.
+  // Best-effort — a retention failure never takes startup down (the sweep
+  // swallows its own errors).
+  operations.runStartupAppendOnlySweep(
+    {
+      workingDirectory: input.workingDirectory,
+      surfaceRoot: input.surfaceRoot,
+      homeDirectory: input.homeDirectory,
+      logDir: input.shellPaths.resolveUserPath('logs'),
+      telemetryDir: input.shellPaths.resolveUserPath('telemetry'),
+    },
+    (k: string) => configManager.get(k as never),
+  );
+  // External config edits apply LIVE through the same subscribe() pipeline an
+  // in-process set() uses; the underlying watchers are unref'd.
+  configManager.watchConfigFiles();
 
   const userPermissionRuleStore = new UserPermissionRuleStore(join(configManager.getControlPlaneConfigDir(), 'permission-rules.json'));
   void userPermissionRuleStore.init().catch((error) => logger.warn('user permission rule store init failed; asks will prompt', { error: summarizeError(error) }));
