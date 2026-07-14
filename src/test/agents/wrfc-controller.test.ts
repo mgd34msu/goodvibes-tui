@@ -42,6 +42,12 @@ function makeReviewerOutput(score: number, passed: boolean): string {
     issues: passed
       ? []
       : [{ severity: 'major', description: 'Missing error handling', file: 'src/foo.ts', line: 10, pointValue: 1 }],
+    // The review gate blocks deterministically when a reviewer emits no
+    // acceptance checklist (on both review paths), so every fabricated review
+    // must carry one — exactly like a real reviewer.
+    acceptanceChecklist: [
+      { item: 'the task contract is met', verified: passed, evidence: passed ? 'exercised the change end-to-end' : 'verification failed', howExercised: 'ran the suite' },
+    ],
   });
 }
 
