@@ -103,6 +103,33 @@ async function checkFanoutQuotaWarning(ctx: CommandContext, draft: WorkstreamDra
 }
 
 /**
+ * Launch an already-approved draft through its gates (best-of-N attempt
+ * validation, then the fan-out quota warning unless `--force`), and print the
+ * outcome. Shared by `launch` and by `approve` (which launches in the same act
+ * — the one confirmed step that replaces the old approve-then-retype ceremony).
+ */
+async function launchApprovedDraft(ctx: CommandContext, service: WorkstreamCommandService, id: string, draft: WorkstreamDraft, force: boolean): Promise<void> {
+  const attemptsCheck = validateAttempts(draft.spec);
+  if (attemptsCheck.violations.length > 0) {
+    ctx.print(`Cannot launch ${id} — best-of-N plan constraints are violated:\n${attemptsCheck.violations.map((v) => `  - ${v}`).join('\n')}\nFix the plan (or drop the attempts) and re-approve.`);
+    return;
+  }
+  if (!force) {
+    const quotaWarning = await checkFanoutQuotaWarning(ctx, draft);
+    if (quotaWarning) {
+      ctx.print(quotaWarning);
+      return;
+    }
+  }
+  const result = service.launchDraft(id);
+  if (!result) {
+    ctx.print(`Could not launch ${id}.`);
+    return;
+  }
+  ctx.print(`Launched workstream ${result.workstreamId} — track it with /workstream status ${result.workstreamId} or the Fleet panel.`);
+}
+
+/**
  * phase.role for a 'custom' phase is the free-text description passed to
  * `/workstream insert-phase` — it is purely COSMETIC. Neither
  * templateForPhase nor buildPhaseTask (phase-runner.ts, engine-side) ever
@@ -377,7 +404,7 @@ export function registerWorkstreamRuntimeCommands(registry: CommandRegistry): vo
   registry.register({
     name: 'workstream',
     description: 'Author and oversee multi-phase agent workstreams (orchestration engine)',
-    usage: 'create [--isolation shared|worktree] <task...> | list | status [id] | insert-phase <id> <description...> | edit-item <id> <item#> <brief...> | remove-item <id> <item#> | move-item <id> <item#> <pos> | approve <id> | edit <id> [--isolation shared|worktree] <task...> | launch <id> [--force] | cancel <id> | attempts list|diff|judge|pick',
+    usage: 'create [--isolation shared|worktree] <task...> | list | status [id] | insert-phase <id> <description...> | edit-item <id> <item#> <brief...> | remove-item <id> <item#> | move-item <id> <item#> <pos> | approve <id> [--no-launch] [--force] | edit <id> [--isolation shared|worktree] <task...> | launch <id> [--force] | cancel <id> | attempts list|diff|judge|pick',
     argsHint: 'create [--isolation worktree] <task> | list | status [id] | edit-item | remove-item | move-item | approve | edit | launch | cancel | attempts',
     handler: async (args, ctx: CommandContext) => {
       const service = ctx.session.workstreamEngine;
@@ -470,9 +497,14 @@ export function registerWorkstreamRuntimeCommands(registry: CommandRegistry): vo
       }
 
       if (sub === 'approve') {
-        const id = args[1];
+        // Approve IS the one confirmed act: it approves AND launches (typing the
+        // verb with an explicit id is the confirmation). --no-launch keeps the
+        // old split for scripts; --force skips the fan-out quota warning.
+        const noLaunch = args.includes('--no-launch');
+        const force = args.includes('--force');
+        const id = args.find((arg, index) => index > 0 && arg !== '--no-launch' && arg !== '--force');
         if (!id) {
-          ctx.print('Usage: /workstream approve <id>');
+          ctx.print('Usage: /workstream approve <id> [--no-launch] [--force]');
           return;
         }
         const draft = service.approveDraft(id);
@@ -480,7 +512,11 @@ export function registerWorkstreamRuntimeCommands(registry: CommandRegistry): vo
           ctx.print(draftNotFoundMessage(service, id));
           return;
         }
-        ctx.print(`Approved ${id}. Launch with: /workstream launch ${id}`);
+        if (noLaunch) {
+          ctx.print(`Approved ${id} (held, not launched). Launch it with /workstream launch ${id}.`);
+          return;
+        }
+        await launchApprovedDraft(ctx, service, id, draft, force);
         return;
       }
 
@@ -554,27 +590,10 @@ export function registerWorkstreamRuntimeCommands(registry: CommandRegistry): vo
           return;
         }
         if (!draft.approved) {
-          ctx.print(`Proposal ${id} is not approved yet. Run /workstream approve ${id} first.`);
+          ctx.print(`Proposal ${id} is not approved yet. Run /workstream approve ${id} first (or approve launches it directly).`);
           return;
         }
-        const attemptsCheck = validateAttempts(draft.spec);
-        if (attemptsCheck.violations.length > 0) {
-          ctx.print(`Cannot launch ${id} — best-of-N plan constraints are violated:\n${attemptsCheck.violations.map((v) => `  - ${v}`).join('\n')}\nFix the plan (or drop the attempts) and re-approve.`);
-          return;
-        }
-        if (!force) {
-          const quotaWarning = await checkFanoutQuotaWarning(ctx, draft);
-          if (quotaWarning) {
-            ctx.print(quotaWarning);
-            return;
-          }
-        }
-        const result = service.launchDraft(id);
-        if (!result) {
-          ctx.print(`Could not launch ${id}.`);
-          return;
-        }
-        ctx.print(`Launched workstream ${result.workstreamId} — track it with /workstream status ${result.workstreamId} or the Fleet panel.`);
+        await launchApprovedDraft(ctx, service, id, draft, force);
         return;
       }
 
@@ -616,9 +635,9 @@ export function registerWorkstreamRuntimeCommands(registry: CommandRegistry): vo
         + '  /workstream edit-item <id> <item#> <new brief...>\n'
         + '  /workstream remove-item <id> <item#>\n'
         + '  /workstream move-item <id> <item#> <new-position#>\n'
-        + '  /workstream approve <id>\n'
+        + '  /workstream approve <id> [--no-launch] [--force]   (approves AND launches in one act)\n'
         + '  /workstream edit <id> [--isolation shared|worktree] <new task...>\n'
-        + '  /workstream launch <id> [--force]\n'
+        + '  /workstream launch <id> [--force]   (for a --no-launch-held or re-launched draft)\n'
         + '  /workstream cancel <id>',
       );
     },

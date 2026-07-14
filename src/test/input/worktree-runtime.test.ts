@@ -158,3 +158,66 @@ describe('/worktree setup', () => {
     expect(text).toContain('no control-plane base URL is configured');
   });
 });
+
+// ---------------------------------------------------------------------------
+// /worktree discard — the real destructive act (worktrees.discard), no longer
+// a metadata setState flip.
+// ---------------------------------------------------------------------------
+
+describe('/worktree discard', () => {
+  function ctxWithSetStateSpy(daemonEnabled: boolean): { ctx: CommandContext; printed: string[]; setStateCalls: Array<[string, string]> } {
+    const printed: string[] = [];
+    const setStateCalls: Array<[string, string]> = [];
+    const ctx = {
+      print: (t: string) => { printed.push(t); },
+      renderRequest: () => {},
+      workspace: {
+        shellPaths: { workingDirectory: '/tmp/x', homeDirectory: '/tmp/home' } as CommandContext['workspace']['shellPaths'],
+        worktreeRegistry: {
+          list: async () => [],
+          attach: () => {},
+          setState: (p: string, s: string) => { setStateCalls.push([p, s]); },
+          cleanup: async () => {},
+        } as unknown as CommandContext['workspace']['worktreeRegistry'],
+      } as CommandContext['workspace'],
+      platform: {
+        configManager: {
+          get: (key: string) => (key === 'daemon.enabled' ? daemonEnabled : undefined),
+          setDynamic: () => {},
+        } as unknown as CommandContext['platform']['configManager'],
+      } as CommandContext['platform'],
+    } as unknown as CommandContext;
+    return { ctx, printed, setStateCalls };
+  }
+
+  function makeRegistry() {
+    const registry = new CommandRegistry();
+    registerWorktreeRuntimeCommands(registry);
+    return registry;
+  }
+
+  test('routes through the worktrees.discard operator verb, never a metadata setState flip', async () => {
+    const { ctx, printed, setStateCalls } = ctxWithSetStateSpy(false);
+    await makeRegistry().get('worktree')!.handler(['discard', '/tmp/wt/agent-1'], ctx);
+    // Discard is a real act now — it must NOT silently flip the persisted state.
+    expect(setStateCalls).toEqual([]);
+    // With no daemon reachable it prints the honest operator-rpc unavailable reason.
+    expect(printed.at(-1)).toContain('[worktree discard]');
+    expect(printed.at(-1)).toContain('daemon is disabled');
+  });
+
+  test('missing path prints the discard usage', async () => {
+    const { ctx, printed } = ctxWithSetStateSpy(false);
+    await makeRegistry().get('worktree')!.handler(['discard'], ctx);
+    expect(printed.at(-1)).toBe('Usage: /worktree discard <path>');
+  });
+
+  test('pause/resume/keep still flip the persisted metadata state', async () => {
+    const { ctx, setStateCalls } = ctxWithSetStateSpy(false);
+    const registry = makeRegistry();
+    await registry.get('worktree')!.handler(['keep', '/tmp/wt/a'], ctx);
+    await registry.get('worktree')!.handler(['pause', '/tmp/wt/b'], ctx);
+    await registry.get('worktree')!.handler(['resume', '/tmp/wt/c'], ctx);
+    expect(setStateCalls).toEqual([['/tmp/wt/a', 'kept'], ['/tmp/wt/b', 'paused'], ['/tmp/wt/c', 'active']]);
+  });
+});

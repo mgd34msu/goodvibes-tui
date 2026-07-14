@@ -445,7 +445,7 @@ describe('workstream-runtime — approve / edit / launch', () => {
     expect(service.engine.createdInputs).toHaveLength(0);
   });
 
-  test('approve then launch calls engine.createWorkstream + start and drops the draft', async () => {
+  test('approve launches in one act — engine.createWorkstream + start — and drops the draft', async () => {
     const registry = new CommandRegistry();
     registerWorkstreamRuntimeCommands(registry);
     const service = makeFakeService();
@@ -453,26 +453,42 @@ describe('workstream-runtime — approve / edit / launch', () => {
     await registry.execute('workstream', ['create', 'task', 'two'], ctx);
     const draftId = service.listDrafts()[0]!.id;
 
+    // No retype ceremony: approve IS the one confirmed act.
     await registry.execute('workstream', ['approve', draftId], ctx);
-    expect(printed.at(-1)).toContain('Approved');
-
-    await registry.execute('workstream', ['launch', draftId], ctx);
     expect(printed.at(-1)).toContain('Launched workstream');
     expect(service.engine.createdInputs).toHaveLength(1);
     expect(service.engine.startedIds).toHaveLength(1);
     expect(service.getDraft(draftId)).toBeUndefined();
   });
 
-  test('launch --force still resolves the draft id and launches (quota check unavailable → same as unforced here, but the flag must not be parsed as the id)', async () => {
+  test('approve --no-launch approves without launching; a later launch runs it', async () => {
+    const registry = new CommandRegistry();
+    registerWorkstreamRuntimeCommands(registry);
+    const service = makeFakeService();
+    const { ctx, printed } = makeCtx(service);
+    await registry.execute('workstream', ['create', 'task', 'held'], ctx);
+    const draftId = service.listDrafts()[0]!.id;
+
+    await registry.execute('workstream', ['approve', draftId, '--no-launch'], ctx);
+    expect(printed.at(-1)).toContain('held, not launched');
+    expect(service.engine.createdInputs).toHaveLength(0);
+    expect(service.getDraft(draftId)!.approved).toBe(true);
+
+    await registry.execute('workstream', ['launch', draftId], ctx);
+    expect(printed.at(-1)).toContain('Launched workstream');
+    expect(service.engine.createdInputs).toHaveLength(1);
+    expect(service.getDraft(draftId)).toBeUndefined();
+  });
+
+  test('approve --force launches in one act and never parses the flag as the id', async () => {
     const registry = new CommandRegistry();
     registerWorkstreamRuntimeCommands(registry);
     const service = makeFakeService();
     const { ctx, printed } = makeCtx(service);
     await registry.execute('workstream', ['create', 'task', 'three'], ctx);
     const draftId = service.listDrafts()[0]!.id;
-    await registry.execute('workstream', ['approve', draftId], ctx);
 
-    await registry.execute('workstream', ['launch', draftId, '--force'], ctx);
+    await registry.execute('workstream', ['approve', draftId, '--force'], ctx);
 
     expect(printed.at(-1)).toContain('Launched workstream');
     expect(service.engine.createdInputs).toHaveLength(1);
@@ -485,7 +501,7 @@ describe('workstream-runtime — approve / edit / launch', () => {
     const { ctx, printed } = makeCtx(service);
     await registry.execute('workstream', ['create', 'original', 'task'], ctx);
     const draftId = service.listDrafts()[0]!.id;
-    await registry.execute('workstream', ['approve', draftId], ctx);
+    await registry.execute('workstream', ['approve', draftId, '--no-launch'], ctx);
     expect(service.getDraft(draftId)!.approved).toBe(true);
 
     await registry.execute('workstream', ['edit', draftId, 'revised', 'task'], ctx);
@@ -776,7 +792,7 @@ describe('workstream-runtime — list / status / insert-phase / cancel', () => {
     const { ctx, printed } = makeCtx(service);
     await registry.execute('workstream', ['create', 'ship', 'it'], ctx);
     const id = service.listDrafts()[0]!.id;
-    await registry.execute('workstream', ['approve', id], ctx);
+    await registry.execute('workstream', ['approve', id, '--no-launch'], ctx);
     expect(service.getDraft(id)!.approved).toBe(true);
 
     await registry.execute('workstream', ['edit-item', id, '2', 'build', 'the', 'REST', 'API', 'with', 'auth'], ctx);
