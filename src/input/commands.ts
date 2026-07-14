@@ -19,6 +19,7 @@ import { registerDiffRuntimeCommands } from './commands/diff-runtime.ts';
 import { registerGitRuntimeCommands } from './commands/git-runtime.ts';
 import { registerQueueRuntimeCommands } from './commands/queue-runtime.ts';
 import { registerPowerRuntimeCommands } from './commands/power-runtime.ts';
+import { registerGraphRuntimeCommands } from './commands/graph-runtime.ts';
 import { registerTestRuntimeCommands } from './commands/test-runtime.ts';
 import { registerNotifyRuntimeCommands } from './commands/notify-runtime.ts';
 import { registerReplayRuntimeCommands } from './commands/replay-runtime.ts';
@@ -107,6 +108,7 @@ export const BUILTIN_COMMAND_GROUPS: readonly BuiltinCommandGroup[] = [
   { category: 'Git', register: registerGitRuntimeCommands },
   { category: 'Shell & Session', register: registerQueueRuntimeCommands },
   { category: 'Shell & Session', register: registerPowerRuntimeCommands },
+  { category: 'Automation', register: registerGraphRuntimeCommands },
   { category: 'Testing', register: registerTestRuntimeCommands },
   { category: 'Notifications', register: registerNotifyRuntimeCommands },
   { category: 'Sessions & Replay', register: registerReplayRuntimeCommands },
