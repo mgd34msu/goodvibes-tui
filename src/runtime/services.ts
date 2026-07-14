@@ -479,7 +479,11 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
     projectRoot: workingDirectory,
   });
   const voiceProviders = new VoiceProviderRegistry();
-  ensureBuiltinVoiceProviders(voiceProviders);
+  // Pass the voice.local.* config reader so the free, offline local-engine
+  // provider is registered alongside the cloud providers — it then appears in
+  // the TTS provider picker beside elevenlabs, reporting an honest
+  // 'unconfigured' status (never an error) until its engines are set up.
+  ensureBuiltinVoiceProviders(voiceProviders, { readConfig: (key) => configManager.get(key as Parameters<typeof configManager.get>[0]) });
   const voiceService = new VoiceService(voiceProviders);
   const webSearchProviders = new WebSearchProviderRegistry({
     env: process.env,

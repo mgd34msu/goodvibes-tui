@@ -77,6 +77,7 @@ export const CATEGORY_LABELS: Record<(typeof SETTINGS_CATEGORIES)[number], strin
   wrfc: 'WRFC',
   helper: 'Helper',
   tts: 'TTS',
+  voice: 'Voice (local engines)',
   service: 'Service',
   daemon: 'Daemon',
   controlPlane: 'Control Plane',

@@ -18,6 +18,7 @@ export type SettingsCategory =
   | 'tools'
   | 'helper'
   | 'tts'
+  | 'voice'
   | 'service'
   | 'daemon'
   | 'controlPlane'
@@ -57,7 +58,7 @@ export const SETTINGS_CATEGORY_GROUPS: ReadonlyArray<{
   readonly categories: readonly SettingsCategory[];
 }> = [
   { label: 'Interface', categories: ['display', 'ui', 'behavior', 'notifications', 'permissions', 'policy', 'security'] },
-  { label: 'AI Routing', categories: ['provider', 'pricing', 'subscriptions', 'helper', 'tools', 'tts'] },
+  { label: 'AI Routing', categories: ['provider', 'pricing', 'subscriptions', 'helper', 'tools', 'tts', 'voice'] },
   { label: 'Service & Network', categories: ['service', 'daemon', 'network', 'controlPlane', 'httpListener', 'web', 'relay'] },
   { label: 'Surfaces & Cloud', categories: ['surfaces', 'integrations', 'mcp', 'cloudflare'] },
   { label: 'Automation', categories: ['batch', 'automation', 'checkin', 'watchers', 'orchestration', 'planner', 'wrfc'] },

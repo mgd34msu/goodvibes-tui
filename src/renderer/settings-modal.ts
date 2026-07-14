@@ -40,6 +40,7 @@ const CATEGORY_INFO: Record<SettingsCategory, string> = {
   wrfc: 'Work-review-fix-cycle thresholds, retry limits, and automatic commit behavior.',
   helper: 'Helper model defaults used by helper subsystems when they do not use the main chat route.',
   tts: 'Text-to-speech provider, voice, and optional spoken-turn LLM overrides.',
+  voice: 'Free, offline local voice engines (voice.local.*): the STT and TTS engine, binary, and model-path for whisper.cpp/faster-whisper and Piper/Kokoro. All empty by default — configurable-not-configured, nothing auto-downloads, and an unconfigured machine reports honestly (never an error). Once set, "Local engines" appears in the TTS provider picker beside elevenlabs, with no billing dimension.',
   service: 'Background service posture: enabled state, autostart, restart behavior, service name, platform, and logs.',
   daemon: 'Local session daemon. It hosts the shared session broker and companion chat so a session started here is visible and steerable from other surfaces. On by default, bound to loopback (127.0.0.1) only.',
   controlPlane: 'Daemon control-plane settings for local admin/API access.',
