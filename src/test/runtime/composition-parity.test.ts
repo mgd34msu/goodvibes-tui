@@ -46,11 +46,16 @@ describe('composition parity — observed foreign-agent detection is daemon-side
     expect(args).not.toContain('observeExternalAgents');
   });
 
-  test('createRuntimeServices wires the observed source into the fleet registry only when opted in', () => {
+  test('createRuntimeServices threads the daemon opt-in into the fleet services helper', () => {
     const services = read('src/runtime/services.ts');
-    // The dep is threaded into the shared fleet registry...
-    expect(services).toContain('observedAgents,');
-    // ...and constructed only under the opt-in flag (never unconditionally).
-    expect(services).toMatch(/options\.observeExternalAgents\s*\?\s*new ObservedAgentSource\(\)\s*:\s*undefined/);
+    expect(services).toContain('observeExternalAgents: options.observeExternalAgents');
+  });
+
+  test('the fleet services helper constructs the observed source only under the opt-in flag', () => {
+    const helper = read('src/runtime/fleet-services.ts');
+    // Constructed only when opted in (never unconditionally)...
+    expect(helper).toMatch(/observeExternalAgents\s*\?\s*new ObservedAgentSource\(\)\s*:\s*undefined/);
+    // ...and threaded into the shared registry as the observedAgents dep.
+    expect(helper).toContain('observedAgents,');
   });
 });
