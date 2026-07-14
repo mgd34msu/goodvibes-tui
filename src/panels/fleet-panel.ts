@@ -43,7 +43,6 @@ import {
 } from './fleet-tabs.ts';
 import { liveSteerableLabels, reconcileSteerBadges as reconcileSteerBadgesPure, renderSteerBadgeLine, steerRefusalMessage } from './fleet-steer.ts';
 import { FleetStopTracker, toggleFleetPause, buildFleetTreeHints, fleetKillConfirmArgs } from './fleet-stop.ts';
-import { isObservedExternalNode, observedKindLabel } from './fleet-observed-render.ts';
 import { resolveFleetDeepLinkIndex } from './fleet-deep-link.ts';
 import { parseAgentLedger, renderFleetAgentTranscript, renderFleetChainSummary, renderFleetLedgerFallback, renderFleetTranscriptLoading } from './fleet-transcript.ts';
 import { renderFleetTabStrip } from '../renderer/fleet-tab-strip.ts';
@@ -384,6 +383,8 @@ export class FleetPanel extends ScrollableListPanel<FleetTreeRow> {
 
     // The candidate picker (a flagged pick decision) owns the view + input while active.
     if (this.acts?.pickModeActive()) return this.acts.handlePickInput(key);
+    // The observed-agent steer composer (a drill-in) likewise owns EVERY key until Enter/Esc.
+    if (this.acts?.observedSteerActive()) return this.acts.handleObservedSteerInput(key);
     // The ACP spawn picker (host a third-party agent) likewise owns view + input.
     if (this.spawn?.spawnModeActive()) return this.spawn.handleSpawnInput(key);
 
@@ -545,15 +546,9 @@ export class FleetPanel extends ScrollableListPanel<FleetTreeRow> {
       // one press for a steerable node; honest refusal otherwise.
       if (!selected) return false;
       const node = selected.node;
-      // Observed foreign agents steer as a DRILL-IN only (the detail surfaces
-      // the channel / honest reason); the tree 's' points there — never an
-      // attach, and stop is never offered (killable:false).
-      if (isObservedExternalNode(node)) {
-        this.setError(node.observed.steer.kind === 'tmux'
-          ? `Steer ${observedKindLabel(node.observed.externalKind)} from its detail (tmux pane ${node.observed.steer.paneId}).`
-          : `Cannot steer this foreign session — ${node.observed.steer.reason}.`);
-        return true;
-      }
+      // Observed foreign agents steer as a DRILL-IN only; that 's' is handled by
+      // acts.handleTreeKey above (opens the composer in the row's detail), so it
+      // never reaches this attach path.
       // Closure replay note: a node that FINISHED in the hint→keypress race
       // window must say so — "does not support steer" is misleading for an
       // agent whose only problem is being done.
@@ -674,7 +669,9 @@ export class FleetPanel extends ScrollableListPanel<FleetTreeRow> {
     // so the detail's literal state text never contradicts the row glyph.
     const stopping = this.stopTracker.isStopping(node.id);
     const blocked = !stopping && isBlockedOnUserNode(node);
-    return renderFleetDetailLines(node, width, stopping, blocked, C);
+    // The drill-in observed-steer draft (when the composer is open on this row)
+    // renders an input line in the observed detail.
+    return renderFleetDetailLines(node, width, stopping, blocked, C, this.acts?.observedSteerDraftFor(node.id) ?? null);
   }
 
   /** Renders the active session tab's content (transcript / chain summary / ledger fallback) in place of the tree. */

@@ -164,11 +164,13 @@ export function renderFleetDetailLines(
   stopping: boolean,
   blocked: boolean,
   palette: PanelPalette = DEFAULT_PANEL_PALETTE,
+  observedSteerDraft: string | null = null,
 ): Line[] {
   const C = palette;
   // Observed foreign agents drill into their own detail (facts + steer-or-reason,
-  // never a stop) — see fleet-observed-render.ts.
-  if (isObservedExternalNode(node)) return renderObservedDetailLines(node, width, palette);
+  // never a stop) — see fleet-observed-render.ts. The drill-in steer draft (when
+  // the composer is open on this row) renders an input line in that detail.
+  if (isObservedExternalNode(node)) return renderObservedDetailLines(node, width, palette, observedSteerDraft);
   const disp = fleetStateDisplay(node.state, stopping, blocked);
   const color = toneColor(disp.tone, C);
   // A blocked node's state text names WHY in the reason's own words

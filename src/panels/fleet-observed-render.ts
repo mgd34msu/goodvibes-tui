@@ -15,7 +15,7 @@
 
 import type { ProcessNode, ProcessObserved, ObservedAgentKind } from '@pellux/goodvibes-sdk/platform/runtime/fleet';
 import type { Line } from '../types/grid.ts';
-import { buildPanelLine, DEFAULT_PANEL_PALETTE, type PanelPalette } from './polish.ts';
+import { buildPanelLine, buildSearchInputLine, DEFAULT_PANEL_PALETTE, type PanelPalette } from './polish.ts';
 import { truncateDisplay, wrapText } from '../utils/terminal-width.ts';
 
 /** An observed-external node carries its foreign-agent facts on `observed`. */
@@ -73,7 +73,13 @@ export function renderObservedRowLine(node: ObservedNode, width: number, palette
  * is 'none' it states the honest reason. It NEVER shows a stop affordance —
  * observing a foreign session is not owning its lifecycle.
  */
-export function renderObservedDetailLines(node: ObservedNode, width: number, palette: PanelPalette = DEFAULT_PANEL_PALETTE): Line[] {
+/**
+ * Render the observed-row detail. When `steerDraft` is a string the drill-in
+ * steer composer is open on THIS row: an active input line replaces the passive
+ * "s: steer" hint. A channel-less row never shows an input (owner ruling) — its
+ * detail states the honest reason and stops there.
+ */
+export function renderObservedDetailLines(node: ObservedNode, width: number, palette: PanelPalette = DEFAULT_PANEL_PALETTE, steerDraft: string | null = null): Line[] {
   const C = palette;
   const observed = node.observed;
   const lines: Line[] = [];
@@ -106,6 +112,16 @@ export function renderObservedDetailLines(node: ObservedNode, width: number, pal
   steerSegments.forEach((segment, i) => {
     lines.push(buildPanelLine(width, [[i === 0 ? ' steer ' : '       ', C.label], [segment, steerFg]]));
   });
+  // Drill-in compose input: only where a real channel exists. An active draft
+  // renders the input line + send/cancel hint; otherwise a discoverability hint.
+  if (observed.steer.kind === 'tmux') {
+    if (steerDraft !== null) {
+      lines.push(buildSearchInputLine(width, ' send ', `${steerDraft}_`, C, { active: true, bg: C.inputBg, valueColor: C.info }));
+      lines.push(buildPanelLine(width, [['       ', C.label], ['Enter: send  Esc: cancel', C.dim]]));
+    } else {
+      lines.push(buildPanelLine(width, [['       ', C.label], ['s: steer this session', C.dim]]));
+    }
+  }
   // Visibility, not a cockpit: there is no stop here, by design.
   lines.push(buildPanelLine(width, [[' stop ', C.label], ['not offered — goodvibes only observes this foreign session', C.dim]]));
   return lines;
