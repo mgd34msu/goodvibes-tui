@@ -4,6 +4,55 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [1.18.0] — 2026-07-14
+
+### Changes
+- 04356a3b adopt published SDK 1.9.0 and opt real runtimes into the host power seam
+- 1551e7f2 memory: consolidation proposals surface in the TUI, and a modal clipping bug fix
+- 6d65128a gates: reviewer fixtures carry the acceptance checklist; command reference regenerated
+- a975efdd keep-awake is daemon-held and the chip syncs across surfaces
+- 101d00de surface honesty: resolved provenance summaries, in-panel review checklist and task-graph posture
+- 97ddf140 dev-link: re-link to sdk fd0e6b29 (review wire seam on the fleet node; observed-agent composition subpath bundle entry)
+- 28d48db4 recovery honesty: session-scoped delete, silent auto-restore, no more .preserved dance
+- ed61ab6b one-act lifecycle verbs: approve launches, discard really discards
+- 3ec4f97b surface honesty: two gate tests write fleet.maxSize, not the dead orchestration.maxActiveAgents key
+- ad8eb489 observed rows get a real drill-in steer path
+- 70e55cf9 fork parity: run the startup retention sweep (full roots) and live config-file watch on TUI-composed runtimes
+- 86a3e24c fleet composition: extract createFleetServices helper so the observed wiring fits under the file-size cap
+- 6e50397b daemon composes observed foreign agents: wire observeExternalAgents through the fork so real users see observed rows
+- 4f92cb10 dev-link: re-link to sdk d0a1b96c (observed-agent source exposed on a daemon-composition subpath, unblocks the daemon composing observed rows)
+- 8f84a539 identifier rule: ban worded plan-item labels (mirror the SDK scanner extension)
+- cedeb53e dev-link: re-link to sdk e0a5595d (cert-minting removed, consolidation.receipts verb, recovery/ registered)
+- 62dd21e2 gates: adopt the SDK's fleet.maxSize rename and fix-phase rework; surface new keys; refresh goldens
+- d0d5d9d0 dev-link: re-link to sdk 89690d07 (memory-provenance rides TURN_COMPLETED.metadata.memory.recordIds)
+- d4ad82ce observed foreign agents render in the fleet pane; keep every touched file under the 800-line cap
+- fb721780 consolidation receipts: an idle memory-consolidation run surfaces as a one-line attach notice
+- d2402ea4 memory provenance chip: read the SDK metadata.memory.recordIds convention
+- ebd7f06b task graph renders: a workstream's nodes, edges, states, and pool posture, legible
+- 124332e6 voice settings: local engines surface, the local provider joins the picker, cost stays honest
+- 7a5c5fa9 memory provenance chip: an opt-in "used N memories" turn indicator with a drill-in
+- 93fed956 power surfaces: the "sleep disabled" chip, held-because reasons, the honest lid-split, a one-key toggle
+- 04273e8b queued mid-turn messages: an editable list, edit/delete until delivery
+- 50093a07 dev-link: re-link to sdk a03bf218; adopt per-session recovery + power/consolidation/live-turn services
+- 547fbc36 per-tool cancel: a key stops the running tool call, cancelled result renders structurally
+- 78dc782b /git diff: route the full structural diff into the diff panel, delete the 4,000-char slice
+- 59d0d1b2 dev-link: re-link to sdk a5c63e3b (per-tool cancel, queued-message verbs, power, task graph)
+- c48997e7 fleet: host third-party ACP agents as fleet rows, from the panel and a command
+- 2de952b9 pairing: LAN posture rendered honestly from the SDK, tailscale serve as one action
+- e0d548f9 dev-link: re-link to sdk 64c67eaf (LAN http posture, acp hosting)
+- ee4c8f51 test: drop the forbidden any cast in the conflict-files detail fixture
+- 1573e2d0 operator-rpc: resolve shell paths lazily, after the static refusals
+- 60c9d177 fleet: the pick, conflict, and discard rows act from the panel selection
+- c58becd0 fleet gateway: the pick/conflict/discard verbs over the shared operator invoke path
+- cb150d8e fleet: waiting-on-human inherits the pick and conflict reasons everywhere
+- 5d4d40d4 dev-link: re-link to sdk d07b49e8 (fleet waiting-on-human: picks, conflicts, worktree discard)
+- fd3c1ad8 dev-link housekeeping: move the tarball pins off tmpfs to the durable job dir
+- 08066730 gates: relocate shared pairing modules to core, hold the 800-line cap
+- a8fe4ec7 blocked-too-long settings + honest turn-budget outcomes
+- 47b568c1 pairing bundle UX + a device manager in the security domain
+- 3735b46e pairing: the QR is the deep link, on a name that survives a lease change
+- 1a48f148 dev-link: adopt the SDK pairing hand-off + per-device token surface
+
 ## [1.17.0] — 2026-07-13
 
 ### Changes
