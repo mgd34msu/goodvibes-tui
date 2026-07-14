@@ -5,7 +5,7 @@
 import type { Line } from '../types/grid.ts';
 import { createStyledCell, createEmptyLine } from '../types/grid.ts';
 import { truncateDisplay, getDisplayWidth } from '../utils/terminal-width.ts';
-import { GitService } from '@pellux/goodvibes-sdk/platform/git';
+import { GitService, type StructuredDiff, type StructuredDiffFile } from '@pellux/goodvibes-sdk/platform/git';
 import { BasePanel } from './base-panel.ts';
 import { UI_TONES, DIFF_TONES } from '../renderer/ui-primitives.ts';
 import { logger } from '@pellux/goodvibes-sdk/platform/utils';
@@ -199,6 +199,25 @@ function extractDiffFilePath(trimmed: string): string {
   return 'unknown';
 }
 
+/**
+ * Reconstruct one file's unified-diff text from a StructuredDiffFile — the
+ * header lines exactly as emitted, then each hunk's header followed by its
+ * lines with their +/-/space prefix re-attached (StructuredDiffLine.text has
+ * the prefix stripped). No size cap: every hunk and every line is emitted, so
+ * a diff of any length round-trips into the renderer intact.
+ */
+function reconstructStructuredFile(file: StructuredDiffFile): string {
+  const out: string[] = [...file.headerLines];
+  for (const hunk of file.hunks) {
+    out.push(hunk.header);
+    for (const line of hunk.lines) {
+      const prefix = line.kind === 'add' ? '+' : line.kind === 'del' ? '-' : ' ';
+      out.push(`${prefix}${line.text}`);
+    }
+  }
+  return out.join('\n');
+}
+
 function splitIntoDiffEntries(raw: string): DiffEntry[] {
   const entries: DiffEntry[] = [];
   // Split on "diff --git" / "diff --cc" / "diff --combined" lines
@@ -301,6 +320,28 @@ export class DiffPanel extends BasePanel {
   /** Load a raw multi-file unified diff string directly. */
   loadRawDiff(raw: string): void {
     this.entries = splitIntoDiffEntries(raw);
+    this.selectedFile = 0;
+    this.scrollOffset = 0;
+    this.markDirty();
+  }
+
+  /**
+   * Ingest a StructuredDiff (from GitService.diffStructured — the FULL working-
+   * tree diff parsed per-file/per-hunk with no size cap anywhere). Each
+   * structured file becomes one DiffEntry, reconstructing its unified text so
+   * the existing per-file tabs and per-hunk renderer work unchanged. This is
+   * the path `/git diff` takes now that the old 4,000-char slice is gone: a
+   * diff of any length renders complete.
+   */
+  loadStructuredDiff(diff: StructuredDiff): void {
+    this.entries = diff.files.map((file) => {
+      const raw = reconstructStructuredFile(file);
+      return {
+        filePath: file.newPath ?? file.oldPath ?? 'unknown',
+        raw,
+        lines: parseDiff(raw),
+      };
+    });
     this.selectedFile = 0;
     this.scrollOffset = 0;
     this.markDirty();
