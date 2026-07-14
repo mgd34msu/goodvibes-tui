@@ -58,16 +58,50 @@ export interface MemoryProvenanceUi {
   renderChip(width: number, configManager: Pick<ConfigManager, 'get'>): Line[];
 }
 
-/** Create the memory-provenance chip controller (default OFF; reads nothing when off). */
-export function createMemoryProvenanceUi(deps: { readonly render: () => void }): MemoryProvenanceUi {
+/** A resolved provenance record summary (null = the record is no longer available). */
+type ResolvedRecord = { readonly summary: string; readonly cls: string } | null;
+
+/**
+ * Create the memory-provenance chip controller (default OFF; reads nothing when
+ * off). When the drill-in is expanded it RESOLVES each memory record id to its
+ * summary through the memory spine (the same host-or-daemon access the recall
+ * commands use, so an adopted daemon resolves over the wire) — per-id and
+ * lazily, so one forgotten record never blanks the rest and a collapsed chip
+ * costs nothing. Mirrors the webui's provenance detail fetch.
+ */
+export function createMemoryProvenanceUi(deps: {
+  readonly render: () => void;
+  readonly memorySpine: { get(id: string): Promise<{ summary: string; cls: string } | null> };
+}): MemoryProvenanceUi {
   let latestRecordIds: readonly string[] = [];
   let expanded = false;
+  // id -> resolved record (null = not found). Absent = not yet fetched.
+  const resolved = new Map<string, ResolvedRecord>();
+  const inFlight = new Set<string>();
+
+  const resolveExpanded = (): void => {
+    for (const id of latestRecordIds) {
+      if (resolved.has(id) || inFlight.has(id)) continue;
+      inFlight.add(id);
+      void deps.memorySpine.get(id)
+        .then((record) => { resolved.set(id, record ? { summary: record.summary, cls: record.cls } : null); })
+        .catch(() => { resolved.set(id, null); })
+        .finally(() => { inFlight.delete(id); deps.render(); });
+    }
+  };
+
   return {
-    toggle() { expanded = !expanded; deps.render(); },
+    toggle() {
+      expanded = !expanded;
+      if (expanded) resolveExpanded();
+      deps.render();
+    },
     onTurnCompleted(evt) { latestRecordIds = memoryRecordIdsFromTurn(evt); expanded = false; },
     renderChip(width, configManager) {
       if (!readMemoryShowProvenance(configManager) || latestRecordIds.length === 0) return [];
-      return UIFactory.createMemoryProvenanceChip(width, latestRecordIds.length, latestRecordIds, expanded);
+      if (expanded) resolveExpanded(); // lazy: fetch any still-unresolved ids (idempotent)
+      const entries = latestRecordIds.map((id) => ({ id, record: resolved.has(id) ? resolved.get(id) : undefined }));
+      return UIFactory.createMemoryProvenanceChip(width, latestRecordIds.length, entries, expanded);
     },
   };
 }

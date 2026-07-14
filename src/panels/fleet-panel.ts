@@ -670,8 +670,10 @@ export class FleetPanel extends ScrollableListPanel<FleetTreeRow> {
     const stopping = this.stopTracker.isStopping(node.id);
     const blocked = !stopping && isBlockedOnUserNode(node);
     // The drill-in observed-steer draft (when the composer is open on this row)
-    // renders an input line in the observed detail.
-    return renderFleetDetailLines(node, width, stopping, blocked, C, this.acts?.observedSteerDraftFor(node.id) ?? null);
+    // renders an input line in the observed detail. For a workstream row, lazily
+    // fetch its task graph so the edges/pool posture renders in-panel.
+    this.acts?.ensureGraphFor(node);
+    return renderFleetDetailLines(node, width, stopping, blocked, C, this.acts?.observedSteerDraftFor(node.id) ?? null, this.acts?.graphFor(node.id) ?? null);
   }
 
   /** Renders the active session tab's content (transcript / chain summary / ledger fallback) in place of the tree. */
