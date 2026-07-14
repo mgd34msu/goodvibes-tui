@@ -1,6 +1,6 @@
 # GV_GOLDEN surface=memory-modal-normal width=100 height=21
 |    ┌─Memory───────────────────────────────────────────────────────────────────┐                    |
-|    │ [ALL RECORDS]  Review Queue                                              │                    |
+|    │ [ALL RECORDS]  Review Queue  Proposals                                   │                    |
 |    │ records 2  review queue 2                                                │                    |
 |    ├──────────────────────────────────────────────────────────────────────────┤                    |
 |    │ ▸ [P/DEC] 0000001a  2025-01-01 00:00  Panel retirements are batched      │                    |

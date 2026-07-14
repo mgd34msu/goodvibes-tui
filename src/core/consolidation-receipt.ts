@@ -7,6 +7,14 @@
 // formats it into the same one-line shape every other attach-time receipt
 // uses, so a run that changed something surfaces on the next attach like a
 // crash/update/migration receipt. A pure no-op run yields null — no noise.
+//
+// A run that PROPOSED something (a contradiction or cross-scope-duplicate
+// awaiting human judgment — never auto-applied) names where to actually look:
+// the Memory modal's Proposals tab (`/memory`, then the Proposals tab —
+// memory-modal.ts's proposalsTab()), which lists each proposal's kind,
+// reason, and affected record ids and jumps to them in the Review Queue.
+// Without this pointer the receipt line was the only trace a proposal ever
+// existed — a count with nowhere to go.
 // ---------------------------------------------------------------------------
 
 import type { MemoryConsolidationRunReceipt } from '@pellux/goodvibes-sdk/platform/state';
@@ -27,5 +35,7 @@ export function formatConsolidationReceipt(receipt: MemoryConsolidationRunReceip
   if (archived) parts.push(`${archived} archived`);
   if (decayed) parts.push(`${decayed} decayed`);
   if (proposed) parts.push(`${proposed} proposed`);
-  return `Memory consolidation: ${parts.join(', ')} (scanned ${receipt.scanned}).`;
+  const base = `Memory consolidation: ${parts.join(', ')} (scanned ${receipt.scanned}).`;
+  if (proposed === 0) return base;
+  return `${base} Review the ${proposed} proposed change${proposed === 1 ? '' : 's'} with /memory (Proposals tab).`;
 }

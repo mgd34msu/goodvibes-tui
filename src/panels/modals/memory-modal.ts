@@ -7,6 +7,8 @@ import type {
   ConfigModalView,
 } from '../../input/config-modal-types.ts';
 import { memoryRecordTemporalStatus } from '@pellux/goodvibes-sdk/platform/state';
+import type { MemoryConsolidationGatewayResolution, MemoryConsolidationProposal } from '../memory-consolidation-gateway.ts';
+import { classifyConsolidationFetchError } from '../memory-consolidation-gateway.ts';
 
 // ---------------------------------------------------------------------------
 // Memory → config-modal surface (group-B port). Two tabs: 'All Records'
@@ -63,7 +65,22 @@ export interface MemoryModalDeps {
       readonly indexUnavailableReason?: string | null | undefined;
     }>;
   };
+  /**
+   * Resolve the memory-consolidation-receipts gateway (memory-consolidation-gateway.ts),
+   * lazily — called fresh each time the Proposals tab (re)fetches, exactly like
+   * the Fleet panel's `resolveGateway` (fleet-gateway.ts / fleet-acts.ts). Absent
+   * in a session with no daemon-backed control plane wired: the Proposals tab
+   * then renders its "unavailable" honest state without ever attempting a fetch.
+   */
+  readonly resolveConsolidationGateway?: () => MemoryConsolidationGatewayResolution;
 }
+
+/** The Proposals tab's fetch state — one honest rendering per state, never a blend. */
+type ProposalsStatus =
+  | { readonly kind: 'loading' }
+  | { readonly kind: 'unavailable'; readonly reason: string }
+  | { readonly kind: 'error'; readonly message: string }
+  | { readonly kind: 'ready'; readonly proposals: readonly MemoryConsolidationProposal[] };
 
 /**
  * Client-side port of the SDK's MemoryStore.reviewQueue ranking
@@ -104,11 +121,14 @@ class MemoryModalSurface implements ConfigModalSurface {
   private reviewRecords: MemoryRecordLike[] = [];
   /** Honest note on the last read: a wire failure (client mode) or the index-unavailable fallback reason — never silently dropped. */
   private loadNote: string | null = null;
+  /** The Proposals tab's fetch state — starts 'loading' whenever a gateway is wired (see refreshProposals). */
+  private proposalsStatus: ProposalsStatus = { kind: 'loading' };
   private requestRender: (() => void) | null = null;
 
   constructor(private readonly deps: MemoryModalDeps) {}
 
   private readonly reviewGate = (row: ConfigModalRow | null, tabId: string): boolean => tabId === 'review' && row !== null;
+  private readonly proposalsGate = (row: ConfigModalRow | null, tabId: string): boolean => tabId === 'proposals' && row !== null;
 
   readonly actions = [
     { key: 'enter', id: 'markReviewed', label: 'reviewed', enabledFor: this.reviewGate },
@@ -117,6 +137,13 @@ class MemoryModalSurface implements ConfigModalSurface {
     { key: 'f', id: 'markFresh', label: 'fresh', enabledFor: this.reviewGate },
     { key: 'd', id: 'remove', label: 'delete', enabledFor: (row: ConfigModalRow | null) => row !== null },
     { key: 'r', id: 'refresh', label: 'refresh' },
+    // Jump from a selected proposal to one of its affected records in the
+    // Review Queue tab. A DISTINCT key from 'enter' (not shared with
+    // markReviewed): ConfigModal.resolveAction matches the FIRST action bound
+    // to a key and returns null if THAT one's enabledFor fails, rather than
+    // trying the next action bound to the same key — so gating two different
+    // 'enter' actions by tabId alone would silently break one of them.
+    { key: 'v', id: 'jumpToReviewQueue', label: 'view in review queue', enabledFor: this.proposalsGate },
   ];
 
   onOpen(requestRender: () => void): void {
@@ -129,6 +156,10 @@ class MemoryModalSurface implements ConfigModalSurface {
   }
 
   private async refresh(): Promise<void> {
+    await Promise.all([this.refreshRecords(), this.refreshProposals()]);
+  }
+
+  private async refreshRecords(): Promise<void> {
     if (!this.deps.memoryRegistry) { this.allRecords = []; this.reviewRecords = []; this.loadNote = null; return; }
     try {
       const result = await this.deps.memoryRegistry.honestSearch({ limit: 100 });
@@ -142,8 +173,48 @@ class MemoryModalSurface implements ConfigModalSurface {
     this.requestRender?.();
   }
 
+  /**
+   * Lazy fetch of memory.consolidation.receipts (memory-consolidation-gateway.ts)
+   * — only attempted when this surface opens or refreshes, never polled. No
+   * gateway resolver wired at all (session has no daemon-backed control
+   * plane) renders the same honest "unavailable" state as a resolved-but-
+   * refused gateway (daemon disabled / no control-plane URL) or a 501/404
+   * from an older daemon with no consolidation scheduler — three different
+   * causes, one bucket, because from the operator's seat they mean the same
+   * thing: nothing to show, and no fault of theirs.
+   */
+  private async refreshProposals(): Promise<void> {
+    if (!this.deps.resolveConsolidationGateway) {
+      this.proposalsStatus = { kind: 'unavailable', reason: 'No consolidation gateway wired for this session.' };
+      return;
+    }
+    this.proposalsStatus = { kind: 'loading' };
+    this.requestRender?.();
+    const resolution = this.deps.resolveConsolidationGateway();
+    if (!resolution.available) {
+      this.proposalsStatus = { kind: 'unavailable', reason: resolution.reason };
+      return;
+    }
+    try {
+      const result = await resolution.gateway.fetchReceipts();
+      this.proposalsStatus = { kind: 'ready', proposals: result.pendingProposals };
+    } catch (error) {
+      this.proposalsStatus = classifyConsolidationFetchError(error);
+    }
+  }
+
   private recordFrom(id: string): MemoryRecordLike | undefined {
     return this.allRecords.find((r) => r.id === id) ?? this.reviewRecords.find((r) => r.id === id);
+  }
+
+  /** First pending proposal that names a given record id, keyed for the Review Queue's reason correlation (item 3). */
+  private proposalsByRecordId(): Map<string, MemoryConsolidationProposal> {
+    const map = new Map<string, MemoryConsolidationProposal>();
+    if (this.proposalsStatus.kind !== 'ready') return map;
+    for (const proposal of this.proposalsStatus.proposals) {
+      for (const id of proposal.ids) if (!map.has(id)) map.set(id, proposal);
+    }
+    return map;
   }
 
   private allTab(): ConfigModalTab {
@@ -162,10 +233,25 @@ class MemoryModalSurface implements ConfigModalSurface {
   }
 
   private reviewTab(): ConfigModalTab {
-    const rows: ConfigModalRow[] = this.reviewRecords.map((record) => ({
-      id: record.id,
-      label: `${record.reviewState.padEnd(13)} ${String(record.confidence).padStart(3)}%  ${record.summary}${record.staleReason ? `  (stale: ${record.staleReason})` : ''}${temporalSuffix(record)}`,
-    }));
+    const proposalByRecord = this.proposalsByRecordId();
+    const rows: ConfigModalRow[] = this.reviewRecords.map((record) => {
+      // A contradiction proposal already carries its reason on the record
+      // itself (the daemon sets reviewState 'contradicted' + staleReason); a
+      // cross-scope-duplicate proposal marks the record 'fresh' with NO
+      // staleReason, so without this correlation those rows are bare and
+      // unexplained (item 3) — fall back to the fetched proposal's own
+      // reason only when the record didn't already carry one.
+      const proposal = record.staleReason ? undefined : proposalByRecord.get(record.id);
+      const reasonSuffix = record.staleReason
+        ? `  (stale: ${record.staleReason})`
+        : proposal
+          ? `  (${proposal.kind}: ${proposal.reason})`
+          : '';
+      return {
+        id: record.id,
+        label: `${record.reviewState.padEnd(13)} ${String(record.confidence).padStart(3)}%  ${record.summary}${reasonSuffix}${temporalSuffix(record)}`,
+      };
+    });
     return {
       id: 'review',
       label: 'Review Queue',
@@ -173,6 +259,40 @@ class MemoryModalSurface implements ConfigModalSurface {
       rows,
       emptyText: 'No records in the review queue.',
       hints: ['enter reviewed', 's stale', 'c contradicted', 'f fresh', 'd delete'],
+    };
+  }
+
+  /**
+   * The Proposals tab — WHAT the daemon's idle-time consolidation pass
+   * proposed (contradiction / cross-scope-duplicate / stale-delete) and is
+   * holding for human judgment, read lazily over memory.consolidation.receipts
+   * (memory-consolidation-gateway.ts). Three distinct honest states render as
+   * three distinct lines — 'loading' / 'unavailable' / 'error' never collapse
+   * into a shared "nothing to show" — plus the true empty state ('ready' with
+   * zero proposals) which is a fourth, equally honest line.
+   */
+  private proposalsTab(): ConfigModalTab {
+    const status = this.proposalsStatus;
+    const header = [`pending proposals ${status.kind === 'ready' ? status.proposals.length : 0}`];
+    if (status.kind === 'loading') {
+      return { id: 'proposals', label: 'Proposals', header, rows: [], emptyText: 'Loading pending proposals…' };
+    }
+    if (status.kind === 'unavailable') {
+      return { id: 'proposals', label: 'Proposals', header, rows: [], emptyText: `Pending proposals unavailable: ${status.reason}` };
+    }
+    if (status.kind === 'error') {
+      return { id: 'proposals', label: 'Proposals', header, rows: [], emptyText: `Could not fetch pending proposals: ${status.message}` };
+    }
+    const rows: ConfigModalRow[] = status.proposals.map((proposal, index) => ({
+      id: `proposal:${index}`,
+      label: `[${proposal.kind}] ${proposal.reason}  — ${proposal.ids.length} record${proposal.ids.length === 1 ? '' : 's'}: ${proposal.ids.join(', ')}`,
+    }));
+    return {
+      id: 'proposals',
+      label: 'Proposals',
+      header,
+      rows,
+      emptyText: 'No pending proposals — nothing awaiting judgment right now.',
     };
   }
 
@@ -187,12 +307,13 @@ class MemoryModalSurface implements ConfigModalSurface {
     return {
       title: 'Memory',
       ...(this.loadNote ? { degraded: this.loadNote } : {}),
-      tabs: [this.allTab(), this.reviewTab()],
+      tabs: [this.allTab(), this.reviewTab(), this.proposalsTab()],
     };
   }
 
   onAction(id: string, ctx: ConfigModalActionContext): void {
     if (id === 'refresh') { void this.refresh(); ctx.setStatus('Reloading memory records...'); return; }
+    if (id === 'jumpToReviewQueue') { this.handleJumpToReviewQueue(ctx); return; }
     const record = ctx.row ? this.recordFrom(ctx.row.id) : undefined;
     if (!record) return;
     const review = (state: string, confidence: number, reason?: string): void => {
@@ -208,6 +329,29 @@ class MemoryModalSurface implements ConfigModalSurface {
       case 'markFresh': review('fresh', Math.max(record.confidence, 60)); break;
       case 'remove': void ctx.executeCommand?.('recall', ['remove', record.id]); ctx.setStatus(`Dispatched /recall remove ${record.id}.`); break;
     }
+  }
+
+  /**
+   * The Proposals tab's "jump": move to the Review Queue tab with one of the
+   * selected proposal's affected records selected — the same host mechanism
+   * (`ctx.jumpToRow`) any future in-surface jump would use. A proposal's
+   * `ids` are not guaranteed to all be inside the review queue's top-24
+   * window, so this picks the first id that IS present there rather than
+   * assuming the first id always is; when none are, it says so honestly
+   * instead of jumping nowhere and leaving the user to wonder why.
+   */
+  private handleJumpToReviewQueue(ctx: ConfigModalActionContext): void {
+    if (this.proposalsStatus.kind !== 'ready' || !ctx.row) return;
+    const index = Number(ctx.row.id.slice('proposal:'.length));
+    const proposal = this.proposalsStatus.proposals[index];
+    if (!proposal) return;
+    const target = proposal.ids.find((id) => this.reviewRecords.some((r) => r.id === id));
+    if (!target) {
+      ctx.setStatus(`None of this proposal's ${proposal.ids.length} record(s) are in the current review-queue window.`);
+      return;
+    }
+    ctx.jumpToRow?.('review', target);
+    ctx.setStatus(`Jumped to ${target} in the Review Queue.`);
   }
 }
 
