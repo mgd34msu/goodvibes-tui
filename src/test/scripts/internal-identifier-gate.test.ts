@@ -99,6 +99,25 @@ describe('checkNoInternalIdentifiers', () => {
     expect(waveRoundViolations[0]).toContain(waveRound);
   });
 
+  test('fails on a worded plan-item label but not a bare dotted version', () => {
+    // Built by concatenation so this file's own text carries no real label.
+    const plainItem = 'item' + ' 1.4';
+    const plannedItem = 'plan ' + 'item' + ' 2.3.1';
+    for (const token of [plainItem, plannedItem]) {
+      const violations = checkNoInternalIdentifiers([
+        { relPath: 'src/panels/example-panel.ts', text: `// delivered by ${token} in the plan` },
+      ]);
+      expect(violations).toHaveLength(1);
+      expect(violations[0]).toContain('[internal-identifier]');
+    }
+    // A bare dotted number (release version) is the sanctioned provenance form
+    // and must stay legal.
+    const versionLegal = checkNoInternalIdentifiers([
+      { relPath: 'src/runtime/example.ts', text: '// isCompatible(sdk, "1.4.0") gates the daemon handshake' },
+    ]);
+    expect(versionLegal).toEqual([]);
+  });
+
   test('reports one violation per offending line, not per file', () => {
     const violations = checkNoInternalIdentifiers([
       {
