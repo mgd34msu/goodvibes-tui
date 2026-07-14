@@ -279,6 +279,7 @@ export const loadLastConversation = operations.loadLastConversation;
 export const loadRecoveryConversation = operations.loadRecoveryConversation;
 export const writeRecoveryFile = operations.writeRecoveryFile;
 export const deleteRecoveryFile = operations.deleteRecoveryFile;
+export const autoRestoreRecovery = operations.autoRestoreRecovery;
 export const checkRecoveryFile = operations.checkRecoveryFile;
 export const getRecoveryFilePath = operations.getRecoveryFilePath;
 export const getRecoveryDir = operations.getRecoveryDir;

@@ -219,8 +219,10 @@ export function installProcessLifecycle(deps: ProcessLifecycleDeps): ProcessLife
     }
     // Only remove the recovery fallback once the durable shutdown save actually completed,
     // so an interrupted or timed-out shutdown leaves the snapshot for the next launch.
+    // Scoped to THIS session's id: without it, one session's clean exit wipes
+    // every session's crash snapshot (the concurrent-session isolation bug).
     if (shutdownOk) {
-      deleteRecoveryFile({ homeDirectory: ctx.services.homeDirectory });
+      deleteRecoveryFile({ homeDirectory: ctx.services.homeDirectory }, ctx.runtime.sessionId);
     }
     process.exit(0);
   };
