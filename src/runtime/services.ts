@@ -66,6 +66,7 @@ import { deriveFeatureStates, bindFeatureSettingsBridge } from '@pellux/goodvibe
 import { createChannelComposition } from './channel-composition.ts';
 import { applyProviderOptimizerConfigMode, bindProviderOptimizerFeatureFlag } from './provider-optimizer-wiring.ts';
 import { type ArchivableProcessRegistry } from '@pellux/goodvibes-sdk/platform/runtime/fleet';
+import { ObservedAgentSource } from '@pellux/goodvibes-sdk/platform/runtime/fleet/observed';
 import { createWorkstreamServices, type OrchestrationEngine, type WorkstreamCommandService } from './workstream-services.ts';
 import { wireFleetNeedsInputPush } from './fleet-needs-input-push.ts';
 import { codeIndexDbPath, createCodeIndexServices, isCodeInjectionSettingEnabled } from './code-index-services.ts';
@@ -94,6 +95,16 @@ export interface RuntimeServicesOptions {
   readonly getConversationTitle?: () => string | undefined;
   readonly workingDir: string;
   readonly homeDirectory: string;
+  /**
+   * Opt-in: fold externally-launched coding-agent sessions observed read-only
+   * on this host (Claude Code / Codex the daemon did not spawn) into the fleet
+   * as 'observed-external' rows (visibility + steer; never counted against
+   * fleet.maxSize, never stopped). The standalone daemon turns this on; the
+   * interactive process leaves it off so it never double-detects — surfaces
+   * read the daemon's snapshot. Absent/false ⇒ no observed rows at all.
+   * Mirrors the SDK's own createRuntimeServices `observeExternalAgents` option.
+   */
+  readonly observeExternalAgents?: boolean | undefined;
 }
 
 export interface RuntimeServices {
@@ -594,6 +605,13 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
     configManager, secretsManager, providerRegistry, memoryDbPath, codeIndexDbPath: codeIndexDbPath(workingDirectory),
   });
   const codeInjectionOrchestratorDeps = { codeIndex: codeIndexStore, isCodeInjectionSettingEnabled: () => isCodeInjectionSettingEnabled(configManager), codeIndexReindexScheduler }; // Code-injection seam (agent here; main via orchestrator-core-services.ts)
+  // Read-only detection of externally-launched coding-agent sessions on this
+  // host (Claude Code / Codex the daemon did not spawn). These fold in as
+  // observed-external rows for visibility + steer; they NEVER count against
+  // fleet.maxSize and are never stopped. Opt-in (daemon-side only) so the
+  // interactive process never double-scans the host — surfaces read the
+  // daemon's snapshot. Absence ⇒ a quiet empty set. Mirrors the SDK composition.
+  const observedAgents = options.observeExternalAgents ? new ObservedAgentSource() : undefined;
   // Shared, archive-aware fleet registry — see gateway-verbs.ts's factory doc.
   const processRegistry = createArchivableFleetRegistry({
     agentManager,
@@ -607,6 +625,7 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
     sessionBroker,
     messageBus: agentMessageBus, // Backs steer()/`steerable` (the Fleet steer composer builds on top)
     automationManager, // Folds /schedule AutomationJobs into the fleet as 'schedule' nodes
+    observedAgents, // Daemon-side observed foreign-agent rows (undefined in the interactive process)
     runtimeBus: options.runtimeBus,
     // Honest-unpriced through the ONE pricing resolver (manual -> registration -> provider-served
     // -> catalog -> unknown); unknown/subscription yields null, never $0. Mirrors the SDK composition.
