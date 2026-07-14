@@ -67,6 +67,7 @@ import { createSessionAutoTitler } from './core/session-auto-titler.ts';
 import { makeComposerEditorOpener } from './input/composer-editor.ts';
 import { evaluateSessionMaintenance } from '@/runtime/index.ts';
 import { createCancelGeneration, createCancelToolCall } from './core/turn-cancellation.ts';
+import { powerSurfaceFromState } from './core/power-status.ts';
 import { wrapRequestPermissionWithAlert } from './core/approval-alert.ts';
 import { createTerminalNotifier } from './core/terminal-notifier.ts';
 import { setPanelFrameRequester } from './panels/base-panel.ts';
@@ -356,6 +357,15 @@ async function main() {
     if (ok) render();
     return ok;
   };
+  // Host sleep ownership (power.*): read the flattened state for the /power
+  // status surface; the toggle drives the live PowerManager (acquires/releases
+  // the OS inhibitor, persists power.keepAwake, emits OPS_POWER_STATE_CHANGED).
+  commandContext.getPowerState = () => powerSurfaceFromState(ctx.services.powerManager.getState());
+  commandContext.setKeepAwake = async (enabled) => {
+    const next = powerSurfaceFromState(await ctx.services.powerManager.setKeepAwake(enabled));
+    render();
+    return next;
+  };
   commandContext.isGenerating = () => orchestrator.isThinking;
   commandContext.jumpToBookmark = jumpToBookmark; commandContext.scrollToLine = scrollToLine;
   commandContext.clearScreen = () => {
@@ -523,6 +533,10 @@ async function main() {
       // Cross-surface spine posture segment (adopted-daemon mode only).
       sessionSpineStatus: (() => { const s = uiServices.platform.externalServices?.inspect(); return s?.sessionSpineActive && s.sessionSpineStatus && s.sessionSpineStatus !== 'unknown' ? s.sessionSpineStatus : undefined; })(), runningAgentCount, runningProcessCount,
       webSurfaceUrl: configManager.get('web.enabled') ? resolveWebSurfaceUrl(configManager) : undefined,
+      // Always-visible "sleep disabled" chip: read live from the PowerManager
+      // each render, so the toggle (one-key affordance or /power) reflects at
+      // once and the OPS_POWER_STATE_CHANGED event needs no separate cache.
+      powerKeepAwake: ctx.services.powerManager.getState().keepAwake.enabled,
       // Composer must not read as focused while the panel/process indicator owns keyboard focus.
       promptFocused: !input.panelFocused && !input.indicatorFocused,
       indicatorFocused: input.indicatorFocused,

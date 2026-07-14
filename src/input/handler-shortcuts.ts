@@ -126,6 +126,16 @@ export function handleGlobalShortcutToken(
       state.commandContext?.cancelToolCall?.();
       return true;
 
+    case 'toggle-keep-awake': {
+      // Flip the daemon-held keep-awake toggle; the always-visible "sleep
+      // disabled" chip is the confirmation. Fire-and-forget (the seam renders on
+      // completion); errors are swallowed so a keystroke never throws.
+      const power = state.commandContext;
+      const current = power?.getPowerState?.().keepAwake ?? false;
+      void power?.setKeepAwake?.(!current);
+      return true;
+    }
+
     case 'screen-clear':
       state.commandContext?.clearScreen?.();
       return true;

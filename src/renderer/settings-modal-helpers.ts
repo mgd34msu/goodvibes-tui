@@ -95,6 +95,7 @@ export const CATEGORY_LABELS: Record<(typeof SETTINGS_CATEGORIES)[number], strin
   surfaces: 'Surfaces',
   cloudflare: 'Cloudflare',
   release: 'Release',
+  power: 'Power',
   danger: 'Danger',
   tools: 'Tools',
   network: 'Network',

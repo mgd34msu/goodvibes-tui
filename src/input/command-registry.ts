@@ -97,6 +97,10 @@ export interface CommandUiActions {
   editQueuedMessage?: (id: string, text: string) => boolean;
   /** Remove a still-queued message before delivery; false once delivered. */
   deleteQueuedMessage?: (id: string) => boolean;
+  /** The current host sleep-ownership projection (power.status.get, flattened) — chip, held-because, lid-split. */
+  getPowerState?: () => import('../core/power-status.ts').PowerSurfaceState;
+  /** Set the daemon-held keep-awake toggle (power.keepAwake.set), acquiring/releasing the inhibitor live; returns the new state. */
+  setKeepAwake?: (enabled: boolean) => Promise<import('../core/power-status.ts').PowerSurfaceState>;
   /** True while an LLM turn is actively streaming. Used to give Escape
    *  cancel-turn precedence over a focused panel's own escape handling. */
   isGenerating?: () => boolean;

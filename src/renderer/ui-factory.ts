@@ -10,6 +10,7 @@ import { formatElapsed } from '../utils/format-elapsed.ts';
 import { abbreviateCount } from '../utils/format-number.ts';
 import { computeContextUsage } from '../core/context-usage.ts';
 import { permissionModeLabel, permissionModeTone } from '../core/permission-mode.ts';
+import { SLEEP_DISABLED_CHIP } from '../core/power-status.ts';
 import { calcSessionCost, isModelPriced } from '../export/cost-utils.ts';
 import { buildFooterTip, isAgentActive } from './footer-tips.ts';
 import type { StreamMetrics } from '../core/stream-event-wiring.ts';
@@ -239,6 +240,10 @@ export class UIFactory {
     // The web surface's reachable URL, when that surface is enabled — a
     // persistent low-priority context segment; undefined suppresses it.
     webSurfaceUrl?: string,
+    // True while power.keepAwake holds — renders the always-visible
+    // "sleep disabled" chip in the posture block (the danger-mode idiom: a
+    // persistent, colored surface indicator, the safety mechanism itself).
+    powerKeepAwake?: boolean,
   ): Line[] {
     const lines: Line[] = [];
     const promptLines = prompt.split('\n');
@@ -402,6 +407,10 @@ export class UIFactory {
             : t.chrome.warn;
       composerTokens.push({ text: ` risk:${composerPendingRisk} `, fg: riskColor, bold: true });
     }
+    // "sleep disabled" chip — always visible while keep-awake holds, in the
+    // danger-mode idiom (a persistent warn-tone indicator; the chip is the
+    // safety mechanism, so there is no timer and no AC-only variant).
+    if (powerKeepAwake) composerTokens.push({ text: ` ${SLEEP_DISABLED_CHIP} `, fg: t.chrome.warn, bold: true });
     if (composerStatus && composerStatus !== 'idle') composerTokens.push({ text: ` state:${composerStatus} `, fg: '244', dim: true });
     if (composerFlags && composerFlags.length > 0) composerTokens.push({ text: ` flags:${composerFlags.join(',')} `, fg: '244', dim: true });
     if (!compact && composerTokens.length > 0) {

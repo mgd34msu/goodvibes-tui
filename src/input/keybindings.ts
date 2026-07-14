@@ -69,7 +69,8 @@ export type KeyAction =
   | 'kill-word-forward'
   | 'yank'
   | 'yank-pop'
-  | 'cancel-tool-call';
+  | 'cancel-tool-call'
+  | 'toggle-keep-awake';
 
 /** Human-readable description for each action (used in /keybindings display). */
 export const ACTION_DESCRIPTIONS: Record<KeyAction, string> = {
@@ -113,6 +114,7 @@ export const ACTION_DESCRIPTIONS: Record<KeyAction, string> = {
   'yank':                  'Yank (paste) from kill ring (Ctrl+Shift+Y)',
   'yank-pop':              'Rotate kill ring and yank next entry (Alt+Y)',
   'cancel-tool-call':      'Cancel the running tool call (the turn continues)',
+  'toggle-keep-awake':     'Toggle keep-awake (the "sleep disabled" chip)',
 };
 
 /** Default key bindings for all actions. */
@@ -196,6 +198,10 @@ export const DEFAULT_KEYBINDINGS: Record<KeyAction, KeyCombo[]> = {
   // { key, alt } combo form. Ctrl+C stays whole-input clear/cancel; this is the
   // narrower per-tool stop.
   'cancel-tool-call':      [{ key: 'c', alt: true }],
+  // Alt+A: toggle keep-awake (the one-key affordance for the "sleep disabled"
+  // chip). Alt+A is unused by any other default. The always-visible chip is the
+  // confirmation of the toggle's state.
+  'toggle-keep-awake':     [{ key: 'a', alt: true }],
 };
 
 /** Resolved overrides type: each key can be a single combo or array. */
