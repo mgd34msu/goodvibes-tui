@@ -32,6 +32,8 @@ export type FleetPickResult = OperatorMethodOutput<'fleet.attempts.pick'>;
 export type FleetConflictResolution = OperatorMethodOutput<'fleet.conflicts.resolve'>;
 /** worktrees.discard output — the honest receipt: dir removed, branch KEPT, dirty state preserved as a commit. */
 export type FleetWorktreeDiscardReceipt = OperatorMethodOutput<'worktrees.discard'>;
+/** fleet.graph.get output — the surface-facing task graph of one workstream (nodes/edges/pool). */
+export type FleetGraphSnapshot = OperatorMethodOutput<'fleet.graph.get'>;
 
 /**
  * The narrow async verb surface the Fleet panel's acts drive. Every method is a
@@ -53,6 +55,8 @@ export interface FleetGateway {
   resolveConflict(itemId: string): Promise<FleetConflictResolution>;
   /** Discard a worktree directory (branch kept, dirty state preserved as a commit). */
   discardWorktree(path: string): Promise<FleetWorktreeDiscardReceipt>;
+  /** Fetch the task graph (nodes/edges/pool) for one workstream — the observability graph view. */
+  getGraph(workstreamId: string): Promise<FleetGraphSnapshot>;
   /** Route a spawned session through the shared one-key jump/attach affordance. */
   armFixSessionAttach(sessionId: string): void;
 }
@@ -101,6 +105,7 @@ export function createFleetGateway(deps: FleetGatewayDeps): FleetGatewayResoluti
     pick: (input) => sdk.operator.invoke('fleet.attempts.pick', input),
     resolveConflict: (itemId) => sdk.operator.invoke('fleet.conflicts.resolve', { itemId }),
     discardWorktree: (path) => sdk.operator.invoke('worktrees.discard', { path }),
+    getGraph: (workstreamId) => sdk.operator.invoke('fleet.graph.get', { workstreamId }),
     armFixSessionAttach: deps.armFixSessionAttach,
   };
   return { available: true, gateway };
