@@ -175,6 +175,11 @@ async function main(): Promise<void> {
     getConversationTitle: () => 'goodvibes daemon',
     workingDir,
     homeDirectory,
+    // The standalone daemon observes externally-launched coding-agent sessions
+    // on the host read-only (fleet visibility + steer; never counted, never
+    // stopped). Daemon-side only — the interactive process reads this snapshot
+    // rather than double-detecting. Mirrors the SDK daemon cli.
+    observeExternalAgents: true,
   });
 
   // Load persisted providers from disk so the provider registry is pre-populated
