@@ -95,13 +95,13 @@ export interface RuntimeServicesOptions {
   readonly getConversationTitle?: () => string | undefined;
   readonly workingDir: string;
   readonly homeDirectory: string;
-  /**
-   * Opt-in (daemon-side only): fold externally-launched coding-agent sessions
-   * observed read-only on this host into the fleet as 'observed-external' rows.
-   * The interactive process leaves it off and reads the daemon snapshot.
-   * Mirrors the SDK's own createRuntimeServices `observeExternalAgents` option.
-   */
+  /** Opt-in (daemon-side only): fold host-observed external coding-agent sessions
+   * into the fleet as 'observed-external' rows. Interactive leaves it off and reads
+   * the daemon snapshot. Mirrors the SDK's own createRuntimeServices option. */
   readonly observeExternalAgents?: boolean | undefined;
+  /** Host power seam opt-in. Fork mirrors the SDK: non-spawning unavailable-seam
+   * default (idle-power-services.ts); daemon + embedded runtime pass createHostPowerSeam(). */
+  readonly powerSeam?: Parameters<typeof wireIdlePowerAndLiveTurn>[0]['powerSeam'];
 }
 
 export interface RuntimeServices {
@@ -614,7 +614,7 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
   });
   const modeManager = new ModeManager(); const fileUndoManager = new FileUndoManager();
   const workspaceCheckpointManager = createWorkspaceCheckpointing({ workspaceRoot: workingDirectory, runtimeBus: options.runtimeBus, configManager });
-  const { memoryConsolidationScheduler, powerManager, sessionLiveTurnControls } = wireIdlePowerAndLiveTurn({ configManager, memoryRegistry, runtimeBus: options.runtimeBus, isIdle: () => sessionBroker.countBusySessions() === 0, snapshotTick: () => storeSnapshotScheduler.tick(), heartbeat: async () => { await automationManager.triggerHeartbeat({ source: 'wake-catchup' }); } });
+  const { memoryConsolidationScheduler, powerManager, sessionLiveTurnControls } = wireIdlePowerAndLiveTurn({ configManager, memoryRegistry, runtimeBus: options.runtimeBus, isIdle: () => sessionBroker.countBusySessions() === 0, snapshotTick: () => storeSnapshotScheduler.tick(), heartbeat: async () => { await automationManager.triggerHeartbeat({ source: 'wake-catchup' }); }, powerSeam: options.powerSeam });
 
   // Terminal-shell wrapper over the SDK registerGatewayVerbGroups (gateway-verbs.ts); checkin.*/fleet-needs-input/pairing.* register only when their deps are present.
   attachWsOnlyGatewayVerbHandlers(gatewayMethods, { processRegistry, workspaceCheckpointManager, conversationRewindPort: createSessionConversationRewindPort(), sessionBroker, secretsManager, stepUpService, approvalBroker, requestApproval: (input) => approvalBroker.requestApproval(input), watcherRegistry, userPermissionRuleStore, shellPaths, configManager, runtimeStore: options.runtimeStore, channelDeliveryRouter, providerRegistry, automationManager, sessionLister: sessionBroker, sessionIntake: sessionBroker, workingDirectory, memoryRegistry, pairingTokens, sessionLiveTurnControls, powerManager, relayAvailable: () => configManager.get('relay.enabled') === true, pairingWebOrigin: () => resolvePairingWebOrigin(configManager).origin, ...wireFleetNeedsInputPush({ registry: processRegistry, runtimeBus: options.runtimeBus, sessionBroker }) });

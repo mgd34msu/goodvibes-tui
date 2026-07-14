@@ -90,3 +90,35 @@ describe('composition parity — keep-awake config live-apply is wired', () => {
     expect(idlePower).toContain('configManager.subscribe');
   });
 });
+
+describe('composition parity — host power seam is opt-in (non-spawning default)', () => {
+  // SDK 1.9.0's wireRuntimePower defaults an ABSENT seam to the real host seam
+  // (createHostPowerSeam — spawns systemd-inhibit + a dbus-monitor sleep-edge
+  // watcher). That host-level spawn must never fire on a test-constructed
+  // runtime, so the fork mirrors the SDK's own createRuntimeServices: default to
+  // the non-spawning unavailable seam, and only the real long-lived compositions
+  // opt in. These source pins catch a fork that regresses either half.
+
+  test('the idle-power helper defaults to the NON-spawning unavailable seam when no seam is passed', () => {
+    const idlePower = read('src/runtime/idle-power-services.ts');
+    // The seam falls back to createUnavailablePowerSeam(...) rather than passing
+    // undefined through to wireRuntimePower (which would spawn the host seam).
+    expect(idlePower).toMatch(/seam:\s*deps\.powerSeam\s*\?\?\s*createUnavailablePowerSeam\(/);
+    expect(idlePower).toContain("import { PowerManager, wireRuntimePower, createUnavailablePowerSeam }");
+  });
+
+  test('createRuntimeServices threads the power-seam opt-in into the idle-power helper', () => {
+    const services = read('src/runtime/services.ts');
+    expect(services).toContain('powerSeam: options.powerSeam');
+  });
+
+  test('the standalone daemon opts into the real host power seam (live keep-awake/idle-inhibit)', () => {
+    const args = createRuntimeServicesCallArgs(read('src/daemon/cli.ts'));
+    expect(args).toContain('powerSeam: createHostPowerSeam()');
+  });
+
+  test('the embedded interactive runtime opts in too (it IS the daemon in the embedded topology)', () => {
+    const args = createRuntimeServicesCallArgs(read('src/runtime/bootstrap-core.ts'));
+    expect(args).toContain('powerSeam: createHostPowerSeam()');
+  });
+});

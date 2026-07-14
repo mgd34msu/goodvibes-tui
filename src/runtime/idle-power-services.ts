@@ -16,7 +16,7 @@ import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import type { MemoryRegistry } from '@pellux/goodvibes-sdk/platform/state';
 import { MemoryConsolidationScheduler } from '@pellux/goodvibes-sdk/platform/state';
 import { SessionLiveTurnControlsHolder } from '@pellux/goodvibes-sdk/platform/control-plane';
-import { PowerManager, wireRuntimePower } from '@pellux/goodvibes-sdk/platform/power';
+import { PowerManager, wireRuntimePower, createUnavailablePowerSeam } from '@pellux/goodvibes-sdk/platform/power';
 import { FeatureAnnouncementStore, featureAnnouncementsPath } from '@pellux/goodvibes-sdk/platform/runtime/feature-announcements';
 import type { RuntimeEventBus } from '@pellux/goodvibes-sdk/platform/runtime/state';
 import { formatConsolidationReceipt } from '../core/consolidation-receipt.ts';
@@ -31,7 +31,16 @@ export interface IdlePowerServicesDeps {
   readonly snapshotTick: () => void;
   /** Wake catch-up: fire the automation heartbeat. */
   readonly heartbeat: () => Promise<void>;
-  /** Injectable platform seam (tests); defaults to the OS pick inside wireRuntimePower. */
+  /**
+   * Host power seam. SDK 1.9.0 makes wireRuntimePower default an absent seam to
+   * the REAL host seam (createHostPowerSeam — which spawns systemd-inhibit and a
+   * dbus-monitor sleep-edge watcher). That spawn is a host-level side effect, so
+   * this fork mirrors the SDK's own createRuntimeServices: when no seam is passed
+   * we default to the NON-spawning unavailable seam, keeping test-constructed
+   * runtimes deterministic. Only the real long-lived compositions (the standalone
+   * daemon and the embedded interactive runtime, which itself IS the daemon) pass
+   * createHostPowerSeam() to opt into live OS keep-awake/idle-inhibit.
+   */
   readonly powerSeam?: Parameters<typeof wireRuntimePower>[0]['seam'];
 }
 
@@ -67,7 +76,10 @@ export function wireIdlePowerAndLiveTurn(deps: IdlePowerServicesDeps): IdlePower
     runtimeBus: deps.runtimeBus,
     sleepCheckpoint: deps.snapshotTick,
     wakeCatchUp: [() => memoryConsolidationScheduler.tick(), deps.snapshotTick, deps.heartbeat],
-    seam: deps.powerSeam,
+    // Non-spawning default (see powerSeam doc above): without an explicit opt-in
+    // the seam is the honest unavailable one, NOT the spawning host seam that
+    // wireRuntimePower would otherwise pick for an undefined seam.
+    seam: deps.powerSeam ?? createUnavailablePowerSeam('runtime services constructed without a host power seam'),
   });
   return { memoryConsolidationScheduler, powerManager, sessionLiveTurnControls };
 }

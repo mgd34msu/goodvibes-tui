@@ -7,6 +7,7 @@ import { bindFeatureSettingsBridge, createFeatureFlagManager, deriveFeatureState
 import { createRuntimeStore } from '../runtime/store/index.ts';
 import { createRuntimeServices } from '../runtime/services.ts';
 import { DaemonServer, HttpListener } from '@pellux/goodvibes-sdk/platform/daemon';
+import { createHostPowerSeam } from '@pellux/goodvibes-sdk/platform/power';
 import { logger } from '@pellux/goodvibes-sdk/platform/utils';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 import {
@@ -180,6 +181,12 @@ async function main(): Promise<void> {
     // stopped). Daemon-side only — the interactive process reads this snapshot
     // rather than double-detecting. Mirrors the SDK daemon cli.
     observeExternalAgents: true,
+    // Opt into the REAL host power seam (Linux logind: systemd-inhibit children
+    // + the dbus-monitor sleep-edge watcher) so the standalone daemon holds live
+    // keep-awake/idle-inhibit. SDK 1.9.0's runtime-services factory defaults to
+    // the non-spawning unavailable seam; only daemon compositions opt in. Mirrors
+    // the SDK daemon cli's createHostPowerSeam() (sdk commit 3a5ea26d).
+    powerSeam: createHostPowerSeam(),
   });
 
   // Load persisted providers from disk so the provider registry is pre-populated
