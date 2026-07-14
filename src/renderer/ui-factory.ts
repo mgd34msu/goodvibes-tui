@@ -11,6 +11,7 @@ import { abbreviateCount } from '../utils/format-number.ts';
 import { computeContextUsage } from '../core/context-usage.ts';
 import { permissionModeLabel, permissionModeTone } from '../core/permission-mode.ts';
 import { SLEEP_DISABLED_CHIP } from '../core/power-status.ts';
+import { renderQueuedMessageList, renderMemoryProvenanceChip } from './composer-fragments.ts';
 import { calcSessionCost, isModelPriced } from '../export/cost-utils.ts';
 import { buildFooterTip, isAgentActive } from './footer-tips.ts';
 import type { StreamMetrics } from '../core/stream-event-wiring.ts';
@@ -174,75 +175,14 @@ export class UIFactory {
     });
   }
 
-  /**
-   * createQueuedMessageList — the mid-turn queue rendered as an EDITABLE list.
-   *
-   * Each still-undelivered message shows a 1-based number so it can be named to
-   * `/queue edit <n> …` / `/queue delete <n>`, which drive the SDK's
-   * editQueuedMessage / deleteQueuedMessage verbs. A delivered message has
-   * already left the queue (it is no longer listed), so the list only ever
-   * shows what is still editable — delivery is immutability, made visible. The
-   * header states the affordance so the capability is discoverable.
-   */
+  /** The mid-turn queue as an editable list — see composer-fragments.ts. */
   public static createQueuedMessageList(width: number, items: readonly { readonly id: string; readonly text: string }[]): Line[] {
-    if (items.length === 0) return [];
-    const t = activeUiTones();
-    const lines: Line[] = [];
-    const header = `${items.length} queued — /queue edit·delete until delivered`;
-    lines.push(...renderConversationFragment(header, width, {
-      prefix: ' ⧗ ',
-      prefixFg: t.state.reasoning,
-      text: t.fg.dim,
-      bodyBg: '#1a1a1a',
-      dim: true,
-    }));
-    items.forEach((item, index) => {
-      lines.push(...renderConversationFragment(item.text, width, {
-        prefix: `   ${index + 1}. `,
-        prefixFg: t.state.reasoning,
-        text: t.fg.dim,
-        bodyBg: '#1a1a1a',
-        dim: true,
-      }));
-    });
-    return lines;
+    return renderQueuedMessageList(width, items);
   }
 
-  /**
-   * createMemoryProvenanceChip — the optional "used N memories" turn chip.
-   *
-   * Collapsed: a single small line naming the count with the drill-in hint.
-   * Expanded (Alt+M): the same line followed by one line per memory id. Returns
-   * an empty array when no memories were used — the caller only renders this
-   * when the memory-provenance setting is on, so an off session produces zero
-   * lines and adds zero context.
-   */
+  /** The optional "used N memories" provenance chip — see composer-fragments.ts. */
   public static createMemoryProvenanceChip(width: number, count: number, ids: readonly string[], expanded: boolean): Line[] {
-    if (count <= 0) return [];
-    const t = activeUiTones();
-    const noun = count === 1 ? 'memory' : 'memories';
-    const header = expanded
-      ? `used ${count} ${noun} — Alt+M to hide`
-      : `used ${count} ${noun} — Alt+M to list`;
-    const lines: Line[] = renderConversationFragment(header, width, {
-      prefix: ' ◆ ',
-      prefixFg: t.state.info,
-      text: t.fg.dim,
-      bodyBg: '#1a1a1a',
-      dim: true,
-    });
-    if (expanded) {
-      ids.forEach((id, index) => {
-        lines.push(...renderConversationFragment(id, width, {
-          prefix: `   ${index + 1}. `,
-          prefixFg: t.state.info,
-          text: t.fg.dim,
-          bodyBg: '#1a1a1a',
-          dim: true,
-        }));
-      });
-    }
-    return lines;
+    return renderMemoryProvenanceChip(width, count, ids, expanded);
   }
 
   public static createFooter(

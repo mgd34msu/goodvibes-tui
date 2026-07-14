@@ -47,3 +47,21 @@ export function memoryRecordIdsFromTurn(turn: unknown): readonly string[] {
   if (!Array.isArray(recordIds)) return [];
   return recordIds.filter((id): id is string => typeof id === 'string');
 }
+
+/**
+ * Build the settings-modal synthetic entry for memory.showProvenance (TUI-local,
+ * default OFF). Read defensively — memory.* has no SDK DEFAULT_CONFIG entry, so
+ * an unset key means the OFF default, not an error.
+ */
+export function buildMemoryProvenanceSyntheticEntry(configManager: Pick<ConfigManager, 'get'>): {
+  setting: { key: string; type: 'boolean'; default: boolean; description: string };
+  currentValue: boolean;
+  isDefault: boolean;
+} {
+  const currentValue = readMemoryShowProvenance(configManager);
+  return {
+    setting: { key: MEMORY_SHOW_PROVENANCE_CONFIG_KEY, type: 'boolean', default: MEMORY_SHOW_PROVENANCE_DEFAULT, description: MEMORY_SHOW_PROVENANCE_DESCRIPTION },
+    currentValue,
+    isDefault: currentValue === MEMORY_SHOW_PROVENANCE_DEFAULT,
+  };
+}

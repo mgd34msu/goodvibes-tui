@@ -57,7 +57,7 @@ import { buildCommandArgsHint } from './input/command-args-hint.ts';
 import { summarizeRunningAgents } from './renderer/process-summary.ts';
 import { footerFleetCost } from './panels/fleet-read-model.ts';
 import { formatUserFacingErrorLine } from './core/format-user-error.ts';
-import { wireStreamEventMetrics, type StreamMetrics, type WireStreamEventMetricsResult } from './core/stream-event-wiring.ts';
+import { wireStreamEventMetrics, createStreamMetrics, type StreamMetrics, type WireStreamEventMetricsResult } from './core/stream-event-wiring.ts';
 import { wireTurnEventHandlers } from './core/turn-event-wiring.ts';
 import { buildContextStatusHint } from './renderer/context-status-hint.ts';
 import { isEffectiveDangerMode } from './config/index.ts';
@@ -66,9 +66,8 @@ import { applyComposerCapture } from './input/composer-capture.ts';
 import { createSessionAutoTitler } from './core/session-auto-titler.ts';
 import { makeComposerEditorOpener } from './input/composer-editor.ts';
 import { evaluateSessionMaintenance } from '@/runtime/index.ts';
-import { createCancelGeneration, createCancelToolCall } from './core/turn-cancellation.ts';
-import { powerSurfaceFromState } from './core/power-status.ts';
-import { memoryRecordIdsFromTurn, readMemoryShowProvenance } from './core/memory-provenance.ts';
+import { createCancelGeneration } from './core/turn-cancellation.ts';
+import { wireInteractionSeams, createMemoryProvenanceUi } from './runtime/interaction-seams.ts';
 import { wrapRequestPermissionWithAlert } from './core/approval-alert.ts';
 import { createTerminalNotifier } from './core/terminal-notifier.ts';
 import { setPanelFrameRequester } from './panels/base-panel.ts';
@@ -162,18 +161,7 @@ async function main() {
   // Cached from the overlay-aware clamp the renderer computes (conversation-layout) each frame so scroll() clamps against exactly what is displayed, not a footer estimate.
   let lastMaxScroll: number | null = null;
   // Stream and tool-timer state; mutated by wireStreamEventMetrics handlers, read during render.
-  const streamMetrics: StreamMetrics = {
-    startTime: 0,
-    deltaCount: 0,
-    tokenSpeed: 0,
-    ttftMs: undefined,
-    ttftRecorded: false,
-    activeToolStartedAtMs: undefined,
-    activeToolName: undefined,
-    activeToolCallId: undefined,
-    lastDeltaAtMs: undefined, stallEpisode: 0,
-    reconnectAttempt: undefined, reconnectMaxAttempts: undefined,
-  };
+  const streamMetrics: StreamMetrics = createStreamMetrics();
 
   const getPromptContentWidth = () => computePromptContentWidth(stdout.columns);
 
@@ -209,11 +197,8 @@ async function main() {
   let recoveryPending = false;
   // Which file the current recovery prompt should load/delete from (see recovery-input-helpers.ts).
   let recoverySource: 'live' | 'preserved' = 'live';
-  // Optional "used N memories" chip (memory.showProvenance): the memory-sourced
-  // record ids the most recent turn drew on (SDK metadata.memory.recordIds),
-  // and the drill-in expand state.
-  let latestMemoryRecordIds: readonly string[] = [];
-  let memoryProvenanceExpanded = false;
+  // The optional "used N memories" provenance chip (default OFF) — see interaction-seams.ts.
+  const memoryProvenanceUi = createMemoryProvenanceUi({ render: () => render() });
 
   const lifecycle = installProcessLifecycle({
     stdin,
@@ -309,17 +294,6 @@ async function main() {
 
   const cancelGeneration = createCancelGeneration(orchestrator, spokenTurns);
 
-  // Per-tool cancel: stop JUST the currently-running tool call (the live
-  // transcript row), leaving the turn to continue (see createCancelToolCall).
-  const cancelActiveToolCall = createCancelToolCall(
-    orchestrator,
-    () => streamMetrics.activeToolCallId,
-    () => {
-      systemMessageRouter.high('[Tool] Cancelled the running tool call — the turn continues.');
-      render();
-    },
-  );
-
   const jumpToBookmark = (key: string) => {
     conversation.getDisplayBlocks();
     const block = conversation.getBlockRegistry().find((entry) => entry.collapseKey === key);
@@ -348,32 +322,10 @@ async function main() {
   // Late-patched: bootstrap.ts populates uiServices.platform.externalServices AFTER commandContext is built.
   commandContext.platform.externalServices = uiServices.platform.externalServices;
   commandContext.cancelGeneration = cancelGeneration;
-  commandContext.cancelToolCall = cancelActiveToolCall;
-  // Mid-turn queue edit/delete (the /queue editable list). The in-process
-  // orchestrator owns the queue; edit/delete return false once a message has
-  // been delivered (immutable) — the command surfaces that honestly.
-  commandContext.listQueuedMessages = () => orchestrator.listQueuedMessages();
-  commandContext.editQueuedMessage = (id, text) => {
-    const ok = orchestrator.editQueuedMessage(id, text);
-    if (ok) render();
-    return ok;
-  };
-  commandContext.deleteQueuedMessage = (id) => {
-    const ok = orchestrator.deleteQueuedMessage(id);
-    if (ok) render();
-    return ok;
-  };
-  // Host sleep ownership (power.*): read the flattened state for the /power
-  // status surface; the toggle drives the live PowerManager (acquires/releases
-  // the OS inhibitor, persists power.keepAwake, emits OPS_POWER_STATE_CHANGED).
-  // Drill-in toggle for the "used N memories" provenance chip (Alt+M).
-  commandContext.toggleMemoryProvenance = () => { memoryProvenanceExpanded = !memoryProvenanceExpanded; render(); };
-  commandContext.getPowerState = () => powerSurfaceFromState(ctx.services.powerManager.getState());
-  commandContext.setKeepAwake = async (enabled) => {
-    const next = powerSurfaceFromState(await ctx.services.powerManager.setKeepAwake(enabled));
-    render();
-    return next;
-  };
+  wireInteractionSeams(commandContext, {
+    orchestrator, powerManager: ctx.services.powerManager, render: () => render(), notify: (m) => systemMessageRouter.high(m),
+    getActiveToolCallId: () => streamMetrics.activeToolCallId, toggleMemoryProvenance: () => memoryProvenanceUi.toggle(),
+  });
   commandContext.isGenerating = () => orchestrator.isThinking;
   commandContext.jumpToBookmark = jumpToBookmark; commandContext.scrollToLine = scrollToLine;
   commandContext.clearScreen = () => {
@@ -541,9 +493,7 @@ async function main() {
       // Cross-surface spine posture segment (adopted-daemon mode only).
       sessionSpineStatus: (() => { const s = uiServices.platform.externalServices?.inspect(); return s?.sessionSpineActive && s.sessionSpineStatus && s.sessionSpineStatus !== 'unknown' ? s.sessionSpineStatus : undefined; })(), runningAgentCount, runningProcessCount,
       webSurfaceUrl: configManager.get('web.enabled') ? resolveWebSurfaceUrl(configManager) : undefined,
-      // Always-visible "sleep disabled" chip: read live from the PowerManager
-      // each render, so the toggle (one-key affordance or /power) reflects at
-      // once and the OPS_POWER_STATE_CHANGED event needs no separate cache.
+      // Always-visible "sleep disabled" chip — read live from the PowerManager each render.
       powerKeepAwake: ctx.services.powerManager.getState().keepAwake.enabled,
       // Composer must not read as focused while the panel/process indicator owns keyboard focus.
       promptFocused: !input.panelFocused && !input.indicatorFocused,
@@ -645,13 +595,7 @@ async function main() {
     }
 
     viewport.push(...UIFactory.createQueuedMessageList(conversationWidth, orchestrator.listQueuedMessages()));
-
-    // Optional "used N memories" provenance chip (default OFF). When off, the
-    // metadata is never even read, so nothing renders. When on, it names the
-    // memory record ids the latest turn drew on (metadata.memory.recordIds).
-    if (readMemoryShowProvenance(configManager) && latestMemoryRecordIds.length > 0) {
-      viewport.push(...UIFactory.createMemoryProvenanceChip(conversationWidth, latestMemoryRecordIds.length, latestMemoryRecordIds, memoryProvenanceExpanded));
-    }
+    viewport.push(...memoryProvenanceUi.renderChip(conversationWidth, configManager));
 
     viewport = applyConversationOverlays(viewport, {
       input,
@@ -740,14 +684,7 @@ async function main() {
   });
   unsubs.push(...turnUnsubs);
 
-  // Capture the memory-provenance record ids from each completed turn's payload
-  // (metadata.memory.recordIds). Read structurally so it works whether or not
-  // the pinned SDK's TurnEvent type surfaces the field yet; the chip renders
-  // only when memory.showProvenance is on (see the render loop).
-  unsubs.push(uiServices.events.turns.on('TURN_COMPLETED', (evt) => {
-    latestMemoryRecordIds = memoryRecordIdsFromTurn(evt);
-    memoryProvenanceExpanded = false; // a fresh turn starts collapsed
-  }));
+  unsubs.push(uiServices.events.turns.on('TURN_COMPLETED', (evt) => memoryProvenanceUi.onTurnCompleted(evt)));
 
   // Stable turn context for failover retry — set in submitInput, read by retryTurn.
   let retryCtx: { count: number; text: string; content?: ContentPart[]; opts?: Parameters<typeof orchestrator.handleUserInput>[2] } | null = null;

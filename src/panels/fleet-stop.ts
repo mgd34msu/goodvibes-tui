@@ -192,3 +192,25 @@ export function countDescendantStats(rows: readonly FleetTreeRow[], nodeId: stri
   }
   return { total, active };
 }
+
+/**
+ * Build the confirm-overlay arm options for a cascade Kill of one node — the
+ * label carries the descendant count so the operator sees what a confirm takes
+ * down. Extracted from FleetPanel to keep that file under the 800-line cap.
+ */
+export function fleetKillConfirmArgs(
+  node: ProcessNode,
+  items: readonly FleetTreeRow[],
+  deps: { readonly kill: (id: string) => void; readonly markStopping: (id: string) => void },
+): { id: string; label: string; verb: string; onConfirm: () => void } {
+  const shortId = node.id.length > 8 ? node.id.slice(-8) : node.id;
+  const stats = countDescendantStats(items, node.id);
+  const suffix = stats.total > 0 ? ` (+${stats.total} descendant${stats.total === 1 ? '' : 's'}, ${stats.active} active)` : '';
+  return {
+    id: node.id,
+    label: `${node.kind} ${shortId}${suffix}`,
+    verb: 'Kill',
+    // Mark 'stopping…' only once the kill is confirmed, not while merely armed.
+    onConfirm: () => { deps.kill(node.id); deps.markStopping(node.id); },
+  };
+}
