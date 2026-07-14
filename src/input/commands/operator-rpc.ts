@@ -27,6 +27,7 @@ import { join } from 'node:path';
 import { createGoodVibesSdk } from '@pellux/goodvibes-sdk';
 import type { GoodVibesSdk } from '@pellux/goodvibes-sdk';
 import { GoodVibesSdkError } from '@pellux/goodvibes-sdk';
+import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import { resolveDaemonEnabled } from '@pellux/goodvibes-sdk/platform/config';
 import { getOrCreateCompanionToken } from '@pellux/goodvibes-sdk/platform/pairing';
 import type { CommandContext } from '../command-registry.ts';
@@ -44,8 +45,7 @@ export interface OperatorRpcAvailable {
 
 export type OperatorRpc = OperatorRpcUnavailable | OperatorRpcAvailable;
 
-function resolveControlPlaneBaseUrl(context: CommandContext): string | null {
-  const configManager = context.platform.configManager;
+function resolveControlPlaneBaseUrl(configManager: ConfigManager): string | null {
   const explicit = String(configManager.get('controlPlane.baseUrl') ?? '').trim();
   if (explicit) return explicit;
   const host = String(configManager.get('controlPlane.host') ?? '').trim();
@@ -55,25 +55,40 @@ function resolveControlPlaneBaseUrl(context: CommandContext): string | null {
 }
 
 /**
+ * Context-free core of {@link getOperatorRpc}: resolve (or honestly refuse to
+ * resolve) an operator SDK client wired to this workspace's control-plane
+ * daemon from just the two things the resolution actually needs — the config
+ * manager and the home directory. Shared by the command layer (via
+ * getOperatorRpc) and the Fleet panel's gateway (fleet-gateway.ts) so both
+ * reach the same daemon over the same generic invoke path, never two divergent
+ * clients. Refusal reasons are surfaced verbatim so callers print them directly.
+ */
+export function resolveOperatorRpc(deps: { readonly configManager: ConfigManager; readonly homeDirectory: string }): OperatorRpc {
+  const { configManager, homeDirectory } = deps;
+  if (!resolveDaemonEnabled(configManager)) {
+    return { available: false, reason: 'the daemon is disabled (daemon.enabled=false) — no operator surface to reach. Enable it in /settings, then retry.' };
+  }
+  const baseUrl = resolveControlPlaneBaseUrl(configManager);
+  if (!baseUrl) {
+    return { available: false, reason: 'no control-plane base URL is configured (controlPlane.baseUrl / controlPlane.host+port) — cannot reach the operator surface.' };
+  }
+  const daemonHomeDir = join(homeDirectory, '.goodvibes', 'daemon');
+  const token = getOrCreateCompanionToken('tui', { daemonHomeDir }).token;
+  const sdk = createGoodVibesSdk({ baseUrl, authToken: token });
+  return { available: true, sdk };
+}
+
+/**
  * Resolve (or honestly refuse to resolve) an operator SDK client wired to
  * this workspace's control-plane daemon. Reasons for refusal are surfaced
  * verbatim to the caller so `/ci`, `/checkin`, and `/principals` can print
  * them directly rather than inventing their own wording.
  */
 export function getOperatorRpc(context: CommandContext): OperatorRpc {
-  const configManager = context.platform.configManager;
-  if (!resolveDaemonEnabled(configManager)) {
-    return { available: false, reason: 'the daemon is disabled (daemon.enabled=false) — no operator surface to reach. Enable it in /settings, then retry.' };
-  }
-  const baseUrl = resolveControlPlaneBaseUrl(context);
-  if (!baseUrl) {
-    return { available: false, reason: 'no control-plane base URL is configured (controlPlane.baseUrl / controlPlane.host+port) — cannot reach the operator surface.' };
-  }
-  const shellPaths = requireShellPaths(context);
-  const daemonHomeDir = join(shellPaths.homeDirectory, '.goodvibes', 'daemon');
-  const token = getOrCreateCompanionToken('tui', { daemonHomeDir }).token;
-  const sdk = createGoodVibesSdk({ baseUrl, authToken: token });
-  return { available: true, sdk };
+  return resolveOperatorRpc({
+    configManager: context.platform.configManager,
+    homeDirectory: requireShellPaths(context).homeDirectory,
+  });
 }
 
 /**
