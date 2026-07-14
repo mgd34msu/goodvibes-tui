@@ -4,7 +4,8 @@ import { ConfigManager, ServiceRegistry, SubscriptionManager, ToolLLM } from '@p
 import { SecretsManager } from '../config/secrets.ts';
 import { AutomationDeliveryManager, AutomationManager } from '@pellux/goodvibes-sdk/platform/automation';
 import { ChannelDeliveryRouter, ChannelPolicyManager, type ChannelPluginRegistry, type RouteBindingManager, type SurfaceRegistry } from '@pellux/goodvibes-sdk/platform/channels';
-import { ApprovalBroker, GatewayMethodCatalog, SharedSessionBroker } from '@pellux/goodvibes-sdk/platform/control-plane';
+import { ApprovalBroker, GatewayMethodCatalog, SessionLiveTurnControlsHolder, SharedSessionBroker } from '@pellux/goodvibes-sdk/platform/control-plane';
+import { PowerManager, wireRuntimePower } from '@pellux/goodvibes-sdk/platform/power';
 import { StepUpService } from '@pellux/goodvibes-sdk/daemon';
 import { PairingTokenManager } from '@pellux/goodvibes-sdk/platform/pairing';
 import { resolvePairingWebOrigin } from '../core/pairing-origin.ts';
@@ -27,7 +28,7 @@ import { MediaProviderRegistry, ensureBuiltinMediaProviders } from '@pellux/good
 import { MultimodalService } from '@pellux/goodvibes-sdk/platform/multimodal';
 import { AgentMessageBus, AgentOrchestrator, ArchetypeLoader, WrfcController } from '@pellux/goodvibes-sdk/platform/agents';
 import { AgentManager, ContextAccountingHolder, OverflowHandler, ProcessManager, createWorkflowServices, type WorkflowServices } from '@pellux/goodvibes-sdk/platform/tools';
-import { FileStateCache, FileUndoManager, MemoryEmbeddingProviderRegistry, MemoryRegistry, MemoryStore, ModeManager, ProjectIndex, resolveCanonicalMemoryDbPath, type CodeIndexStore, type CodeIndexReindexScheduler } from '@pellux/goodvibes-sdk/platform/state';
+import { FileStateCache, FileUndoManager, MemoryConsolidationScheduler, MemoryEmbeddingProviderRegistry, MemoryRegistry, MemoryStore, ModeManager, ProjectIndex, resolveCanonicalMemoryDbPath, type CodeIndexStore, type CodeIndexReindexScheduler } from '@pellux/goodvibes-sdk/platform/state';
 import type { StoreSnapshotScheduler } from '@pellux/goodvibes-sdk/platform/state/store-snapshots';
 import type { UserPermissionRuleStore } from '@pellux/goodvibes-sdk/platform/permissions';
 import { buildExecPromptAnswerHandler } from '@pellux/goodvibes-sdk/platform/runtime/permissions/exec-prompt-wiring';
@@ -201,6 +202,12 @@ export interface RuntimeServices {
   readonly codeIndexReindexScheduler: CodeIndexReindexScheduler; // tool-site reindex
   /** Daily snapshots of every SQLite store this runtime writes, with bounded retention; unref'd timers (mirrors the SDK composition — hosts that tear down a runtime stop() it themselves). */
   readonly storeSnapshotScheduler: StoreSnapshotScheduler;
+  /** Idle-time memory consolidation (learning.consolidation.*): merges duplicate standing memories and decays/archives stale ones; retains one-line run receipts. Mirrors the SDK composition. */
+  readonly memoryConsolidationScheduler: MemoryConsolidationScheduler;
+  /** Host sleep ownership (power.*): work-signal inhibition, the keep-awake toggle, and the sleep-edge checkpoint + wake catch-up. Backs power.status.get / power.keepAwake.set and the OPS_POWER_STATE_CHANGED event. */
+  readonly powerManager: PowerManager;
+  /** Per-session live-turn control holder backing the sessions.toolCalls.cancel / sessions.queuedMessages.* wire verbs (bound to a session's orchestrator when it runs). Mirrors the SDK composition. */
+  readonly sessionLiveTurnControls: SessionLiveTurnControlsHolder;
   /** Unified live process registry (agents, WRFC chains, workflows, watchers, background processes) backing the Fleet panel; archive-aware — finished subtrees can be moved to the session archive view. */
   readonly processRegistry: ArchivableProcessRegistry;
   readonly modeManager: ModeManager;
@@ -619,8 +626,32 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
   const modeManager = new ModeManager(); const fileUndoManager = new FileUndoManager();
   const workspaceCheckpointManager = createWorkspaceCheckpointing({ workspaceRoot: workingDirectory, runtimeBus: options.runtimeBus, configManager });
 
+  // Idle-time memory consolidation (learning.consolidation.*), host sleep
+  // ownership (power.*), and the per-session live-turn control holder that backs
+  // the sessions.toolCalls.cancel / sessions.queuedMessages.* wire verbs — all
+  // mirroring the SDK's own createRuntimeServices composition so every surface
+  // exposes the same verbs and shares the same idle/wake behaviour.
+  const memoryConsolidationScheduler = new MemoryConsolidationScheduler({
+    memoryRegistry,
+    configSource: configManager,
+    isIdle: () => sessionBroker.countBusySessions() === 0,
+  });
+  memoryConsolidationScheduler.start();
+  const sessionLiveTurnControls = new SessionLiveTurnControlsHolder();
+  const powerManager = wireRuntimePower({
+    readConfig: (key) => configManager.get(key as Parameters<typeof configManager.get>[0]),
+    writeConfig: (key, value) => configManager.setDynamic(key as Parameters<typeof configManager.setDynamic>[0], value),
+    runtimeBus: options.runtimeBus,
+    sleepCheckpoint: () => storeSnapshotScheduler.tick(),
+    wakeCatchUp: [
+      () => memoryConsolidationScheduler.tick(),
+      () => storeSnapshotScheduler.tick(),
+      async () => { await automationManager.triggerHeartbeat({ source: 'wake-catchup' }); },
+    ],
+  });
+
   // Terminal-shell wrapper over the SDK registerGatewayVerbGroups (gateway-verbs.ts); checkin.*/fleet-needs-input/pairing.* register only when their deps are present.
-  attachWsOnlyGatewayVerbHandlers(gatewayMethods, { processRegistry, workspaceCheckpointManager, conversationRewindPort: createSessionConversationRewindPort(), sessionBroker, secretsManager, stepUpService, approvalBroker, requestApproval: (input) => approvalBroker.requestApproval(input), watcherRegistry, userPermissionRuleStore, shellPaths, configManager, runtimeStore: options.runtimeStore, channelDeliveryRouter, providerRegistry, automationManager, sessionLister: sessionBroker, sessionIntake: sessionBroker, workingDirectory, memoryRegistry, pairingTokens, relayAvailable: () => configManager.get('relay.enabled') === true, pairingWebOrigin: () => resolvePairingWebOrigin(configManager).origin, ...wireFleetNeedsInputPush({ registry: processRegistry, runtimeBus: options.runtimeBus, sessionBroker }) });
+  attachWsOnlyGatewayVerbHandlers(gatewayMethods, { processRegistry, workspaceCheckpointManager, conversationRewindPort: createSessionConversationRewindPort(), sessionBroker, secretsManager, stepUpService, approvalBroker, requestApproval: (input) => approvalBroker.requestApproval(input), watcherRegistry, userPermissionRuleStore, shellPaths, configManager, runtimeStore: options.runtimeStore, channelDeliveryRouter, providerRegistry, automationManager, sessionLister: sessionBroker, sessionIntake: sessionBroker, workingDirectory, memoryRegistry, pairingTokens, sessionLiveTurnControls, powerManager, relayAvailable: () => configManager.get('relay.enabled') === true, pairingWebOrigin: () => resolvePairingWebOrigin(configManager).origin, ...wireFleetNeedsInputPush({ registry: processRegistry, runtimeBus: options.runtimeBus, sessionBroker }) });
   const integrationHelpers = new IntegrationHelperService({
     workingDirectory,
     homeDirectory,
@@ -783,6 +814,9 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
     codeIndexStore,
     codeIndexReindexScheduler,
     storeSnapshotScheduler,
+    memoryConsolidationScheduler,
+    powerManager,
+    sessionLiveTurnControls,
     processRegistry,
     modeManager,
     fileUndoManager,

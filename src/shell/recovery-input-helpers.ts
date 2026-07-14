@@ -6,14 +6,24 @@
  */
 
 import { copyFileSync, existsSync, readFileSync, unlinkSync } from 'node:fs';
+import { join } from 'node:path';
 import type { ConversationMessageSnapshot } from '../core/conversation.ts';
 import type { SessionReturnContextSummary, SessionSnapshot } from '@/runtime/index.ts';
 import {
   checkRecoveryFile,
   deleteRecoveryFile as deleteLiveRecoveryFile,
+  getRecoveryDir,
   getRecoveryFilePath,
   loadRecoveryConversation as loadLiveRecoveryConversation,
 } from '@/runtime/index.ts';
+
+/**
+ * Fixed name of the single dismissed-recovery preserved sibling, kept inside
+ * the per-session recovery directory. It is deliberately NOT a
+ * `recovery-<sessionId>.jsonl` name, so `checkRecoveryFile` (which only scans
+ * the per-session crash files) never mistakes it for a live crash snapshot.
+ */
+const PRESERVED_RECOVERY_FILENAME = 'recovery-dismissed.preserved.jsonl';
 
 export interface PersistRecoveryDeps {
   readonly sessionManager: {
@@ -49,24 +59,33 @@ export function createReopenRecoveryPanels(deps: ReopenPanelsDeps): (snapshot: S
 }
 
 // ---------------------------------------------------------------------------
-// W3 Finding 3: preserve the dismissed recovery snapshot.
+// Preserve the dismissed recovery snapshot.
 //
-// main.ts's 60s autosave (writeRecoveryFile) overwrites the single shared
-// recovery.jsonl with the CURRENT session's live state within a minute — so
-// the dismiss banner's promise ("still on disk; you will be asked again next
-// time") went false silently well before the next launch. Fix: the moment
-// the user dismisses (blocking-input.ts), copy recovery.jsonl aside to a
-// preserved sibling file (recovery.jsonl.preserved) so it survives this
-// session's later autosaves. Startup then checks BOTH the live file and the
-// preserved sibling and offers whichever is newer (pickNewestRecoveryInfo),
-// bounded to exactly one preserved file — a later dismiss replaces it, and
-// that replacement is reported honestly (PreserveRecoveryResult.replacedPrevious)
-// rather than silently dropping the older snapshot.
+// The SDK now keeps per-session crash snapshots (recovery-<sessionId>.jsonl),
+// so this session's autosave no longer clobbers a crashed session's file. But
+// checkRecoveryFile only offers a snapshot that is newer than the last clean
+// session save — so once THIS session saves cleanly, an older dismissed crash
+// snapshot would stop being offered. To keep the dismiss banner's promise
+// ("still on disk; you will be asked again next time"), the moment the user
+// dismisses (blocking-input.ts) we copy the crashed session's file aside to a
+// single fixed preserved sibling in the recovery dir (it is inert — never
+// subject to the newer-than-clean-save gate). Startup then checks BOTH the
+// newest live crash file and the preserved sibling and offers whichever is
+// newer (pickNewestRecoveryInfo), bounded to exactly one preserved file — a
+// later dismiss replaces it, reported honestly (replacedPrevious) rather than
+// silently dropping the older snapshot.
 // ---------------------------------------------------------------------------
 
 export interface RecoveryFileDeps {
   readonly homeDirectory: string;
   readonly surfaceRoot?: string | undefined;
+  /**
+   * Working directory — needed so the preserve step can resolve, via
+   * checkRecoveryFile, WHICH per-session crash file is being dismissed (its
+   * sessionId names the file to copy aside). Optional: the read-only preserved
+   * helpers (check/load/delete) do not need it.
+   */
+  readonly workingDirectory?: string | undefined;
 }
 
 export interface PreservedRecoveryInfo {
@@ -84,7 +103,7 @@ export interface PreserveRecoveryResult {
 }
 
 function preservedRecoveryPath(deps: RecoveryFileDeps): string {
-  return `${getRecoveryFilePath(deps.homeDirectory, deps.surfaceRoot)}.preserved`;
+  return join(getRecoveryDir(deps.homeDirectory, deps.surfaceRoot), PRESERVED_RECOVERY_FILENAME);
 }
 
 function readRecoveryMetaLine(path: string): { title?: string; timestamp?: number; sessionId?: string; returnContext?: SessionReturnContextSummary } | null {
@@ -98,10 +117,18 @@ function readRecoveryMetaLine(path: string): { title?: string; timestamp?: numbe
   }
 }
 
-/** Copy the live recovery.jsonl aside to the preserved sibling. Called once, at dismiss. */
+/**
+ * Copy the dismissed session's crash file aside to the preserved sibling.
+ * Called once, at dismiss. The source is resolved live via checkRecoveryFile —
+ * whose RecoveryFileInfo.sessionId names the per-session file to copy — so the
+ * preserve captures exactly the snapshot the banner is offering, before any
+ * clean save this session performs could supersede it by timestamp.
+ */
 export function createPreserveRecoveryFile(deps: RecoveryFileDeps): () => PreserveRecoveryResult {
   return () => {
-    const live = getRecoveryFilePath(deps.homeDirectory, deps.surfaceRoot);
+    const info = checkRecoveryFile({ workingDirectory: deps.workingDirectory, homeDirectory: deps.homeDirectory, surfaceRoot: deps.surfaceRoot });
+    if (!info) return { preserved: false, replacedPrevious: false };
+    const live = getRecoveryFilePath(deps.homeDirectory, info.sessionId, deps.surfaceRoot);
     const preserved = preservedRecoveryPath(deps);
     if (!existsSync(live)) return { preserved: false, replacedPrevious: false };
     const replacedPrevious = existsSync(preserved);
