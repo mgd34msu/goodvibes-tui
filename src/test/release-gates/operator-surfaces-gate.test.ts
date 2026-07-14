@@ -48,7 +48,7 @@ describe('operator surfaces gate', () => {
   beforeEach(() => {
     policyRuntimeState = new PolicyRuntimeState();
     configManager = new ConfigManager({ surfaceRoot: 'tui',  configDir: join(tmpdir(), `gv-operator-surfaces-${Date.now()}-${Math.random().toString(36).slice(2)}`) });
-    configManager.set('orchestration.maxActiveAgents', 8);
+    configManager.set('fleet.maxSize', 8);
     configManager.set('orchestration.maxDepth', 1);
     configManager.set('orchestration.recursionEnabled', true);
     runtimeServices = createRuntimeServices({
