@@ -46,6 +46,7 @@ export type SettingsCategory =
   | 'notifications'
   | 'release'
   | 'update'
+  | 'power'
   | 'danger';
 
 export type SettingsFocusPane = 'categories' | 'settings';
@@ -59,7 +60,7 @@ export const SETTINGS_CATEGORY_GROUPS: ReadonlyArray<{
   { label: 'Service & Network', categories: ['service', 'daemon', 'network', 'controlPlane', 'httpListener', 'web', 'relay'] },
   { label: 'Surfaces & Cloud', categories: ['surfaces', 'integrations', 'mcp', 'cloudflare'] },
   { label: 'Automation', categories: ['batch', 'automation', 'checkin', 'watchers', 'orchestration', 'planner', 'wrfc'] },
-  { label: 'Runtime & Data', categories: ['storage', 'atRest', 'sandbox', 'fetch', 'agents', 'runtime', 'cache', 'telemetry', 'diagnostics', 'learning'] },
+  { label: 'Runtime & Data', categories: ['storage', 'atRest', 'sandbox', 'fetch', 'agents', 'runtime', 'power', 'cache', 'telemetry', 'diagnostics', 'learning'] },
   { label: 'Advanced', categories: ['release', 'update', 'danger'] },
 ];
 

@@ -67,6 +67,8 @@ export interface ShellFooterBuildOptions {
   readonly sessionSpineStatus?: 'online' | 'offline';
   /** The web surface's reachable URL, when that surface is enabled; a persistent footer segment. */
   readonly webSurfaceUrl?: string;
+  /** True while power.keepAwake holds — renders the always-visible "sleep disabled" chip. */
+  readonly powerKeepAwake?: boolean;
 }
 
 export interface ShellFooterBuildResult {
@@ -147,6 +149,7 @@ export function buildShellFooter(
     options.sessionSpineStatus,
     options.permissionMode,
     options.webSurfaceUrl,
+    options.powerKeepAwake,
   );
   // Compact posture drops the process indicator and context hint entirely so
   // the footer fits within ~5 rows on short terminals.
