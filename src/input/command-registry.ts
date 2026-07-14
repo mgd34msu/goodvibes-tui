@@ -97,6 +97,8 @@ export interface CommandUiActions {
   editQueuedMessage?: (id: string, text: string) => boolean;
   /** Remove a still-queued message before delivery; false once delivered. */
   deleteQueuedMessage?: (id: string) => boolean;
+  /** Toggle the drill-in of the "used N memories" provenance chip (memory.showProvenance). */
+  toggleMemoryProvenance?: () => void;
   /** The current host sleep-ownership projection (power.status.get, flattened) — chip, held-because, lid-split. */
   getPowerState?: () => import('../core/power-status.ts').PowerSurfaceState;
   /** Set the daemon-held keep-awake toggle (power.keepAwake.set), acquiring/releasing the inhibitor live; returns the new state. */
