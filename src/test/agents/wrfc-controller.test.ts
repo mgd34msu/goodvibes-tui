@@ -375,9 +375,14 @@ describe('WrfcController', () => {
       expect(workflowCalls('WORKFLOW_CHAIN_PASSED')).toHaveLength(1);
     });
 
-    test('failing review starts same-chain fixer and records owner decision', async () => {
+    test('failing review starts a planned fix workstream and records owner decision', async () => {
       const controller = initTestWrfcController();
       const { chain, engineer } = createStartedChain(controller);
+      // The single-fixer prompt was replaced by a planned fix WORKSTREAM (SDK
+      // fix-phase rework): review findings decompose into a dependency-graph
+      // workstream driven by a FixWorkstreamRunner. A pending runner keeps the
+      // chain honestly 'fixing' while that cycle runs.
+      controller.setFixWorkstreamRunner({ run: () => new Promise(() => {}) } as never);
       await emitAgentCompleted(runtimeBus, engineer.id);
       const reviewer = agentStore.get(chain.reviewerAgentId ?? '')!;
       reviewer.fullOutput = makeReviewerOutput(5, false);
@@ -385,42 +390,42 @@ describe('WrfcController', () => {
       await emitAgentCompleted(runtimeBus, reviewer.id);
       await new Promise((r) => setTimeout(r, 10));
 
-      const fixer = agentStore.get(chain.fixerAgentId ?? '');
       expect(chain.state).toBe('fixing');
       expect(chain.fixAttempts).toBe(1);
-      expect(fixer?.wrfcRole).toBe('fixer');
-      expect(fixer?.wrfcId).toBe(chain.id);
-      expect(spawnInputs[2]).toMatchObject({ template: 'engineer', dangerously_disable_wrfc: true });
-      expect(spawnInputs[2].task).toContain('WRFC Fix Request');
-      expect(spawnInputs[2].task).toContain('Missing error handling');
       expect(workflowCalls('WORKFLOW_FIX_ATTEMPTED')).toHaveLength(1);
       expect(chain.ownerDecisions.at(-1)?.action).toBe('spawn_fixer');
     });
 
-    test('fix completion returns to reviewer and max fix attempts eventually fails the owner chain', async () => {
+    test('a merged fix cycle re-reviews, and max fix attempts eventually fails the owner chain', async () => {
       mockConfigState['wrfc.maxFixAttempts'] = 1;
       mockConfigGetCategoryState.maxFixAttempts = 1;
       const controller = initTestWrfcController();
+      // A 'merged' planned-fix runner resolves each cycle merged — the controller
+      // proceeds to the terminal-contract re-review (a fresh reviewer spawn),
+      // replacing the old complete-the-fixer-agent step.
+      controller.setFixWorkstreamRunner({ run: async () => ({ status: 'merged', taskCount: 1, workstreamId: 'ws-fix-1', mergedTitles: ['fix task'], filesModified: ['src/test.ts'] }) } as never);
       const { owner, chain, engineer } = createStartedChain(controller);
 
       await emitAgentCompleted(runtimeBus, engineer.id);
       const reviewerOne = agentStore.get(chain.reviewerAgentId ?? '')!;
       reviewerOne.fullOutput = makeReviewerOutput(5, false);
       await emitAgentCompleted(runtimeBus, reviewerOne.id);
-      const fixer = agentStore.get(chain.fixerAgentId ?? '')!;
-      fixer.fullOutput = makeEngineerOutput({ summary: 'fix attempt complete' });
-      await emitAgentCompleted(runtimeBus, fixer.id);
+      // The merged fix cycle re-reviews the merged result against the original
+      // contract (a fresh reviewer spawn). Complete that reviewer with another
+      // fail; with maxFixAttempts already spent (1), the chain fails below threshold.
+      await new Promise((r) => setTimeout(r, 20));
       const reviewerTwo = agentStore.get(chain.reviewerAgentId ?? '')!;
       reviewerTwo.fullOutput = makeReviewerOutput(5, false);
       await emitAgentCompleted(runtimeBus, reviewerTwo.id);
       await new Promise((r) => setTimeout(r, 20));
 
-      expect(chain.reviewCycles).toBe(2);
+      expect(chain.fixAttempts).toBe(1);
       expect(chain.state).toBe('failed');
       expect(chain.error).toContain('below threshold');
       expect(owner.status).toBe('failed');
       expect(chain.ownerTerminalEmitted).toBe(true);
       expect(workflowCalls('WORKFLOW_CHAIN_FAILED')).toHaveLength(1);
+      expect(chain.ownerDecisions.map((d) => d.action)).toContain('spawn_fixer');
     });
   });
 
@@ -487,33 +492,35 @@ describe('WrfcController', () => {
       expect(workflowCalls('WORKFLOW_AUTO_COMMITTED')).toHaveLength(1);
     });
 
-    test('auto-commit prefers an accepted fixer over a superseded engineer', async () => {
+    test('a merged fix cycle that then passes re-review lands the chain passed', async () => {
       mockConfigState['wrfc.autoCommit'] = true;
       mockConfigGetCategoryState.autoCommit = true;
       mkdirSync(join(projectRoot, '.git'));
       const controller = initTestWrfcController();
+      // The single fixer was replaced by a planned fix workstream that does its
+      // own reviewed-and-merged release; the controller re-reviews the merged
+      // result and, on a pass, the chain lands passed.
+      controller.setFixWorkstreamRunner({ run: async () => ({ status: 'merged', taskCount: 1, workstreamId: 'ws-fix-1', mergedTitles: ['fix task'], filesModified: ['src/test.ts'] }) } as never);
       const { chain, engineer } = createStartedChain(controller);
 
       await emitAgentCompleted(runtimeBus, engineer.id);
       const reviewerOne = agentStore.get(chain.reviewerAgentId ?? '')!;
       reviewerOne.fullOutput = makeReviewerOutput(5, false);
       await emitAgentCompleted(runtimeBus, reviewerOne.id);
-
-      const fixer = agentStore.get(chain.fixerAgentId ?? '')!;
-      fixer.fullOutput = makeEngineerOutput({ summary: 'accepted fix complete' });
-      await emitAgentCompleted(runtimeBus, fixer.id);
+      // The merged fix cycle re-reviews; that reviewer passes the original contract.
+      await new Promise((r) => setTimeout(r, 20));
       const reviewerTwo = agentStore.get(chain.reviewerAgentId ?? '')!;
       reviewerTwo.fullOutput = makeReviewerOutput(10, true);
       await emitAgentCompleted(runtimeBus, reviewerTwo.id);
       await new Promise((r) => setTimeout(r, 100));
 
       expect(chain.state).toBe('passed');
-      expect(mockMerge).toHaveBeenCalledTimes(1);
-      expect(mockMerge).toHaveBeenCalledWith(fixer.id);
-      expect(mockMerge).not.toHaveBeenCalledWith(engineer.id);
-      expect(mockMerge).not.toHaveBeenCalledWith(reviewerOne.id);
-      expect(mockMerge).not.toHaveBeenCalledWith(reviewerTwo.id);
-      expect(workflowCalls('WORKFLOW_AUTO_COMMITTED')).toHaveLength(1);
+      expect(chain.fixAttempts).toBe(1);
+      // The planned fix workstream did its own reviewed-and-merged release, so
+      // the passing chain routes through the fix cycle (spawn_fixer), not a
+      // separate single-fixer worktree auto-commit.
+      expect(chain.ownerDecisions.map((d) => d.action)).toContain('spawn_fixer');
+      expect(chain.ownerDecisions.map((d) => d.action)).toContain('review_passed');
     });
 
     test('auto-commit merge failure is a non-fatal warning — the reviewed chain still passes', async () => {

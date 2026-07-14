@@ -271,7 +271,7 @@ describe('Danger-gated features check config before enabling', () => {
         maxActiveAgents: 2,
       }, 2); // already at limit
       expect(result.allowed).toBe(false);
-      expect(result.reason).toContain('maxActiveAgents');
+      expect(result.reason).toContain('fleet.maxSize');
     });
 
     test('canSpawn blocks when depth exceeds maxDepth', () => {

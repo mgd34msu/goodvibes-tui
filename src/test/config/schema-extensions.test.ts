@@ -49,7 +49,7 @@ describe('Config schema extensions: orchestration, storage, sandbox, danger, and
     test('orchestration category fields have correct types when no project config exists', () => {
       const mgr = createConfigManager(tmpDir);
       expect(typeof mgr.get('orchestration.recursionEnabled')).toBe('boolean');
-      expect(typeof mgr.get('orchestration.maxActiveAgents')).toBe('number');
+      expect(typeof mgr.get('fleet.maxSize')).toBe('number');
       expect(typeof mgr.get('orchestration.maxDepth')).toBe('number');
     });
 
@@ -90,7 +90,7 @@ describe('Config schema extensions: orchestration, storage, sandbox, danger, and
 
     test('DEFAULT_CONFIG.orchestration has correct default values', () => {
       expect(DEFAULT_CONFIG.orchestration.recursionEnabled).toBe(false);
-      expect(DEFAULT_CONFIG.orchestration.maxActiveAgents).toBe(8);
+      expect(DEFAULT_CONFIG.fleet.maxSize).toBe(8);
       expect(DEFAULT_CONFIG.orchestration.maxDepth).toBe(0);
     });
 
@@ -128,11 +128,11 @@ describe('Config schema extensions: orchestration, storage, sandbox, danger, and
       mkdirSync(projectSettingsDir, { recursive: true });
       writeFileSync(
         join(projectSettingsDir, 'settings.json'),
-        JSON.stringify({ orchestration: { maxActiveAgents: 4 } }, null, 2),
+        JSON.stringify({ fleet: { maxSize: 4 } }, null, 2),
         'utf-8'
       );
       const mgr = createConfigManager(tmpDir);
-      expect(mgr.get('orchestration.maxActiveAgents')).toBe(4);
+      expect(mgr.get('fleet.maxSize')).toBe(4);
     });
   });
 
@@ -178,10 +178,10 @@ describe('Config schema extensions: orchestration, storage, sandbox, danger, and
       expect(mgr.get('orchestration.recursionEnabled')).toBe(true);
     });
 
-    test('set and get orchestration.maxActiveAgents with valid value', () => {
+    test('set and get fleet.maxSize with valid value', () => {
       const mgr = createConfigManager(tmpDir);
-      mgr.set('orchestration.maxActiveAgents', 12);
-      expect(mgr.get('orchestration.maxActiveAgents')).toBe(12);
+      mgr.set('fleet.maxSize', 12);
+      expect(mgr.get('fleet.maxSize')).toBe(12);
     });
 
     test('set and get orchestration.maxDepth to 1', () => {
@@ -359,26 +359,26 @@ describe('Config schema extensions: orchestration, storage, sandbox, danger, and
       expect(() => mgr.set('orchestration.maxDepth', 6 as never)).toThrow();
     });
 
-    test('orchestration.maxActiveAgents rejects 0 (below minimum)', () => {
+    test('fleet.maxSize rejects 0 (below minimum)', () => {
       const mgr = createConfigManager(tmpDir);
-      expect(() => mgr.set('orchestration.maxActiveAgents', 0 as never)).toThrow();
+      expect(() => mgr.set('fleet.maxSize', 0 as never)).toThrow();
     });
 
-    test('orchestration.maxActiveAgents rejects 21 (above maximum)', () => {
+    test('fleet.maxSize rejects 21 (above maximum)', () => {
       const mgr = createConfigManager(tmpDir);
-      expect(() => mgr.set('orchestration.maxActiveAgents', 21 as never)).toThrow();
+      expect(() => mgr.set('fleet.maxSize', 21 as never)).toThrow();
     });
 
-    test('orchestration.maxActiveAgents accepts boundary value 1', () => {
+    test('fleet.maxSize accepts boundary value 1', () => {
       const mgr = createConfigManager(tmpDir);
-      mgr.set('orchestration.maxActiveAgents', 1);
-      expect(mgr.get('orchestration.maxActiveAgents')).toBe(1);
+      mgr.set('fleet.maxSize', 1);
+      expect(mgr.get('fleet.maxSize')).toBe(1);
     });
 
-    test('orchestration.maxActiveAgents accepts boundary value 20', () => {
+    test('fleet.maxSize accepts boundary value 20', () => {
       const mgr = createConfigManager(tmpDir);
-      mgr.set('orchestration.maxActiveAgents', 20);
-      expect(mgr.get('orchestration.maxActiveAgents')).toBe(20);
+      mgr.set('fleet.maxSize', 20);
+      expect(mgr.get('fleet.maxSize')).toBe(20);
     });
   });
 
@@ -415,7 +415,7 @@ describe('Config schema extensions: orchestration, storage, sandbox, danger, and
       const mgr = createConfigManager(tmpDir);
       const all = mgr.getAll();
       expect(typeof all.orchestration.recursionEnabled).toBe('boolean');
-      expect(typeof all.orchestration.maxActiveAgents).toBe('number');
+      expect(typeof all.fleet.maxSize).toBe('number');
       expect(typeof all.orchestration.maxDepth).toBe('number');
       expect(typeof all.daemon.enabled).toBe('boolean');
       expect(typeof all.danger.httpListener).toBe('boolean');
@@ -433,14 +433,14 @@ describe('Config schema extensions: orchestration, storage, sandbox, danger, and
 
     test('getAll snapshot does not reflect subsequent mutations (deep clone)', () => {
       const mgr = createConfigManager(tmpDir);
-      const valueBefore = mgr.get('orchestration.maxActiveAgents');
+      const valueBefore = mgr.get('fleet.maxSize');
       const snapshot = mgr.getAll();
       // Set to a value that differs from whatever was loaded (pick 1 if current is > 1, else pick 2)
       const newValue = valueBefore !== 1 ? 1 : 2;
-      mgr.set('orchestration.maxActiveAgents', newValue);
+      mgr.set('fleet.maxSize', newValue);
       // Snapshot must not reflect the mutation
-      expect(snapshot.orchestration.maxActiveAgents).toBe(valueBefore);
-      expect(mgr.get('orchestration.maxActiveAgents')).toBe(newValue);
+      expect(snapshot.fleet.maxSize).toBe(valueBefore);
+      expect(mgr.get('fleet.maxSize')).toBe(newValue);
     });
   });
 
@@ -452,7 +452,7 @@ describe('Config schema extensions: orchestration, storage, sandbox, danger, and
     test('DEFAULT_CONFIG.orchestration, daemon, and danger have all required keys', () => {
       expect(DEFAULT_CONFIG.orchestration).toBeDefined();
       expect(typeof DEFAULT_CONFIG.orchestration.recursionEnabled).toBe('boolean');
-      expect(typeof DEFAULT_CONFIG.orchestration.maxActiveAgents).toBe('number');
+      expect(typeof DEFAULT_CONFIG.fleet.maxSize).toBe('number');
       expect(typeof DEFAULT_CONFIG.orchestration.maxDepth).toBe('number');
       // daemon.enabled is the honest key (default true). The deprecated
       // danger.daemon alias was removed from the schema.
