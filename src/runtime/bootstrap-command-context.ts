@@ -56,6 +56,7 @@ import {
 
 export type CreateBootstrapCommandContextOptions = {
   configManager: ConfigManager;
+  pairingTokens?: import('@pellux/goodvibes-sdk/platform/pairing').PairingTokenManager;
   featureFlagManager?: import('@/runtime/index.ts').FeatureFlagManager;
   providerRegistry: ProviderRegistry;
   conversation: ConversationManager;
@@ -144,6 +145,7 @@ export function createBootstrapCommandContext(
   const {
     providerRegistry,
     configManager,
+    pairingTokens,
     featureFlagManager,
     conversation,
     runtime,
@@ -288,7 +290,7 @@ export function createBootstrapCommandContext(
     projectPlanningProjectId,
     workPlanStore,
   }, shellServices);
-  const platform = createBootstrapCommandPlatformSection({ configManager, featureFlagManager, voiceProviderRegistry, voiceService, webSearchService, mediaProviders, artifactStore }, shellServices);
+  const platform = createBootstrapCommandPlatformSection({ configManager, pairingTokens, featureFlagManager, voiceProviderRegistry, voiceService, webSearchService, mediaProviders, artifactStore }, shellServices);
   const extensions = createBootstrapCommandExtensionsSection({
     toolRegistry,
     mcpRegistry,

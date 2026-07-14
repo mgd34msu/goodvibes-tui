@@ -26,6 +26,7 @@ import { createMemoryModalSurface, type MemoryModalDeps } from './modals/memory-
 import { createWorkPlanModalSurface } from './modals/work-plan-modal.ts';
 import { createKeybindingsModalSurface } from './modals/keybindings-modal.ts';
 import { createPairingModalSurface, type PairingModalConnectionInfo } from './modals/pairing-modal.ts';
+import { createDevicesModalSurface } from './modals/devices-modal.ts';
 import { createPlanningModalSurface } from './modals/planning-modal.ts';
 
 /**
@@ -149,6 +150,14 @@ export function registerBuiltinModals(manager: PanelManager, deps: ResolvedBuilt
     copyToClipboard,
   }));
   manager.registerModalRedirect('qr-code', 'pairing-modal');
+
+  // Paired-device management (settings security domain): list/rename/revoke/
+  // migrate-shared over the same per-device token store the pairing QR mints into.
+  manager.registerModalSurface(createDevicesModalSurface({
+    pairingTokens: ui.platform.pairingTokens,
+    copyToClipboard,
+  }));
+  manager.registerModalRedirect('devices', 'devices-modal');
 
   manager.registerModalSurface(createPlanningModalSurface({
     service: deps.projectPlanningService,

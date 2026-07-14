@@ -273,6 +273,8 @@ export interface CommandWorkspaceServices
 export interface CommandPlatformConfigServices {
   readonly config: DeepReadonly<GoodVibesConfig>;
   readonly configManager: ConfigManager;
+  /** Per-device pairing tokens — backs the /devices command family. */
+  readonly pairingTokens?: import('@pellux/goodvibes-sdk/platform/pairing').PairingTokenManager;
   /** Capability gate runtime — feature states derive from domain settings keys; surfaces read live/pending state here. */
   readonly featureFlagManager?: FeatureFlagManager;
   readonly voiceProviderRegistry?: VoiceProviderRegistry;

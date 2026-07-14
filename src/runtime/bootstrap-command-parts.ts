@@ -74,6 +74,7 @@ export interface BootstrapCommandActionOptions {
 
 export interface BootstrapCommandSectionOptions {
   readonly configManager: ConfigManager;
+  readonly pairingTokens?: import('@pellux/goodvibes-sdk/platform/pairing').PairingTokenManager;
   readonly featureFlagManager?: FeatureFlagManager;
   readonly providerRegistry: ProviderRegistry;
   readonly conversation: ConversationManager;
@@ -396,13 +397,14 @@ export function createBootstrapCommandWorkspaceSection(
 export function createBootstrapCommandPlatformSection(
   options: Pick<
     BootstrapCommandSectionOptions,
-    'configManager' | 'featureFlagManager' | 'voiceProviderRegistry' | 'voiceService' | 'webSearchService' | 'mediaProviders' | 'artifactStore'
+    'configManager' | 'pairingTokens' | 'featureFlagManager' | 'voiceProviderRegistry' | 'voiceService' | 'webSearchService' | 'mediaProviders' | 'artifactStore'
   >,
   shellServices: BootstrapCommandShellServices,
 ): BootstrapCommandPlatformSection {
   return {
     config: getConfigSnapshot(options.configManager),
     configManager: options.configManager,
+    ...(options.pairingTokens ? { pairingTokens: options.pairingTokens } : {}),
     featureFlagManager: options.featureFlagManager,
     voiceProviderRegistry: options.voiceProviderRegistry,
     voiceService: options.voiceService,
