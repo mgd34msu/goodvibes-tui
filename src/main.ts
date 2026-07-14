@@ -68,7 +68,7 @@ import { makeComposerEditorOpener } from './input/composer-editor.ts';
 import { evaluateSessionMaintenance } from '@/runtime/index.ts';
 import { createCancelGeneration, createCancelToolCall } from './core/turn-cancellation.ts';
 import { powerSurfaceFromState } from './core/power-status.ts';
-import { latestMemoryUse, readMemoryShowProvenance } from './core/memory-provenance.ts';
+import { memoryRecordIdsFromTurn, readMemoryShowProvenance } from './core/memory-provenance.ts';
 import { wrapRequestPermissionWithAlert } from './core/approval-alert.ts';
 import { createTerminalNotifier } from './core/terminal-notifier.ts';
 import { setPanelFrameRequester } from './panels/base-panel.ts';
@@ -209,7 +209,10 @@ async function main() {
   let recoveryPending = false;
   // Which file the current recovery prompt should load/delete from (see recovery-input-helpers.ts).
   let recoverySource: 'live' | 'preserved' = 'live';
-  // Drill-in state for the optional "used N memories" chip (memory.showProvenance).
+  // Optional "used N memories" chip (memory.showProvenance): the memory-sourced
+  // record ids the most recent turn drew on (SDK metadata.memory.recordIds),
+  // and the drill-in expand state.
+  let latestMemoryRecordIds: readonly string[] = [];
   let memoryProvenanceExpanded = false;
 
   const lifecycle = installProcessLifecycle({
@@ -644,12 +647,10 @@ async function main() {
     viewport.push(...UIFactory.createQueuedMessageList(conversationWidth, orchestrator.listQueuedMessages()));
 
     // Optional "used N memories" provenance chip (default OFF). When off, the
-    // records are never even read, so nothing renders and no context is added.
-    if (readMemoryShowProvenance(configManager)) {
-      const memoryUse = latestMemoryUse(orchestrator.getTurnInjections());
-      if (memoryUse) {
-        viewport.push(...UIFactory.createMemoryProvenanceChip(conversationWidth, memoryUse.use.count, memoryUse.use.ids, memoryProvenanceExpanded));
-      }
+    // metadata is never even read, so nothing renders. When on, it names the
+    // memory record ids the latest turn drew on (metadata.memory.recordIds).
+    if (readMemoryShowProvenance(configManager) && latestMemoryRecordIds.length > 0) {
+      viewport.push(...UIFactory.createMemoryProvenanceChip(conversationWidth, latestMemoryRecordIds.length, latestMemoryRecordIds, memoryProvenanceExpanded));
     }
 
     viewport = applyConversationOverlays(viewport, {
@@ -738,6 +739,15 @@ async function main() {
     render, webhookNotifier: ctx.services.webhookNotifier, focusTracker: ctx.services.focusTracker, terminalNotifier, runtimeBus: uiServices.runtime.runtimeBus,
   });
   unsubs.push(...turnUnsubs);
+
+  // Capture the memory-provenance record ids from each completed turn's payload
+  // (metadata.memory.recordIds). Read structurally so it works whether or not
+  // the pinned SDK's TurnEvent type surfaces the field yet; the chip renders
+  // only when memory.showProvenance is on (see the render loop).
+  unsubs.push(uiServices.events.turns.on('TURN_COMPLETED', (evt) => {
+    latestMemoryRecordIds = memoryRecordIdsFromTurn(evt);
+    memoryProvenanceExpanded = false; // a fresh turn starts collapsed
+  }));
 
   // Stable turn context for failover retry — set in submitInput, read by retryTurn.
   let retryCtx: { count: number; text: string; content?: ContentPart[]; opts?: Parameters<typeof orchestrator.handleUserInput>[2] } | null = null;
