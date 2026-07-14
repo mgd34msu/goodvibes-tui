@@ -167,6 +167,11 @@ const KIND_TAGS: Record<ProcessKind, string> = {
   // A single leaf node — never a rollup of other flat-list nodes (see
   // ROLLUP_KINDS below) — so no other list in this module needs updating.
   'code-index': 'index',
+  // A hosted third-party coding agent (Claude Code / Codex / opencode) spawned
+  // over ACP (adapters/acp-host.ts). A plain leaf row — steer/stop/attention
+  // ride on its node capabilities and the SDK's needsAttention projection, so
+  // this glyph/label is the only read-model special-casing it needs.
+  'acp-agent': 'acp',
 };
 
 export function fleetStateGlyph(state: ProcessState): string {

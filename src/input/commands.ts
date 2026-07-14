@@ -55,6 +55,7 @@ import { registerLocalProviderRuntimeCommands } from './commands/local-provider-
 import { registerHealthRuntimeCommands } from './commands/health-runtime.ts';
 import { registerSettingsSyncRuntimeCommands } from './commands/settings-sync-runtime.ts';
 import { registerWorktreeRuntimeCommands } from './commands/worktree-runtime.ts';
+import { registerAcpRuntimeCommands } from './commands/acp-runtime.ts';
 import { registerProviderAccountsRuntimeCommands } from './commands/provider-accounts-runtime.ts';
 import { registerLocalAuthRuntimeCommands } from './commands/local-auth-runtime.ts';
 import { registerIntelligenceRuntimeCommands } from './commands/intelligence-runtime.ts';
@@ -134,6 +135,7 @@ export const BUILTIN_COMMAND_GROUPS: readonly BuiltinCommandGroup[] = [
   { category: 'Health', register: registerHealthRuntimeCommands },
   { category: 'Settings Sync', register: registerSettingsSyncRuntimeCommands },
   { category: 'Worktrees', register: registerWorktreeRuntimeCommands },
+  { category: 'Fleet', register: registerAcpRuntimeCommands },
   { category: 'Provider Accounts', register: registerProviderAccountsRuntimeCommands },
   { category: 'Local Auth', register: registerLocalAuthRuntimeCommands },
   { category: 'Intelligence', register: registerIntelligenceRuntimeCommands },
