@@ -126,6 +126,12 @@ export function handleGlobalShortcutToken(
       state.commandContext?.cancelToolCall?.();
       return true;
 
+    case 'toggle-memory-provenance':
+      // Expand/collapse the provenance chip's drill-in. No-op when the chip is
+      // not showing; still consumed so the composer never sees a stray Alt+M.
+      state.commandContext?.toggleMemoryProvenance?.();
+      return true;
+
     case 'toggle-keep-awake': {
       // Flip the daemon-held keep-awake toggle; the always-visible "sleep
       // disabled" chip is the confirmation. Fire-and-forget (the seam renders on

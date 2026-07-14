@@ -208,6 +208,43 @@ export class UIFactory {
     return lines;
   }
 
+  /**
+   * createMemoryProvenanceChip — the optional "used N memories" turn chip.
+   *
+   * Collapsed: a single small line naming the count with the drill-in hint.
+   * Expanded (Alt+M): the same line followed by one line per memory id. Returns
+   * an empty array when no memories were used — the caller only renders this
+   * when the memory-provenance setting is on, so an off session produces zero
+   * lines and adds zero context.
+   */
+  public static createMemoryProvenanceChip(width: number, count: number, ids: readonly string[], expanded: boolean): Line[] {
+    if (count <= 0) return [];
+    const t = activeUiTones();
+    const noun = count === 1 ? 'memory' : 'memories';
+    const header = expanded
+      ? `used ${count} ${noun} — Alt+M to hide`
+      : `used ${count} ${noun} — Alt+M to list`;
+    const lines: Line[] = renderConversationFragment(header, width, {
+      prefix: ' ◆ ',
+      prefixFg: t.state.info,
+      text: t.fg.dim,
+      bodyBg: '#1a1a1a',
+      dim: true,
+    });
+    if (expanded) {
+      ids.forEach((id, index) => {
+        lines.push(...renderConversationFragment(id, width, {
+          prefix: `   ${index + 1}. `,
+          prefixFg: t.state.info,
+          text: t.fg.dim,
+          bodyBg: '#1a1a1a',
+          dim: true,
+        }));
+      });
+    }
+    return lines;
+  }
+
   public static createFooter(
     width: number,
     prompt: string,

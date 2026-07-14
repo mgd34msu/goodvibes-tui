@@ -25,6 +25,7 @@ import {
 } from './worktree-setup-config.ts';
 import { BUDGET_ALERT_USD_CONFIG_KEY, BUDGET_ALERT_USD_DEFAULT, readBudgetAlertUsd } from '../export/cost-utils.ts';
 import { MEMORY_PROJECTION_DIR_CONFIG_KEY, buildMemoryProjectionDirSyntheticEntry } from './commands/recall-files-config.ts';
+import { MEMORY_SHOW_PROVENANCE_CONFIG_KEY, MEMORY_SHOW_PROVENANCE_DEFAULT, MEMORY_SHOW_PROVENANCE_DESCRIPTION, readMemoryShowProvenance } from '../core/memory-provenance.ts';
 import {
   injectSandboxExecSyntheticEntries,
   isSandboxExecListConfigKey,
@@ -210,6 +211,26 @@ export function buildSettingGroups(
   // settings). Not in the SDK ConfigKey union, same rationale as above.
   if (storageEntries && !storageEntries.some((e) => e.setting.key === MEMORY_PROJECTION_DIR_CONFIG_KEY)) {
     storageEntries.push(buildMemoryProjectionDirSyntheticEntry(configManager));
+  }
+
+  // Inject the memory.showProvenance synthetic (the "used N memories" turn chip)
+  // into the memory category. TUI-local, default OFF (owner ruling 2026-07-13):
+  // when off, nothing renders and no context is added.
+  const memoryEntries = groups.get('memory');
+  if (memoryEntries && !memoryEntries.some((e) => e.setting.key === (MEMORY_SHOW_PROVENANCE_CONFIG_KEY as ConfigKey))) {
+    // Read defensively (memory.* has no SDK DEFAULT_CONFIG entry — get() throws
+    // until a value is written; unset means the default OFF).
+    const currentValue = readMemoryShowProvenance(configManager);
+    memoryEntries.push({
+      setting: {
+        key: MEMORY_SHOW_PROVENANCE_CONFIG_KEY as ConfigKey,
+        type: 'boolean',
+        default: MEMORY_SHOW_PROVENANCE_DEFAULT,
+        description: MEMORY_SHOW_PROVENANCE_DESCRIPTION,
+      },
+      currentValue,
+      isDefault: currentValue === MEMORY_SHOW_PROVENANCE_DEFAULT,
+    });
   }
 
   // Inject the worktree.setup.commands / worktree.setup.carryOverGlobs

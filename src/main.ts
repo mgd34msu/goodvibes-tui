@@ -68,6 +68,7 @@ import { makeComposerEditorOpener } from './input/composer-editor.ts';
 import { evaluateSessionMaintenance } from '@/runtime/index.ts';
 import { createCancelGeneration, createCancelToolCall } from './core/turn-cancellation.ts';
 import { powerSurfaceFromState } from './core/power-status.ts';
+import { latestMemoryUse, readMemoryShowProvenance } from './core/memory-provenance.ts';
 import { wrapRequestPermissionWithAlert } from './core/approval-alert.ts';
 import { createTerminalNotifier } from './core/terminal-notifier.ts';
 import { setPanelFrameRequester } from './panels/base-panel.ts';
@@ -208,6 +209,8 @@ async function main() {
   let recoveryPending = false;
   // Which file the current recovery prompt should load/delete from (see recovery-input-helpers.ts).
   let recoverySource: 'live' | 'preserved' = 'live';
+  // Drill-in state for the optional "used N memories" chip (memory.showProvenance).
+  let memoryProvenanceExpanded = false;
 
   const lifecycle = installProcessLifecycle({
     stdin,
@@ -360,6 +363,8 @@ async function main() {
   // Host sleep ownership (power.*): read the flattened state for the /power
   // status surface; the toggle drives the live PowerManager (acquires/releases
   // the OS inhibitor, persists power.keepAwake, emits OPS_POWER_STATE_CHANGED).
+  // Drill-in toggle for the "used N memories" provenance chip (Alt+M).
+  commandContext.toggleMemoryProvenance = () => { memoryProvenanceExpanded = !memoryProvenanceExpanded; render(); };
   commandContext.getPowerState = () => powerSurfaceFromState(ctx.services.powerManager.getState());
   commandContext.setKeepAwake = async (enabled) => {
     const next = powerSurfaceFromState(await ctx.services.powerManager.setKeepAwake(enabled));
@@ -637,6 +642,15 @@ async function main() {
     }
 
     viewport.push(...UIFactory.createQueuedMessageList(conversationWidth, orchestrator.listQueuedMessages()));
+
+    // Optional "used N memories" provenance chip (default OFF). When off, the
+    // records are never even read, so nothing renders and no context is added.
+    if (readMemoryShowProvenance(configManager)) {
+      const memoryUse = latestMemoryUse(orchestrator.getTurnInjections());
+      if (memoryUse) {
+        viewport.push(...UIFactory.createMemoryProvenanceChip(conversationWidth, memoryUse.use.count, memoryUse.use.ids, memoryProvenanceExpanded));
+      }
+    }
 
     viewport = applyConversationOverlays(viewport, {
       input,

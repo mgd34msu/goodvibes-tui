@@ -70,7 +70,8 @@ export type KeyAction =
   | 'yank'
   | 'yank-pop'
   | 'cancel-tool-call'
-  | 'toggle-keep-awake';
+  | 'toggle-keep-awake'
+  | 'toggle-memory-provenance';
 
 /** Human-readable description for each action (used in /keybindings display). */
 export const ACTION_DESCRIPTIONS: Record<KeyAction, string> = {
@@ -115,6 +116,7 @@ export const ACTION_DESCRIPTIONS: Record<KeyAction, string> = {
   'yank-pop':              'Rotate kill ring and yank next entry (Alt+Y)',
   'cancel-tool-call':      'Cancel the running tool call (the turn continues)',
   'toggle-keep-awake':     'Toggle keep-awake (the "sleep disabled" chip)',
+  'toggle-memory-provenance': 'List/hide the memories a turn used (provenance chip drill-in)',
 };
 
 /** Default key bindings for all actions. */
@@ -202,6 +204,9 @@ export const DEFAULT_KEYBINDINGS: Record<KeyAction, KeyCombo[]> = {
   // chip). Alt+A is unused by any other default. The always-visible chip is the
   // confirmation of the toggle's state.
   'toggle-keep-awake':     [{ key: 'a', alt: true }],
+  // Alt+M: expand/collapse the "used N memories" provenance chip's drill-in.
+  // Alt+M is unused by any other default. A no-op when the chip is not showing.
+  'toggle-memory-provenance': [{ key: 'm', alt: true }],
 };
 
 /** Resolved overrides type: each key can be a single combo or array. */

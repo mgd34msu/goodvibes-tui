@@ -59,6 +59,7 @@ const CATEGORY_INFO: Record<SettingsCategory, string> = {
   cloudflare: 'Optional Cloudflare control plane, batch queue, Worker, Tunnel, Access, DNS, KV, Durable Objects, Secrets Store, and R2 settings.',
   release: 'Release-channel preference.',
   power: 'Host sleep ownership. Keep-awake holds the host awake (the always-visible "sleep disabled" chip is the safety mechanism — no timer, no AC-only option); automatic inhibition keeps the host awake while real work runs, with an honest hard cap on that work hold.',
+  memory: 'Memory provenance surfacing. Whether turns that drew on your standing memories show a small "used N memories" chip with a drill-in listing them. Off by default — when off, nothing is rendered and no context is added.',
   danger: 'High-impact switches for daemon and HTTP listener behavior. These are operational overrides, not normal preferences.',
   tools: 'Tool LLM and helper model routing. Empty provider/model values inherit the active chat route unless a specific helper/tool route is set.',
   network: 'Combined network view for daemon control-plane, HTTP listener, browser web surface, and general outbound network settings.',
