@@ -8,7 +8,7 @@ import { linesToText } from '../setup.ts';
 // Full-string render at 80x24 and 60 columns, both states.
 // ---------------------------------------------------------------------------
 
-function footerText(width: number, powerKeepAwake: boolean): string {
+function footerText(width: number, powerKeepAwake: boolean, compact = false): string {
   const lines = UIFactory.createFooter(
     width,
     '> prompt',
@@ -31,7 +31,7 @@ function footerText(width: number, powerKeepAwake: boolean): string {
     undefined,         // composerStatus
     undefined,         // composerFlags
     undefined,         // composerPendingRisk
-    false,             // compact
+    compact,           // compact
     undefined,         // sessionSpineStatus
     'normal',          // permissionMode
     undefined,         // webSurfaceUrl
@@ -55,5 +55,15 @@ describe('footer "sleep disabled" chip (STEP 3)', () => {
 
   test('60 columns, keep-awake OFF: no chip', () => {
     expect(footerText(60, false)).not.toContain('sleep disabled');
+  });
+
+  // The posture row (mode/ctx/risk/state/flags) is dropped at compact height,
+  // but the keep-awake chip is a safety indicator and must survive.
+  test('compact height, keep-awake ON: the chip survives (posture row dropped, chip kept)', () => {
+    expect(footerText(80, true, true)).toContain('sleep disabled');
+  });
+
+  test('compact height, keep-awake OFF: no chip', () => {
+    expect(footerText(80, false, true)).not.toContain('sleep disabled');
   });
 });

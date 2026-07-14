@@ -68,6 +68,8 @@ import { makeComposerEditorOpener } from './input/composer-editor.ts';
 import { evaluateSessionMaintenance } from '@/runtime/index.ts';
 import { createCancelGeneration } from './core/turn-cancellation.ts';
 import { wireInteractionSeams, createMemoryProvenanceUi } from './runtime/interaction-seams.ts';
+import { createPowerChipSource } from './core/power-chip-source.ts';
+import { fetchDaemonPowerState, installKeepAwakeRemoteForward } from './runtime/power-keepawake-remote.ts';
 import { wrapRequestPermissionWithAlert } from './core/approval-alert.ts';
 import { createTerminalNotifier } from './core/terminal-notifier.ts';
 import { setPanelFrameRequester } from './panels/base-panel.ts';
@@ -196,6 +198,11 @@ async function main() {
   let stopSpokenOutputForExit: (() => Promise<void>) | null = null;
   // The optional "used N memories" provenance chip (default OFF) — see interaction-seams.ts.
   const memoryProvenanceUi = createMemoryProvenanceUi({ render: () => render(), memorySpine: ctx.services.memorySpine });
+  // Topology-aware keep-awake: the chip renders the DAEMON's state in adopted-external mode (power-chip-source.ts) and every toggle is forwarded to that daemon (power-keepawake-remote.ts) so keep-awake survives the TUI closing in BOTH topologies.
+  const isExternalDaemon = () => uiServices.platform.externalServices?.inspect()?.daemonStatus?.mode === 'external';
+  const powerChipSource = createPowerChipSource({ powerManager: ctx.services.powerManager, render: () => render(), isExternalDaemon,
+    onPowerEvent: (cb) => uiServices.events.ops.on('OPS_POWER_STATE_CHANGED', cb as never), fetchDaemonPowerState: () => fetchDaemonPowerState({ configManager, homeDirectory, isExternalDaemon }) });
+  unsubs.push(powerChipSource.stop, installKeepAwakeRemoteForward({ configManager, homeDirectory, isExternalDaemon }));
 
   const lifecycle = installProcessLifecycle({
     stdin,
@@ -320,7 +327,7 @@ async function main() {
   commandContext.platform.externalServices = uiServices.platform.externalServices;
   commandContext.cancelGeneration = cancelGeneration;
   wireInteractionSeams(commandContext, {
-    orchestrator, powerManager: ctx.services.powerManager, render: () => render(), notify: (m) => systemMessageRouter.high(m),
+    orchestrator, powerManager: ctx.services.powerManager, readPowerSurface: () => powerChipSource.get(), render: () => render(), notify: (m) => systemMessageRouter.high(m),
     getActiveToolCallId: () => streamMetrics.activeToolCallId, toggleMemoryProvenance: () => memoryProvenanceUi.toggle(),
   });
   commandContext.isGenerating = () => orchestrator.isThinking;
@@ -490,8 +497,8 @@ async function main() {
       // Cross-surface spine posture segment (adopted-daemon mode only).
       sessionSpineStatus: (() => { const s = uiServices.platform.externalServices?.inspect(); return s?.sessionSpineActive && s.sessionSpineStatus && s.sessionSpineStatus !== 'unknown' ? s.sessionSpineStatus : undefined; })(), runningAgentCount, runningProcessCount,
       webSurfaceUrl: configManager.get('web.enabled') ? resolveWebSurfaceUrl(configManager) : undefined,
-      // Always-visible "sleep disabled" chip — read live from the PowerManager each render.
-      powerKeepAwake: ctx.services.powerManager.getState().keepAwake.enabled,
+      // Always-visible "sleep disabled" chip — topology-aware: the DAEMON's state in adopted-external mode, the in-process manager otherwise (power-chip-source.ts).
+      powerKeepAwake: powerChipSource.get().keepAwake,
       // Composer must not read as focused while the panel/process indicator owns keyboard focus.
       promptFocused: !input.panelFocused && !input.indicatorFocused,
       indicatorFocused: input.indicatorFocused,

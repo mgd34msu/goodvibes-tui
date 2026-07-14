@@ -411,6 +411,18 @@ export class UIFactory {
         if (px >= width) break;
       }
       lines.push(postureLine);
+    } else if (compact && powerKeepAwake) {
+      // The keep-awake chip is a safety indicator — it survives compact height
+      // even though the rest of the posture row (mode/ctx/risk/state/flags) is
+      // dropped at height < 30. Its own compact-surviving slot.
+      const chipLine = createBaseLine();
+      let cx = 2;
+      for (const ch of ` ${SLEEP_DISABLED_CHIP} `) {
+        if (cx >= width) break;
+        chipLine[cx] = { char: ch, fg: t.chrome.warn, bg: '', bold: true, dim: false, underline: false, italic: false, strikethrough: false };
+        cx += getDisplayWidth(ch);
+      }
+      lines.push(chipLine);
     }
     const isRecentlyCopied = Date.now() - lastCopyTime < 2000;
     // Token usage line + running ~$ cost estimate (derived from the usage

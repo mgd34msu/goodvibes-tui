@@ -82,3 +82,11 @@ describe('composition parity — retention janitor and live config apply run on 
     expect(services).toContain('shellPaths,');
   });
 });
+
+describe('composition parity — keep-awake config live-apply is wired', () => {
+  test('the power manager is wired with subscribeConfig so a config write applies live', () => {
+    const idlePower = read('src/runtime/idle-power-services.ts');
+    expect(idlePower).toContain('subscribeConfig:');
+    expect(idlePower).toContain('configManager.subscribe');
+  });
+});

@@ -28,6 +28,8 @@ export interface InteractionOrchestrator extends ToolCancelOrchestrator {
 export interface InteractionSeamDeps {
   readonly orchestrator: InteractionOrchestrator;
   readonly powerManager: PowerManager;
+  /** Topology-aware power projection (the chip source): the DAEMON's state in adopted-external mode. Falls back to the local manager when absent. */
+  readonly readPowerSurface?: (() => ReturnType<typeof powerSurfaceFromState>) | undefined;
   readonly render: () => void;
   readonly notify: (message: string) => void;
   readonly getActiveToolCallId: () => string | undefined;
@@ -44,7 +46,7 @@ export function wireInteractionSeams(cc: CommandContext, deps: InteractionSeamDe
   cc.editQueuedMessage = (id, text) => { const ok = deps.orchestrator.editQueuedMessage(id, text); if (ok) deps.render(); return ok; };
   cc.deleteQueuedMessage = (id) => { const ok = deps.orchestrator.deleteQueuedMessage(id); if (ok) deps.render(); return ok; };
   cc.toggleMemoryProvenance = deps.toggleMemoryProvenance;
-  cc.getPowerState = () => powerSurfaceFromState(deps.powerManager.getState());
+  cc.getPowerState = () => (deps.readPowerSurface ? deps.readPowerSurface() : powerSurfaceFromState(deps.powerManager.getState()));
   cc.setKeepAwake = async (enabled) => { const next = powerSurfaceFromState(await deps.powerManager.setKeepAwake(enabled)); deps.render(); return next; };
 }
 

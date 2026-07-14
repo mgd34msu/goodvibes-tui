@@ -31,6 +31,8 @@ export interface IdlePowerServicesDeps {
   readonly snapshotTick: () => void;
   /** Wake catch-up: fire the automation heartbeat. */
   readonly heartbeat: () => Promise<void>;
+  /** Injectable platform seam (tests); defaults to the OS pick inside wireRuntimePower. */
+  readonly powerSeam?: Parameters<typeof wireRuntimePower>[0]['seam'];
 }
 
 export interface IdlePowerServices {
@@ -56,9 +58,16 @@ export function wireIdlePowerAndLiveTurn(deps: IdlePowerServicesDeps): IdlePower
   const powerManager = wireRuntimePower({
     readConfig: (key) => deps.configManager.get(key as Parameters<typeof deps.configManager.get>[0]),
     writeConfig: (key, value) => deps.configManager.setDynamic(key as Parameters<typeof deps.configManager.setDynamic>[0], value),
+    // Live config subscription: an external edit to power.keepAwake (a settings-
+    // modal toggle, a hand-edited settings file) applies LIVE to the in-process
+    // manager — acquires/releases the inhibitor and lights the chip with no
+    // restart. This is the config-apply path for the EMBEDDED topology + the
+    // local chip; the external daemon is reached separately over the verb.
+    subscribeConfig: (key, cb) => (deps.configManager.subscribe as unknown as (k: string, c: (v: unknown) => void) => () => void)(key, (newValue) => cb(newValue)),
     runtimeBus: deps.runtimeBus,
     sleepCheckpoint: deps.snapshotTick,
     wakeCatchUp: [() => memoryConsolidationScheduler.tick(), deps.snapshotTick, deps.heartbeat],
+    seam: deps.powerSeam,
   });
   return { memoryConsolidationScheduler, powerManager, sessionLiveTurnControls };
 }
