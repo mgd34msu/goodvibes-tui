@@ -69,7 +69,7 @@ async function runAgentMayFail(args: Record<string, unknown>) {
 
 beforeEach(() => {
   harness = makeAgentHarness();
-  harness.configManager.set('orchestration.maxActiveAgents', 8);
+  harness.configManager.set('fleet.maxSize', 8);
   harness.configManager.set('orchestration.maxDepth', 1);
   harness.configManager.set('orchestration.recursionEnabled', true);
 });
