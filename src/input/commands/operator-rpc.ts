@@ -63,8 +63,8 @@ function resolveControlPlaneBaseUrl(configManager: ConfigManager): string | null
  * reach the same daemon over the same generic invoke path, never two divergent
  * clients. Refusal reasons are surfaced verbatim so callers print them directly.
  */
-export function resolveOperatorRpc(deps: { readonly configManager: ConfigManager; readonly homeDirectory: string }): OperatorRpc {
-  const { configManager, homeDirectory } = deps;
+export function resolveOperatorRpc(deps: { readonly configManager: ConfigManager; readonly homeDirectory: string | (() => string) }): OperatorRpc {
+  const { configManager } = deps;
   if (!resolveDaemonEnabled(configManager)) {
     return { available: false, reason: 'the daemon is disabled (daemon.enabled=false) — no operator surface to reach. Enable it in /settings, then retry.' };
   }
@@ -72,6 +72,10 @@ export function resolveOperatorRpc(deps: { readonly configManager: ConfigManager
   if (!baseUrl) {
     return { available: false, reason: 'no control-plane base URL is configured (controlPlane.baseUrl / controlPlane.host+port) — cannot reach the operator surface.' };
   }
+  // Resolve the home directory only AFTER the static refusals — a caller whose
+  // shell paths are not wired (a disabled-daemon path) must still get the honest
+  // unavailable reason above, never a "shell paths not wired" throw.
+  const homeDirectory = typeof deps.homeDirectory === 'function' ? deps.homeDirectory() : deps.homeDirectory;
   const daemonHomeDir = join(homeDirectory, '.goodvibes', 'daemon');
   const token = getOrCreateCompanionToken('tui', { daemonHomeDir }).token;
   const sdk = createGoodVibesSdk({ baseUrl, authToken: token });
@@ -87,7 +91,9 @@ export function resolveOperatorRpc(deps: { readonly configManager: ConfigManager
 export function getOperatorRpc(context: CommandContext): OperatorRpc {
   return resolveOperatorRpc({
     configManager: context.platform.configManager,
-    homeDirectory: requireShellPaths(context).homeDirectory,
+    // Lazy: only resolved once the daemon-enabled + base-URL refusals pass, so a
+    // disabled-daemon context with no shell paths still returns the honest reason.
+    homeDirectory: () => requireShellPaths(context).homeDirectory,
   });
 }
 
