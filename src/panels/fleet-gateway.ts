@@ -34,6 +34,8 @@ export type FleetConflictResolution = OperatorMethodOutput<'fleet.conflicts.reso
 export type FleetWorktreeDiscardReceipt = OperatorMethodOutput<'worktrees.discard'>;
 /** fleet.graph.get output — the surface-facing task graph of one workstream (nodes/edges/pool). */
 export type FleetGraphSnapshot = OperatorMethodOutput<'fleet.graph.get'>;
+/** fleet.observed.steer output — queued:true with a messageId, or queued:false with an honest reason. */
+export type FleetObservedSteerResult = OperatorMethodOutput<'fleet.observed.steer'>;
 
 /**
  * The narrow async verb surface the Fleet panel's acts drive. Every method is a
@@ -57,6 +59,8 @@ export interface FleetGateway {
   discardWorktree(path: string): Promise<FleetWorktreeDiscardReceipt>;
   /** Fetch the task graph (nodes/edges/pool) for one workstream — the observability graph view. */
   getGraph(workstreamId: string): Promise<FleetGraphSnapshot>;
+  /** Steer an observed foreign agent over its own channel (tmux send-keys); the daemon honestly refuses a channel-less row. */
+  steerObserved(input: { readonly id: string; readonly text: string }): Promise<FleetObservedSteerResult>;
   /** Route a spawned session through the shared one-key jump/attach affordance. */
   armFixSessionAttach(sessionId: string): void;
 }
@@ -106,6 +110,7 @@ export function createFleetGateway(deps: FleetGatewayDeps): FleetGatewayResoluti
     resolveConflict: (itemId) => sdk.operator.invoke('fleet.conflicts.resolve', { itemId }),
     discardWorktree: (path) => sdk.operator.invoke('worktrees.discard', { path }),
     getGraph: (workstreamId) => sdk.operator.invoke('fleet.graph.get', { workstreamId }),
+    steerObserved: (input) => sdk.operator.invoke('fleet.observed.steer', input),
     armFixSessionAttach: deps.armFixSessionAttach,
   };
   return { available: true, gateway };

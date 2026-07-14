@@ -26,6 +26,9 @@ import type { ProcessNode } from '@pellux/goodvibes-sdk/platform/runtime/fleet';
 import type { WorkItem } from '@pellux/goodvibes-sdk/platform/orchestration';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 import type { Line } from '../types/grid.ts';
+import { isPanelSearchBackspace, isPanelSearchCancel, isPanelSearchCommit, isPanelSearchPrintable } from './search-focus.ts';
+import { appendSteerText } from './fleet-tabs.ts';
+import { isObservedExternalNode, observedKindLabel, type ObservedNode } from './fleet-observed-render.ts';
 import {
   buildKeyboardHints,
   buildPanelWorkspace,
@@ -100,6 +103,8 @@ export function workItemFromNode(node: ProcessNode): WorkItem | null {
 
 export class FleetActs {
   private pick: PickMode | null = null;
+  /** Live observed-agent steer composer: the row being steered + its draft. Drill-in only. */
+  private observedSteer: { readonly nodeId: string; draft: string } | null = null;
 
   public constructor(private readonly deps: FleetActsDeps) {}
 
@@ -123,7 +128,75 @@ export class FleetActs {
     if (key === 'D') {
       return this.discardWorktree(node);
     }
+    // Observed foreign agents steer as a DRILL-IN only: 's' on the selected row
+    // opens the composer in its detail (never an attach, never a list verb).
+    if (key === 's' && isObservedExternalNode(node)) {
+      return this.openObservedSteer(node);
+    }
     return false;
+  }
+
+  // ── Observed-agent steer (drill-in composer) ──────────────────────────────
+
+  /** True while the observed-steer composer owns input. */
+  public observedSteerActive(): boolean {
+    return this.observedSteer !== null;
+  }
+
+  /** The active observed-steer draft for `nodeId`, or null — the detail renderer shows the compose line only for the composing row. */
+  public observedSteerDraftFor(nodeId: string): string | null {
+    return this.observedSteer && this.observedSteer.nodeId === nodeId ? this.observedSteer.draft : null;
+  }
+
+  /**
+   * Open the drill-in steer composer for an observed foreign-agent row. A row
+   * with a live tmux channel opens an input; a channel-less row keeps NO input
+   * and states the honest reason (owner ruling: steer is drill-in-only, and stop
+   * is never offered on an observed row).
+   */
+  public openObservedSteer(node: ObservedNode): boolean {
+    const channel = node.observed.steer;
+    if (channel.kind !== 'tmux') {
+      this.deps.notify(`Cannot steer this ${observedKindLabel(node.observed.externalKind)} session — ${channel.reason}.`);
+      return true;
+    }
+    this.observedSteer = { nodeId: node.id, draft: '' };
+    this.deps.markDirty();
+    return true;
+  }
+
+  /** Input while the observed-steer composer is open (mirrors the tab steer composer). */
+  public handleObservedSteerInput(key: string): boolean {
+    if (!this.observedSteer) return false;
+    if (isPanelSearchCancel(key)) { this.observedSteer = null; this.deps.markDirty(); return true; }
+    if (isPanelSearchCommit(key)) { void this.submitObservedSteer(); return true; }
+    if (isPanelSearchBackspace(key)) { this.observedSteer.draft = this.observedSteer.draft.slice(0, -1); this.deps.markDirty(); return true; }
+    if (key.length === 1 && (isPanelSearchPrintable(key) || key === '\r' || key === '\n')) {
+      this.observedSteer.draft = appendSteerText(this.observedSteer.draft, key);
+      this.deps.markDirty();
+      return true;
+    }
+    return true; // absorb every other key while composing
+  }
+
+  /** Drive fleet.observed.steer over the daemon; the row's own channel routes the send-keys server-side. */
+  private async submitObservedSteer(): Promise<void> {
+    if (!this.observedSteer) return;
+    const { nodeId, draft } = this.observedSteer;
+    const text = draft.trim();
+    this.observedSteer = null;
+    this.deps.markDirty();
+    if (text.length === 0) return; // empty submit just closes the composer
+    const gateway = this.requireGateway();
+    if (!gateway) return;
+    try {
+      const result = await gateway.steerObserved({ id: nodeId, text });
+      this.deps.notify(result.queued
+        ? '[Fleet] Steer delivered to the foreign session (tmux send-keys).'
+        : `[Fleet] Steer refused: ${result.reason ?? 'the foreign session exposes no channel'}.`);
+    } catch (err) {
+      this.deps.notify(`Observed steer failed: ${summarizeError(err)}`);
+    }
   }
 
   // ── Pick (STEP 3) ─────────────────────────────────────────────────────────
