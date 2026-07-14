@@ -228,8 +228,7 @@ describe('fleet detail block: headline row', () => {
       kind: 'work-item',
       label: 'conflicted',
       needsAttention: { reason: 'conflict' },
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      raw: { item: { mergeState: 'conflict', conflictFiles: ['src/very/deeply/nested/module/that/is/quite/long/parser.ts', 'README.md'] } } as any,
+      raw: { item: { mergeState: 'conflict', conflictFiles: ['src/very/deeply/nested/module/that/is/quite/long/parser.ts', 'README.md'] } },
     });
     const texts = renderFleetDetailLines(node, 60, false, true).map(text);
     expect(texts.some((t) => t.includes('conflicts') && t.includes('2 file(s)') && t.includes('press Enter to resolve'))).toBe(true);
