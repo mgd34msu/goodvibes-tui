@@ -91,6 +91,12 @@ export interface CommandUiActions {
    * Returns true when a running call was found and cancelled.
    */
   cancelToolCall?: () => boolean;
+  /** The still-undelivered mid-turn messages, in delivery order (the /queue editable list). */
+  listQueuedMessages?: () => ReadonlyArray<{ id: string; queuedAt: number; text: string }>;
+  /** Replace a still-queued message's text; false once delivered (immutable). */
+  editQueuedMessage?: (id: string, text: string) => boolean;
+  /** Remove a still-queued message before delivery; false once delivered. */
+  deleteQueuedMessage?: (id: string) => boolean;
   /** True while an LLM turn is actively streaming. Used to give Escape
    *  cancel-turn precedence over a focused panel's own escape handling. */
   isGenerating?: () => boolean;

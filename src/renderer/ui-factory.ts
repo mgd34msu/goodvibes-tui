@@ -173,6 +173,40 @@ export class UIFactory {
     });
   }
 
+  /**
+   * createQueuedMessageList — the mid-turn queue rendered as an EDITABLE list.
+   *
+   * Each still-undelivered message shows a 1-based number so it can be named to
+   * `/queue edit <n> …` / `/queue delete <n>`, which drive the SDK's
+   * editQueuedMessage / deleteQueuedMessage verbs. A delivered message has
+   * already left the queue (it is no longer listed), so the list only ever
+   * shows what is still editable — delivery is immutability, made visible. The
+   * header states the affordance so the capability is discoverable.
+   */
+  public static createQueuedMessageList(width: number, items: readonly { readonly id: string; readonly text: string }[]): Line[] {
+    if (items.length === 0) return [];
+    const t = activeUiTones();
+    const lines: Line[] = [];
+    const header = `${items.length} queued — /queue edit·delete until delivered`;
+    lines.push(...renderConversationFragment(header, width, {
+      prefix: ' ⧗ ',
+      prefixFg: t.state.reasoning,
+      text: t.fg.dim,
+      bodyBg: '#1a1a1a',
+      dim: true,
+    }));
+    items.forEach((item, index) => {
+      lines.push(...renderConversationFragment(item.text, width, {
+        prefix: `   ${index + 1}. `,
+        prefixFg: t.state.reasoning,
+        text: t.fg.dim,
+        bodyBg: '#1a1a1a',
+        dim: true,
+      }));
+    });
+    return lines;
+  }
+
   public static createFooter(
     width: number,
     prompt: string,
