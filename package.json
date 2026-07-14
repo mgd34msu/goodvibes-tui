@@ -104,8 +104,8 @@
     "@anthropic-ai/vertex-sdk": "^0.16.0",
     "@ast-grep/napi": "^0.42.0",
     "@aws/bedrock-token-generator": "^1.1.0",
-    "@pellux/goodvibes-sdk": "1.8.0",
-    "@pellux/goodvibes-terminal-shell": "1.8.0",
+    "@pellux/goodvibes-sdk": "/tmp/gv-sdk-snap-3bddf143-9GsT/.tarballs/pellux-goodvibes-sdk-1.8.0.tgz",
+    "@pellux/goodvibes-terminal-shell": "/tmp/gv-sdk-snap-3bddf143-9GsT/.tarballs/pellux-goodvibes-terminal-shell-1.8.0.tgz",
     "bash-language-server": "^5.6.0",
     "fuse.js": "^7.1.0",
     "graphql": "^16.13.2",
@@ -138,6 +138,16 @@
   },
   "trustedDependencies": [],
   "overrides": {
-    "minimatch": "^10.2.5"
+    "minimatch": "^10.2.5",
+    "@pellux/goodvibes-contracts": "/tmp/gv-sdk-snap-3bddf143-9GsT/.tarballs/pellux-goodvibes-contracts-1.8.0.tgz",
+    "@pellux/goodvibes-daemon-sdk": "/tmp/gv-sdk-snap-3bddf143-9GsT/.tarballs/pellux-goodvibes-daemon-sdk-1.8.0.tgz",
+    "@pellux/goodvibes-errors": "/tmp/gv-sdk-snap-3bddf143-9GsT/.tarballs/pellux-goodvibes-errors-1.8.0.tgz",
+    "@pellux/goodvibes-operator-sdk": "/tmp/gv-sdk-snap-3bddf143-9GsT/.tarballs/pellux-goodvibes-operator-sdk-1.8.0.tgz",
+    "@pellux/goodvibes-peer-sdk": "/tmp/gv-sdk-snap-3bddf143-9GsT/.tarballs/pellux-goodvibes-peer-sdk-1.8.0.tgz",
+    "@pellux/goodvibes-sdk": "/tmp/gv-sdk-snap-3bddf143-9GsT/.tarballs/pellux-goodvibes-sdk-1.8.0.tgz",
+    "@pellux/goodvibes-terminal-shell": "/tmp/gv-sdk-snap-3bddf143-9GsT/.tarballs/pellux-goodvibes-terminal-shell-1.8.0.tgz",
+    "@pellux/goodvibes-transport-core": "/tmp/gv-sdk-snap-3bddf143-9GsT/.tarballs/pellux-goodvibes-transport-core-1.8.0.tgz",
+    "@pellux/goodvibes-transport-http": "/tmp/gv-sdk-snap-3bddf143-9GsT/.tarballs/pellux-goodvibes-transport-http-1.8.0.tgz",
+    "@pellux/goodvibes-transport-realtime": "/tmp/gv-sdk-snap-3bddf143-9GsT/.tarballs/pellux-goodvibes-transport-realtime-1.8.0.tgz"
   }
 }
