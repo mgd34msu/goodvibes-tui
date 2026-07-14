@@ -7,7 +7,7 @@ import type {
   ConfigModalView,
 } from '../../input/config-modal-types.ts';
 import { generateQrMatrix, renderQrToString, type PairingHandoffOfferKind } from '@pellux/goodvibes-sdk/platform/pairing';
-import { formatPairingOffers, PAIRING_HTTP_LAN_POSTURE } from '../../cli/pairing-offers.ts';
+import { formatPairingOffers, PAIRING_HTTP_LAN_POSTURE } from '../../core/pairing-offers.ts';
 
 // ---------------------------------------------------------------------------
 // Device Pairing config-modal surface. Shows the web-app origin, the per-device

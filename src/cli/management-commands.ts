@@ -6,10 +6,10 @@ import { getSubscriptionProviderConfig, listAvailableSubscriptionProviders } fro
 import { beginOpenAICodexLogin, exchangeOpenAICodexCode } from '@pellux/goodvibes-sdk/platform/config';
 import { inspectProviderAuth } from '@/runtime/index.ts';
 import { generateQrMatrix, renderQrToString, PAIRING_HANDOFF_OFFER_KINDS, type PairingHandoffOfferKind } from '@pellux/goodvibes-sdk/platform/pairing';
-import { ensurePublicBaseUrl } from './pairing-origin.ts';
-import { formatPairingOffers, PAIRING_HTTP_LAN_POSTURE } from './pairing-offers.ts';
-import { defaultPairingTokenName } from './pairing-handoff.ts';
-import { stableUrlHostForBindHost } from './stable-host.ts';
+import { ensurePublicBaseUrl } from '../core/pairing-origin.ts';
+import { formatPairingOffers, PAIRING_HTTP_LAN_POSTURE } from '../core/pairing-offers.ts';
+import { defaultPairingTokenName } from '../core/pairing-handoff.ts';
+import { stableUrlHostForBindHost } from '../core/stable-host.ts';
 import { resolveRuntimeEndpointBinding } from './endpoints.ts';
 import { classifyBindPosture, isNetworkFacing } from './network-posture.ts';
 import type { CliCommandRuntime } from './types.ts';

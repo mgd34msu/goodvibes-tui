@@ -1,5 +1,5 @@
 import type { CommandContext, CommandRegistry } from '../command-registry.ts';
-import { formatDeviceLine, resolveTokenByIdPrefix } from '../../cli/pairing-devices.ts';
+import { formatDeviceLine, resolveTokenByIdPrefix } from '../../core/pairing-devices.ts';
 
 /**
  * Register the /devices command — manage the per-device pairing tokens minted by

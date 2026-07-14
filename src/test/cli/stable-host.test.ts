@@ -7,7 +7,7 @@ import {
   firstNonInternalIpv4,
   stableUrlHostForBindHost,
   type StableHostInputs,
-} from '../../cli/stable-host.ts';
+} from '../../core/stable-host.ts';
 
 describe('resolveStableHost ladder', () => {
   test('tailscale MagicDNS wins when tailscale is up', () => {
