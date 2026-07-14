@@ -104,6 +104,100 @@ describe('fleet row headline + stall marker (full-string, 80 and 60 cols)', () =
   });
 });
 
+// STEP 2: the ready best-of-N pick and the merge-conflict flag are first-class
+// members of the ONE waiting-on-human state class — same ⚑ glyph idiom (which
+// truncates to '…' in the 1-width glyph cell, exactly like approval/input),
+// same jump key, same count — but each names its required act in its own words,
+// distinct from the bare 'blocked on you'. Full-string at 80 AND 60 columns.
+describe('fleet row waiting-on-human: pick + conflict reasons (full-string, 80 and 60 cols)', () => {
+  test('80 cols: a ready best-of-N pick reads "needs your pick"', () => {
+    const line = renderFleetRowLine(
+      row({ id: 'ws1', label: 'stream', kind: 'workstream', needsAttention: { reason: 'pick' } }),
+      80,
+      false,
+      true,
+      null,
+    );
+    expect(text(line)).toBe('… stream   stream                    1m05s     n/a unpriced needs your pick     ');
+  });
+
+  test('60 cols: a ready best-of-N pick stays readable and never overflows', () => {
+    const line = renderFleetRowLine(
+      row({ id: 'ws1', label: 'stream', kind: 'workstream', needsAttention: { reason: 'pick' } }),
+      60,
+      false,
+      true,
+      null,
+    );
+    expect(text(line)).toBe('… stream   stream       1m05s     n/a unpriced needs your pi');
+    expect(text(line).length).toBeLessThanOrEqual(60);
+  });
+
+  test('80 cols: a merge conflict reads "merge conflict waiting on you"', () => {
+    const line = renderFleetRowLine(
+      row({ id: 'wi1', label: 'item', kind: 'work-item', needsAttention: { reason: 'conflict' } }),
+      80,
+      false,
+      true,
+      null,
+    );
+    expect(text(line)).toBe('… item     item                      1m05s     n/a unpriced merge conflict wait…');
+  });
+
+  test('60 cols: a merge conflict stays readable and never overflows', () => {
+    const line = renderFleetRowLine(
+      row({ id: 'wi1', label: 'item', kind: 'work-item', needsAttention: { reason: 'conflict' } }),
+      60,
+      false,
+      true,
+      null,
+    );
+    expect(text(line)).toBe('… item     item         1m05s     n/a unpriced merge conflic');
+    expect(text(line).length).toBeLessThanOrEqual(60);
+  });
+
+  test('all four reasons flow through fleetAttentionText with distinct wording', () => {
+    expect(fleetAttentionText({ reason: 'approval' })).toBe('blocked on you');
+    expect(fleetAttentionText({ reason: 'input' })).toBe('needs your input');
+    expect(fleetAttentionText({ reason: 'pick' })).toBe('needs your pick');
+    expect(fleetAttentionText({ reason: 'conflict' })).toBe('merge conflict waiting on you');
+  });
+
+  test('pick + conflict are counted and jumpable exactly like an approval ask', () => {
+    const snapshot = buildFleetSnapshot([
+      makeNode({ id: 'ws1', kind: 'workstream', needsAttention: { reason: 'pick' } }),
+      makeNode({ id: 'wi1', kind: 'work-item', needsAttention: { reason: 'conflict' } }),
+      makeNode({ id: 'ap1', state: 'awaiting-approval' }),
+      makeNode({ id: 'plain1' }),
+    ]);
+    // Same count + jump membership: every waiting-on-human node (approval, pick,
+    // conflict), never the plain running one.
+    expect(snapshot.blockedNodeIds).toContain('ws1');
+    expect(snapshot.blockedNodeIds).toContain('wi1');
+    expect(snapshot.blockedNodeIds).toContain('ap1');
+    expect(snapshot.blockedNodeIds).not.toContain('plain1');
+    expect(isBlockedOnUserNode(makeNode({ id: 'ws1', kind: 'workstream', needsAttention: { reason: 'pick' } }))).toBe(true);
+    expect(isBlockedOnUserNode(makeNode({ id: 'wi1', kind: 'work-item', needsAttention: { reason: 'conflict' } }))).toBe(true);
+  });
+
+  test('the detail block names the reason (pick / conflict) in the state slot', () => {
+    const pick = renderFleetDetailLines(
+      makeNode({ id: 'ws1', label: 'stream', kind: 'workstream', needsAttention: { reason: 'pick' } }),
+      80,
+      false,
+      true,
+    );
+    expect(text(pick[0]!)).toContain('state needs your pick');
+    const conflict = renderFleetDetailLines(
+      makeNode({ id: 'wi1', label: 'item', kind: 'work-item', needsAttention: { reason: 'conflict' } }),
+      80,
+      false,
+      true,
+    );
+    expect(text(conflict[0]!)).toContain('state merge conflict waiting on you');
+  });
+});
+
 describe('fleet detail block: headline row', () => {
   test('a node with a headline gets a dedicated headline row mirroring the tree slot', () => {
     const lines = renderFleetDetailLines(
