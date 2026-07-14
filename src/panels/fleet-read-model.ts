@@ -499,7 +499,9 @@ function isFleetAggregateRollupNode(node: ProcessNode): boolean {
  * count in the way summing its rolled-up usage/cost would be.
  */
 function isFleetRunningLeaf(node: ProcessNode): boolean {
-  return !ROLLUP_KINDS.has(node.kind) && isRunningProcessState(node.state);
+  // Observed foreign agents are NEVER counted in our own fleet counts — they
+  // are externally-launched sessions goodvibes only watches, not work it runs.
+  return node.kind !== 'observed-external' && !ROLLUP_KINDS.has(node.kind) && isRunningProcessState(node.state);
 }
 
 /** Build the full FleetSnapshot (rows + honest aggregates) from a flat node list. */

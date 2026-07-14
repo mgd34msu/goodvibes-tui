@@ -42,7 +42,8 @@ import {
   type SteerBadge,
 } from './fleet-tabs.ts';
 import { liveSteerableLabels, reconcileSteerBadges as reconcileSteerBadgesPure, renderSteerBadgeLine, steerRefusalMessage } from './fleet-steer.ts';
-import { FleetStopTracker, toggleFleetPause, buildFleetTreeHints, countDescendantStats } from './fleet-stop.ts';
+import { FleetStopTracker, toggleFleetPause, buildFleetTreeHints, fleetKillConfirmArgs } from './fleet-stop.ts';
+import { isObservedExternalNode, observedKindLabel } from './fleet-observed-render.ts';
 import { resolveFleetDeepLinkIndex } from './fleet-deep-link.ts';
 import { parseAgentLedger, renderFleetAgentTranscript, renderFleetChainSummary, renderFleetLedgerFallback, renderFleetTranscriptLoading } from './fleet-transcript.ts';
 import { renderFleetTabStrip } from '../renderer/fleet-tab-strip.ts';
@@ -493,25 +494,16 @@ export class FleetPanel extends ScrollableListPanel<FleetTreeRow> {
 
     if (key === 'K') {
       if (!selected || isTerminalProcessState(selected.node.state)) return false;
+      // Observed foreign agents have killable:false — the refusal below reads
+      // honestly; goodvibes only observes them, so stop is never offered.
       if (!selected.node.capabilities.killable) {
         this.setError(`${selected.node.kind} does not support kill.`);
         return true;
       }
-      const node = selected.node;
-      const shortId = node.id.length > 8 ? node.id.slice(-8) : node.id;
-      const stats = countDescendantStats(this.getItems(), node.id);
-      const suffix = stats.total > 0 ? ` (+${stats.total} descendant${stats.total === 1 ? '' : 's'}, ${stats.active} active)` : '';
-      this.confirmOverlay.arm({
-        id: node.id,
-        label: `${node.kind} ${shortId}${suffix}`,
-        verb: 'Kill',
-        // d1: mark 'stopping…' only once the kill is confirmed, not while
-        // the confirm overlay is merely armed.
-        onConfirm: () => {
-          this.actions.kill(node.id, { cascade: true });
-          this.stopTracker.mark(node.id);
-        },
-      });
+      this.confirmOverlay.arm(fleetKillConfirmArgs(selected.node, this.getItems(), {
+        kill: (id) => this.actions.kill(id, { cascade: true }),
+        markStopping: (id) => this.stopTracker.mark(id),
+      }));
       return true;
     }
 
@@ -553,6 +545,15 @@ export class FleetPanel extends ScrollableListPanel<FleetTreeRow> {
       // one press for a steerable node; honest refusal otherwise.
       if (!selected) return false;
       const node = selected.node;
+      // Observed foreign agents steer as a DRILL-IN only (the detail surfaces
+      // the channel / honest reason); the tree 's' points there — never an
+      // attach, and stop is never offered (killable:false).
+      if (isObservedExternalNode(node)) {
+        this.setError(node.observed.steer.kind === 'tmux'
+          ? `Steer ${observedKindLabel(node.observed.externalKind)} from its detail (tmux pane ${node.observed.steer.paneId}).`
+          : `Cannot steer this foreign session — ${node.observed.steer.reason}.`);
+        return true;
+      }
       // Closure replay note: a node that FINISHED in the hint→keypress race
       // window must say so — "does not support steer" is misleading for an
       // agent whose only problem is being done.

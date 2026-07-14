@@ -199,13 +199,7 @@ function extractDiffFilePath(trimmed: string): string {
   return 'unknown';
 }
 
-/**
- * Reconstruct one file's unified-diff text from a StructuredDiffFile — the
- * header lines exactly as emitted, then each hunk's header followed by its
- * lines with their +/-/space prefix re-attached (StructuredDiffLine.text has
- * the prefix stripped). No size cap: every hunk and every line is emitted, so
- * a diff of any length round-trips into the renderer intact.
- */
+/** Reconstruct one file's unified-diff text from a StructuredDiffFile (header + hunks, prefixes re-attached; no size cap). */
 function reconstructStructuredFile(file: StructuredDiffFile): string {
   const out: string[] = [...file.headerLines];
   for (const hunk of file.hunks) {
@@ -326,12 +320,10 @@ export class DiffPanel extends BasePanel {
   }
 
   /**
-   * Ingest a StructuredDiff (from GitService.diffStructured — the FULL working-
-   * tree diff parsed per-file/per-hunk with no size cap anywhere). Each
-   * structured file becomes one DiffEntry, reconstructing its unified text so
-   * the existing per-file tabs and per-hunk renderer work unchanged. This is
-   * the path `/git diff` takes now that the old 4,000-char slice is gone: a
-   * diff of any length renders complete.
+   * Ingest a StructuredDiff (GitService.diffStructured — the FULL, uncapped
+   * working-tree diff). Each file becomes one DiffEntry (unified text
+   * reconstructed) so the existing tabs/renderer work unchanged; the old
+   * 4,000-char slice is gone and a diff of any length renders complete.
    */
   loadStructuredDiff(diff: StructuredDiff): void {
     this.entries = diff.files.map((file) => {

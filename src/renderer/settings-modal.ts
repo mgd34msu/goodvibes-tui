@@ -186,8 +186,7 @@ function buildSettingContext(modal: SettingsModal, entry: SettingEntry): string[
   if (entry.locked) lines.push(`Locked: ${entry.lockReason ?? 'This setting is locked by a higher-priority layer.'}`);
   if (entry.conflict) lines.push(`Conflict: resolve with /settings-sync resolve ${entry.setting.key} local|synced.`);
 
-  // A settings sub-row owned by a feature unit names its feature so "what
-  // does this do" is answerable without scrolling back to the header row.
+  // A settings sub-row owned by a feature unit names its feature so "what does this do" is answerable without scrolling back to the header row.
   if (entry.ownerFlagId) {
     const owner = FEATURE_SETTINGS_BY_ID.get(entry.ownerFlagId);
     if (owner) lines.push(`Part of feature: ${owner.name} (the header row above).`);

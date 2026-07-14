@@ -25,7 +25,7 @@ import {
 } from './worktree-setup-config.ts';
 import { BUDGET_ALERT_USD_CONFIG_KEY, BUDGET_ALERT_USD_DEFAULT, readBudgetAlertUsd } from '../export/cost-utils.ts';
 import { MEMORY_PROJECTION_DIR_CONFIG_KEY, buildMemoryProjectionDirSyntheticEntry } from './commands/recall-files-config.ts';
-import { MEMORY_SHOW_PROVENANCE_CONFIG_KEY, MEMORY_SHOW_PROVENANCE_DEFAULT, MEMORY_SHOW_PROVENANCE_DESCRIPTION, readMemoryShowProvenance } from '../core/memory-provenance.ts';
+import { MEMORY_SHOW_PROVENANCE_CONFIG_KEY, buildMemoryProvenanceSyntheticEntry } from '../core/memory-provenance.ts';
 import {
   injectSandboxExecSyntheticEntries,
   isSandboxExecListConfigKey,
@@ -123,9 +123,7 @@ export function buildSettingGroups(
     }
   }
 
-  // inject the synthetic display.themeMode enum (auto|dark|light). TUI-local
-  // key stored under the existing `display` section (see theme-mode-config.ts for why
-  // not `appearance`), same rationale as the other synthetic settings below.
+  // Synthetic display.themeMode enum (auto|dark|light) — TUI-local, see theme-mode-config.ts.
   const displayEntries = groups.get('display');
   if (displayEntries && !displayEntries.some((e) => e.setting.key === (THEME_MODE_CONFIG_KEY as ConfigKey))) {
     displayEntries.push(buildThemeModeSyntheticEntry(configManager));
@@ -152,17 +150,12 @@ export function buildSettingGroups(
     }
   }
 
-  // Inject the synthetic tts.speed entry into the tts category.
-  // tts.speed is not yet a ConfigKey in the SDK schema (pending SDK addition).
-  // The entry is surfaced here with an honest description caveat so users can
-  // see and understand the setting before the SDK schema catches up.
+  // Synthetic tts.speed (not yet an SDK ConfigKey) — surfaced with an honest caveat.
   if (ttsEntries && !ttsEntries.some((e) => e.setting.key === ('tts.speed' as ConfigKey))) {
     ttsEntries.push(buildTtsSpeedSyntheticEntry(configManager));
   }
 
-  // Inject the synthetic behavior.notifyAfterSeconds entry into the behavior
-  // category. This key is TUI-local (not in the SDK ConfigKey union) and
-  // controls the long-task push notification threshold.
+  // Synthetic behavior.notifyAfterSeconds (TUI-local): long-task push threshold.
   const behaviorEntries = groups.get('behavior');
   if (behaviorEntries && !behaviorEntries.some((e) => e.setting.key === ('behavior.notifyAfterSeconds' as ConfigKey))) {
     behaviorEntries.push(buildNotifyAfterSecondsSyntheticEntry(configManager));
@@ -213,24 +206,10 @@ export function buildSettingGroups(
     storageEntries.push(buildMemoryProjectionDirSyntheticEntry(configManager));
   }
 
-  // Inject the memory.showProvenance synthetic (the "used N memories" turn chip)
-  // into the memory category. TUI-local, default OFF (owner ruling 2026-07-13):
-  // when off, nothing renders and no context is added.
+  // Synthetic memory.showProvenance (TUI-local, default OFF — see memory-provenance.ts).
   const memoryEntries = groups.get('memory');
   if (memoryEntries && !memoryEntries.some((e) => e.setting.key === (MEMORY_SHOW_PROVENANCE_CONFIG_KEY as ConfigKey))) {
-    // Read defensively (memory.* has no SDK DEFAULT_CONFIG entry — get() throws
-    // until a value is written; unset means the default OFF).
-    const currentValue = readMemoryShowProvenance(configManager);
-    memoryEntries.push({
-      setting: {
-        key: MEMORY_SHOW_PROVENANCE_CONFIG_KEY as ConfigKey,
-        type: 'boolean',
-        default: MEMORY_SHOW_PROVENANCE_DEFAULT,
-        description: MEMORY_SHOW_PROVENANCE_DESCRIPTION,
-      },
-      currentValue,
-      isDefault: currentValue === MEMORY_SHOW_PROVENANCE_DEFAULT,
-    });
+    memoryEntries.push(buildMemoryProvenanceSyntheticEntry(configManager) as unknown as SettingEntry);
   }
 
   // Inject the worktree.setup.commands / worktree.setup.carryOverGlobs

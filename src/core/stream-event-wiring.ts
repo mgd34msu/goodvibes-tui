@@ -56,6 +56,16 @@ export interface StreamMetrics {
   reconnectMaxAttempts: number | undefined;
 }
 
+/** The idle initial StreamMetrics — mutated in place by wireStreamEventMetrics handlers. */
+export function createStreamMetrics(): StreamMetrics {
+  return {
+    startTime: 0, deltaCount: 0, tokenSpeed: 0, ttftMs: undefined, ttftRecorded: false,
+    activeToolStartedAtMs: undefined, activeToolName: undefined, activeToolCallId: undefined,
+    lastDeltaAtMs: undefined, stallEpisode: 0,
+    reconnectAttempt: undefined, reconnectMaxAttempts: undefined,
+  };
+}
+
 /** Minimal orchestrator surface required for stream token-speed calculation. */
 interface StreamOrchestrator {
   readonly streamingOutputTokens: number;

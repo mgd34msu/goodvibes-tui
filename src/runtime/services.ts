@@ -5,9 +5,8 @@ import { SecretsManager } from '../config/secrets.ts';
 import { AutomationDeliveryManager, AutomationManager } from '@pellux/goodvibes-sdk/platform/automation';
 import { ChannelDeliveryRouter, ChannelPolicyManager, type ChannelPluginRegistry, type RouteBindingManager, type SurfaceRegistry } from '@pellux/goodvibes-sdk/platform/channels';
 import { ApprovalBroker, GatewayMethodCatalog, SessionLiveTurnControlsHolder, SharedSessionBroker } from '@pellux/goodvibes-sdk/platform/control-plane';
-import { PowerManager, wireRuntimePower } from '@pellux/goodvibes-sdk/platform/power';
-import { FeatureAnnouncementStore, featureAnnouncementsPath } from '@pellux/goodvibes-sdk/platform/runtime/feature-announcements';
-import { formatConsolidationReceipt } from '../core/consolidation-receipt.ts';
+import type { PowerManager } from '@pellux/goodvibes-sdk/platform/power';
+import { wireIdlePowerAndLiveTurn } from './idle-power-services.ts';
 import { StepUpService } from '@pellux/goodvibes-sdk/daemon';
 import { PairingTokenManager } from '@pellux/goodvibes-sdk/platform/pairing';
 import { resolvePairingWebOrigin } from '../core/pairing-origin.ts';
@@ -204,11 +203,8 @@ export interface RuntimeServices {
   readonly codeIndexReindexScheduler: CodeIndexReindexScheduler; // tool-site reindex
   /** Daily snapshots of every SQLite store this runtime writes, with bounded retention; unref'd timers (mirrors the SDK composition — hosts that tear down a runtime stop() it themselves). */
   readonly storeSnapshotScheduler: StoreSnapshotScheduler;
-  /** Idle-time memory consolidation (learning.consolidation.*): merges duplicate standing memories and decays/archives stale ones; retains one-line run receipts. Mirrors the SDK composition. */
   readonly memoryConsolidationScheduler: MemoryConsolidationScheduler;
-  /** Host sleep ownership (power.*): work-signal inhibition, the keep-awake toggle, and the sleep-edge checkpoint + wake catch-up. Backs power.status.get / power.keepAwake.set and the OPS_POWER_STATE_CHANGED event. */
   readonly powerManager: PowerManager;
-  /** Per-session live-turn control holder backing the sessions.toolCalls.cancel / sessions.queuedMessages.* wire verbs (bound to a session's orchestrator when it runs). Mirrors the SDK composition. */
   readonly sessionLiveTurnControls: SessionLiveTurnControlsHolder;
   /** Unified live process registry (agents, WRFC chains, workflows, watchers, background processes) backing the Fleet panel; archive-aware — finished subtrees can be moved to the session archive view. */
   readonly processRegistry: ArchivableProcessRegistry;
@@ -481,10 +477,6 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
     projectRoot: workingDirectory,
   });
   const voiceProviders = new VoiceProviderRegistry();
-  // Pass the voice.local.* config reader so the free, offline local-engine
-  // provider is registered alongside the cloud providers — it then appears in
-  // the TTS provider picker beside elevenlabs, reporting an honest
-  // 'unconfigured' status (never an error) until its engines are set up.
   ensureBuiltinVoiceProviders(voiceProviders, { readConfig: (key) => configManager.get(key as Parameters<typeof configManager.get>[0]) });
   const voiceService = new VoiceService(voiceProviders);
   const webSearchProviders = new WebSearchProviderRegistry({
@@ -495,18 +487,9 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
     serviceRegistry,
     featureFlags,
   });
-  knowledgeSemanticService.setGapRepairer(createWebKnowledgeGapRepairer({
-    searchService: webSearchService,
-    ingestService: knowledgeService,
-  }));
-  agentKnowledgeSemanticService.setGapRepairer(createWebKnowledgeGapRepairer({
-    searchService: webSearchService,
-    ingestService: agentKnowledgeService,
-  }));
-  homeGraphSemanticService.setGapRepairer(createWebKnowledgeGapRepairer({
-    searchService: webSearchService,
-    ingestService: homeGraphService,
-  }));
+  for (const [semantic, ingest] of [[knowledgeSemanticService, knowledgeService], [agentKnowledgeSemanticService, agentKnowledgeService], [homeGraphSemanticService, homeGraphService]] as const) {
+    semantic.setGapRepairer(createWebKnowledgeGapRepairer({ searchService: webSearchService, ingestService: ingest }));
+  }
   const mediaProviders = new MediaProviderRegistry();
   ensureBuiltinMediaProviders(mediaProviders, artifactStore, providerRegistry);
   const multimodalService = new MultimodalService(artifactStore, mediaProviders, voiceService, knowledgeService);
@@ -631,39 +614,7 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
   });
   const modeManager = new ModeManager(); const fileUndoManager = new FileUndoManager();
   const workspaceCheckpointManager = createWorkspaceCheckpointing({ workspaceRoot: workingDirectory, runtimeBus: options.runtimeBus, configManager });
-
-  // Idle-time memory consolidation (learning.consolidation.*), host sleep
-  // ownership (power.*), and the per-session live-turn control holder that backs
-  // the sessions.toolCalls.cancel / sessions.queuedMessages.* wire verbs — all
-  // mirroring the SDK's own createRuntimeServices composition so every surface
-  // exposes the same verbs and shares the same idle/wake behaviour.
-  // Consolidation receipts ride the SAME attach-time queue every other receipt
-  // uses: a run that changed something records a one-line notice into the
-  // file-backed feature-announcement store, drained (and rendered as a
-  // "[Daemon] …" line) on the next surface attach. A quiet run records nothing.
-  const consolidationReceiptStore = new FeatureAnnouncementStore(featureAnnouncementsPath(configManager));
-  const memoryConsolidationScheduler = new MemoryConsolidationScheduler({
-    memoryRegistry,
-    configSource: configManager,
-    isIdle: () => sessionBroker.countBusySessions() === 0,
-    onReceipt: (receipt) => {
-      const text = formatConsolidationReceipt(receipt);
-      if (text) consolidationReceiptStore.record(receipt.runId, text);
-    },
-  });
-  memoryConsolidationScheduler.start();
-  const sessionLiveTurnControls = new SessionLiveTurnControlsHolder();
-  const powerManager = wireRuntimePower({
-    readConfig: (key) => configManager.get(key as Parameters<typeof configManager.get>[0]),
-    writeConfig: (key, value) => configManager.setDynamic(key as Parameters<typeof configManager.setDynamic>[0], value),
-    runtimeBus: options.runtimeBus,
-    sleepCheckpoint: () => storeSnapshotScheduler.tick(),
-    wakeCatchUp: [
-      () => memoryConsolidationScheduler.tick(),
-      () => storeSnapshotScheduler.tick(),
-      async () => { await automationManager.triggerHeartbeat({ source: 'wake-catchup' }); },
-    ],
-  });
+  const { memoryConsolidationScheduler, powerManager, sessionLiveTurnControls } = wireIdlePowerAndLiveTurn({ configManager, memoryRegistry, runtimeBus: options.runtimeBus, isIdle: () => sessionBroker.countBusySessions() === 0, snapshotTick: () => storeSnapshotScheduler.tick(), heartbeat: async () => { await automationManager.triggerHeartbeat({ source: 'wake-catchup' }); } });
 
   // Terminal-shell wrapper over the SDK registerGatewayVerbGroups (gateway-verbs.ts); checkin.*/fleet-needs-input/pairing.* register only when their deps are present.
   attachWsOnlyGatewayVerbHandlers(gatewayMethods, { processRegistry, workspaceCheckpointManager, conversationRewindPort: createSessionConversationRewindPort(), sessionBroker, secretsManager, stepUpService, approvalBroker, requestApproval: (input) => approvalBroker.requestApproval(input), watcherRegistry, userPermissionRuleStore, shellPaths, configManager, runtimeStore: options.runtimeStore, channelDeliveryRouter, providerRegistry, automationManager, sessionLister: sessionBroker, sessionIntake: sessionBroker, workingDirectory, memoryRegistry, pairingTokens, sessionLiveTurnControls, powerManager, relayAvailable: () => configManager.get('relay.enabled') === true, pairingWebOrigin: () => resolvePairingWebOrigin(configManager).origin, ...wireFleetNeedsInputPush({ registry: processRegistry, runtimeBus: options.runtimeBus, sessionBroker }) });

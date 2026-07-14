@@ -22,6 +22,7 @@ import { fleetKindTag } from './fleet-read-model.ts';
 import { steerBadgeGlyph, steerBadgeTone } from './fleet-steer.ts';
 import type { SteerBadge } from './fleet-tabs.ts';
 import type { FleetTreeRow } from './fleet-read-model.ts';
+import { isObservedExternalNode, renderObservedDetailLines, renderObservedRowLine } from './fleet-observed-render.ts';
 
 // Column widths for the tree row layout. `label` absorbs whatever width is
 // left over after the fixed columns + gaps; on hostile (narrow) widths the
@@ -89,6 +90,9 @@ export function renderFleetRowLine(
 ): Line {
   const C = palette;
   const node = row.node;
+  // Observed foreign agents render as their own visibility row (no cost/steer
+  // columns, no stop marker) — see fleet-observed-render.ts.
+  if (isObservedExternalNode(node)) return renderObservedRowLine(node, width, palette);
   const disp = fleetStateDisplay(node.state, stopping, blocked);
   const color = toneColor(disp.tone, C);
   // Best-of-N grouping: badge a sibling attempt so the N candidates read as one
@@ -162,6 +166,9 @@ export function renderFleetDetailLines(
   palette: PanelPalette = DEFAULT_PANEL_PALETTE,
 ): Line[] {
   const C = palette;
+  // Observed foreign agents drill into their own detail (facts + steer-or-reason,
+  // never a stop) — see fleet-observed-render.ts.
+  if (isObservedExternalNode(node)) return renderObservedDetailLines(node, width, palette);
   const disp = fleetStateDisplay(node.state, stopping, blocked);
   const color = toneColor(disp.tone, C);
   // A blocked node's state text names WHY in the reason's own words
