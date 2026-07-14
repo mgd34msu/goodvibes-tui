@@ -8,7 +8,13 @@
 // ---------------------------------------------------------------------------
 
 import type { ProcessNode, ProcessState } from '@pellux/goodvibes-sdk/platform/runtime/fleet';
-import { fleetStateGlyph, fleetStateTone, isTerminalProcessState, type FleetStateTone, type FleetTreeRow } from './fleet-read-model.ts';
+import type { WorkItem } from '@pellux/goodvibes-sdk/platform/orchestration';
+import { fleetNodeAttention, fleetStateGlyph, fleetStateTone, isTerminalProcessState, type FleetStateTone, type FleetTreeRow } from './fleet-read-model.ts';
+
+/** True when a work-item node owns a worktree that worktrees.discard can act on (D from the tree). */
+function ownsWorktree(node: ProcessNode): boolean {
+  return Boolean((node.raw as { item?: WorkItem } | undefined)?.item?.worktreePath);
+}
 
 /** How long 'stopping…' lingers after a stop keypress before the true state is shown regardless (never masks a stuck kill). */
 export const STOP_SETTLE_MS = 1500;
@@ -123,9 +129,15 @@ export function buildFleetTreeHints(
 ): FleetHint[] {
   const live = selected !== undefined && !isTerminalProcessState(selected.state);
   const isPaused = selected !== undefined && selected.state === 'paused';
+  // Enter is context-sensitive: on a flagged pick/conflict row it acts, else it
+  // attaches. Name the act so the key is discoverable from the tree.
+  const attention = selected ? fleetNodeAttention(selected) : null;
+  const enterLabel = attention?.reason === 'pick' ? 'pick'
+    : attention?.reason === 'conflict' ? 'resolve conflict'
+      : 'attach';
   const hints: FleetHint[] = [
     { keys: 'j/k', label: 'navigate' },
-    { keys: 'Enter', label: 'attach' },
+    { keys: 'Enter', label: enterLabel },
   ];
   // Jump-to-blocked is offered whenever something is waiting on the operator,
   // in either view (the blocked nodes live in the active fleet, and the jump
@@ -144,6 +156,7 @@ export function buildFleetTreeHints(
   if (live && selected.capabilities.killable) hints.push({ keys: 'K', label: 'kill' });
   if (live && !isPaused && selected.capabilities.pausable) hints.push({ keys: 'p', label: 'pause' });
   if (isPaused && selected.capabilities.resumable) hints.push({ keys: 'p', label: 'resume' });
+  if (selected && ownsWorktree(selected)) hints.push({ keys: 'D', label: 'discard worktree' });
   if (selected && !live) hints.push({ keys: 'a', label: 'archive' });
   hints.push({ keys: 'A', label: 'archive finished' });
   hints.push({ keys: 'v', label: 'archived' });

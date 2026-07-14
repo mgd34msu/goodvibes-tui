@@ -188,4 +188,20 @@ describe('buildFleetTreeHints (d2)', () => {
     expect(hints).toContainEqual({ keys: 'f', label: 'follow:on' });
     expect(hints).toContainEqual({ keys: '[ ]', label: 'tabs' });
   });
+
+  test('Enter is context-sensitive: pick / resolve conflict / attach by the row', () => {
+    const pickRow = makeNode({ id: 'workstream:ws1', kind: 'workstream', state: 'awaiting-approval', needsAttention: { reason: 'pick' } });
+    expect(buildFleetTreeHints(pickRow, false, false)).toContainEqual({ keys: 'Enter', label: 'pick' });
+    const conflictRow = makeNode({ id: 'work-item:it1', kind: 'work-item', state: 'stalled', needsAttention: { reason: 'conflict' } });
+    expect(buildFleetTreeHints(conflictRow, false, false)).toContainEqual({ keys: 'Enter', label: 'resolve conflict' });
+    const agentRow = makeNode({ id: 'a1', kind: 'agent', state: 'executing-tool' });
+    expect(buildFleetTreeHints(agentRow, false, false)).toContainEqual({ keys: 'Enter', label: 'attach' });
+  });
+
+  test('a worktree-owning row surfaces the D discard chip; others do not', () => {
+    const worktreeRow = makeNode({ id: 'work-item:it1', kind: 'work-item', state: 'done', raw: { item: { worktreePath: '/wt/it1' } } });
+    expect(buildFleetTreeHints(worktreeRow, false, false)).toContainEqual({ keys: 'D', label: 'discard worktree' });
+    const plainRow = makeNode({ id: 'a1', kind: 'agent', state: 'executing-tool' });
+    expect(buildFleetTreeHints(plainRow, false, false).some((h) => h.keys === 'D')).toBe(false);
+  });
 });

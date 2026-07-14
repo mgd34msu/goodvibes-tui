@@ -150,6 +150,18 @@ export interface BuiltinPanelDeps {
    * cross-panel navigation instead of printing a "/panel open …" signpost.
    */
   openPanel?: (panelId: string) => void;
+  /**
+   * Surface a Fleet act result/receipt/error to the operator (late-bound to the
+   * command context's print, which the Fleet pick/conflict/discard acts use for
+   * their receipts — the same conversation sink the command flow prints to).
+   */
+  fleetActsNotify?: (message: string) => void;
+  /**
+   * Hand a spawned session id to the shared one-key jump/attach affordance (the
+   * CI fix-session machinery). Late-bound: main.ts patches it onto the command
+   * context after bootstrap; the Fleet conflict-resolve act reuses it verbatim.
+   */
+  armFixSessionAttach?: (sessionId: string) => void;
 }
 
 export type ResolvedBuiltinPanelDeps = Omit<

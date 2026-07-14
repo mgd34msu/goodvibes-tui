@@ -46,3 +46,17 @@ export function formatWorkItemIsolationDetailFromRaw(raw: unknown): string | nul
   const item = (raw as { item?: WorkItem } | undefined)?.item;
   return item ? formatWorkItemIsolationDetail(item) : null;
 }
+
+/**
+ * The STRUCTURED conflicting-path list a merge-conflict work item recorded
+ * (WorkItem.conflictFiles), for the Fleet detail block to show a human exactly
+ * which files need resolving. Null when the node is not a conflicted work item
+ * or recorded no files. The caller wraps these (never clips) so a long path is
+ * always fully readable.
+ */
+export function conflictFilesFromRaw(raw: unknown): readonly string[] | null {
+  const item = (raw as { item?: WorkItem } | undefined)?.item;
+  if (!item || item.mergeState !== 'conflict') return null;
+  const files = item.conflictFiles;
+  return files && files.length > 0 ? files : null;
+}
