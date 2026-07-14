@@ -373,6 +373,7 @@ async function main() {
         surfaceRegistry: ctx.services.surfaceRegistry,
         subscriptionManager: ctx.services.subscriptionManager,
         secretsManager: ctx.services.secretsManager,
+        pairingTokens: ctx.services.pairingTokens,
         tokenAuditor: ctx.services.tokenAuditor,
         replayEngine: ctx.services.replayEngine,
         webhookNotifier: ctx.services.webhookNotifier,

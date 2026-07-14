@@ -1,36 +1,31 @@
-import { join } from 'node:path';
 import type { CommandRegistry } from '../command-registry.ts';
-import { openModalCommand, requireShellPaths } from './runtime-services.ts';
-import { regenerateCompanionToken } from '@pellux/goodvibes-sdk/platform/pairing';
+import { openModalCommand } from './runtime-services.ts';
 
 /**
  * Register the /qrcode command.
  *
- * `/qrcode` (no args) opens the companion-app pairing modal (QR code + URL/
- * token/username). `/qrcode regenerate` rotates the companion pairing token:
- * it re-keys the shared operator-token store, so the previously-issued token is
- * rejected on the next auth and a fresh QR must be scanned to reconnect.
+ * `/qrcode` (no args, aliases /qr /pair) opens the device-pairing modal: a QR of
+ * the `#pair=<token>` deep link plus the offer set. Each open mints its own
+ * named per-device token, so `/qrcode regenerate` no longer rotates a shared
+ * token — it simply re-opens the modal, which mints a fresh token and QR. The
+ * previously-shown token stays valid until you revoke it in
+ * /settings → security → devices.
  */
 export function registerQrcodeRuntimeCommands(registry: CommandRegistry): void {
   registry.register({
     name: 'qrcode',
     aliases: ['qr', 'pair'],
-    description: 'Open the companion-app pairing modal (QR code), or regenerate the pairing token',
+    description: 'Open the device-pairing modal (QR deep link + offers); each open mints a fresh device token',
     usage: '[regenerate]',
     argsHint: '[regenerate]',
     handler(args, ctx) {
       if (args[0]?.toLowerCase() === 'regenerate') {
-        const shellPaths = requireShellPaths(ctx);
-        const daemonHomeDir = join(shellPaths.homeDirectory, '.goodvibes', 'daemon');
-        try {
-          const rotated = regenerateCompanionToken({ daemonHomeDir });
-          ctx.print(
-            'Pairing token rotated. The previous token is now rejected — ' +
-            `re-scan the QR (new peer ${rotated.peerId.slice(0, 8)}…) to reconnect the companion app.`,
-          );
-        } catch (error) {
-          ctx.print(`Could not regenerate the pairing token: ${String(error)}`);
-        }
+        // Each pairing-modal open mints its own token, so "regenerate" is just a
+        // fresh open: the re-pull mints a new named token + QR in place. The
+        // prior token is not rotated out from under a live device — revoke it
+        // explicitly in /settings → security → devices when you no longer need it.
+        ctx.print('Opening a fresh pairing QR — it mints a new device token. Revoke old ones in /settings → security → devices.');
+        openModalCommand(ctx, 'pairing-modal');
         return;
       }
       openModalCommand(ctx, 'pairing-modal');

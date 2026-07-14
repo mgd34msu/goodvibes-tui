@@ -11,8 +11,6 @@ import { BUILTIN_SECRET_PROVIDER_SOURCES, describeSecretRef, isSecretRefInput, r
 import { getSubscriptionProviderConfig, listAvailableSubscriptionProviders } from '@pellux/goodvibes-sdk/platform/config';
 import { beginOpenAICodexLogin, exchangeOpenAICodexCode } from '@pellux/goodvibes-sdk/platform/config';
 import { inspectProviderAuth } from '@/runtime/index.ts';
-import { getOrCreateCompanionToken, buildCompanionConnectionInfo, encodeConnectionPayload, formatConnectionBlock } from '@pellux/goodvibes-sdk/platform/pairing';
-import { generateQrMatrix, renderQrToString } from '@pellux/goodvibes-sdk/platform/pairing';
 import type { CliCommandRuntime, GoodVibesCliParseResult } from './types.ts';
 import { formatProviderAuthRoute, summarizeProviderAuthRoutes } from './provider-auth-routes.ts';
 import { classifyProviderSetup } from './provider-classification.ts';
