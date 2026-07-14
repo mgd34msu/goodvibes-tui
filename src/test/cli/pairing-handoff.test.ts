@@ -6,8 +6,8 @@ import {
   pairingQrContent,
   type PairingTokenMinter,
 } from '../../core/pairing-handoff.ts';
-import { formatPairingOffers, PAIRING_HTTP_LAN_POSTURE } from '../../core/pairing-offers.ts';
-import { parsePairingHandoffLink } from '@pellux/goodvibes-sdk/platform/pairing';
+import { formatPairingOffers, formatPostureCapabilities, pairingPostureNotice } from '../../core/pairing-offers.ts';
+import { LAN_PLAIN_HTTP_NOTICE, parsePairingHandoffLink } from '@pellux/goodvibes-sdk/platform/pairing';
 
 function fakeMinter(): PairingTokenMinter & { minted: string[] } {
   const minted: string[] = [];
@@ -41,6 +41,33 @@ describe('mintPairingHandoff', () => {
     // The QR content is a deep link — never a raw JSON blob.
     expect(handoff.deepLink!.startsWith('https://app.example')).toBe(true);
     expect(handoff.deepLink).not.toContain('{');
+    // A secure-context origin carries a posture with NO LAN notice (never a nag)
+    // and every browser capability available.
+    expect(handoff.posture?.secureContext).toBe(true);
+    expect(handoff.posture?.notice).toBeUndefined();
+    expect(handoff.posture?.capabilities.every((c) => c.available)).toBe(true);
+  });
+
+  test('a plain-http LAN origin carries the SDK LAN notice verbatim and gated capabilities', () => {
+    const handoff = mintPairingHandoff({
+      pairingTokens: fakeMinter(),
+      name: 'workshop',
+      offers: ['notifications'],
+      webOrigin: 'http://workshop.local:3141',
+    });
+    expect(handoff.posture?.secureContext).toBe(false);
+    // The one honest line is the SDK export, byte-for-byte — never a local rewording.
+    expect(pairingPostureNotice(handoff.posture)).toBe(LAN_PLAIN_HTTP_NOTICE);
+    const caps = formatPostureCapabilities(handoff.posture);
+    expect(caps.length).toBe(3);
+    expect(caps.every((line) => line.includes('needs https'))).toBe(true);
+  });
+
+  test('no web origin means no posture (fragment-only handoff)', () => {
+    const handoff = mintPairingHandoff({ pairingTokens: fakeMinter(), name: 'x', offers: [] });
+    expect(handoff.posture).toBeUndefined();
+    expect(pairingPostureNotice(handoff.posture)).toBeNull();
+    expect(formatPostureCapabilities(handoff.posture)).toEqual([]);
   });
 
   test('without a web origin, falls back to the fragment and QR encodes it', () => {
@@ -79,8 +106,13 @@ describe('formatPairingOffers copy', () => {
     expect(lines[0]).toContain('Notifications —');
     expect(lines[1]).toContain('Passkey —');
   });
-  test('the posture line is a single honest line', () => {
-    expect(PAIRING_HTTP_LAN_POSTURE).toContain('plain http on your LAN');
-    expect(PAIRING_HTTP_LAN_POSTURE.split('\n')).toHaveLength(1);
+  test('the one honest LAN line is the SDK export, a single line', () => {
+    expect(LAN_PLAIN_HTTP_NOTICE.split('\n')).toHaveLength(1);
+    expect(LAN_PLAIN_HTTP_NOTICE).toContain('unencrypted on your LAN');
+  });
+  test('capability labels are plain-language, no jargon', () => {
+    const posture = { origin: 'http://box.local', scheme: 'http' as const, privateNetwork: true, secureContext: false, notice: LAN_PLAIN_HTTP_NOTICE, capabilities: [{ capability: 'push' as const, available: false, reason: 'needs https — available via tailscale' }] };
+    const lines = formatPostureCapabilities(posture);
+    expect(lines[0]).toBe('  Push notifications — needs https — available via tailscale');
   });
 });

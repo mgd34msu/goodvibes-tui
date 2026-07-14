@@ -16,7 +16,9 @@
 import {
   buildPairingHandoffFragment,
   buildPairingHandoffLink,
+  describeOriginPosture,
   type MintedPairingToken,
+  type OriginPosture,
   type PairingHandoffOfferKind,
 } from '@pellux/goodvibes-sdk/platform/pairing';
 
@@ -32,6 +34,14 @@ export interface PairingHandoff {
   readonly fragment: string;
   /** `<webOrigin>/#pair=<token>` — present only when a web origin is known. */
   readonly deepLink?: string | undefined;
+  /**
+   * The honest TLS/capability posture of the web origin the deep link opens —
+   * the same field the `pairing.handoff.create` gateway verb carries (both
+   * computed by the SDK's describeOriginPosture). Present only when a web origin
+   * is known; a surface renders its one honest LAN line and its labeled
+   * capability list from here, never from a locally-authored string.
+   */
+  readonly posture?: OriginPosture | undefined;
 }
 
 export interface MintPairingHandoffInput {
@@ -59,7 +69,11 @@ export function mintPairingHandoff(input: MintPairingHandoffInput): PairingHando
   const deepLink = input.webOrigin
     ? buildPairingHandoffLink({ webOrigin: input.webOrigin, token: token.token, offers: input.offers })
     : undefined;
-  return { token, offers: input.offers, fragment, ...(deepLink ? { deepLink } : {}) };
+  // The posture is described from the SAME web origin the deep link opens — the
+  // identical computation the gateway verb performs — so a locally-minted handoff
+  // carries the same honest posture as one minted over the wire.
+  const posture = input.webOrigin ? describeOriginPosture(input.webOrigin) : undefined;
+  return { token, offers: input.offers, fragment, ...(deepLink ? { deepLink } : {}), ...(posture ? { posture } : {}) };
 }
 
 /** The link content a QR should encode: the full deep link when known, else the fragment. */
