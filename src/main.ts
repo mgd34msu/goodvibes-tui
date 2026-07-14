@@ -342,6 +342,20 @@ async function main() {
   commandContext.platform.externalServices = uiServices.platform.externalServices;
   commandContext.cancelGeneration = cancelGeneration;
   commandContext.cancelToolCall = cancelActiveToolCall;
+  // Mid-turn queue edit/delete (the /queue editable list). The in-process
+  // orchestrator owns the queue; edit/delete return false once a message has
+  // been delivered (immutable) — the command surfaces that honestly.
+  commandContext.listQueuedMessages = () => orchestrator.listQueuedMessages();
+  commandContext.editQueuedMessage = (id, text) => {
+    const ok = orchestrator.editQueuedMessage(id, text);
+    if (ok) render();
+    return ok;
+  };
+  commandContext.deleteQueuedMessage = (id) => {
+    const ok = orchestrator.deleteQueuedMessage(id);
+    if (ok) render();
+    return ok;
+  };
   commandContext.isGenerating = () => orchestrator.isThinking;
   commandContext.jumpToBookmark = jumpToBookmark; commandContext.scrollToLine = scrollToLine;
   commandContext.clearScreen = () => {
@@ -608,9 +622,7 @@ async function main() {
       viewport.push(...PermissionPromptUI.createPromptLines(conversationWidth, pendingPermission, pendingPermission.hunkState, pendingPermission.detailsExpanded, pendingPermission.requestedBy, PermissionPromptUI.promptViewState(pendingPermission, conversationWidth, approvalBroker)));
     }
 
-    orchestrator.messageQueue.forEach(msg => {
-      viewport.push(...UIFactory.createQueuedMessageFragment(conversationWidth, msg.text));
-    });
+    viewport.push(...UIFactory.createQueuedMessageList(conversationWidth, orchestrator.listQueuedMessages()));
 
     viewport = applyConversationOverlays(viewport, {
       input,

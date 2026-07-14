@@ -17,6 +17,7 @@ import { registerOperatorRuntimeCommands } from './commands/operator-runtime.ts'
 import { registerPluginRuntimeCommands } from './commands/plugin-runtime.ts';
 import { registerDiffRuntimeCommands } from './commands/diff-runtime.ts';
 import { registerGitRuntimeCommands } from './commands/git-runtime.ts';
+import { registerQueueRuntimeCommands } from './commands/queue-runtime.ts';
 import { registerTestRuntimeCommands } from './commands/test-runtime.ts';
 import { registerNotifyRuntimeCommands } from './commands/notify-runtime.ts';
 import { registerReplayRuntimeCommands } from './commands/replay-runtime.ts';
@@ -103,6 +104,7 @@ export const BUILTIN_COMMAND_GROUPS: readonly BuiltinCommandGroup[] = [
   { category: 'Plugins', register: registerPluginRuntimeCommands },
   { category: 'Diff & Review', register: registerDiffRuntimeCommands },
   { category: 'Git', register: registerGitRuntimeCommands },
+  { category: 'Shell & Session', register: registerQueueRuntimeCommands },
   { category: 'Testing', register: registerTestRuntimeCommands },
   { category: 'Notifications', register: registerNotifyRuntimeCommands },
   { category: 'Sessions & Replay', register: registerReplayRuntimeCommands },
