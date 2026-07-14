@@ -30,11 +30,11 @@ import {
   replayJournalForSession,
   replayJournalIntoConversation,
 } from '../../core/session-recovery.ts';
-import { handleBlockingShellInput } from '../../shell/blocking-input.ts';
+import { autoRestoreRecoverySession } from '../../shell/recovery-input-helpers.ts';
+import { writeRecoveryFile } from '@/runtime/index.ts';
 import { ConversationManager } from '../../core/conversation.ts';
 import { createResumeSessionHandler } from '../../runtime/bootstrap-hook-bridge.ts';
 import type { ResumeSessionOptions } from '../../runtime/bootstrap-hook-bridge.ts';
-import type { SessionSnapshot } from '@/runtime/index.ts';
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -164,105 +164,73 @@ describe('seam-replay: seam 1 — CLI/command resume (replayJournalForSession)',
   });
 });
 
-// ── Seam 2: Ctrl+R crash recovery (blocking-input.ts path) ───────────────────
+// ── Seam 2: silent crash recovery (autoRestoreRecoverySession) ───────────────
+// The Ctrl+R prompt is gone: recovery now restores silently at startup. This
+// seam proves that path still wires journal replay after loading the snapshot.
 
-describe('seam-replay: seam 2 — Ctrl+R crash recovery (handleBlockingShellInput)', () => {
+describe('seam-replay: seam 2 — silent crash recovery (autoRestoreRecoverySession)', () => {
   test('replays journal turns newer than the recovery snapshot timestamp', () => {
     const sessionId = 'seam2-ses';
     const homeDirectory = tmpDir;
     const journalPath = journalPathFor(homeDirectory, sessionId);
     const snapshotTimestamp = Date.now() - 5000;
 
-    // Pre-populate journal with 3 post-snapshot records.
+    // Write a real crash snapshot (one seed message — the silent restore skips
+    // an empty snapshot) for this session, then a journal with 3 post-snapshot
+    // records that the restore must replay in on top of it.
+    writeRecoveryFile(
+      { messages: makeMessages(1) as never, title: 'seam2 test', titleSource: 'auto', timestamp: snapshotTimestamp },
+      sessionId, 'seam2 test', { workingDirectory: tmpDir, homeDirectory },
+    );
     writeJournalWithRecords(journalPath, sessionId, 3, snapshotTimestamp);
 
     const conversation = new ConversationManager(() => 80);
     let persistCalled = false;
+    const receipts: string[] = [];
 
-    // Minimal system-message router stub.
-    const systemMessageRouter = {
-      high: (_msg: string) => {},
-      low: (_msg: string) => {},
-      normal: (_msg: string) => {},
-    };
-
-    // Recovery snapshot carries the timestamp so the ts-gate is applied.
-    const recoverySnapshot: SessionSnapshot = {
-      messages: [],
-      title: 'seam2 test',
-      titleSource: 'auto',
-      timestamp: snapshotTimestamp,
-    };
-
-    const result = handleBlockingShellInput({
-      data: '\x12', // Ctrl+R
-      pendingPermission: null,
-      recoveryPending: true,
-      abortTurn: () => {},
-      conversation,
-      systemMessageRouter: systemMessageRouter as never,
-      render: () => {},
-      loadRecoveryConversation: () => recoverySnapshot,
-      deleteRecoveryFile: () => {},
+    const restored = autoRestoreRecoverySession({
+      workingDirectory: tmpDir,
       homeDirectory,
-      sessionId,
-      persistSnapshot: (msgs) => {
-        persistCalled = true;
-        void msgs;
-      },
+      conversation,
+      persistSnapshot: () => { persistCalled = true; },
+      reopenPanels: () => {},
+      systemMessageRouter: { high: (m) => receipts.push(m) },
     });
 
-    expect(result.handled).toBe(true);
-    expect(result.recoveryPending).toBe(false);
-    // Conversation was populated via journal replay (3 records appended).
-    expect(conversation.getMessageCount()).toBe(4);
+    expect(restored).toBe(true);
+    // Conversation carries the seed message PLUS the replayed journal turns.
+    expect(conversation.getMessageCount()).toBeGreaterThan(1);
     expect(persistCalled).toBe(true);
     // Journal cleaned up by rotate() inside replayJournalForSession.
     expect(existsSync(journalPath)).toBe(false);
+    // Exactly one one-line receipt.
+    expect(receipts).toHaveLength(1);
+    expect(receipts[0]).toContain('Restored an interrupted session');
   });
 
   test('recovers without journal when no journal exists (replay is a no-op)', () => {
     const sessionId = 'seam2-nojournal';
     const homeDirectory = tmpDir;
+    writeRecoveryFile(
+      { messages: makeMessages(2) as never, title: 'seam2 nojournal test', titleSource: 'manual', timestamp: Date.now() - 1000 },
+      sessionId, 'seam2 nojournal test', { workingDirectory: tmpDir, homeDirectory },
+    );
     const conversation = new ConversationManager(() => 80);
     let persistCalled = false;
 
-    const systemMessageRouter = {
-      high: (_msg: string) => {},
-      low: (_msg: string) => {},
-      normal: (_msg: string) => {},
-    };
-
-    const recoverySnapshot: SessionSnapshot = {
-      messages: makeMessages(2) as never,
-      title: 'seam2 nojournal test',
-      titleSource: 'manual',
-      timestamp: Date.now() - 1000,
-    };
-
-    const result = handleBlockingShellInput({
-      data: '\x12',
-      pendingPermission: null,
-      recoveryPending: true,
-      abortTurn: () => {},
-      conversation,
-      systemMessageRouter: systemMessageRouter as never,
-      render: () => {},
-      loadRecoveryConversation: () => recoverySnapshot,
-      deleteRecoveryFile: () => {},
+    const restored = autoRestoreRecoverySession({
+      workingDirectory: tmpDir,
       homeDirectory,
-      sessionId,
-      persistSnapshot: (msgs) => {
-        persistCalled = true;
-        void msgs;
-      },
+      conversation,
+      persistSnapshot: () => { persistCalled = true; },
+      reopenPanels: () => {},
+      systemMessageRouter: { high: () => {} },
     });
 
-    expect(result.handled).toBe(true);
-    expect(result.recoveryPending).toBe(false);
+    expect(restored).toBe(true);
     // Messages from snapshot only (no journal to replay).
-    expect(conversation.getMessageCount()).toBe(recoverySnapshot.messages.length);
-    // No replay occurred, persistSnapshot not called by replay path.
+    expect(conversation.getMessageCount()).toBe(2);
+    // No replay occurred, persistSnapshot not called by the replay path.
     expect(persistCalled).toBe(false);
   });
 });

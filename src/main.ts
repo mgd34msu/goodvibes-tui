@@ -39,10 +39,10 @@ import { createSessionContinuityHintsBuilder } from './runtime/session-continuit
 import { resolveWebSurfaceUrl } from '@pellux/goodvibes-sdk/platform/runtime/feature-announcements';
 import { readLastSessionPointer, writeRecoveryFile } from '@/runtime/index.ts';
 import { handleBlockingShellInput, type PendingPermissionState } from './shell/blocking-input.ts';
-import { createPersistRecoverySnapshot, createRecoveryFileOps, createReopenRecoveryPanels, handleErrorAffordanceKey, resolveStartupRecoveryInfo } from './shell/recovery-input-helpers.ts';
+import { autoRestoreRecoverySession, createPersistRecoverySnapshot, createReopenRecoveryPanels, handleErrorAffordanceKey } from './shell/recovery-input-helpers.ts';
 import { wireShellUiOpeners } from './shell/ui-openers.ts';
 import { deriveComposerState } from './core/composer-state.ts';
-import { buildPersistedSessionContext, formatReturnContextForDisplay, getReturnContextMode, maybeAssistReturnContextSummary } from '@/runtime/index.ts';
+import { buildPersistedSessionContext, getReturnContextMode, maybeAssistReturnContextSummary } from '@/runtime/index.ts';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 import { prepareShellCliRuntime } from './cli/entrypoint.ts';
 import { applyInitialTuiCliState } from './cli/tui-startup.ts';
@@ -194,9 +194,6 @@ async function main() {
   const unsubs: Array<() => void> = [];
   let recoveryInterval: ReturnType<typeof setInterval> | null = null;
   let stopSpokenOutputForExit: (() => Promise<void>) | null = null;
-  let recoveryPending = false;
-  // Which file the current recovery prompt should load/delete from (see recovery-input-helpers.ts).
-  let recoverySource: 'live' | 'preserved' = 'live';
   // The optional "used N memories" provenance chip (default OFF) — see interaction-seams.ts.
   const memoryProvenanceUi = createMemoryProvenanceUi({ render: () => render() });
 
@@ -735,15 +732,10 @@ async function main() {
   stdin.on('data', (raw: string) => {
     const data = themeProbe.filterInput(raw); if (data.length === 0) return;
     const blocking = handleBlockingShellInput({
-      data, pendingPermission, recoveryPending, conversation, systemMessageRouter, render,
+      data, pendingPermission, render,
       abortTurn: () => orchestrator.abort(),
-      ...createRecoveryFileOps(() => recoverySource, { homeDirectory, workingDirectory: workingDir }),
-      homeDirectory, sessionId: runtime.sessionId,
-      persistSnapshot: createPersistRecoverySnapshot({ sessionManager: ctx.services.sessionManager, runtime, conversation }),
-      reopenPanels: createReopenRecoveryPanels({ panelManager, render }),
     });
     pendingPermission = blocking.pendingPermission;
-    recoveryPending = blocking.recoveryPending;
     if (blocking.handled) {
       return;
     }
@@ -765,26 +757,27 @@ async function main() {
   process.on('unhandledRejection', unhandledRejectionHandler);
   stdout.on('resize', resizeHandler);
 
+  // --- Silent crash-recovery restore (no prompt/banner) ---
+  // Restore the newest crash snapshot in place, replay any post-snapshot
+  // journal turns, reopen its panels, and emit a single one-line receipt. The
+  // SDK scopes both the load and the follow-up delete to that snapshot's own
+  // session id, so a concurrent session's snapshot is never touched. Runs
+  // before the initial render so the restored content shows immediately.
+  autoRestoreRecoverySession({
+    workingDirectory: workingDir,
+    homeDirectory,
+    conversation,
+    persistSnapshot: createPersistRecoverySnapshot({ sessionManager: ctx.services.sessionManager, runtime, conversation }),
+    reopenPanels: createReopenRecoveryPanels({ panelManager, render }),
+    systemMessageRouter,
+  });
+
   // Initial render
   conversation.rebuildHistory();
   render();
 
-  // --- Crash recovery check (also checks the preserve-on-dismiss sibling; see recovery-input-helpers.ts) ---
-  const recoveryInfo = resolveStartupRecoveryInfo({ workingDirectory: workingDir, homeDirectory });
-  if (recoveryInfo) {
-    recoverySource = recoveryInfo.source;
-    systemMessageRouter.high(`[Recovery] Found unsaved session from ${new Date(recoveryInfo.timestamp).toLocaleString()}. Title: "${recoveryInfo.title}". Press Ctrl+R to restore, Esc to discard, or start typing to ignore it.`);
-    for (const line of formatReturnContextForDisplay(recoveryInfo.returnContext)) {
-      systemMessageRouter.low(`[Recovery] ${line}`);
-    }
-    render();
-    recoveryPending = true;
-  }
-
   // --- Auto-save to recovery file every 60s ---
   recoveryInterval = setInterval(() => {
-    // Skip while an earlier recovery prompt is unresolved (avoids racing preserve-on-dismiss).
-    if (recoveryPending) return;
     const snapshot = conversation.toJSON() as { messages: Array<import('./core/conversation.ts').ConversationMessageSnapshot> };
     const persisted = buildPersistedSessionContext(snapshot.messages, conversation.getTitleSource(), buildSessionContinuityHints());
     writeRecoveryFile(
