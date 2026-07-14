@@ -213,9 +213,27 @@ export function isBlockedOnUserNode(node: ProcessNode): boolean {
   return fleetNodeAttention(node) !== null;
 }
 
-/** The literal badge text for a waiting-on-human node, by reason. */
+/**
+ * The literal badge text for a waiting-on-human node, by reason. Every reason
+ * is a first-class member of the ONE waiting-on-human state class (same ⚑
+ * glyph, same jump key, same count) but names WHY in its own words:
+ *   - 'approval' — a tool call is held for an approve/deny decision.
+ *   - 'input'    — the node is otherwise blocked on operator input.
+ *   - 'pick'     — a best-of-N attempt group is ready and only a human's
+ *                  winner pick advances it.
+ *   - 'conflict' — a merge conflict needs a human resolution before the work
+ *                  can land.
+ * The pick/conflict wording is deliberately DISTINCT from the bare
+ * 'blocked on you' so an operator reads the required act, not just the state.
+ */
 export function fleetAttentionText(attention: ProcessAttention): string {
-  return attention.reason === 'input' ? 'needs your input' : 'blocked on you';
+  switch (attention.reason) {
+    case 'input': return 'needs your input';
+    case 'pick': return 'needs your pick';
+    case 'conflict': return 'merge conflict waiting on you';
+    case 'approval': return 'blocked on you';
+    default: return 'blocked on you';
+  }
 }
 
 /**

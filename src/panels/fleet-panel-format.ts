@@ -163,6 +163,13 @@ export function renderFleetDetailLines(
   const C = palette;
   const disp = fleetStateDisplay(node.state, stopping, blocked);
   const color = toneColor(disp.tone, C);
+  // A blocked node's state text names WHY in the reason's own words
+  // ('needs your pick' / 'merge conflict waiting on you' / …) so the detail
+  // block never contradicts the row's reason-specific badge; the shared ⚑
+  // glyph/tone (disp) is unchanged. 'stopping' still wins over the reason.
+  const stateLabel = blocked && !stopping
+    ? fleetAttentionText(fleetNodeAttention(node) ?? { reason: 'approval' })
+    : disp.label;
 
   const line1 = buildPanelLine(width, [
     [' ', C.dim],
@@ -171,7 +178,7 @@ export function renderFleetDetailLines(
     ['  id ', C.label],
     [node.id, C.value],
     ['  state ', C.label],
-    [disp.label, color],
+    [stateLabel, color],
     ['  elapsed ', C.label],
     [formatElapsed(node.elapsedMs), C.value],
   ]);
