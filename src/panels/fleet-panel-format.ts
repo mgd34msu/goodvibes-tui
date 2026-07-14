@@ -7,7 +7,7 @@
 // renderItem/renderDetail call, with no `this` dependency.
 // ---------------------------------------------------------------------------
 
-import type { ProcessCostState, ProcessNode, ProcessUsage } from '@pellux/goodvibes-sdk/platform/runtime/fleet';
+import type { ProcessCostState, ProcessNode, ProcessReviewSummary, ProcessUsage } from '@pellux/goodvibes-sdk/platform/runtime/fleet';
 import type { Line } from '../types/grid.ts';
 import { formatAgentCost } from './agent-inspector-shared.ts';
 import { buildPanelLine, DEFAULT_PANEL_PALETTE, type ColumnSpec, type PanelPalette } from './polish.ts';
@@ -23,6 +23,7 @@ import { steerBadgeGlyph, steerBadgeTone } from './fleet-steer.ts';
 import type { SteerBadge } from './fleet-tabs.ts';
 import type { FleetTreeRow } from './fleet-read-model.ts';
 import { isObservedExternalNode, renderObservedDetailLines, renderObservedRowLine } from './fleet-observed-render.ts';
+import { renderPoolSummary, type WorkstreamGraphSnapshot } from './workstream-graph-render.ts';
 
 // Column widths for the tree row layout. `label` absorbs whatever width is
 // left over after the fixed columns + gaps; on hostile (narrow) widths the
@@ -158,6 +159,80 @@ export function renderFleetRowLine(
  * 'state' text never claims a past-tense outcome mid-write, and a
  * blocked-on-user node reads 'blocked on you' here too.
  */
+/**
+ * The reviewer's acceptance checklist + verdict, from the fleet node's served
+ * `review` field (ProcessReviewSummary, rides fleet.snapshot/list). Rendered
+ * only when a review has completed — never an empty shell. Each item shows
+ * whether it was verified, the evidence, and (when present) how it was
+ * exercised, matching what the webui's review detail surfaces.
+ */
+export function renderReviewLines(review: ProcessReviewSummary, width: number, palette: PanelPalette = DEFAULT_PANEL_PALETTE): Line[] {
+  const C = palette;
+  const passTone = C.good ?? C.info;
+  const failTone = C.bad ?? C.warn ?? DEFAULT_PANEL_PALETTE.warn;
+  const cyclesLabel = review.cycles === 1 ? '1 cycle' : `${review.cycles} cycles`;
+  const lines: Line[] = [
+    buildPanelLine(width, [
+      [' review ', C.label],
+      [review.passed ? '✓ passed' : '✗ not passed', review.passed ? passTone : failTone],
+      ['  score ', C.label], [String(review.score), C.value],
+      ['  ', C.dim], [cyclesLabel, C.dim],
+    ]),
+  ];
+  if (review.checklist.length === 0) {
+    // Empty checklist is itself a gate failure — say so honestly, don't hide it.
+    lines.push(buildPanelLine(width, [['   ', C.dim], ['(the reviewer emitted no acceptance checklist — a gate failure)', failTone]]));
+    return lines;
+  }
+  for (const it of review.checklist) {
+    const mark = it.verified ? '[verified]  ' : '[unverified]';
+    const markTone = it.verified ? passTone : failTone;
+    wrapText(it.item, Math.max(1, width - 16)).forEach((seg, i) => {
+      lines.push(buildPanelLine(width, i === 0
+        ? [['   ', C.dim], [`${mark} `, markTone], [seg, C.value]]
+        : [['                ', C.dim], [seg, C.value]]));
+    });
+    if (it.evidence) {
+      for (const seg of wrapText(`evidence: ${it.evidence}`, Math.max(1, width - 6))) {
+        lines.push(buildPanelLine(width, [['     ', C.dim], [seg, C.dim]]));
+      }
+    }
+    if (it.howExercised) {
+      for (const seg of wrapText(`exercised: ${it.howExercised}`, Math.max(1, width - 6))) {
+        lines.push(buildPanelLine(width, [['     ', C.dim], [seg, C.dim]]));
+      }
+    }
+  }
+  return lines;
+}
+
+/**
+ * The task graph's edges + elastic-pool posture for a workstream row, rendered
+ * IN the fleet detail (the tree shows nodes; edges/pool used to be reachable
+ * only via /graph — /graph still works). Fetched lazily and cached by fleet-acts;
+ * rendered only once a snapshot is in hand. An empty graph states so honestly.
+ */
+export function renderGraphPostureLines(graph: WorkstreamGraphSnapshot, width: number, palette: PanelPalette = DEFAULT_PANEL_PALETTE): Line[] {
+  const C = palette;
+  const lines: Line[] = [
+    buildPanelLine(width, [[' graph ', C.label], [renderPoolSummary(graph.pool), C.value]]),
+  ];
+  if (graph.edges.length === 0) {
+    lines.push(buildPanelLine(width, [['   ', C.dim], ['no dependency edges', C.dim]]));
+    return lines;
+  }
+  const titleById = new Map(graph.nodes.map((n) => [n.id, n.title]));
+  lines.push(buildPanelLine(width, [[' edges ', C.label], [`${graph.edges.length} dependency link(s)`, C.value]]));
+  for (const edge of graph.edges) {
+    const from = titleById.get(edge.from) ?? edge.from;
+    const to = titleById.get(edge.to) ?? edge.to;
+    for (const seg of wrapText(`${from} → ${to}`, Math.max(1, width - 5))) {
+      lines.push(buildPanelLine(width, [['   ', C.dim], [seg, C.dim]]));
+    }
+  }
+  return lines;
+}
+
 export function renderFleetDetailLines(
   node: ProcessNode,
   width: number,
@@ -165,6 +240,7 @@ export function renderFleetDetailLines(
   blocked: boolean,
   palette: PanelPalette = DEFAULT_PANEL_PALETTE,
   observedSteerDraft: string | null = null,
+  graphSnapshot: WorkstreamGraphSnapshot | null = null,
 ): Line[] {
   const C = palette;
   // Observed foreign agents drill into their own detail (facts + steer-or-reason,
@@ -240,5 +316,11 @@ export function renderFleetDetailLines(
       ),
     ]
     : [];
-  return [line1, line2, ...headlineLine, line3, line4, ...(isolationDetail ? [buildPanelLine(width, [[' isolation ', C.label], [isolationDetail, C.dim]])] : []), ...conflictLines];
+  // The reviewer's acceptance checklist + verdict, when a review has completed
+  // (served on node.review; absent before any review — never an empty shell).
+  const reviewLines = node.review ? renderReviewLines(node.review, width, C) : [];
+  // The task graph's edges/pool posture for a workstream row (fetched + cached
+  // by fleet-acts); rendered in-panel under the chain, /graph still available.
+  const graphLines = graphSnapshot ? renderGraphPostureLines(graphSnapshot, width, C) : [];
+  return [line1, line2, ...headlineLine, line3, line4, ...(isolationDetail ? [buildPanelLine(width, [[' isolation ', C.label], [isolationDetail, C.dim]])] : []), ...conflictLines, ...reviewLines, ...graphLines];
 }

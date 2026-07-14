@@ -44,6 +44,7 @@ import {
   type FleetAttemptCandidate,
   type FleetGateway,
   type FleetGatewayResolution,
+  type FleetGraphSnapshot,
   type FleetHeldMergeGroup,
 } from './fleet-gateway.ts';
 
@@ -105,6 +106,9 @@ export class FleetActs {
   private pick: PickMode | null = null;
   /** Live observed-agent steer composer: the row being steered + its draft. Drill-in only. */
   private observedSteer: { readonly nodeId: string; draft: string } | null = null;
+  /** Per-workstream-node graph snapshot cache (null = fetched, unavailable). undefined = not fetched. */
+  private readonly graphCache = new Map<string, FleetGraphSnapshot | null>();
+  private readonly graphInFlight = new Set<string>();
 
   public constructor(private readonly deps: FleetActsDeps) {}
 
@@ -197,6 +201,33 @@ export class FleetActs {
     } catch (err) {
       this.deps.notify(`Observed steer failed: ${summarizeError(err)}`);
     }
+  }
+
+  // ── Task-graph posture (in-panel edges/pool under a workstream) ───────────
+
+  /**
+   * Lazily fetch the task graph (fleet.graph.get) for a selected workstream row
+   * so the in-panel detail can render its edges/pool posture WITHOUT opening
+   * /graph. Idempotent: fetches once per node (cache + in-flight guard), quiet
+   * on an unavailable daemon (caches null rather than nagging every frame). A
+   * no-op for any non-workstream node.
+   */
+  public ensureGraphFor(node: ProcessNode): void {
+    const workstreamId = workstreamIdFromNodeId(node.id);
+    if (workstreamId === null) return;
+    if (this.graphCache.has(node.id) || this.graphInFlight.has(node.id)) return;
+    const resolution = this.deps.resolveGateway();
+    if (!resolution.available) { this.graphCache.set(node.id, null); return; }
+    this.graphInFlight.add(node.id);
+    void resolution.gateway.getGraph(workstreamId)
+      .then((snapshot) => { this.graphCache.set(node.id, snapshot); })
+      .catch(() => { this.graphCache.set(node.id, null); })
+      .finally(() => { this.graphInFlight.delete(node.id); this.deps.markDirty(); });
+  }
+
+  /** The cached graph for a node (null = fetched/unavailable, undefined = not yet fetched). */
+  public graphFor(nodeId: string): FleetGraphSnapshot | null | undefined {
+    return this.graphCache.get(nodeId);
   }
 
   // ── Pick (STEP 3) ─────────────────────────────────────────────────────────

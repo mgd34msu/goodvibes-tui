@@ -31,13 +31,24 @@ export function renderQueuedMessageList(width: number, items: readonly { readonl
 }
 
 /**
+ * One drilled-in memory-provenance row. `record` is the RESOLVED record summary
+ * (undefined = still resolving, null = no longer available) — the drill-in
+ * shows a human summary, never a raw record id, matching the webui's detail
+ * fetch (per-id, so one missing record never blanks the rest).
+ */
+export interface MemoryProvenanceEntry {
+  readonly id: string;
+  readonly record?: { readonly summary: string; readonly cls: string } | null | undefined;
+}
+
+/**
  * The optional "used N memories" turn chip. Collapsed: one small line naming the
  * count with the drill-in hint. Expanded (Alt+M): the same line followed by one
- * line per memory id. Empty when no memories were used — the caller only renders
- * this when the memory-provenance setting is on, so an off session produces zero
- * lines and adds zero context.
+ * line per memory — its resolved SUMMARY (with the record class), a "resolving…"
+ * placeholder while the fetch is in flight, or an honest "no longer available"
+ * for a record that has since been forgotten. Empty when no memories were used.
  */
-export function renderMemoryProvenanceChip(width: number, count: number, ids: readonly string[], expanded: boolean): Line[] {
+export function renderMemoryProvenanceChip(width: number, count: number, entries: readonly MemoryProvenanceEntry[], expanded: boolean): Line[] {
   if (count <= 0) return [];
   const t = activeUiTones();
   const bodyBg = activeTheme().collapsedBodyBg;
@@ -45,8 +56,13 @@ export function renderMemoryProvenanceChip(width: number, count: number, ids: re
   const header = expanded ? `used ${count} ${noun} — Alt+M to hide` : `used ${count} ${noun} — Alt+M to list`;
   const lines: Line[] = renderConversationFragment(header, width, { prefix: ' ◆ ', prefixFg: t.state.info, text: t.fg.dim, bodyBg, dim: true });
   if (expanded) {
-    ids.forEach((id, index) => {
-      lines.push(...renderConversationFragment(id, width, { prefix: `   ${index + 1}. `, prefixFg: t.state.info, text: t.fg.dim, bodyBg, dim: true }));
+    entries.forEach((entry, index) => {
+      const body = entry.record === undefined
+        ? 'resolving…'
+        : entry.record === null
+          ? 'no longer available'
+          : `${entry.record.summary}  ·  ${entry.record.cls}`;
+      lines.push(...renderConversationFragment(body, width, { prefix: `   ${index + 1}. `, prefixFg: t.state.info, text: t.fg.dim, bodyBg, dim: true }));
     });
   }
   return lines;

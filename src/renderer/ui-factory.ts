@@ -11,7 +11,7 @@ import { abbreviateCount } from '../utils/format-number.ts';
 import { computeContextUsage } from '../core/context-usage.ts';
 import { permissionModeLabel, permissionModeTone } from '../core/permission-mode.ts';
 import { SLEEP_DISABLED_CHIP } from '../core/power-status.ts';
-import { renderQueuedMessageList, renderMemoryProvenanceChip } from './composer-fragments.ts';
+import { renderQueuedMessageList, renderMemoryProvenanceChip, type MemoryProvenanceEntry } from './composer-fragments.ts';
 import { calcSessionCost, isModelPriced } from '../export/cost-utils.ts';
 import { buildFooterTip, isAgentActive } from './footer-tips.ts';
 import type { StreamMetrics } from '../core/stream-event-wiring.ts';
@@ -181,8 +181,8 @@ export class UIFactory {
   }
 
   /** The optional "used N memories" provenance chip — see composer-fragments.ts. */
-  public static createMemoryProvenanceChip(width: number, count: number, ids: readonly string[], expanded: boolean): Line[] {
-    return renderMemoryProvenanceChip(width, count, ids, expanded);
+  public static createMemoryProvenanceChip(width: number, count: number, entries: readonly MemoryProvenanceEntry[], expanded: boolean): Line[] {
+    return renderMemoryProvenanceChip(width, count, entries, expanded);
   }
 
   public static createFooter(

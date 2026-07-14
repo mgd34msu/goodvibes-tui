@@ -195,7 +195,7 @@ async function main() {
   let recoveryInterval: ReturnType<typeof setInterval> | null = null;
   let stopSpokenOutputForExit: (() => Promise<void>) | null = null;
   // The optional "used N memories" provenance chip (default OFF) — see interaction-seams.ts.
-  const memoryProvenanceUi = createMemoryProvenanceUi({ render: () => render() });
+  const memoryProvenanceUi = createMemoryProvenanceUi({ render: () => render(), memorySpine: ctx.services.memorySpine });
 
   const lifecycle = installProcessLifecycle({
     stdin,
