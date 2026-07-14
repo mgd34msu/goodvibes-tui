@@ -15,7 +15,8 @@ import { fleetAttentionText, fleetNodeAttention, fleetStallMarker, fleetUsageTok
 import { fleetStateDisplay } from './fleet-stop.ts';
 import { formatElapsed } from '../utils/format-elapsed.ts';
 import { truncateDisplay } from '../utils/terminal-width.ts';
-import { formatWorkItemIsolationDetailFromRaw } from './fleet-panel-worktree-detail.ts';
+import { conflictFilesFromRaw, formatWorkItemIsolationDetailFromRaw } from './fleet-panel-worktree-detail.ts';
+import { wrapText } from '../utils/terminal-width.ts';
 import { buildAlignedRow } from './polish.ts';
 import { fleetKindTag } from './fleet-read-model.ts';
 import { steerBadgeGlyph, steerBadgeTone } from './fleet-steer.ts';
@@ -213,5 +214,22 @@ export function renderFleetDetailLines(
   // Approval history attaches here once session tabs land.
   const line4 = buildPanelLine(width, [[' approvals ', C.label], ['—', C.dim]]);
   const isolationDetail = node.kind === 'work-item' ? formatWorkItemIsolationDetailFromRaw(node.raw) : null;
-  return [line1, line2, ...headlineLine, line3, line4, ...(isolationDetail ? [buildPanelLine(width, [[' isolation ', C.label], [isolationDetail, C.dim]])] : [])];
+  // A merge-conflict row shows its STRUCTURED conflicting-path list, wrapped so a
+  // long path is fully readable — never clipped (STEP 4: the conflict row acts,
+  // and the operator sees exactly which files need resolving before pressing Enter).
+  const conflictFiles = node.kind === 'work-item' ? conflictFilesFromRaw(node.raw) : null;
+  const conflictLines: Line[] = conflictFiles
+    ? [
+      buildPanelLine(width, [[' conflicts ', C.label], [`${conflictFiles.length} file(s) — press Enter to resolve`, C.warn ?? DEFAULT_PANEL_PALETTE.warn]]),
+      // Prefix is 3 spaces of indent + a 2-col bullet/continuation marker, so
+      // wrap the path at width-5 to keep the composed line within `width`
+      // (a hard-wrapped long path is fully readable, never clipped).
+      ...conflictFiles.flatMap((file) =>
+        wrapText(file, Math.max(1, width - 5)).map((segment, i) =>
+          buildPanelLine(width, [['   ', C.dim], [i === 0 ? `• ${segment}` : `  ${segment}`, C.value]]),
+        ),
+      ),
+    ]
+    : [];
+  return [line1, line2, ...headlineLine, line3, line4, ...(isolationDetail ? [buildPanelLine(width, [[' isolation ', C.label], [isolationDetail, C.dim]])] : []), ...conflictLines];
 }

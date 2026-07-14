@@ -206,6 +206,12 @@ export function createBootstrapShell(options: BootstrapShellOptions): BootstrapS
     runtimeStore,
     openPanel: (panelId: string) => { services.panelManager.open(panelId); },
     knowledgeApi,
+    // Fleet acts (pick / conflict / discard) surface receipts through the command
+    // context's print and reuse its one-key jump affordance — both late-bound
+    // (the command context is assigned to commandContextRef after bootstrap, and
+    // main.ts patches armFixSessionAttach onto it).
+    fleetActsNotify: (message: string) => { commandContextRef?.print?.(message); requestRender(); },
+    armFixSessionAttach: (sessionId: string) => { commandContextRef?.armFixSessionAttach?.(sessionId); },
   });
   services.panelManager.prewarmRegistered();
 

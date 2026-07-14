@@ -1,6 +1,9 @@
 import type { PanelManager } from '../panel-manager.ts';
 import { FleetPanel } from '../fleet-panel.ts';
 import { createFleetReadModel } from '../fleet-read-model.ts';
+import { FleetActs, type FleetDiffSurface } from '../fleet-acts.ts';
+import { createFleetGateway } from '../fleet-gateway.ts';
+import { DiffPanel } from '../diff-panel.ts';
 import { LocalAuthPanel } from '../local-auth-panel.ts';
 import { NotificationsPanel } from '../notifications-panel.ts';
 import type { ResolvedBuiltinPanelDeps } from './shared.ts';
@@ -43,6 +46,43 @@ export function registerOperationsPanels(manager: PanelManager, deps: ResolvedBu
   // to the honest COMMUNICATION_CONSUMED steer-ack signal (fleet-read-model.ts).
   const fleetReadModel = createFleetReadModel(ui.runtime.processRegistry, ui.runtime.runtimeBus);
 
+  // The Fleet panel's waiting-on-human acts (pick / conflict / discard) drive
+  // gateway verbs over the same operator invoke path the command layer uses, and
+  // reuse the shared DiffPanel (candidate diffs + the pick confirm overlay) and
+  // the CI fix-session jump affordance. Built here so the panel stays thin.
+  const fleetNotify = deps.fleetActsNotify ?? (() => {});
+  const armFixSessionAttach = deps.armFixSessionAttach ?? (() => {});
+  const diffSurface: FleetDiffSurface = {
+    show: (_title, unifiedDiff) => {
+      let panel = manager.getAllOpen().find((p) => p.id === 'diff');
+      if (!panel) { try { panel = manager.open('diff'); } catch { return; } }
+      manager.activateById('diff');
+      if (!manager.isVisible()) manager.show();
+      manager.focusPanels();
+      (panel as DiffPanel).loadRawDiff(unifiedDiff);
+    },
+    armConfirm: (opts) => {
+      let panel = manager.getAllOpen().find((p) => p.id === 'diff');
+      if (!panel) { try { panel = manager.open('diff'); } catch { return; } }
+      manager.activateById('diff');
+      if (!manager.isVisible()) manager.show();
+      manager.focusPanels();
+      (panel as DiffPanel).confirmOverlay.arm(opts);
+    },
+    close: () => { manager.close('diff'); },
+  };
+  const fleetActs = new FleetActs({
+    resolveGateway: () => createFleetGateway({
+      configManager: deps.configManager,
+      homeDirectory: ui.environment.shellPaths.homeDirectory,
+      armFixSessionAttach,
+    }),
+    diffSurface,
+    notify: fleetNotify,
+    markDirty: deps.requestRender ?? (() => {}),
+    findNode: (nodeId: string) => fleetReadModel.getSnapshot().rows.find((r) => r.node.id === nodeId)?.node ?? null,
+  });
+
   manager.registerType({
     id: 'fleet',
     name: 'Fleet',
@@ -63,7 +103,7 @@ export function registerOperationsPanels(manager: PanelManager, deps: ResolvedBu
       resolveSessionLogPath: (agentId: string) => ui.environment.shellPaths.resolveProjectPath('tui', 'sessions', `${agentId}.jsonl`),
       // Queue a message for a live in-process agent/wrfc-subtask member.
       steer: (id: string, text: string) => fleetReadModel.steer(id, text),
-    }, deps.configManager),
+    }, deps.configManager, fleetActs),
   });
 
   // Compat: '/panel open <id>' (and any saved layout/muscle memory) for

@@ -221,6 +221,35 @@ describe('fleet detail block: headline row', () => {
     const lines = renderFleetDetailLines(makeNode({ id: 'a9', label: 'plain' }), 80, false, false);
     expect(lines.map(text).some((t) => t.includes('headline'))).toBe(false);
   });
+
+  test('a merge-conflict work item lists its structured conflict files, never clipped', () => {
+    const node = makeNode({
+      id: 'work-item:it1',
+      kind: 'work-item',
+      label: 'conflicted',
+      needsAttention: { reason: 'conflict' },
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      raw: { item: { mergeState: 'conflict', conflictFiles: ['src/very/deeply/nested/module/that/is/quite/long/parser.ts', 'README.md'] } } as any,
+    });
+    const texts = renderFleetDetailLines(node, 60, false, true).map(text);
+    expect(texts.some((t) => t.includes('conflicts') && t.includes('2 file(s)') && t.includes('press Enter to resolve'))).toBe(true);
+    // The long path is fully present across (hard-)wrapped, padded segments —
+    // never truncated with an ellipsis. Stripping whitespace reconstructs it
+    // (wrap only inserts line breaks / indent padding, never drops characters).
+    const stripped = texts.join('').replace(/\s/g, '');
+    expect(stripped).toContain('src/very/deeply/nested/module/that/is/quite/long/parser.ts');
+    expect(stripped).toContain('README.md');
+    expect(texts.some((t) => t.includes('…'))).toBe(false);
+    // Every rendered line stays within the 60-col width (wrapped, never overflowing).
+    for (const line of renderFleetDetailLines(node, 60, false, true)) {
+      expect(text(line).length).toBeLessThanOrEqual(60);
+    }
+  });
+
+  test('a non-conflict work item shows no conflict-files block', () => {
+    const node = makeNode({ id: 'work-item:it2', kind: 'work-item', label: 'clean' });
+    expect(renderFleetDetailLines(node, 80, false, false).map(text).some((t) => t.includes('conflicts'))).toBe(false);
+  });
 });
 
 describe('waiting-on-human classification (needsAttention projection)', () => {

@@ -27,6 +27,7 @@ import {
   type FleetReadModel,
   type FleetTreeRow,
 } from './fleet-read-model.ts';
+import type { FleetActs } from './fleet-acts.ts';
 import {
   activeFleetTab,
   appendSteerText,
@@ -112,6 +113,9 @@ export class FleetPanel extends ScrollableListPanel<FleetTreeRow> {
     private readonly readModel: FleetReadModel,
     actions: Partial<FleetActionCallbacks> = {},
     private readonly configManager: ConfigManager | null = null,
+    // The waiting-on-human acts (pick / conflict / discard). Null in a runtime
+    // with no daemon gateway wired — those keys then fall through honestly.
+    private readonly acts: FleetActs | null = null,
   ) {
     super('fleet', 'Fleet', '⊟', 'runtime-ops');
     this.showSelectionGutter = true; // visible ▸ focus indicator
@@ -384,6 +388,9 @@ export class FleetPanel extends ScrollableListPanel<FleetTreeRow> {
   public override handleInput(key: string): boolean {
     if (this.lastError !== null) this.clearError();
 
+    // The candidate picker (a flagged pick decision) owns the view + input while active.
+    if (this.acts?.pickModeActive()) return this.acts.handlePickInput(key);
+
     // Confirm overlay owns input first (K-armed kill confirm).
     if (this.confirmOverlay.handleInput(key)) return true;
 
@@ -424,6 +431,14 @@ export class FleetPanel extends ScrollableListPanel<FleetTreeRow> {
     }
 
     const selected = this.getSelectedItem();
+
+    // Waiting-on-human acts on the selected row: Enter on a flagged pick/conflict
+    // row, D on a worktree-owning row. Returns false (falls through to attach /
+    // ordinary handling) for any other row, so Enter still opens an agent tab.
+    if (this.acts && selected && this.acts.handleTreeKey(key, selected.node)) {
+      this.captureSelectionAnchor();
+      return true;
+    }
 
     // Archive controls: v toggles the live fleet <-> session archive view;
     // a archives the selected finished subtree (or restores it from the
@@ -777,6 +792,7 @@ export class FleetPanel extends ScrollableListPanel<FleetTreeRow> {
   }
 
   public override render(width: number, height: number): Line[] {
+    if (this.acts?.pickModeActive()) return this.acts.renderPickMode(width, height, C);
     if (this.tabsState.activeTabIndex > 0) return this.renderTabView(width, height);
     return this.renderTreeView(width, height);
   }
