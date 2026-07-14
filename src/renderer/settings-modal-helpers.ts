@@ -115,6 +115,12 @@ const SETTING_LABELS: Partial<Record<string, string>> = {
   'ui.voiceEnabled': 'Always Speak',
   'behavior.autoCompactThreshold': 'Auto-Compact %',
   'behavior.staleContextWarnings': 'Context Warnings',
+  // Blocked-too-long escalation: a fleet node waiting on a human gets a device
+  // push once the grace elapses (regardless of an attached surface), then bounded
+  // reminders. Real numeric option shapes come from the SDK schema's ranges.
+  'notifications.blockedEscalationGraceMs': 'Blocked-Too-Long Grace (ms)',
+  'notifications.blockedEscalationFollowUpMs': 'Blocked Reminder Interval (ms)',
+  'notifications.blockedEscalationMaxFollowUps': 'Blocked Reminder Limit',
   'behavior.returnContextMode': 'Return Context',
   'behavior.guidanceMode': 'Guidance Mode',
   'storage.secretPolicy': 'Secret Policy',

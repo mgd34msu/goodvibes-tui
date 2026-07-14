@@ -25,6 +25,7 @@ import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 import type { CommandContext } from '../command-registry.ts';
 import type { WorkstreamCommandService } from '../../runtime/workstream-services.ts';
 import { requirePanelManager } from './runtime-services.ts';
+import { describeFailureReason, isTurnBudgetReason } from '../../core/turn-budget-outcome.ts';
 import { type AttemptGraphItem, renderDependentHoldLines } from './workstream-attempt-dependents.ts';
 
 /** Resolve a workstream's items for dependent-hold display; null-safe against a stubbed engine. */
@@ -58,7 +59,11 @@ function resolveCandidate(group: HeldMergeGroup, ref: string): AttemptCandidate 
 
 function candidateLine(c: AttemptCandidate): string {
   const files = c.diff ? `${c.diff.files.length} file(s)` : 'no diff';
-  const state = c.state === 'held-merge' ? 'held (pick-ready)' : `failed${c.failureReason ? `: ${c.failureReason}` : ''}`;
+  const state = c.state === 'held-merge'
+    ? 'held (pick-ready)'
+    : isTurnBudgetReason(c.failureReason)
+      ? describeFailureReason(c.failureReason) // a spent budget, not an infrastructure failure
+      : `failed${c.failureReason ? `: ${c.failureReason}` : ''}`;
   return `    ${c.attemptIndex + 1}. [${state}] ${c.title} — ${files}, item ${shortId(c.itemId)}`;
 }
 

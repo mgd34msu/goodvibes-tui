@@ -441,6 +441,29 @@ describe('wireTurnEventHandlers — agent/chain-failure alerts', () => {
     expect(spy).not.toHaveBeenCalledWith('\x07');
     spy.mockRestore();
   });
+
+  test('WORKFLOW_CHAIN_FAILED with failureKind=max_turns alerts via the budget branch (limit + source from the event)', () => {
+    const spy = spyOnStdoutWrite();
+    const tracker = new FocusTracker();
+    tracker.setFocused(false);
+    const opts = makeMinimalOptions({
+      focusTracker: tracker,
+      configManager: { get: () => undefined },
+    });
+    wireTurnEventHandlers(opts);
+    // The typed budget branch reads turnLimit/turnLimitSource off the event; it
+    // must alert without throwing and without regex-matching the prose reason.
+    expect(() => opts.emitWorkflow('WORKFLOW_CHAIN_FAILED', {
+      type: 'WORKFLOW_CHAIN_FAILED',
+      chainId: 'chain-abcdef123456',
+      reason: 'agent reached the turn limit of 50',
+      failureKind: 'max_turns',
+      turnLimit: 50,
+      turnLimitSource: 'default',
+    })).not.toThrow();
+    expect(spy).toHaveBeenCalledWith('\x07');
+    spy.mockRestore();
+  });
 });
 
 function spyOnStdoutWrite(): ReturnType<typeof spyOn> {
