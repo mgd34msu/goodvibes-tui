@@ -13,12 +13,13 @@ import {
   getOrCreateCompanionToken,
   pruneStaleOperatorTokens,
   buildPairingHandoffLink,
+  describeOriginPosture,
   generateQrMatrix,
   renderQrToString,
 } from '@pellux/goodvibes-sdk/platform/pairing';
 import { ensurePublicBaseUrl } from '../core/pairing-origin.ts';
 import { availablePairingOffers } from '../core/pairing-handoff.ts';
-import { formatPairingOffers, PAIRING_HTTP_LAN_POSTURE } from '../core/pairing-offers.ts';
+import { formatPairingOffers, formatPostureCapabilities, pairingPostureNotice } from '../core/pairing-offers.ts';
 import { workspaceOperatorTokenCandidates } from '../runtime/operator-token-cleanup.ts';
 import {
   scan,
@@ -296,13 +297,19 @@ async function main(): Promise<void> {
   });
   const deepLink = buildPairingHandoffLink({ webOrigin: webOrigin.origin, token: companionTokenRecord.token, offers });
   const qrString = renderQrToString(generateQrMatrix(deepLink));
+  // The banner renders the SAME SDK posture the pairing verb carries: the labeled
+  // capability list, and the one honest LAN line only when the posture holds it.
+  const posture = describeOriginPosture(webOrigin.origin);
+  const capabilities = formatPostureCapabilities(posture);
+  const notice = pairingPostureNotice(posture);
   const bannerLines = [
     `GoodVibes daemon ${VERSION} — scan to pair a device (opens the web app signed in):`,
     '',
     `  ${webOrigin.origin}`,
     '',
     ...(offers.length > 0 ? ['Offers (each declinable in the web app):', ...formatPairingOffers(offers), ''] : []),
-    ...(webOrigin.httpOnLan ? [PAIRING_HTTP_LAN_POSTURE, ''] : []),
+    ...(capabilities.length > 0 ? ['This device will get:', ...capabilities, ''] : []),
+    ...(notice ? [notice, ''] : []),
     qrString,
   ];
   // eslint-disable-next-line no-console

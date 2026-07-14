@@ -12,20 +12,38 @@ when the install is usable, non-zero only for a must-fix finding.
 
 ## TLS, stated plainly, in both directions
 
-- **The webui cockpit works over plain `http` on your LAN.** Browsing
-  sessions, watching agents, and steering them needs nothing more than
-  `http://<server>:3423`.
-- **The full progressive-web-app feature set does not.** Browsers gate
-  secure-context features — installing the webui as an app, offline caching,
-  push notifications, microphone capture — behind `https`. Over plain `http`
-  those stay unavailable no matter what GoodVibes does.
-- **Providing TLS on a home network is your responsibility.** GoodVibes will
-  not conjure a certificate for `192.168.1.20`. The recommended path is
-  `tailscale serve` (step 6), which terminates TLS with a real certificate for
-  your tailnet hostname. Alternatively, the control plane and HTTP listener
-  can terminate TLS themselves (`controlPlane.tls.mode = direct` with
-  certificate files — see [Deployment and services](deployment-and-services.md),
-  "Inbound TLS").
+This is the honest picture, stated once. Pairing surfaces (the pairing modal,
+`goodvibes pair`, the daemon startup banner) render the same posture the daemon
+computes, so it is stated where you pair a device and never repeated as a nag.
+
+- **Plain `http` on your LAN works, and is a supported posture.** A phone or
+  laptop on the same private network (a `10.x` / `172.16-31.x` / `192.168.x`
+  address, a `.local` mDNS name, or localhost) uses the full cockpit over
+  `http://<server>:3423` — browsing sessions, watching agents, and steering
+  them. The transport does not refuse private-network origins. Two things are
+  true about it:
+  1. The connection is unencrypted on your local network — anyone who can
+     already capture traffic on your LAN can read it, including the bearer
+     token. This is the one honest line the pairing surfaces show for a
+     plain-`http` LAN link.
+  2. Browsers gate a few capabilities on a *secure context* (https, or the
+     localhost loopback): **service worker / PWA install, push notifications,
+     and the microphone**. Over plain `http` on the LAN these are unavailable.
+     The daemon reports each one in the pairing/posture contract
+     (`pairing.posture.get`, and the `posture` field of
+     `pairing.handoff.create`), so surfaces render a
+     "needs https — available via tailscale" label next to each capability
+     instead of a dead button. Localhost keeps all three.
+- **The full progressive-web-app feature set needs TLS, and TLS on a home
+  network is your responsibility.** The daemon never mints certificates and
+  never provisions its own CA — it will not conjure one for `192.168.1.20`.
+  The recommended path is `tailscale serve` (step 6), which terminates TLS
+  with a real certificate for your tailnet hostname and needs zero certificate
+  handling on your side. If you already run real TLS (a reverse proxy, or the
+  control plane and HTTP listener terminating TLS themselves via
+  `controlPlane.tls.mode = direct` with certificate files — see
+  [Deployment and services](deployment-and-services.md), "Inbound TLS"), that
+  works as-is.
 
 ## Step 1 — install GoodVibes on the always-on box
 
@@ -146,6 +164,13 @@ sudo tailscale serve --bg 3423
 URL it now serves, e.g. `https://myserver.tail1234.ts.net/` — open it from
 any tailnet device: the webui over real TLS, secure-context features
 available, no certificate work on your part.
+
+GoodVibes offers this as a one-action affordance so you need not run the
+command by hand: `goodvibes` detects tailscale read-only (`tailscale.get` —
+binary, logged-in state, MagicDNS name; where tailscale is absent, nothing
+nags), and the pairing modal offers a single confirmed action to run the serve
+for you (`tailscale.serve.run`), which records an honest receipt and updates
+`web.publicBaseUrl` to the resulting `https` MagicDNS URL.
 
 ## Step 7 — the TUI: over SSH, or cross-machine
 

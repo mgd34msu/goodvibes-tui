@@ -1,13 +1,23 @@
 /**
- * pairing-offers.ts — plain-language copy for the pairing offer set and the one
- * honest LAN-posture line.
+ * pairing-offers.ts — plain-language copy for the pairing offer set, the one
+ * honest LAN-posture line, and the labeled browser-capability list.
  *
  * Each offer names, in plain terms, what accepting it does and what declining it
  * costs — no security jargon, just the concrete consequence. Every offer is
  * independently declinable; a pairing without any accepted offer still pairs the
  * device (it just signs in with none of the extras).
+ *
+ * The one honest LAN line and the per-capability availability both come from the
+ * SDK posture (describeOriginPosture / the `posture` field on a handoff), so
+ * every surface renders the SAME truth: the exact LAN_PLAIN_HTTP_NOTICE wording
+ * only when the posture carries it, and each browser-gated capability labeled
+ * with whether the paired device gets it (and why not, when it does not).
  */
-import type { PairingHandoffOfferKind } from '@pellux/goodvibes-sdk/platform/pairing';
+import type {
+  BrowserGatedCapability,
+  OriginPosture,
+  PairingHandoffOfferKind,
+} from '@pellux/goodvibes-sdk/platform/pairing';
 
 export interface PairingOfferCopy {
   readonly title: string;
@@ -39,9 +49,35 @@ export function formatPairingOffers(offers: readonly PairingHandoffOfferKind[]):
 }
 
 /**
- * The single honest line shown when the pairing link is http on the LAN: the
- * one-time token travels in the clear, so pair on a trusted network and re-pair
- * if it may have leaked. Kept to one line by charter.
+ * Plain-language label for each browser-gated capability the posture reports —
+ * what the paired device would actually get, named without jargon.
  */
-export const PAIRING_HTTP_LAN_POSTURE =
-  'This link is plain http on your LAN: the one-time token is readable by anyone who intercepts it on this network. Pair on a network you trust, and re-scan to mint a new token if it may have leaked.';
+export const POSTURE_CAPABILITY_LABEL: Record<BrowserGatedCapability, string> = {
+  'service-worker': 'Offline app (installable / background sync)',
+  push: 'Push notifications',
+  microphone: 'Voice input (microphone)',
+};
+
+/**
+ * The one honest LAN line to render, or null. This is the SDK posture's own
+ * `notice` field verbatim (LAN_PLAIN_HTTP_NOTICE) — present ONLY for the
+ * plain-http-on-LAN posture, absent (and so never a nag) everywhere else.
+ */
+export function pairingPostureNotice(posture: OriginPosture | undefined): string | null {
+  return posture?.notice ?? null;
+}
+
+/**
+ * The labeled capability list from the posture: each browser-gated capability as
+ * a `Label — available` / `Label — <reason>` line, so the pairing surface lists
+ * what the paired device will get instead of hiding a dead button. Empty when no
+ * posture is known.
+ */
+export function formatPostureCapabilities(posture: OriginPosture | undefined): string[] {
+  if (!posture) return [];
+  return posture.capabilities.map((cap) => {
+    const label = POSTURE_CAPABILITY_LABEL[cap.capability as BrowserGatedCapability] ?? cap.capability;
+    const status = cap.available ? 'available' : (cap.reason ?? 'unavailable');
+    return `  ${label} — ${status}`;
+  });
+}

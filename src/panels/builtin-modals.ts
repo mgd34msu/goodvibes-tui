@@ -6,6 +6,7 @@ import { createRuntimeProviderApi } from '@/runtime/index.ts';
 import { copyToClipboard } from '../utils/clipboard.ts';
 import { ensurePublicBaseUrl } from '../core/pairing-origin.ts';
 import { availablePairingOffers, mintPairingHandoff, defaultPairingTokenName } from '../core/pairing-handoff.ts';
+import { probePairingTailscale, runPairingTailscaleServe } from '../core/pairing-tailscale-gateway.ts';
 // ── Providers & Connectivity + Security subset ────────────────────────────────
 import { createServicesModalSurface } from './modals/services-modal.ts';
 import { createSubscriptionModalSurface } from './modals/subscription-modal.ts';
@@ -144,10 +145,13 @@ export function registerBuiltinModals(manager: PanelManager, deps: ResolvedBuilt
   }));
   manager.registerModalRedirect('docs', 'keybindings-modal');
 
+  const tailscaleGatewayDeps = { configManager: deps.configManager, homeDirectory: ui.environment.shellPaths.homeDirectory };
   manager.registerModalSurface(createPairingModalSurface({
     getConnectionInfo: () => buildPairingConnectionInfo(deps),
     controlPlaneReadModel: ui.readModels.controlPlane,
     copyToClipboard,
+    probeTailscale: () => probePairingTailscale(tailscaleGatewayDeps),
+    runTailscaleServe: () => runPairingTailscaleServe(tailscaleGatewayDeps),
   }));
   manager.registerModalRedirect('qr-code', 'pairing-modal');
 
@@ -204,7 +208,7 @@ function buildPairingConnectionInfo(deps: ResolvedBuiltinPanelDeps): PairingModa
       tokenName: handoff.token.name,
       deepLink: handoff.deepLink ?? handoff.fragment,
       offers: handoff.offers,
-      httpOnLan: webOrigin.httpOnLan,
+      posture: handoff.posture,
     };
   } catch {
     return null;

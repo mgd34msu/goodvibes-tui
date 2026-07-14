@@ -7,12 +7,13 @@ import { beginOpenAICodexLogin, exchangeOpenAICodexCode } from '@pellux/goodvibe
 import { inspectProviderAuth } from '@/runtime/index.ts';
 import { generateQrMatrix, renderQrToString, PAIRING_HANDOFF_OFFER_KINDS, type PairingHandoffOfferKind } from '@pellux/goodvibes-sdk/platform/pairing';
 import { ensurePublicBaseUrl } from '../core/pairing-origin.ts';
-import { formatPairingOffers, PAIRING_HTTP_LAN_POSTURE } from '../core/pairing-offers.ts';
+import { formatPairingOffers, formatPostureCapabilities, pairingPostureNotice } from '../core/pairing-offers.ts';
 import { defaultPairingTokenName } from '../core/pairing-handoff.ts';
 import { stableUrlHostForBindHost } from '../core/stable-host.ts';
 import { resolveRuntimeEndpointBinding } from './endpoints.ts';
 import { classifyBindPosture, isNetworkFacing } from './network-posture.ts';
 import type { CliCommandRuntime } from './types.ts';
+import type { RuntimeServices } from '../runtime/services.ts';
 import { extractAuthorizationCode, formatJsonOrText, hasCommandFlag, openBrowser, probeTcp, readAuthPaths, readOptionValue, runNonInteractiveAgent, withRuntimeServices, yesNo } from './management-utils.ts';
 
 export async function renderSubscriptions(runtime: CliCommandRuntime): Promise<string> {
@@ -376,14 +377,17 @@ interface PairingHandoffCreateResult {
   readonly offers: readonly { readonly kind: PairingHandoffOfferKind }[];
   readonly fragment: string;
   readonly deepLink?: string | undefined;
+  /** The honest TLS/capability posture of the origin the QR points at (SDK-computed). */
+  readonly posture?: import('@pellux/goodvibes-sdk/platform/pairing').OriginPosture | undefined;
 }
 
 export async function renderPairing(runtime: CliCommandRuntime): Promise<string> {
   return await withRuntimeServices(runtime, async (services) => {
     // Freeze a stable web origin once (never clobbering a user-set value) so the
     // printed link and the daemon's own handoff origin agree and survive a DHCP
-    // lease change where a stable name exists.
-    const webOrigin = ensurePublicBaseUrl(runtime.configManager);
+    // lease change where a stable name exists. The verb re-derives the same origin
+    // and returns its honest posture, so this call is a persistence side effect.
+    ensurePublicBaseUrl(runtime.configManager);
     const name = readOptionValue(runtime.cli.commandArgs, 'name') ?? defaultPairingTokenName();
     // Mint through the canonical hand-off verb: it mints a fresh per-device token
     // and returns the exact `#pair=<token>` deep link the web app consumes. The
@@ -403,10 +407,45 @@ export async function renderPairing(runtime: CliCommandRuntime): Promise<string>
     if (result.offers.length > 0) {
       lines.push('', 'Offers carried in this pairing (each declinable in the web app):', ...formatPairingOffers(result.offers.map((o) => o.kind)));
     }
-    if (webOrigin.httpOnLan) lines.push('', PAIRING_HTTP_LAN_POSTURE);
+    // The labeled browser-capability list and the one honest LAN line both render
+    // from the SDK posture the verb returned — never a locally-authored string.
+    const capabilities = formatPostureCapabilities(result.posture);
+    if (capabilities.length > 0) lines.push('', 'This device will get:', ...capabilities);
+    const notice = pairingPostureNotice(result.posture);
+    if (notice) lines.push('', notice);
+    // Tailscale detection is read-only here (the interactive serve lives in the
+    // pairing modal); when detected with an https MagicDNS URL, name the encrypted
+    // path. Absence stays quiet.
+    lines.push(...(await renderPairingTailscaleLines(services)));
     lines.push('', qr);
     return lines.join('\n');
   });
+}
+
+interface TailscaleGetResult {
+  readonly available: boolean;
+  readonly httpsUrl?: string | undefined;
+  readonly detail: string;
+}
+
+/**
+ * Read-only tailscale detection for the `gv pair` block: when tailscale is
+ * available with a served https MagicDNS URL, name the encrypted path (the
+ * interactive one-action serve lives in the pairing modal). Quiet — an empty
+ * array — when tailscale is absent or the probe fails.
+ */
+async function renderPairingTailscaleLines(services: RuntimeServices): Promise<string[]> {
+  try {
+    const ts = (await services.gatewayMethods.invoke('tailscale.get', {
+      body: {},
+      context: { principalId: 'admin', principalKind: 'user', admin: true },
+    })) as TailscaleGetResult;
+    if (!ts.available) return [];
+    if (ts.httpsUrl) return ['', `Encrypted access (Tailscale): ${ts.httpsUrl}`];
+    return ['', 'Tailscale detected — run it as a serve target for encrypted https access (see the pairing modal).'];
+  } catch {
+    return [];
+  }
 }
 
 export async function renderRemote(runtime: CliCommandRuntime, label: 'remote' | 'bridge'): Promise<string> {
