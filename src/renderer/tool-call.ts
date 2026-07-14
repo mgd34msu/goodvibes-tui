@@ -147,7 +147,7 @@ function extractKeyArg(toolCall: ToolCall): string {
  * Layout: [margin] [icon] [space] [tool name padded] [key arg] [summary] [duration]
  *
  * @param toolCall - The tool call being executed
- * @param status - 'executing' | 'done' | 'error'
+ * @param status - 'executing' | 'done' | 'error' | 'pending' | 'cancelled'
  * @param resultSummary - Optional brief summary (e.g., "3 files", "exit 0")
  * @param width - Terminal width
  * @param durationMs - Optional duration in milliseconds
@@ -157,7 +157,7 @@ function extractKeyArg(toolCall: ToolCall): string {
  */
 export function renderToolCallBlock(
   toolCall: ToolCall,
-  status: 'executing' | 'done' | 'error' | 'pending',
+  status: 'executing' | 'done' | 'error' | 'pending' | 'cancelled',
   resultSummary: string | undefined,
   width: number,
   durationMs?: number,
@@ -174,12 +174,16 @@ export function renderToolCallBlock(
   // Status icon. 'pending' means the tool is still awaiting a decision
   // (e.g. an approval prompt) and has NOT run yet — it uses the hollow idle
   // glyph so a not-yet-run tool never shows the completed green ✓ (2c).
+  // 'cancelled' means the user stopped THIS call mid-flight — the blocked glyph
+  // in the warn tone, distinct from both success and a real error.
   const icon = status === 'done' ? TOOL_STATUS.SUCCESS_ICON
     : status === 'error' ? TOOL_STATUS.FAIL_ICON
+    : status === 'cancelled' ? GLYPHS.status.blocked
     : status === 'pending' ? GLYPHS.status.idle
     : TOOL_STATUS.SPINNER_FRAMES[(frameIndex ?? 0) % TOOL_STATUS.SPINNER_FRAMES.length];
   const iconColor = status === 'done' ? t.chrome.good
     : status === 'error' ? t.chrome.bad
+    : status === 'cancelled' ? t.chrome.warn
     : '244';
   const rightText = (() => {
     if (durationMs !== undefined && status === 'done') {
@@ -204,7 +208,7 @@ export function renderToolCallBlock(
   let col: number = leftStart;
 
   if (col < leftEndExclusive) {
-    line[col] = createStyledCell(icon, { fg: iconColor, bold: status === 'done' || status === 'error' });
+    line[col] = createStyledCell(icon, { fg: iconColor, bold: status === 'done' || status === 'error' || status === 'cancelled' });
   }
   col += 2; // icon + space
 
@@ -215,9 +219,11 @@ export function renderToolCallBlock(
   const keyArg = stripDangerousAnsi(extractKeyArg(toolCall));
   const suffixText = status === 'error' && errorMsg
     ? `- ${stripDangerousAnsi(errorMsg).slice(0, 40)}`
-    : status === 'done' && resultSummary
-      ? `(${stripDangerousAnsi(resultSummary)})`
-      : '';
+    : status === 'cancelled'
+      ? '- cancelled'
+      : status === 'done' && resultSummary
+        ? `(${stripDangerousAnsi(resultSummary)})`
+        : '';
   const leftBudget = Math.max(0, leftEndExclusive - col);
   const leftSegments = buildLeftSegments(rawName, keyArg, suffixText, leftBudget);
   for (const segment of leftSegments) {

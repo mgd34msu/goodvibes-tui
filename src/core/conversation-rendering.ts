@@ -1,7 +1,7 @@
 import { UIFactory } from '../renderer/ui-factory.ts';
 import { renderMarkdownTracked } from '../renderer/markdown.ts';
 import { renderDiffView } from '../renderer/diff-view.ts';
-import { activeTheme } from '../renderer/theme.ts';
+import { activeTheme, activeUiTones } from '../renderer/theme.ts';
 import { renderToolCallBlock } from '../renderer/tool-call.ts';
 import { summarizeToolResult } from '../renderer/tool-result-summary.ts';
 import type { ToolCall } from '@pellux/goodvibes-sdk/platform/types';
@@ -291,11 +291,20 @@ export function renderConversationToolMessage(
     context.collapseState.set(collapseKey, isShort ? false : true);
   }
 
+  // A per-call user cancellation settles as a tool result whose content leads
+  // with "Error: cancelled by user" (the SDK's structured cancelled shape; any
+  // partial output the tool produced before it stopped follows on later lines).
+  // Render it structurally as a distinct "cancelled" block in the warn tone —
+  // not a generic tool result, and not a hard error — so the transcript reads
+  // the user's decision honestly while the partial output stays visible below.
+  const isCancelled = blockType === 'tool' && /^Error: cancelled by user\b/.test(contentLines[0] ?? '');
+  const warnTone = activeUiTones().chrome.warn;
+
   context.history.addLine(renderConversationEventLine(width, {
-    marker: blockType === 'diff' ? GLYPHS.status.dualPane : GLYPHS.status.active,
-    markerFg: blockType === 'diff' ? T.diffAccent : T.toolAccent,
-    label: blockType === 'diff' ? 'diff' : 'tool result',
-    labelFg: blockType === 'diff' ? T.diffAccent : T.toolAccent,
+    marker: isCancelled ? GLYPHS.status.blocked : (blockType === 'diff' ? GLYPHS.status.dualPane : GLYPHS.status.active),
+    markerFg: isCancelled ? warnTone : (blockType === 'diff' ? T.diffAccent : T.toolAccent),
+    label: isCancelled ? 'cancelled' : (blockType === 'diff' ? 'diff' : 'tool result'),
+    labelFg: isCancelled ? warnTone : (blockType === 'diff' ? T.diffAccent : T.toolAccent),
     detailFg: '244',
   }, [
     ...(message.toolName
