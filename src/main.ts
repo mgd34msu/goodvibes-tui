@@ -66,7 +66,7 @@ import { applyComposerCapture } from './input/composer-capture.ts';
 import { createSessionAutoTitler } from './core/session-auto-titler.ts';
 import { makeComposerEditorOpener } from './input/composer-editor.ts';
 import { evaluateSessionMaintenance } from '@/runtime/index.ts';
-import { createCancelGeneration } from './core/turn-cancellation.ts';
+import { createCancelGeneration, createCancelToolCall } from './core/turn-cancellation.ts';
 import { wrapRequestPermissionWithAlert } from './core/approval-alert.ts';
 import { createTerminalNotifier } from './core/terminal-notifier.ts';
 import { setPanelFrameRequester } from './panels/base-panel.ts';
@@ -168,6 +168,7 @@ async function main() {
     ttftRecorded: false,
     activeToolStartedAtMs: undefined,
     activeToolName: undefined,
+    activeToolCallId: undefined,
     lastDeltaAtMs: undefined, stallEpisode: 0,
     reconnectAttempt: undefined, reconnectMaxAttempts: undefined,
   };
@@ -301,6 +302,17 @@ async function main() {
 
   const cancelGeneration = createCancelGeneration(orchestrator, spokenTurns);
 
+  // Per-tool cancel: stop JUST the currently-running tool call (the live
+  // transcript row), leaving the turn to continue (see createCancelToolCall).
+  const cancelActiveToolCall = createCancelToolCall(
+    orchestrator,
+    () => streamMetrics.activeToolCallId,
+    () => {
+      systemMessageRouter.high('[Tool] Cancelled the running tool call — the turn continues.');
+      render();
+    },
+  );
+
   const jumpToBookmark = (key: string) => {
     conversation.getDisplayBlocks();
     const block = conversation.getBlockRegistry().find((entry) => entry.collapseKey === key);
@@ -329,6 +341,7 @@ async function main() {
   // Late-patched: bootstrap.ts populates uiServices.platform.externalServices AFTER commandContext is built.
   commandContext.platform.externalServices = uiServices.platform.externalServices;
   commandContext.cancelGeneration = cancelGeneration;
+  commandContext.cancelToolCall = cancelActiveToolCall;
   commandContext.isGenerating = () => orchestrator.isThinking;
   commandContext.jumpToBookmark = jumpToBookmark; commandContext.scrollToLine = scrollToLine;
   commandContext.clearScreen = () => {
@@ -586,7 +599,7 @@ async function main() {
       viewport.push(...thinking);
       // Live tool timer: render the currently executing tool row with ticking elapsed.
       if (streamMetrics.activeToolName !== undefined && streamMetrics.activeToolStartedAtMs !== undefined) {
-        const liveToolCall = { id: 'live', name: streamMetrics.activeToolName, arguments: {} };
+        const liveToolCall = { id: streamMetrics.activeToolCallId ?? 'live', name: streamMetrics.activeToolName, arguments: {} };
         viewport.push(...renderToolCallBlock(liveToolCall, 'executing', undefined, conversationWidth, undefined, undefined, undefined, streamMetrics.activeToolStartedAtMs));
       }
     }

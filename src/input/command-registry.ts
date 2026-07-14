@@ -84,6 +84,13 @@ export interface CommandUiActions {
   /** Arm the one-key jump to a spawned CI fix-session (the surface attaches on the jump key; the user never retypes an id). */
   armFixSessionAttach?: (fixSessionId: string) => void;
   cancelGeneration?: () => void;
+  /**
+   * Cancel JUST the currently-running tool call (the live transcript row),
+   * leaving the turn to continue — the local-session equivalent of the
+   * sessions.toolCalls.cancel wire verb over the in-process orchestrator.
+   * Returns true when a running call was found and cancelled.
+   */
+  cancelToolCall?: () => boolean;
   /** True while an LLM turn is actively streaming. Used to give Escape
    *  cancel-turn precedence over a focused panel's own escape handling. */
   isGenerating?: () => boolean;

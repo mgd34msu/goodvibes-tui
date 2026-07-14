@@ -119,6 +119,13 @@ export function handleGlobalShortcutToken(
       state.handleCtrlC();
       return true;
 
+    case 'cancel-tool-call':
+      // Cancel JUST the currently-running tool call (the live transcript row).
+      // No-op (still consumed) when nothing is running — the composer keeps the
+      // keystroke rather than letting it fall through as text.
+      state.commandContext?.cancelToolCall?.();
+      return true;
+
     case 'screen-clear':
       state.commandContext?.clearScreen?.();
       return true;

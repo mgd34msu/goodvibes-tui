@@ -25,6 +25,13 @@ export interface StreamMetrics {
   /** Name of the currently executing tool; cleared when execution completes. */
   activeToolName: string | undefined;
   /**
+   * callId of the currently executing tool call; cleared when execution
+   * completes. This is the real orchestrator callId (from TOOL_EXECUTING),
+   * so a per-tool cancel affordance targets exactly the running call — never
+   * the synthetic 'live' render id.
+   */
+  activeToolCallId: string | undefined;
+  /**
    * Epoch ms of the most recent STREAM_START or STREAM_DELTA; undefined when
    * idle (no turn in flight). Read every render frame — not just on the
    * watchdog's one-shot hint — so "ms since last byte" can be computed even
@@ -443,6 +450,7 @@ export function wireStreamEventMetrics(
   unsubs.push(events.tools.on('TOOL_EXECUTING', (ev) => {
     metrics.activeToolStartedAtMs = ev.startedAt;
     metrics.activeToolName = ev.tool;
+    metrics.activeToolCallId = ev.callId;
     render();
   }));
   // On every tool-completion path, reset lastDeltaAtMs to "now" so the
@@ -456,16 +464,19 @@ export function wireStreamEventMetrics(
   unsubs.push(events.tools.on('TOOL_SUCCEEDED', () => {
     metrics.activeToolStartedAtMs = undefined;
     metrics.activeToolName = undefined;
+    metrics.activeToolCallId = undefined;
     metrics.lastDeltaAtMs = Date.now();
   }));
   unsubs.push(events.tools.on('TOOL_FAILED', () => {
     metrics.activeToolStartedAtMs = undefined;
     metrics.activeToolName = undefined;
+    metrics.activeToolCallId = undefined;
     metrics.lastDeltaAtMs = Date.now();
   }));
   unsubs.push(events.tools.on('TOOL_CANCELLED', () => {
     metrics.activeToolStartedAtMs = undefined;
     metrics.activeToolName = undefined;
+    metrics.activeToolCallId = undefined;
     metrics.lastDeltaAtMs = Date.now();
   }));
 

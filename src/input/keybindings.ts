@@ -68,7 +68,8 @@ export type KeyAction =
   | 'kill-to-start'
   | 'kill-word-forward'
   | 'yank'
-  | 'yank-pop';
+  | 'yank-pop'
+  | 'cancel-tool-call';
 
 /** Human-readable description for each action (used in /keybindings display). */
 export const ACTION_DESCRIPTIONS: Record<KeyAction, string> = {
@@ -111,6 +112,7 @@ export const ACTION_DESCRIPTIONS: Record<KeyAction, string> = {
   'kill-word-forward':     'Kill word forward into kill ring (Alt+D)',
   'yank':                  'Yank (paste) from kill ring (Ctrl+Shift+Y)',
   'yank-pop':              'Rotate kill ring and yank next entry (Alt+Y)',
+  'cancel-tool-call':      'Cancel the running tool call (the turn continues)',
 };
 
 /** Default key bindings for all actions. */
@@ -189,6 +191,11 @@ export const DEFAULT_KEYBINDINGS: Record<KeyAction, KeyCombo[]> = {
   'yank':                  [{ key: 'y', ctrl: true, shift: true }],
   // Alt+Y: yank-pop (rotate ring after yank)
   'yank-pop':              [{ key: 'y', alt: true }],
+  // Alt+C: cancel the currently-running tool call (the turn continues). Alt+C
+  // is unused by any other default and representable by the tokenizer's
+  // { key, alt } combo form. Ctrl+C stays whole-input clear/cancel; this is the
+  // narrower per-tool stop.
+  'cancel-tool-call':      [{ key: 'c', alt: true }],
 };
 
 /** Resolved overrides type: each key can be a single combo or array. */
