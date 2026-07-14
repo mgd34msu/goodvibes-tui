@@ -195,7 +195,7 @@ describe('canSpawn', () => {
     const token = manager.createOrchestratorToken();
     const result = manager.canSpawn(token, defaultConfig({ maxActiveAgents: 3 }), 3);
     expect(result.allowed).toBe(false);
-    expect(result.reason).toContain('maxActiveAgents');
+    expect(result.reason).toContain('fleet.maxSize');
   });
 
   test('denies when depth exceeds maxDepth', () => {

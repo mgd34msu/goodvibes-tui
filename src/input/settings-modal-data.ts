@@ -121,6 +121,8 @@ export function buildSettingGroups(
     if ((rawCat === 'controlPlane' || rawCat === 'httpListener' || rawCat === 'web') && groups.has('network')) {
       groups.get('network')!.push(entry);
     }
+    // fleet.maxSize (was orchestration.maxActiveAgents) surfaces under orchestration.
+    if (rawCat === 'fleet' && groups.has('orchestration')) groups.get('orchestration')!.push(entry);
   }
 
   // Synthetic display.themeMode enum (auto|dark|light) — TUI-local, see theme-mode-config.ts.
@@ -161,10 +163,8 @@ export function buildSettingGroups(
     behaviorEntries.push(buildNotifyAfterSecondsSyntheticEntry(configManager));
   }
 
-  // Inject the synthetic behavior.budgetAlertUsd entry into the behavior
-  // category. This key is TUI-local (not in the SDK ConfigKey union), which
-  // previously left it with no schema-driven inspection surface at all: it
-  // never appeared in /config, and /settings-sync show rejects any key not
+  // Synthetic behavior.budgetAlertUsd (TUI-local): no schema surface previously,
+  // never in /config; /settings-sync show rejects any key not
   // in CONFIG_KEYS. The Cost panel's 'b' key and /cost budget <usd> remain
   // the primary way to change it; this entry makes the current effective
   // value (and whether it's still the "no budget configured" default)
@@ -607,44 +607,34 @@ export function refreshEntryValues(
 ): void {
   for (const entries of groups.values()) {
     for (const entry of entries) {
-      // The worktree.setup.* keys read through a defensive helper. The SDK now
-      // registers the 'worktree' section in DEFAULT_CONFIG, so a plain
-      // configManager.get returns the empty default rather than throwing; the
-      // helper's guard (belt-and-suspenders for an older SDK) keeps this
-      // refresh from crashing for EVERY setting change if the section is ever
-      // absent (see worktree-setup-config.ts).
+      // worktree.setup.* read through a defensive array-normalizing helper (see worktree-setup-config.ts).
       if (isWorktreeSetupListConfigKey(entry.setting.key)) {
         entry.currentValue = readWorktreeSetupList(configManager, entry.setting.key);
         entry.isDefault = (entry.currentValue as string[]).length === 0;
         continue;
       }
-      // sandbox.egressAllowlist / sandbox.workspaceWritable: 'sandbox' IS a real
-      // DEFAULT_CONFIG section (has been since before this repack, backing the
-      // VM/REPL isolation settings), so a plain get() would not throw — but an
-      // unset leaf still reads back as `undefined`, not `[]`, so this still needs
-      // the same array-normalizing read as the worktree keys above (see
-      // sandbox-exec-config.ts).
+      // sandbox.* list leaves normalize an unset undefined to [] (see sandbox-exec-config.ts).
       if (isSandboxExecListConfigKey(entry.setting.key)) {
         entry.currentValue = readSandboxExecList(configManager, entry.setting.key);
         entry.isDefault = (entry.currentValue as string[]).length === 0;
         continue;
       }
-      // permissions.execEnvScrubAllowlist: same normalizing-read trap as above —
-      // 'permissions' is a real section but this leaf is TUI-local (see
-      // exec-env-scrub-config.ts).
+      // permissions.execEnvScrubAllowlist: same array-normalizing read (see exec-env-scrub-config.ts).
       if (isExecEnvScrubAllowlistConfigKey(entry.setting.key)) {
         entry.currentValue = readExecEnvScrubAllowlist(configManager);
         entry.isDefault = (entry.currentValue as string[]).length === 0;
         continue;
       }
-      // 'learning' is now a real DEFAULT_CONFIG section (schema-domain-learning.ts),
-      // so learning.consolidation.* keys read through the plain path below like any
-      // other schema-driven setting — no special case needed anymore.
-      // Same trap still applies here: 'memory' has no DEFAULT_CONFIG entry.
+      // 'memory' has no DEFAULT_CONFIG entry — its synthetic leaves read defensively below.
       if (entry.setting.key === MEMORY_PROJECTION_DIR_CONFIG_KEY) {
         const refreshed = buildMemoryProjectionDirSyntheticEntry(configManager);
-        entry.currentValue = refreshed.currentValue;
-        entry.isDefault = refreshed.isDefault;
+        entry.currentValue = refreshed.currentValue; entry.isDefault = refreshed.isDefault;
+        continue;
+      }
+      // memory.showProvenance: same 'memory'-has-no-DEFAULT_CONFIG trap — read defensively.
+      if (entry.setting.key === (MEMORY_SHOW_PROVENANCE_CONFIG_KEY as ConfigKey)) {
+        const refreshed = buildMemoryProvenanceSyntheticEntry(configManager);
+        entry.currentValue = refreshed.currentValue; entry.isDefault = refreshed.isDefault;
         continue;
       }
       const raw = configManager.get(entry.setting.key as ConfigKey);
@@ -677,8 +667,12 @@ export function updateEntryForKey(
     if (entry) {
       if (key === MEMORY_PROJECTION_DIR_CONFIG_KEY) {
         const refreshed = buildMemoryProjectionDirSyntheticEntry(configManager);
-        entry.currentValue = refreshed.currentValue;
-        entry.isDefault = refreshed.isDefault;
+        entry.currentValue = refreshed.currentValue; entry.isDefault = refreshed.isDefault;
+        continue;
+      }
+      if (key === (MEMORY_SHOW_PROVENANCE_CONFIG_KEY as ConfigKey)) {
+        const refreshed = buildMemoryProvenanceSyntheticEntry(configManager);
+        entry.currentValue = refreshed.currentValue; entry.isDefault = refreshed.isDefault;
         continue;
       }
       if (isSandboxExecListConfigKey(key)) {

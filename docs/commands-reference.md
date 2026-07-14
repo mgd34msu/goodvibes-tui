@@ -6,10 +6,11 @@
 
 # Command Reference
 
-GoodVibes ships **145** built-in slash commands across **70** categories. Every command below is generated directly from the command registry, so this list is always complete and current. Type a command in the composer prefixed with `/`, or press `Ctrl+K` (or run `/palette`) to search them all in the command palette.
+GoodVibes ships **148** built-in slash commands across **71** categories. Every command below is generated directly from the command registry, so this list is always complete and current. Type a command in the composer prefixed with `/`, or press `Ctrl+K` (or run `/palette`) to search them all in the command palette.
 
 ## Categories
 
+- [Automation](#automation) — 1
 - [Branches](#branches) — 3
 - [Channels](#channels) — 1
 - [Check-in](#check-in) — 1
@@ -69,7 +70,7 @@ GoodVibes ships **145** built-in slash commands across **70** categories. Every 
 - [Sessions & Replay](#sessions-replay) — 3
 - [Settings Sync](#settings-sync) — 1
 - [Sharing](#sharing) — 1
-- [Shell & Session](#shell-session) — 16
+- [Shell & Session](#shell-session) — 18
 - [Skills](#skills) — 1
 - [Subscriptions](#subscriptions) — 1
 - [Tasks](#tasks) — 1
@@ -80,6 +81,12 @@ GoodVibes ships **145** built-in slash commands across **70** categories. Every 
 - [Work Plans](#work-plans) — 1
 - [Workstreams](#workstreams) — 1
 - [Worktrees](#worktrees) — 1
+
+## Automation
+
+| Command | Aliases | Usage | Description |
+| --- | --- | --- | --- |
+| `/graph` | — | `<workstreamId>` | Show a workstream's task graph — nodes, edges, states, and pool posture |
 
 ## Branches
 
@@ -511,6 +518,8 @@ GoodVibes ships **145** built-in slash commands across **70** categories. Every 
 | `/model` | `/m` | `[model-id]` | Select or display the current LLM model |
 | `/palette` | `/k` | — | Open the command palette to search and run any slash command |
 | `/paste` | `/clip` | — | Insert clipboard text or image into the prompt |
+| `/power` | — | `[status \| on \| off \| toggle]` | Host sleep ownership — show status and toggle keep-awake |
+| `/queue` | `/q` | `[list \| edit <n> <text> \| delete <n>]` | Mid-turn message queue — list, edit, or delete still-undelivered messages |
 | `/quit` | `/:q` | — | Exit the application |
 | `/reset` | — | — | Full reset: clear display and conversation context |
 | `/shortcuts` | `/keys`, `/keybinds` | — | Show keyboard shortcuts reference |

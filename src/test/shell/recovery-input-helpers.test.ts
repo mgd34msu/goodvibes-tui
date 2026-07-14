@@ -1,18 +1,18 @@
 /**
- * recovery-input-helpers.test.ts — W3 Finding 3.
+ * recovery-input-helpers.test.ts — preserve-on-dismiss.
  *
- * main.ts's 60s autosave (writeRecoveryFile) overwrites the single shared
- * recovery.jsonl with the CURRENT session's state within a minute, so the
- * recovery banner's dismiss promise ("still on disk; you will be asked again
- * next time") silently expired. These tests cover the preserve-on-dismiss
- * mechanism: copy recovery.jsonl aside to a `.preserved` sibling, check it
- * honestly at next startup, and pick the newer of live vs. preserved.
+ * The SDK now keeps per-session crash snapshots (recovery-<sessionId>.jsonl), so
+ * this session's autosave no longer clobbers a crashed session's file. But
+ * checkRecoveryFile only offers a snapshot newer than the last clean save, so a
+ * dismissed crash snapshot would stop being offered once this session saves.
+ * These tests cover the preserve-on-dismiss mechanism: on dismiss, copy the
+ * dismissed session's crash file (resolved via checkRecoveryFile) aside to a
+ * single fixed preserved sibling, check it at next startup, and pick the newer
+ * of live vs. preserved.
  */
 import { describe, expect, test } from 'bun:test';
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
-import { dirname } from 'node:path';
 import { rmSync } from 'node:fs';
-import { getRecoveryFilePath } from '@/runtime/index.ts';
+import { writeRecoveryFile } from '@/runtime/index.ts';
 import {
   checkPreservedRecoveryFile,
   createPreserveRecoveryFile,
@@ -22,27 +22,30 @@ import {
 } from '../../shell/recovery-input-helpers.ts';
 import { makeProjectTempDir } from '../helpers/project-temp.ts';
 
-function writeLiveRecoveryFile(homeDirectory: string, meta: { title: string; timestamp: number; sessionId: string }, messages: Array<Record<string, unknown>> = [{ role: 'user', content: 'hi' }]): void {
-  const path = getRecoveryFilePath(homeDirectory);
-  mkdirSync(dirname(path), { recursive: true });
-  const lines = [JSON.stringify({ type: 'meta', ...meta }), ...messages.map((m) => JSON.stringify({ type: 'message', ...m }))];
-  writeFileSync(path, lines.join('\n') + '\n', 'utf-8');
+/** Write a per-session crash-recovery snapshot the way the live autosave does. */
+function writeCrash(dir: string, sessionId: string, title: string, timestamp: number, titleSource?: 'user' | 'system'): void {
+  writeRecoveryFile(
+    { messages: [{ role: 'user', content: 'hi' }], timestamp, title, ...(titleSource ? { titleSource } : {}) },
+    sessionId,
+    title,
+    { workingDirectory: dir, homeDirectory: dir },
+  );
 }
 
-describe('recovery-input-helpers — preserve-on-dismiss (W3 Finding 3)', () => {
-  test('createPreserveRecoveryFile copies the live file aside; no-op when nothing live', () => {
+describe('recovery-input-helpers — preserve-on-dismiss', () => {
+  test('createPreserveRecoveryFile copies the dismissed session file aside; no-op when nothing live', () => {
     const dir = makeProjectTempDir('gv-recovery-preserve');
     try {
-      const preserve = createPreserveRecoveryFile({ homeDirectory: dir });
+      const preserve = createPreserveRecoveryFile({ homeDirectory: dir, workingDirectory: dir });
 
-      // Nothing live yet.
+      // Nothing live yet — checkRecoveryFile finds no crash snapshot.
       expect(preserve()).toEqual({ preserved: false, replacedPrevious: false });
-      expect(existsSync(`${getRecoveryFilePath(dir)}.preserved`)).toBe(false);
+      expect(checkPreservedRecoveryFile({ homeDirectory: dir })).toBeNull();
 
-      writeLiveRecoveryFile(dir, { title: 'Session A', timestamp: 1000, sessionId: 'a' });
+      writeCrash(dir, 'a', 'Session A', 1000);
       const result = preserve();
       expect(result).toEqual({ preserved: true, replacedPrevious: false });
-      expect(existsSync(`${getRecoveryFilePath(dir)}.preserved`)).toBe(true);
+      expect(checkPreservedRecoveryFile({ homeDirectory: dir })?.sessionId).toBe('a');
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -51,13 +54,14 @@ describe('recovery-input-helpers — preserve-on-dismiss (W3 Finding 3)', () => 
   test('a second dismiss replaces the preserved file and reports it honestly', () => {
     const dir = makeProjectTempDir('gv-recovery-preserve-replace');
     try {
-      const preserve = createPreserveRecoveryFile({ homeDirectory: dir });
+      const preserve = createPreserveRecoveryFile({ homeDirectory: dir, workingDirectory: dir });
 
-      writeLiveRecoveryFile(dir, { title: 'Session A', timestamp: 1000, sessionId: 'a' });
+      writeCrash(dir, 'a', 'Session A', 1000);
       expect(preserve()).toEqual({ preserved: true, replacedPrevious: false });
 
-      // A later session's dismiss overwrites the live file, then dismisses again.
-      writeLiveRecoveryFile(dir, { title: 'Session B', timestamp: 2000, sessionId: 'b' });
+      // A later session crashes (newer); checkRecoveryFile now offers B, so the
+      // second dismiss preserves B, replacing the earlier preserved sibling.
+      writeCrash(dir, 'b', 'Session B', 2000);
       expect(preserve()).toEqual({ preserved: true, replacedPrevious: true });
 
       // Bounded to exactly one preserved file, holding the newest dismiss.
@@ -81,21 +85,13 @@ describe('recovery-input-helpers — preserve-on-dismiss (W3 Finding 3)', () => 
   test('loadPreservedRecoveryConversation round-trips messages, title, and titleSource', () => {
     const dir = makeProjectTempDir('gv-recovery-preserve-load');
     try {
-      const live = getRecoveryFilePath(dir);
-      mkdirSync(dirname(live), { recursive: true });
-      const lines = [
-        JSON.stringify({ type: 'meta', sessionId: 'a', title: 'My Session', timestamp: 1000, titleSource: 'user' }),
-        JSON.stringify({ type: 'message', role: 'user', content: 'hello' }),
-      ];
-      writeFileSync(live, lines.join('\n') + '\n', 'utf-8');
-
-      const preserve = createPreserveRecoveryFile({ homeDirectory: dir });
-      preserve();
+      writeCrash(dir, 'a', 'My Session', 1000, 'user');
+      createPreserveRecoveryFile({ homeDirectory: dir, workingDirectory: dir })();
 
       const snapshot = loadPreservedRecoveryConversation({ homeDirectory: dir });
       expect(snapshot?.title).toBe('My Session');
       expect(snapshot?.titleSource).toBe('user');
-      expect(snapshot?.messages).toEqual([{ role: 'user', content: 'hello' }]);
+      expect(snapshot?.messages).toEqual([{ role: 'user', content: 'hi' }]);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -104,14 +100,12 @@ describe('recovery-input-helpers — preserve-on-dismiss (W3 Finding 3)', () => 
   test('deletePreservedRecoveryFile removes it; missing file is a silent no-op', () => {
     const dir = makeProjectTempDir('gv-recovery-preserve-delete');
     try {
-      writeLiveRecoveryFile(dir, { title: 'Session A', timestamp: 1000, sessionId: 'a' });
-      const preserve = createPreserveRecoveryFile({ homeDirectory: dir });
-      preserve();
-      const preservedPath = `${getRecoveryFilePath(dir)}.preserved`;
-      expect(existsSync(preservedPath)).toBe(true);
+      writeCrash(dir, 'a', 'Session A', 1000);
+      createPreserveRecoveryFile({ homeDirectory: dir, workingDirectory: dir })();
+      expect(checkPreservedRecoveryFile({ homeDirectory: dir })).not.toBeNull();
 
       deletePreservedRecoveryFile({ homeDirectory: dir });
-      expect(existsSync(preservedPath)).toBe(false);
+      expect(checkPreservedRecoveryFile({ homeDirectory: dir })).toBeNull();
 
       // Deleting again (nothing there) must not throw.
       expect(() => deletePreservedRecoveryFile({ homeDirectory: dir })).not.toThrow();
@@ -127,9 +121,7 @@ describe('recovery-input-helpers — preserve-on-dismiss (W3 Finding 3)', () => 
     expect(pickNewestRecoveryInfo(null, null)).toBeNull();
     expect(pickNewestRecoveryInfo(live, null)).toEqual({ ...live, source: 'live' });
     expect(pickNewestRecoveryInfo(null, preserved)).toEqual({ ...preserved, source: 'preserved' });
-    // preserved is newer here.
     expect(pickNewestRecoveryInfo(live, preserved)).toEqual({ ...preserved, source: 'preserved' });
-    // live is newer here.
     expect(pickNewestRecoveryInfo(preserved, live)).toEqual({ ...preserved, source: 'live' });
   });
 });
