@@ -25,6 +25,7 @@ import {
 import { readExecEnvScrubAllowlist } from '../input/exec-env-scrub-config.ts';
 import { createSandboxExecAsk, sandboxExecAskDepsFromRuntime } from '../permissions/sandbox-exec-gate.ts';
 import { createRuntimeServices, type RuntimeServices } from './services.ts';
+import { createHostPowerSeam } from '@pellux/goodvibes-sdk/platform/power';
 import { runBootMemoryFold } from './memory-fold.ts';
 import { wireCostPricing } from '../export/cost-utils.ts';
 import { createUiRuntimeServices, type UiRuntimeServices } from './ui-services.ts';
@@ -37,9 +38,7 @@ import { SessionInboundInputPoller, createBootstrapInboundInputPoller } from './
 import { trustGatedAsk, type WorkspaceTrustLevel } from './trust/workspace-trust.ts';
 import { syncNotifierQueueIntegrations } from './bootstrap-notifier-sync.ts';
 
-// ---------------------------------------------------------------------------
-// Pre-router buffer
-// ---------------------------------------------------------------------------
+// --- Pre-router buffer ---
 
 const PRE_ROUTER_BUFFER_MAX = 100;
 
@@ -133,9 +132,7 @@ export interface BootstrapCoreState {
 
 export type CompanionMessagePayload = Extract<SessionEvent, { type: 'COMPANION_MESSAGE_RECEIVED' }>;
 
-// ---------------------------------------------------------------------------
-// Operator narration of inbound channel events
-// ---------------------------------------------------------------------------
+// --- Operator narration of inbound channel events ---
 
 /** Narrate an inbound channel event (GitHub, Slack, ntfy, etc.) that triggered an
  * agent turn, via the SystemMessageRouter — null for internal/companion sources. */
@@ -252,6 +249,9 @@ export async function initializeBootstrapCore(
     runtimeStore: store,
     getConversationTitle: () => getConversationTitle(),
     workingDir, homeDirectory,
+    // Embedded topology: the in-process runtime IS the daemon and holds its own OS
+    // inhibitor, so opt into the real host seam (fork default is non-spawning). See services.ts.
+    powerSeam: createHostPowerSeam(),
   });
   await services.workspaceTrustManager.load(); // settle any already-persisted trust decision before any tool runs
   const providerRegistry = services.providerRegistry;
