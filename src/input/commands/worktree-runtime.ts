@@ -145,19 +145,46 @@ export function registerWorktreeRuntimeCommands(registry: CommandRegistry): void
           : `${header}: ${targetKind} ${targetId}\n  No attached worktrees tracked.`);
         return;
       }
-      if (sub === 'pause' || sub === 'resume' || sub === 'keep' || sub === 'discard') {
+      if (sub === 'discard') {
+        // Discard is a real destructive act, not a metadata flip: route it
+        // through the worktrees.discard operator verb (preservation commit,
+        // git worktree removal, honest receipt) — the SAME behavior as the
+        // Fleet panel's D key. Typing the verb with an explicit path is the
+        // confirmation.
+        const path = args[1];
+        if (!path) {
+          ctx.print('Usage: /worktree discard <path>');
+          return;
+        }
+        const rpc = getOperatorRpc(ctx);
+        if (!rpc.available) {
+          ctx.print(`[worktree discard] ${rpc.reason}`);
+          return;
+        }
+        try {
+          const receipt = await rpc.sdk.operator.invoke('worktrees.discard', { path });
+          if (receipt.ok) {
+            ctx.print([
+              `[worktree discard] Discarded ${receipt.path}`,
+              `  branch kept: ${receipt.branch || '(unknown)'}`,
+              `  preservation commit: ${receipt.preservedCommit || '(none — nothing to preserve)'}`,
+              `  ${receipt.detail}`,
+            ].join('\n'));
+          } else {
+            ctx.print(`[worktree discard] refused for ${receipt.path}: ${receipt.detail}`);
+          }
+        } catch (error) {
+          ctx.print(`[worktree discard] round-trip request failed: ${describeOperatorRpcError(error)}`);
+        }
+        return;
+      }
+      if (sub === 'pause' || sub === 'resume' || sub === 'keep') {
         const path = args[1];
         if (!path) {
           ctx.print(`Usage: /worktree ${sub} <path>`);
           return;
         }
-        const nextState = sub === 'resume'
-          ? 'active'
-          : sub === 'pause'
-            ? 'paused'
-            : sub === 'keep'
-              ? 'kept'
-              : 'discard';
+        const nextState = sub === 'resume' ? 'active' : sub === 'pause' ? 'paused' : 'kept';
         runtime.setState(path, nextState);
         ctx.print(`Updated ${path} to state ${nextState}.`);
         return;
