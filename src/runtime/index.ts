@@ -281,6 +281,7 @@ export const writeRecoveryFile = operations.writeRecoveryFile;
 export const deleteRecoveryFile = operations.deleteRecoveryFile;
 export const checkRecoveryFile = operations.checkRecoveryFile;
 export const getRecoveryFilePath = operations.getRecoveryFilePath;
+export const getRecoveryDir = operations.getRecoveryDir;
 export const getLastSessionPointerPath = operations.getLastSessionPointerPath;
 export const writeLastSessionPointer = operations.writeLastSessionPointer;
 export const readLastSessionPointer = operations.readLastSessionPointer;

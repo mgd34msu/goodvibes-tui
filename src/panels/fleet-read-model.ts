@@ -172,6 +172,12 @@ const KIND_TAGS: Record<ProcessKind, string> = {
   // ride on its node capabilities and the SDK's needsAttention projection, so
   // this glyph/label is the only read-model special-casing it needs.
   'acp-agent': 'acp',
+  // An externally-launched foreign coding agent (Claude Code / Codex / opencode)
+  // that goodvibes did NOT spawn — observed read-only from OS signals. The row's
+  // first job is visibility ("it's in claude or codex"); it is never counted in
+  // any our-fleet count, never carries a stop affordance, and steer is drill-in
+  // only. See ObservedProcess handling in fleet-panel-format.ts.
+  'observed-external': 'observed',
 };
 
 export function fleetStateGlyph(state: ProcessState): string {

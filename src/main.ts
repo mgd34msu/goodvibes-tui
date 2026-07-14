@@ -750,7 +750,7 @@ async function main() {
     const blocking = handleBlockingShellInput({
       data, pendingPermission, recoveryPending, conversation, systemMessageRouter, render,
       abortTurn: () => orchestrator.abort(),
-      ...createRecoveryFileOps(() => recoverySource, { homeDirectory }),
+      ...createRecoveryFileOps(() => recoverySource, { homeDirectory, workingDirectory: workingDir }),
       homeDirectory, sessionId: runtime.sessionId,
       persistSnapshot: createPersistRecoverySnapshot({ sessionManager: ctx.services.sessionManager, runtime, conversation }),
       reopenPanels: createReopenRecoveryPanels({ panelManager, render }),
