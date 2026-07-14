@@ -59,3 +59,26 @@ describe('composition parity — observed foreign-agent detection is daemon-side
     expect(helper).toContain('observedAgents,');
   });
 });
+
+describe('composition parity — retention janitor and live config apply run on TUI-composed runtimes', () => {
+  const durability = read('src/runtime/durability-services.ts');
+
+  test('the startup append-only sweep runs with the FULL roots set', () => {
+    expect(durability).toContain('runStartupAppendOnlySweep');
+    // Every root the SDK passes must be present — omitting any silently skips
+    // that store class on every sweep.
+    for (const root of ['workingDirectory', 'surfaceRoot', 'homeDirectory', 'logDir', 'telemetryDir']) {
+      expect(durability, `sweep root ${root} missing`).toContain(`${root}:`);
+    }
+  });
+
+  test('live config-file watching is composed (external edits apply without a restart)', () => {
+    expect(durability).toContain('configManager.watchConfigFiles()');
+  });
+
+  test('services.ts feeds the durability helper the sweep roots', () => {
+    const services = read('src/runtime/services.ts');
+    expect(services).toContain('surfaceRoot:');
+    expect(services).toContain('shellPaths,');
+  });
+});
