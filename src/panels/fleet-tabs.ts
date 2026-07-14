@@ -25,10 +25,10 @@ import { MessageLineCache } from '../core/conversation-line-cache.ts';
 import { fleetKindTag } from './fleet-read-model.ts';
 
 /** Node kinds that can be attached as a session tab. */
-export type FleetAttachableKind = 'agent' | 'wrfc-chain';
+export type FleetAttachableKind = 'agent' | 'wrfc-chain' | 'acp-agent';
 
 export function isAttachableFleetKind(kind: ProcessKind): kind is FleetAttachableKind {
-  return kind === 'agent' || kind === 'wrfc-chain';
+  return kind === 'agent' || kind === 'wrfc-chain' || kind === 'acp-agent';
 }
 
 /**

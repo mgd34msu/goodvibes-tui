@@ -28,6 +28,7 @@ import {
   type FleetTreeRow,
 } from './fleet-read-model.ts';
 import type { FleetActs } from './fleet-acts.ts';
+import type { FleetSpawn } from './fleet-spawn.ts';
 import {
   activeFleetTab,
   appendSteerText,
@@ -96,13 +97,10 @@ export class FleetPanel extends ScrollableListPanel<FleetTreeRow> {
   private tickTimer: ReturnType<typeof setInterval> | null = null;
   /**
    * The node id the cursor is anchored to, independent of its row index.
-   * `selectedIndex` is a plain offset into `getItems()`'s current order —
-   * every snapshot rebuilds that array from scratch (new nodes, completed
-   * nodes pruned, tree re-sorted), so a stale index silently points at
-   * whatever row now happens to occupy that slot. `reanchorSelection()`
-   * re-locates this id in every fresh snapshot and repoints selectedIndex
-   * there; null means "no anchor yet" (follows the base class's index-0
-   * default until the first navigation/tick establishes one).
+   * `selectedIndex` is a plain offset into `getItems()`'s current (rebuilt-every-
+   * snapshot) order, so a stale index silently drifts; `reanchorSelection()`
+   * re-locates this id each snapshot and repoints selectedIndex. null means "no
+   * anchor yet" (base class index-0 default until first navigation/tick).
    */
   private selectedNodeId: string | null = null;
 
@@ -116,6 +114,8 @@ export class FleetPanel extends ScrollableListPanel<FleetTreeRow> {
     // The waiting-on-human acts (pick / conflict / discard). Null in a runtime
     // with no daemon gateway wired — those keys then fall through honestly.
     private readonly acts: FleetActs | null = null,
+    // The ACP spawn affordance ('n' hosts a discovered third-party agent); null with no gateway wired.
+    private readonly spawn: FleetSpawn | null = null,
   ) {
     super('fleet', 'Fleet', '⊟', 'runtime-ops');
     this.showSelectionGutter = true; // visible ▸ focus indicator
@@ -236,11 +236,10 @@ export class FleetPanel extends ScrollableListPanel<FleetTreeRow> {
   }
 
   /**
-   * (cross-restart honesty): a restart always starts from an empty
-   * `AgentManager` Map (no bridge from a prior TUI/daemon registry), so a
-   * completed process from a previous session can never reappear here — a
-   * real, permanent limitation (brief point 5), documented rather than
-   * silently implying "nothing has ever run" or that a restart brings it back.
+   * (cross-restart honesty): a restart starts from an empty `AgentManager` Map
+   * (no bridge from a prior registry), so a completed process from a previous
+   * session can never reappear here — a real, permanent limitation, documented
+   * rather than implying "nothing has ever run" or that a restart brings it back.
    */
   protected override getEmptyStateActions(): Array<{ command: string; summary: string }> {
     return [
@@ -279,15 +278,11 @@ export class FleetPanel extends ScrollableListPanel<FleetTreeRow> {
   }
 
   /**
-   * Re-locate `selectedNodeId` in the current (possibly just-changed)
-   * snapshot and repoint `selectedIndex` at its new position — this is what
-   * makes the selection follow a specific process across adds/removes/
-   * reorders instead of drifting onto whatever row now occupies the old
-   * index. When the anchored node is no longer present (completed and
-   * pruned, killed and pruned, etc.) — or no anchor has been established
-   * yet — falls back to the base class's clampSelection() (nearest valid
-   * index, never an out-of-bounds/vanished selection) and re-anchors to
-   * whatever that lands on.
+   * Re-locate `selectedNodeId` in the current snapshot and repoint
+   * `selectedIndex` at it, so the selection follows a specific process across
+   * adds/removes/reorders instead of drifting onto whatever row occupies the old
+   * index. When the anchored node is gone (pruned) — or no anchor exists yet —
+   * falls back to clampSelection() (nearest valid index) and re-anchors there.
    */
   private reanchorSelection(): void {
     const rows = this.getItems();
@@ -321,12 +316,10 @@ export class FleetPanel extends ScrollableListPanel<FleetTreeRow> {
 
   /**
    * Focus the next node blocked on the operator (awaiting approval/input),
-   * cycling top-to-bottom in display order and wrapping. Always resolves
-   * against the LIVE fleet (blocked nodes never live in the archive), and
-   * returns to the tree view from any attached tab so the reveal is visible —
-   * mirrors receiveDeepLink's "make it visible" contract. Honest no-op with a
-   * message when nothing is currently waiting on the operator. Returns true
-   * (the 'b' key is always consumed by the panel).
+   * cycling in display order and wrapping. Resolves against the LIVE fleet
+   * (blocked nodes never live in the archive) and returns to the tree view from
+   * any attached tab so the reveal is visible (receiveDeepLink's contract).
+   * Honest no-op message when nothing waits; always consumes 'b' (returns true).
    */
   private jumpToNextBlocked(): boolean {
     const snapshot = this.readModel.getSnapshot();
@@ -390,6 +383,8 @@ export class FleetPanel extends ScrollableListPanel<FleetTreeRow> {
 
     // The candidate picker (a flagged pick decision) owns the view + input while active.
     if (this.acts?.pickModeActive()) return this.acts.handlePickInput(key);
+    // The ACP spawn picker (host a third-party agent) likewise owns view + input.
+    if (this.spawn?.spawnModeActive()) return this.spawn.handleSpawnInput(key);
 
     // Confirm overlay owns input first (K-armed kill confirm).
     if (this.confirmOverlay.handleInput(key)) return true;
@@ -439,6 +434,10 @@ export class FleetPanel extends ScrollableListPanel<FleetTreeRow> {
       this.captureSelectionAnchor();
       return true;
     }
+
+    // Host a third-party ACP agent: lists discovered agents, then a known dir,
+    // then spawns it as an acp-agent row. Quiet when none are discovered.
+    if (key === 'n' && this.spawn) { void this.spawn.begin(); return true; }
 
     // Archive controls: v toggles the live fleet <-> session archive view;
     // a archives the selected finished subtree (or restores it from the
@@ -793,6 +792,7 @@ export class FleetPanel extends ScrollableListPanel<FleetTreeRow> {
 
   public override render(width: number, height: number): Line[] {
     if (this.acts?.pickModeActive()) return this.acts.renderPickMode(width, height, C);
+    if (this.spawn?.spawnModeActive()) return this.spawn.renderSpawnMode(width, height, C);
     if (this.tabsState.activeTabIndex > 0) return this.renderTabView(width, height);
     return this.renderTreeView(width, height);
   }

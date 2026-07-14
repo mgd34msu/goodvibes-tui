@@ -6,7 +6,7 @@
 
 # Command Reference
 
-GoodVibes ships **144** built-in slash commands across **69** categories. Every command below is generated directly from the command registry, so this list is always complete and current. Type a command in the composer prefixed with `/`, or press `Ctrl+K` (or run `/palette`) to search them all in the command palette.
+GoodVibes ships **145** built-in slash commands across **70** categories. Every command below is generated directly from the command registry, so this list is always complete and current. Type a command in the composer prefixed with `/`, or press `Ctrl+K` (or run `/palette`) to search them all in the command palette.
 
 ## Categories
 
@@ -26,6 +26,7 @@ GoodVibes ships **144** built-in slash commands across **69** categories. Every 
 - [Editor](#editor) — 1
 - [Eval](#eval) — 1
 - [Experience](#experience) — 8
+- [Fleet](#fleet) — 1
 - [Git](#git) — 1
 - [Guidance](#guidance) — 2
 - [Health](#health) — 1
@@ -191,6 +192,12 @@ GoodVibes ships **144** built-in slash commands across **69** categories. Every 
 | `/runner-pool` | `/pool` | `[list\|show <id>\|create <id> <label...>\|assign <pool> <runner>\|unassign <pool> <runner>]` | Dedicated front-door for remote runner pool review and assignment flows |
 | `/tunnel` | — | `[review\|export <path>]` | Dedicated front-door for remote tunnel review and export flows |
 | `/voice` | — | `[review\|enable\|disable\|bundle export <path>\|bundle inspect <path>]` | Review or toggle always-speak mode (same switch as /tts on\|off) and package portable voice metadata |
+
+## Fleet
+
+| Command | Aliases | Usage | Description |
+| --- | --- | --- | --- |
+| `/agents` | `/acp` | `list \| host <agentId> [directory]` | Host third-party coding agents (Claude Code, Codex, opencode) as fleet rows over ACP |
 
 ## Git
 

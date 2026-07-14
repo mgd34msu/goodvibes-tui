@@ -160,6 +160,7 @@ export function buildFleetTreeHints(
   if (selected && !live) hints.push({ keys: 'a', label: 'archive' });
   hints.push({ keys: 'A', label: 'archive finished' });
   hints.push({ keys: 'v', label: 'archived' });
+  hints.push({ keys: 'n', label: 'host agent' });
   hints.push({ keys: 'f', label: follow ? 'follow:on' : 'follow' });
   if (hasTabs) hints.push({ keys: '[ ]', label: 'tabs' });
   return hints;

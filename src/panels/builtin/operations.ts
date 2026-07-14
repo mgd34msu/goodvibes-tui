@@ -3,6 +3,7 @@ import { FleetPanel } from '../fleet-panel.ts';
 import { createFleetReadModel } from '../fleet-read-model.ts';
 import { FleetActs, type FleetDiffSurface } from '../fleet-acts.ts';
 import { createFleetGateway } from '../fleet-gateway.ts';
+import { FleetSpawn, createAcpSpawnGateway } from '../fleet-spawn.ts';
 import { DiffPanel } from '../diff-panel.ts';
 import { LocalAuthPanel } from '../local-auth-panel.ts';
 import { NotificationsPanel } from '../notifications-panel.ts';
@@ -83,6 +84,18 @@ export function registerOperationsPanels(manager: PanelManager, deps: ResolvedBu
     findNode: (nodeId: string) => fleetReadModel.getSnapshot().rows.find((r) => r.node.id === nodeId)?.node ?? null,
   });
 
+  // The ACP spawn affordance ('n'): host a discovered third-party agent as an
+  // acp-agent row over the same operator invoke path the acts use.
+  const fleetSpawn = new FleetSpawn({
+    resolveGateway: () => createAcpSpawnGateway({
+      configManager: deps.configManager,
+      homeDirectory: ui.environment.shellPaths.homeDirectory,
+    }),
+    currentDirectory: () => ui.environment.shellPaths.workingDirectory,
+    notify: fleetNotify,
+    markDirty: deps.requestRender ?? (() => {}),
+  });
+
   manager.registerType({
     id: 'fleet',
     name: 'Fleet',
@@ -103,7 +116,7 @@ export function registerOperationsPanels(manager: PanelManager, deps: ResolvedBu
       resolveSessionLogPath: (agentId: string) => ui.environment.shellPaths.resolveProjectPath('tui', 'sessions', `${agentId}.jsonl`),
       // Queue a message for a live in-process agent/wrfc-subtask member.
       steer: (id: string, text: string) => fleetReadModel.steer(id, text),
-    }, deps.configManager, fleetActs),
+    }, deps.configManager, fleetActs, fleetSpawn),
   });
 
   // Compat: '/panel open <id>' (and any saved layout/muscle memory) for
