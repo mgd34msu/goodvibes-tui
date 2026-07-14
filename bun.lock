@@ -11,8 +11,8 @@
         "@anthropic-ai/vertex-sdk": "^0.16.0",
         "@ast-grep/napi": "^0.42.0",
         "@aws/bedrock-token-generator": "^1.1.0",
-        "@pellux/goodvibes-sdk": "/home/buzzkill/.claude/jobs/e28eaafb/tmp/tarballs-tui-64c67eaf/pellux-goodvibes-sdk-1.8.0.tgz",
-        "@pellux/goodvibes-terminal-shell": "/home/buzzkill/.claude/jobs/e28eaafb/tmp/tarballs-tui-64c67eaf/pellux-goodvibes-terminal-shell-1.8.0.tgz",
+        "@pellux/goodvibes-sdk": "/home/buzzkill/.claude/jobs/e28eaafb/tmp/tarballs-tui-a5c63e3b/pellux-goodvibes-sdk-1.8.0.tgz",
+        "@pellux/goodvibes-terminal-shell": "/home/buzzkill/.claude/jobs/e28eaafb/tmp/tarballs-tui-a5c63e3b/pellux-goodvibes-terminal-shell-1.8.0.tgz",
         "bash-language-server": "^5.6.0",
         "fuse.js": "^7.1.0",
         "graphql": "^16.13.2",
@@ -46,16 +46,16 @@
     },
   },
   "overrides": {
-    "@pellux/goodvibes-contracts": "/home/buzzkill/.claude/jobs/e28eaafb/tmp/tarballs-tui-64c67eaf/pellux-goodvibes-contracts-1.8.0.tgz",
-    "@pellux/goodvibes-daemon-sdk": "/home/buzzkill/.claude/jobs/e28eaafb/tmp/tarballs-tui-64c67eaf/pellux-goodvibes-daemon-sdk-1.8.0.tgz",
-    "@pellux/goodvibes-errors": "/home/buzzkill/.claude/jobs/e28eaafb/tmp/tarballs-tui-64c67eaf/pellux-goodvibes-errors-1.8.0.tgz",
-    "@pellux/goodvibes-operator-sdk": "/home/buzzkill/.claude/jobs/e28eaafb/tmp/tarballs-tui-64c67eaf/pellux-goodvibes-operator-sdk-1.8.0.tgz",
-    "@pellux/goodvibes-peer-sdk": "/home/buzzkill/.claude/jobs/e28eaafb/tmp/tarballs-tui-64c67eaf/pellux-goodvibes-peer-sdk-1.8.0.tgz",
-    "@pellux/goodvibes-sdk": "/home/buzzkill/.claude/jobs/e28eaafb/tmp/tarballs-tui-64c67eaf/pellux-goodvibes-sdk-1.8.0.tgz",
-    "@pellux/goodvibes-terminal-shell": "/home/buzzkill/.claude/jobs/e28eaafb/tmp/tarballs-tui-64c67eaf/pellux-goodvibes-terminal-shell-1.8.0.tgz",
-    "@pellux/goodvibes-transport-core": "/home/buzzkill/.claude/jobs/e28eaafb/tmp/tarballs-tui-64c67eaf/pellux-goodvibes-transport-core-1.8.0.tgz",
-    "@pellux/goodvibes-transport-http": "/home/buzzkill/.claude/jobs/e28eaafb/tmp/tarballs-tui-64c67eaf/pellux-goodvibes-transport-http-1.8.0.tgz",
-    "@pellux/goodvibes-transport-realtime": "/home/buzzkill/.claude/jobs/e28eaafb/tmp/tarballs-tui-64c67eaf/pellux-goodvibes-transport-realtime-1.8.0.tgz",
+    "@pellux/goodvibes-contracts": "/home/buzzkill/.claude/jobs/e28eaafb/tmp/tarballs-tui-a5c63e3b/pellux-goodvibes-contracts-1.8.0.tgz",
+    "@pellux/goodvibes-daemon-sdk": "/home/buzzkill/.claude/jobs/e28eaafb/tmp/tarballs-tui-a5c63e3b/pellux-goodvibes-daemon-sdk-1.8.0.tgz",
+    "@pellux/goodvibes-errors": "/home/buzzkill/.claude/jobs/e28eaafb/tmp/tarballs-tui-a5c63e3b/pellux-goodvibes-errors-1.8.0.tgz",
+    "@pellux/goodvibes-operator-sdk": "/home/buzzkill/.claude/jobs/e28eaafb/tmp/tarballs-tui-a5c63e3b/pellux-goodvibes-operator-sdk-1.8.0.tgz",
+    "@pellux/goodvibes-peer-sdk": "/home/buzzkill/.claude/jobs/e28eaafb/tmp/tarballs-tui-a5c63e3b/pellux-goodvibes-peer-sdk-1.8.0.tgz",
+    "@pellux/goodvibes-sdk": "/home/buzzkill/.claude/jobs/e28eaafb/tmp/tarballs-tui-a5c63e3b/pellux-goodvibes-sdk-1.8.0.tgz",
+    "@pellux/goodvibes-terminal-shell": "/home/buzzkill/.claude/jobs/e28eaafb/tmp/tarballs-tui-a5c63e3b/pellux-goodvibes-terminal-shell-1.8.0.tgz",
+    "@pellux/goodvibes-transport-core": "/home/buzzkill/.claude/jobs/e28eaafb/tmp/tarballs-tui-a5c63e3b/pellux-goodvibes-transport-core-1.8.0.tgz",
+    "@pellux/goodvibes-transport-http": "/home/buzzkill/.claude/jobs/e28eaafb/tmp/tarballs-tui-a5c63e3b/pellux-goodvibes-transport-http-1.8.0.tgz",
+    "@pellux/goodvibes-transport-realtime": "/home/buzzkill/.claude/jobs/e28eaafb/tmp/tarballs-tui-a5c63e3b/pellux-goodvibes-transport-realtime-1.8.0.tgz",
     "minimatch": "^10.2.5",
   },
   "packages": {
@@ -207,25 +207,25 @@
 
     "@one-ini/wasm": ["@one-ini/wasm@0.2.0", "", {}, "sha512-n+L/BvrwKUn7q5O3wHGo+CJZAqfewh38+37sk+eBzv/39lM9pPgPRd4sOZRvSRzo0ukLxzyXso4WlGj2oKZ5hA=="],
 
-    "@pellux/goodvibes-contracts": ["@pellux/goodvibes-contracts@/home/buzzkill/.claude/jobs/e28eaafb/tmp/tarballs-tui-64c67eaf/pellux-goodvibes-contracts-1.8.0.tgz", { "dependencies": { "zod": "^4.3.6" } }, "sha512-pJ/KCqR+Bm+4dDfVfS6VbwgELHbL7KL76YcrA+8rlsBCu+gGosHkGYhpUprWTC7D+mbOMvOfFPCrwi98AHt6hg=="],
+    "@pellux/goodvibes-contracts": ["@pellux/goodvibes-contracts@/home/buzzkill/.claude/jobs/e28eaafb/tmp/tarballs-tui-a5c63e3b/pellux-goodvibes-contracts-1.8.0.tgz", { "dependencies": { "zod": "^4.3.6" } }, "sha512-FLJqKPYF3bPLAgdxqwoHWQBr4e9wDpRMcA5u4LikeZPHfto1LLdDKJEVcsej6VsL5mWimxsoIVNKsBc6CKWnqg=="],
 
-    "@pellux/goodvibes-daemon-sdk": ["@pellux/goodvibes-daemon-sdk@/home/buzzkill/.claude/jobs/e28eaafb/tmp/tarballs-tui-64c67eaf/pellux-goodvibes-daemon-sdk-1.8.0.tgz", { "dependencies": { "@pellux/goodvibes-contracts": "1.7.0", "@pellux/goodvibes-errors": "1.7.0", "@pellux/goodvibes-transport-core": "1.7.0" }, "bin": { "goodvibes-relay": "./dist/relay-server-entry.js" } }, "sha512-cyh/nIxu+KWPCjfU0uAeENoWBC+ddnyDxd3nTGdL2FXlm9o0uwBSBAT4r/qLcBT2pskPQk//JmjjQVZyQIcV3A=="],
+    "@pellux/goodvibes-daemon-sdk": ["@pellux/goodvibes-daemon-sdk@/home/buzzkill/.claude/jobs/e28eaafb/tmp/tarballs-tui-a5c63e3b/pellux-goodvibes-daemon-sdk-1.8.0.tgz", { "dependencies": { "@pellux/goodvibes-contracts": "1.7.0", "@pellux/goodvibes-errors": "1.7.0", "@pellux/goodvibes-transport-core": "1.7.0" }, "bin": { "goodvibes-relay": "./dist/relay-server-entry.js" } }, "sha512-DNqRMsfS3zk8rwOb7gJtz6A+xc0fTw1QbgMBiKOnErHjlAMTAxTDB3HmCUuA2j3V9ch22QG1xIl7MR5DdLkssQ=="],
 
-    "@pellux/goodvibes-errors": ["@pellux/goodvibes-errors@/home/buzzkill/.claude/jobs/e28eaafb/tmp/tarballs-tui-64c67eaf/pellux-goodvibes-errors-1.8.0.tgz", {}, "sha512-Sb6Ru9cAqyp593kV+710TLVk7Zqr+KgyoxMBqLZLnKBIjz8WGHdy2V3B/X9JwyNGdnhECww8t0QX6UF8S0GFrg=="],
+    "@pellux/goodvibes-errors": ["@pellux/goodvibes-errors@/home/buzzkill/.claude/jobs/e28eaafb/tmp/tarballs-tui-a5c63e3b/pellux-goodvibes-errors-1.8.0.tgz", {}, "sha512-shFnKt5lUp3hawocN+O084pNAksOxjuFr8vuG7HW4WX/aB4bOtWZXKXWfOMxST/5heh+afZ1wETsgME6JIsbnQ=="],
 
-    "@pellux/goodvibes-operator-sdk": ["@pellux/goodvibes-operator-sdk@/home/buzzkill/.claude/jobs/e28eaafb/tmp/tarballs-tui-64c67eaf/pellux-goodvibes-operator-sdk-1.8.0.tgz", { "dependencies": { "@pellux/goodvibes-contracts": "1.7.0", "@pellux/goodvibes-errors": "1.7.0", "@pellux/goodvibes-transport-http": "1.7.0", "zod": "^4.3.6" } }, "sha512-DcOyDWib6S90vTe4GVj5FuG0q0vCpO8rLyIKgbJu0BZ/IjMLGFuxrTyOqQq2D+hBv7Z1reGw0GwjdBQ+jITMWA=="],
+    "@pellux/goodvibes-operator-sdk": ["@pellux/goodvibes-operator-sdk@/home/buzzkill/.claude/jobs/e28eaafb/tmp/tarballs-tui-a5c63e3b/pellux-goodvibes-operator-sdk-1.8.0.tgz", { "dependencies": { "@pellux/goodvibes-contracts": "1.7.0", "@pellux/goodvibes-errors": "1.7.0", "@pellux/goodvibes-transport-http": "1.7.0", "zod": "^4.3.6" } }, "sha512-DcOyDWib6S90vTe4GVj5FuG0q0vCpO8rLyIKgbJu0BZ/IjMLGFuxrTyOqQq2D+hBv7Z1reGw0GwjdBQ+jITMWA=="],
 
-    "@pellux/goodvibes-peer-sdk": ["@pellux/goodvibes-peer-sdk@/home/buzzkill/.claude/jobs/e28eaafb/tmp/tarballs-tui-64c67eaf/pellux-goodvibes-peer-sdk-1.8.0.tgz", { "dependencies": { "@pellux/goodvibes-contracts": "1.7.0", "@pellux/goodvibes-errors": "1.7.0", "@pellux/goodvibes-transport-http": "1.7.0" } }, "sha512-FuPl5/t752f6Ug6tQjCLUxlLhj4lDlcBacMVgtbJ5XK/92DPbGM295urCE3qN5HZf2bZhhfMlBS0pgb88fJ5wA=="],
+    "@pellux/goodvibes-peer-sdk": ["@pellux/goodvibes-peer-sdk@/home/buzzkill/.claude/jobs/e28eaafb/tmp/tarballs-tui-a5c63e3b/pellux-goodvibes-peer-sdk-1.8.0.tgz", { "dependencies": { "@pellux/goodvibes-contracts": "1.7.0", "@pellux/goodvibes-errors": "1.7.0", "@pellux/goodvibes-transport-http": "1.7.0" } }, "sha512-FuPl5/t752f6Ug6tQjCLUxlLhj4lDlcBacMVgtbJ5XK/92DPbGM295urCE3qN5HZf2bZhhfMlBS0pgb88fJ5wA=="],
 
-    "@pellux/goodvibes-sdk": ["@pellux/goodvibes-sdk@/home/buzzkill/.claude/jobs/e28eaafb/tmp/tarballs-tui-64c67eaf/pellux-goodvibes-sdk-1.8.0.tgz", { "dependencies": { "@pellux/goodvibes-contracts": "1.7.0", "@pellux/goodvibes-daemon-sdk": "1.7.0", "@pellux/goodvibes-errors": "1.7.0", "@pellux/goodvibes-operator-sdk": "1.7.0", "@pellux/goodvibes-peer-sdk": "1.7.0", "@pellux/goodvibes-transport-core": "1.7.0", "@pellux/goodvibes-transport-http": "1.7.0", "@pellux/goodvibes-transport-realtime": "1.7.0" }, "optionalDependencies": { "@agentclientprotocol/sdk": "^0.21.0", "@anthropic-ai/bedrock-sdk": "^0.29.1", "@anthropic-ai/sdk": "^0.92.0", "@ast-grep/napi": "^0.42.0", "@mozilla/readability": "^0.6.0", "bash-language-server": "^5.6.0", "bplist-parser": "^0.3.2", "cloudflare": "6.0.0", "fuse.js": "^7.1.0", "google-auth-library": "10.6.2", "graphql": "^16.13.2", "jsdom": "^29.1.0", "jszip": "^3.10.1", "node-edge-tts": "^1.2.10", "openai": "6.46.0", "pdfjs-dist": "5.7.284", "pyright": "^1.1.408", "simple-git": "^3.33.0", "sql.js": "^1.14.1", "sqlite-vec": "^0.1.9", "tree-sitter-css": "^0.25.0", "tree-sitter-javascript": "^0.25.0", "tree-sitter-json": "^0.24.8", "tree-sitter-python": "^0.25.0", "tree-sitter-typescript": "^0.23.2", "typescript-language-server": "^5.1.3", "vscode-langservers-extracted": "^4.10.0", "web-tree-sitter": "^0.26.7", "zustand": "^5.0.12" }, "peerDependencies": { "expo-secure-store": ">=13.0.0", "react-native-keychain": ">=8.0.0" }, "optionalPeers": ["expo-secure-store", "react-native-keychain"] }, "sha512-6+WaEUVljNtvCmeCAWJZjpIOjrmAwLnqguIDZTuXn5n0EGvErb+T2ZZnfU9qQsNo1qxssFgTru5A5WdfXxXNOw=="],
+    "@pellux/goodvibes-sdk": ["@pellux/goodvibes-sdk@/home/buzzkill/.claude/jobs/e28eaafb/tmp/tarballs-tui-a5c63e3b/pellux-goodvibes-sdk-1.8.0.tgz", { "dependencies": { "@pellux/goodvibes-contracts": "1.7.0", "@pellux/goodvibes-daemon-sdk": "1.7.0", "@pellux/goodvibes-errors": "1.7.0", "@pellux/goodvibes-operator-sdk": "1.7.0", "@pellux/goodvibes-peer-sdk": "1.7.0", "@pellux/goodvibes-transport-core": "1.7.0", "@pellux/goodvibes-transport-http": "1.7.0", "@pellux/goodvibes-transport-realtime": "1.7.0" }, "optionalDependencies": { "@agentclientprotocol/sdk": "^0.21.0", "@anthropic-ai/bedrock-sdk": "^0.29.1", "@anthropic-ai/sdk": "^0.92.0", "@ast-grep/napi": "^0.42.0", "@mozilla/readability": "^0.6.0", "bash-language-server": "^5.6.0", "bplist-parser": "^0.3.2", "cloudflare": "6.0.0", "fuse.js": "^7.1.0", "google-auth-library": "10.6.2", "graphql": "^16.13.2", "jsdom": "^29.1.0", "jszip": "^3.10.1", "node-edge-tts": "^1.2.10", "openai": "6.46.0", "pdfjs-dist": "5.7.284", "pyright": "^1.1.408", "simple-git": "^3.33.0", "sql.js": "^1.14.1", "sqlite-vec": "^0.1.9", "tree-sitter-css": "^0.25.0", "tree-sitter-javascript": "^0.25.0", "tree-sitter-json": "^0.24.8", "tree-sitter-python": "^0.25.0", "tree-sitter-typescript": "^0.23.2", "typescript-language-server": "^5.1.3", "vscode-langservers-extracted": "^4.10.0", "web-tree-sitter": "^0.26.7", "zustand": "^5.0.12" }, "peerDependencies": { "expo-secure-store": ">=13.0.0", "react-native-keychain": ">=8.0.0" }, "optionalPeers": ["expo-secure-store", "react-native-keychain"] }, "sha512-KBRahgRDwXhIkWOXHlzs5ioEbxvbX3jYFyR6NwM+5BOwbAefYMVJ0SvC8crHOitVAHp5HjiZ/HaBZBbHiSmN/A=="],
 
-    "@pellux/goodvibes-terminal-shell": ["@pellux/goodvibes-terminal-shell@/home/buzzkill/.claude/jobs/e28eaafb/tmp/tarballs-tui-64c67eaf/pellux-goodvibes-terminal-shell-1.8.0.tgz", { "dependencies": { "@pellux/goodvibes-contracts": "1.7.0", "@pellux/goodvibes-sdk": "1.7.0" } }, "sha512-WUBh7hojcsAPi5sKRAH3qm2lohCaKfdxpEsL5u10qKIA76ogGf+C8HM1J0Y6nsxM1HI+hdJJcpre8wukc7F3uQ=="],
+    "@pellux/goodvibes-terminal-shell": ["@pellux/goodvibes-terminal-shell@/home/buzzkill/.claude/jobs/e28eaafb/tmp/tarballs-tui-a5c63e3b/pellux-goodvibes-terminal-shell-1.8.0.tgz", { "dependencies": { "@pellux/goodvibes-contracts": "1.7.0", "@pellux/goodvibes-sdk": "1.7.0" } }, "sha512-GEejPSBT1K5n4z0ULjloJGVNgjAgLY3vjRgplMNffoaHnlX67IO3FxlDw/XBwu4Nb8CWvINsUVaxUJFrRx18aQ=="],
 
-    "@pellux/goodvibes-transport-core": ["@pellux/goodvibes-transport-core@/home/buzzkill/.claude/jobs/e28eaafb/tmp/tarballs-tui-64c67eaf/pellux-goodvibes-transport-core-1.8.0.tgz", { "dependencies": { "@pellux/goodvibes-errors": "1.7.0" } }, "sha512-T6t3A2RWC4Bxcrt54R4km14ypKh95C5vIBNGn1ql7XJFzNdGTJAoMwgNRKv1YrLKLEWRi9EwK5fkO6dtzePlxg=="],
+    "@pellux/goodvibes-transport-core": ["@pellux/goodvibes-transport-core@/home/buzzkill/.claude/jobs/e28eaafb/tmp/tarballs-tui-a5c63e3b/pellux-goodvibes-transport-core-1.8.0.tgz", { "dependencies": { "@pellux/goodvibes-errors": "1.7.0" } }, "sha512-J50wJ77jFmew+IdCCQn6LUf4wJV/88oLbYhWFi8fs6QSBeqv2Qh6x3Xkp7rIIzi244ATERSqFDRhhWgfnBO7aA=="],
 
-    "@pellux/goodvibes-transport-http": ["@pellux/goodvibes-transport-http@/home/buzzkill/.claude/jobs/e28eaafb/tmp/tarballs-tui-64c67eaf/pellux-goodvibes-transport-http-1.8.0.tgz", { "dependencies": { "@pellux/goodvibes-contracts": "1.7.0", "@pellux/goodvibes-errors": "1.7.0", "@pellux/goodvibes-transport-core": "1.7.0", "zod": "^4.3.6" } }, "sha512-eJ2w2emZaONP34+3tiE+NgQnqyNpdH/mDr0NI29A5MwFWZESDwnWwBHDWh1V8/dA9KzbOQWCReKRBAAQtvpsAw=="],
+    "@pellux/goodvibes-transport-http": ["@pellux/goodvibes-transport-http@/home/buzzkill/.claude/jobs/e28eaafb/tmp/tarballs-tui-a5c63e3b/pellux-goodvibes-transport-http-1.8.0.tgz", { "dependencies": { "@pellux/goodvibes-contracts": "1.7.0", "@pellux/goodvibes-errors": "1.7.0", "@pellux/goodvibes-transport-core": "1.7.0", "zod": "^4.3.6" } }, "sha512-eJ2w2emZaONP34+3tiE+NgQnqyNpdH/mDr0NI29A5MwFWZESDwnWwBHDWh1V8/dA9KzbOQWCReKRBAAQtvpsAw=="],
 
-    "@pellux/goodvibes-transport-realtime": ["@pellux/goodvibes-transport-realtime@/home/buzzkill/.claude/jobs/e28eaafb/tmp/tarballs-tui-64c67eaf/pellux-goodvibes-transport-realtime-1.8.0.tgz", { "dependencies": { "@pellux/goodvibes-contracts": "1.7.0", "@pellux/goodvibes-errors": "1.7.0", "@pellux/goodvibes-transport-core": "1.7.0", "@pellux/goodvibes-transport-http": "1.7.0" } }, "sha512-lgXym6MNdInMvq8o09rygoyVvOLu+4xJsXQx5hb66d6p4EGmMisUhs+FZVavYJ1MWtFw91aHdCP90uAPuWMxyw=="],
+    "@pellux/goodvibes-transport-realtime": ["@pellux/goodvibes-transport-realtime@/home/buzzkill/.claude/jobs/e28eaafb/tmp/tarballs-tui-a5c63e3b/pellux-goodvibes-transport-realtime-1.8.0.tgz", { "dependencies": { "@pellux/goodvibes-contracts": "1.7.0", "@pellux/goodvibes-errors": "1.7.0", "@pellux/goodvibes-transport-core": "1.7.0", "@pellux/goodvibes-transport-http": "1.7.0" } }, "sha512-N+MUEM7ZvkPlkW32lqMlhDY6On04SGgGttW0IL6VfgWgXTHdluKolORwSt0txLB6cExIANJCi5BcA6bC8mZ3zw=="],
 
     "@pellux/goodvibes-tui-darwin-arm64": ["@pellux/goodvibes-tui-darwin-arm64@1.17.0", "", { "os": "darwin", "cpu": "arm64" }, "sha512-h48ZlRx5b9crSwO+Ocs7uM5SvnewtlzJTabQ/cz1xxVTurS5iUII+yreuBiHyxP0E9eLnGgl545cNGmH82hMkA=="],
 
@@ -305,7 +305,7 @@
 
     "@types/bun": ["@types/bun@1.3.14", "", { "dependencies": { "bun-types": "1.3.14" } }, "sha512-h1hFqFVcvAvD9j9K7ZW7vd82aSA+rTdznZa+5bwvCwqSB1jmmfLcbIWhOLx1/+boy/xmjgCs/OMUL8hRJSmnPw=="],
 
-    "@types/node": ["@types/node@18.19.130", "", { "dependencies": { "undici-types": "~5.26.4" } }, "sha512-GRaXQx6jGfL8sKfaIDD6OupbIHBr9jv7Jnaml9tB7l4v068PAOXqfcujMMo5PhbIs6ggR1XODELqahT2R8v0fg=="],
+    "@types/node": ["@types/node@26.1.1", "", { "dependencies": { "undici-types": "~8.3.0" } }, "sha512-nxAkRSVkN1Y0JC1W8ky/fTfkGsMmcrRsbx+3XoZE+rMOX71kLYTV7fLXpqud1GpbpP5TuffXFqfX7fH2GgZREw=="],
 
     "@types/node-fetch": ["@types/node-fetch@2.6.13", "", { "dependencies": { "@types/node": "*", "form-data": "^4.0.4" } }, "sha512-QGpRVpzSaUs30JBSGPjOg4Uveu384erbHBoT1zeONvyCfwQxIkUshLAOqN/k9EjGviPRmWTTe6aH2qySWKTVSw=="],
 
@@ -639,7 +639,7 @@
 
     "undici": ["undici@7.28.0", "", {}, "sha512-cRZYrTDwWznlnRiPjggAGxZXanty6M8RV1ff8Wm4LWXBp7/IG8v5DnOm74DtUBp9OONpK75YlPnIjQqX0dBDtA=="],
 
-    "undici-types": ["undici-types@5.26.5", "", {}, "sha512-JlCMO+ehdEIKqlFxk6IfVoAUVmgz7cU7zD/h9XZ0qzeosSHmUJVOzSQvvYSYWXkFXC+IfLKSIffhv0sVZup6pA=="],
+    "undici-types": ["undici-types@8.3.0", "", {}, "sha512-j375ScV60dom+YkPFIfTLcOiPxkN/buHz5GobjLhixFuANaNs3C9l4GmrWqejgXWJ7BbJcFYpTEUkS1Ge8bpZQ=="],
 
     "util-deprecate": ["util-deprecate@1.0.2", "", {}, "sha512-EPD5q1uXyFxJpCrLnCc1nHnq3gOa6DZBocAIiI2TaSCA7VCJ1UJDMagCzIkXNsUYfD1daK//LTEQ8xiIbrHtcw=="],
 
@@ -698,6 +698,10 @@
     "zod": ["zod@4.4.3", "", {}, "sha512-ytENFjIJFl2UwYglde2jchW2Hwm4GJFLDiSXWdTrJQBIN9Fcyp7n4DhxJEiWNAJMV1/BqWfW/kkg71UDcHJyTQ=="],
 
     "zustand": ["zustand@5.0.14", "", { "peerDependencies": { "@types/react": ">=18.0.0", "immer": ">=9.0.6", "react": ">=18.0.0", "use-sync-external-store": ">=1.2.0" }, "optionalPeers": ["@types/react", "immer", "react", "use-sync-external-store"] }, "sha512-/8tAspM5LMPr28b3fwLYrtdj77ECpfZviaP75CMTnwO8ISyaE4GDIG/9rDDYq/cH9D2Xw2A2RXglLInmVBQB/g=="],
+
+    "@anthropic-ai/bedrock-sdk/@anthropic-ai/sdk": ["@anthropic-ai/sdk@0.92.0", "", { "dependencies": { "json-schema-to-ts": "^3.1.1" }, "peerDependencies": { "zod": "^3.25.0 || ^4.0.0" }, "optionalPeers": ["zod"], "bin": { "anthropic-ai-sdk": "bin/cli" } }, "sha512-l653JFC83wCglH8H83t1xpgDurCyPyslYW1maPRdCsfuNuGbLvQjQ81sWd3Go3LWRm0jNspzAhuqAYV8r9joSw=="],
+
+    "@anthropic-ai/vertex-sdk/@anthropic-ai/sdk": ["@anthropic-ai/sdk@0.92.0", "", { "dependencies": { "json-schema-to-ts": "^3.1.1" }, "peerDependencies": { "zod": "^3.25.0 || ^4.0.0" }, "optionalPeers": ["zod"], "bin": { "anthropic-ai-sdk": "bin/cli" } }, "sha512-l653JFC83wCglH8H83t1xpgDurCyPyslYW1maPRdCsfuNuGbLvQjQ81sWd3Go3LWRm0jNspzAhuqAYV8r9joSw=="],
 
     "@aws-crypto/crc32/@aws-crypto/util": ["@aws-crypto/util@3.0.0", "", { "dependencies": { "@aws-sdk/types": "^3.222.0", "@aws-sdk/util-utf8-browser": "^3.0.0", "tslib": "^1.11.1" } }, "sha512-2OJlpeJpCR48CC8r+uKVChzs9Iungj9wkZrl8Z041DWEWvyIHILYKCPNzJghKsivj+S3mLo6BVc7mBNzdxA46w=="],
 
@@ -792,6 +796,12 @@
     "@aws-sdk/xml-builder/@smithy/types": ["@smithy/types@4.16.1", "", { "dependencies": { "tslib": "^2.6.2" } }, "sha512-0JFs3V2y2M9tKW5na/qxe69Zv+uxLMO7QBbhxF/FHu/Gp2NFZAAL9tWl9PU02xxo07pb3G9FTyjNc6D5uZrJIg=="],
 
     "@aws-sdk/xml-builder/tslib": ["tslib@2.8.1", "", {}, "sha512-oJFu94HQb+KVduSUQL7wnpmqnfmLsOA/nAh6b6EH0wCEoK0/mPeXU6c3wKDV83MkOuHPRHtSXKKU99IBazS/2w=="],
+
+    "@aws/bedrock-token-generator/@smithy/protocol-http": ["@smithy/protocol-http@5.5.8", "", { "dependencies": { "@smithy/core": "^3.29.3", "tslib": "^2.6.2" } }, "sha512-SyFyL/ajuzJ79W+BpseFFbSz8/Rwj+QGqUlayeZE0jS2aCcjzV5tJBcbHgfypvSHpe7s2JmUHZmfpICaxwEs5g=="],
+
+    "@aws/bedrock-token-generator/@smithy/signature-v4": ["@smithy/signature-v4@5.6.4", "", { "dependencies": { "@smithy/core": "^3.29.3", "@smithy/types": "^4.16.1", "tslib": "^2.6.2" } }, "sha512-B89bpf2t/y/wia6LZ+4JfHXYQT9PnVftsH05rgJKKIStS7r/4XSs9HOjtPoLtgcA6HCW9jVqX5DBbq7E0PAkiQ=="],
+
+    "@aws/bedrock-token-generator/@smithy/types": ["@smithy/types@4.16.1", "", { "dependencies": { "tslib": "^2.6.2" } }, "sha512-0JFs3V2y2M9tKW5na/qxe69Zv+uxLMO7QBbhxF/FHu/Gp2NFZAAL9tWl9PU02xxo07pb3G9FTyjNc6D5uZrJIg=="],
 
     "@pellux/goodvibes-sdk/@agentclientprotocol/sdk": ["@agentclientprotocol/sdk@0.21.1", "", { "peerDependencies": { "zod": "^3.25.0 || ^4.0.0" } }, "sha512-ZTLH+o9QxcZDLX/9ww+W7C2iExnXFM+vD/uGFVSlR61Kzj9FaxUqBC6Rv/kwgA7qVWYUEI9c5ZNqCuO9PM4rKg=="],
 
@@ -903,6 +913,8 @@
 
     "bash-language-server/zod": ["zod@3.24.2", "", {}, "sha512-lY7CDW43ECgW9u1TcT3IoXHflywfVqDYze4waEz812jR/bZ8FHDsl7pFQoSZTz5N+2NqRXs8GBwnAwo3ZNxqhQ=="],
 
+    "cloudflare/@types/node": ["@types/node@18.19.130", "", { "dependencies": { "undici-types": "~5.26.4" } }, "sha512-GRaXQx6jGfL8sKfaIDD6OupbIHBr9jv7Jnaml9tB7l4v068PAOXqfcujMMo5PhbIs6ggR1XODELqahT2R8v0fg=="],
+
     "dom-serializer/entities": ["entities@4.5.0", "", {}, "sha512-V0hjH4dGPh9Ao5p0MoRY6BVqtwCjhz6vI5LT8AJ55H+4g9/4vbHx1I54fS0XuclLhDHArPQCiMjDxjaL8fPxhw=="],
 
     "fetch-blob/web-streams-polyfill": ["web-streams-polyfill@3.3.3", "", {}, "sha512-d2JWLCivmZYTSIoge9MsgFCZrt571BikcWGYkjC1khllbTeDlGqZ2D8vD8E/lJa8WGWbb7Plm8/XJYV7IJHZZw=="],
@@ -923,9 +935,17 @@
 
     "vscode-markdown-languageservice/vscode-languageserver-protocol": ["vscode-languageserver-protocol@3.18.2", "", { "dependencies": { "vscode-jsonrpc": "9.0.1", "vscode-languageserver-types": "3.18.0" } }, "sha512-XRyDbT0Pp3sSNti3JmxVEUMySWCSi1hhM+/KUlCy1hV1zmrqpM1OwO12EAki8blhmLuIMpaJrYbo0OzGVfK2Qg=="],
 
+    "@aws/bedrock-token-generator/@smithy/protocol-http/tslib": ["tslib@2.8.1", "", {}, "sha512-oJFu94HQb+KVduSUQL7wnpmqnfmLsOA/nAh6b6EH0wCEoK0/mPeXU6c3wKDV83MkOuHPRHtSXKKU99IBazS/2w=="],
+
+    "@aws/bedrock-token-generator/@smithy/signature-v4/tslib": ["tslib@2.8.1", "", {}, "sha512-oJFu94HQb+KVduSUQL7wnpmqnfmLsOA/nAh6b6EH0wCEoK0/mPeXU6c3wKDV83MkOuHPRHtSXKKU99IBazS/2w=="],
+
+    "@aws/bedrock-token-generator/@smithy/types/tslib": ["tslib@2.8.1", "", {}, "sha512-oJFu94HQb+KVduSUQL7wnpmqnfmLsOA/nAh6b6EH0wCEoK0/mPeXU6c3wKDV83MkOuHPRHtSXKKU99IBazS/2w=="],
+
     "@pellux/goodvibes-sdk/google-auth-library/gaxios": ["gaxios@7.2.0", "", { "dependencies": { "extend": "^3.0.2", "https-proxy-agent": "^7.0.1", "node-fetch": "^3.3.2" } }, "sha512-CUVb4wcYe+771XevyH6HtGmXFAGGKkIC3kswAP8Z1JCe0j80JMaTPZH930DWFrvo0atjh18Arc0pEyUCWa5bfg=="],
 
     "@pellux/goodvibes-sdk/google-auth-library/gcp-metadata": ["gcp-metadata@8.1.2", "", { "dependencies": { "gaxios": "^7.0.0", "google-logging-utils": "^1.0.0", "json-bigint": "^1.0.0" } }, "sha512-zV/5HKTfCeKWnxG0Dmrw51hEWFGfcF2xiXqcA3+J90WDuP0SvoiSO5ORvcBsifmx/FoIjgQN3oNOGaQ5PhLFkg=="],
+
+    "cloudflare/@types/node/undici-types": ["undici-types@5.26.5", "", {}, "sha512-JlCMO+ehdEIKqlFxk6IfVoAUVmgz7cU7zD/h9XZ0qzeosSHmUJVOzSQvvYSYWXkFXC+IfLKSIffhv0sVZup6pA=="],
 
     "node-fetch/whatwg-url/tr46": ["tr46@0.0.3", "", {}, "sha512-N3WMsuqV66lT30CrXNbEjx4GEwlow3v6rr4mCcv6prnfwhS01rkgyFdjPNBYd9br7LpXV1+Emh01fHnq2Gdgrw=="],
 

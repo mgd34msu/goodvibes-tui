@@ -104,8 +104,8 @@
     "@anthropic-ai/vertex-sdk": "^0.16.0",
     "@ast-grep/napi": "^0.42.0",
     "@aws/bedrock-token-generator": "^1.1.0",
-    "@pellux/goodvibes-sdk": "/home/buzzkill/.claude/jobs/e28eaafb/tmp/tarballs-tui-64c67eaf/pellux-goodvibes-sdk-1.8.0.tgz",
-    "@pellux/goodvibes-terminal-shell": "/home/buzzkill/.claude/jobs/e28eaafb/tmp/tarballs-tui-64c67eaf/pellux-goodvibes-terminal-shell-1.8.0.tgz",
+    "@pellux/goodvibes-sdk": "/home/buzzkill/.claude/jobs/e28eaafb/tmp/tarballs-tui-a5c63e3b/pellux-goodvibes-sdk-1.8.0.tgz",
+    "@pellux/goodvibes-terminal-shell": "/home/buzzkill/.claude/jobs/e28eaafb/tmp/tarballs-tui-a5c63e3b/pellux-goodvibes-terminal-shell-1.8.0.tgz",
     "bash-language-server": "^5.6.0",
     "fuse.js": "^7.1.0",
     "graphql": "^16.13.2",
@@ -139,15 +139,15 @@
   "trustedDependencies": [],
   "overrides": {
     "minimatch": "^10.2.5",
-    "@pellux/goodvibes-contracts": "/home/buzzkill/.claude/jobs/e28eaafb/tmp/tarballs-tui-64c67eaf/pellux-goodvibes-contracts-1.8.0.tgz",
-    "@pellux/goodvibes-daemon-sdk": "/home/buzzkill/.claude/jobs/e28eaafb/tmp/tarballs-tui-64c67eaf/pellux-goodvibes-daemon-sdk-1.8.0.tgz",
-    "@pellux/goodvibes-errors": "/home/buzzkill/.claude/jobs/e28eaafb/tmp/tarballs-tui-64c67eaf/pellux-goodvibes-errors-1.8.0.tgz",
-    "@pellux/goodvibes-operator-sdk": "/home/buzzkill/.claude/jobs/e28eaafb/tmp/tarballs-tui-64c67eaf/pellux-goodvibes-operator-sdk-1.8.0.tgz",
-    "@pellux/goodvibes-peer-sdk": "/home/buzzkill/.claude/jobs/e28eaafb/tmp/tarballs-tui-64c67eaf/pellux-goodvibes-peer-sdk-1.8.0.tgz",
-    "@pellux/goodvibes-sdk": "/home/buzzkill/.claude/jobs/e28eaafb/tmp/tarballs-tui-64c67eaf/pellux-goodvibes-sdk-1.8.0.tgz",
-    "@pellux/goodvibes-terminal-shell": "/home/buzzkill/.claude/jobs/e28eaafb/tmp/tarballs-tui-64c67eaf/pellux-goodvibes-terminal-shell-1.8.0.tgz",
-    "@pellux/goodvibes-transport-core": "/home/buzzkill/.claude/jobs/e28eaafb/tmp/tarballs-tui-64c67eaf/pellux-goodvibes-transport-core-1.8.0.tgz",
-    "@pellux/goodvibes-transport-http": "/home/buzzkill/.claude/jobs/e28eaafb/tmp/tarballs-tui-64c67eaf/pellux-goodvibes-transport-http-1.8.0.tgz",
-    "@pellux/goodvibes-transport-realtime": "/home/buzzkill/.claude/jobs/e28eaafb/tmp/tarballs-tui-64c67eaf/pellux-goodvibes-transport-realtime-1.8.0.tgz"
+    "@pellux/goodvibes-contracts": "/home/buzzkill/.claude/jobs/e28eaafb/tmp/tarballs-tui-a5c63e3b/pellux-goodvibes-contracts-1.8.0.tgz",
+    "@pellux/goodvibes-daemon-sdk": "/home/buzzkill/.claude/jobs/e28eaafb/tmp/tarballs-tui-a5c63e3b/pellux-goodvibes-daemon-sdk-1.8.0.tgz",
+    "@pellux/goodvibes-errors": "/home/buzzkill/.claude/jobs/e28eaafb/tmp/tarballs-tui-a5c63e3b/pellux-goodvibes-errors-1.8.0.tgz",
+    "@pellux/goodvibes-operator-sdk": "/home/buzzkill/.claude/jobs/e28eaafb/tmp/tarballs-tui-a5c63e3b/pellux-goodvibes-operator-sdk-1.8.0.tgz",
+    "@pellux/goodvibes-peer-sdk": "/home/buzzkill/.claude/jobs/e28eaafb/tmp/tarballs-tui-a5c63e3b/pellux-goodvibes-peer-sdk-1.8.0.tgz",
+    "@pellux/goodvibes-sdk": "/home/buzzkill/.claude/jobs/e28eaafb/tmp/tarballs-tui-a5c63e3b/pellux-goodvibes-sdk-1.8.0.tgz",
+    "@pellux/goodvibes-terminal-shell": "/home/buzzkill/.claude/jobs/e28eaafb/tmp/tarballs-tui-a5c63e3b/pellux-goodvibes-terminal-shell-1.8.0.tgz",
+    "@pellux/goodvibes-transport-core": "/home/buzzkill/.claude/jobs/e28eaafb/tmp/tarballs-tui-a5c63e3b/pellux-goodvibes-transport-core-1.8.0.tgz",
+    "@pellux/goodvibes-transport-http": "/home/buzzkill/.claude/jobs/e28eaafb/tmp/tarballs-tui-a5c63e3b/pellux-goodvibes-transport-http-1.8.0.tgz",
+    "@pellux/goodvibes-transport-realtime": "/home/buzzkill/.claude/jobs/e28eaafb/tmp/tarballs-tui-a5c63e3b/pellux-goodvibes-transport-realtime-1.8.0.tgz"
   }
 }
