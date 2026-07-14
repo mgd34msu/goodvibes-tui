@@ -106,6 +106,17 @@ export interface ConfigModalActionContext {
   readonly setStatus: (message: string) => void;
   /** Close the modal (focus returns to whatever opened it). */
   readonly close: () => void;
+  /**
+   * Switch the active tab and select a row within it, by id — the in-surface
+   * "jump" affordance (e.g. the Memory modal's Proposals tab jumping to an
+   * affected record in the Review Queue tab, rather than opening a second
+   * modal). Host-owned, populated by ConfigModal itself (like `close`/
+   * `setStatus`) — a surface's `onAction` calls it, never constructs it. A
+   * no-op if either id is not present in the surface's current structure; the
+   * surface should check reachability itself and print an honest status line
+   * when it isn't, rather than relying on a silent no-op.
+   */
+  readonly jumpToRow?: (tabId: string, rowId: string) => void;
 }
 
 /** A declarative action bound to a key. */

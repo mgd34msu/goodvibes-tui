@@ -24,6 +24,7 @@ import { createSecurityModalSurface } from './modals/security-modal.ts';
 import { createPolicyModalSurface } from './modals/policy-modal.ts';
 import { createKnowledgeModalSurface } from './modals/knowledge-modal.ts';
 import { createMemoryModalSurface, type MemoryModalDeps } from './modals/memory-modal.ts';
+import { createMemoryConsolidationGateway } from './memory-consolidation-gateway.ts';
 import { createWorkPlanModalSurface } from './modals/work-plan-modal.ts';
 import { createKeybindingsModalSurface } from './modals/keybindings-modal.ts';
 import { createPairingModalSurface, type PairingModalConnectionInfo } from './modals/pairing-modal.ts';
@@ -132,6 +133,13 @@ export function registerBuiltinModals(manager: PanelManager, deps: ResolvedBuilt
 
   manager.registerModalSurface(createMemoryModalSurface({
     memoryRegistry: deps.memoryRegistry as MemoryModalDeps['memoryRegistry'],
+    // Lazily resolved — a fresh factory call per Proposals-tab fetch, exactly
+    // like the Fleet gateway (fleet-gateway.ts) — so a daemon that comes up
+    // AFTER this session started is still reachable on the next refresh.
+    resolveConsolidationGateway: () => createMemoryConsolidationGateway({
+      configManager: deps.configManager,
+      homeDirectory: ui.environment.shellPaths.homeDirectory,
+    }),
   }));
   manager.registerModalRedirect('memory', 'memory-modal');
 

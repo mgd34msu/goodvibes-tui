@@ -339,7 +339,7 @@ export class ConfigModal {
    * action (consumed). Handles the two-press confirm for destructive actions.
    * This is an interaction boundary (syncs structure first).
    */
-  fireAction(key: string, ctx: Omit<ConfigModalActionContext, 'row' | 'tabId' | 'setStatus' | 'close' | 'requestRender'>): boolean {
+  fireAction(key: string, ctx: Omit<ConfigModalActionContext, 'row' | 'tabId' | 'setStatus' | 'close' | 'requestRender' | 'jumpToRow'>): boolean {
     this.syncStructure();
     const action = this.resolveAction(key);
     if (!action) return false;
@@ -359,9 +359,34 @@ export class ConfigModal {
       requestRender: this.requestRender,
       setStatus: (m: string) => { this.statusMessage = m; },
       close: () => this.close(),
+      jumpToRow: (tabId: string, rowId: string) => this.jumpToRow(tabId, rowId),
     };
     this.surface?.onAction?.(action.id, fullCtx);
     return true;
+  }
+
+  /**
+   * In-surface "jump": switch the active tab (by id) and select a specific
+   * row (by id) within it — the mechanism a surface's own action handler
+   * uses to move the user from one tab to a specific row in another (e.g.
+   * the Memory modal's Proposals tab jumping to an affected record in the
+   * Review Queue tab). An interaction boundary (re-syncs structure first,
+   * same as `_switchTab`). A no-op if either id is absent from the
+   * freshly-synced structure.
+   */
+  jumpToRow(tabId: string, rowId: string): void {
+    this._clearConfirm();
+    this.filterActive = false;
+    this.filterQuery = '';
+    this.syncStructure();
+    const tab = this.frozenView?.tabs.find((t) => t.id === tabId);
+    if (!tab) return;
+    if (!tab.rows.some((r) => r.id === rowId && r.selectable !== false)) return;
+    this.activeTabId = tabId;
+    this.selectedRowId = rowId;
+    this.scrollOffset = 0;
+    this.statusMessage = '';
+    this._clampScroll();
   }
 
   /** Clear a pending confirm when the user navigates or presses an unrelated key. */
@@ -442,7 +467,7 @@ export class ConfigModal {
     });
 
     const visible = this.visibleRows;
-    const windowed = allRows.slice(this.scrollOffset, this.scrollOffset + visible);
+    const windowed = this._windowRowsByLineBudget(allRows, this.scrollOffset, visible, labelWrapWidth);
 
     // item 1: while filtering, the surface's own action/tab hints are
     // unreliable (their printable-letter keys are captured by the filter
@@ -503,6 +528,44 @@ export class ConfigModal {
     const lastIdx = clamped.length - 1;
     clamped[lastIdx] = `${truncateDisplay(clamped[lastIdx]!, Math.max(1, width - 1))}…`;
     return clamped.join('\n');
+  }
+
+  /**
+   * Modal sizing rule (owner, zero tolerance: a modal/list must never clip
+   * its full descriptive text — size to content or scroll, never clip).
+   * `scrollOffset`/`visible` are ROW-count based, which is exactly right when
+   * every row wraps to one line — but ModalFactory renders each row's WRAPPED
+   * lines and then bounds the whole section to a fixed content-row budget
+   * computed from `visible` (see renderConfigModal's targetContentRows). A
+   * row whose label wraps to MULTIPLE lines can therefore push the total past
+   * that budget, and the LAST row handed to the renderer gets cut off
+   * mid-line instead of being deferred to the next scroll page — the
+   * clipping hazard this closes.
+   *
+   * Windows `rows` starting at `scrollOffset`, greedily including whole rows
+   * while their CUMULATIVE wrapped-line count (at `wrapWidth`) stays within
+   * the `visible` line budget. Always includes at least the first candidate
+   * row so the view is never empty — a single row that alone exceeds the
+   * budget is shown in full rather than replaced with nothing; only a
+   * SUBSEQUENT row that would overflow is deferred to scrolling instead of
+   * being rendered partially.
+   */
+  private _windowRowsByLineBudget(
+    rows: readonly ConfigModalRenderRow[],
+    scrollOffset: number,
+    visible: number,
+    wrapWidth: number,
+  ): ConfigModalRenderRow[] {
+    const candidates = rows.slice(scrollOffset);
+    const out: ConfigModalRenderRow[] = [];
+    let usedLines = 0;
+    for (const row of candidates) {
+      const lineCount = Math.max(1, wrapText(row.label, wrapWidth).length);
+      if (out.length > 0 && usedLines + lineCount > visible) break;
+      out.push(row);
+      usedLines += lineCount;
+    }
+    return out;
   }
 
   /** Footer text for the active filter: the query + a truthful match count. */

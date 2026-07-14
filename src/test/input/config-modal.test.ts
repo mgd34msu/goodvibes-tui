@@ -248,6 +248,77 @@ describe('ConfigModal host', () => {
     expect(fired).toEqual(['stop']);
   });
 
+  // jumpToRow — the in-surface "jump" a surface's own onAction drives (e.g.
+  // the Memory modal's Proposals tab jumping to an affected record in the
+  // Review Queue tab), host-constructed and handed to onAction as
+  // ctx.jumpToRow — never something a caller of fireAction supplies.
+  describe('jumpToRow (in-surface jump)', () => {
+    function twoTabSurface(): ConfigModalSurface {
+      return makeSurface({
+        view: () => ({ title: 'T', tabs: [
+          { id: 'a', label: 'A', rows: [{ id: 'a1', label: 'A1' }] },
+          { id: 'b', label: 'B', rows: [
+            { id: 'b1', label: 'B1' },
+            { id: 'b2', label: 'B2' },
+            { id: 'note', label: 'a note', selectable: false },
+          ] },
+        ] }),
+        actions: [{ key: 'v', id: 'jump', label: 'jump', enabledFor: (row) => row !== null }],
+        onAction: (id, ctx) => { if (id === 'jump') ctx.jumpToRow?.('b', 'b2'); },
+      });
+    }
+
+    test('switches the active tab and selects the named row', () => {
+      const modal = new ConfigModal();
+      modal.open(twoTabSurface());
+      expect(modal.getActiveTabId()).toBe('a');
+      expect(modal.fireAction('v', ctxNoop())).toBe(true);
+      expect(modal.getActiveTabId()).toBe('b');
+      expect(modal.getSelectedRowId()).toBe('b2');
+    });
+
+    test('is a no-op when the target tab id does not exist in the current structure', () => {
+      const modal = new ConfigModal();
+      const surface = makeSurface({
+        view: () => ({ title: 'T', tabs: [{ id: 'a', label: 'A', rows: [{ id: 'a1', label: 'A1' }] }] }),
+        actions: [{ key: 'v', id: 'jump', label: 'jump' }],
+        onAction: (id, ctx) => { if (id === 'jump') ctx.jumpToRow?.('no-such-tab', 'a1'); },
+      });
+      modal.open(surface);
+      expect(modal.fireAction('v', ctxNoop())).toBe(true);
+      expect(modal.getActiveTabId()).toBe('a'); // unchanged — the target tab never existed
+    });
+
+    test('is a no-op when the target row id does not exist in the target tab', () => {
+      const modal = new ConfigModal();
+      const surface = makeSurface({
+        view: () => ({ title: 'T', tabs: [
+          { id: 'a', label: 'A', rows: [{ id: 'a1', label: 'A1' }] },
+          { id: 'b', label: 'B', rows: [{ id: 'b1', label: 'B1' }] },
+        ] }),
+        actions: [{ key: 'v', id: 'jump', label: 'jump' }],
+        onAction: (id, ctx) => { if (id === 'jump') ctx.jumpToRow?.('b', 'no-such-row'); },
+      });
+      modal.open(surface);
+      expect(modal.fireAction('v', ctxNoop())).toBe(true);
+      expect(modal.getActiveTabId()).toBe('a'); // unchanged — the target row never existed on tab 'b'
+    });
+
+    test('is a no-op for a non-selectable row (a jump must land on something the user can act on)', () => {
+      const modal = new ConfigModal();
+      const surface = twoTabSurface();
+      // Re-point the jump at the tab's non-selectable info row.
+      const surfaceWithBadJump = makeSurface({
+        view: surface.buildView,
+        actions: surface.actions,
+        onAction: (id, ctx) => { if (id === 'jump') ctx.jumpToRow?.('b', 'note'); },
+      });
+      modal.open(surfaceWithBadJump);
+      expect(modal.fireAction('v', ctxNoop())).toBe(true);
+      expect(modal.getActiveTabId()).toBe('a'); // unchanged — 'note' is not selectable
+    });
+  });
+
   test('onOpen/onClose fire exactly once and drive live refresh', () => {
     let opens = 0;
     let closes = 0;
@@ -495,5 +566,73 @@ describe('ConfigModal host — wrap-clamp overlay (item 2)', () => {
     const frameB = renderConfigModal(modal, 90, 24);
     expect(frameB.length).toBe(frameA.length);
     expect(text(frameB)).toContain('…');
+  });
+});
+
+// ── Modal sizing rule (owner, zero tolerance): a modal/list must never clip
+// its full descriptive text — size to content or scroll, never clip. Before
+// this fix, row-count-based scroll windowing (`visible` rows sliced off
+// `allRows`) assumed one rendered line per row; ModalFactory then bounds the
+// WRAPPED lines to a fixed content-row budget (renderConfigModal's
+// targetContentRows), so a row that wraps to multiple lines could push a
+// LATER row's content past that budget and have it silently cut off
+// mid-line by ModalFactory.createModal's `sectionLines.slice(0,
+// targetContentRows)` — a real, reproduced bug (confirmed against the
+// planning-modal golden fixture, which had been rendering exactly this kind
+// of truncated row prior to this fix; its golden was re-baselined
+// accordingly). `_windowRowsByLineBudget` closes this by windowing on
+// CUMULATIVE WRAPPED LINES rather than raw row count.
+describe('ConfigModal host — line-budget row windowing (modal sizing rule)', () => {
+  test('a row that wraps to multiple lines is shown in FULL (label untouched, no ellipsis); a later row that would overflow the line budget is deferred to scrolling instead of being cut off', () => {
+    const modal = new ConfigModal();
+    modal.setViewportRows(3); // exactly the host's floor (setViewportRows clamps to a minimum of 3)
+    modal.open(makeSurface({
+      view: () => ({ title: 'T', tabs: [{ id: 'a', label: 'A', rows: [
+        // Wraps to 4 lines at width 20 (verified: "a label long enough" /
+        // "to wrap across three" / "lines at this narrow" / "width here") —
+        // already past the 3-line budget on its own.
+        { id: 'r1', label: 'a label long enough to wrap across three lines at this narrow width here' },
+        { id: 'r2', label: 'second row' },
+        { id: 'r3', label: 'third row' },
+      ] }] }),
+    }));
+    const model = modal.getRenderModel(20);
+    // r1 alone already exceeds the 3-line budget — shown in full anyway (a
+    // lone overflowing row is rendered whole, never replaced with nothing —
+    // only a SUBSEQUENT row is deferred), so r2/r3 have no room left at all.
+    expect(model.rows.map((r) => r.id)).toEqual(['r1']);
+    expect(model.rows[0]!.label).toBe('a label long enough to wrap across three lines at this narrow width here');
+    expect(model.rows[0]!.label).not.toContain('…');
+  });
+
+  test('every row wrapping to exactly one line behaves identically to plain row-count windowing (no behavior change in the common case)', () => {
+    const modal = new ConfigModal();
+    modal.setViewportRows(2); // clamped up to the host's floor of 3 rows/lines
+    modal.open(makeSurface({
+      view: () => ({ title: 'T', tabs: [{ id: 'a', label: 'A', rows: [
+        { id: 'r1', label: 'one' },
+        { id: 'r2', label: 'two' },
+        { id: 'r3', label: 'three' },
+        { id: 'r4', label: 'four' },
+      ] }] }),
+    }));
+    const model = modal.getRenderModel(80);
+    expect(model.rows.map((r) => r.id)).toEqual(['r1', 'r2', 'r3']); // exactly the row-count-based window (floor of 3)
+  });
+
+  test('a two-line row followed by a one-line row: both fit within the budget and both are shown in full', () => {
+    const modal = new ConfigModal();
+    modal.setViewportRows(3);
+    modal.open(makeSurface({
+      view: () => ({ title: 'T', tabs: [{ id: 'a', label: 'A', rows: [
+        { id: 'r1', label: 'a label that wraps to two lines here' }, // 2 lines at width 20
+        { id: 'r2', label: 'second row' }, // 1 line — 2 + 1 = 3, exactly the budget
+        { id: 'r3', label: 'third row' }, // would push to 4 — deferred
+      ] }] }),
+    }));
+    const model = modal.getRenderModel(20);
+    expect(model.rows.map((r) => r.id)).toEqual(['r1', 'r2']);
+    expect(model.rows[0]!.label).not.toContain('…');
+    expect(model.rows[1]!.label).toBe('second row');
   });
 });
