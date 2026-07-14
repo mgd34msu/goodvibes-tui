@@ -9,7 +9,7 @@
  * printed/QR link uses, so the link and the persisted origin always agree.
  */
 import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
-import { resolveRuntimeEndpointBinding } from './endpoints.ts';
+import { resolveRuntimeEndpointBinding } from '../cli/endpoints.ts';
 import { stableUrlHostForBindHost, type ResolvedStableHost, type StableHostInputs } from './stable-host.ts';
 
 export interface PairingWebOrigin {

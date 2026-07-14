@@ -7,7 +7,7 @@ import type {
   ConfigModalView,
 } from '../../input/config-modal-types.ts';
 import type { MintedPairingToken, PublicPairingToken } from '@pellux/goodvibes-sdk/platform/pairing';
-import { formatDeviceLine, shortTokenId } from '../../cli/pairing-devices.ts';
+import { formatDeviceLine, shortTokenId } from '../../core/pairing-devices.ts';
 
 // ---------------------------------------------------------------------------
 // Paired Devices — the settings security-domain device/token management surface.

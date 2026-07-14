@@ -7,7 +7,7 @@ import { ChannelDeliveryRouter, ChannelPolicyManager, type ChannelPluginRegistry
 import { ApprovalBroker, GatewayMethodCatalog, SharedSessionBroker } from '@pellux/goodvibes-sdk/platform/control-plane';
 import { StepUpService } from '@pellux/goodvibes-sdk/daemon';
 import { PairingTokenManager } from '@pellux/goodvibes-sdk/platform/pairing';
-import { resolvePairingWebOrigin } from '../cli/pairing-origin.ts';
+import { resolvePairingWebOrigin } from '../core/pairing-origin.ts';
 import { attachWsOnlyGatewayVerbHandlers, createArchivableFleetRegistry } from '@pellux/goodvibes-terminal-shell';
 import { WatcherRegistry } from '@pellux/goodvibes-sdk/platform/watchers';
 import { ArtifactStore } from '@pellux/goodvibes-sdk/platform/artifacts';
@@ -137,8 +137,7 @@ export interface RuntimeServices {
   readonly serviceRegistry: ServiceRegistry;
   readonly secretsManager: SecretsManager;
   readonly stepUpService: StepUpService;
-  /** Per-device pairing tokens (list/mint/rename/revoke/migrate/revoke-shared); backs the pairing.tokens.* verbs and the settings device surface. Mirrors the SDK composition. */
-  readonly pairingTokens: PairingTokenManager;
+  readonly pairingTokens: PairingTokenManager; // backs pairing.tokens.* verbs + the settings device surface (mirrors the SDK composition)
   readonly subscriptionManager: SubscriptionManager;
   readonly localUserAuthManager: UserAuthManager;
   readonly profileManager: ProfileManager;
@@ -617,14 +616,10 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
     // -> catalog -> unknown); unknown/subscription yields null, never $0. Mirrors the SDK composition.
     priceUsage: (model, usage) => (model ? computeUsageCostUsd(providerRegistry.resolveModelPricing(model), usage) : null),
   });
-  const modeManager = new ModeManager();
-  const fileUndoManager = new FileUndoManager();
+  const modeManager = new ModeManager(); const fileUndoManager = new FileUndoManager();
   const workspaceCheckpointManager = createWorkspaceCheckpointing({ workspaceRoot: workingDirectory, runtimeBus: options.runtimeBus, configManager });
 
-  // Shared terminal-shell wrapper over the SDK's registerGatewayVerbGroups (see gateway-verbs.ts): 501s the ws-only
-  // family without it. principals.*/channels.profiles.*/ci.* register unconditionally; checkin.* only with
-  // channelDeliveryRouter/providerRegistry/automationManager/sessionLister ALL present; fleet needs-input push gated by
-  // runtimeBus/sessionPresence (fleet-needs-input-push.ts). conversationRewindPort serves conversation-scope rewind live.
+  // Terminal-shell wrapper over the SDK registerGatewayVerbGroups (gateway-verbs.ts); checkin.*/fleet-needs-input/pairing.* register only when their deps are present.
   attachWsOnlyGatewayVerbHandlers(gatewayMethods, { processRegistry, workspaceCheckpointManager, conversationRewindPort: createSessionConversationRewindPort(), sessionBroker, secretsManager, stepUpService, approvalBroker, requestApproval: (input) => approvalBroker.requestApproval(input), watcherRegistry, userPermissionRuleStore, shellPaths, configManager, runtimeStore: options.runtimeStore, channelDeliveryRouter, providerRegistry, automationManager, sessionLister: sessionBroker, sessionIntake: sessionBroker, workingDirectory, memoryRegistry, pairingTokens, relayAvailable: () => configManager.get('relay.enabled') === true, pairingWebOrigin: () => resolvePairingWebOrigin(configManager).origin, ...wireFleetNeedsInputPush({ registry: processRegistry, runtimeBus: options.runtimeBus, sessionBroker }) });
   const integrationHelpers = new IntegrationHelperService({
     workingDirectory,

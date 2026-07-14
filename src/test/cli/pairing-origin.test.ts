@@ -1,6 +1,6 @@
 import { describe, test, expect } from 'bun:test';
-import { resolvePairingWebOrigin, ensurePublicBaseUrl, isHttpOnLan } from '../../cli/pairing-origin.ts';
-import type { StableHostInputs } from '../../cli/stable-host.ts';
+import { resolvePairingWebOrigin, ensurePublicBaseUrl, isHttpOnLan } from '../../core/pairing-origin.ts';
+import type { StableHostInputs } from '../../core/stable-host.ts';
 
 /** Minimal config double: a map of keys to values, plus a setDynamic recorder. */
 function fakeConfig(initial: Record<string, unknown>) {

@@ -4,8 +4,8 @@ import type { ConfigModalSurface, ConfigModalView } from '../input/config-modal-
 import { createProviderRuntimeInspectionQuery } from '../runtime/ui-service-queries.ts';
 import { createRuntimeProviderApi } from '@/runtime/index.ts';
 import { copyToClipboard } from '../utils/clipboard.ts';
-import { ensurePublicBaseUrl } from '../cli/pairing-origin.ts';
-import { availablePairingOffers, mintPairingHandoff, defaultPairingTokenName } from '../cli/pairing-handoff.ts';
+import { ensurePublicBaseUrl } from '../core/pairing-origin.ts';
+import { availablePairingOffers, mintPairingHandoff, defaultPairingTokenName } from '../core/pairing-handoff.ts';
 // ── Providers & Connectivity + Security subset ────────────────────────────────
 import { createServicesModalSurface } from './modals/services-modal.ts';
 import { createSubscriptionModalSurface } from './modals/subscription-modal.ts';

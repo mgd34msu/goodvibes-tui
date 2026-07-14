@@ -16,9 +16,9 @@ import {
   generateQrMatrix,
   renderQrToString,
 } from '@pellux/goodvibes-sdk/platform/pairing';
-import { ensurePublicBaseUrl } from '../cli/pairing-origin.ts';
-import { availablePairingOffers } from '../cli/pairing-handoff.ts';
-import { formatPairingOffers, PAIRING_HTTP_LAN_POSTURE } from '../cli/pairing-offers.ts';
+import { ensurePublicBaseUrl } from '../core/pairing-origin.ts';
+import { availablePairingOffers } from '../core/pairing-handoff.ts';
+import { formatPairingOffers, PAIRING_HTTP_LAN_POSTURE } from '../core/pairing-offers.ts';
 import { workspaceOperatorTokenCandidates } from '../runtime/operator-token-cleanup.ts';
 import {
   scan,
