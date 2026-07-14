@@ -6,7 +6,7 @@
 
 # Command Reference
 
-GoodVibes ships **143** built-in slash commands across **68** categories. Every command below is generated directly from the command registry, so this list is always complete and current. Type a command in the composer prefixed with `/`, or press `Ctrl+K` (or run `/palette`) to search them all in the command palette.
+GoodVibes ships **144** built-in slash commands across **69** categories. Every command below is generated directly from the command registry, so this list is always complete and current. Type a command in the composer prefixed with `/`, or press `Ctrl+K` (or run `/palette`) to search them all in the command palette.
 
 ## Categories
 
@@ -62,6 +62,7 @@ GoodVibes ships **143** built-in slash commands across **68** categories. Every 
 - [Remote](#remote) — 2
 - [Scheduling](#scheduling) — 1
 - [Secrets](#secrets) — 1
+- [Security](#security) — 1
 - [Services](#services) — 1
 - [Session Content](#session-content) — 10
 - [Sessions & Replay](#sessions-replay) — 3
@@ -413,7 +414,7 @@ GoodVibes ships **143** built-in slash commands across **68** categories. Every 
 
 | Command | Aliases | Usage | Description |
 | --- | --- | --- | --- |
-| `/qrcode` | `/qr`, `/pair` | `[regenerate]` | Open the companion-app pairing modal (QR code), or regenerate the pairing token |
+| `/qrcode` | `/qr`, `/pair` | `[regenerate]` | Open the device-pairing modal (QR deep link + offers); each open mints a fresh device token |
 
 ## Relay
 
@@ -439,6 +440,12 @@ GoodVibes ships **143** built-in slash commands across **68** categories. Every 
 | Command | Aliases | Usage | Description |
 | --- | --- | --- | --- |
 | `/secret` | — | `/secret <NAME>` | Enter a secret with concealed (masked) input and store it as an environment variable — plaintext never enters the transcript |
+
+## Security
+
+| Command | Aliases | Usage | Description |
+| --- | --- | --- | --- |
+| `/devices` | `/device` | `[list\|rename <id> <name>\|revoke <id>\|migrate-shared [name]\|revoke-shared]` | Manage paired-device tokens (list, rename, revoke, migrate-shared) |
 
 ## Services
 

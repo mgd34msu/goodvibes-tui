@@ -239,6 +239,7 @@ export function createBootstrapShell(options: BootstrapShellOptions): BootstrapS
 
   const commandContext: CommandContext = createBootstrapCommandContext({
     configManager,
+    pairingTokens: services.pairingTokens,
     providerRegistry: services.providerRegistry,
     conversation,
     runtime,

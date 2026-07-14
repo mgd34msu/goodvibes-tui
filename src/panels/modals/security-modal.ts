@@ -74,6 +74,7 @@ class SecurityModalSurface implements ConfigModalSurface {
   readonly actions = [
     { key: 'f', id: 'preflight', label: 'preflight' },
     { key: 'i', id: 'jumpToIncident', label: 'jump to incident', enabledFor: () => Boolean(this.deps.readModel.getSnapshot().latestIncident) },
+    { key: 'd', id: 'manageDevices', label: 'manage devices' },
     { key: 'r', id: 'refresh', label: 'refresh audit' },
   ];
 
@@ -170,6 +171,11 @@ class SecurityModalSurface implements ConfigModalSurface {
     if (id === 'jumpToIncident' && this.deps.readModel.getSnapshot().latestIncident) {
       void ctx.executeCommand?.('panel', ['open', 'incident']);
       ctx.setStatus('Opened the incident surface (fleet).');
+      return;
+    }
+    if (id === 'manageDevices') {
+      ctx.openModal?.('devices-modal');
+      ctx.setStatus('Opened paired-device management.');
     }
   }
 }
