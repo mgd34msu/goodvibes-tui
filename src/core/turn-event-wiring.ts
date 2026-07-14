@@ -1,6 +1,7 @@
 import type { UiRuntimeEvents, RuntimeEventBus } from '@/runtime/index.ts';
 import { buildPersistedSessionContext, persistConversation } from '@/runtime/index.ts';
 import { buildCompactionReceiptBlock } from './compaction-receipt.ts';
+import { formatTurnBudgetOutcome } from './turn-budget-outcome.ts';
 import { persistTurnAnchors, recordTurnAnchor, summarizeTurnLabel } from './rewind-turn-anchors.ts';
 import { logger } from '@pellux/goodvibes-sdk/platform/utils';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
@@ -290,6 +291,11 @@ export function wireTurnEventHandlers(
         // chain/owner/cohort surfaces.
         if (payload.failureKind === 'cancelled') {
           notifyCompletion('GoodVibes — WRFC chain cancelled', `chain ${payload.chainId.slice(0, 12)} cancelled: ${payload.reason}`, FORCE_NOTIFY_DURATION_MS);
+        } else if (payload.failureKind === 'max_turns') {
+          // A turn-budget exhaustion is a spent ceiling, not an infrastructure
+          // failure — narrate the limit and where it came from, from the typed
+          // event fields, never a regex of the prose reason.
+          notifyCompletion('GoodVibes — WRFC chain hit its turn budget', `chain ${payload.chainId.slice(0, 12)} ${formatTurnBudgetOutcome({ limit: payload.turnLimit, source: payload.turnLimitSource })}`, FORCE_NOTIFY_DURATION_MS);
         } else {
           const kindLabel = payload.failureKind === 'transport' ? 'transient transport error' : payload.reason;
           notifyCompletion('GoodVibes — WRFC chain failed', `chain ${payload.chainId.slice(0, 12)} failed: ${kindLabel}`, FORCE_NOTIFY_DURATION_MS);
