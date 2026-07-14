@@ -1,6 +1,5 @@
-import { homedir, networkInterfaces } from 'node:os';
+import { homedir } from 'node:os';
 import { join } from 'node:path';
-import { readFileSync } from 'node:fs';
 import { ConfigManager, resolveDaemonEnabled } from '@pellux/goodvibes-sdk/platform/config';
 import { formatProviderModel, getModelIdFromProviderModel, getProviderIdFromModel } from '../config/provider-model.ts';
 import { RuntimeEventBus, GlobalNetworkTransportInstaller } from '@/runtime/index.ts';
@@ -13,12 +12,13 @@ import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 import {
   getOrCreateCompanionToken,
   pruneStaleOperatorTokens,
-  buildCompanionConnectionInfo,
-  encodeConnectionPayload,
-  formatConnectionBlock,
+  buildPairingHandoffLink,
   generateQrMatrix,
   renderQrToString,
 } from '@pellux/goodvibes-sdk/platform/pairing';
+import { ensurePublicBaseUrl } from '../cli/pairing-origin.ts';
+import { availablePairingOffers } from '../cli/pairing-handoff.ts';
+import { formatPairingOffers, PAIRING_HTTP_LAN_POSTURE } from '../cli/pairing-offers.ts';
 import { workspaceOperatorTokenCandidates } from '../runtime/operator-token-cleanup.ts';
 import {
   scan,
@@ -50,36 +50,6 @@ type DaemonCliTokens = {
   readonly daemonToken: string | undefined;
   readonly httpToken: string | undefined;
 };
-
-function getLocalNetworkIp(): string {
-  try {
-    const nets = networkInterfaces();
-    for (const name of Object.keys(nets)) {
-      for (const net of nets[name] ?? []) {
-        if (net.family === 'IPv4' && !net.internal) {
-          return net.address;
-        }
-      }
-    }
-  } catch {
-    return 'localhost';
-  }
-  return 'localhost';
-}
-
-function readBootstrapPassword(credentialPath: string): string | undefined {
-  try {
-    const content = readFileSync(credentialPath, 'utf-8');
-    for (const line of content.split('\n')) {
-      if (line.startsWith('password=')) {
-        return line.slice('password='.length).trim();
-      }
-    }
-  } catch {
-    // credential file may not exist yet
-  }
-  return undefined;
-}
 
 function resolveDaemonCliOwnership(): DaemonCliOwnership {
   return {
@@ -312,29 +282,31 @@ async function main(): Promise<void> {
     httpListener: config.get('danger.httpListener'),
   });
 
-  // Print companion connection info + QR code to stdout.
-  // Use the config-driven control plane port, not a hardcoded default.
-  const daemonPort = config.get('controlPlane.port');
-  const configuredDaemonHost = String(process.env.GOODVIBES_DAEMON_HOST ?? getLocalNetworkIp());
-  const daemonHost = configuredDaemonHost === '0.0.0.0' || configuredDaemonHost === '::'
-    ? getLocalNetworkIp()
-    : configuredDaemonHost;
-  const daemonUrl = `http://${daemonHost}:${daemonPort}`;
-  const bootstrapPassword = readBootstrapPassword(userAuth.getBootstrapCredentialPath());
-  const connectionInfo = buildCompanionConnectionInfo({
-    daemonUrl,
-    token: companionTokenRecord.token,
-    password: bootstrapPassword,
-    // Without this the SDK defaults the printed banner header to v0.0.0 —
-    // the visible version must be this binary's real version.
-    version: VERSION,
-    surface: 'tui',
+  // Print a device-pairing QR to stdout. The QR encodes the canonical
+  // `#pair=<token>` deep link the web app consumes — a camera scan opens it
+  // already signed in. No raw JSON connection blob is printed. This is also the
+  // one place web.publicBaseUrl is frozen from the stable-name resolution (never
+  // clobbering a user-set value), so the printed origin survives a DHCP change.
+  // The daemon's shared companion token rides as the pairing token; a device can
+  // later migrate to its own per-device token from /settings → security → devices.
+  const webOrigin = ensurePublicBaseUrl(config);
+  const offers = availablePairingOffers({
+    relayEnabled: config.get('relay.enabled') === true,
+    stepUpAvailable: true,
   });
-  const payload = encodeConnectionPayload(connectionInfo);
-  const qrMatrix = generateQrMatrix(payload);
-  const qrString = renderQrToString(qrMatrix);
+  const deepLink = buildPairingHandoffLink({ webOrigin: webOrigin.origin, token: companionTokenRecord.token, offers });
+  const qrString = renderQrToString(generateQrMatrix(deepLink));
+  const bannerLines = [
+    `GoodVibes daemon ${VERSION} — scan to pair a device (opens the web app signed in):`,
+    '',
+    `  ${webOrigin.origin}`,
+    '',
+    ...(offers.length > 0 ? ['Offers (each declinable in the web app):', ...formatPairingOffers(offers), ''] : []),
+    ...(webOrigin.httpOnLan ? [PAIRING_HTTP_LAN_POSTURE, ''] : []),
+    qrString,
+  ];
   // eslint-disable-next-line no-console
-  console.log(formatConnectionBlock(connectionInfo, qrString));
+  console.log(bannerLines.join('\n'));
 }
 
 void main().catch(async (error) => {

@@ -5,12 +5,15 @@ import { BUILTIN_SECRET_PROVIDER_SOURCES, describeSecretRef, isSecretRefInput, r
 import { getSubscriptionProviderConfig, listAvailableSubscriptionProviders } from '@pellux/goodvibes-sdk/platform/config';
 import { beginOpenAICodexLogin, exchangeOpenAICodexCode } from '@pellux/goodvibes-sdk/platform/config';
 import { inspectProviderAuth } from '@/runtime/index.ts';
-import { getOrCreateCompanionToken, buildCompanionConnectionInfo, encodeConnectionPayload, formatConnectionBlock } from '@pellux/goodvibes-sdk/platform/pairing';
-import { generateQrMatrix, renderQrToString } from '@pellux/goodvibes-sdk/platform/pairing';
+import { generateQrMatrix, renderQrToString, PAIRING_HANDOFF_OFFER_KINDS, type PairingHandoffOfferKind } from '@pellux/goodvibes-sdk/platform/pairing';
+import { ensurePublicBaseUrl } from './pairing-origin.ts';
+import { formatPairingOffers, PAIRING_HTTP_LAN_POSTURE } from './pairing-offers.ts';
+import { defaultPairingTokenName } from './pairing-handoff.ts';
+import { stableUrlHostForBindHost } from './stable-host.ts';
 import { resolveRuntimeEndpointBinding } from './endpoints.ts';
 import { classifyBindPosture, isNetworkFacing } from './network-posture.ts';
 import type { CliCommandRuntime } from './types.ts';
-import { extractAuthorizationCode, formatJsonOrText, hasCommandFlag, openBrowser, probeTcp, readAuthPaths, runNonInteractiveAgent, urlHostForBindHost, withRuntimeServices, yesNo } from './management-utils.ts';
+import { extractAuthorizationCode, formatJsonOrText, hasCommandFlag, openBrowser, probeTcp, readAuthPaths, readOptionValue, runNonInteractiveAgent, withRuntimeServices, yesNo } from './management-utils.ts';
 
 export async function renderSubscriptions(runtime: CliCommandRuntime): Promise<string> {
   return await withRuntimeServices(runtime, async (services) => {
@@ -368,19 +371,42 @@ export async function renderControlPlaneStatus(runtime: CliCommandRuntime): Prom
   return formatControlPlaneStatus(runtime, await buildControlPlaneStatusResult(runtime));
 }
 
+interface PairingHandoffCreateResult {
+  readonly token: { readonly id: string; readonly name: string; readonly token: string };
+  readonly offers: readonly { readonly kind: PairingHandoffOfferKind }[];
+  readonly fragment: string;
+  readonly deepLink?: string | undefined;
+}
+
 export async function renderPairing(runtime: CliCommandRuntime): Promise<string> {
-  const daemonHomeDir = join(runtime.homeDirectory, '.goodvibes', 'daemon');
-  const tokenRecord = getOrCreateCompanionToken('tui', { daemonHomeDir });
-  const binding = resolveRuntimeEndpointBinding(runtime.configManager, 'controlPlane');
-  const daemonUrl = `http://${urlHostForBindHost(binding.host)}:${binding.port}`;
-  const info = buildCompanionConnectionInfo({
-    daemonUrl,
-    token: tokenRecord.token,
-    username: 'admin',
+  return await withRuntimeServices(runtime, async (services) => {
+    // Freeze a stable web origin once (never clobbering a user-set value) so the
+    // printed link and the daemon's own handoff origin agree and survive a DHCP
+    // lease change where a stable name exists.
+    const webOrigin = ensurePublicBaseUrl(runtime.configManager);
+    const name = readOptionValue(runtime.cli.commandArgs, 'name') ?? defaultPairingTokenName();
+    // Mint through the canonical hand-off verb: it mints a fresh per-device token
+    // and returns the exact `#pair=<token>` deep link the web app consumes. The
+    // daemon filters the requested offer set down to what it can actually satisfy.
+    const result = (await services.gatewayMethods.invoke('pairing.handoff.create', {
+      body: { name, offers: [...PAIRING_HANDOFF_OFFER_KINDS] },
+      context: { principalId: 'admin', principalKind: 'user', admin: true },
+    })) as PairingHandoffCreateResult;
+    const link = result.deepLink ?? result.fragment;
+    const qr = renderQrToString(generateQrMatrix(link));
+    const lines: string[] = [
+      'Scan to pair a device — the QR opens the web app already signed in:',
+      '',
+      `  ${link}`,
+      `  Token name: ${result.token.name}  (rename or revoke later in /settings → security → devices)`,
+    ];
+    if (result.offers.length > 0) {
+      lines.push('', 'Offers carried in this pairing (each declinable in the web app):', ...formatPairingOffers(result.offers.map((o) => o.kind)));
+    }
+    if (webOrigin.httpOnLan) lines.push('', PAIRING_HTTP_LAN_POSTURE);
+    lines.push('', qr);
+    return lines.join('\n');
   });
-  const payload = encodeConnectionPayload(info);
-  const qr = renderQrToString(generateQrMatrix(payload));
-  return [formatConnectionBlock(info, payload), '', qr].join('\n');
 }
 
 export async function renderRemote(runtime: CliCommandRuntime, label: 'remote' | 'bridge'): Promise<string> {
@@ -408,9 +434,11 @@ export function renderWeb(runtime: CliCommandRuntime): string {
   const binding = resolveRuntimeEndpointBinding(runtime.configManager, 'web');
   const publicBaseUrl = String(runtime.configManager.get('web.publicBaseUrl') ?? '');
   const hasEndpointOverride = runtime.cli.flags.hostname !== undefined || runtime.cli.flags.port !== undefined;
+  // Prefer the stable-name resolution over the raw first-non-internal IPv4 so the
+  // printed URL survives a DHCP lease change where a stable name exists.
   const url = !hasEndpointOverride && publicBaseUrl
     ? publicBaseUrl
-    : `http://${urlHostForBindHost(binding.host)}:${binding.port}`;
+    : `http://${stableUrlHostForBindHost(binding.host).host}:${binding.port}`;
   const value = {
     enabled: runtime.configManager.get('web.enabled'),
     ...binding,

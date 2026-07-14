@@ -59,6 +59,8 @@ export interface UiPlatformServices {
   readonly surfaceRegistry: RuntimeServices['surfaceRegistry'];
   readonly subscriptionManager: RuntimeServices['subscriptionManager'];
   readonly secretsManager: SecretsManager;
+  /** Per-device pairing tokens — backs the pairing modal QR and the settings device surface. */
+  readonly pairingTokens: RuntimeServices['pairingTokens'];
   readonly tokenAuditor: RuntimeServices['tokenAuditor'];
   readonly replayEngine: RuntimeServices['replayEngine'];
   readonly webhookNotifier: RuntimeServices['webhookNotifier'];
@@ -188,6 +190,7 @@ export function createUiRuntimeServices(
       surfaceRegistry: runtimeServices.surfaceRegistry,
       subscriptionManager: runtimeServices.subscriptionManager,
       secretsManager: runtimeServices.secretsManager,
+      pairingTokens: runtimeServices.pairingTokens,
       tokenAuditor: runtimeServices.tokenAuditor,
       replayEngine: runtimeServices.replayEngine,
       webhookNotifier: runtimeServices.webhookNotifier,

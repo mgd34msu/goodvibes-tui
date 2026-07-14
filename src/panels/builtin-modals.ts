@@ -1,12 +1,11 @@
-import { networkInterfaces } from 'node:os';
-import { readFileSync } from 'node:fs';
 import type { PanelManager } from './panel-manager.ts';
 import { requireUiServices, type ResolvedBuiltinPanelDeps } from './builtin/shared.ts';
 import type { ConfigModalSurface, ConfigModalView } from '../input/config-modal-types.ts';
 import { createProviderRuntimeInspectionQuery } from '../runtime/ui-service-queries.ts';
 import { createRuntimeProviderApi } from '@/runtime/index.ts';
 import { copyToClipboard } from '../utils/clipboard.ts';
-import { getOrCreateCompanionToken, buildCompanionConnectionInfo } from '@pellux/goodvibes-sdk/platform/pairing';
+import { ensurePublicBaseUrl } from '../cli/pairing-origin.ts';
+import { availablePairingOffers, mintPairingHandoff, defaultPairingTokenName } from '../cli/pairing-handoff.ts';
 // ── Providers & Connectivity + Security subset ────────────────────────────────
 import { createServicesModalSurface } from './modals/services-modal.ts';
 import { createSubscriptionModalSurface } from './modals/subscription-modal.ts';
@@ -171,15 +170,33 @@ export function registerBuiltinModals(manager: PanelManager, deps: ResolvedBuilt
  * Mirrors the retired QrPanel factory's construction.
  */
 function buildPairingConnectionInfo(deps: ResolvedBuiltinPanelDeps): PairingModalConnectionInfo | null {
-  if (!deps.daemonHomeDir) return null;
   try {
-    const daemonHomeDir = deps.daemonHomeDir;
-    const tokenRecord = getOrCreateCompanionToken('tui', { daemonHomeDir });
-    const daemonPort = deps.configManager.get('controlPlane.port');
-    const daemonHost = String(process.env['GOODVIBES_DAEMON_HOST'] ?? getLocalNetworkIp());
-    const daemonUrl = `http://${daemonHost}:${daemonPort}`;
-    const bootstrapPassword = readBootstrapPassword(deps.localUserAuthManager.getBootstrapCredentialPath());
-    return buildCompanionConnectionInfo({ daemonUrl, token: tokenRecord.token, password: bootstrapPassword, surface: 'tui' }) as PairingModalConnectionInfo;
+    const ui = requireUiServices(deps);
+    const configManager = deps.configManager;
+    // Freeze a stable web origin once (never clobbering a user-set value).
+    const webOrigin = ensurePublicBaseUrl(configManager);
+    const offers = availablePairingOffers({
+      relayEnabled: configManager.get('relay.enabled') === true,
+      // The TUI composition always wires a step-up service ⇒ the passkey offer is
+      // presentable; the web app declines it if the device has no authenticator.
+      stepUpAvailable: true,
+    });
+    // Mint a fresh per-device token and encode the canonical `#pair=` deep link —
+    // the same mint the pairing.handoff.create verb performs, no raw JSON blob.
+    const handoff = mintPairingHandoff({
+      pairingTokens: ui.platform.pairingTokens,
+      name: defaultPairingTokenName(),
+      offers,
+      webOrigin: webOrigin.origin,
+    });
+    return {
+      url: webOrigin.origin,
+      token: handoff.token.token,
+      tokenName: handoff.token.name,
+      deepLink: handoff.deepLink ?? handoff.fragment,
+      offers: handoff.offers,
+      httpOnLan: webOrigin.httpOnLan,
+    };
   } catch {
     return null;
   }
@@ -195,24 +212,3 @@ function unwiredSurface(name: string, title: string, reason: string): ConfigModa
   };
 }
 
-function getLocalNetworkIp(): string {
-  const nets = networkInterfaces();
-  for (const name of Object.keys(nets)) {
-    for (const net of nets[name] ?? []) {
-      if (net.family === 'IPv4' && !net.internal) return net.address;
-    }
-  }
-  return 'localhost';
-}
-
-function readBootstrapPassword(credentialPath: string): string | undefined {
-  try {
-    const content = readFileSync(credentialPath, 'utf-8');
-    for (const line of content.split('\n')) {
-      if (line.startsWith('password=')) return line.slice('password='.length).trim();
-    }
-  } catch {
-    // credential file may not exist yet
-  }
-  return undefined;
-}
