@@ -2,23 +2,22 @@
 // memory-provenance.ts — the optional "used N memories" turn chip (owner-ruled
 // 2026-07-13, default OFF).
 //
-// The SDK already records, per turn, which standing-memory records were
-// injected into the prompt (Orchestrator.getTurnInjections() → TurnInjectionRecord
-// with parallel injectedIds / injectedSources arrays). When the memory-provenance
-// setting is ON, a turn that drew on memories shows a small chip naming how many,
-// with a drill-in listing them. When OFF (default), NOTHING is rendered and no
-// context is added — the caller never even asks for the records.
+// The SDK tags each turn payload with the memory-sourced injection ids it drew
+// on: `metadata.memory.recordIds: string[]` (absent when none) — the SAME
+// convention the webui's chip reads, so both surfaces name the same records.
+// When the memory-provenance setting is ON, a turn that used memories shows a
+// small chip naming how many, with a drill-in listing them. When OFF (default),
+// NOTHING is rendered and the metadata is never even read.
 // ---------------------------------------------------------------------------
 
 import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
-import type { TurnInjectionEntry } from '../renderer/turn-injection.ts';
 
 /** TUI-local setting key: show the per-turn memory-provenance chip. Default OFF. */
 export const MEMORY_SHOW_PROVENANCE_CONFIG_KEY = 'memory.showProvenance';
 export const MEMORY_SHOW_PROVENANCE_DEFAULT = false;
 export const MEMORY_SHOW_PROVENANCE_DESCRIPTION =
   'Show a "used N memories" chip on turns that drew on your standing memories, with a drill-in ' +
-  'listing them (Alt+M to expand). Off by default; when off, nothing is rendered and no context is added.';
+  'listing them (Alt+M to expand). Off by default; when off, nothing is rendered and no metadata is read.';
 
 /**
  * Read the memory-provenance toggle defensively. `memory.*` is a TUI-local
@@ -34,31 +33,17 @@ export function readMemoryShowProvenance(configManager: Pick<ConfigManager, 'get
   }
 }
 
-/** The memory-sourced injected ids for one turn. */
-export interface MemoryUse {
-  readonly count: number;
-  readonly ids: readonly string[];
-}
-
 /**
- * The memory-sourced injected ids for one turn. `injectedSources` is parallel
- * to `injectedIds`; a missing/short entry defaults to 'memory' (matching
- * turn-injection.ts), so a memory-only record — the common case — counts every
- * id. Code-index hits are excluded: this chip is about memories specifically.
+ * Extract the memory-sourced record ids a turn drew on, from the SDK's
+ * `metadata.memory.recordIds` convention. Structural (not a named import) so it
+ * reads the field whether or not the pinned SDK's TurnEvent type surfaces it
+ * yet, and yields an empty list for any turn without the field — never a guess,
+ * never a throw.
  */
-export function memoryUseFromEntry(entry: TurnInjectionEntry): MemoryUse {
-  const sources = entry.injectedSources ?? [];
-  const ids = entry.injectedIds.filter((_, i) => (sources[i] ?? 'memory') === 'memory');
-  return { count: ids.length, ids };
-}
-
-/** The most-recent turn that used at least one memory, or null when none did. */
-export function latestMemoryUse(
-  entries: readonly TurnInjectionEntry[],
-): { readonly entry: TurnInjectionEntry; readonly use: MemoryUse } | null {
-  for (let i = entries.length - 1; i >= 0; i--) {
-    const use = memoryUseFromEntry(entries[i]!);
-    if (use.count > 0) return { entry: entries[i]!, use };
-  }
-  return null;
+export function memoryRecordIdsFromTurn(turn: unknown): readonly string[] {
+  const metadata = (turn as { metadata?: unknown } | null | undefined)?.metadata;
+  const memory = (metadata as { memory?: unknown } | null | undefined)?.memory;
+  const recordIds = (memory as { recordIds?: unknown } | null | undefined)?.recordIds;
+  if (!Array.isArray(recordIds)) return [];
+  return recordIds.filter((id): id is string => typeof id === 'string');
 }
