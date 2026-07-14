@@ -6,6 +6,7 @@ import { AutomationDeliveryManager, AutomationManager } from '@pellux/goodvibes-
 import { ChannelDeliveryRouter, ChannelPolicyManager, type ChannelPluginRegistry, type RouteBindingManager, type SurfaceRegistry } from '@pellux/goodvibes-sdk/platform/channels';
 import { ApprovalBroker, GatewayMethodCatalog, SharedSessionBroker } from '@pellux/goodvibes-sdk/platform/control-plane';
 import { StepUpService } from '@pellux/goodvibes-sdk/daemon';
+import { PairingTokenManager } from '@pellux/goodvibes-sdk/platform/pairing';
 import { attachWsOnlyGatewayVerbHandlers, createArchivableFleetRegistry } from '@pellux/goodvibes-terminal-shell';
 import { WatcherRegistry } from '@pellux/goodvibes-sdk/platform/watchers';
 import { ArtifactStore } from '@pellux/goodvibes-sdk/platform/artifacts';
@@ -135,6 +136,8 @@ export interface RuntimeServices {
   readonly serviceRegistry: ServiceRegistry;
   readonly secretsManager: SecretsManager;
   readonly stepUpService: StepUpService;
+  /** Per-device pairing tokens (list/mint/rename/revoke/migrate/revoke-shared); backs the pairing.tokens.* verbs and the settings device surface. Mirrors the SDK composition. */
+  readonly pairingTokens: PairingTokenManager;
   readonly subscriptionManager: SubscriptionManager;
   readonly localUserAuthManager: UserAuthManager;
   readonly profileManager: ProfileManager;
@@ -249,6 +252,7 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
   });
   // Step-up (WebAuthn) ceremony service, shared between the ceremony gateway verbs and the relay gate's verifier.
   const stepUpService = new StepUpService({ secrets: secretsManager });
+  const pairingTokens = new PairingTokenManager(shellPaths.resolveUserPath('control-plane', 'pairing-tokens.json'));
   const subscriptionManager = new SubscriptionManager(shellPaths.resolveUserPath('tui', 'subscriptions.json'));
   const serviceRegistry = new ServiceRegistry(shellPaths.resolveProjectPath('tui', 'services.json'), {
     secretsManager,
@@ -620,7 +624,7 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
   // family without it. principals.*/channels.profiles.*/ci.* register unconditionally; checkin.* only with
   // channelDeliveryRouter/providerRegistry/automationManager/sessionLister ALL present; fleet needs-input push gated by
   // runtimeBus/sessionPresence (fleet-needs-input-push.ts). conversationRewindPort serves conversation-scope rewind live.
-  attachWsOnlyGatewayVerbHandlers(gatewayMethods, { processRegistry, workspaceCheckpointManager, conversationRewindPort: createSessionConversationRewindPort(), sessionBroker, secretsManager, stepUpService, approvalBroker, requestApproval: (input) => approvalBroker.requestApproval(input), watcherRegistry, userPermissionRuleStore, shellPaths, configManager, runtimeStore: options.runtimeStore, channelDeliveryRouter, providerRegistry, automationManager, sessionLister: sessionBroker, sessionIntake: sessionBroker, workingDirectory, memoryRegistry, ...wireFleetNeedsInputPush({ registry: processRegistry, runtimeBus: options.runtimeBus, sessionBroker }) });
+  attachWsOnlyGatewayVerbHandlers(gatewayMethods, { processRegistry, workspaceCheckpointManager, conversationRewindPort: createSessionConversationRewindPort(), sessionBroker, secretsManager, stepUpService, approvalBroker, requestApproval: (input) => approvalBroker.requestApproval(input), watcherRegistry, userPermissionRuleStore, shellPaths, configManager, runtimeStore: options.runtimeStore, channelDeliveryRouter, providerRegistry, automationManager, sessionLister: sessionBroker, sessionIntake: sessionBroker, workingDirectory, memoryRegistry, pairingTokens, ...wireFleetNeedsInputPush({ registry: processRegistry, runtimeBus: options.runtimeBus, sessionBroker }) });
   const integrationHelpers = new IntegrationHelperService({
     workingDirectory,
     homeDirectory,
@@ -723,6 +727,7 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
     serviceRegistry,
     secretsManager,
     stepUpService,
+    pairingTokens,
     subscriptionManager,
     localUserAuthManager,
     profileManager,
