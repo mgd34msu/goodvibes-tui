@@ -13,14 +13,16 @@ import {
 } from '../../daemon/service-commands.ts';
 import {
   resolveConfiguredServiceName,
-  reconcileRedundantLegacyUnit,
   buildManagedDaemonServiceManager,
   legacyUnitPath,
-  INSTALLER_UNIT_MARKER,
   LEGACY_SERVICE_UNIT_NAME,
   MANAGED_SERVICE_NAME,
   type ManagedServiceActionRunner as RuntimeActionRunner,
 } from '../../runtime/legacy-daemon-migration.ts';
+import {
+  reconcileRedundantLegacyUnit,
+  INSTALLER_UNIT_MARKER,
+} from '../../runtime/legacy-daemon-reconcile.ts';
 import { resolveRuntimeEndpointBinding } from '../../cli/endpoints.ts';
 
 describe('resolveConfiguredServiceName — config-honest name for pre-manager callers', () => {
