@@ -533,6 +533,70 @@ legacy_unit_provenance() {
   fi
 }
 
+# The exact Description the product's own unit writer emits (see
+# MANAGED_SERVICE_DESCRIPTION in src/runtime/legacy-daemon-migration.ts) — the
+# fingerprint that identifies a unit written by the in-app install-service /
+# onboarding, which carry no installer marker but are just as platform-owned
+# (the product overwrites its own units freely whenever install-service runs).
+PRODUCT_UNIT_FINGERPRINT='GoodVibes daemon (shared session broker + companion host)'
+
+# Provenance of a CANONICAL unit/plist file:
+# managed (installer marker OR the product writer's fingerprint) |
+# hand-written | unreadable | absent.
+canonical_unit_provenance() {
+  _cp="$1"
+  [ -f "$_cp" ] || { printf 'absent'; return 0; }
+  [ -r "$_cp" ] || { printf 'unreadable'; return 0; }
+  if grep -q "$INSTALLER_MARKER" "$_cp" 2>/dev/null ||
+     grep -q "$PRODUCT_UNIT_FINGERPRINT" "$_cp" 2>/dev/null; then
+    printf 'managed'
+  else
+    printf 'hand-written'
+  fi
+}
+
+# True when a unit/plist file bakes the endpoint flags this generation no
+# longer uses. Released v1.14.0-v1.18.0 in-app installs (and one unreleased
+# installer generation) pinned '--hostname <host> --port <port>' into the
+# launch, snapshotting config-at-install-time — those pins override the
+# controlPlane settings on every boot until the file is re-derived.
+unit_is_endpoint_pinned() {
+  grep -qe '--hostname' -e '--port' "$1" 2>/dev/null
+}
+
+# Upgrade-time content currency for the CANONICAL unit (Linux): a
+# platform-managed unit still carrying pinned endpoint flags is regenerated to
+# the config-derived shape (file + daemon-reload only — the ordinary restart
+# path right after this applies it to a running daemon). A hand-written unit
+# is never rewritten: honest notice only. Runs BEFORE restart_running_daemon
+# so the restart picks up the new content in the same run.
+refresh_pinned_canonical_unit() {
+  [ "$os_tag" = "linux" ] || return 0
+  _rp=$(systemd_daemon_unit_path)
+  [ -f "$_rp" ] || return 0
+  unit_is_endpoint_pinned "$_rp" || return 0
+  case "$(canonical_unit_provenance "$_rp")" in
+    managed)
+      say ""
+      say "Regenerating $SYSTEMD_DAEMON_UNIT: it pins endpoint flags (--hostname/--port) from an older release,"
+      say "  which override the controlPlane settings on every boot. The daemon now resolves its endpoint from"
+      say "  settings at startup."
+      write_systemd_unit "$_rp"
+      command -v systemctl >/dev/null 2>&1 && systemctl --user daemon-reload 2>/dev/null || true
+      say "  rewrote    $_rp (config-derived launch)"
+      if [ "$RESTART_DAEMON" != "1" ]; then
+        say "  NOTE: GOODVIBES_RESTART_DAEMON=0 — the running daemon keeps the old pinned endpoint until restarted."
+      fi
+      ;;
+    hand-written)
+      say ""
+      say "NOTE: $SYSTEMD_DAEMON_UNIT at $_rp pins endpoint flags (--hostname/--port), which override the"
+      say "  controlPlane settings — and the unit is not recognizably platform-managed, so it was left untouched."
+      say "  Remove those flags yourself so the daemon follows your settings."
+      ;;
+  esac
+}
+
 restart_systemd_unit() {
   # restart_systemd_unit <unit> <expected-binary> — returns 0 if it handled a
   # running unit (restarted, replaced, or reported), 1 if no active unit
@@ -1077,6 +1141,26 @@ migrate_legacy_systemd_unit() {
     # then retire the legacy unit.
     say ""
     say "Transferring daemon supervision from $LEGACY_SYSTEMD_DAEMON_UNIT to $SYSTEMD_DAEMON_UNIT ..."
+    # A pre-existing canonical unit that still pins endpoint flags would make
+    # the transfer start a daemon on the WRONG endpoint and retire the legacy
+    # unit that was serving the configured one — behind a receipt that only
+    # verifies liveness. Platform-managed pinned units are re-derived first;
+    # a hand-written pinned unit refuses the transfer honestly.
+    if [ -f "$canonical_path" ] && unit_is_endpoint_pinned "$canonical_path"; then
+      case "$(canonical_unit_provenance "$canonical_path")" in
+        managed)
+          write_systemd_unit "$canonical_path"
+          say "  rewrote    $canonical_path (replaced older pinned endpoint flags with the config-derived launch)"
+          ;;
+        *)
+          say "  NOTE: the existing $SYSTEMD_DAEMON_UNIT pins endpoint flags (--hostname/--port) and is not"
+          say "  recognizably platform-managed — transferring supervision onto it could bind the wrong endpoint."
+          say "  Nothing was changed; remove those flags yourself, or migrate deliberately with:"
+          say "    goodvibes-daemon migrate-service"
+          return 0
+          ;;
+      esac
+    fi
     wrote_canonical=0
     if [ ! -f "$canonical_path" ]; then
       write_systemd_unit "$canonical_path"
@@ -1196,8 +1280,14 @@ migrate_legacy_launchd_plist() {
   plist_path=$(launchd_daemon_plist_path)
   [ -f "$plist_path" ] || return 0
   grep -q "$INSTALLER_MARKER" "$plist_path" 2>/dev/null || return 0
-  # Already the current launch form — nothing to migrate.
-  grep -q -- '--daemon-home' "$plist_path" 2>/dev/null && return 0
+  # Already the current launch form — nothing to migrate. Current means
+  # --daemon-home present AND no pinned endpoint flags: the middle generation
+  # carried --daemon-home PLUS --hostname/--port, and keying the gate on
+  # --daemon-home alone declared those pinned plists current forever.
+  if grep -q -- '--daemon-home' "$plist_path" 2>/dev/null &&
+     ! unit_is_endpoint_pinned "$plist_path"; then
+    return 0
+  fi
 
   # Record the agent's CURRENT load state BEFORE touching anything.
   agent_loaded=0
@@ -1548,6 +1638,10 @@ main() {
   # Install the sqlite-vec addon before restarting the daemon so the restarted
   # process picks it up and semantic vector search is live immediately.
   install_sqlite_vec
+
+  # Bring a platform-managed canonical unit up to the current (config-derived)
+  # launch shape BEFORE the restart below, so the restart applies it.
+  refresh_pinned_canonical_unit
 
   restart_running_daemon
 

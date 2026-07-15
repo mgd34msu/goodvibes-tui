@@ -1136,11 +1136,11 @@ describe('install.sh — supervised transfer from an ACTIVE legacy unit (the dom
     expect(out.stdout).not.toContain('keeps running');
   });
 
-  test('a pre-existing canonical unit file is USED for the transfer, never overwritten', () => {
+  test('a pre-existing UNPINNED canonical unit file is USED for the transfer, never overwritten', () => {
     const t = stageLegacyOnlyActive('gv-transfer-existing-canonical');
-    // A canonical unit file already on disk (e.g. written by the in-app
-    // install-service, currently inactive) with distinctive content.
-    const existing = `[Service]\nExecStart=${t.installDir}/goodvibes-daemon --daemon-home ${t.home} --hostname 127.0.0.1 --port 3500\n`;
+    // A canonical unit file already on disk (currently inactive) with
+    // distinctive content and NO pinned endpoint flags — current launch shape.
+    const existing = `[Service]\nExecStart=${t.installDir}/goodvibes-daemon --daemon-home ${t.home}\nNice=5\n`;
     writeFileSync(t.canonicalPath, existing);
 
     const out = runLib('migrate_legacy_installer_unit', t.env);
@@ -1153,6 +1153,53 @@ describe('install.sh — supervised transfer from an ACTIVE legacy unit (the dom
     expect(readFileSync(t.canonicalPath, 'utf-8')).toBe(existing);
     expect(out.stdout).not.toContain(`wrote      ${t.canonicalPath}`);
     expect(existsSync(t.legacyPath)).toBe(false);
+  });
+
+  test('transfer onto a PINNED platform-managed canonical unit re-derives it first — never starts the stale endpoint behind a verified receipt', () => {
+    // Pins the verifier's re-transfer probe: the pre-existing canonical unit
+    // carries the released v1.18.0 in-app shape (product Description
+    // fingerprint + pinned --hostname 127.0.0.1 --port 3421). The old flow
+    // started it verbatim — binding the pinned endpoint regardless of
+    // settings — passed the liveness verify, and retired the legacy unit
+    // that was serving the configured endpoint.
+    const t = stageLegacyOnlyActive('gv-transfer-pinned-managed');
+    const pinned = [
+      '[Unit]',
+      'Description=GoodVibes daemon (shared session broker + companion host)',
+      '',
+      '[Service]',
+      `ExecStart=${t.installDir}/goodvibes-daemon --daemon-home ${t.home} --hostname 127.0.0.1 --port 3421`,
+      '',
+    ].join('\n');
+    writeFileSync(t.canonicalPath, pinned);
+
+    const out = runLib('migrate_legacy_installer_unit', t.env);
+    expect(out.code).toBe(0);
+
+    expect(out.stdout).toContain(`rewrote    ${t.canonicalPath}`);
+    expect(out.stdout).toContain('retired    goodvibes-daemon.service');
+    const unit = readFileSync(t.canonicalPath, 'utf-8');
+    expect(unit).not.toContain('--hostname');
+    expect(unit).not.toContain('--port');
+    expect(unit).toContain(`ExecStart="${t.installDir}/goodvibes-daemon" --daemon-home "${t.home}"`);
+    expect(existsSync(t.legacyPath)).toBe(false);
+  });
+
+  test('transfer onto a PINNED hand-written canonical unit REFUSES — never binds an unvetted endpoint and never retires the serving legacy', () => {
+    const t = stageLegacyOnlyActive('gv-transfer-pinned-handwritten');
+    const pinned = `[Service]\nExecStart=${t.installDir}/goodvibes-daemon --daemon-home ${t.home} --hostname 10.0.0.9 --port 4000\n`;
+    writeFileSync(t.canonicalPath, pinned);
+
+    const out = runLib('migrate_legacy_installer_unit', t.env);
+    expect(out.code).toBe(0);
+
+    expect(out.stdout).toContain('pins endpoint flags');
+    expect(out.stdout).toContain('Nothing was changed');
+    // Untouched on both sides: legacy still active and serving, canonical verbatim.
+    expect(readFileSync(t.canonicalPath, 'utf-8')).toBe(pinned);
+    expect(existsSync(t.legacyPath)).toBe(true);
+    expect(readFileSync(t.legacyState, 'utf-8')).toContain('active');
+    expect(out.stdout).not.toContain('retired');
   });
 
   test('rollback: when the canonical unit fails to come up, legacy supervision is restored and NOTHING is removed', () => {
@@ -1236,6 +1283,122 @@ describe('install.sh — supervised transfer from an ACTIVE legacy unit (the dom
     } finally {
       chmodSync(t.legacyPath, 0o644);
     }
+  });
+});
+
+/**
+ * Fielded-fleet content currency: units written by released v1.14.0-v1.18.0
+ * (the in-app install-service baked --hostname/--port, snapshotting
+ * config-at-install-time) must be re-derived on upgrade — otherwise the pinned
+ * flags override the controlPlane settings on every boot, forever, while every
+ * display surface shows the configured values the daemon ignores.
+ */
+describe('install.sh — pinned-endpoint canonical units are re-derived on upgrade', () => {
+  const MARKER = '# managed by goodvibes install.sh';
+  const FINGERPRINT = 'Description=GoodVibes daemon (shared session broker + companion host)';
+
+  function stageCanonical(prefix: string, unitContent: string) {
+    const root = scratch(prefix);
+    const home = join(root, 'home');
+    const installDir = join(root, 'bin');
+    const unitDir = join(home, '.config/systemd/user');
+    mkdirSync(installDir, { recursive: true });
+    mkdirSync(unitDir, { recursive: true });
+    const canonicalPath = join(unitDir, 'goodvibes.service');
+    writeFileSync(canonicalPath, unitContent);
+    return {
+      root, home, installDir, canonicalPath,
+      env: {
+        HOME: home,
+        GOODVIBES_INSTALL_DIR: installDir,
+        PATH: `${stubDualUnitServiceBin(root)}:${process.env.PATH ?? ''}`,
+      },
+    };
+  }
+
+  test('an installer-marker unit pinning --hostname/--port is regenerated to the config-derived launch', () => {
+    const t = stageCanonical('gv-refresh-marker', [
+      MARKER,
+      '[Service]',
+      'ExecStart=/x/goodvibes-daemon --daemon-home /h --hostname 127.0.0.1 --port 3421',
+      '',
+    ].join('\n'));
+
+    const out = runLib('refresh_pinned_canonical_unit', t.env);
+    expect(out.code).toBe(0);
+
+    expect(out.stdout).toContain('Regenerating goodvibes.service');
+    expect(out.stdout).toContain(`rewrote    ${t.canonicalPath}`);
+    const unit = readFileSync(t.canonicalPath, 'utf-8');
+    expect(unit).not.toContain('--hostname');
+    expect(unit).not.toContain('--port');
+    expect(unit).toContain(`ExecStart="${t.installDir}/goodvibes-daemon" --daemon-home "${t.home}"`);
+  });
+
+  test('a product-written unit (v1.18.0 in-app install-service shape: fingerprint, no marker) pinning the endpoint is regenerated too', () => {
+    // The verifier's population correction: the fielded pinned units were
+    // written by the in-app install-service — they carry the product's
+    // Description fingerprint, not the installer marker. Both are
+    // platform-owned and safe to re-derive.
+    const t = stageCanonical('gv-refresh-product', [
+      '[Unit]',
+      FINGERPRINT,
+      'After=network-online.target',
+      '',
+      '[Service]',
+      'Type=simple',
+      'ExecStart=/usr/local/bin/goodvibes-daemon --daemon-home /home/mike --hostname 127.0.0.1 --port 3421',
+      '',
+      '[Install]',
+      'WantedBy=default.target',
+      '',
+    ].join('\n'));
+
+    const out = runLib('refresh_pinned_canonical_unit', t.env);
+    expect(out.code).toBe(0);
+
+    expect(out.stdout).toContain(`rewrote    ${t.canonicalPath}`);
+    const unit = readFileSync(t.canonicalPath, 'utf-8');
+    expect(unit).not.toContain('--hostname');
+    expect(unit).not.toContain('--port');
+  });
+
+  test('a hand-written pinned unit is NEVER rewritten — honest notice only', () => {
+    const content = '[Service]\nExecStart=/opt/custom/goodvibes-daemon --hostname 10.0.0.9 --port 4000\n';
+    const t = stageCanonical('gv-refresh-handwritten', content);
+
+    const out = runLib('refresh_pinned_canonical_unit', t.env);
+    expect(out.code).toBe(0);
+
+    expect(readFileSync(t.canonicalPath, 'utf-8')).toBe(content);
+    expect(out.stdout).toContain('not recognizably platform-managed');
+    expect(out.stdout).toContain('Remove those flags yourself');
+    expect(out.stdout).not.toContain('rewrote');
+  });
+
+  test('an already config-derived unit is left byte-identical (refresh is a no-op)', () => {
+    const content = `${MARKER}\n[Service]\nExecStart="/x/goodvibes-daemon" --daemon-home "/h"\n`;
+    const t = stageCanonical('gv-refresh-current', content);
+
+    const out = runLib('refresh_pinned_canonical_unit', t.env);
+    expect(out.code).toBe(0);
+    expect(readFileSync(t.canonicalPath, 'utf-8')).toBe(content);
+    expect(out.stdout).not.toContain('Regenerating');
+  });
+
+  test('GOODVIBES_RESTART_DAEMON=0: the pinned managed unit is still rewritten, with an honest note that the running daemon keeps the old endpoint', () => {
+    const t = stageCanonical('gv-refresh-restart0', [
+      MARKER,
+      '[Service]',
+      'ExecStart=/x/goodvibes-daemon --daemon-home /h --hostname 127.0.0.1 --port 3421',
+      '',
+    ].join('\n'));
+
+    const out = runLib('refresh_pinned_canonical_unit', { ...t.env, GOODVIBES_RESTART_DAEMON: '0' });
+    expect(out.code).toBe(0);
+
+    expect(readFileSync(t.canonicalPath, 'utf-8')).not.toContain('--hostname');
+    expect(out.stdout).toContain('keeps the old pinned endpoint until restarted');
   });
 });
 
@@ -1329,6 +1492,57 @@ describe('install.sh — launchd migration analog (macOS upgrades get the args-d
     const log = readFileSync(launchctlLog, 'utf-8');
     expect(log).not.toContain('bootout');
     expect(log).not.toContain('bootstrap gui');
+  });
+
+  test('a marker-managed plist carrying --daemon-home PLUS pinned --hostname/--port is regenerated — the gate no longer declares it current', () => {
+    // Pins the verifier's gate-hole probe: the middle-generation plist has
+    // --daemon-home AND the endpoint flags this generation removed. Keying
+    // the already-migrated gate on --daemon-home alone returned 'nothing to
+    // migrate' and preserved the pinned endpoint forever.
+    const root = scratch('gv-launchd-pinned');
+    const home = join(root, 'home');
+    const installDir = join(root, 'bin');
+    mkdirSync(installDir, { recursive: true });
+    const plistPath = join(home, 'Library/LaunchAgents/sh.goodvibes.daemon.plist');
+    mkdirSync(join(home, 'Library/LaunchAgents'), { recursive: true });
+    writeFileSync(plistPath, [
+      '<?xml version="1.0" encoding="UTF-8"?>',
+      `<!-- ${MARKER} -->`,
+      '<plist version="1.0">',
+      '<dict>',
+      '  <key>Label</key>',
+      '  <string>sh.goodvibes.daemon</string>',
+      '  <key>GoodVibesManagedBy</key>',
+      `  <string>${MARKER}</string>`,
+      '  <key>ProgramArguments</key>',
+      '  <array>',
+      `    <string>${installDir}/goodvibes-daemon</string>`,
+      '    <string>--daemon-home</string>',
+      `    <string>${home}</string>`,
+      '    <string>--hostname</string>',
+      '    <string>127.0.0.1</string>',
+      '    <string>--port</string>',
+      '    <string>3421</string>',
+      '  </array>',
+      '</dict>',
+      '</plist>',
+      '',
+    ].join('\n'));
+    const launchctlLog = join(root, 'launchctl-log');
+
+    const out = runLib('migrate_legacy_launchd_plist', {
+      HOME: home,
+      GOODVIBES_INSTALL_DIR: installDir,
+      PATH: `${stubDualUnitServiceBin(root)}:${process.env.PATH ?? ''}`,
+      STUB_LAUNCHCTL_LOG: launchctlLog,
+    });
+    expect(out.code).toBe(0);
+
+    expect(out.stdout).toContain('Upgrading the installer-managed LaunchAgent');
+    const plist = readFileSync(plistPath, 'utf-8');
+    expect(plist).toContain('<string>--daemon-home</string>');
+    expect(plist).not.toContain('--hostname');
+    expect(plist).not.toContain('--port');
   });
 
   test('a hand-written plist (no marker) is left byte-identical', () => {
