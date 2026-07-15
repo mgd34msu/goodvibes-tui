@@ -12,6 +12,9 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
+import { buildManagedDaemonServiceManager } from '../../runtime/legacy-daemon-migration.ts';
+import { resolveRuntimeEndpointBinding } from '../../cli/endpoints.ts';
 
 // Shell-level coverage for the two installer features added in this file:
 //   1. first-run daemon service setup (systemd unit / launchd plist generation,
@@ -78,7 +81,11 @@ function stubServiceBin(root: string): string {
     '#!/bin/sh',
     'for a in "$@"; do',
     '  case "$a" in',
-    '    is-active) exit 3 ;;',
+    // is-active prints a recognized final state: the installer's tri-state
+    // unit_active_state treats exit 3 WITHOUT parseable output as UNKNOWN
+    // (bus unreachable) and refuses all action — this stub means "definitely
+    // inactive", so it must say so.
+    "    is-active) printf 'inactive\\n'; exit 3 ;;",
     '    cat) exit 1 ;;',
     '  esac',
     'done',
@@ -113,8 +120,10 @@ function stubStatefulServiceBin(root: string): string {
     'case "$args" in',
     '  *"is-active"*)',
     '    if [ -f "$STUB_STATE_FILE" ] && grep -q inactive "$STUB_STATE_FILE" 2>/dev/null; then',
+    "      printf 'inactive\\n'",
     '      exit 3',
     '    fi',
+    "    printf 'active\\n'",
     '    exit 0',
     '    ;;',
     '  *"show"*"ExecStart"*)',
@@ -163,6 +172,7 @@ function stubDualUnitServiceBin(root: string): string {
   mkdirSync(bin, { recursive: true });
   const systemctlStub = [
     '#!/bin/sh',
+    '[ -n "$STUB_SYSTEMCTL_LOG" ] && printf \'%s\\n\' "$*" >> "$STUB_SYSTEMCTL_LOG"',
     'unit=""',
     'verb=""',
     'for a in "$@"; do',
@@ -170,7 +180,7 @@ function stubDualUnitServiceBin(root: string): string {
     '    goodvibes.service) unit="canon" ;;',
     '    goodvibes-daemon.service) unit="legacy" ;;',
     '    goodvibes-agent.service) unit="agent" ;;',
-    '    is-active|enable|disable|start|stop|daemon-reload|cat|show) [ -z "$verb" ] && verb="$a" ;;',
+    '    is-active|is-enabled|enable|disable|start|stop|daemon-reload|cat|show|status) [ -z "$verb" ] && verb="$a" ;;',
     '  esac',
     'done',
     'state_file() {',
@@ -183,8 +193,30 @@ function stubDualUnitServiceBin(root: string): string {
     'case "$verb" in',
     '  is-active)',
     '    f=$(state_file)',
-    '    [ -n "$f" ] && grep -qx active "$f" 2>/dev/null && exit 0',
+    '    if [ -n "$f" ] && grep -qx active "$f" 2>/dev/null; then',
+    "      printf 'active\\n'",
+    '      exit 0',
+    '    fi',
+    "    printf 'inactive\\n'",
     '    exit 3 ;;',
+    '  is-enabled)',
+    '    if [ "$unit" = "canon" ] && [ "$STUB_CANON_PRE_ENABLED" = "1" ]; then',
+    "      printf 'enabled\\n'",
+    '      exit 0',
+    '    fi',
+    "    printf 'disabled\\n'",
+    '    exit 1 ;;',
+    '  status)',
+    // Unit-for-pid lookup: `systemctl [--user] status <pid>` — answer with a
+    // .service headline for the staged pid (ANY unit name, per the general
+    // supervision check), exit 4 (no unit for pid) otherwise.
+    '    for a in "$@"; do',
+    '      if [ -n "$STUB_PID_UNIT_PID" ] && [ "$a" = "$STUB_PID_UNIT_PID" ]; then',
+    '        printf \'* %s - stub unit\\n\' "${STUB_PID_UNIT_NAME:-goodvibes-daemon.service}"',
+    '        exit 0',
+    '      fi',
+    '    done',
+    '    exit 4 ;;',
     '  show)',
     '    case "$*" in',
     '      *MainPID*)',
@@ -217,6 +249,12 @@ function stubDualUnitServiceBin(root: string): string {
   const launchctlStub = [
     '#!/bin/sh',
     '[ -n "$STUB_LAUNCHCTL_LOG" ] && printf \'%s\\n\' "$*" >> "$STUB_LAUNCHCTL_LOG"',
+    'case "$1" in',
+    '  print)',
+    '    [ "$STUB_LAUNCHCTL_PRINT_FAILS" = "1" ] && exit 3',
+    '    [ -n "$STUB_LAUNCHD_DAEMON_PID" ] && printf \'    pid = %s\\n\' "$STUB_LAUNCHD_DAEMON_PID"',
+    '    exit 0 ;;',
+    'esac',
     'exit 0',
     '',
   ].join('\n');
@@ -285,12 +323,14 @@ describe('install.sh — systemd unit generation', () => {
     // Installer-managed marker (the uninstall path keys on this exact string).
     expect(unit).toContain('# managed by goodvibes install.sh');
     // ExecStart mirrors what the product's own service setup writes: the daemon
-    // binary inside the install dir PLUS the args-driven launch flags
-    // (--daemon-home/--hostname/--port), so a curl install and the in-app
-    // install-service produce the same unit instead of a bare-args one. The
+    // binary plus --daemon-home ONLY. No endpoint flags are baked — the daemon
+    // resolves controlPlane.hostMode/host/port from settings at boot, so a
+    // configured endpoint is never silently re-pinned by an upgrade. The
     // path-valued words are systemd-quoted so a HOME/INSTALL_DIR containing a
     // space cannot silently split into stray arguments.
-    expect(unit).toContain(`ExecStart="${installDir}/goodvibes-daemon" --daemon-home "${home}" --hostname 127.0.0.1 --port 3421`);
+    expect(unit).toContain(`ExecStart="${installDir}/goodvibes-daemon" --daemon-home "${home}"`);
+    expect(unit).not.toContain('--hostname');
+    expect(unit).not.toContain('--port');
     expect(unit).toContain('Restart=on-failure');
     expect(unit).toContain('WantedBy=default.target');
     expect(unit).toMatch(/\[Unit\][\s\S]*\[Service\][\s\S]*\[Install\]/);
@@ -351,7 +391,7 @@ describe('install.sh — systemd unit generation', () => {
     expect(out.code).toBe(0);
 
     const unit = readFileSync(unitPath, 'utf-8');
-    expect(unit).toContain(`ExecStart="${installDir}/goodvibes-daemon" --daemon-home "${home}" --hostname 127.0.0.1 --port 3421`);
+    expect(unit).toContain(`ExecStart="${installDir}/goodvibes-daemon" --daemon-home "${home}"`);
 
     // When systemd-analyze is present, prove systemd parses the quoted words
     // as single tokens (the unquoted form failed verify with a truncated path).
@@ -529,7 +569,9 @@ describe('install.sh — canonical unit name + legacy-unit unification', () => {
 
     const unit = readFileSync(join(unitDir, 'goodvibes.service'), 'utf-8');
     expect(unit).toContain(MARKER);
-    expect(unit).toContain(`ExecStart="${installDir}/goodvibes-daemon" --daemon-home "${home}" --hostname 127.0.0.1 --port 3421`);
+    expect(unit).toContain(`ExecStart="${installDir}/goodvibes-daemon" --daemon-home "${home}"`);
+    expect(unit).not.toContain('--hostname');
+    expect(unit).not.toContain('--port');
     // Nothing to migrate: no legacy retirement/transfer lines printed.
     expect(out.stdout).not.toContain('Retiring');
     expect(out.stdout).not.toContain('Transferring');
@@ -645,6 +687,11 @@ describe('install.sh — supervised transfer from an ACTIVE legacy unit (the dom
         PATH: `${stubDualUnitServiceBin(root)}:${process.env.PATH ?? ''}`,
         STUB_CANON_STATE_FILE: canonState,
         STUB_LEGACY_STATE_FILE: legacyState,
+        // The transfer's settled verify requires the canonical unit's MainPID
+        // to be a LIVE, STABLE process across two probes — the test harness's
+        // own pid is exactly that. Settle sleeps collapse to 0 for test speed.
+        STUB_CANON_MAINPID: String(process.pid),
+        GOODVIBES_INSTALL_VERIFY_SETTLE_SECS: '0',
       },
     };
   }
@@ -686,11 +733,11 @@ describe('install.sh — supervised transfer from an ACTIVE legacy unit (the dom
         expect(isAlive()).toBe(true);
         expect(out.stdout).not.toContain('not relaunching');
         expect(out.stdout).not.toContain('Restarting running');
-        expect(out.stdout).toContain('running under the goodvibes-daemon.service unit');
+        expect(out.stdout).toContain('running under the installer-managed goodvibes-daemon.service unit');
 
         // Supervised transfer: canonical written, started, VERIFIED, then legacy retired.
         expect(out.stdout).toContain('Transferring daemon supervision from goodvibes-daemon.service to goodvibes.service');
-        expect(out.stdout).toContain('started    goodvibes.service (verified active)');
+        expect(out.stdout).toContain('started    goodvibes.service (verified: active with a stable live main process)');
         expect(out.stdout).toContain('retired    goodvibes-daemon.service (disabled, unit file removed)');
 
         expect(existsSync(t.canonicalPath)).toBe(true);
@@ -721,13 +768,15 @@ describe('install.sh — supervised transfer from an ACTIVE legacy unit (the dom
   );
 
   test(
-    'the bare-process fallback never SIGTERMs a systemd-supervised MainPID',
+    'the bare-process fallback never SIGTERMs a service-supervised pid — supervision looked up by pid, ANY unit name',
     async () => {
       // Pins the kill mechanism itself: even when restart_bare_processes IS
       // reached (legacy unit inactive here, so restart_running_daemon falls
-      // through to it), a pid that systemd reports as a unit MainPID is
-      // skipped — killing it + nohup-relaunching would demote a supervised
-      // daemon to an unsupervised process with its enabled unit left behind.
+      // through to it), a pid that `systemctl status <pid>` resolves to ANY
+      // .service unit is skipped — killing it + nohup-relaunching would
+      // demote a supervised daemon to an unsupervised process with its
+      // enabled unit left behind. The unit name here is deliberately a
+      // NON-goodvibes one: the check is by pid lookup, not a hardcoded list.
       const t = stageLegacyOnlyActive('gv-no-kill-supervised');
       writeFileSync(t.legacyState, 'inactive\n'); // fall through to the bare-process path
       copyFileSync('/bin/sleep', join(t.installDir, 'goodvibes-daemon'));
@@ -745,10 +794,14 @@ describe('install.sh — supervised transfer from an ACTIVE legacy unit (the dom
 
       try {
         await new Promise((r) => setTimeout(r, 300));
-        const out = runLib('restart_running_daemon', { ...t.env, STUB_LEGACY_MAINPID: String(pid) });
+        const out = runLib('restart_running_daemon', {
+          ...t.env,
+          STUB_PID_UNIT_PID: String(pid),
+          STUB_PID_UNIT_NAME: 'gv-custom.service',
+        });
         expect(out.code).toBe(0);
         expect(out.stdout).toContain(`Skipping pid ${pid}`);
-        expect(out.stdout).toContain('supervised by a systemd user unit');
+        expect(out.stdout).toContain('supervised by a service manager');
         expect(isAlive()).toBe(true); // never killed
       } finally {
         if (isAlive()) {
@@ -762,6 +815,191 @@ describe('install.sh — supervised transfer from an ACTIVE legacy unit (the dom
     },
     20000,
   );
+
+  test(
+    'FAIL-SAFE ON UNKNOWN: a busless session never demotes the supervised daemon — no kill, no nohup, honest notes, converges later',
+    async () => {
+      // Byte-for-byte the verifier's busless-F1 probe: the dominant upgrade
+      // state (installer-marker legacy unit enabled+active supervising the
+      // daemon, no canonical unit) run from a session where EVERY systemctl
+      // call fails at the bus. The old guards read 'cannot ask systemd' as
+      // 'not supervised' and SIGTERM+nohup'd the supervised MainPID, leaving
+      // canonical absent and the enabled legacy unit behind — the original
+      // incident. Now every unknown answer refuses.
+      const root = scratch('gv-busless-f1');
+      const home = join(root, 'home');
+      const installDir = join(root, 'bin');
+      const unitDir = join(home, '.config/systemd/user');
+      mkdirSync(installDir, { recursive: true });
+      mkdirSync(unitDir, { recursive: true });
+      const legacy = join(unitDir, 'goodvibes-daemon.service');
+      writeFileSync(legacy, `${MARKER}\n[Service]\nExecStart=${installDir}/goodvibes-daemon\n`);
+
+      copyFileSync('/bin/sleep', join(installDir, 'goodvibes-daemon'));
+      chmodSync(join(installDir, 'goodvibes-daemon'), 0o755);
+      const proc = Bun.spawn([join(installDir, 'goodvibes-daemon'), '300'], { stdio: ['ignore', 'ignore', 'ignore'] });
+      const pid = proc.pid;
+      const isAlive = () => {
+        try {
+          process.kill(pid, 0);
+          return true;
+        } catch {
+          return false;
+        }
+      };
+
+      try {
+        await new Promise((r) => setTimeout(r, 300));
+        const out = runLib('restart_running_daemon; setup_daemon_service; migrate_legacy_installer_unit', {
+          HOME: home,
+          GOODVIBES_INSTALL_DIR: installDir,
+          PATH: `${stubBuslessServiceBin(root)}:${process.env.PATH ?? ''}`,
+        });
+        expect(out.code).toBe(0);
+
+        // The supervised daemon is untouched: alive, never nohup-relaunched.
+        expect(isAlive()).toBe(true);
+        expect(out.stdout).not.toContain('not relaunching');
+        expect(out.stdout).not.toContain('Restarting running');
+        // Honest refusals name the reason and the manual path.
+        expect(out.stdout).toContain('cannot determine the daemon service state');
+        expect(out.stdout).toContain("cannot determine the daemon units' state");
+        // Nothing half-done: no canonical written by migration, legacy intact.
+        expect(existsSync(join(unitDir, 'goodvibes.service'))).toBe(false);
+        expect(existsSync(legacy)).toBe(true);
+      } finally {
+        if (isAlive()) {
+          try {
+            process.kill(pid, 'SIGKILL');
+          } catch {
+            /* already gone */
+          }
+        }
+      }
+    },
+    20000,
+  );
+
+  test('hand-written legacy unit ACTIVE: the installer restarts it in place — no false transfer promise, no silent no-upgrade', () => {
+    // Verifier scenario: the daemon runs under a hand-written (marker-less)
+    // goodvibes-daemon.service. The old flow printed 'the migration step
+    // below transfers it' — a promise no code path fulfilled — and the
+    // swapped binary never started serving. Now the restart path checks
+    // provenance BEFORE promising: hand-written units get a non-destructive
+    // in-place restart so the upgrade takes effect, and migration reports
+    // (never touches) the unit.
+    const t = stageLegacyOnlyActive('gv-handwritten-active');
+    // Overwrite the legacy unit with a marker-less, hand-written one whose
+    // ExecStart binary EXISTS (so the broken-exec replacement path stays out).
+    const customBin = join(t.root, 'custom', 'goodvibes-daemon');
+    mkdirSync(join(t.root, 'custom'), { recursive: true });
+    writeFileSync(customBin, '#!/bin/sh\nexit 0\n');
+    chmodSync(customBin, 0o755);
+    writeFileSync(t.legacyPath, `[Service]\nExecStart=${customBin}\n`);
+
+    const out = runLib('restart_running_daemon; migrate_legacy_installer_unit', {
+      ...t.env,
+      STUB_EXEC_BIN: customBin,
+    });
+    expect(out.code).toBe(0);
+
+    // Restarted in place, honestly.
+    expect(out.stdout).toContain('Restarting the running goodvibes-daemon (systemd user service)');
+    expect(out.stdout).toContain('restarted  goodvibes-daemon.service');
+    // Never the transfer promise — migration does not transfer hand-written units.
+    expect(out.stdout).not.toContain('the migration step below transfers it');
+    // Migration reports the hand-written unit, touches nothing.
+    expect(out.stdout).toContain('A hand-written goodvibes-daemon.service (no installer marker)');
+    expect(existsSync(t.legacyPath)).toBe(true);
+  });
+
+  test('BOTH units running: nothing is stopped automatically — refusal points at the consented migrate-service', () => {
+    // Verifier scenario: canonical 'active' AND legacy actively serving (the
+    // wrong-port or port-fight state). The old canonical-active branch
+    // disable--now'd the serving legacy daemon on a bare is-active sample.
+    const t = stageLegacyOnlyActive('gv-both-running');
+    writeFileSync(t.canonState, 'active\n');
+    writeFileSync(t.canonicalPath, `${MARKER}\n[Service]\nExecStart="${t.installDir}/goodvibes-daemon" --daemon-home "${t.home}"\n`);
+
+    const out = runLib('migrate_legacy_installer_unit', t.env);
+    expect(out.code).toBe(0);
+
+    expect(out.stdout).toContain('both goodvibes.service and goodvibes-daemon.service are currently running');
+    expect(out.stdout).toContain('migrate-service');
+    // Nothing changed: both unit files remain, both states untouched.
+    expect(existsSync(t.legacyPath)).toBe(true);
+    expect(existsSync(t.canonicalPath)).toBe(true);
+    expect(readFileSync(t.legacyState, 'utf-8')).toContain('active');
+    expect(readFileSync(t.canonState, 'utf-8')).toContain('active');
+    expect(out.stdout).not.toContain('disabled + removed');
+    expect(out.stdout).not.toContain('Retiring');
+  });
+
+  test('canonical SERVING + legacy present but idle: the redundant legacy unit is retired with an honest verified receipt', () => {
+    const t = stageLegacyOnlyActive('gv-retire-idle-legacy');
+    writeFileSync(t.canonState, 'active\n');
+    writeFileSync(t.legacyState, 'inactive\n');
+    writeFileSync(t.canonicalPath, `${MARKER}\n[Service]\nExecStart="${t.installDir}/goodvibes-daemon" --daemon-home "${t.home}"\n`);
+
+    const out = runLib('migrate_legacy_installer_unit', t.env);
+    expect(out.code).toBe(0);
+
+    expect(out.stdout).toContain('Retiring the redundant installer-managed goodvibes-daemon.service (goodvibes.service is serving)');
+    expect(out.stdout).toContain('disabled + removed');
+    expect(out.stdout).toContain('verified: active with a live main process');
+    expect(existsSync(t.legacyPath)).toBe(false);
+    expect(existsSync(t.canonicalPath)).toBe(true);
+  });
+
+  test("fork-proof verify: canonical reports 'active' but has no live main process — the transfer rolls back instead of retiring the legacy unit", () => {
+    // Verifier scenario: Type=simple reports active from fork onward, so a
+    // canonical daemon doomed to bind-fail passes a single instant is-active.
+    // The settled verify also requires a LIVE, STABLE MainPID — a dead pid
+    // fails it and the rollback (built for exactly this) actually fires.
+    const t = stageLegacyOnlyActive('gv-fork-proof-verify');
+
+    const out = runLib('migrate_legacy_installer_unit', {
+      ...t.env,
+      STUB_CANON_MAINPID: '99999999', // resolves, but no such live process
+    });
+    expect(out.code).toBe(0);
+
+    expect(out.stdout).toContain('did not come up healthy — rolling back');
+    expect(out.stdout).toContain('restarted  goodvibes-daemon.service');
+    expect(existsSync(t.canonicalPath)).toBe(false); // written by this run → rolled back
+    expect(existsSync(t.legacyPath)).toBe(true);
+    expect(out.stdout).not.toContain('retired');
+  });
+
+  test('rollback restores the PRE-RUN enablement: a pre-existing, pre-ENABLED canonical unit is stopped but never disabled', () => {
+    // Verifier scenario: canonical unit file on disk and ENABLED before this
+    // run (in-app install-service wrote+enabled it), legacy actively serving,
+    // canonical cannot come up. The old rollback ran a blanket
+    // `disable --now`, silently destroying the user's pre-existing enablement.
+    const t = stageLegacyOnlyActive('gv-rollback-pre-enabled');
+    const existing = `[Service]\nExecStart=${t.installDir}/goodvibes-daemon --daemon-home ${t.home}\n`;
+    writeFileSync(t.canonicalPath, existing);
+    const log = join(t.root, 'systemctl-log');
+
+    const out = runLib('migrate_legacy_installer_unit', {
+      ...t.env,
+      STUB_CANON_PRE_ENABLED: '1',
+      STUB_CANON_START_FAILS: '1',
+      STUB_SYSTEMCTL_LOG: log,
+    });
+    expect(out.code).toBe(0);
+
+    expect(out.stdout).toContain('did not come up healthy — rolling back');
+    // The pre-existing unit file survives (not written by this run).
+    expect(readFileSync(t.canonicalPath, 'utf-8')).toBe(existing);
+    // The rollback STOPPED the canonical unit but never issued a disable for
+    // it — the user's pre-run enablement is preserved.
+    const calls = readFileSync(log, 'utf-8').split('\n');
+    expect(calls.some((c) => c.includes('stop') && c.includes('goodvibes.service'))).toBe(true);
+    expect(calls.some((c) => c.includes('disable') && c.includes('goodvibes.service') && !c.includes('goodvibes-daemon.service'))).toBe(false);
+    // Legacy supervision restored.
+    expect(out.stdout).toContain('restarted  goodvibes-daemon.service');
+  });
 
   test('GOODVIBES_RESTART_DAEMON=0 leaves an ACTIVE legacy unit completely untouched (the documented contract)', () => {
     // Verifier scenario: legacy actively serving, canonical unit FILE present
@@ -797,7 +1035,7 @@ describe('install.sh — supervised transfer from an ACTIVE legacy unit (the dom
 
     // Transfer happened using the existing unit — content byte-identical.
     expect(out.stdout).toContain('Transferring daemon supervision');
-    expect(out.stdout).toContain('started    goodvibes.service (verified active)');
+    expect(out.stdout).toContain('started    goodvibes.service (verified: active with a stable live main process)');
     expect(out.stdout).toContain('retired    goodvibes-daemon.service');
     expect(readFileSync(t.canonicalPath, 'utf-8')).toBe(existing);
     expect(out.stdout).not.toContain(`wrote      ${t.canonicalPath}`);
@@ -839,10 +1077,12 @@ describe('install.sh — supervised transfer from an ACTIVE legacy unit (the dom
     expect(existsSync(t.canonicalPath)).toBe(false);
   });
 
-  test('busless run (every systemctl fails): the unit file is NEVER removed behind a false "disabled + removed" receipt', () => {
-    // Verifier scenario: no user D-Bus (env-stripped session) — disable/stop
-    // fail; the old code rm -f'd the unit file anyway and printed
-    // "disabled + removed", leaving a dangling enablement symlink.
+  test('busless migration (every systemctl fails): UNKNOWN state refuses everything — nothing removed, no false receipt', () => {
+    // Verifier scenario: no user D-Bus (env-stripped session). Unit states
+    // cannot be read, so the migration must refuse up front — 'cannot ask
+    // systemd' is never read as 'inactive'. The pre-fix code fell into the
+    // neither-active branch and rm -f'd the unit file behind a false
+    // "disabled + removed" receipt, leaving a dangling enablement symlink.
     const root = scratch('gv-busless');
     const home = join(root, 'home');
     const installDir = join(root, 'bin');
@@ -853,7 +1093,7 @@ describe('install.sh — supervised transfer from an ACTIVE legacy unit (the dom
     const legacy = join(unitDir, 'goodvibes-daemon.service');
     writeFileSync(legacy, `${MARKER}\n[Service]\nExecStart=${installDir}/goodvibes-daemon\n`);
     const canonical = join(unitDir, 'goodvibes.service');
-    writeFileSync(canonical, `${MARKER}\n[Service]\nExecStart="${installDir}/goodvibes-daemon" --daemon-home "${home}" --hostname 127.0.0.1 --port 3421\n`);
+    writeFileSync(canonical, `${MARKER}\n[Service]\nExecStart="${installDir}/goodvibes-daemon" --daemon-home "${home}"\n`);
 
     const out = runLib('migrate_legacy_installer_unit', {
       HOME: home,
@@ -862,11 +1102,13 @@ describe('install.sh — supervised transfer from an ACTIVE legacy unit (the dom
     });
     expect(out.code).toBe(0);
 
-    // Disable failed → the unit file stays, and the output says so honestly.
+    // Refused at the unknown-state gate: both unit files stay, honest note.
     expect(existsSync(legacy)).toBe(true);
-    expect(out.stdout).toContain('could not disable goodvibes-daemon.service');
-    expect(out.stdout).toContain('nothing was removed');
+    expect(existsSync(canonical)).toBe(true);
+    expect(out.stdout).toContain("cannot determine the daemon units' state");
+    expect(out.stdout).toContain('nothing was changed');
     expect(out.stdout).not.toContain('disabled + removed');
+    expect(out.stdout).not.toContain('Retiring');
   });
 
   test('an UNREADABLE legacy unit file is reported as unreadable — never misdiagnosed as hand-written, never touched', () => {
@@ -932,11 +1174,48 @@ describe('install.sh — launchd migration analog (macOS upgrades get the args-d
     expect(plist).toContain(MARKER); // still installer-managed
     expect(plist).toContain('<string>--daemon-home</string>');
     expect(plist).toContain(`<string>${home}</string>`);
-    expect(plist).toContain('<string>--port</string>');
+    // No endpoint flags: the daemon resolves controlPlane settings at boot,
+    // so a configured endpoint survives the plist regeneration.
+    expect(plist).not.toContain('--hostname');
+    expect(plist).not.toContain('--port');
     // The agent was actually reloaded (bootout then bootstrap/load).
     const log = readFileSync(launchctlLog, 'utf-8');
     expect(log).toContain('bootout');
     expect(log).toContain('bootstrap');
+  });
+
+  test('an agent the user booted out (plist not loaded) is NEVER started by the migration — file updated, load command printed', () => {
+    // Verifier scenario: marker plist on disk, agent deliberately stopped via
+    // `launchctl bootout` (plist kept). The old code swallowed the failed
+    // bootout and bootstrapped anyway — RunAtLoad=true STARTED the daemon the
+    // user had stopped, behind a false 'reloaded' receipt.
+    const root = scratch('gv-launchd-not-loaded');
+    const home = join(root, 'home');
+    const installDir = join(root, 'bin');
+    mkdirSync(installDir, { recursive: true });
+    const plistPath = join(home, 'Library/LaunchAgents/sh.goodvibes.daemon.plist');
+    mkdirSync(join(home, 'Library/LaunchAgents'), { recursive: true });
+    writeFileSync(plistPath, oldStylePlist(installDir));
+    const launchctlLog = join(root, 'launchctl-log');
+
+    const out = runLib('migrate_legacy_launchd_plist', {
+      HOME: home,
+      GOODVIBES_INSTALL_DIR: installDir,
+      PATH: `${stubDualUnitServiceBin(root)}:${process.env.PATH ?? ''}`,
+      STUB_LAUNCHCTL_LOG: launchctlLog,
+      STUB_LAUNCHCTL_PRINT_FAILS: '1', // the label is NOT loaded
+    });
+    expect(out.code).toBe(0);
+
+    // File updated; agent left stopped, honestly, with the load command.
+    expect(readFileSync(plistPath, 'utf-8')).toContain('<string>--daemon-home</string>');
+    expect(out.stdout).toContain('not currently loaded — leaving it stopped');
+    expect(out.stdout).toContain('launchctl bootstrap');
+    expect(out.stdout).not.toContain('reloaded');
+    // Only the read-only load-state probe hit launchctl — no bootout, no bootstrap.
+    const log = readFileSync(launchctlLog, 'utf-8');
+    expect(log).not.toContain('bootout');
+    expect(log).not.toContain('bootstrap gui');
   });
 
   test('a hand-written plist (no marker) is left byte-identical', () => {
@@ -980,7 +1259,132 @@ describe('install.sh — launchd migration analog (macOS upgrades get the args-d
 
     expect(readFileSync(plistPath, 'utf-8')).toContain('<string>--daemon-home</string>');
     expect(out.stdout).toContain('keeps its old arguments until you reload it');
-    expect(existsSync(launchctlLog)).toBe(false); // no bootout/bootstrap issued
+    // Only the read-only load-state probe hit launchctl — never a reload.
+    const log = readFileSync(launchctlLog, 'utf-8');
+    expect(log).not.toContain('bootout');
+    expect(log).not.toContain('bootstrap gui');
+  });
+
+  test('macOS restart path: a LOADED launchd agent is restarted via kickstart — never SIGTERM + nohup', () => {
+    // Verifier scenario (platform parity): on macOS the systemd guards never
+    // fire, so the old restart path SIGTERMed the launchd-supervised daemon
+    // and nohup-relaunched it outside launchd, racing the KeepAlive respawn
+    // for the port. The restart path now restarts a loaded agent in place.
+    const root = scratch('gv-launchd-kickstart');
+    const home = join(root, 'home');
+    const installDir = join(root, 'bin');
+    mkdirSync(installDir, { recursive: true });
+    const launchctlLog = join(root, 'launchctl-log');
+
+    // Override os_tag after resolve_platform: this suite runs on Linux, and
+    // the macOS branch dispatches purely on the variable.
+    const out = runLib('os_tag=macos; restart_running_daemon', {
+      HOME: home,
+      GOODVIBES_INSTALL_DIR: installDir,
+      PATH: `${stubDualUnitServiceBin(root)}:${process.env.PATH ?? ''}`,
+      STUB_LAUNCHCTL_LOG: launchctlLog,
+    });
+    expect(out.code).toBe(0);
+
+    expect(out.stdout).toContain('Restarting the running sh.goodvibes.daemon (launchd user agent)');
+    expect(out.stdout).toContain('restarted  sh.goodvibes.daemon');
+    const log = readFileSync(launchctlLog, 'utf-8');
+    expect(log).toContain('kickstart -k');
+    // Never the bare-process demotion path.
+    expect(out.stdout).not.toContain('not relaunching');
+    expect(out.stdout).not.toContain('Restarting running goodvibes-daemon (pid');
+  });
+
+  test('macOS restart path: an agent that is NOT loaded falls through to the guarded bare-process path, not a phantom kickstart', () => {
+    const root = scratch('gv-launchd-not-loaded-restart');
+    const home = join(root, 'home');
+    const installDir = join(root, 'bin');
+    mkdirSync(installDir, { recursive: true });
+    const launchctlLog = join(root, 'launchctl-log');
+
+    const out = runLib('os_tag=macos; restart_running_daemon', {
+      HOME: home,
+      GOODVIBES_INSTALL_DIR: installDir,
+      PATH: `${stubDualUnitServiceBin(root)}:${process.env.PATH ?? ''}`,
+      STUB_LAUNCHCTL_LOG: launchctlLog,
+      STUB_LAUNCHCTL_PRINT_FAILS: '1',
+    });
+    expect(out.code).toBe(0);
+    // No kickstart, no false restart claim; with no matching bare processes
+    // the run is silent.
+    expect(out.stdout).not.toContain('kickstart');
+    expect(out.stdout).not.toContain('restarted  sh.goodvibes.daemon');
+  });
+});
+
+/**
+ * ONE canonical unit content, derived from config: the installer-written and
+ * product-written units must agree — same launch shape, no baked endpoint —
+ * verified on a NON-DEFAULT config fixture (hostMode=network, port 3500). The
+ * endpoint lives in config and is resolved by the daemon at boot; pinning it
+ * into either writer's ExecStart is what silently re-pinned custom-configured
+ * hosts back to installer constants behind a success receipt.
+ */
+describe('install.sh ↔ product — canonical unit content parity on a non-default config', () => {
+  test('both writers emit binary + --daemon-home only; neither bakes the configured endpoint; boot-time resolution yields it', () => {
+    const root = scratch('gv-unit-parity');
+    const home = join(root, 'home');
+    const installDir = join(root, 'bin');
+    mkdirSync(installDir, { recursive: true });
+
+    // Non-default endpoint fixture: hostMode=network + port 3500.
+    const configManager = new ConfigManager({ workingDir: home, homeDir: home, surfaceRoot: 'tui' });
+    configManager.setDynamic('controlPlane.hostMode', 'network');
+    configManager.setDynamic('controlPlane.port', 3500);
+
+    // Product-written unit (the in-app install-service path).
+    const manager = buildManagedDaemonServiceManager({
+      binaryPath: join(installDir, 'goodvibes-daemon'),
+      homeDir: home,
+      host: '0.0.0.0',
+      port: 3500,
+      configManager,
+      actionRunner: () => ({ status: 0 }),
+    });
+    const installed = manager.install();
+    expect(installed.actionError).toBeUndefined();
+    const productUnit = readFileSync(join(home, '.config', 'systemd', 'user', 'goodvibes.service'), 'utf-8');
+    const productExec = productUnit.split('\n').find((l) => l.startsWith('ExecStart=')) ?? '';
+
+    // Installer-written unit (write_systemd_unit) into a sibling path.
+    const installerUnitPath = join(root, 'installer-home', '.config/systemd/user/goodvibes.service');
+    const out = runLib(`write_systemd_unit "${installerUnitPath}"`, {
+      HOME: home,
+      GOODVIBES_INSTALL_DIR: installDir,
+    });
+    expect(out.code).toBe(0);
+    const installerUnit = readFileSync(installerUnitPath, 'utf-8');
+    const installerExec = installerUnit.split('\n').find((l) => l.startsWith('ExecStart=')) ?? '';
+
+    // Normalize both ExecStart lines to token lists (strip systemd quoting).
+    const tokens = (line: string): string[] =>
+      line.replace('ExecStart=', '').split(/\s+/).filter(Boolean).map((t) => t.replace(/^"|"$/g, ''));
+    const productTokens = tokens(productExec);
+    const installerTokens = tokens(installerExec);
+
+    // PARITY: identical launch shape — the daemon binary, then --daemon-home
+    // with the home dir. Nothing else.
+    expect(productTokens).toEqual([join(installDir, 'goodvibes-daemon'), '--daemon-home', home]);
+    expect(installerTokens).toEqual([join(installDir, 'goodvibes-daemon'), '--daemon-home', home]);
+
+    // Neither writer baked the configured endpoint (flags OR values).
+    for (const unit of [productUnit, installerUnit]) {
+      expect(unit).not.toContain('--hostname');
+      expect(unit).not.toContain('--port');
+      expect(unit).not.toContain('3500');
+      expect(unit).not.toContain('0.0.0.0');
+    }
+
+    // The endpoint comes from config at boot: this is what a daemon launched
+    // by EITHER unit resolves on this fixture.
+    const bootBinding = resolveRuntimeEndpointBinding(configManager, 'controlPlane');
+    expect(bootBinding.host).toBe('0.0.0.0');
+    expect(bootBinding.port).toBe(3500);
   });
 });
 
@@ -1032,7 +1436,7 @@ describe('install.sh — restart path validates the target before restarting/rel
     expect(existsSync(unitPath)).toBe(true);
     const newUnit = readFileSync(unitPath, 'utf-8');
     expect(newUnit).toContain('# managed by goodvibes install.sh');
-    expect(newUnit).toContain(`ExecStart="${installDir}/goodvibes-daemon" --daemon-home "${home}" --hostname 127.0.0.1 --port 3421`);
+    expect(newUnit).toContain(`ExecStart="${installDir}/goodvibes-daemon" --daemon-home "${home}"`);
     expect(out.stdout).toContain('Setting up the goodvibes daemon as a systemd user service');
     expect(out.stdout).toContain('started    goodvibes.service (active)');
   });
