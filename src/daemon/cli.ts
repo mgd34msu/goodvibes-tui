@@ -150,6 +150,15 @@ async function main(): Promise<void> {
     // (the --hostname flag already lands in config via
     // applyRuntimeEndpointFlagOverrides above, so it is covered here).
     const binding = resolveRuntimeEndpointBinding(config, 'controlPlane');
+    if (!binding.recognized) {
+      // The SDK bind path has no default case for an unrecognized hostMode —
+      // a daemon launched with this config throws before binding. Say so
+      // instead of presenting the fallback values as a real binding.
+      console.warn(
+        `[goodvibes-daemon] warning: controlPlane.hostMode '${binding.hostMode}' is not a recognized mode ` +
+          "(local|network|custom) — the daemon will fail to start until it is corrected.",
+      );
+    }
     const binaryPath = resolveInstalledDaemonBinary({ moduleUrl: import.meta.url });
     const result = await runDaemonServiceCli({
       subcommand: serviceSubcommand,
@@ -166,6 +175,28 @@ async function main(): Promise<void> {
       console.log(line);
     }
     process.exit(result.exitCode);
+  }
+
+  // Honest startup identity, printed for EVERY launch shape — including a bare
+  // (no-arg) systemd launch, and BEFORE any runtime construction so it still
+  // reaches the journal when a broken config makes the daemon throw during
+  // composition. It states the resolved version (never a placeholder) and the
+  // home/host/port the daemon will actually bind: the binding comes from the
+  // SAME hostMode-aware resolution the SDK bind path uses (resolveHostBinding:
+  // 'local' forces 127.0.0.1, 'network' forces 0.0.0.0, port 0/non-numeric
+  // falls back to the default) — never from controlPlane.host alone, and never
+  // from the GOODVIBES_DAEMON_HOST env var, which the bind path does not read.
+  const bannerBinding = resolveRuntimeEndpointBinding(config, 'controlPlane');
+  // eslint-disable-next-line no-console
+  console.log(renderDaemonStartupBanner(VERSION, { homeDir: homeDirectory, host: bannerBinding.host, port: bannerBinding.port }));
+  if (!bannerBinding.recognized) {
+    // An unrecognized hostMode has NO binding the SDK can produce (its
+    // resolver has no default case and the daemon will throw below, before
+    // serving). Warn here so the journaled crash is explained.
+    console.warn(
+      `[goodvibes-daemon] warning: controlPlane.hostMode '${bannerBinding.hostMode}' is not a recognized mode ` +
+        "(local|network|custom) — the daemon cannot bind until it is corrected; the host/port above are fallback values, not a real binding.",
+    );
   }
 
   const runtimeBus = new RuntimeEventBus();
@@ -260,18 +291,6 @@ async function main(): Promise<void> {
   daemon.enable({ daemon: true }, effectiveDaemonToken);
   listener.enable({ httpListener: true }, effectiveHttpToken);
 
-  // Honest startup identity, printed for EVERY launch shape — including a bare
-  // (no-arg) systemd launch. It states the resolved version (never a
-  // placeholder), the home/host/port the daemon will actually bind, and points
-  // at the real service-setup command. The binding comes from the SAME
-  // hostMode-aware resolution the SDK bind path uses (resolveHostBinding:
-  // 'local' forces 127.0.0.1, 'network' forces 0.0.0.0, port 0/non-numeric
-  // falls back to the default) — never from controlPlane.host alone, and never
-  // from the GOODVIBES_DAEMON_HOST env var, which the bind path does not read.
-  const bannerBinding = resolveRuntimeEndpointBinding(config, 'controlPlane');
-  // eslint-disable-next-line no-console
-  console.log(renderDaemonStartupBanner(VERSION, { homeDir: homeDirectory, host: bannerBinding.host, port: bannerBinding.port }));
-
   await Promise.all([
     daemon.start(),
     config.get('danger.httpListener') ? listener.start() : Promise.resolve(),
@@ -316,17 +335,24 @@ async function main(): Promise<void> {
 
   // Cheap unattended reconcile: if this (canonical) daemon unit is confirmed
   // serving AND a redundant installer-managed goodvibes-daemon.service (the
-  // retired unit name) still sits enabled beside it — the exact production-
-  // incident state — auto-disable and remove it, printing a receipt. A
-  // hand-written legacy unit is only reported, never touched. Best-effort:
-  // never let this block or crash daemon boot (the default systemctl runner is
-  // hard-timeout-bounded). The unit search root is the LOGIN user's home
+  // retired unit name) sits enabled-but-NOT-running beside it — the exact
+  // production-incident state — auto-disable and remove it, printing a
+  // receipt. A RUNNING legacy daemon, a hand-written unit, or an unanswered
+  // configured endpoint all refuse with a notice instead. Best-effort: never
+  // let this block or crash daemon boot (per-call systemctl timeouts plus one
+  // cumulative pass deadline). The unit search root is the LOGIN user's home
   // (where systemd user units live), never the daemon data home
-  // (GOODVIBES_DAEMON_HOME); the tracked name honors service.serviceName.
+  // (GOODVIBES_DAEMON_HOME); the tracked name honors service.serviceName. The
+  // endpoint requirement uses the CLIENT view of the config — a fresh read of
+  // settings.json with none of this process's runtime flag overrides — because
+  // that is what clients resolve when they look for the daemon.
   try {
-    const reconcile = reconcileRedundantLegacyUnit({
+    const clientViewConfig = new ConfigManager({ workingDir, homeDir: homeDirectory, surfaceRoot: 'tui' });
+    const clientEndpoint = resolveRuntimeEndpointBinding(clientViewConfig, 'controlPlane');
+    const reconcile = await reconcileRedundantLegacyUnit({
       homeDir: homedir(),
-      trackedServiceName: resolveConfiguredServiceName(config),
+      trackedServiceName: resolveConfiguredServiceName(clientViewConfig),
+      configuredEndpoint: { host: clientEndpoint.host, port: clientEndpoint.port },
     });
     if (reconcile.action !== 'noop') {
       for (const line of reconcile.lines) {

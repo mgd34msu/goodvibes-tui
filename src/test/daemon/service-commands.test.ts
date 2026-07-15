@@ -14,12 +14,14 @@ import {
 import {
   resolveConfiguredServiceName,
   reconcileRedundantLegacyUnit,
+  buildManagedDaemonServiceManager,
   legacyUnitPath,
   INSTALLER_UNIT_MARKER,
   LEGACY_SERVICE_UNIT_NAME,
   MANAGED_SERVICE_NAME,
   type ManagedServiceActionRunner as RuntimeActionRunner,
 } from '../../runtime/legacy-daemon-migration.ts';
+import { resolveRuntimeEndpointBinding } from '../../cli/endpoints.ts';
 
 describe('resolveConfiguredServiceName — config-honest name for pre-manager callers', () => {
   function config(value: unknown): { get(key: string): unknown } {
@@ -145,8 +147,12 @@ describe('runDaemonServiceCli (systemd path, real PlatformServiceManager, stubbe
     expect(existsSync(unitPath)).toBe(true);
     const contents = readFileSync(unitPath, 'utf-8');
     expect(contents).toContain('ExecStart=/usr/local/bin/goodvibes-daemon --daemon-home');
-    expect(contents).toContain('--hostname 127.0.0.1');
-    expect(contents).toContain('--port 3421');
+    // No endpoint flags are baked into ExecStart: the daemon resolves
+    // controlPlane.hostMode/host/port from settings at boot, so a config
+    // change (or a non-default endpoint) never requires a unit rewrite and
+    // can never be silently reverted by one.
+    expect(contents).not.toContain('--hostname');
+    expect(contents).not.toContain('--port');
     // install() only writes the file; install-service also calls start() to
     // preserve the old shim's "install implies enabled + running" behavior.
     // The SDK's status() now also issues read-only `is-active` probes, and
@@ -768,16 +774,21 @@ describe('reconcileRedundantLegacyUnit — auto-retire a redundant install-scrip
     readonly canonicalActive?: boolean;
     readonly canonicalMainPid?: number;
     readonly legacyMainPid?: number;
-    readonly disableStatus?: number;
+    readonly disableStatus?: number | null;
+    /** Reply to the post-timeout is-enabled re-inspection. */
+    readonly isEnabledReply?: { status: number | null; stdout?: string };
   }
 
-  /** A recording runner answering is-active + MainPID probes and disable/daemon-reload. */
+  /** A recording runner answering is-active/MainPID/is-enabled probes and disable/daemon-reload. */
   function fakeReconcileRunner(opts: FakeRunnerOptions = {}): { runner: RuntimeActionRunner; calls: string[][] } {
     const calls: string[][] = [];
     const runner: RuntimeActionRunner = (command, args) => {
       calls.push([command, ...args]);
       if (args.includes('is-active')) {
         return (opts.canonicalActive ?? true) ? { status: 0, stdout: 'active\n' } : { status: 3, stdout: 'inactive\n' };
+      }
+      if (args.includes('is-enabled')) {
+        return (opts.isEnabledReply ?? { status: 0, stdout: 'enabled\n' }) as ReturnType<RuntimeActionRunner>;
       }
       if (args.includes('MainPID')) {
         const unit = args[args.length - 1] ?? '';
@@ -787,14 +798,16 @@ describe('reconcileRedundantLegacyUnit — auto-retire a redundant install-scrip
         return { status: 0, stdout: `${pid}\n` };
       }
       if (args.includes('disable')) {
-        return { status: opts.disableStatus ?? 0 };
+        return { status: opts.disableStatus === undefined ? 0 : opts.disableStatus } as ReturnType<RuntimeActionRunner>;
       }
       return { status: 0 };
     };
     return { runner, calls };
   }
 
-  /** Base input with every guard seam injected to a safe, deterministic answer. */
+  /** Base input with every guard seam injected to a safe, deterministic answer.
+   * The legacy MainPID default (0) plus `processAlive` keyed off the canonical
+   * pid model the incident state: canonical serving, legacy enabled-but-idle. */
   function baseReconcileInput(
     overrides: Partial<Parameters<typeof reconcileRedundantLegacyUnit>[0]> = {},
   ): Parameters<typeof reconcileRedundantLegacyUnit>[0] {
@@ -806,14 +819,16 @@ describe('reconcileRedundantLegacyUnit — auto-retire a redundant install-scrip
       processAlive: () => true,
       ownPid: OWN_PID,
       readOwnCgroup: () => `0::/user.slice/user-1000.slice/user@1000.service/app.slice/${MANAGED_SERVICE_NAME}.service`,
+      configuredEndpoint: { host: '127.0.0.1', port: 3421 },
+      endpointProbe: () => true,
       ...overrides,
     };
   }
 
-  test('exact incident state: legacy marker-managed + canonical active with live MainPID → disabled, removed, receipt printed', () => {
+  test('exact incident state: canonical serving, legacy marker-managed and NOT running → disabled, removed, receipt printed', async () => {
     const { runner, calls } = fakeReconcileRunner();
     const removed: string[] = [];
-    const result = reconcileRedundantLegacyUnit(baseReconcileInput({
+    const result = await reconcileRedundantLegacyUnit(baseReconcileInput({
       legacyUnitFileRemove: (p) => removed.push(p),
       actionRunner: runner,
     }));
@@ -832,10 +847,50 @@ describe('reconcileRedundantLegacyUnit — auto-retire a redundant install-scrip
     expect(result.lines.join('\n')).toContain('disabled and removed');
   });
 
-  test('hand-written legacy unit (no marker) is never removed — a one-line actionable notice instead', () => {
+  test('wrong-port dual-daemon state: a RUNNING legacy daemon is never stopped by the unattended reconcile', async () => {
+    // Pins the verifier's wrong-port probe: canonical alive on its own port,
+    // legacy MainPID a LIVE process serving the endpoint clients actually
+    // resolve. The old guards passed and disable--now'd the daemon clients
+    // use; the unattended path must refuse and defer to migrate-service.
+    const { runner, calls } = fakeReconcileRunner({ legacyMainPid: 555 });
+    const removed: string[] = [];
+    const result = await reconcileRedundantLegacyUnit(baseReconcileInput({
+      legacyUnitFileRemove: (p) => removed.push(p),
+      actionRunner: runner,
+    }));
+
+    expect(result.action).toBe('noop');
+    expect(result.reason).toBe('legacy-running');
+    expect(removed).toEqual([]);
+    expect(calls.some((c) => c.includes('disable'))).toBe(false);
+    const text = result.lines.join('\n');
+    expect(text).toContain('live main process');
+    expect(text).toContain('migrate-service');
+  });
+
+  test('configured endpoint not answering → refuses: a canonical daemon alive on the WRONG port proves nothing for clients', async () => {
+    // Pins the endpoint half of the wrong-port state: legacy idle, canonical
+    // alive, but nothing serves what clients resolve from settings.json.
     const { runner, calls } = fakeReconcileRunner();
     const removed: string[] = [];
-    const result = reconcileRedundantLegacyUnit(baseReconcileInput({
+    const result = await reconcileRedundantLegacyUnit(baseReconcileInput({
+      configuredEndpoint: { host: '127.0.0.1', port: 3500 },
+      endpointProbe: () => false,
+      legacyUnitFileRemove: (p) => removed.push(p),
+      actionRunner: runner,
+    }));
+
+    expect(result.action).toBe('noop');
+    expect(result.reason).toBe('configured-endpoint-unserved');
+    expect(removed).toEqual([]);
+    expect(calls.some((c) => c.includes('disable'))).toBe(false);
+    expect(result.lines.join('\n')).toContain('127.0.0.1:3500');
+  });
+
+  test('hand-written legacy unit (no marker) is never removed — a one-line actionable notice instead', async () => {
+    const { runner, calls } = fakeReconcileRunner();
+    const removed: string[] = [];
+    const result = await reconcileRedundantLegacyUnit(baseReconcileInput({
       legacyUnitFileRead: () => '[Service]\nExecStart=/opt/custom/goodvibes-daemon\n',
       legacyUnitFileRemove: (p) => removed.push(p),
       actionRunner: runner,
@@ -850,14 +905,14 @@ describe('reconcileRedundantLegacyUnit — auto-retire a redundant install-scrip
     expect(result.lines.join('\n')).toContain(`disable --now ${LEGACY_SERVICE_UNIT_NAME}.service`);
   });
 
-  test('an UNREADABLE legacy unit file is reported as unreadable — never misdiagnosed as hand-written', () => {
+  test('an UNREADABLE legacy unit file is reported as unreadable — never misdiagnosed as hand-written', async () => {
     // Reproduces the verifier's chmod-000/root-owned probe: existsSync sees
     // the file, readFileSync throws EACCES. The old code printed "It is
     // hand-written (no installer marker)" — a false provenance claim about a
     // file whose contents (which DO carry the marker) were never read.
     const { runner, calls } = fakeReconcileRunner();
     const removed: string[] = [];
-    const result = reconcileRedundantLegacyUnit(baseReconcileInput({
+    const result = await reconcileRedundantLegacyUnit(baseReconcileInput({
       legacyUnitFileRead: () => {
         throw Object.assign(new Error(`EACCES: permission denied, open '${LEGACY_PATH}'`), { code: 'EACCES' });
       },
@@ -873,10 +928,10 @@ describe('reconcileRedundantLegacyUnit — auto-retire a redundant install-scrip
     expect(result.lines.join('\n')).not.toContain('hand-written');
   });
 
-  test('canonical NOT active → refuses with a breadcrumb: the legacy unit might be the only daemon', () => {
+  test('canonical NOT active → refuses with a breadcrumb: the legacy unit might be the only daemon', async () => {
     const { runner, calls } = fakeReconcileRunner({ canonicalActive: false });
     const removed: string[] = [];
-    const result = reconcileRedundantLegacyUnit(baseReconcileInput({
+    const result = await reconcileRedundantLegacyUnit(baseReconcileInput({
       legacyUnitFileRemove: (p) => removed.push(p),
       actionRunner: runner,
     }));
@@ -890,13 +945,13 @@ describe('reconcileRedundantLegacyUnit — auto-retire a redundant install-scrip
     expect(calls.some((c) => c.includes('daemon-reload'))).toBe(false);
   });
 
-  test("canonical reports active but its MainPID is 0 → refuses ('active' from a Type=simple unit is not proof of serving)", () => {
+  test("canonical reports active but its MainPID is 0 → refuses ('active' from a Type=simple unit is not proof of serving)", async () => {
     // Reproduces the verifier's crash-loop window: is-active says 'active'
     // (Type=simple reports active from fork onward) while no live main
     // process exists. The old guard authorized disable/remove here.
     const { runner, calls } = fakeReconcileRunner({ canonicalMainPid: 0 });
     const removed: string[] = [];
-    const result = reconcileRedundantLegacyUnit(baseReconcileInput({
+    const result = await reconcileRedundantLegacyUnit(baseReconcileInput({
       legacyUnitFileRemove: (p) => removed.push(p),
       actionRunner: runner,
     }));
@@ -907,10 +962,10 @@ describe('reconcileRedundantLegacyUnit — auto-retire a redundant install-scrip
     expect(calls.some((c) => c.includes('disable'))).toBe(false);
   });
 
-  test('canonical MainPID resolves but the process is dead → refuses', () => {
+  test('canonical MainPID resolves but the process is dead → refuses', async () => {
     const { runner, calls } = fakeReconcileRunner({ canonicalMainPid: 777 });
     const removed: string[] = [];
-    const result = reconcileRedundantLegacyUnit(baseReconcileInput({
+    const result = await reconcileRedundantLegacyUnit(baseReconcileInput({
       processAlive: () => false,
       legacyUnitFileRemove: (p) => removed.push(p),
       actionRunner: runner,
@@ -922,14 +977,14 @@ describe('reconcileRedundantLegacyUnit — auto-retire a redundant install-scrip
     expect(calls.some((c) => c.includes('disable'))).toBe(false);
   });
 
-  test('refuses to disable the unit supervising THIS process (legacy MainPID == own pid) — never SIGTERMs itself', () => {
+  test('refuses to disable the unit supervising THIS process (legacy MainPID == own pid) — never SIGTERMs itself', async () => {
     // Reproduces the verifier's self-kill scenario: the currently-booting
     // daemon was launched BY the legacy unit; `disable --now` on it would
     // SIGTERM this process's own cgroup mid-boot from inside the blocking
     // systemctl call.
     const { runner, calls } = fakeReconcileRunner({ legacyMainPid: OWN_PID });
     const removed: string[] = [];
-    const result = reconcileRedundantLegacyUnit(baseReconcileInput({
+    const result = await reconcileRedundantLegacyUnit(baseReconcileInput({
       legacyUnitFileRemove: (p) => removed.push(p),
       actionRunner: runner,
     }));
@@ -941,10 +996,10 @@ describe('reconcileRedundantLegacyUnit — auto-retire a redundant install-scrip
     expect(result.lines.join('\n')).toContain('refusing to disable');
   });
 
-  test('refuses when /proc/self/cgroup names the legacy unit, even if the MainPID probe is inconclusive', () => {
+  test('refuses when /proc/self/cgroup names the legacy unit, even if the MainPID probe is inconclusive', async () => {
     const { runner, calls } = fakeReconcileRunner({ legacyMainPid: 0 });
     const removed: string[] = [];
-    const result = reconcileRedundantLegacyUnit(baseReconcileInput({
+    const result = await reconcileRedundantLegacyUnit(baseReconcileInput({
       readOwnCgroup: () => `0::/user.slice/user-1000.slice/user@1000.service/app.slice/${LEGACY_SERVICE_UNIT_NAME}.service`,
       legacyUnitFileRemove: (p) => removed.push(p),
       actionRunner: runner,
@@ -956,14 +1011,14 @@ describe('reconcileRedundantLegacyUnit — auto-retire a redundant install-scrip
     expect(calls.some((c) => c.includes('disable'))).toBe(false);
   });
 
-  test('a FAILED disable leaves the unit file in place and never prints a false "disabled and removed" receipt', () => {
+  test('a FAILED disable (nonzero exit) leaves the unit file in place and never prints a false success receipt', async () => {
     // Reproduces the verifier's dangling-symlink scenario: disable --now
     // exits non-zero (bus hiccup); the old code removed the unit file anyway
     // and claimed success, leaving an enabled symlink pointing at nothing —
     // unrecoverable by the next reconcile pass (which noops on file-absent).
     const { runner, calls } = fakeReconcileRunner({ disableStatus: 1 });
     const removed: string[] = [];
-    const result = reconcileRedundantLegacyUnit(baseReconcileInput({
+    const result = await reconcileRedundantLegacyUnit(baseReconcileInput({
       legacyUnitFileRemove: (p) => removed.push(p),
       actionRunner: runner,
     }));
@@ -974,37 +1029,59 @@ describe('reconcileRedundantLegacyUnit — auto-retire a redundant install-scrip
     // No daemon-reload after a failed disable — nothing was changed.
     expect(calls.some((c) => c.includes('daemon-reload'))).toBe(false);
     const text = result.lines.join('\n');
-    expect(text).toContain('could not disable');
-    expect(text).toContain('nothing was removed');
+    expect(text).toContain('reported failure');
+    expect(text).toContain('this tool removed nothing');
     expect(text).not.toContain('disabled and removed');
   });
 
-  test('a TIMED-OUT disable (status null, wedged bus) is treated exactly like a failed disable', () => {
-    const calls: string[][] = [];
-    const runner: RuntimeActionRunner = (command, args) => {
-      calls.push([command, ...args]);
-      if (args.includes('is-active')) return { status: 0, stdout: 'active\n' };
-      if (args.includes('MainPID')) {
-        const unit = args[args.length - 1] ?? '';
-        return { status: 0, stdout: unit === `${LEGACY_SERVICE_UNIT_NAME}.service` ? '0\n' : `${CANONICAL_PID}\n` };
-      }
-      if (args.includes('disable')) return { status: null } as ReturnType<RuntimeActionRunner>;
-      return { status: 0 };
-    };
+  test('a TIMED-OUT disable whose re-inspection CONFIRMS the unit is disabled proceeds, saying the stop may still be completing', async () => {
+    // Pins the verifier's >5s-stop probe: `disable --now` removes the
+    // enablement symlinks synchronously, THEN blocks on the stop job; a
+    // client timeout does not undo the disable. The old code printed
+    // 'could not disable ... nothing was removed' — false on both counts.
+    const { runner } = fakeReconcileRunner({
+      disableStatus: null,
+      isEnabledReply: { status: 1, stdout: 'disabled\n' },
+    });
     const removed: string[] = [];
-    const result = reconcileRedundantLegacyUnit(baseReconcileInput({
+    const result = await reconcileRedundantLegacyUnit(baseReconcileInput({
+      legacyUnitFileRemove: (p) => removed.push(p),
+      actionRunner: runner,
+    }));
+
+    expect(result.action).toBe('removed');
+    expect(result.reason).toBe('retired');
+    expect(removed).toEqual([LEGACY_PATH]);
+    const text = result.lines.join('\n');
+    expect(text).toContain('timed out');
+    expect(text).toContain('re-inspection confirms');
+    expect(text).toContain('stop may still be completing');
+    expect(text).not.toContain('could not disable');
+  });
+
+  test('a TIMED-OUT disable whose outcome CANNOT be re-confirmed reports UNKNOWN — never a blanket denial', async () => {
+    const { runner } = fakeReconcileRunner({
+      disableStatus: null,
+      isEnabledReply: { status: null },
+    });
+    const removed: string[] = [];
+    const result = await reconcileRedundantLegacyUnit(baseReconcileInput({
       legacyUnitFileRemove: (p) => removed.push(p),
       actionRunner: runner,
     }));
 
     expect(result.action).toBe('failed');
-    expect(result.reason).toBe('disable-failed');
+    expect(result.reason).toBe('disable-timeout');
     expect(removed).toEqual([]);
+    const text = result.lines.join('\n');
+    expect(text).toContain('UNKNOWN');
+    expect(text).toContain('timed out');
+    expect(text).not.toContain('could not disable');
   });
 
-  test('no legacy unit present → noop, and it does not even probe systemd', () => {
+  test('no legacy unit present → noop, and it does not even probe systemd', async () => {
     const { runner, calls } = fakeReconcileRunner();
-    const result = reconcileRedundantLegacyUnit(baseReconcileInput({
+    const result = await reconcileRedundantLegacyUnit(baseReconcileInput({
       legacyUnitFileExists: () => false,
       actionRunner: runner,
     }));
@@ -1015,7 +1092,7 @@ describe('reconcileRedundantLegacyUnit — auto-retire a redundant install-scrip
     expect(calls).toEqual([]); // short-circuits before any systemctl call
   });
 
-  test('default runner is hard-timeout-bounded: a hanging systemctl (wedged user bus) degrades to a fast refusal, never a boot hang', () => {
+  test('default runner is hard-timeout-bounded: a hanging systemctl (wedged user bus) degrades to a fast refusal, never a boot hang', async () => {
     // Reproduces the verifier's frozen-event-loop probe: a fake systemctl on
     // PATH that sleeps forever. Without a spawnSync timeout the reconcile
     // blocked the daemon's event loop indefinitely; with it, the probe times
@@ -1028,7 +1105,7 @@ describe('reconcileRedundantLegacyUnit — auto-retire a redundant install-scrip
     process.env.PATH = `${dir}:${previousPath ?? ''}`;
     try {
       const startedAt = Date.now();
-      const result = reconcileRedundantLegacyUnit(baseReconcileInput({
+      const result = await reconcileRedundantLegacyUnit(baseReconcileInput({
         // No actionRunner: exercises the DEFAULT spawnSync runner against the
         // hanging stub, with a short injected timeout to keep the suite fast.
         systemctlTimeoutMs: 500,
@@ -1041,6 +1118,74 @@ describe('reconcileRedundantLegacyUnit — auto-retire a redundant install-scrip
     } finally {
       if (previousPath === undefined) delete process.env.PATH;
       else process.env.PATH = previousPath;
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test('one CUMULATIVE deadline covers the whole pass: once exceeded, remaining calls are skipped with a notice', async () => {
+    // Pins the degraded-bus (slow-but-completing) shape: per-call timeouts
+    // alone let ~5 sequential calls stack up. With the pass deadline already
+    // exhausted, every call is skipped outright and the refusal says so.
+    const removed: string[] = [];
+    const result = await reconcileRedundantLegacyUnit(baseReconcileInput({
+      deadlineMs: 0,
+      legacyUnitFileRemove: (p) => removed.push(p),
+      // No actionRunner: the deadline wrapper must skip the DEFAULT runner's
+      // calls before any child process is spawned.
+    }));
+
+    expect(result.action).toBe('noop');
+    expect(result.reason).toBe('canonical-not-active');
+    expect(removed).toEqual([]);
+    expect(result.lines.join('\n')).toContain('time budget');
+  });
+});
+
+/**
+ * Unit-content parity (installer vs product) on a NON-DEFAULT config fixture:
+ * both writers must produce the same ExecStart shape — the daemon binary plus
+ * `--daemon-home <home>` and NOTHING else. Neither may bake the configured
+ * endpoint into the unit: the daemon resolves controlPlane at boot, which is
+ * exactly how a hostMode=network / port-3500 host keeps its endpoint across
+ * upgrades instead of being silently re-pinned to installer constants.
+ */
+describe('canonical unit content parity — installer and product agree, endpoint comes from config at boot', () => {
+  test('product-written unit on a hostMode=network/port-3500 fixture bakes no endpoint; boot-time resolution yields the configured endpoint', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'gv-unit-parity-'));
+    try {
+      const configManager = new ConfigManager({ workingDir: dir, homeDir: dir, surfaceRoot: 'tui' });
+      configManager.setDynamic('controlPlane.hostMode', 'network');
+      configManager.setDynamic('controlPlane.port', 3500);
+
+      const manager = buildManagedDaemonServiceManager({
+        binaryPath: '/usr/local/bin/goodvibes-daemon',
+        homeDir: dir,
+        host: '0.0.0.0',
+        port: 3500,
+        configManager,
+        actionRunner: () => ({ status: 0 }),
+      });
+      const installed = manager.install();
+      expect(installed.actionError).toBeUndefined();
+      const productUnit = readFileSync(join(dir, '.config', 'systemd', 'user', 'goodvibes.service'), 'utf-8');
+      const productExec = productUnit.split('\n').find((l) => l.startsWith('ExecStart=')) ?? '';
+
+      // The product unit: binary + --daemon-home only — no endpoint flags, no
+      // endpoint VALUES.
+      const productArgs = productExec.replace('ExecStart=', '').split(/\s+/).slice(1);
+      expect(productArgs).toEqual(['--daemon-home', dir]);
+      expect(productUnit).not.toContain('--hostname');
+      expect(productUnit).not.toContain('--port');
+      expect(productUnit).not.toContain('3500');
+      expect(productUnit).not.toContain('0.0.0.0');
+
+      // The endpoint LIVES in config, resolved by the daemon at boot: the
+      // boot-time resolution on this fixture is the configured endpoint, for
+      // a unit written by either path.
+      const bootBinding = resolveRuntimeEndpointBinding(configManager, 'controlPlane');
+      expect(bootBinding.host).toBe('0.0.0.0');
+      expect(bootBinding.port).toBe(3500);
+    } finally {
       rmSync(dir, { recursive: true, force: true });
     }
   });
