@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { renderGoodVibesVersion } from '../../cli/help.ts';
+import { renderGoodVibesVersion, renderDaemonStartupBanner } from '../../cli/help.ts';
 import { VERSION } from '../../version.ts';
 
 describe('CLI help/version', () => {
@@ -22,5 +22,41 @@ describe('CLI help/version', () => {
         process.env.npm_package_version = previous;
       }
     }
+  });
+
+  test('renderGoodVibesVersion never renders the 0.0.0 placeholder', () => {
+    // The name-guard in getPackageVersion() means a stray package.json can never
+    // leak "0.0.0" into the version string; the resolved value is the real
+    // prebuild-baked VERSION.
+    expect(renderGoodVibesVersion('goodvibes-daemon')).toBe(`goodvibes-daemon ${VERSION}`);
+    expect(renderGoodVibesVersion('goodvibes-daemon')).not.toContain('0.0.0');
+  });
+});
+
+describe('daemon startup banner', () => {
+  // A sentinel version that can never equal the live build — the banner must
+  // render exactly what it is handed, so the daemon's bare-launch path shows
+  // the resolved version (not a placeholder) and its actual home/host/port.
+  const SENTINEL = '42.42.42-daemon-banner-sentinel';
+
+  test('renders the resolved version and the bound home/host/port', () => {
+    const line = renderDaemonStartupBanner(SENTINEL, {
+      homeDir: '/home/mike',
+      host: '127.0.0.1',
+      port: 3421,
+    });
+    expect(line).toBe(
+      'goodvibes-daemon 42.42.42-daemon-banner-sentinel starting — ' +
+        'home=/home/mike host=127.0.0.1 port=3421 ' +
+        '(manage as a service: goodvibes-daemon install-service)',
+    );
+  });
+
+  test('points a bare launch at the real service setup instead of a bare banner', () => {
+    const line = renderDaemonStartupBanner(SENTINEL, { homeDir: '/h', host: '127.0.0.1', port: 8080 });
+    expect(line).toContain('install-service');
+    expect(line).toContain('42.42.42-daemon-banner-sentinel');
+    // The version segment is exactly the sentinel — never a 0.0.0 placeholder.
+    expect(line).toContain('goodvibes-daemon 42.42.42-daemon-banner-sentinel starting');
   });
 });

@@ -41,7 +41,7 @@
  *     exercised deterministically via fakes and never touches a real running
  *     service in tests.
  */
-import { existsSync, rmSync } from 'node:fs';
+import { existsSync, readFileSync, rmSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import net from 'node:net';
 import { basename, dirname, join } from 'node:path';
@@ -268,6 +268,109 @@ export function legacyUnitNote(legacy: LegacyUnitInfo, trackedServiceName: strin
     `both would start two daemons competing for the same port. To retire the install-script unit in favor of this ` +
     `tool's: systemctl --user disable --now ${LEGACY_SERVICE_UNIT_NAME}.service && rm ${legacy.path} && systemctl --user daemon-reload`
   );
+}
+
+/**
+ * The exact marker string scripts/install.sh writes into every unit it
+ * creates (as a `# managed by goodvibes install.sh` comment). The reconcile
+ * check below keys on it to tell an installer-created legacy unit — safe to
+ * auto-retire — apart from a hand-written one that must only ever be reported.
+ * Kept in lockstep with `INSTALLER_MARKER` in scripts/install.sh.
+ */
+export const INSTALLER_UNIT_MARKER = 'managed by goodvibes install.sh';
+
+export interface ReconcileRedundantLegacyUnitInput {
+  readonly homeDir: string;
+  /** The unit name this tool manages (e.g. 'goodvibes'). */
+  readonly trackedServiceName: string;
+  /** Injectable existsSync so tests never touch the host filesystem. */
+  readonly legacyUnitFileExists?: ((path: string) => boolean) | undefined;
+  /** Injectable unit-file read for the installer-marker check. */
+  readonly legacyUnitFileRead?: ((path: string) => string) | undefined;
+  /** Injectable removal of the legacy unit file. Defaults to a real `rmSync`. */
+  readonly legacyUnitFileRemove?: ((path: string) => void) | undefined;
+  /** Injectable systemctl runner (is-active probe + disable/daemon-reload). */
+  readonly actionRunner?: ManagedServiceActionRunner | undefined;
+}
+
+export interface ReconcileRedundantLegacyUnitResult {
+  /** 'removed' = legacy unit auto-retired; 'notice' = hand-written, left alone with a hint; 'noop' = nothing to do. */
+  readonly action: 'removed' | 'notice' | 'noop';
+  readonly lines: readonly string[];
+}
+
+/**
+ * Cheap, unattended startup reconcile for the exact host state the production
+ * incident surfaced: an installer-managed legacy `goodvibes-daemon.service`
+ * unit sitting ENABLED alongside the canonical `goodvibes.service` that is
+ * ENABLED + ACTIVE. Nothing ever disabled the redundant legacy unit, so a
+ * bare-args second daemon could boot and fight the real one for the port.
+ *
+ * This runs on daemon startup (no user invocation needed) and, guard-railed:
+ *   - Only acts when the canonical unit is CONFIRMED active (a read-only
+ *     `is-active` probe). If the canonical one is not the daemon actually
+ *     serving, the legacy unit might be the only daemon — leave it alone.
+ *   - AUTO-RETIRES only an installer-MARKER-managed legacy unit (disable +
+ *     remove + daemon-reload), printing a receipt. A hand-written legacy unit
+ *     (no marker) is never touched — it returns a one-line actionable notice.
+ * Every side effect goes through the same injectable seams the migration engine
+ * uses, so tests exercise it deterministically and never touch a real service.
+ */
+export function reconcileRedundantLegacyUnit(
+  input: ReconcileRedundantLegacyUnitInput,
+): ReconcileRedundantLegacyUnitResult {
+  const path = legacyUnitPath(input.homeDir);
+  const fileExists = input.legacyUnitFileExists ?? existsSync;
+  if (!fileExists(path)) return { action: 'noop', lines: [] };
+
+  const run: ManagedServiceActionRunner = input.actionRunner
+    ?? ((command, args) => spawnSync(command, args, { stdio: 'pipe', encoding: 'utf-8' }) as ManagedServiceActionResult);
+
+  // Only reconcile when the canonical unit is the one actually serving.
+  const canonicalUnit = `${input.trackedServiceName}.service`;
+  const probe = run('systemctl', ['--user', 'is-active', canonicalUnit]);
+  const canonicalActive = (probe.status ?? 1) === 0 && (probe.stdout ?? '').trim() === 'active';
+  if (!canonicalActive) return { action: 'noop', lines: [] };
+
+  const readFile = input.legacyUnitFileRead ?? ((p: string) => readFileSync(p, 'utf-8'));
+  let marked = false;
+  try {
+    marked = readFile(path).includes(INSTALLER_UNIT_MARKER);
+  } catch {
+    marked = false;
+  }
+
+  if (!marked) {
+    return {
+      action: 'notice',
+      lines: [
+        `note: ${canonicalUnit} is active but a separate ${LEGACY_SERVICE_UNIT_NAME}.service also exists at ${path}. ` +
+          'It is hand-written (no installer marker) so it was left untouched; retire it yourself to stop two daemons ' +
+          `competing for the same port: systemctl --user disable --now ${LEGACY_SERVICE_UNIT_NAME}.service && rm ${path} && ` +
+          'systemctl --user daemon-reload',
+      ],
+    };
+  }
+
+  // Installer-marker-managed and redundant: auto-disable + remove, with a receipt.
+  run('systemctl', ['--user', 'disable', '--now', `${LEGACY_SERVICE_UNIT_NAME}.service`]);
+  const removeFile = input.legacyUnitFileRemove ?? ((p: string) => rmSync(p, { force: true }));
+  let removeError: string | undefined;
+  try {
+    removeFile(path);
+  } catch (error) {
+    removeError = summarizeError(error);
+  }
+  run('systemctl', ['--user', 'daemon-reload']);
+
+  const lines = [
+    `reconciled: ${canonicalUnit} is active, so the redundant installer-managed ${LEGACY_SERVICE_UNIT_NAME}.service ` +
+      `was disabled${removeError ? '' : ` and removed (${path})`}.`,
+  ];
+  if (removeError) {
+    lines.push(`note: could not remove ${path}: ${removeError} — remove it by hand.`);
+  }
+  return { action: 'removed', lines };
 }
 
 /**

@@ -11,7 +11,15 @@ import {
   runDaemonServiceCli,
   type ManagedServiceActionRunner,
 } from '../../daemon/service-commands.ts';
-import { resolveConfiguredServiceName } from '../../runtime/legacy-daemon-migration.ts';
+import {
+  resolveConfiguredServiceName,
+  reconcileRedundantLegacyUnit,
+  legacyUnitPath,
+  INSTALLER_UNIT_MARKER,
+  LEGACY_SERVICE_UNIT_NAME,
+  MANAGED_SERVICE_NAME,
+  type ManagedServiceActionRunner as RuntimeActionRunner,
+} from '../../runtime/legacy-daemon-migration.ts';
 
 describe('resolveConfiguredServiceName — config-honest name for pre-manager callers', () => {
   function config(value: unknown): { get(key: string): unknown } {
@@ -735,5 +743,109 @@ describe('buildInstallResultLines — "suggested follow-ups" gating (W3 Finding 
     expect(lines).not.toContain('service is enabled and running');
     expect(lines.some((line) => line.includes('suggested follow-ups'))).toBe(true);
     expect(lines.some((line) => line.includes('systemctl --user daemon-reload'))).toBe(true);
+  });
+});
+
+/**
+ * The unattended startup reconcile (`reconcileRedundantLegacyUnit`) — the fix
+ * for the production incident where an installer-managed legacy
+ * `goodvibes-daemon.service` sat ENABLED alongside the canonical, ENABLED +
+ * ACTIVE `goodvibes.service` and nothing ever disabled it. Every side effect
+ * goes through injected seams: the `is-active` probe and disable/daemon-reload
+ * through a fake `actionRunner`, file existence/read/remove through fakes — this
+ * suite never touches a real service or a real ~/.config/systemd/user unit.
+ */
+describe('reconcileRedundantLegacyUnit — auto-retire a redundant install-script unit at startup', () => {
+  const HOME = '/home/mike';
+  const LEGACY_PATH = legacyUnitPath(HOME);
+
+  /** A recording runner whose `is-active` answer for the canonical unit is fixed. */
+  function runnerWithCanonical(canonicalActive: boolean): { runner: RuntimeActionRunner; calls: string[][] } {
+    const calls: string[][] = [];
+    const runner: RuntimeActionRunner = (command, args) => {
+      calls.push([command, ...args]);
+      if (args.includes('is-active')) {
+        return canonicalActive ? { status: 0, stdout: 'active\n' } : { status: 3, stdout: 'inactive\n' };
+      }
+      return { status: 0 };
+    };
+    return { runner, calls };
+  }
+
+  test('exact incident state: legacy marker-managed + canonical active → disabled, removed, receipt printed', () => {
+    const { runner, calls } = runnerWithCanonical(true);
+    const removed: string[] = [];
+    const result = reconcileRedundantLegacyUnit({
+      homeDir: HOME,
+      trackedServiceName: MANAGED_SERVICE_NAME,
+      legacyUnitFileExists: () => true,
+      legacyUnitFileRead: () => `# ${INSTALLER_UNIT_MARKER}\n[Service]\nExecStart=/x/goodvibes-daemon\n`,
+      legacyUnitFileRemove: (p) => removed.push(p),
+      actionRunner: runner,
+    });
+
+    expect(result.action).toBe('removed');
+    // The legacy unit file was removed via the injected seam.
+    expect(removed).toEqual([LEGACY_PATH]);
+    // It probed the CANONICAL unit's activeness, then disabled the LEGACY one.
+    expect(calls).toContainEqual(['systemctl', '--user', 'is-active', `${MANAGED_SERVICE_NAME}.service`]);
+    expect(calls).toContainEqual(['systemctl', '--user', 'disable', '--now', `${LEGACY_SERVICE_UNIT_NAME}.service`]);
+    expect(calls).toContainEqual(['systemctl', '--user', 'daemon-reload']);
+    // Honest receipt.
+    expect(result.lines.join('\n')).toContain(`redundant installer-managed ${LEGACY_SERVICE_UNIT_NAME}.service`);
+    expect(result.lines.join('\n')).toContain('disabled and removed');
+  });
+
+  test('hand-written legacy unit (no marker) is never removed — a one-line actionable notice instead', () => {
+    const { runner, calls } = runnerWithCanonical(true);
+    const removed: string[] = [];
+    const result = reconcileRedundantLegacyUnit({
+      homeDir: HOME,
+      trackedServiceName: MANAGED_SERVICE_NAME,
+      legacyUnitFileExists: () => true,
+      legacyUnitFileRead: () => '[Service]\nExecStart=/opt/custom/goodvibes-daemon\n',
+      legacyUnitFileRemove: (p) => removed.push(p),
+      actionRunner: runner,
+    });
+
+    expect(result.action).toBe('notice');
+    expect(removed).toEqual([]); // never removed
+    // Never issued a disable for a hand-written unit.
+    expect(calls.some((c) => c.includes('disable'))).toBe(false);
+    expect(result.lines.join('\n')).toContain('hand-written (no installer marker)');
+    expect(result.lines.join('\n')).toContain(`disable --now ${LEGACY_SERVICE_UNIT_NAME}.service`);
+  });
+
+  test('canonical NOT active → noop: the legacy unit might be the only daemon, so it is left alone', () => {
+    const { runner, calls } = runnerWithCanonical(false);
+    const removed: string[] = [];
+    const result = reconcileRedundantLegacyUnit({
+      homeDir: HOME,
+      trackedServiceName: MANAGED_SERVICE_NAME,
+      legacyUnitFileExists: () => true,
+      legacyUnitFileRead: () => `# ${INSTALLER_UNIT_MARKER}\n`,
+      legacyUnitFileRemove: (p) => removed.push(p),
+      actionRunner: runner,
+    });
+
+    expect(result.action).toBe('noop');
+    expect(removed).toEqual([]);
+    // It probed activeness but never disabled/removed anything.
+    expect(calls.some((c) => c.includes('disable'))).toBe(false);
+    expect(calls.some((c) => c.includes('daemon-reload'))).toBe(false);
+  });
+
+  test('no legacy unit present → noop, and it does not even probe systemd', () => {
+    const { runner, calls } = runnerWithCanonical(true);
+    const result = reconcileRedundantLegacyUnit({
+      homeDir: HOME,
+      trackedServiceName: MANAGED_SERVICE_NAME,
+      legacyUnitFileExists: () => false,
+      actionRunner: runner,
+    });
+
+    expect(result.action).toBe('noop');
+    expect(result.lines).toEqual([]);
+    expect(calls).toEqual([]); // short-circuits before any systemctl call
   });
 });
