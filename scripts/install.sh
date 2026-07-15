@@ -75,11 +75,31 @@ UNINSTALL="${GOODVIBES_UNINSTALL:-0}"
 # a plain substring grep for this string matches either form.
 INSTALLER_MARKER="managed by goodvibes install.sh"
 
-# Service unit / LaunchAgent identities. The systemd unit name matches the one
-# the installer's existing upgrade-restart logic already targets
-# (goodvibes-daemon.service), so setup and restart agree on a single unit.
-SYSTEMD_DAEMON_UNIT="goodvibes-daemon.service"
+# Service unit / LaunchAgent identities. The systemd unit name is the SAME one
+# the product's own service setup manages (src/daemon/service-commands.ts ->
+# buildManagedDaemonServiceManager writes `goodvibes.service` with an
+# args-driven ExecStart). Installer create/restart/uninstall all target this
+# single canonical name so a curl install and the in-app `install-service`
+# command never fight over two different units.
+SYSTEMD_DAEMON_UNIT="goodvibes.service"
 LAUNCHD_DAEMON_LABEL="sh.goodvibes.daemon"
+
+# The prior generation of this installer created the daemon unit under the name
+# `goodvibes-daemon.service` with a bare `ExecStart=<bin>` (no args). That unit
+# name is retired: the upgrade path (migrate_legacy_installer_unit) disables and
+# removes an installer-MARKER-managed one after the canonical unit is in place,
+# and uninstall removes it too. A hand-written goodvibes-daemon.service (no
+# marker) is always left alone and only reported.
+LEGACY_SYSTEMD_DAEMON_UNIT="goodvibes-daemon.service"
+
+# Launch arguments baked into the canonical unit's ExecStart. These mirror what
+# the product's PlatformServiceManager writes (`--daemon-home <home> --hostname
+# <host> --port <port>`) so a fresh curl install and the in-app install-service
+# command produce the same running daemon. The host/port defaults match the
+# SDK's controlPlane config defaults (127.0.0.1:3421); a user who later moves
+# the daemon re-runs the in-app install-service to re-pin its own values.
+DAEMON_HOST="127.0.0.1"
+DAEMON_PORT="3421"
 
 say() { printf '%s\n' "$*"; }
 fail() { printf 'install.sh: %s\n' "$*" >&2; exit 1; }
@@ -468,7 +488,7 @@ restart_bare_processes() {
 
 restart_running_daemon() {
   [ "$RESTART_DAEMON" = "1" ] || return 0
-  restart_systemd_unit goodvibes-daemon.service "$INSTALL_DIR/goodvibes-daemon" && return 0
+  restart_systemd_unit "$SYSTEMD_DAEMON_UNIT" "$INSTALL_DIR/goodvibes-daemon" && return 0
   restart_bare_processes '[g]oodvibes-daemon' "$INSTALL_DIR/goodvibes-daemon"
 }
 
@@ -538,7 +558,7 @@ StartLimitIntervalSec=0
 
 [Service]
 Type=simple
-ExecStart=$INSTALL_DIR/goodvibes-daemon
+ExecStart=$INSTALL_DIR/goodvibes-daemon --daemon-home $HOME --hostname $DAEMON_HOST --port $DAEMON_PORT
 Restart=on-failure
 RestartSec=2$_restart_escalation
 
@@ -566,6 +586,12 @@ write_launchd_plist() {
   <key>ProgramArguments</key>
   <array>
     <string>$INSTALL_DIR/goodvibes-daemon</string>
+    <string>--daemon-home</string>
+    <string>$HOME</string>
+    <string>--hostname</string>
+    <string>$DAEMON_HOST</string>
+    <string>--port</string>
+    <string>$DAEMON_PORT</string>
   </array>
   <key>RunAtLoad</key>
   <true/>
@@ -683,6 +709,57 @@ setup_daemon_service() {
   say "No user service manager (systemd/launchd) is available to run the daemon"
   say "automatically. Start it yourself with:"
   say "  $INSTALL_DIR/goodvibes-daemon"
+}
+
+# --- upgrade path: retire the legacy `goodvibes-daemon.service` unit name ---
+# The prior installer created the daemon unit as `goodvibes-daemon.service`
+# with a bare `ExecStart=<bin>` (no args). This installer now unifies on
+# `goodvibes.service` (the same name the in-app install-service manages). When
+# an upgrade finds a leftover legacy unit, retire it — but ONLY if the canonical
+# unit is already in place (so we never leave a host with no daemon unit at all)
+# and ONLY if the legacy unit carries this installer's marker (a hand-written
+# goodvibes-daemon.service is never removed, only reported). This is the piece
+# that stops the two-unit split the production incident surfaced: a bare-args
+# legacy unit booting a second, port-conflicting daemon alongside the real one.
+migrate_legacy_installer_unit() {
+  legacy_path=$(systemd_unit_path "$LEGACY_SYSTEMD_DAEMON_UNIT")
+  [ -f "$legacy_path" ] || return 0
+
+  # Only retire the legacy unit once the canonical unit is actually present on
+  # disk (or reported active) — never remove the legacy one and leave nothing.
+  canonical_path=$(systemd_daemon_unit_path)
+  canonical_ready=0
+  [ -f "$canonical_path" ] && canonical_ready=1
+  if [ "$canonical_ready" != "1" ] && command -v systemctl >/dev/null 2>&1; then
+    systemctl --user is-active --quiet "$SYSTEMD_DAEMON_UNIT" 2>/dev/null && canonical_ready=1
+  fi
+  if [ "$canonical_ready" != "1" ]; then
+    say ""
+    say "Found a legacy $LEGACY_SYSTEMD_DAEMON_UNIT unit but no canonical $SYSTEMD_DAEMON_UNIT is in place yet —"
+    say "  leaving the legacy unit alone so the host is never left without a daemon unit."
+    return 0
+  fi
+
+  if ! grep -q "$INSTALLER_MARKER" "$legacy_path" 2>/dev/null; then
+    # Hand-written legacy unit: never touched, only reported.
+    say ""
+    say "A hand-written $LEGACY_SYSTEMD_DAEMON_UNIT (no installer marker) exists at $legacy_path."
+    say "  This installer now manages $SYSTEMD_DAEMON_UNIT instead; your unit is left in place."
+    say "  If it is redundant, retire it yourself:"
+    say "    systemctl --user disable --now $LEGACY_SYSTEMD_DAEMON_UNIT && rm $legacy_path && systemctl --user daemon-reload"
+    return 0
+  fi
+
+  say ""
+  say "Retiring the superseded installer-managed $LEGACY_SYSTEMD_DAEMON_UNIT (now unified as $SYSTEMD_DAEMON_UNIT) ..."
+  if command -v systemctl >/dev/null 2>&1; then
+    systemctl --user disable --now "$LEGACY_SYSTEMD_DAEMON_UNIT" 2>/dev/null ||
+      systemctl --user stop "$LEGACY_SYSTEMD_DAEMON_UNIT" 2>/dev/null || true
+  fi
+  rm -f "$legacy_path"
+  command -v systemctl >/dev/null 2>&1 && systemctl --user daemon-reload 2>/dev/null || true
+  say "  disabled + removed $legacy_path"
+  say "  the canonical $SYSTEMD_DAEMON_UNIT keeps running."
 }
 
 # --- sqlite-vec native addon: restores semantic vector search ---
@@ -878,6 +955,9 @@ uninstall_services_and_processes() {
   case "$os_tag" in
     linux)
       uninstall_systemd_service "$SYSTEMD_DAEMON_UNIT" "$(systemd_daemon_unit_path)"
+      # Also clean up the retired goodvibes-daemon.service unit name: removed
+      # when installer-marker-managed, left in place (and reported) otherwise.
+      uninstall_systemd_service "$LEGACY_SYSTEMD_DAEMON_UNIT" "$(systemd_unit_path "$LEGACY_SYSTEMD_DAEMON_UNIT")"
       uninstall_systemd_service goodvibes-agent.service "$HOME/.config/systemd/user/goodvibes-agent.service"
       ;;
     macos)
@@ -1008,6 +1088,12 @@ main() {
   # running and no unit exists yet (a no-op on an upgrade, which the restart
   # path above already handled).
   setup_daemon_service
+
+  # Upgrade path: once the canonical goodvibes.service is in place, retire a
+  # leftover installer-managed goodvibes-daemon.service (the retired unit name)
+  # so the host never runs two competing daemon units. A hand-written legacy
+  # unit is left alone and only reported.
+  migrate_legacy_installer_unit
 
   say ""
   if [ "$PATH_LINE_ADDED" = "1" ]; then

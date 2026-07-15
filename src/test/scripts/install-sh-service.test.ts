@@ -180,7 +180,7 @@ describe('install.sh — systemd unit generation', () => {
     const installDir = join(root, 'bin');
     mkdirSync(installDir, { recursive: true });
 
-    const unitPath = join(home, '.config/systemd/user/goodvibes-daemon.service');
+    const unitPath = join(home, '.config/systemd/user/goodvibes.service');
     const out = runLib(`write_systemd_unit "${unitPath}"`, { HOME: home, GOODVIBES_INSTALL_DIR: installDir });
     expect(out.code).toBe(0);
     expect(existsSync(unitPath)).toBe(true);
@@ -188,8 +188,11 @@ describe('install.sh — systemd unit generation', () => {
     const unit = readFileSync(unitPath, 'utf-8');
     // Installer-managed marker (the uninstall path keys on this exact string).
     expect(unit).toContain('# managed by goodvibes install.sh');
-    // ExecStart points at the daemon binary inside the install dir.
-    expect(unit).toContain(`ExecStart=${installDir}/goodvibes-daemon`);
+    // ExecStart mirrors what the product's own service setup writes: the daemon
+    // binary inside the install dir PLUS the args-driven launch flags
+    // (--daemon-home/--hostname/--port), so a curl install and the in-app
+    // install-service produce the same unit instead of a bare-args one.
+    expect(unit).toContain(`ExecStart=${installDir}/goodvibes-daemon --daemon-home ${home} --hostname 127.0.0.1 --port 3421`);
     expect(unit).toContain('Restart=on-failure');
     expect(unit).toContain('WantedBy=default.target');
     expect(unit).toMatch(/\[Unit\][\s\S]*\[Service\][\s\S]*\[Install\]/);
@@ -349,7 +352,7 @@ describe('install.sh — first-run service setup guards', () => {
     expect(out.code).toBe(0);
     expect(out.stdout).toContain('GOODVIBES_DAEMON_SERVICE=0');
     expect(out.stdout).toContain(`${installDir}/goodvibes-daemon`);
-    expect(existsSync(join(home, '.config/systemd/user/goodvibes-daemon.service'))).toBe(false);
+    expect(existsSync(join(home, '.config/systemd/user/goodvibes.service'))).toBe(false);
   });
 
   test('an existing unit is never overwritten (installer-managed or hand-written)', () => {
@@ -359,7 +362,7 @@ describe('install.sh — first-run service setup guards', () => {
     const unitDir = join(home, '.config/systemd/user');
     mkdirSync(installDir, { recursive: true });
     mkdirSync(unitDir, { recursive: true });
-    const unitPath = join(unitDir, 'goodvibes-daemon.service');
+    const unitPath = join(unitDir, 'goodvibes.service');
     const original = '[Service]\nExecStart=/somewhere/else/goodvibes-daemon\n';
     writeFileSync(unitPath, original);
 
@@ -372,6 +375,96 @@ describe('install.sh — first-run service setup guards', () => {
     expect(out.stdout).toContain('already exists');
     // Untouched: the pre-existing contents survive verbatim.
     expect(readFileSync(unitPath, 'utf-8')).toBe(original);
+  });
+});
+
+describe('install.sh — canonical unit name + legacy-unit unification', () => {
+  const MARKER = '# managed by goodvibes install.sh';
+
+  test('fresh install writes only the canonical goodvibes.service (no legacy name), and migrate is a no-op', () => {
+    const root = scratch('gv-fresh-canonical');
+    const home = join(root, 'home');
+    const installDir = join(root, 'bin');
+    mkdirSync(installDir, { recursive: true });
+
+    const out = runLib('setup_daemon_service_systemd; migrate_legacy_installer_unit', {
+      HOME: home,
+      GOODVIBES_INSTALL_DIR: installDir,
+      PATH: `${stubServiceBin(root)}:${process.env.PATH ?? ''}`,
+    });
+    expect(out.code).toBe(0);
+
+    const unitDir = join(home, '.config/systemd/user');
+    // Exactly the canonical unit is on disk; the retired name never appears.
+    expect(existsSync(join(unitDir, 'goodvibes.service'))).toBe(true);
+    expect(existsSync(join(unitDir, 'goodvibes-daemon.service'))).toBe(false);
+
+    const unit = readFileSync(join(unitDir, 'goodvibes.service'), 'utf-8');
+    expect(unit).toContain(MARKER);
+    expect(unit).toContain(`ExecStart=${installDir}/goodvibes-daemon --daemon-home ${home} --hostname 127.0.0.1 --port 3421`);
+    // Nothing to migrate: no legacy retirement lines printed.
+    expect(out.stdout).not.toContain('Retiring the superseded');
+  });
+
+  test('upgrade with an installer-managed legacy unit: legacy is disabled + removed, canonical stays', () => {
+    const root = scratch('gv-upgrade-legacy');
+    const home = join(root, 'home');
+    const installDir = join(root, 'bin');
+    const unitDir = join(home, '.config/systemd/user');
+    mkdirSync(installDir, { recursive: true });
+    mkdirSync(unitDir, { recursive: true });
+
+    // The canonical unit is already in place (this is an upgrade) ...
+    const canonical = join(unitDir, 'goodvibes.service');
+    writeFileSync(canonical, `${MARKER}\n[Service]\nExecStart=${installDir}/goodvibes-daemon --daemon-home ${home} --hostname 127.0.0.1 --port 3421\n`);
+    // ... alongside a leftover installer-managed legacy unit (the exact host
+    // state the production incident found: two units, canonical is the real one).
+    const legacy = join(unitDir, 'goodvibes-daemon.service');
+    writeFileSync(legacy, `${MARKER}\n[Service]\nExecStart=${installDir}/goodvibes-daemon\n`);
+
+    const out = runLib('migrate_legacy_installer_unit', {
+      HOME: home,
+      GOODVIBES_INSTALL_DIR: installDir,
+      PATH: `${stubServiceBin(root)}:${process.env.PATH ?? ''}`,
+    });
+    expect(out.code).toBe(0);
+
+    // Legacy retired; canonical untouched.
+    expect(existsSync(legacy)).toBe(false);
+    expect(existsSync(canonical)).toBe(true);
+    expect(out.stdout).toContain('Retiring the superseded installer-managed goodvibes-daemon.service');
+    expect(out.stdout).toContain('disabled + removed');
+    expect(out.stdout).toContain('the canonical goodvibes.service keeps running');
+  });
+
+  test('a hand-written legacy unit (no marker) is left in place with an actionable notice', () => {
+    const root = scratch('gv-upgrade-handwritten-legacy');
+    const home = join(root, 'home');
+    const installDir = join(root, 'bin');
+    const unitDir = join(home, '.config/systemd/user');
+    mkdirSync(installDir, { recursive: true });
+    mkdirSync(unitDir, { recursive: true });
+
+    const canonical = join(unitDir, 'goodvibes.service');
+    writeFileSync(canonical, `${MARKER}\n[Service]\nExecStart=${installDir}/goodvibes-daemon --daemon-home ${home} --hostname 127.0.0.1 --port 3421\n`);
+    // A hand-written legacy unit — no installer marker — must never be removed.
+    const legacy = join(unitDir, 'goodvibes-daemon.service');
+    const handWritten = '[Service]\nExecStart=/opt/custom/goodvibes-daemon\n';
+    writeFileSync(legacy, handWritten);
+
+    const out = runLib('migrate_legacy_installer_unit', {
+      HOME: home,
+      GOODVIBES_INSTALL_DIR: installDir,
+      PATH: `${stubServiceBin(root)}:${process.env.PATH ?? ''}`,
+    });
+    expect(out.code).toBe(0);
+
+    // Untouched, verbatim, and only reported.
+    expect(existsSync(legacy)).toBe(true);
+    expect(readFileSync(legacy, 'utf-8')).toBe(handWritten);
+    expect(out.stdout).toContain('A hand-written goodvibes-daemon.service (no installer marker)');
+    expect(out.stdout).toContain('is left in place');
+    expect(out.stdout).not.toContain('Retiring the superseded');
   });
 });
 
@@ -395,7 +488,7 @@ describe('install.sh — restart path validates the target before restarting/rel
     // Never created — simulates `bun remove -g` having deleted the binary
     // out from under the bun-era unit.
     const deletedBin = join(root, 'bun-vendor', 'goodvibes-daemon');
-    const unitPath = join(unitDir, 'goodvibes-daemon.service');
+    const unitPath = join(unitDir, 'goodvibes.service');
     writeFileSync(unitPath, `[Service]\nExecStart=${deletedBin}\nRestart=on-failure\n`);
 
     const stateFile = join(root, 'state');
@@ -415,7 +508,7 @@ describe('install.sh — restart path validates the target before restarting/rel
     expect(out.stdout).toContain('replacing it');
 
     // Old unit file backed up, never silently destroyed.
-    const backup = readdirSync(unitDir).find((f) => f.startsWith('goodvibes-daemon.service.bak.'));
+    const backup = readdirSync(unitDir).find((f) => f.startsWith('goodvibes.service.bak.'));
     expect(backup).toBeDefined();
     expect(readFileSync(join(unitDir, backup as string), 'utf-8')).toContain(deletedBin);
 
@@ -423,9 +516,9 @@ describe('install.sh — restart path validates the target before restarting/rel
     expect(existsSync(unitPath)).toBe(true);
     const newUnit = readFileSync(unitPath, 'utf-8');
     expect(newUnit).toContain('# managed by goodvibes install.sh');
-    expect(newUnit).toContain(`ExecStart=${installDir}/goodvibes-daemon`);
+    expect(newUnit).toContain(`ExecStart=${installDir}/goodvibes-daemon --daemon-home ${home} --hostname 127.0.0.1 --port 3421`);
     expect(out.stdout).toContain('Setting up the goodvibes daemon as a systemd user service');
-    expect(out.stdout).toContain('started    goodvibes-daemon.service (active)');
+    expect(out.stdout).toContain('started    goodvibes.service (active)');
   });
 
   test('an existing unit whose ExecStart is a different, still-valid binary is restarted and left in place', () => {
@@ -443,7 +536,7 @@ describe('install.sh — restart path validates the target before restarting/rel
     writeFileSync(otherBin, '#!/bin/sh\nexit 0\n');
     chmodSync(otherBin, 0o755);
 
-    const unitPath = join(unitDir, 'goodvibes-daemon.service');
+    const unitPath = join(unitDir, 'goodvibes.service');
     const originalUnit = `[Service]\nExecStart=${otherBin}\n`;
     writeFileSync(unitPath, originalUnit);
 
@@ -451,7 +544,7 @@ describe('install.sh — restart path validates the target before restarting/rel
     writeFileSync(stateFile, 'active\n');
 
     const out = runLib(
-      'restart_systemd_unit goodvibes-daemon.service "$GOODVIBES_INSTALL_DIR/goodvibes-daemon"; setup_daemon_service_systemd',
+      'restart_systemd_unit goodvibes.service "$GOODVIBES_INSTALL_DIR/goodvibes-daemon"; setup_daemon_service_systemd',
       {
         HOME: home,
         GOODVIBES_INSTALL_DIR: installDir,
@@ -462,8 +555,8 @@ describe('install.sh — restart path validates the target before restarting/rel
     );
 
     expect(out.code).toBe(0);
-    expect(out.stdout).toContain('Restarting the running goodvibes-daemon (systemd user service)');
-    expect(out.stdout).toContain('restarted  goodvibes-daemon.service');
+    expect(out.stdout).toContain('Restarting the running goodvibes (systemd user service)');
+    expect(out.stdout).toContain('restarted  goodvibes.service');
     // Mismatch noted (expected_bin is $installDir/goodvibes-daemon, not otherBin) but never overwritten.
     expect(out.stdout).toContain('does not exec');
     expect(readdirSync(unitDir).some((f) => f.includes('.bak.'))).toBe(false);
@@ -582,9 +675,14 @@ describe('install.sh — uninstall mode', () => {
     writeFileSync(join(installDir, 'lib/sqlite-vec-linux-x64/vec0.so'), 'x');
     writeFileSync(join(dataDir, 'settings.json'), '{}');
 
-    const managedUnit = join(unitDir, 'goodvibes-daemon.service');
+    // Both the canonical (goodvibes.service) and the retired legacy name
+    // (goodvibes-daemon.service) are installer-marker-managed here — uninstall
+    // must remove BOTH.
+    const managedUnit = join(unitDir, 'goodvibes.service');
+    const legacyManagedUnit = join(unitDir, 'goodvibes-daemon.service');
     const handWrittenUnit = join(unitDir, 'goodvibes-agent.service');
-    writeFileSync(managedUnit, `# managed by goodvibes install.sh\n[Service]\nExecStart=${installDir}/goodvibes-daemon\n`);
+    writeFileSync(managedUnit, `# managed by goodvibes install.sh\n[Service]\nExecStart=${installDir}/goodvibes-daemon --daemon-home ${home} --hostname 127.0.0.1 --port 3421\n`);
+    writeFileSync(legacyManagedUnit, `# managed by goodvibes install.sh\n[Service]\nExecStart=${installDir}/goodvibes-daemon\n`);
     writeFileSync(handWrittenUnit, '[Service]\nExecStart=/usr/bin/custom-agent\n');
 
     const result = Bun.spawnSync(['sh', INSTALL_SH], {
@@ -606,6 +704,8 @@ describe('install.sh — uninstall mode', () => {
     expect(existsSync(join(installDir, 'goodvibes-agent'))).toBe(false);
     expect(existsSync(join(installDir, 'lib/sqlite-vec-linux-x64'))).toBe(false);
     expect(existsSync(managedUnit)).toBe(false);
+    // The retired legacy unit name is installer-marker-managed too — also gone.
+    expect(existsSync(legacyManagedUnit)).toBe(false);
 
     // Hand-written unit and user data are preserved.
     expect(existsSync(handWrittenUnit)).toBe(true);
