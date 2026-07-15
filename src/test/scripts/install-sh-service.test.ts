@@ -197,8 +197,19 @@ function stubDualUnitServiceBin(root: string): string {
     "      printf 'active\\n'",
     '      exit 0',
     '    fi',
+    '    if [ -n "$f" ] && grep -qx activating "$f" 2>/dev/null; then',
+    "      printf 'activating\\n'",
+    '    exit 3',
+    '    fi',
+    '    if [ -n "$f" ] && grep -qx inactive "$f" 2>/dev/null; then',
+    "      printf 'inactive\\n'",
+    '      exit 3',
+    '    fi',
+    // Unit does not exist (no state staged): modern systemd answers
+    // 'inactive' rc 4 (LSB "no such unit"); old systemd answered rc 3.
+    // STUB_MISSING_UNIT_RC pins which vocabulary a test exercises.
     "    printf 'inactive\\n'",
-    '    exit 3 ;;',
+    '    exit "${STUB_MISSING_UNIT_RC:-4}" ;;',
     '  is-enabled)',
     '    if [ "$unit" = "canon" ] && [ "$STUB_CANON_PRE_ENABLED" = "1" ]; then',
     "      printf 'enabled\\n'",
@@ -1000,6 +1011,108 @@ describe('install.sh — supervised transfer from an ACTIVE legacy unit (the dom
     // Legacy supervision restored.
     expect(out.stdout).toContain('restarted  goodvibes-daemon.service');
   });
+
+  test("unit_active_state recognizes every real systemctl vocabulary: rc-4 'no such unit' is ABSENT (modern systemd), rc-3 inactive is inactive (old), transitional is active, bus failure is unknown", () => {
+    // Pins the verifier's live-host probe: on systemd 260 (this repo's own
+    // deployment host) `systemctl --user is-active <no-unit-file>` prints
+    // 'inactive' with rc 4. Mapping that to unknown made every fail-safe
+    // branch refuse the primary upgrade path on modern systemd.
+    const t = stageLegacyOnlyActive('gv-vocab');
+    const run = (body: string, extra: Record<string, string> = {}) => runLib(body, { ...t.env, ...extra });
+
+    // Modern vocabulary: missing unit → rc 4 → affirmatively ABSENT.
+    writeFileSync(t.canonState, 'absent\n');
+    expect(run('unit_active_state goodvibes.service').stdout).toBe('absent');
+    // Old vocabulary: the same missing unit answered rc 3 'inactive'.
+    expect(run('unit_active_state goodvibes.service', { STUB_MISSING_UNIT_RC: '3' }).stdout).toBe('inactive');
+    // Exists-but-inactive stays inactive.
+    writeFileSync(t.canonState, 'inactive\n');
+    expect(run('unit_active_state goodvibes.service').stdout).toBe('inactive');
+    // Transitional (crash-loop RestartSec window) is the unit EXISTING with
+    // processes in flux — active, never a false "unreachable".
+    writeFileSync(t.canonState, 'activating\n');
+    expect(run('unit_active_state goodvibes.service').stdout).toBe('active');
+    // A bus that cannot be asked stays unknown.
+    const busless = runLib('unit_active_state goodvibes.service', {
+      HOME: t.home,
+      GOODVIBES_INSTALL_DIR: t.installDir,
+      PATH: `${stubBuslessServiceBin(t.root)}:${process.env.PATH ?? ''}`,
+    });
+    expect(busless.stdout).toBe('unknown');
+  });
+
+  test('modern systemd (rc-4 for the missing canonical unit): the dominant-state supervised transfer RUNS — no false "unreachable" refusal', () => {
+    // The HIGH regression pin: legacy marker unit ACTIVE, canonical unit file
+    // absent — on systemd >= ~257 the canonical probe answers rc 4, which the
+    // old tri-state read as unknown, refusing the whole migration with a false
+    // 'user service manager unreachable' note on a healthy bus, on every
+    // re-run. With rc 4 = absent, the transfer proceeds.
+    const t = stageLegacyOnlyActive('gv-rc4-transfer');
+    writeFileSync(t.canonState, 'absent\n'); // canonical unit does not exist → rc 4
+
+    const out = runLib('migrate_legacy_installer_unit', t.env);
+    expect(out.code).toBe(0);
+
+    expect(out.stdout).not.toContain("cannot determine the daemon units' state");
+    expect(out.stdout).toContain('Transferring daemon supervision from goodvibes-daemon.service to goodvibes.service');
+    expect(out.stdout).toContain('retired    goodvibes-daemon.service');
+    expect(existsSync(t.canonicalPath)).toBe(true);
+    expect(existsSync(t.legacyPath)).toBe(false);
+  });
+
+  test(
+    'modern systemd, no legacy unit anywhere: the guarded bare-process restart still runs — not dead-coded by a false unknown',
+    async () => {
+      // Consequence (b) of the rc-4 regression: with no legacy unit file the
+      // legacy probe answers rc 4 on modern systemd; reading it as unknown
+      // made restart_running_daemon refuse before the bare-process path on
+      // EVERY post-unification host, so a bare daemon never restarted after a
+      // binary swap.
+      const root = scratch('gv-rc4-bare');
+      const home = join(root, 'home');
+      const installDir = join(root, 'bin');
+      mkdirSync(installDir, { recursive: true });
+      copyFileSync('/bin/sleep', join(installDir, 'goodvibes-daemon'));
+      chmodSync(join(installDir, 'goodvibes-daemon'), 0o755);
+      const proc = Bun.spawn([join(installDir, 'goodvibes-daemon'), '300'], { stdio: ['ignore', 'ignore', 'ignore'] });
+      const pid = proc.pid;
+      const isAlive = () => {
+        try {
+          process.kill(pid, 0);
+          return true;
+        } catch {
+          return false;
+        }
+      };
+
+      try {
+        await new Promise((r) => setTimeout(r, 300));
+        // Dual stub with NO state files staged: every unit answers the modern
+        // rc-4 'no such unit'; status <pid> answers rc 4 too → pid is free.
+        const out = runLib('restart_running_daemon', {
+          HOME: home,
+          GOODVIBES_INSTALL_DIR: installDir,
+          PATH: `${stubDualUnitServiceBin(root)}:${process.env.PATH ?? ''}`,
+        });
+        expect(out.code).toBe(0);
+        // The bare-process path RAN (restart attempted), and no false
+        // unreachable diagnosis was printed.
+        expect(out.stdout).not.toContain('cannot determine the daemon service state');
+        expect(out.stdout).toContain(`Restarting running goodvibes-daemon (pid ${pid})`);
+      } finally {
+        if (isAlive()) {
+          try {
+            process.kill(pid, 'SIGKILL');
+          } catch {
+            /* gone */
+          }
+        }
+        // The restart path may have relaunched a replacement sleep — sweep it.
+        Bun.spawnSync(['pkill', '-f', `${installDir}/goodvibes-daemon`]);
+      }
+    },
+    20000,
+  );
 
   test('GOODVIBES_RESTART_DAEMON=0 leaves an ACTIVE legacy unit completely untouched (the documented contract)', () => {
     // Verifier scenario: legacy actively serving, canonical unit FILE present

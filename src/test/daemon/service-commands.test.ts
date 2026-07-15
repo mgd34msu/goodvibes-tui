@@ -776,6 +776,8 @@ describe('reconcileRedundantLegacyUnit — auto-retire a redundant install-scrip
     readonly canonicalActive?: boolean;
     readonly canonicalMainPid?: number;
     readonly legacyMainPid?: number;
+    /** Override the LEGACY MainPID reply wholesale (flap/timeout variants). */
+    readonly legacyMainPidReply?: { status: number | null; stdout?: string };
     readonly disableStatus?: number | null;
     /** Reply to the post-timeout is-enabled re-inspection. */
     readonly isEnabledReply?: { status: number | null; stdout?: string };
@@ -794,10 +796,11 @@ describe('reconcileRedundantLegacyUnit — auto-retire a redundant install-scrip
       }
       if (args.includes('MainPID')) {
         const unit = args[args.length - 1] ?? '';
-        const pid = unit === `${LEGACY_SERVICE_UNIT_NAME}.service`
-          ? (opts.legacyMainPid ?? 0)
-          : (opts.canonicalMainPid ?? CANONICAL_PID);
-        return { status: 0, stdout: `${pid}\n` };
+        if (unit === `${LEGACY_SERVICE_UNIT_NAME}.service`) {
+          if (opts.legacyMainPidReply) return opts.legacyMainPidReply as ReturnType<RuntimeActionRunner>;
+          return { status: 0, stdout: `${opts.legacyMainPid ?? 0}\n` };
+        }
+        return { status: 0, stdout: `${opts.canonicalMainPid ?? CANONICAL_PID}\n` };
       }
       if (args.includes('disable')) {
         return { status: opts.disableStatus === undefined ? 0 : opts.disableStatus } as ReturnType<RuntimeActionRunner>;
@@ -868,6 +871,56 @@ describe('reconcileRedundantLegacyUnit — auto-retire a redundant install-scrip
     const text = result.lines.join('\n');
     expect(text).toContain('live main process');
     expect(text).toContain('migrate-service');
+  });
+
+  test('a FAILED legacy MainPID query (rc 1 bus flap) is UNKNOWN, not "legacy stopped" — refuses instead of disabling a possibly-live daemon', async () => {
+    // Pins the verifier's scenario B: same wrong-port state with a live legacy
+    // daemon, but the one systemctl call that would reveal it flaps (rc=1).
+    // The old guard read the unparseable reply as MainPID-undefined = not
+    // running and disable--now'd the live daemon; guard 5 cannot save it
+    // because the legacy daemon itself answers the configured endpoint.
+    const { runner, calls } = fakeReconcileRunner({ legacyMainPidReply: { status: 1, stdout: '' } });
+    const removed: string[] = [];
+    const result = await reconcileRedundantLegacyUnit(baseReconcileInput({
+      legacyUnitFileRemove: (p) => removed.push(p),
+      actionRunner: runner,
+    }));
+
+    expect(result.action).toBe('noop');
+    expect(result.reason).toBe('legacy-state-unknown');
+    expect(removed).toEqual([]);
+    expect(calls.some((c) => c.includes('disable'))).toBe(false);
+    expect(result.lines.join('\n')).toContain('refusing to act on a guess');
+  });
+
+  test('a TIMED-OUT legacy MainPID query (status null) is UNKNOWN too — never read as "legacy stopped"', async () => {
+    // Verifier scenario C: the spawnSync timeout shape of the same flap.
+    const { runner, calls } = fakeReconcileRunner({ legacyMainPidReply: { status: null } });
+    const removed: string[] = [];
+    const result = await reconcileRedundantLegacyUnit(baseReconcileInput({
+      legacyUnitFileRemove: (p) => removed.push(p),
+      actionRunner: runner,
+    }));
+
+    expect(result.action).toBe('noop');
+    expect(result.reason).toBe('legacy-state-unknown');
+    expect(removed).toEqual([]);
+    expect(calls.some((c) => c.includes('disable'))).toBe(false);
+  });
+
+  test('a KNOWN MainPID=0 reply is the affirmative "legacy stopped" and still permits the retire', async () => {
+    // The tri-state must not over-refuse: rc 0 + '0' is systemd affirmatively
+    // saying the unit has no main process.
+    const { runner } = fakeReconcileRunner({ legacyMainPid: 0 });
+    const removed: string[] = [];
+    const result = await reconcileRedundantLegacyUnit(baseReconcileInput({
+      legacyUnitFileRemove: (p) => removed.push(p),
+      actionRunner: runner,
+    }));
+
+    expect(result.action).toBe('removed');
+    expect(result.reason).toBe('retired');
+    expect(removed.length).toBe(1);
   });
 
   test('configured endpoint not answering → refuses: a canonical daemon alive on the WRONG port proves nothing for clients', async () => {
