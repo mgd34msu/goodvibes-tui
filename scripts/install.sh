@@ -457,15 +457,31 @@ pid_supervision() {
   _q="$1"
   if [ "$os_tag" = "macos" ]; then
     if command -v launchctl >/dev/null 2>&1; then
+      # Tri-state like the systemd branch: a print failure is NOT the same as
+      # "label not loaded". launchctl exits 113 for could-not-find-service
+      # (affirmatively not loaded); any other failure (e.g. the gui domain
+      # unreachable from an ssh session — 'Bad request') means the manager
+      # could not be ASKED, and cannot-ask is never read as free-to-kill.
+      _saw_print_failure=0
       for _label in "$LAUNCHD_DAEMON_LABEL" sh.goodvibes.agent; do
-        if launchctl print "gui/$(id -u)/$_label" 2>/dev/null | grep -q "pid = $_q"; then
-          printf 'supervised'
-          return 0
+        _lrc=0
+        _lout=$(launchctl print "gui/$(id -u)/$_label" 2>/dev/null) || _lrc=$?
+        if [ "$_lrc" -eq 0 ]; then
+          if printf '%s\n' "$_lout" | grep -q "pid = $_q"; then
+            printf 'supervised'
+            return 0
+          fi
+        elif [ "$_lrc" -ne 113 ]; then
+          _saw_print_failure=1
         fi
       done
-      # Our labels do not own it. launchd supervision under a foreign label is
-      # not cheaply enumerable; the practical supervision surface for the
-      # goodvibes binaries is our own labels.
+      if [ "$_saw_print_failure" = "1" ]; then
+        printf 'unknown'
+        return 0
+      fi
+      # Our labels affirmatively do not own it. launchd supervision under a
+      # foreign label is not cheaply enumerable; the practical supervision
+      # surface for the goodvibes binaries is our own labels.
       printf 'free'
       return 0
     fi
@@ -598,13 +614,17 @@ refresh_pinned_canonical_unit() {
 }
 
 restart_systemd_unit() {
-  # restart_systemd_unit <unit> <expected-binary> — returns 0 if it handled a
-  # running unit (restarted, replaced, or reported), 1 if no active unit
-  # exists, or its unit was just replaced because it could no longer run —
-  # either way the caller should fall through to bare-process handling and
-  # then first-run service setup.
+  # restart_systemd_unit <unit> <expected-binary> [replace-broken] — returns 0
+  # if it handled a running unit (restarted, replaced, or reported), 1 if no
+  # active unit exists, or its unit was just replaced because it could no
+  # longer run — either way the caller should fall through to bare-process
+  # handling and then first-run service setup. The optional third argument
+  # (default 1) gates the broken-ExecStart replacement branch: callers that
+  # have classified the unit as HAND-WRITTEN pass 0, because this tool never
+  # disables, renames, or rewrites a hand-written unit — not even a broken one.
   unit="$1"
   expected_bin="$2"
+  replace_broken="${3:-1}"
   command -v systemctl >/dev/null 2>&1 || return 1
   systemctl --user is-active --quiet "$unit" 2>/dev/null || return 1
 
@@ -617,6 +637,17 @@ restart_systemd_unit() {
   # keeps the ordinary restart-and-note-the-mismatch behavior below.
   exec_bin=$(systemd_unit_exec_binary "$unit")
   if [ -n "$exec_bin" ] && [ ! -x "$exec_bin" ]; then
+    if [ "$replace_broken" != "1" ]; then
+      # Hand-written unit in the corpse state: the running daemon may be
+      # executing a deleted inode. Touch NOTHING — restarting would kill the
+      # daemon with no binary to relaunch, and disabling/renaming is exactly
+      # the never-touch violation this gate exists to prevent. Say so.
+      say ""
+      say "NOTE: ${unit} points at $exec_bin, which no longer exists, and the unit is hand-written —"
+      say "  leaving it (and its running daemon, which may be executing a deleted binary) untouched."
+      say "  Fix the unit's ExecStart yourself, then: systemctl --user restart $unit"
+      return 0
+    fi
     say ""
     say "${unit} points at $exec_bin, which no longer exists — replacing it."
     systemctl --user disable --now "$unit" 2>/dev/null ||
@@ -738,7 +769,21 @@ restart_bare_processes() {
 restart_launchd_agent() {
   _label="$1"
   command -v launchctl >/dev/null 2>&1 || return 1
-  launchctl print "gui/$(id -u)/$_label" >/dev/null 2>&1 || return 1
+  # Tri-state the load probe: exit 113 = could-not-find-service (affirmatively
+  # not loaded — the caller may use the guarded bare-process path); any other
+  # failure means launchd could not be ASKED (gui domain unreachable from this
+  # session) — refuse with an honest note and report handled, so the caller
+  # never falls through to kill/nohup on a guess.
+  _prc=0
+  launchctl print "gui/$(id -u)/$_label" >/dev/null 2>&1 || _prc=$?
+  if [ "$_prc" -ne 0 ]; then
+    [ "$_prc" -eq 113 ] && return 1
+    say ""
+    say "NOTE: cannot determine the $_label agent state (launchctl print failed — is the GUI session"
+    say "  reachable from this session?). No process was touched; restart the agent yourself from a"
+    say "  logged-in session:  launchctl kickstart -k gui/$(id -u)/$_label"
+    return 0
+  fi
   say ""
   say "Restarting the running $_label (launchd user agent) ..."
   if launchctl kickstart -k "gui/$(id -u)/$_label" 2>/dev/null; then
@@ -777,8 +822,11 @@ restart_running_daemon() {
           ;;
         *)
           # Hand-written or unreadable: this tool won't modify the unit, but
-          # the upgrade must still take effect — restart it in place.
-          restart_systemd_unit "$LEGACY_SYSTEMD_DAEMON_UNIT" "$INSTALL_DIR/goodvibes-daemon" || {
+          # the upgrade must still take effect — restart it in place. The
+          # third argument gates the broken-ExecStart replacement branch OFF:
+          # a hand-written unit is never disabled, renamed, or rewritten,
+          # corpse state included.
+          restart_systemd_unit "$LEGACY_SYSTEMD_DAEMON_UNIT" "$INSTALL_DIR/goodvibes-daemon" 0 || {
             say ""
             say "NOTE: could not restart $LEGACY_SYSTEMD_DAEMON_UNIT — restart it yourself so the upgraded binary takes effect:"
             say "    systemctl --user restart $LEGACY_SYSTEMD_DAEMON_UNIT"

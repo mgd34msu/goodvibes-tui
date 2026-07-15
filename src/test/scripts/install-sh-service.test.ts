@@ -262,7 +262,10 @@ function stubDualUnitServiceBin(root: string): string {
     '[ -n "$STUB_LAUNCHCTL_LOG" ] && printf \'%s\\n\' "$*" >> "$STUB_LAUNCHCTL_LOG"',
     'case "$1" in',
     '  print)',
-    '    [ "$STUB_LAUNCHCTL_PRINT_FAILS" = "1" ] && exit 3',
+    // 113 = launchd's could-not-find-service (affirmatively not loaded);
+    // 64 = 'Bad request' (gui domain unreachable, e.g. over ssh) — cannot-ask.
+    '    [ "$STUB_LAUNCHCTL_PRINT_FAILS" = "1" ] && exit 113',
+    '    [ "$STUB_LAUNCHCTL_PRINT_BADREQ" = "1" ] && exit 64',
     '    [ -n "$STUB_LAUNCHD_DAEMON_PID" ] && printf \'    pid = %s\\n\' "$STUB_LAUNCHD_DAEMON_PID"',
     '    exit 0 ;;',
     'esac',
@@ -890,6 +893,90 @@ describe('install.sh — supervised transfer from an ACTIVE legacy unit (the dom
     },
     20000,
   );
+
+  test('hand-written ACTIVE legacy unit in the CORPSE state (ExecStart binary deleted): never disabled, never renamed, never rewritten — honest note only', () => {
+    // Pins the verifier's corpse-route probe: the hand-written unit points at
+    // a deleted binary while the daemon still runs the deleted inode. The old
+    // restart-in-place routed through restart_systemd_unit's replacement
+    // branch, which disabled the user's running daemon, renamed their unit to
+    // .bak, and then setup wrote a fresh installer unit over the top — a
+    // triple never-touch violation with a false 'restart it yourself' note
+    // pointing at the renamed-away unit.
+    const t = stageLegacyOnlyActive('gv-handwritten-corpse');
+    const deletedBin = join(t.root, 'old-install', 'goodvibes-daemon'); // never created
+    const handWritten = `[Service]\nExecStart=${deletedBin}\n`;
+    writeFileSync(t.legacyPath, handWritten);
+    const log = join(t.root, 'systemctl-log');
+
+    const out = runLib('restart_running_daemon; migrate_legacy_installer_unit', {
+      ...t.env,
+      STUB_EXEC_BIN: deletedBin, // show -p ExecStart reports the missing path
+      STUB_SYSTEMCTL_LOG: log,
+    });
+    expect(out.code).toBe(0);
+
+    // The unit file survives verbatim under its own name — no .bak rename.
+    expect(readFileSync(t.legacyPath, 'utf-8')).toBe(handWritten);
+    expect(readdirSync(join(t.home, '.config/systemd/user')).some((f) => f.includes('.bak.'))).toBe(false);
+    // The running daemon was never disabled or stopped.
+    const calls = readFileSync(log, 'utf-8');
+    expect(calls).not.toContain('disable');
+    expect(calls).not.toContain('stop goodvibes-daemon.service');
+    expect(readFileSync(t.legacyState, 'utf-8')).toContain('active');
+    // Honest note: names the corpse state and the manual fix.
+    expect(out.stdout).toContain('the unit is hand-written');
+    expect(out.stdout).toContain("Fix the unit's ExecStart yourself");
+    expect(out.stdout).not.toContain('replacing it');
+  });
+
+  test("macOS supervision probe: a launchctl print FAILURE (gui domain unreachable) is UNKNOWN — never 'free', never kill/nohup", async () => {
+    // Pins the verifier's variant-B probe: launchctl exists but print fails
+    // with 'Bad request' (exit 64, e.g. from an ssh session while the console
+    // user's agent runs). The old branch mapped any print failure to 'free'
+    // and SIGTERM+nohup'd the supervised daemon.
+    const root = scratch('gv-macos-unknown');
+    const home = join(root, 'home');
+    const installDir = join(root, 'bin');
+    mkdirSync(installDir, { recursive: true });
+    copyFileSync('/bin/sleep', join(installDir, 'goodvibes-daemon'));
+    chmodSync(join(installDir, 'goodvibes-daemon'), 0o755);
+    const proc = Bun.spawn([join(installDir, 'goodvibes-daemon'), '300'], { stdio: ['ignore', 'ignore', 'ignore'] });
+    const pid = proc.pid;
+    const isAlive = () => {
+      try {
+        process.kill(pid, 0);
+        return true;
+      } catch {
+        return false;
+      }
+    };
+
+    try {
+      await new Promise((r) => setTimeout(r, 300));
+      const out = runLib('os_tag=macos; restart_running_daemon', {
+        HOME: home,
+        GOODVIBES_INSTALL_DIR: installDir,
+        PATH: `${stubDualUnitServiceBin(root)}:${process.env.PATH ?? ''}`,
+        STUB_LAUNCHCTL_PRINT_BADREQ: '1',
+      });
+      expect(out.code).toBe(0);
+
+      // restart_launchd_agent refused with the honest cannot-ask note and
+      // reported handled — the bare kill/nohup path never ran.
+      expect(out.stdout).toContain('cannot determine the sh.goodvibes.daemon agent state');
+      expect(out.stdout).not.toContain('Restarting running');
+      expect(out.stdout).not.toContain('restarted  sh.goodvibes.daemon');
+      expect(isAlive()).toBe(true); // never killed
+    } finally {
+      if (isAlive()) {
+        try {
+          process.kill(pid, 'SIGKILL');
+        } catch {
+          /* gone */
+        }
+      }
+    }
+  });
 
   test('hand-written legacy unit ACTIVE: the installer restarts it in place — no false transfer promise, no silent no-upgrade', () => {
     // Verifier scenario: the daemon runs under a hand-written (marker-less)
