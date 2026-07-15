@@ -29,6 +29,7 @@ import {
 } from '@pellux/goodvibes-sdk/platform/discovery';
 import { createSafeHostServeFactory } from './safe-serve.ts';
 import { isDaemonServiceSubcommand, resolveInstalledDaemonBinary, runDaemonServiceCli } from './service-commands.ts';
+import { reconcileRedundantLegacyUnit, MANAGED_SERVICE_NAME } from '../runtime/legacy-daemon-migration.ts';
 import { resolveDaemonUpdateArtifact } from './lifecycle.ts';
 import { VERSION } from '../version.ts';
 
@@ -36,6 +37,7 @@ import {
   parseGoodVibesCli,
   renderGoodVibesDaemonHelp,
   renderGoodVibesVersion,
+  renderDaemonStartupBanner,
   applyRuntimeConfigOverrides,
   applyRuntimeConfigValue,
   applyRuntimeFeatureFlagOverrides,
@@ -253,6 +255,16 @@ async function main(): Promise<void> {
   daemon.enable({ daemon: true }, effectiveDaemonToken);
   listener.enable({ httpListener: true }, effectiveHttpToken);
 
+  // Honest startup identity, printed for EVERY launch shape — including a bare
+  // (no-arg) systemd launch. It states the resolved version (never a
+  // placeholder), the home/host/port actually bound, and points at the real
+  // service-setup command, replacing the misleading wrong-version banner a bare
+  // launch used to show. VERSION is the prebuild-baked, name-guarded value.
+  const bannerHost = String(process.env.GOODVIBES_DAEMON_HOST ?? config.get('controlPlane.host') ?? '127.0.0.1');
+  const bannerPort = Number(config.get('controlPlane.port'));
+  // eslint-disable-next-line no-console
+  console.log(renderDaemonStartupBanner(VERSION, { homeDir: homeDirectory, host: bannerHost, port: bannerPort }));
+
   await Promise.all([
     daemon.start(),
     config.get('danger.httpListener') ? listener.start() : Promise.resolve(),
@@ -294,6 +306,28 @@ async function main(): Promise<void> {
     daemon: resolveDaemonEnabled(config),
     httpListener: config.get('danger.httpListener'),
   });
+
+  // Cheap unattended reconcile: if this (canonical goodvibes.service) daemon is
+  // active AND a redundant installer-managed goodvibes-daemon.service (the
+  // retired unit name) still sits enabled beside it — the exact production-
+  // incident state — auto-disable and remove it, printing a receipt. A
+  // hand-written legacy unit is only reported, never touched. Best-effort:
+  // never let this block or crash daemon boot.
+  try {
+    const reconcile = reconcileRedundantLegacyUnit({
+      homeDir: homeDirectory,
+      trackedServiceName: MANAGED_SERVICE_NAME,
+    });
+    if (reconcile.action !== 'noop') {
+      for (const line of reconcile.lines) {
+        // eslint-disable-next-line no-console
+        console.log(line);
+      }
+      logger.info('daemon: legacy-unit reconcile', { action: reconcile.action });
+    }
+  } catch (error) {
+    logger.warn('daemon: legacy-unit reconcile failed (non-fatal)', { error: summarizeError(error) });
+  }
 
   // Print a device-pairing QR to stdout. The QR encodes the canonical
   // `#pair=<token>` deep link the web app consumes — a camera scan opens it

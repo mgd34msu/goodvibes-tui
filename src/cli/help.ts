@@ -6,8 +6,13 @@ import { VERSION } from '../version.ts';
 function readJsonVersion(path: string): string | null {
   try {
     if (!existsSync(path)) return null;
-    const parsed = JSON.parse(readFileSync(path, 'utf-8')) as { version?: unknown };
-    return typeof parsed.version === 'string' ? parsed.version : null;
+    const parsed = JSON.parse(readFileSync(path, 'utf-8')) as { name?: unknown; version?: unknown };
+    // Only trust OUR package.json — a compiled single-file binary can resolve
+    // this path to a different package.json (a bundled dependency's) that
+    // reports a placeholder like "0.0.0". Fall through to the baked VERSION in
+    // that case rather than rendering a stray version in `--version`/banners.
+    if (parsed.name !== '@pellux/goodvibes-tui') return null;
+    return typeof parsed.version === 'string' && parsed.version.length > 0 ? parsed.version : null;
   } catch {
     return null;
   }
@@ -21,6 +26,28 @@ export function getPackageVersion(): string {
 
 export function renderGoodVibesVersion(binary = 'goodvibes'): string {
   return `${binary} ${getPackageVersion()}`;
+}
+
+/**
+ * Honest one-line startup identity for the daemon binary, emitted right as it
+ * begins serving — including on a bare (no-arg) systemd launch. It states the
+ * RESOLVED version (never a placeholder), the home/host/port it actually bound,
+ * and points at the real service-setup command. This replaces the field
+ * behavior where a bare launch showed a wrong "v0.0.0" banner and gave an
+ * operator nothing to act on. `version` is passed in (never read from the live
+ * build here) so callers/tests can pin a sentinel and never compare the live
+ * VERSION.
+ */
+export function renderDaemonStartupBanner(
+  version: string,
+  binding: { readonly homeDir: string; readonly host: string; readonly port: number },
+  binary = 'goodvibes-daemon',
+): string {
+  return (
+    `${binary} ${version} starting — ` +
+    `home=${binding.homeDir} host=${binding.host} port=${binding.port} ` +
+    `(manage as a service: ${binary} install-service)`
+  );
 }
 
 export function renderGoodVibesHelp(binary = 'goodvibes'): string {
