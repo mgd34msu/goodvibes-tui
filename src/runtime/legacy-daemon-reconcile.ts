@@ -110,6 +110,7 @@ export type ReconcileRedundantLegacyUnitReason =
   | 'canonical-not-active'
   | 'canonical-mainpid-not-alive'
   | 'self-supervised-by-legacy'
+  | 'legacy-state-unknown'
   | 'legacy-running'
   | 'configured-endpoint-unserved'
   | 'hand-written'
@@ -243,8 +244,18 @@ export async function reconcileRedundantLegacyUnit(
   // Guard 3: never disable the unit that launched THIS process. `disable
   // --now` on our own supervising unit would SIGTERM this daemon's whole
   // cgroup mid-boot, from inside the blocking systemctl call.
+  //
+  // The legacy MainPID probe is TRI-STATE, exactly like guards 1-2: a reply
+  // whose status is non-zero or null (bus flap, timeout, skipped-by-deadline)
+  // does NOT mean "MainPID=0, unit affirmatively stopped" — reading it that
+  // way let one transient systemctl failure on exactly this call authorize
+  // `disable --now` against a LIVE legacy daemon (and guard 5 cannot catch
+  // it: in the wrong-port state the legacy daemon itself answers the
+  // configured-endpoint probe). Unknown refuses.
   const ownPid = input.ownPid ?? process.pid;
-  const legacyPid = parseMainPid(run('systemctl', ['--user', 'show', '-p', 'MainPID', '--value', legacyUnit]));
+  const legacyPidReply = run('systemctl', ['--user', 'show', '-p', 'MainPID', '--value', legacyUnit]);
+  const legacyPidKnown = (legacyPidReply.status ?? 1) === 0;
+  const legacyPid = parseMainPid(legacyPidReply);
   const ownCgroup = (input.readOwnCgroup ?? defaultReadOwnCgroup)();
   if (legacyPid === ownPid || ownCgroup.includes(legacyUnit)) {
     return {
@@ -256,12 +267,24 @@ export async function reconcileRedundantLegacyUnit(
       ],
     };
   }
+  if (!legacyPidKnown) {
+    return {
+      action: 'noop',
+      reason: 'legacy-state-unknown',
+      lines: [
+        `legacy-unit reconcile: could not determine whether ${legacyUnit} has a running daemon (the MainPID query ` +
+          'failed or timed out) — refusing to act on a guess; it will be re-checked at the next daemon start.',
+        ...deadlineNote(),
+      ],
+    };
+  }
 
   // Guard 4: never stop a RUNNING legacy daemon from the unattended path. A
   // live legacy MainPID means a second daemon is actually serving something —
   // possibly the endpoint clients resolve from settings.json (the wrong-port
   // two-daemon state). Retiring an enabled-but-idle unit needs no --now kill;
-  // stopping a serving one needs consent.
+  // stopping a serving one needs consent. (A KNOWN reply of MainPID=0 is the
+  // affirmative "stopped" that permits proceeding.)
   if (legacyPid !== undefined && alive(legacyPid)) {
     return {
       action: 'noop',

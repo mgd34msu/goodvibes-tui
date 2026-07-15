@@ -407,9 +407,24 @@ unit_active_state() {
     printf 'active'
     return 0
   fi
+  # LSB exit 4 = "no such unit": modern systemd (verified on this repo's own
+  # deployment host, systemd 260: prints 'inactive', rc 4) answers it for any
+  # unit with NO unit file. That is an AFFIRMATIVE answer — nothing exists to
+  # be running — and must never be read as "cannot ask systemd": mapping it to
+  # unknown made every fail-safe branch refuse the primary upgrade path on
+  # modern systemd. Old systemd answers rc 3 'inactive' for missing units,
+  # which the inactive case below already covers.
+  if [ "$_rc" -eq 4 ]; then
+    printf 'absent'
+    return 0
+  fi
   if [ "$_rc" -eq 3 ]; then
     case "$_out" in
-      inactive|failed) printf 'inactive'; return 0 ;;
+      inactive|failed|dead) printf 'inactive'; return 0 ;;
+      # Transitional states: the unit exists and has (or is acquiring/releasing)
+      # processes — treat as active so nothing destructive happens around it,
+      # and never as a false "service manager unreachable".
+      activating|deactivating|reloading|refreshing) printf 'active'; return 0 ;;
     esac
   fi
   printf 'unknown'
