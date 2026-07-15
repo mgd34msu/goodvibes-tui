@@ -45,12 +45,34 @@ All notable changes to GoodVibes TUI.
   beside its own unit, it disables and removes it and records what it did — but
   only after verifying the canonical unit is genuinely serving (active with a
   live main process), never from inside the old unit itself (it will not
-  disable the unit supervising its own process), and only removing the unit
-  file after the disable actually succeeded. Refusals are logged with a reason,
+  disable the unit supervising its own process), never while the old unit has
+  a running daemon of its own (a running second daemon might be the one your
+  clients reach — retiring it needs the deliberate `migrate-service` command),
+  and only once the endpoint clients resolve from settings is confirmed to be
+  answering. The unit file is removed only after the disable actually
+  succeeded; a disable that times out is re-inspected and reported as exactly
+  what was confirmed, never a blanket claim. Refusals are logged with a reason,
   the configured service name and the login home directory are used (custom
-  setups reconcile too), and every check runs with a hard timeout so a wedged
-  service manager can never hang daemon startup. A hand-written unit is only
-  reported, never touched.
+  setups reconcile too), and every check runs with a per-call timeout plus one
+  overall time budget so even a slow service manager can never stall daemon
+  startup. A hand-written unit is only reported, never touched.
+- Service units no longer pin the network endpoint. Both the installer and the
+  in-app service setup now write a unit that launches the daemon with only its
+  home directory; the daemon reads the configured interface mode, host, and
+  port from settings at startup. A host configured for network access or a
+  non-default port keeps that endpoint across upgrades — previously an upgrade
+  could silently pin the daemon back to loopback and the default port while
+  reporting success.
+- Installer treats "cannot ask the service manager" as a hard stop. When
+  systemd cannot be reached (for example, a session without a user bus), the
+  installer no longer guesses: nothing is stopped, killed, or removed, and it
+  prints what to run once a normal session is available. The process-restart
+  fallback now checks per-process supervision by asking systemd which unit owns
+  the process — any unit name counts, and an unanswerable check counts as
+  supervised. macOS gets the same discipline: a loaded LaunchAgent is restarted
+  in place through launchd, an agent the user deliberately stopped is never
+  started by an upgrade, and rollbacks restore the exact pre-upgrade enablement
+  state.
 
 ---
 
