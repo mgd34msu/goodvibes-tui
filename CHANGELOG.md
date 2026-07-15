@@ -4,6 +4,37 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [Unreleased]
+
+### Fixed
+- Installer now creates one daemon service unit that matches the app. The curl
+  installer used to write a `goodvibes-daemon.service` unit with a bare launch
+  command (no arguments), while the in-app service setup manages a
+  `goodvibes.service` unit launched with `--daemon-home`/`--hostname`/`--port`.
+  On upgrade a host could end up running both, and the extra bare unit booted a
+  second daemon that fought the real one for the same port. The installer now
+  writes only `goodvibes.service` with the same launch arguments the app uses,
+  and its create, restart, and uninstall paths all target that one name.
+- Installer upgrade path retires the old unit. When an upgrade finds a leftover
+  installer-created `goodvibes-daemon.service`, the installer disables and
+  removes it once the canonical `goodvibes.service` is in place. A
+  hand-written unit of that name (one without the installer's marker comment) is
+  never removed — it is left untouched and only reported, with the exact command
+  to retire it yourself.
+- Daemon startup prints an honest one-line identity. Launching the daemon binary
+  now prints its real version plus the home directory, host, and port it bound,
+  and points at the `install-service` command — replacing a startup banner that
+  could show a wrong `0.0.0` version. Version resolution is hardened so a
+  compiled binary can never pick up an unrelated `package.json`'s placeholder
+  version.
+- Daemon self-heals the two-unit state at startup. If the daemon is running as
+  the canonical `goodvibes.service` and finds a redundant installer-created
+  `goodvibes-daemon.service` still enabled beside it, it now disables and removes
+  that redundant unit and records what it did. A hand-written unit is only
+  reported, never touched.
+
+---
+
 ## [1.18.0] — 2026-07-14
 
 ### Changes
