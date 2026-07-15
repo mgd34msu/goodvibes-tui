@@ -15,22 +15,41 @@ All notable changes to GoodVibes TUI.
   second daemon that fought the real one for the same port. The installer now
   writes only `goodvibes.service` with the same launch arguments the app uses,
   and its create, restart, and uninstall paths all target that one name.
-- Installer upgrade path retires the old unit. When an upgrade finds a leftover
-  installer-created `goodvibes-daemon.service`, the installer disables and
-  removes it once the canonical `goodvibes.service` is in place. A
-  hand-written unit of that name (one without the installer's marker comment) is
-  never removed — it is left untouched and only reported, with the exact command
-  to retire it yourself.
+- Installer upgrade path migrates the old unit safely. When the daemon is
+  actively running under a leftover installer-created `goodvibes-daemon.service`
+  (the common upgrade state), the installer now performs a supervised transfer:
+  it writes the canonical unit, stops the old one, starts the new one, verifies
+  it is actually active, and only then disables and removes the old unit. If
+  the new unit fails to come up, everything rolls back and the old unit keeps
+  running. Every stop/disable checks its exit status — a failed disable (for
+  example, no user service bus) leaves the unit file in place and says so,
+  instead of removing it behind a false "disabled + removed" message. A
+  hand-written unit of that name (no installer marker) is never removed, an
+  unreadable one is reported as unreadable, and `GOODVIBES_RESTART_DAEMON=0`
+  now also keeps the migration from stopping a running unit. The installer's
+  process-restart fallback no longer kills a systemd-supervised daemon, and
+  paths with spaces are quoted in the generated unit. macOS gets the same
+  upgrade: an installer-managed LaunchAgent with the old bare launch command is
+  regenerated to the argument-driven form.
 - Daemon startup prints an honest one-line identity. Launching the daemon binary
-  now prints its real version plus the home directory, host, and port it bound,
-  and points at the `install-service` command — replacing a startup banner that
-  could show a wrong `0.0.0` version. Version resolution is hardened so a
-  compiled binary can never pick up an unrelated `package.json`'s placeholder
-  version.
-- Daemon self-heals the two-unit state at startup. If the daemon is running as
-  the canonical `goodvibes.service` and finds a redundant installer-created
-  `goodvibes-daemon.service` still enabled beside it, it now disables and removes
-  that redundant unit and records what it did. A hand-written unit is only
+  now prints its real version plus the home directory, host, and port it will
+  actually bind — the host/port come from the same resolution the bind path
+  uses (including the `hostMode` setting and port fallbacks), so the banner can
+  no longer claim a loopback bind while listening on every interface, or print
+  `port=0`. It points at the `install-service` command, replacing a startup
+  banner that could show a wrong `0.0.0` version. Version resolution is
+  hardened so a compiled binary can never pick up an unrelated `package.json`'s
+  placeholder version.
+- Daemon self-heals the two-unit state at startup, carefully. If the daemon
+  finds a redundant installer-created `goodvibes-daemon.service` still enabled
+  beside its own unit, it disables and removes it and records what it did — but
+  only after verifying the canonical unit is genuinely serving (active with a
+  live main process), never from inside the old unit itself (it will not
+  disable the unit supervising its own process), and only removing the unit
+  file after the disable actually succeeded. Refusals are logged with a reason,
+  the configured service name and the login home directory are used (custom
+  setups reconcile too), and every check runs with a hard timeout so a wedged
+  service manager can never hang daemon startup. A hand-written unit is only
   reported, never touched.
 
 ---
