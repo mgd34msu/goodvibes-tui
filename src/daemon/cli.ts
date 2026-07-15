@@ -29,7 +29,8 @@ import {
 } from '@pellux/goodvibes-sdk/platform/discovery';
 import { createSafeHostServeFactory } from './safe-serve.ts';
 import { isDaemonServiceSubcommand, resolveInstalledDaemonBinary, runDaemonServiceCli } from './service-commands.ts';
-import { reconcileRedundantLegacyUnit, MANAGED_SERVICE_NAME } from '../runtime/legacy-daemon-migration.ts';
+import { reconcileRedundantLegacyUnit, resolveConfiguredServiceName } from '../runtime/legacy-daemon-migration.ts';
+import { resolveRuntimeEndpointBinding } from '../cli/endpoints.ts';
 import { resolveDaemonUpdateArtifact } from './lifecycle.ts';
 import { VERSION } from '../version.ts';
 
@@ -143,15 +144,19 @@ async function main(): Promise<void> {
   // no runtime/services are constructed — and exit with the honest result code.
   const serviceSubcommand = cli.positionals[0];
   if (isDaemonServiceSubcommand(serviceSubcommand)) {
-    const host = String(process.env.GOODVIBES_DAEMON_HOST ?? config.get('controlPlane.host') ?? '127.0.0.1');
-    const port = Number(config.get('controlPlane.port'));
+    // The host/port baked into the unit's ExecStart (and displayed) come from
+    // the SAME hostMode-aware resolution the SDK bind path uses — never from
+    // the GOODVIBES_DAEMON_HOST env var, which nothing in the bind path reads
+    // (the --hostname flag already lands in config via
+    // applyRuntimeEndpointFlagOverrides above, so it is covered here).
+    const binding = resolveRuntimeEndpointBinding(config, 'controlPlane');
     const binaryPath = resolveInstalledDaemonBinary({ moduleUrl: import.meta.url });
     const result = await runDaemonServiceCli({
       subcommand: serviceSubcommand,
       binaryPath,
       homeDir: homeDirectory,
-      host,
-      port,
+      host: binding.host,
+      port: binding.port,
       // migrate-service only: never auto-migrate — requires the same explicit
       // consent as any other non-interactive destructive confirmation.
       confirmMigration: cliFlags.yes,
@@ -257,13 +262,15 @@ async function main(): Promise<void> {
 
   // Honest startup identity, printed for EVERY launch shape — including a bare
   // (no-arg) systemd launch. It states the resolved version (never a
-  // placeholder), the home/host/port actually bound, and points at the real
-  // service-setup command, replacing the misleading wrong-version banner a bare
-  // launch used to show. VERSION is the prebuild-baked, name-guarded value.
-  const bannerHost = String(process.env.GOODVIBES_DAEMON_HOST ?? config.get('controlPlane.host') ?? '127.0.0.1');
-  const bannerPort = Number(config.get('controlPlane.port'));
+  // placeholder), the home/host/port the daemon will actually bind, and points
+  // at the real service-setup command. The binding comes from the SAME
+  // hostMode-aware resolution the SDK bind path uses (resolveHostBinding:
+  // 'local' forces 127.0.0.1, 'network' forces 0.0.0.0, port 0/non-numeric
+  // falls back to the default) — never from controlPlane.host alone, and never
+  // from the GOODVIBES_DAEMON_HOST env var, which the bind path does not read.
+  const bannerBinding = resolveRuntimeEndpointBinding(config, 'controlPlane');
   // eslint-disable-next-line no-console
-  console.log(renderDaemonStartupBanner(VERSION, { homeDir: homeDirectory, host: bannerHost, port: bannerPort }));
+  console.log(renderDaemonStartupBanner(VERSION, { homeDir: homeDirectory, host: bannerBinding.host, port: bannerBinding.port }));
 
   await Promise.all([
     daemon.start(),
@@ -307,23 +314,31 @@ async function main(): Promise<void> {
     httpListener: config.get('danger.httpListener'),
   });
 
-  // Cheap unattended reconcile: if this (canonical goodvibes.service) daemon is
-  // active AND a redundant installer-managed goodvibes-daemon.service (the
+  // Cheap unattended reconcile: if this (canonical) daemon unit is confirmed
+  // serving AND a redundant installer-managed goodvibes-daemon.service (the
   // retired unit name) still sits enabled beside it — the exact production-
   // incident state — auto-disable and remove it, printing a receipt. A
   // hand-written legacy unit is only reported, never touched. Best-effort:
-  // never let this block or crash daemon boot.
+  // never let this block or crash daemon boot (the default systemctl runner is
+  // hard-timeout-bounded). The unit search root is the LOGIN user's home
+  // (where systemd user units live), never the daemon data home
+  // (GOODVIBES_DAEMON_HOME); the tracked name honors service.serviceName.
   try {
     const reconcile = reconcileRedundantLegacyUnit({
-      homeDir: homeDirectory,
-      trackedServiceName: MANAGED_SERVICE_NAME,
+      homeDir: homedir(),
+      trackedServiceName: resolveConfiguredServiceName(config),
     });
     if (reconcile.action !== 'noop') {
       for (const line of reconcile.lines) {
         // eslint-disable-next-line no-console
         console.log(line);
       }
-      logger.info('daemon: legacy-unit reconcile', { action: reconcile.action });
+    }
+    if (reconcile.reason !== 'no-legacy-unit') {
+      // Breadcrumb for EVERY outcome where a legacy unit file exists —
+      // including guard refusals — so a persisting two-unit state is never
+      // silent about why nothing was reconciled.
+      logger.info('daemon: legacy-unit reconcile', { action: reconcile.action, reason: reconcile.reason });
     }
   } catch (error) {
     logger.warn('daemon: legacy-unit reconcile failed (non-fatal)', { error: summarizeError(error) });

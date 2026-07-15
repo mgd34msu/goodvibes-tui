@@ -52,7 +52,11 @@ export function resolveRuntimeEndpointBinding(
   const keys = RUNTIME_ENDPOINT_CONFIG_KEYS[endpoint];
   const hostMode = String(config.get(keys.hostMode) ?? 'local');
   const configuredHost = String(config.get(keys.host) ?? '127.0.0.1');
-  const port = Number(config.get(keys.port) || RUNTIME_ENDPOINT_DEFAULT_PORTS[endpoint]);
+  // Mirror the SDK bind path exactly (`Number(raw ?? default)` fed into
+  // `customPort || DEFAULT` in host-resolver.js): a stored 0 OR a non-numeric
+  // value both collapse to the endpoint default, never NaN — so anything
+  // displayed from this binding matches the port the server actually binds.
+  const port = Number(config.get(keys.port) ?? RUNTIME_ENDPOINT_DEFAULT_PORTS[endpoint]) || RUNTIME_ENDPOINT_DEFAULT_PORTS[endpoint];
   if (hostMode === 'network') {
     return { hostMode, configuredHost, host: '0.0.0.0', port };
   }
