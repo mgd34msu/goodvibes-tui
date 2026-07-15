@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -751,44 +751,80 @@ describe('buildInstallResultLines — "suggested follow-ups" gating (W3 Finding 
  * for the production incident where an installer-managed legacy
  * `goodvibes-daemon.service` sat ENABLED alongside the canonical, ENABLED +
  * ACTIVE `goodvibes.service` and nothing ever disabled it. Every side effect
- * goes through injected seams: the `is-active` probe and disable/daemon-reload
- * through a fake `actionRunner`, file existence/read/remove through fakes — this
- * suite never touches a real service or a real ~/.config/systemd/user unit.
+ * goes through injected seams: the `is-active`/MainPID probes and
+ * disable/daemon-reload through a fake `actionRunner`, file
+ * existence/read/remove and process-liveness/cgroup checks through fakes —
+ * this suite never touches a real service or a real ~/.config/systemd/user
+ * unit. (The one exception, clearly marked, is the default-runner timeout
+ * test, which spawns a deliberately-hanging FAKE systemctl from a scratch dir.)
  */
 describe('reconcileRedundantLegacyUnit — auto-retire a redundant install-script unit at startup', () => {
   const HOME = '/home/mike';
   const LEGACY_PATH = legacyUnitPath(HOME);
+  const OWN_PID = 999_999;
+  const CANONICAL_PID = 4242;
 
-  /** A recording runner whose `is-active` answer for the canonical unit is fixed. */
-  function runnerWithCanonical(canonicalActive: boolean): { runner: RuntimeActionRunner; calls: string[][] } {
+  interface FakeRunnerOptions {
+    readonly canonicalActive?: boolean;
+    readonly canonicalMainPid?: number;
+    readonly legacyMainPid?: number;
+    readonly disableStatus?: number;
+  }
+
+  /** A recording runner answering is-active + MainPID probes and disable/daemon-reload. */
+  function fakeReconcileRunner(opts: FakeRunnerOptions = {}): { runner: RuntimeActionRunner; calls: string[][] } {
     const calls: string[][] = [];
     const runner: RuntimeActionRunner = (command, args) => {
       calls.push([command, ...args]);
       if (args.includes('is-active')) {
-        return canonicalActive ? { status: 0, stdout: 'active\n' } : { status: 3, stdout: 'inactive\n' };
+        return (opts.canonicalActive ?? true) ? { status: 0, stdout: 'active\n' } : { status: 3, stdout: 'inactive\n' };
+      }
+      if (args.includes('MainPID')) {
+        const unit = args[args.length - 1] ?? '';
+        const pid = unit === `${LEGACY_SERVICE_UNIT_NAME}.service`
+          ? (opts.legacyMainPid ?? 0)
+          : (opts.canonicalMainPid ?? CANONICAL_PID);
+        return { status: 0, stdout: `${pid}\n` };
+      }
+      if (args.includes('disable')) {
+        return { status: opts.disableStatus ?? 0 };
       }
       return { status: 0 };
     };
     return { runner, calls };
   }
 
-  test('exact incident state: legacy marker-managed + canonical active → disabled, removed, receipt printed', () => {
-    const { runner, calls } = runnerWithCanonical(true);
-    const removed: string[] = [];
-    const result = reconcileRedundantLegacyUnit({
+  /** Base input with every guard seam injected to a safe, deterministic answer. */
+  function baseReconcileInput(
+    overrides: Partial<Parameters<typeof reconcileRedundantLegacyUnit>[0]> = {},
+  ): Parameters<typeof reconcileRedundantLegacyUnit>[0] {
+    return {
       homeDir: HOME,
       trackedServiceName: MANAGED_SERVICE_NAME,
       legacyUnitFileExists: () => true,
       legacyUnitFileRead: () => `# ${INSTALLER_UNIT_MARKER}\n[Service]\nExecStart=/x/goodvibes-daemon\n`,
+      processAlive: () => true,
+      ownPid: OWN_PID,
+      readOwnCgroup: () => `0::/user.slice/user-1000.slice/user@1000.service/app.slice/${MANAGED_SERVICE_NAME}.service`,
+      ...overrides,
+    };
+  }
+
+  test('exact incident state: legacy marker-managed + canonical active with live MainPID → disabled, removed, receipt printed', () => {
+    const { runner, calls } = fakeReconcileRunner();
+    const removed: string[] = [];
+    const result = reconcileRedundantLegacyUnit(baseReconcileInput({
       legacyUnitFileRemove: (p) => removed.push(p),
       actionRunner: runner,
-    });
+    }));
 
     expect(result.action).toBe('removed');
+    expect(result.reason).toBe('retired');
     // The legacy unit file was removed via the injected seam.
     expect(removed).toEqual([LEGACY_PATH]);
-    // It probed the CANONICAL unit's activeness, then disabled the LEGACY one.
+    // It probed the CANONICAL unit's activeness + MainPID, then disabled the LEGACY one.
     expect(calls).toContainEqual(['systemctl', '--user', 'is-active', `${MANAGED_SERVICE_NAME}.service`]);
+    expect(calls).toContainEqual(['systemctl', '--user', 'show', '-p', 'MainPID', '--value', `${MANAGED_SERVICE_NAME}.service`]);
     expect(calls).toContainEqual(['systemctl', '--user', 'disable', '--now', `${LEGACY_SERVICE_UNIT_NAME}.service`]);
     expect(calls).toContainEqual(['systemctl', '--user', 'daemon-reload']);
     // Honest receipt.
@@ -797,18 +833,16 @@ describe('reconcileRedundantLegacyUnit — auto-retire a redundant install-scrip
   });
 
   test('hand-written legacy unit (no marker) is never removed — a one-line actionable notice instead', () => {
-    const { runner, calls } = runnerWithCanonical(true);
+    const { runner, calls } = fakeReconcileRunner();
     const removed: string[] = [];
-    const result = reconcileRedundantLegacyUnit({
-      homeDir: HOME,
-      trackedServiceName: MANAGED_SERVICE_NAME,
-      legacyUnitFileExists: () => true,
+    const result = reconcileRedundantLegacyUnit(baseReconcileInput({
       legacyUnitFileRead: () => '[Service]\nExecStart=/opt/custom/goodvibes-daemon\n',
       legacyUnitFileRemove: (p) => removed.push(p),
       actionRunner: runner,
-    });
+    }));
 
     expect(result.action).toBe('notice');
+    expect(result.reason).toBe('hand-written');
     expect(removed).toEqual([]); // never removed
     // Never issued a disable for a hand-written unit.
     expect(calls.some((c) => c.includes('disable'))).toBe(false);
@@ -816,36 +850,198 @@ describe('reconcileRedundantLegacyUnit — auto-retire a redundant install-scrip
     expect(result.lines.join('\n')).toContain(`disable --now ${LEGACY_SERVICE_UNIT_NAME}.service`);
   });
 
-  test('canonical NOT active → noop: the legacy unit might be the only daemon, so it is left alone', () => {
-    const { runner, calls } = runnerWithCanonical(false);
+  test('an UNREADABLE legacy unit file is reported as unreadable — never misdiagnosed as hand-written', () => {
+    // Reproduces the verifier's chmod-000/root-owned probe: existsSync sees
+    // the file, readFileSync throws EACCES. The old code printed "It is
+    // hand-written (no installer marker)" — a false provenance claim about a
+    // file whose contents (which DO carry the marker) were never read.
+    const { runner, calls } = fakeReconcileRunner();
     const removed: string[] = [];
-    const result = reconcileRedundantLegacyUnit({
-      homeDir: HOME,
-      trackedServiceName: MANAGED_SERVICE_NAME,
-      legacyUnitFileExists: () => true,
-      legacyUnitFileRead: () => `# ${INSTALLER_UNIT_MARKER}\n`,
+    const result = reconcileRedundantLegacyUnit(baseReconcileInput({
+      legacyUnitFileRead: () => {
+        throw Object.assign(new Error(`EACCES: permission denied, open '${LEGACY_PATH}'`), { code: 'EACCES' });
+      },
       legacyUnitFileRemove: (p) => removed.push(p),
       actionRunner: runner,
-    });
+    }));
+
+    expect(result.action).toBe('notice');
+    expect(result.reason).toBe('marker-unreadable');
+    expect(removed).toEqual([]); // fail closed
+    expect(calls.some((c) => c.includes('disable'))).toBe(false);
+    expect(result.lines.join('\n')).toContain('could not be read');
+    expect(result.lines.join('\n')).not.toContain('hand-written');
+  });
+
+  test('canonical NOT active → refuses with a breadcrumb: the legacy unit might be the only daemon', () => {
+    const { runner, calls } = fakeReconcileRunner({ canonicalActive: false });
+    const removed: string[] = [];
+    const result = reconcileRedundantLegacyUnit(baseReconcileInput({
+      legacyUnitFileRemove: (p) => removed.push(p),
+      actionRunner: runner,
+    }));
 
     expect(result.action).toBe('noop');
+    expect(result.reason).toBe('canonical-not-active');
+    // Refusals carry a line so a persisting two-unit state is never silent.
+    expect(result.lines.length).toBeGreaterThan(0);
     expect(removed).toEqual([]);
-    // It probed activeness but never disabled/removed anything.
     expect(calls.some((c) => c.includes('disable'))).toBe(false);
     expect(calls.some((c) => c.includes('daemon-reload'))).toBe(false);
   });
 
-  test('no legacy unit present → noop, and it does not even probe systemd', () => {
-    const { runner, calls } = runnerWithCanonical(true);
-    const result = reconcileRedundantLegacyUnit({
-      homeDir: HOME,
-      trackedServiceName: MANAGED_SERVICE_NAME,
-      legacyUnitFileExists: () => false,
+  test("canonical reports active but its MainPID is 0 → refuses ('active' from a Type=simple unit is not proof of serving)", () => {
+    // Reproduces the verifier's crash-loop window: is-active says 'active'
+    // (Type=simple reports active from fork onward) while no live main
+    // process exists. The old guard authorized disable/remove here.
+    const { runner, calls } = fakeReconcileRunner({ canonicalMainPid: 0 });
+    const removed: string[] = [];
+    const result = reconcileRedundantLegacyUnit(baseReconcileInput({
+      legacyUnitFileRemove: (p) => removed.push(p),
       actionRunner: runner,
-    });
+    }));
 
     expect(result.action).toBe('noop');
+    expect(result.reason).toBe('canonical-mainpid-not-alive');
+    expect(removed).toEqual([]);
+    expect(calls.some((c) => c.includes('disable'))).toBe(false);
+  });
+
+  test('canonical MainPID resolves but the process is dead → refuses', () => {
+    const { runner, calls } = fakeReconcileRunner({ canonicalMainPid: 777 });
+    const removed: string[] = [];
+    const result = reconcileRedundantLegacyUnit(baseReconcileInput({
+      processAlive: () => false,
+      legacyUnitFileRemove: (p) => removed.push(p),
+      actionRunner: runner,
+    }));
+
+    expect(result.action).toBe('noop');
+    expect(result.reason).toBe('canonical-mainpid-not-alive');
+    expect(removed).toEqual([]);
+    expect(calls.some((c) => c.includes('disable'))).toBe(false);
+  });
+
+  test('refuses to disable the unit supervising THIS process (legacy MainPID == own pid) — never SIGTERMs itself', () => {
+    // Reproduces the verifier's self-kill scenario: the currently-booting
+    // daemon was launched BY the legacy unit; `disable --now` on it would
+    // SIGTERM this process's own cgroup mid-boot from inside the blocking
+    // systemctl call.
+    const { runner, calls } = fakeReconcileRunner({ legacyMainPid: OWN_PID });
+    const removed: string[] = [];
+    const result = reconcileRedundantLegacyUnit(baseReconcileInput({
+      legacyUnitFileRemove: (p) => removed.push(p),
+      actionRunner: runner,
+    }));
+
+    expect(result.action).toBe('noop');
+    expect(result.reason).toBe('self-supervised-by-legacy');
+    expect(removed).toEqual([]);
+    expect(calls.some((c) => c.includes('disable'))).toBe(false);
+    expect(result.lines.join('\n')).toContain('refusing to disable');
+  });
+
+  test('refuses when /proc/self/cgroup names the legacy unit, even if the MainPID probe is inconclusive', () => {
+    const { runner, calls } = fakeReconcileRunner({ legacyMainPid: 0 });
+    const removed: string[] = [];
+    const result = reconcileRedundantLegacyUnit(baseReconcileInput({
+      readOwnCgroup: () => `0::/user.slice/user-1000.slice/user@1000.service/app.slice/${LEGACY_SERVICE_UNIT_NAME}.service`,
+      legacyUnitFileRemove: (p) => removed.push(p),
+      actionRunner: runner,
+    }));
+
+    expect(result.action).toBe('noop');
+    expect(result.reason).toBe('self-supervised-by-legacy');
+    expect(removed).toEqual([]);
+    expect(calls.some((c) => c.includes('disable'))).toBe(false);
+  });
+
+  test('a FAILED disable leaves the unit file in place and never prints a false "disabled and removed" receipt', () => {
+    // Reproduces the verifier's dangling-symlink scenario: disable --now
+    // exits non-zero (bus hiccup); the old code removed the unit file anyway
+    // and claimed success, leaving an enabled symlink pointing at nothing —
+    // unrecoverable by the next reconcile pass (which noops on file-absent).
+    const { runner, calls } = fakeReconcileRunner({ disableStatus: 1 });
+    const removed: string[] = [];
+    const result = reconcileRedundantLegacyUnit(baseReconcileInput({
+      legacyUnitFileRemove: (p) => removed.push(p),
+      actionRunner: runner,
+    }));
+
+    expect(result.action).toBe('failed');
+    expect(result.reason).toBe('disable-failed');
+    expect(removed).toEqual([]); // the unit file was NOT removed
+    // No daemon-reload after a failed disable — nothing was changed.
+    expect(calls.some((c) => c.includes('daemon-reload'))).toBe(false);
+    const text = result.lines.join('\n');
+    expect(text).toContain('could not disable');
+    expect(text).toContain('nothing was removed');
+    expect(text).not.toContain('disabled and removed');
+  });
+
+  test('a TIMED-OUT disable (status null, wedged bus) is treated exactly like a failed disable', () => {
+    const calls: string[][] = [];
+    const runner: RuntimeActionRunner = (command, args) => {
+      calls.push([command, ...args]);
+      if (args.includes('is-active')) return { status: 0, stdout: 'active\n' };
+      if (args.includes('MainPID')) {
+        const unit = args[args.length - 1] ?? '';
+        return { status: 0, stdout: unit === `${LEGACY_SERVICE_UNIT_NAME}.service` ? '0\n' : `${CANONICAL_PID}\n` };
+      }
+      if (args.includes('disable')) return { status: null } as ReturnType<RuntimeActionRunner>;
+      return { status: 0 };
+    };
+    const removed: string[] = [];
+    const result = reconcileRedundantLegacyUnit(baseReconcileInput({
+      legacyUnitFileRemove: (p) => removed.push(p),
+      actionRunner: runner,
+    }));
+
+    expect(result.action).toBe('failed');
+    expect(result.reason).toBe('disable-failed');
+    expect(removed).toEqual([]);
+  });
+
+  test('no legacy unit present → noop, and it does not even probe systemd', () => {
+    const { runner, calls } = fakeReconcileRunner();
+    const result = reconcileRedundantLegacyUnit(baseReconcileInput({
+      legacyUnitFileExists: () => false,
+      actionRunner: runner,
+    }));
+
+    expect(result.action).toBe('noop');
+    expect(result.reason).toBe('no-legacy-unit');
     expect(result.lines).toEqual([]);
     expect(calls).toEqual([]); // short-circuits before any systemctl call
+  });
+
+  test('default runner is hard-timeout-bounded: a hanging systemctl (wedged user bus) degrades to a fast refusal, never a boot hang', () => {
+    // Reproduces the verifier's frozen-event-loop probe: a fake systemctl on
+    // PATH that sleeps forever. Without a spawnSync timeout the reconcile
+    // blocked the daemon's event loop indefinitely; with it, the probe times
+    // out (status null) and the guard refuses within the bound.
+    const dir = mkdtempSync(join(tmpdir(), 'gv-reconcile-timeout-'));
+    const stub = join(dir, 'systemctl');
+    writeFileSync(stub, '#!/bin/sh\nsleep 30\n');
+    chmodSync(stub, 0o755);
+    const previousPath = process.env.PATH;
+    process.env.PATH = `${dir}:${previousPath ?? ''}`;
+    try {
+      const startedAt = Date.now();
+      const result = reconcileRedundantLegacyUnit(baseReconcileInput({
+        // No actionRunner: exercises the DEFAULT spawnSync runner against the
+        // hanging stub, with a short injected timeout to keep the suite fast.
+        systemctlTimeoutMs: 500,
+      }));
+      const elapsedMs = Date.now() - startedAt;
+
+      expect(result.action).toBe('noop');
+      expect(result.reason).toBe('canonical-not-active'); // timed-out probe = not provably active
+      expect(elapsedMs).toBeLessThan(10_000); // bounded, not the stub's 30s hang
+    } finally {
+      if (previousPath === undefined) delete process.env.PATH;
+      else process.env.PATH = previousPath;
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });

@@ -217,8 +217,7 @@ export function detectLegacyUnit(input: DetectLegacyUnitInput): LegacyUnitInfo {
   const path = legacyUnitPath(input.homeDir);
   const fileExists = input.legacyUnitFileExists ?? existsSync;
   if (!fileExists(path)) return { present: false, active: false, path };
-  const run: ManagedServiceActionRunner = input.actionRunner
-    ?? ((command, args) => spawnSync(command, args, { stdio: 'pipe', encoding: 'utf-8' }) as ManagedServiceActionResult);
+  const run: ManagedServiceActionRunner = input.actionRunner ?? defaultActionRunner(SYSTEMCTL_TIMEOUT_MS);
   const result = run('systemctl', ['--user', 'is-active', `${LEGACY_SERVICE_UNIT_NAME}.service`]);
   const state = (result.stdout ?? '').trim();
   const active = (result.status ?? 1) === 0 && state === 'active';
@@ -279,6 +278,29 @@ export function legacyUnitNote(legacy: LegacyUnitInfo, trackedServiceName: strin
  */
 export const INSTALLER_UNIT_MARKER = 'managed by goodvibes install.sh';
 
+/**
+ * Hard ceiling on every systemctl invocation made through a DEFAULT action
+ * runner in this module. The reconcile below runs on the daemon's own startup
+ * path, and `spawnSync` without a timeout blocks the single JS event loop for
+ * as long as the child runs — a wedged user D-Bus (a real incident class on
+ * this host) would freeze an already-listening daemon indefinitely. A timed-out
+ * call reports `status: null`, which every status check in this module treats
+ * as failure, so a wedge degrades to an honest refusal instead of a hang.
+ */
+export const SYSTEMCTL_TIMEOUT_MS = 5_000;
+
+function defaultActionRunner(timeoutMs: number): ManagedServiceActionRunner {
+  return (command, args) =>
+    spawnSync(command, args, { stdio: 'pipe', encoding: 'utf-8', timeout: timeoutMs }) as ManagedServiceActionResult;
+}
+
+/** Parse a `systemctl show -p MainPID --value` reply: a positive integer pid, or undefined when absent/unparseable/0. */
+function parseMainPid(result: { status?: number | null; stdout?: string | null | undefined }): number | undefined {
+  if ((result.status ?? 1) !== 0) return undefined;
+  const parsed = Number.parseInt((result.stdout ?? '').trim(), 10);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : undefined;
+}
+
 export interface ReconcileRedundantLegacyUnitInput {
   readonly homeDir: string;
   /** The unit name this tool manages (e.g. 'goodvibes'). */
@@ -289,14 +311,56 @@ export interface ReconcileRedundantLegacyUnitInput {
   readonly legacyUnitFileRead?: ((path: string) => string) | undefined;
   /** Injectable removal of the legacy unit file. Defaults to a real `rmSync`. */
   readonly legacyUnitFileRemove?: ((path: string) => void) | undefined;
-  /** Injectable systemctl runner (is-active probe + disable/daemon-reload). */
+  /** Injectable systemctl runner (is-active/MainPID probes + disable/daemon-reload). */
   readonly actionRunner?: ManagedServiceActionRunner | undefined;
+  /** Injectable liveness check for the canonical unit's MainPID. Defaults to a signal-0 probe. */
+  readonly processAlive?: ((pid: number) => boolean) | undefined;
+  /** This process's pid, for the self-supervision guard. Defaults to `process.pid`. */
+  readonly ownPid?: number | undefined;
+  /** Injectable /proc/self/cgroup read, for the self-supervision guard. */
+  readonly readOwnCgroup?: (() => string) | undefined;
+  /** Timeout applied to the DEFAULT systemctl runner only. Defaults to SYSTEMCTL_TIMEOUT_MS. */
+  readonly systemctlTimeoutMs?: number | undefined;
 }
 
+export type ReconcileRedundantLegacyUnitReason =
+  | 'no-legacy-unit'
+  | 'canonical-not-active'
+  | 'canonical-mainpid-not-alive'
+  | 'self-supervised-by-legacy'
+  | 'hand-written'
+  | 'marker-unreadable'
+  | 'disable-failed'
+  | 'retired';
+
 export interface ReconcileRedundantLegacyUnitResult {
-  /** 'removed' = legacy unit auto-retired; 'notice' = hand-written, left alone with a hint; 'noop' = nothing to do. */
-  readonly action: 'removed' | 'notice' | 'noop';
+  /**
+   * 'removed' = legacy unit auto-retired; 'notice' = left alone with a printed
+   * hint (hand-written, or unreadable); 'failed' = retirement was attempted but
+   * a destructive step failed (nothing was removed); 'noop' = guard refused or
+   * nothing to do.
+   */
+  readonly action: 'removed' | 'notice' | 'noop' | 'failed';
+  /** Machine-readable why, so callers can leave a breadcrumb for every refusal. */
+  readonly reason: ReconcileRedundantLegacyUnitReason;
   readonly lines: readonly string[];
+}
+
+function defaultProcessAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function defaultReadOwnCgroup(): string {
+  try {
+    return readFileSync('/proc/self/cgroup', 'utf-8');
+  } catch {
+    return '';
+  }
 }
 
 /**
@@ -307,12 +371,21 @@ export interface ReconcileRedundantLegacyUnitResult {
  * bare-args second daemon could boot and fight the real one for the port.
  *
  * This runs on daemon startup (no user invocation needed) and, guard-railed:
- *   - Only acts when the canonical unit is CONFIRMED active (a read-only
- *     `is-active` probe). If the canonical one is not the daemon actually
- *     serving, the legacy unit might be the only daemon — leave it alone.
- *   - AUTO-RETIRES only an installer-MARKER-managed legacy unit (disable +
- *     remove + daemon-reload), printing a receipt. A hand-written legacy unit
- *     (no marker) is never touched — it returns a one-line actionable notice.
+ *   - Only acts when the canonical unit is CONFIRMED serving: `is-active`
+ *     reports active AND its MainPID resolves to a live process. `is-active`
+ *     alone is not proof — a Type=simple unit reports active from fork onward,
+ *     including the pre-bind window of a daemon that is about to crash-loop.
+ *   - NEVER acts from inside the legacy unit itself: if this process IS the
+ *     legacy unit's MainPID, or /proc/self/cgroup names the legacy unit,
+ *     running `disable --now` would SIGTERM the very daemon executing this
+ *     code (mid-boot, from inside a blocking spawnSync). Refuses instead.
+ *   - AUTO-RETIRES only an installer-MARKER-managed legacy unit, and only
+ *     removes its unit file AFTER `disable --now` reports success — a failed
+ *     disable leaves everything in place and says so, never printing a
+ *     "disabled and removed" receipt for a disable that did not happen.
+ *   - A hand-written legacy unit (no marker) is never touched — a one-line
+ *     actionable notice. An UNREADABLE unit file is reported as unreadable,
+ *     never misdiagnosed as hand-written.
  * Every side effect goes through the same injectable seams the migration engine
  * uses, so tests exercise it deterministically and never touch a real service.
  */
@@ -321,39 +394,116 @@ export function reconcileRedundantLegacyUnit(
 ): ReconcileRedundantLegacyUnitResult {
   const path = legacyUnitPath(input.homeDir);
   const fileExists = input.legacyUnitFileExists ?? existsSync;
-  if (!fileExists(path)) return { action: 'noop', lines: [] };
+  if (!fileExists(path)) return { action: 'noop', reason: 'no-legacy-unit', lines: [] };
 
   const run: ManagedServiceActionRunner = input.actionRunner
-    ?? ((command, args) => spawnSync(command, args, { stdio: 'pipe', encoding: 'utf-8' }) as ManagedServiceActionResult);
-
-  // Only reconcile when the canonical unit is the one actually serving.
+    ?? defaultActionRunner(input.systemctlTimeoutMs ?? SYSTEMCTL_TIMEOUT_MS);
   const canonicalUnit = `${input.trackedServiceName}.service`;
+  const legacyUnit = `${LEGACY_SERVICE_UNIT_NAME}.service`;
+
+  // Guard 1: the canonical unit must report active. (A timed-out or failed
+  // probe — e.g. a wedged user bus — lands here too and refuses.)
   const probe = run('systemctl', ['--user', 'is-active', canonicalUnit]);
   const canonicalActive = (probe.status ?? 1) === 0 && (probe.stdout ?? '').trim() === 'active';
-  if (!canonicalActive) return { action: 'noop', lines: [] };
+  if (!canonicalActive) {
+    return {
+      action: 'noop',
+      reason: 'canonical-not-active',
+      lines: [
+        `legacy-unit reconcile: a ${legacyUnit} unit file exists at ${path} but ${canonicalUnit} is not active — ` +
+          'left untouched (it may be the only daemon).',
+      ],
+    };
+  }
+
+  // Guard 2: 'active' alone does not prove the canonical unit is the daemon
+  // actually serving (Type=simple reports active from fork onward). Require
+  // its MainPID to resolve and be a live process.
+  const canonicalPid = parseMainPid(run('systemctl', ['--user', 'show', '-p', 'MainPID', '--value', canonicalUnit]));
+  const alive = input.processAlive ?? defaultProcessAlive;
+  if (canonicalPid === undefined || !alive(canonicalPid)) {
+    return {
+      action: 'noop',
+      reason: 'canonical-mainpid-not-alive',
+      lines: [
+        `legacy-unit reconcile: ${canonicalUnit} reports active but its MainPID could not be confirmed alive — ` +
+          `left the ${legacyUnit} unit untouched.`,
+      ],
+    };
+  }
+
+  // Guard 3: never disable the unit that launched THIS process. `disable
+  // --now` on our own supervising unit would SIGTERM this daemon's whole
+  // cgroup mid-boot, from inside the blocking systemctl call.
+  const ownPid = input.ownPid ?? process.pid;
+  const legacyPid = parseMainPid(run('systemctl', ['--user', 'show', '-p', 'MainPID', '--value', legacyUnit]));
+  const ownCgroup = (input.readOwnCgroup ?? defaultReadOwnCgroup)();
+  if (legacyPid === ownPid || ownCgroup.includes(legacyUnit)) {
+    return {
+      action: 'noop',
+      reason: 'self-supervised-by-legacy',
+      lines: [
+        `legacy-unit reconcile: this daemon appears to be running UNDER ${legacyUnit} itself — refusing to disable ` +
+          `the unit supervising the current process. Migrate from the canonical side instead: goodvibes-daemon migrate-service`,
+      ],
+    };
+  }
 
   const readFile = input.legacyUnitFileRead ?? ((p: string) => readFileSync(p, 'utf-8'));
   let marked = false;
+  let readError: string | undefined;
   try {
     marked = readFile(path).includes(INSTALLER_UNIT_MARKER);
-  } catch {
-    marked = false;
+  } catch (error) {
+    readError = summarizeError(error);
+  }
+
+  if (readError !== undefined) {
+    // Fail closed, and say what actually happened: the file could not be READ.
+    // Asserting "hand-written (no installer marker)" here would be a false
+    // provenance claim about a file whose contents were never established.
+    return {
+      action: 'notice',
+      reason: 'marker-unreadable',
+      lines: [
+        `note: ${canonicalUnit} is active and a separate ${legacyUnit} exists at ${path}, but its unit file could not ` +
+          `be read (${readError}) — left untouched. Inspect it yourself; if it is redundant, retire it with: ` +
+          `systemctl --user disable --now ${legacyUnit} && rm ${path} && systemctl --user daemon-reload`,
+      ],
+    };
   }
 
   if (!marked) {
     return {
       action: 'notice',
+      reason: 'hand-written',
       lines: [
-        `note: ${canonicalUnit} is active but a separate ${LEGACY_SERVICE_UNIT_NAME}.service also exists at ${path}. ` +
+        `note: ${canonicalUnit} is active but a separate ${legacyUnit} also exists at ${path}. ` +
           'It is hand-written (no installer marker) so it was left untouched; retire it yourself to stop two daemons ' +
-          `competing for the same port: systemctl --user disable --now ${LEGACY_SERVICE_UNIT_NAME}.service && rm ${path} && ` +
+          `competing for the same port: systemctl --user disable --now ${legacyUnit} && rm ${path} && ` +
           'systemctl --user daemon-reload',
       ],
     };
   }
 
-  // Installer-marker-managed and redundant: auto-disable + remove, with a receipt.
-  run('systemctl', ['--user', 'disable', '--now', `${LEGACY_SERVICE_UNIT_NAME}.service`]);
+  // Installer-marker-managed and redundant: disable first, and only remove the
+  // unit file if the disable actually succeeded — otherwise the enablement
+  // symlink dangles at a deleted file and this tool can never repair it (the
+  // next pass no-ops at the file-exists check).
+  const disableResult = run('systemctl', ['--user', 'disable', '--now', legacyUnit]);
+  if ((disableResult.status ?? 1) !== 0) {
+    const detail = (disableResult.stderr ?? disableResult.stdout ?? '').trim() || 'no output';
+    return {
+      action: 'failed',
+      reason: 'disable-failed',
+      lines: [
+        `legacy-unit reconcile: could not disable the redundant installer-managed ${legacyUnit} (${detail}) — ` +
+          `its unit file at ${path} was left in place; nothing was removed.`,
+        `Retire it yourself: systemctl --user disable --now ${legacyUnit} && rm ${path} && systemctl --user daemon-reload`,
+      ],
+    };
+  }
+
   const removeFile = input.legacyUnitFileRemove ?? ((p: string) => rmSync(p, { force: true }));
   let removeError: string | undefined;
   try {
@@ -364,13 +514,13 @@ export function reconcileRedundantLegacyUnit(
   run('systemctl', ['--user', 'daemon-reload']);
 
   const lines = [
-    `reconciled: ${canonicalUnit} is active, so the redundant installer-managed ${LEGACY_SERVICE_UNIT_NAME}.service ` +
+    `reconciled: ${canonicalUnit} is active and serving, so the redundant installer-managed ${legacyUnit} ` +
       `was disabled${removeError ? '' : ` and removed (${path})`}.`,
   ];
   if (removeError) {
     lines.push(`note: could not remove ${path}: ${removeError} — remove it by hand.`);
   }
-  return { action: 'removed', lines };
+  return { action: 'removed', reason: 'retired', lines };
 }
 
 /**
@@ -593,8 +743,7 @@ export async function runLegacyDaemonMigration(
   }
 
   // New unit verified healthy — now, and only now, retire the legacy unit.
-  const run: ManagedServiceActionRunner = params.actionRunner
-    ?? ((command, args) => spawnSync(command, args, { stdio: 'pipe', encoding: 'utf-8' }) as ManagedServiceActionResult);
+  const run: ManagedServiceActionRunner = params.actionRunner ?? defaultActionRunner(SYSTEMCTL_TIMEOUT_MS);
   const stopResult = run('systemctl', ['--user', 'stop', `${LEGACY_SERVICE_UNIT_NAME}.service`]);
   const disableResult = run('systemctl', ['--user', 'disable', `${LEGACY_SERVICE_UNIT_NAME}.service`]);
   const removeFile = params.legacyUnitFileRemove ?? ((path: string) => rmSync(path, { force: true }));
