@@ -123,6 +123,48 @@ describe('daemon startup banner — binding honesty (mirrors the SDK bind path)'
     expect(binding.port).toBe(3421);
   });
 
+  test("unrecognized hostMode strings ('LAN', 'Network', '') are flagged recognized:false — the SDK bind path has no default case for them and the daemon cannot bind", () => {
+    // Pins the verifier's fixture: the SDK's resolveHostBinding is a switch
+    // with NO default case, so these values yield an undefined binding and the
+    // daemon throws in its constructor. The display resolver must not present
+    // its loopback fallback as a definite binding for a config the SDK cannot
+    // bind at all — recognized:false is the signal callers warn on.
+    for (const badMode of ['LAN', 'Network', '', 'local ']) {
+      const binding = resolveRuntimeEndpointBinding(
+        fakeConfig({ 'controlPlane.hostMode': badMode, 'controlPlane.port': 3421 }),
+        'controlPlane',
+      );
+      expect(binding.recognized).toBe(false);
+      expect(binding.hostMode).toBe(badMode);
+    }
+    // The three SDK-recognized modes are affirmatively recognized.
+    for (const goodMode of ['local', 'network', 'custom']) {
+      const binding = resolveRuntimeEndpointBinding(
+        fakeConfig({ 'controlPlane.hostMode': goodMode }),
+        'controlPlane',
+      );
+      expect(binding.recognized).toBe(true);
+    }
+    // Unset hostMode defaults to 'local' — recognized, exactly like the SDK's
+    // own `?? 'local'`.
+    expect(resolveRuntimeEndpointBinding(fakeConfig({}), 'controlPlane').recognized).toBe(true);
+  });
+
+  test("web port is anchored to the SDK's resolveWebPort (bare Number, no collapse): 0 stays 0 and non-numeric stays NaN, matching the tailscale/announcement machinery", () => {
+    // The SDK has NO resolveHostBinding consumer for the web endpoint — its
+    // web machinery (resolveWebPort driving tailscale serve, the surface
+    // registry, feature announcements) uses `Number(raw ?? default)` with no
+    // ||-collapse. Collapsing here would make displays assert a port that
+    // machinery is not using. (The proper close — a real web bind resolver —
+    // is SDK-side.)
+    expect(resolveRuntimeEndpointBinding(fakeConfig({ 'web.port': 0 }), 'web').port).toBe(0);
+    expect(Number.isNaN(resolveRuntimeEndpointBinding(fakeConfig({ 'web.port': 'abc' }), 'web').port)).toBe(true);
+    expect(resolveRuntimeEndpointBinding(fakeConfig({}), 'web').port).toBe(3423);
+    // controlPlane/httpListener keep the resolveHostBinding-anchored collapse.
+    expect(resolveRuntimeEndpointBinding(fakeConfig({ 'controlPlane.port': 0 }), 'controlPlane').port).toBe(3421);
+    expect(resolveRuntimeEndpointBinding(fakeConfig({ 'httpListener.port': 'abc' }), 'httpListener').port).toBe(3422);
+  });
+
   test('GOODVIBES_DAEMON_HOST in the environment does not influence the displayed binding (the bind path never reads it)', () => {
     // Verifier probe: Environment=GOODVIBES_DAEMON_HOST=0.0.0.0 in the unit →
     // daemon binds per config (local → 127.0.0.1) while the old banner printed
