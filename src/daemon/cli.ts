@@ -29,7 +29,8 @@ import {
 } from '@pellux/goodvibes-sdk/platform/discovery';
 import { createSafeHostServeFactory } from './safe-serve.ts';
 import { isDaemonServiceSubcommand, resolveInstalledDaemonBinary, runDaemonServiceCli } from './service-commands.ts';
-import { reconcileRedundantLegacyUnit, resolveConfiguredServiceName } from '../runtime/legacy-daemon-migration.ts';
+import { resolveConfiguredServiceName } from '../runtime/legacy-daemon-migration.ts';
+import { reconcileRedundantLegacyUnit } from '../runtime/legacy-daemon-reconcile.ts';
 import { resolveRuntimeEndpointBinding } from '../cli/endpoints.ts';
 import { resolveDaemonUpdateArtifact } from './lifecycle.ts';
 import { VERSION } from '../version.ts';
