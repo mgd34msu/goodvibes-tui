@@ -370,6 +370,36 @@ systemd_unit_exec_binary() {
   printf '%s' "$_raw" | sed -n 's/.*path=\([^ ;]*\).*/\1/p' | head -1
 }
 
+# The MainPID systemd reports for a user unit, or nothing when unknown.
+systemd_unit_main_pid() {
+  _mp=$(systemctl --user show -p MainPID --value "$1" 2>/dev/null || true)
+  case "$_mp" in
+    ''|0) : ;;
+    *[!0-9]*) : ;;
+    *) printf '%s' "$_mp" ;;
+  esac
+}
+
+# True when <pid> is the MainPID of one of OUR systemd user units. The
+# bare-process kill/relaunch fallback must never apply to a systemd-supervised
+# process: SIGTERM + nohup would demote a supervised daemon to an unsupervised
+# process while leaving its (still-enabled) unit behind — the exact two-daemon
+# state at the next login that this installer exists to prevent.
+pid_is_unit_mainpid() {
+  _q="$1"
+  command -v systemctl >/dev/null 2>&1 || return 1
+  for _unit in "$SYSTEMD_DAEMON_UNIT" "$LEGACY_SYSTEMD_DAEMON_UNIT" goodvibes-agent.service; do
+    [ "$(systemd_unit_main_pid "$_unit")" = "$_q" ] && return 0
+  done
+  return 1
+}
+
+# True when the LEGACY goodvibes-daemon.service unit is currently active.
+legacy_unit_active() {
+  command -v systemctl >/dev/null 2>&1 || return 1
+  systemctl --user is-active --quiet "$LEGACY_SYSTEMD_DAEMON_UNIT" 2>/dev/null
+}
+
 restart_systemd_unit() {
   # restart_systemd_unit <unit> <expected-binary> — returns 0 if it handled a
   # running unit (restarted, replaced, or reported), 1 if no active unit
@@ -430,6 +460,14 @@ restart_bare_processes() {
   pids=$(pgrep -f "$pattern" 2>/dev/null || true)
   [ -n "$pids" ] || return 0
   for pid in $pids; do
+    if pid_is_unit_mainpid "$pid"; then
+      # A systemd-supervised process is NEVER killed/relaunched here: its unit
+      # owns the restart, and a SIGTERM + nohup relaunch would demote it to an
+      # unsupervised process with its enabled unit left behind.
+      say ""
+      say "Skipping pid $pid — it is supervised by a systemd user unit; its unit owns the restart."
+      continue
+    fi
     if ! proc_belongs_to_install_dir "$pid"; then
       # Its real executable is gone or lives outside $INSTALL_DIR — a
       # leftover from a different install. Recovering its argv and
@@ -489,6 +527,16 @@ restart_bare_processes() {
 restart_running_daemon() {
   [ "$RESTART_DAEMON" = "1" ] || return 0
   restart_systemd_unit "$SYSTEMD_DAEMON_UNIT" "$INSTALL_DIR/goodvibes-daemon" && return 0
+  if legacy_unit_active; then
+    # The daemon is supervised by the LEGACY goodvibes-daemon.service unit —
+    # the dominant pre-unification upgrade state. Do NOT fall through to the
+    # bare-process kill/nohup path (that would SIGTERM a supervised daemon and
+    # relaunch it outside systemd). The migration step later in this run owns
+    # the supervised transfer to the canonical unit.
+    say ""
+    say "The daemon is running under the $LEGACY_SYSTEMD_DAEMON_UNIT unit — the migration step below transfers it to $SYSTEMD_DAEMON_UNIT."
+    return 0
+  fi
   restart_bare_processes '[g]oodvibes-daemon' "$INSTALL_DIR/goodvibes-daemon"
 }
 
@@ -558,7 +606,7 @@ StartLimitIntervalSec=0
 
 [Service]
 Type=simple
-ExecStart=$INSTALL_DIR/goodvibes-daemon --daemon-home $HOME --hostname $DAEMON_HOST --port $DAEMON_PORT
+ExecStart="$INSTALL_DIR/goodvibes-daemon" --daemon-home "$HOME" --hostname $DAEMON_HOST --port $DAEMON_PORT
 Restart=on-failure
 RestartSec=2$_restart_escalation
 
@@ -714,29 +762,39 @@ setup_daemon_service() {
 # --- upgrade path: retire the legacy `goodvibes-daemon.service` unit name ---
 # The prior installer created the daemon unit as `goodvibes-daemon.service`
 # with a bare `ExecStart=<bin>` (no args). This installer now unifies on
-# `goodvibes.service` (the same name the in-app install-service manages). When
-# an upgrade finds a leftover legacy unit, retire it — but ONLY if the canonical
-# unit is already in place (so we never leave a host with no daemon unit at all)
-# and ONLY if the legacy unit carries this installer's marker (a hand-written
-# goodvibes-daemon.service is never removed, only reported). This is the piece
-# that stops the two-unit split the production incident surfaced: a bare-args
-# legacy unit booting a second, port-conflicting daemon alongside the real one.
+# `goodvibes.service` (the same name the in-app install-service manages).
+# The migration handles every upgrade state honestly:
+#   - legacy ACTIVE and canonical not: supervised transfer — write the
+#     canonical unit, stop legacy, start canonical, VERIFY it is active, and
+#     only then retire the legacy unit. A canonical unit that fails to come up
+#     rolls back (legacy restarted, nothing removed).
+#   - canonical VERIFIED ACTIVE: the legacy unit is redundant — disable+remove
+#     it (checking every exit status; the unit file is only removed after a
+#     SUCCESSFUL disable, so a busless run never leaves a dangling enablement
+#     symlink behind a false "disabled + removed" receipt).
+#   - neither active: retire the inactive legacy unit only when a canonical
+#     unit file exists, and state the canonical unit's real (inactive) state.
+# Marker-gated throughout: a hand-written goodvibes-daemon.service is never
+# touched, and an UNREADABLE unit file is reported as unreadable, never
+# misdiagnosed as hand-written. GOODVIBES_RESTART_DAEMON=0 documents "leave
+# running daemon untouched" — with it set, an ACTIVE legacy unit is never
+# stopped (a notice explains how to migrate later).
 migrate_legacy_installer_unit() {
+  case "$os_tag" in
+    linux) migrate_legacy_systemd_unit ;;
+    macos) migrate_legacy_launchd_plist ;;
+  esac
+}
+
+migrate_legacy_systemd_unit() {
   legacy_path=$(systemd_unit_path "$LEGACY_SYSTEMD_DAEMON_UNIT")
   [ -f "$legacy_path" ] || return 0
 
-  # Only retire the legacy unit once the canonical unit is actually present on
-  # disk (or reported active) — never remove the legacy one and leave nothing.
-  canonical_path=$(systemd_daemon_unit_path)
-  canonical_ready=0
-  [ -f "$canonical_path" ] && canonical_ready=1
-  if [ "$canonical_ready" != "1" ] && command -v systemctl >/dev/null 2>&1; then
-    systemctl --user is-active --quiet "$SYSTEMD_DAEMON_UNIT" 2>/dev/null && canonical_ready=1
-  fi
-  if [ "$canonical_ready" != "1" ]; then
+  if [ ! -r "$legacy_path" ]; then
     say ""
-    say "Found a legacy $LEGACY_SYSTEMD_DAEMON_UNIT unit but no canonical $SYSTEMD_DAEMON_UNIT is in place yet —"
-    say "  leaving the legacy unit alone so the host is never left without a daemon unit."
+    say "NOTE: a $LEGACY_SYSTEMD_DAEMON_UNIT unit exists at $legacy_path but could not be read"
+    say "  (permissions?) — leaving it untouched. Inspect it yourself; if it is redundant:"
+    say "    systemctl --user disable --now $LEGACY_SYSTEMD_DAEMON_UNIT && rm $legacy_path && systemctl --user daemon-reload"
     return 0
   fi
 
@@ -750,16 +808,158 @@ migrate_legacy_installer_unit() {
     return 0
   fi
 
-  say ""
-  say "Retiring the superseded installer-managed $LEGACY_SYSTEMD_DAEMON_UNIT (now unified as $SYSTEMD_DAEMON_UNIT) ..."
-  if command -v systemctl >/dev/null 2>&1; then
-    systemctl --user disable --now "$LEGACY_SYSTEMD_DAEMON_UNIT" 2>/dev/null ||
-      systemctl --user stop "$LEGACY_SYSTEMD_DAEMON_UNIT" 2>/dev/null || true
+  if ! command -v systemctl >/dev/null 2>&1; then
+    say ""
+    say "NOTE: found the installer-managed $LEGACY_SYSTEMD_DAEMON_UNIT at $legacy_path but systemctl is not"
+    say "  available — nothing was changed. Retire it yourself once systemd is reachable:"
+    say "    systemctl --user disable --now $LEGACY_SYSTEMD_DAEMON_UNIT && rm $legacy_path && systemctl --user daemon-reload"
+    return 0
   fi
-  rm -f "$legacy_path"
-  command -v systemctl >/dev/null 2>&1 && systemctl --user daemon-reload 2>/dev/null || true
-  say "  disabled + removed $legacy_path"
-  say "  the canonical $SYSTEMD_DAEMON_UNIT keeps running."
+
+  legacy_active=0
+  legacy_unit_active && legacy_active=1
+  canonical_active=0
+  systemctl --user is-active --quiet "$SYSTEMD_DAEMON_UNIT" 2>/dev/null && canonical_active=1
+  canonical_path=$(systemd_daemon_unit_path)
+
+  # GOODVIBES_RESTART_DAEMON=0 means "leave running daemon/agent untouched" —
+  # that contract covers the migration's stop/disable of an ACTIVE unit too.
+  if [ "$legacy_active" = "1" ] && [ "$RESTART_DAEMON" != "1" ]; then
+    say ""
+    say "NOTE: $LEGACY_SYSTEMD_DAEMON_UNIT is running and GOODVIBES_RESTART_DAEMON=0 — leaving it untouched."
+    say "  Re-run the installer without GOODVIBES_RESTART_DAEMON=0 to migrate it to $SYSTEMD_DAEMON_UNIT."
+    return 0
+  fi
+
+  if [ "$canonical_active" = "1" ]; then
+    # The canonical unit is verified active: the legacy unit is redundant.
+    say ""
+    say "Retiring the redundant installer-managed $LEGACY_SYSTEMD_DAEMON_UNIT ($SYSTEMD_DAEMON_UNIT is active) ..."
+    if systemctl --user disable --now "$LEGACY_SYSTEMD_DAEMON_UNIT" 2>/dev/null; then
+      rm -f "$legacy_path"
+      systemctl --user daemon-reload 2>/dev/null || true
+      say "  disabled + removed $legacy_path"
+      say "  the canonical $SYSTEMD_DAEMON_UNIT keeps running (verified active)."
+    else
+      say "  NOTE: could not disable $LEGACY_SYSTEMD_DAEMON_UNIT (is the user service manager reachable?)."
+      say "  Its unit file was left in place — nothing was removed. Retire it yourself:"
+      say "    systemctl --user disable --now $LEGACY_SYSTEMD_DAEMON_UNIT && rm $legacy_path && systemctl --user daemon-reload"
+    fi
+    return 0
+  fi
+
+  if [ "$legacy_active" = "1" ]; then
+    # Dominant upgrade state: the legacy unit is the ONLY serving unit.
+    # Supervised transfer: canonical unit written first, then stop-legacy /
+    # start-canonical / verify-active, and only then retire the legacy unit.
+    say ""
+    say "Transferring daemon supervision from $LEGACY_SYSTEMD_DAEMON_UNIT to $SYSTEMD_DAEMON_UNIT ..."
+    wrote_canonical=0
+    if [ ! -f "$canonical_path" ]; then
+      write_systemd_unit "$canonical_path"
+      wrote_canonical=1
+      say "  wrote      $canonical_path"
+    fi
+    systemctl --user daemon-reload 2>/dev/null || true
+    if ! systemctl --user stop "$LEGACY_SYSTEMD_DAEMON_UNIT" 2>/dev/null; then
+      say "  NOTE: could not stop $LEGACY_SYSTEMD_DAEMON_UNIT — nothing was changed; the daemon keeps"
+      say "  running under the legacy unit. Migrate later with: goodvibes-daemon migrate-service"
+      [ "$wrote_canonical" = "1" ] && rm -f "$canonical_path"
+      return 0
+    fi
+    if systemctl --user enable --now "$SYSTEMD_DAEMON_UNIT" 2>/dev/null &&
+       systemctl --user is-active --quiet "$SYSTEMD_DAEMON_UNIT" 2>/dev/null; then
+      say "  started    $SYSTEMD_DAEMON_UNIT (verified active)"
+      if systemctl --user disable "$LEGACY_SYSTEMD_DAEMON_UNIT" 2>/dev/null; then
+        rm -f "$legacy_path"
+        say "  retired    $LEGACY_SYSTEMD_DAEMON_UNIT (disabled, unit file removed)"
+      else
+        say "  NOTE: $SYSTEMD_DAEMON_UNIT is active, but $LEGACY_SYSTEMD_DAEMON_UNIT could not be disabled —"
+        say "  its unit file was left in place. Retire it yourself:"
+        say "    systemctl --user disable --now $LEGACY_SYSTEMD_DAEMON_UNIT && rm $legacy_path && systemctl --user daemon-reload"
+      fi
+      systemctl --user daemon-reload 2>/dev/null || true
+    else
+      # Rollback: the canonical unit did not come up — restore legacy
+      # supervision and remove only what this run wrote. Never leave the host
+      # with no supervised daemon.
+      say "  NOTE: $SYSTEMD_DAEMON_UNIT did not come up healthy — rolling back."
+      systemctl --user disable --now "$SYSTEMD_DAEMON_UNIT" 2>/dev/null || true
+      if [ "$wrote_canonical" = "1" ]; then
+        rm -f "$canonical_path"
+        say "  removed    $canonical_path (written by this run)"
+      fi
+      systemctl --user daemon-reload 2>/dev/null || true
+      if systemctl --user start "$LEGACY_SYSTEMD_DAEMON_UNIT" 2>/dev/null; then
+        say "  restarted  $LEGACY_SYSTEMD_DAEMON_UNIT — the daemon keeps running under the legacy unit."
+      else
+        say "  NOTE: the legacy unit could not be restarted either — start it yourself:"
+        say "    systemctl --user start $LEGACY_SYSTEMD_DAEMON_UNIT"
+      fi
+    fi
+    return 0
+  fi
+
+  # Neither unit is active. Retire the inactive legacy unit only when a
+  # canonical unit file exists — never remove the only daemon unit on the host.
+  if [ ! -f "$canonical_path" ]; then
+    say ""
+    say "Found the installer-managed $LEGACY_SYSTEMD_DAEMON_UNIT (inactive) but no $SYSTEMD_DAEMON_UNIT unit —"
+    say "  leaving it alone so the host is never left without a daemon unit."
+    return 0
+  fi
+  say ""
+  say "Retiring the inactive installer-managed $LEGACY_SYSTEMD_DAEMON_UNIT (superseded by $SYSTEMD_DAEMON_UNIT) ..."
+  if systemctl --user disable --now "$LEGACY_SYSTEMD_DAEMON_UNIT" 2>/dev/null; then
+    rm -f "$legacy_path"
+    systemctl --user daemon-reload 2>/dev/null || true
+    say "  disabled + removed $legacy_path"
+    say "  NOTE: $SYSTEMD_DAEMON_UNIT is present but not active — start it with:"
+    say "    systemctl --user start $SYSTEMD_DAEMON_UNIT"
+  else
+    say "  NOTE: could not disable $LEGACY_SYSTEMD_DAEMON_UNIT (is the user service manager reachable?)."
+    say "  Its unit file was left in place — nothing was removed. Retire it yourself:"
+    say "    systemctl --user disable --now $LEGACY_SYSTEMD_DAEMON_UNIT && rm $legacy_path && systemctl --user daemon-reload"
+  fi
+}
+
+# macOS analog: the launchd label never changed, but the OLD installer's plist
+# carried a bare ProgramArguments (binary only). The marker proves the plist is
+# installer-owned and safe to regenerate, so an upgrade rewrites it to the
+# args-driven form the product uses. A hand-written plist (no marker) is never
+# touched. The reload (bootout/bootstrap) restarts the agent, so it is gated on
+# GOODVIBES_RESTART_DAEMON — with it off, the file is updated and the running
+# agent honestly keeps the old arguments until reloaded.
+migrate_legacy_launchd_plist() {
+  plist_path=$(launchd_daemon_plist_path)
+  [ -f "$plist_path" ] || return 0
+  grep -q "$INSTALLER_MARKER" "$plist_path" 2>/dev/null || return 0
+  # Already args-driven — nothing to migrate.
+  grep -q -- '--daemon-home' "$plist_path" 2>/dev/null && return 0
+
+  say ""
+  say "Upgrading the installer-managed LaunchAgent to the args-driven launch form ..."
+  write_launchd_plist "$plist_path"
+  say "  rewrote    $plist_path"
+  if [ "$RESTART_DAEMON" != "1" ]; then
+    say "  NOTE: GOODVIBES_RESTART_DAEMON=0 — the running agent keeps its old arguments until you reload it:"
+    say "    launchctl bootout gui/$(id -u)/$LAUNCHD_DAEMON_LABEL ; launchctl bootstrap gui/$(id -u) $plist_path"
+    return 0
+  fi
+  if ! command -v launchctl >/dev/null 2>&1; then
+    say "  NOTE: launchctl not found — reload the agent yourself for the new arguments to apply."
+    return 0
+  fi
+  uid=$(id -u)
+  launchctl bootout "gui/$uid/$LAUNCHD_DAEMON_LABEL" 2>/dev/null ||
+    launchctl unload "$plist_path" 2>/dev/null || true
+  if launchctl bootstrap "gui/$uid" "$plist_path" 2>/dev/null ||
+     launchctl load "$plist_path" 2>/dev/null; then
+    say "  reloaded   $LAUNCHD_DAEMON_LABEL with the new launch arguments"
+  else
+    say "  NOTE: could not reload the LaunchAgent — load it yourself:"
+    say "    launchctl bootstrap gui/$uid $plist_path"
+  fi
 }
 
 # --- sqlite-vec native addon: restores semantic vector search ---
