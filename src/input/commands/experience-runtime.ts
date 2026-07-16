@@ -2,6 +2,7 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import type { CommandRegistry } from '../command-registry.ts';
 import { requirePanelManager, requireShellPaths } from './runtime-services.ts';
+import { createVoiceProvisionGateway, renderVoiceProvision, VOICE_SETUP_ANNOUNCEMENT } from '../../core/voice-provision-gateway.ts';
 
 interface VoiceBundle {
   readonly version: 1;
@@ -222,11 +223,26 @@ export function registerExperienceRuntimeCommands(registry: CommandRegistry): vo
 
   registry.register({
     name: 'voice',
-    description: 'Review or toggle always-speak mode (same switch as /tts on|off) and package portable voice metadata',
-    usage: '[review|enable|disable|bundle export <path>|bundle inspect <path>]',
-    handler(args, ctx) {
+    description: 'Review or toggle always-speak mode, provision the managed local voice runtime (setup/status), and package portable voice metadata',
+    usage: '[review|status|setup|enable|disable|bundle export <path>|bundle inspect <path>]',
+    async handler(args, ctx) {
       const shellPaths = requireShellPaths(ctx);
       const sub = (args[0] ?? 'review').toLowerCase();
+      if (sub === 'status' || sub === 'setup') {
+        // The one-act managed install returns a final receipt (no per-phase
+        // streaming over the verb), so the announcement block prints first and
+        // the receipt/failure block follows once the (possibly long,
+        // multi-hundred-MB) install resolves.
+        const resolution = createVoiceProvisionGateway({
+          configManager: ctx.platform.configManager,
+          // Lazy: the daemon-disabled / no-base-URL refusals resolve before shell paths.
+          homeDirectory: () => requireShellPaths(ctx).homeDirectory,
+        });
+        // Print the up-front announcement before awaiting the long install.
+        if (sub === 'setup' && resolution.available) ctx.print(VOICE_SETUP_ANNOUNCEMENT);
+        ctx.print(await renderVoiceProvision(sub, resolution));
+        return;
+      }
       if (sub === 'review') {
         const enabled = Boolean(ctx.platform.configManager.get('ui.voiceEnabled') ?? false);
         ctx.print([
@@ -273,7 +289,7 @@ export function registerExperienceRuntimeCommands(registry: CommandRegistry): vo
           return;
         }
       }
-      ctx.print('Usage: /voice [review|enable|disable|bundle export <path>|bundle inspect <path>]');
+      ctx.print('Usage: /voice [review|status|setup|enable|disable|bundle export <path>|bundle inspect <path>]');
     },
   });
 }
