@@ -63,6 +63,32 @@ All notable changes to GoodVibes TUI.
   non-default port keeps that endpoint across upgrades — previously an upgrade
   could silently pin the daemon back to loopback and the default port while
   reporting success.
+- Installer understands modern systemd's answers. Current systemd (verified on
+  systemd 260) reports "no such unit" with a distinct exit code that older
+  releases did not use; the installer now reads that as the affirmative "this
+  unit does not exist" — which permits writing the unit and migrating — instead
+  of refusing the whole upgrade with a false "service manager unreachable"
+  message. Transitional unit states (starting, stopping) are read as the unit
+  existing, and the same discipline applies to the daemon's startup check: a
+  service query that fails or times out is treated as unanswered, never as
+  "the old service is stopped".
+- Existing installs with a pinned network endpoint get fixed on upgrade. Units
+  written by earlier releases baked the interface and port into the launch
+  command, silently overriding later settings changes on every boot. The
+  installer now regenerates recognizably product-managed units (and the macOS
+  LaunchAgent) to the settings-driven launch during upgrade; hand-written units
+  are never rewritten — they get a clear notice instead, and the migration
+  refuses to move a running daemon onto a hand-written unit with pinned flags.
+- Hand-written service units are never modified, even broken ones. A
+  hand-written unit whose launch binary no longer exists is left exactly as it
+  is (no disable, no rename, no replacement unit written over it) with an
+  honest note about how to fix it.
+- Status displays never invent a bind address. Every command that shows an
+  endpoint (status, doctor, control-plane status, web, listener test, service
+  posture, surfaces) now goes through one shared formatter: an unrecognized
+  interface mode is reported as exactly that — with a doctor finding naming the
+  fix — instead of being displayed as a definite loopback bind, and such
+  endpoints are never port-probed.
 - Installer treats "cannot ask the service manager" as a hard stop. When
   systemd cannot be reached (for example, a session without a user bus), the
   installer no longer guesses: nothing is stopped, killed, or removed, and it
