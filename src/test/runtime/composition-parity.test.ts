@@ -139,6 +139,15 @@ describe('composition parity — memory governance is composed (governor default
     const attachIdx = services.indexOf('attachWsOnlyGatewayVerbHandlers(gatewayMethods,');
     expect(services.slice(attachIdx)).toContain('voiceSetup,');
   });
+
+  test('the daemon serves LIVE install progress: the tracker is wired and merged onto status()', () => {
+    const helper = read('src/runtime/voice-setup-services.ts');
+    expect(helper).toContain('createVoiceInstallProgressTracker(');
+    expect(helper).toContain('progress.begin()');
+    expect(helper).toContain('onProgress: (p) => progress.onProgress(p)');
+    expect(helper).toContain('progress.end()');
+    expect(helper).toContain('installInProgress: snapshot');
+  });
 });
 
 describe('composition parity — host power seam is opt-in (non-spawning default)', () => {

@@ -15,6 +15,7 @@
 // ---------------------------------------------------------------------------
 
 import {
+  createVoiceInstallProgressTracker,
   localVoiceRuntimeStatus,
   preconfigureLocalVoiceKeys,
   provisionLocalVoiceRuntime,
@@ -45,10 +46,18 @@ export interface VoiceSetupService {
 export function wireVoiceSetup(deps: VoiceSetupServicesDeps): { voiceSetup: VoiceSetupService } {
   const { configManager, voiceProviders } = deps;
   const managedVoiceRoot = deps.shellPaths.resolveUserPath('voice');
+  // Live install progress: the install verb is plain request/response, so during
+  // a multi-hundred-MB provision a surface would otherwise only see busy→receipt.
+  // The tracker folds the provisioner's onProgress stream into a poll-able
+  // snapshot that status() carries as `installInProgress` WHILE (and only while)
+  // an install runs — surfaces poll status during install (mirrors the SDK).
+  const progress = createVoiceInstallProgressTracker();
   // Single-flight: concurrent installs join the in-progress promise instead of
   // starting parallel multi-hundred-MB downloads.
   const runVoiceInstall = singleFlight(async () => {
-    const provision = await provisionLocalVoiceRuntime({ managedRoot: managedVoiceRoot });
+    progress.begin();
+    try {
+    const provision = await provisionLocalVoiceRuntime({ managedRoot: managedVoiceRoot, onProgress: (p) => progress.onProgress(p) });
     let configured: { set: { key: string; value: string }[]; skipped: { key: string; reason: string }[] } = { set: [], skipped: [] };
     if (provision.tts.state === 'provisioned' && provision.tts.binaryPath && provision.tts.modelPath) {
       const stamp = readVoiceInstallStamp(managedVoiceRoot);
@@ -71,9 +80,17 @@ export function wireVoiceSetup(deps: VoiceSetupServicesDeps): { voiceSetup: Voic
       voiceProviders.get('local')?.resetEngineFailureState?.();
     }
     return { provisioned: provision.tts.state === 'provisioned', platform: provision.platform, tts: provision.tts, stt: provision.stt, components: provision.components, configured };
+    } finally {
+      progress.end();
+    }
   });
   const voiceSetup: VoiceSetupService = {
-    status: () => localVoiceRuntimeStatus({ managedRoot: managedVoiceRoot }),
+    status: () => {
+      const base = localVoiceRuntimeStatus({ managedRoot: managedVoiceRoot });
+      const snapshot = progress.snapshot();
+      // Carry live per-component progress ONLY while an install is active.
+      return snapshot ? { ...base, installInProgress: snapshot } : base;
+    },
     install: async () => {
       // Critical-tier admission: refuse honestly instead of piling onto pressure.
       const admission = deps.admitExpensiveWork('voice runtime install');

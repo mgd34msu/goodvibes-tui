@@ -22,6 +22,10 @@ import type { OperatorMethodOutput } from '@pellux/goodvibes-sdk';
 export type VoiceRuntimeStatusResult = OperatorMethodOutput<'voice.local.status'>;
 /** voice.local.install receipt — the one-act install outcome. */
 export type VoiceLocalInstallResult = OperatorMethodOutput<'voice.local.install'>;
+/** The live per-component progress carried on voice.local.status WHILE an install runs. */
+export type VoiceInstallProgress = NonNullable<VoiceRuntimeStatusResult['installInProgress']>;
+/** One live install component's progress (latest phase wins). */
+export type VoiceInstallComponentProgress = VoiceInstallProgress['components'][number];
 
 /** Human byte size (mirrors the local formatBytes idiom used across the renderer). */
 export function formatVoiceBytes(bytes: number | null | undefined): string {
@@ -101,6 +105,35 @@ export function voiceStatusLines(status: VoiceRuntimeStatusResult): string[] {
     lines.push(`  setup download: ${formatVoiceBytes(status.offerBytes)} — run /voice setup to install`);
   }
   return lines;
+}
+
+/** A human phase label for a live install component. */
+export function voiceProgressPhaseLabel(phase: string): string {
+  switch (phase) {
+    case 'skip': return 'already present';
+    case 'download': return 'downloading';
+    case 'verify': return 'verifying';
+    case 'extract': return 'extracting';
+    case 'done': return 'done';
+    case 'error': return 'failed';
+    default: return phase;
+  }
+}
+
+/** One live progress line for an install component (size shown as done/total where known). */
+export function voiceInstallComponentLine(component: VoiceInstallComponentProgress): string {
+  let size = '';
+  if (component.bytesTotal !== undefined) {
+    const done = component.bytesDone !== undefined ? `${formatVoiceBytes(component.bytesDone)}/` : '';
+    size = ` (${done}${formatVoiceBytes(component.bytesTotal)})`;
+  }
+  const msg = component.message ? ` — ${component.message}` : '';
+  return `    ${component.component}: ${voiceProgressPhaseLabel(component.phase)}${size}${msg}`;
+}
+
+/** Render the live per-component install progress (voice.local.status installInProgress). */
+export function voiceInstallProgressLines(progress: VoiceInstallProgress): string[] {
+  return progress.components.map(voiceInstallComponentLine);
 }
 
 /** The honest per-terminal-state one-liner for a TTS/STT engine outcome. */

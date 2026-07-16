@@ -2,7 +2,7 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import type { CommandRegistry } from '../command-registry.ts';
 import { requirePanelManager, requireShellPaths } from './runtime-services.ts';
-import { createVoiceProvisionGateway, renderVoiceProvision, VOICE_SETUP_ANNOUNCEMENT } from '../../core/voice-provision-gateway.ts';
+import { createVoiceProvisionGateway, renderVoiceProvision, runVoiceSetupWithProgress, VOICE_SETUP_ANNOUNCEMENT } from '../../core/voice-provision-gateway.ts';
 
 interface VoiceBundle {
   readonly version: 1;
@@ -238,8 +238,13 @@ export function registerExperienceRuntimeCommands(registry: CommandRegistry): vo
           // Lazy: the daemon-disabled / no-base-URL refusals resolve before shell paths.
           homeDirectory: () => requireShellPaths(ctx).homeDirectory,
         });
-        // Print the up-front announcement before awaiting the long install.
-        if (sub === 'setup' && resolution.available) ctx.print(VOICE_SETUP_ANNOUNCEMENT);
+        if (sub === 'setup') {
+          // Print the up-front announcement, then drive the install with live
+          // per-component progress polled from voice.local.status.
+          if (resolution.available) ctx.print(VOICE_SETUP_ANNOUNCEMENT);
+          await runVoiceSetupWithProgress(resolution, { print: (block) => ctx.print(block) });
+          return;
+        }
         ctx.print(await renderVoiceProvision(sub, resolution));
         return;
       }

@@ -20,7 +20,7 @@ import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import { GoodVibesSdkError } from '@pellux/goodvibes-sdk';
 import { resolveOperatorRpc, describeOperatorRpcError } from '../input/commands/operator-rpc.ts';
 import type { VoiceRuntimeStatusResult, VoiceLocalInstallResult } from './voice-provision-status.ts';
-import { voiceStatusLines, voiceInstallReceiptLines } from './voice-provision-status.ts';
+import { voiceStatusLines, voiceInstallReceiptLines, voiceInstallComponentLine } from './voice-provision-status.ts';
 
 /** The narrow async verb surface the /voice setup + /voice status surfaces drive. */
 export interface VoiceProvisionGateway {
@@ -126,5 +126,77 @@ export async function renderVoiceProvision(
     return failure.kind === 'unavailable'
       ? `Local Voice Setup\n  ${failure.reason}`
       : `Local Voice Setup\n  install failed: ${failure.message}`;
+  }
+}
+
+export interface VoiceSetupProgressOptions {
+  /** Sink for each printed block (the command passes ctx.print). */
+  readonly print: (block: string) => void;
+  /** Poll interval while the install is in flight (default 800ms). */
+  readonly pollMs?: number;
+  /** Injectable delay (tests pass a fake; the command uses setTimeout). */
+  readonly sleep?: (ms: number) => Promise<void>;
+}
+
+const realSleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+
+/**
+ * Run /voice setup with LIVE progress: kick off the (long, request/response)
+ * install and, while it is in flight, poll voice.local.status for its
+ * `installInProgress` snapshot, printing a per-component line each time a
+ * component's phase advances (download → verify → extract → done). When the
+ * install settles, print the final receipt (or an honest failure). The install
+ * verb streams nothing itself — this polling is exactly how the SDK intends
+ * surfaces to render real progress instead of busy→receipt.
+ *
+ * The caller prints VOICE_SETUP_ANNOUNCEMENT before calling this. gateway
+ * fetchStatus/runInstall and sleep are injectable so a wire test drives the
+ * whole flow with no real timers or HTTP.
+ */
+export async function runVoiceSetupWithProgress(
+  resolution: VoiceProvisionGatewayResolution,
+  opts: VoiceSetupProgressOptions,
+): Promise<void> {
+  if (!resolution.available) {
+    opts.print(`Local Voice Setup unavailable: ${resolution.reason}`);
+    return;
+  }
+  const { gateway } = resolution;
+  const pollMs = opts.pollMs ?? 800;
+  const sleep = opts.sleep ?? realSleep;
+
+  let settled = false;
+  const installPromise = gateway.runInstall().then(
+    (receipt) => { settled = true; return { ok: true as const, receipt }; },
+    (error) => { settled = true; return { ok: false as const, error }; },
+  );
+
+  // Print a component line only when its phase changes, so a slow install does
+  // not spam identical lines each poll.
+  const lastPhase = new Map<string, string>();
+  while (!settled) {
+    await sleep(pollMs);
+    if (settled) break;
+    try {
+      const status = await gateway.fetchStatus();
+      const progress = status.installInProgress;
+      if (!progress) continue;
+      const changed = progress.components.filter((c) => lastPhase.get(c.component) !== c.phase);
+      for (const c of changed) lastPhase.set(c.component, c.phase);
+      if (changed.length > 0) opts.print(changed.map(voiceInstallComponentLine).join('\n'));
+    } catch {
+      // A transient poll failure never aborts the install; the receipt/failure
+      // block below is the authoritative outcome.
+    }
+  }
+
+  const result = await installPromise;
+  if (result.ok) {
+    opts.print(['Local Voice Setup — receipt', ...voiceInstallReceiptLines(result.receipt)].join('\n'));
+  } else {
+    const failure = classifyVoiceProvisionError(result.error);
+    opts.print(failure.kind === 'unavailable'
+      ? `Local Voice Setup\n  ${failure.reason}`
+      : `Local Voice Setup\n  install failed: ${failure.message}`);
   }
 }
