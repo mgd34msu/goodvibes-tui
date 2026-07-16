@@ -463,7 +463,7 @@ pid_supervision() {
       # unreachable from an ssh session — 'Bad request') means the manager
       # could not be ASKED, and cannot-ask is never read as free-to-kill.
       _saw_print_failure=0
-      for _label in "$LAUNCHD_DAEMON_LABEL" sh.goodvibes.agent; do
+      for _label in "$LAUNCHD_DAEMON_LABEL" goodvibes sh.goodvibes.agent; do
         _lrc=0
         _lout=$(launchctl print "gui/$(id -u)/$_label" 2>/dev/null) || _lrc=$?
         if [ "$_lrc" -eq 0 ]; then
@@ -814,6 +814,10 @@ restart_running_daemon() {
   [ "$RESTART_DAEMON" = "1" ] || return 0
   if [ "$os_tag" = "macos" ]; then
     restart_launchd_agent "$LAUNCHD_DAEMON_LABEL" && return 0
+    # The in-app install-service registers the daemon under the PRODUCT label
+    # 'goodvibes' (~/Library/LaunchAgents/goodvibes.plist) — a loaded agent
+    # there is the same daemon and gets the same in-place restart.
+    restart_launchd_agent goodvibes && return 0
     restart_bare_processes '[g]oodvibes-daemon' "$INSTALL_DIR/goodvibes-daemon"
     return 0
   fi
@@ -954,10 +958,13 @@ EOF
 }
 
 write_launchd_plist() {
-  # write_launchd_plist <path> — writes the installer-managed LaunchAgent text
-  # only, no activation. The GoodVibesManagedBy key and the XML comment both
-  # carry the marker string the uninstall path greps for.
+  # write_launchd_plist <path> [label] — writes the installer-managed
+  # LaunchAgent text only, no activation. The GoodVibesManagedBy key and the
+  # XML comment both carry the marker string the uninstall path greps for.
+  # The label defaults to the installer's own; regenerating the product's
+  # goodvibes.plist passes 'goodvibes' so label/path correspondence survives.
   _plist_path="$1"
+  _plist_label="${2:-$LAUNCHD_DAEMON_LABEL}"
   mkdir -p "$(dirname "$_plist_path")"
   cat > "$_plist_path" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
@@ -966,7 +973,7 @@ write_launchd_plist() {
 <plist version="1.0">
 <dict>
   <key>Label</key>
-  <string>$LAUNCHD_DAEMON_LABEL</string>
+  <string>$_plist_label</string>
   <key>GoodVibesManagedBy</key>
   <string>$INSTALLER_MARKER</string>
   <key>ProgramArguments</key>
@@ -1359,10 +1366,21 @@ migrate_legacy_systemd_unit() {
 #   - an agent the user has booted out (NOT loaded) is never started by a
 #     migration: the file is updated, the agent stays stopped, and the load
 #     command is printed. Rewriting a file must never override a user's stop.
+# The PRODUCT's in-app LaunchAgent identity: the SDK writes
+# ~/Library/LaunchAgents/<serviceName>.plist with serviceName 'goodvibes' —
+# a different path AND label from the installer's sh.goodvibes.daemon. Both
+# are platform-owned upgrade targets.
+launchd_product_plist_path() { printf '%s' "$HOME/Library/LaunchAgents/goodvibes.plist"; }
+
 migrate_legacy_launchd_plist() {
-  plist_path=$(launchd_daemon_plist_path)
+  migrate_one_launchd_plist "$(launchd_daemon_plist_path)" "$LAUNCHD_DAEMON_LABEL"
+  migrate_one_launchd_plist "$(launchd_product_plist_path)" goodvibes
+}
+
+migrate_one_launchd_plist() {
+  plist_path="$1"
+  plist_label="$2"
   [ -f "$plist_path" ] || return 0
-  grep -q "$INSTALLER_MARKER" "$plist_path" 2>/dev/null || return 0
   # Already the current launch form — nothing to migrate. Current means
   # --daemon-home present AND no pinned endpoint flags: the middle generation
   # carried --daemon-home PLUS --hostname/--port, and keying the gate on
@@ -1372,16 +1390,41 @@ migrate_legacy_launchd_plist() {
     return 0
   fi
 
+  # Provenance: the installer marker is proof of platform ownership. Without
+  # it, ProgramArguments[0] naming the goodvibes-managed binary inside
+  # $INSTALL_DIR is strong structural evidence of a product-installed plist —
+  # the SDK's plist writer emits no marker and structurally CANNOT carry the
+  # product Description fingerprint (renderLaunchdPlist drops the definition
+  # description; an SDK-owned gap, reported upstream). Anything else is
+  # indeterminable: an honest notice when pinned, never silence.
+  plist_managed=0
+  if grep -q "$INSTALLER_MARKER" "$plist_path" 2>/dev/null; then
+    plist_managed=1
+  elif grep -q "<string>$INSTALL_DIR/goodvibes-daemon</string>" "$plist_path" 2>/dev/null; then
+    plist_managed=1
+  fi
+
+  if [ "$plist_managed" != "1" ]; then
+    if unit_is_endpoint_pinned "$plist_path"; then
+      say ""
+      say "NOTE: the LaunchAgent at $plist_path pins endpoint flags (--hostname/--port), which override the"
+      say "  controlPlane settings — and it is not recognizably platform-managed, so it was left untouched."
+      say "  Remove those flags yourself so the daemon follows your settings."
+    fi
+    return 0
+  fi
+
   # Record the agent's CURRENT load state BEFORE touching anything.
   agent_loaded=0
   if command -v launchctl >/dev/null 2>&1 &&
-     launchctl print "gui/$(id -u)/$LAUNCHD_DAEMON_LABEL" >/dev/null 2>&1; then
+     launchctl print "gui/$(id -u)/$plist_label" >/dev/null 2>&1; then
     agent_loaded=1
   fi
 
   say ""
-  say "Upgrading the installer-managed LaunchAgent to the current launch form ..."
-  write_launchd_plist "$plist_path"
+  say "Upgrading the platform-managed LaunchAgent ($plist_label) to the current launch form ..."
+  backup_unit_file "$plist_path"
+  write_launchd_plist "$plist_path" "$plist_label"
   say "  rewrote    $plist_path"
 
   if [ "$agent_loaded" != "1" ]; then
@@ -1392,15 +1435,15 @@ migrate_legacy_launchd_plist() {
   fi
   if [ "$RESTART_DAEMON" != "1" ]; then
     say "  NOTE: GOODVIBES_RESTART_DAEMON=0 — the running agent keeps its old arguments until you reload it:"
-    say "    launchctl bootout gui/$(id -u)/$LAUNCHD_DAEMON_LABEL ; launchctl bootstrap gui/$(id -u) $plist_path"
+    say "    launchctl bootout gui/$(id -u)/$plist_label ; launchctl bootstrap gui/$(id -u) $plist_path"
     return 0
   fi
   uid=$(id -u)
-  launchctl bootout "gui/$uid/$LAUNCHD_DAEMON_LABEL" 2>/dev/null ||
+  launchctl bootout "gui/$uid/$plist_label" 2>/dev/null ||
     launchctl unload "$plist_path" 2>/dev/null || true
   if launchctl bootstrap "gui/$uid" "$plist_path" 2>/dev/null ||
      launchctl load "$plist_path" 2>/dev/null; then
-    say "  reloaded   $LAUNCHD_DAEMON_LABEL with the new launch arguments"
+    say "  reloaded   $plist_label with the new launch arguments"
   else
     say "  NOTE: could not reload the LaunchAgent — load it yourself:"
     say "    launchctl bootstrap gui/$uid $plist_path"
@@ -1607,6 +1650,9 @@ uninstall_services_and_processes() {
       ;;
     macos)
       uninstall_launchd_agent "$LAUNCHD_DAEMON_LABEL" "$(launchd_daemon_plist_path)"
+      # The product's in-app plist becomes installer-marker-managed once a
+      # migration regenerates it — cover it too (marker-gated, like the rest).
+      uninstall_launchd_agent goodvibes "$(launchd_product_plist_path)"
       uninstall_launchd_agent sh.goodvibes.agent "$HOME/Library/LaunchAgents/sh.goodvibes.agent.plist"
       ;;
   esac
