@@ -91,6 +91,54 @@ describe('composition parity — keep-awake config live-apply is wired', () => {
   });
 });
 
+describe('composition parity — memory governance is composed (governor default ON, real caches, pausable jobs)', () => {
+  const services = read('src/runtime/services.ts');
+
+  test('the CacheRegistry, PauseController and the deferrable job ids are built EARLY (before the schedulers that consult them)', () => {
+    expect(services).toContain('new CacheRegistry()');
+    expect(services).toContain('new PauseController()');
+    expect(services).toContain("MEMORY_BACKGROUND_JOB_IDS = ['knowledge-self-improvement', 'memory-consolidation', 'code-index-reindex']");
+    // The seams are built before the knowledge semantic services (which consult them).
+    expect(services.indexOf('new CacheRegistry()')).toBeLessThan(services.indexOf('new KnowledgeSemanticService('));
+  });
+
+  test('createRuntimeServices constructs + starts the governor via the tail helper and late-binds the admission gate', () => {
+    expect(services).toContain('wireMemoryGovernance({');
+    expect(services).toContain('admitExpensiveWorkRef.current = (label) => memoryGovernor.admitExpensiveWork(label)');
+  });
+
+  test('the governor is threaded into the gateway verb handlers so ops.memory.get is invokable (not a 501)', () => {
+    // memoryGovernor lands in the attachWsOnlyGatewayVerbHandlers deps object.
+    const attachIdx = services.indexOf('attachWsOnlyGatewayVerbHandlers(gatewayMethods,');
+    expect(attachIdx).toBeGreaterThan(-1);
+    expect(services.slice(attachIdx)).toContain('memoryGovernor,');
+  });
+
+  test('the three deferrable jobs honor governor backpressure at their scheduler gates', () => {
+    // code-index reindex (threaded into createCodeIndexServices)...
+    expect(services).toContain("isReindexPaused: () => pauseController.isPaused('code-index-reindex')");
+    // memory consolidation (ANDed into the idle gate)...
+    expect(services).toContain("!pauseController.isPaused('memory-consolidation')");
+    // knowledge self-improvement (isBackgroundPaused on the semantic services).
+    expect(services).toContain('isBackgroundPaused: isKnowledgeBackgroundPaused');
+  });
+
+  test('the tail helper registers the REAL cache adapters and starts by default (never start:false)', () => {
+    const helper = read('src/runtime/memory-governance-services.ts');
+    expect(helper).toContain('wireDaemonMemoryGovernance({');
+    expect(helper).toContain('knowledgeStores: deps.knowledgeStores');
+    expect(helper).toContain('sessionBroker: deps.sessionBroker');
+    // Default ON: the helper never opts out of the governor's default start.
+    expect(helper).not.toContain('start: false');
+  });
+
+  test('managed voice provisioning is composed so voice.local.status/install are invokable', () => {
+    expect(services).toContain('const voiceSetup = {');
+    const attachIdx = services.indexOf('attachWsOnlyGatewayVerbHandlers(gatewayMethods,');
+    expect(services.slice(attachIdx)).toContain('voiceSetup,');
+  });
+});
+
 describe('composition parity — host power seam is opt-in (non-spawning default)', () => {
   // SDK 1.9.0's wireRuntimePower defaults an ABSENT seam to the real host seam
   // (createHostPowerSeam — spawns systemd-inhibit + a dbus-monitor sleep-edge

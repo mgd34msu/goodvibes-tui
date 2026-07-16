@@ -64,6 +64,15 @@ export interface CodeIndexServicesDeps {
   readonly workingDirectory: string;
   readonly configManager: Pick<ConfigManager, 'get'>;
   readonly memoryEmbeddingRegistry: MemoryEmbeddingProviderRegistry;
+  /**
+   * Memory-governor backpressure (optional): when the governor pauses the
+   * 'code-index-reindex' job, the tool-site reindex scheduler stops scheduling
+   * new work; the critical tier refuses new reindex work outright via
+   * admitExpensiveWork. Absent (most test fixtures) → never paused, always
+   * admitted, exactly as before.
+   */
+  readonly isReindexPaused?: (() => boolean) | undefined;
+  readonly admitExpensiveWork?: ((label: string) => { allowed: boolean; reason?: string | undefined }) | undefined;
 }
 
 /**
@@ -128,7 +137,12 @@ export function createCodeIndexServices(deps: CodeIndexServicesDeps): CodeIndexS
   const codeIndexReindexScheduler = new CodeIndexReindexScheduler({
     target: codeIndexStore,
     workingDirectory: deps.workingDirectory,
-    isEnabled: () => isCodeInjectionSettingEnabled(deps.configManager),
+    // Honor governor backpressure: a paused code-index reindex job stops
+    // scheduling new work until the governor resumes it, and the critical
+    // memory tier refuses new reindex work outright (mirrors the SDK).
+    isEnabled: () => isCodeInjectionSettingEnabled(deps.configManager)
+      && !(deps.isReindexPaused?.() ?? false)
+      && (deps.admitExpensiveWork?.('code-index reindex').allowed ?? true),
   });
   return { codeIndexStore, codeIndexReindexScheduler };
 }

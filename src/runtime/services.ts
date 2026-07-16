@@ -47,7 +47,10 @@ import {
   IdempotencyStore, ComponentHealthMonitor, WorktreeRegistry, SandboxSessionRegistry, createShellPathService,
   type ShellPathService, type FeatureFlagManager, createFeatureFlagManager, PolicyRuntimeState,
 } from '@/runtime/index.ts';
-import { VoiceProviderRegistry, VoiceService, ensureBuiltinVoiceProviders } from '@pellux/goodvibes-sdk/platform/voice';
+import { VoiceProviderRegistry, VoiceService, ensureBuiltinVoiceProviders, localVoiceRuntimeStatus, preconfigureLocalVoiceKeys, provisionLocalVoiceRuntime, readVoiceInstallStamp, writeVoiceInstallStamp } from '@pellux/goodvibes-sdk/platform/voice';
+import { singleFlight } from '@pellux/goodvibes-sdk/platform/utils';
+import { CacheRegistry, PauseController, type MemoryGovernor } from '@pellux/goodvibes-sdk/platform/runtime/memory';
+import { wireMemoryGovernance } from './memory-governance-services.ts';
 import { WebSearchProviderRegistry, WebSearchService } from '@pellux/goodvibes-sdk/platform/web-search';
 import { PanelManager } from '../panels/panel-manager.ts';
 import { HookActivityTracker } from '@pellux/goodvibes-sdk/platform/hooks';
@@ -213,6 +216,12 @@ export interface RuntimeServices {
   readonly storeSnapshotScheduler: StoreSnapshotScheduler;
   readonly memoryConsolidationScheduler: MemoryConsolidationScheduler;
   readonly powerManager: PowerManager;
+  /** The daemon's memory governor (default ON). Backs ops.memory.get and defends the daemon's footprint by tier. */
+  readonly memoryGovernor: MemoryGovernor;
+  /** Registry of every retained cache the governor can shrink (knowledge stores + shared session broker). */
+  readonly cacheRegistry: CacheRegistry;
+  /** Controller the governor uses to pause/resume the deferrable background jobs under pressure. */
+  readonly pauseController: PauseController;
   readonly sessionLiveTurnControls: SessionLiveTurnControlsHolder;
   /** Unified live process registry (agents, WRFC chains, workflows, watchers, background processes) backing the Fleet panel; archive-aware — finished subtrees can be moved to the session archive view. */
   readonly processRegistry: ArchivableProcessRegistry;
@@ -243,6 +252,19 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
     bindFeatureSettingsBridge(configManager, featureFlags);
   }
   const runtimeDispatch = createDomainDispatch(options.runtimeStore);
+  // Memory governance seams built EARLY (mirrors the SDK's own createRuntimeServices)
+  // so the scheduler gates and the knowledge background jobs can consult the pause
+  // controller before the MemoryGovernor (constructed at the composition tail)
+  // drives it. The admission gate is late-bound: expensive entry points capture
+  // this closure now and the governor binds into it at the tail — until then
+  // everything is admitted (the daemon is still booting).
+  const cacheRegistry = new CacheRegistry();
+  const pauseController = new PauseController();
+  const MEMORY_BACKGROUND_JOB_IDS = ['knowledge-self-improvement', 'memory-consolidation', 'code-index-reindex'];
+  const admitExpensiveWorkRef: { current: ((label: string) => { allowed: boolean; reason?: string | undefined }) | null } = { current: null };
+  const admitExpensiveWork = (label: string): { allowed: boolean; reason?: string | undefined } =>
+    admitExpensiveWorkRef.current?.(label) ?? { allowed: true };
+  const isKnowledgeBackgroundPaused = (): boolean => pauseController.isPaused('knowledge-self-improvement');
   const gatewayMethods = new GatewayMethodCatalog();
   const panelManager = new PanelManager();
   // (the purge): MIGRATE-TO-MODAL surface + redirect registration moved to
@@ -450,30 +472,39 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
   const knowledgeSemanticService = new KnowledgeSemanticService(knowledgeStore, {
     llm: knowledgeSemanticLlm,
     maxLlmSourcesPerReindex: 3,
+    isBackgroundPaused: isKnowledgeBackgroundPaused,
+    admitExpensiveWork,
   });
   const homeGraphSemanticService = new KnowledgeSemanticService(homeGraphKnowledgeStore, {
     llm: knowledgeSemanticLlm,
     maxLlmSourcesPerReindex: 3,
     objectProfiles: HOME_GRAPH_KNOWLEDGE_EXTENSION.objectProfiles,
+    isBackgroundPaused: isKnowledgeBackgroundPaused,
+    admitExpensiveWork,
   });
   const agentKnowledgeSemanticService = new KnowledgeSemanticService(agentKnowledgeStore, {
     llm: knowledgeSemanticLlm,
     maxLlmSourcesPerReindex: 3,
+    isBackgroundPaused: isKnowledgeBackgroundPaused,
+    admitExpensiveWork,
   });
   const knowledgeService = new KnowledgeService(knowledgeStore, artifactStore, undefined, {
     memoryRegistry,
     runtimeBus: options.runtimeBus,
     semanticService: knowledgeSemanticService,
+    admitExpensiveWork,
   });
   knowledgeService.attachRuntimeBus(options.runtimeBus);
   const agentKnowledgeService = new KnowledgeService(agentKnowledgeStore, artifactStore, undefined, {
     memoryRegistry,
     runtimeBus: options.runtimeBus,
     semanticService: agentKnowledgeSemanticService,
+    admitExpensiveWork,
   });
   agentKnowledgeService.attachRuntimeBus(options.runtimeBus);
   const homeGraphService = new HomeGraphService(homeGraphKnowledgeStore, artifactStore, {
     semanticService: homeGraphSemanticService,
+    admitExpensiveWork,
   });
   const projectPlanningProjectId = projectPlanningProjectIdFromPath(workingDirectory);
   const projectPlanningService = new ProjectPlanningService(knowledgeStore, {
@@ -595,7 +626,7 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
   // Repo source-tree code index, sharing memoryEmbeddingRegistry
   // with MemoryStore above. Auto-build is config-gated (default off) — see
   // code-index-services.ts's header doc.
-  const { codeIndexStore, codeIndexReindexScheduler } = createCodeIndexServices({ workingDirectory, configManager, memoryEmbeddingRegistry });
+  const { codeIndexStore, codeIndexReindexScheduler } = createCodeIndexServices({ workingDirectory, configManager, memoryEmbeddingRegistry, isReindexPaused: () => pauseController.isPaused('code-index-reindex'), admitExpensiveWork });
   // Store snapshots + durable remembered-approval rules + the live credential
   // chain, mirroring the SDK composition — see durability-services.ts.
   const { storeSnapshotScheduler, userPermissionRuleStore } = createDurabilityServices({
@@ -614,10 +645,77 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
   });
   const modeManager = new ModeManager(); const fileUndoManager = new FileUndoManager();
   const workspaceCheckpointManager = createWorkspaceCheckpointing({ workspaceRoot: workingDirectory, runtimeBus: options.runtimeBus, configManager });
-  const { memoryConsolidationScheduler, powerManager, sessionLiveTurnControls } = wireIdlePowerAndLiveTurn({ configManager, memoryRegistry, runtimeBus: options.runtimeBus, isIdle: () => sessionBroker.countBusySessions() === 0, snapshotTick: () => storeSnapshotScheduler.tick(), heartbeat: async () => { await automationManager.triggerHeartbeat({ source: 'wake-catchup' }); }, powerSeam: options.powerSeam });
+  // memory-consolidation honors governor backpressure: it ticks only when idle
+  // AND the 'memory-consolidation' job is not paused AND expensive work is
+  // admitted (mirrors the SDK's own createRuntimeServices idle gate).
+  const { memoryConsolidationScheduler, powerManager, sessionLiveTurnControls } = wireIdlePowerAndLiveTurn({ configManager, memoryRegistry, runtimeBus: options.runtimeBus, isIdle: () => sessionBroker.countBusySessions() === 0 && !pauseController.isPaused('memory-consolidation') && admitExpensiveWork('memory consolidation').allowed, snapshotTick: () => storeSnapshotScheduler.tick(), heartbeat: async () => { await automationManager.triggerHeartbeat({ source: 'wake-catchup' }); }, powerSeam: options.powerSeam });
 
-  // Terminal-shell wrapper over the SDK registerGatewayVerbGroups (gateway-verbs.ts); checkin.*/fleet-needs-input/pairing.* register only when their deps are present.
-  attachWsOnlyGatewayVerbHandlers(gatewayMethods, { processRegistry, workspaceCheckpointManager, conversationRewindPort: createSessionConversationRewindPort(), sessionBroker, secretsManager, stepUpService, approvalBroker, requestApproval: (input) => approvalBroker.requestApproval(input), watcherRegistry, userPermissionRuleStore, shellPaths, configManager, runtimeStore: options.runtimeStore, channelDeliveryRouter, providerRegistry, automationManager, sessionLister: sessionBroker, sessionIntake: sessionBroker, workingDirectory, memoryRegistry, pairingTokens, sessionLiveTurnControls, powerManager, relayAvailable: () => configManager.get('relay.enabled') === true, pairingWebOrigin: () => resolvePairingWebOrigin(configManager).origin, ...wireFleetNeedsInputPush({ registry: processRegistry, runtimeBus: options.runtimeBus, sessionBroker }) });
+  // Construct + start the MemoryGovernor (default ON — a safety feature) with
+  // the standard KNOWN cache adapters (knowledge stores + shared session
+  // broker), then late-bind the admission gate the expensive entry points
+  // captured earlier. Mirrors the SDK's own createRuntimeServices composition tail.
+  const { memoryGovernor } = wireMemoryGovernance({
+    configManager,
+    runtimeBus: options.runtimeBus,
+    cacheRegistry,
+    pauseController,
+    jobIds: MEMORY_BACKGROUND_JOB_IDS,
+    receiptPath: shellPaths.resolveProjectPath('tui', 'memory', 'tripwire-receipt.json'),
+    knowledgeStores: [knowledgeStore, agentKnowledgeStore, homeGraphKnowledgeStore],
+    sessionBroker,
+    // Graceful tripwire shutdown flushes in-flight state via ASYNC store
+    // snapshots so the governor's 10s shutdown ceiling stays enforceable.
+    onTripwireShutdown: async () => { await storeSnapshotScheduler.snapshotAllAsync('tripwire'); },
+  });
+  admitExpensiveWorkRef.current = (label) => memoryGovernor.admitExpensiveWork(label);
+
+  // Managed local-voice provisioning: status read + one-act install that
+  // provisions the piper engine + a default voice (and whisper STT where a
+  // bundle is published) and pre-configures the voice.local.* keys (user-set
+  // keys preserved). Single-flight: concurrent installs join the in-progress
+  // promise instead of starting parallel multi-hundred-MB downloads. Mirrors
+  // the SDK's own createRuntimeServices voiceSetup composition.
+  const managedVoiceRoot = shellPaths.resolveUserPath('voice');
+  const runVoiceInstall = singleFlight(async () => {
+    const provision = await provisionLocalVoiceRuntime({ managedRoot: managedVoiceRoot });
+    let configured: { set: { key: string; value: string }[]; skipped: { key: string; reason: string }[] } = { set: [], skipped: [] };
+    if (provision.tts.state === 'provisioned' && provision.tts.binaryPath && provision.tts.modelPath) {
+      const stamp = readVoiceInstallStamp(managedVoiceRoot);
+      const receipt = preconfigureLocalVoiceKeys({
+        getConfig: (k) => String(configManager.get(k as Parameters<typeof configManager.get>[0]) ?? ''),
+        setConfig: (k, v) => configManager.setDynamic(k as Parameters<typeof configManager.setDynamic>[0], v),
+        ttsEngine: provision.tts.engine,
+        ttsBinary: provision.tts.binaryPath,
+        ttsModelPath: provision.tts.modelPath,
+        ...(provision.stt.state === 'provisioned' && provision.stt.binaryPath && provision.stt.modelPath
+          ? { sttEngine: provision.stt.engine, sttBinary: provision.stt.binaryPath, sttModelPath: provision.stt.modelPath }
+          : {}),
+        priorInstallWrites: stamp?.configWrites,
+      });
+      configured = { set: [...receipt.set], skipped: [...receipt.skipped] };
+      if (stamp) {
+        writeVoiceInstallStamp(managedVoiceRoot, { ...stamp, configWrites: { ...stamp.configWrites, ...receipt.installWrites } });
+      }
+      // A successful (re-)install clears any tripped local-engine breaker.
+      voiceProviders.get('local')?.resetEngineFailureState?.();
+    }
+    return { provisioned: provision.tts.state === 'provisioned', platform: provision.platform, tts: provision.tts, stt: provision.stt, components: provision.components, configured };
+  });
+  const voiceSetup = {
+    status: () => localVoiceRuntimeStatus({ managedRoot: managedVoiceRoot }),
+    install: async () => {
+      // Critical-tier admission: a provision run allocates archive + model
+      // buffers — refuse honestly instead of piling onto memory pressure.
+      const admission = admitExpensiveWork('voice runtime install');
+      if (!admission.allowed) {
+        throw new Error(admission.reason ?? 'voice runtime install refused: daemon is under critical memory pressure.');
+      }
+      return runVoiceInstall();
+    },
+  };
+
+  // Terminal-shell wrapper over the SDK registerGatewayVerbGroups (gateway-verbs.ts); checkin.*/fleet-needs-input/pairing.* register only when their deps are present. memoryGovernor lights up ops.memory.get; voiceSetup lights up voice.local.status/install.
+  attachWsOnlyGatewayVerbHandlers(gatewayMethods, { processRegistry, workspaceCheckpointManager, conversationRewindPort: createSessionConversationRewindPort(), sessionBroker, secretsManager, stepUpService, approvalBroker, requestApproval: (input) => approvalBroker.requestApproval(input), watcherRegistry, userPermissionRuleStore, shellPaths, configManager, runtimeStore: options.runtimeStore, channelDeliveryRouter, providerRegistry, automationManager, sessionLister: sessionBroker, sessionIntake: sessionBroker, workingDirectory, memoryRegistry, pairingTokens, sessionLiveTurnControls, powerManager, memoryGovernor, voiceSetup, relayAvailable: () => configManager.get('relay.enabled') === true, pairingWebOrigin: () => resolvePairingWebOrigin(configManager).origin, ...wireFleetNeedsInputPush({ registry: processRegistry, runtimeBus: options.runtimeBus, sessionBroker }) });
   const integrationHelpers = new IntegrationHelperService({
     workingDirectory,
     homeDirectory,
@@ -785,6 +883,9 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
     storeSnapshotScheduler,
     memoryConsolidationScheduler,
     powerManager,
+    memoryGovernor,
+    cacheRegistry,
+    pauseController,
     sessionLiveTurnControls,
     processRegistry,
     modeManager,
