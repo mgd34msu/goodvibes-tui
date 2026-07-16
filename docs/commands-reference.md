@@ -198,7 +198,7 @@ GoodVibes ships **148** built-in slash commands across **71** categories. Every 
 | `/remote-setup` | — | `[review\|export <path>]` | Dedicated front-door for remote setup review and portable setup bundles |
 | `/runner-pool` | `/pool` | `[list\|show <id>\|create <id> <label...>\|assign <pool> <runner>\|unassign <pool> <runner>]` | Dedicated front-door for remote runner pool review and assignment flows |
 | `/tunnel` | — | `[review\|export <path>]` | Dedicated front-door for remote tunnel review and export flows |
-| `/voice` | — | `[review\|enable\|disable\|bundle export <path>\|bundle inspect <path>]` | Review or toggle always-speak mode (same switch as /tts on\|off) and package portable voice metadata |
+| `/voice` | — | `[review\|status\|setup\|enable\|disable\|bundle export <path>\|bundle inspect <path>]` | Review or toggle always-speak mode, provision the managed local voice runtime (setup/status), and package portable voice metadata |
 
 ## Fleet
 
@@ -223,7 +223,7 @@ GoodVibes ships **148** built-in slash commands across **71** categories. Every 
 
 | Command | Aliases | Usage | Description |
 | --- | --- | --- | --- |
-| `/health` | `/doctor` | `[report\|review\|open\|setup\|services\|sandbox\|provider\|accounts\|auth\|settings\|intelligence\|remote\|mcp\|metrics\|continuity\|worktrees\|maintenance\|term\|repair [domain]] — bare and report stay a cross-domain transcript report (see also /health provider for the providers modal)` | Health workspace for startup posture, service readiness, sandbox posture, and provider health |
+| `/health` | `/doctor` | `[report\|review\|open\|setup\|services\|sandbox\|provider\|accounts\|auth\|settings\|intelligence\|remote\|mcp\|memory\|metrics\|continuity\|worktrees\|maintenance\|term\|repair [domain]] — bare and report stay a cross-domain transcript report (see also /health provider for the providers modal)` | Health workspace for startup posture, service readiness, sandbox posture, and provider health |
 
 ## Hooks
 
