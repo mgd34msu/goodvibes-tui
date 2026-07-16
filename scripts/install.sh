@@ -580,6 +580,19 @@ unit_is_endpoint_pinned() {
   grep -qe '--hostname' -e '--port' "$1" 2>/dev/null
 }
 
+# Timestamped backup of a unit/plist file about to be regenerated, with a
+# receipt naming it. Fingerprint/structural provenance is only PROBABLY
+# platform-owned — a user may have customized a product-written unit in place
+# (extra Environment lines, a different binary path) while keeping its
+# recognizable shape — so a regeneration must never destroy the prior
+# content: recovery is one mv away.
+backup_unit_file() {
+  _bf="$1"
+  _bak="$_bf.bak.$(date +%Y%m%d%H%M%S)"
+  cp -p "$_bf" "$_bak" 2>/dev/null || cp "$_bf" "$_bak"
+  say "  backed up  $_bf -> $_bak"
+}
+
 # Upgrade-time content currency for the CANONICAL unit (Linux): a
 # platform-managed unit still carrying pinned endpoint flags is regenerated to
 # the config-derived shape (file + daemon-reload only — the ordinary restart
@@ -597,6 +610,7 @@ refresh_pinned_canonical_unit() {
       say "Regenerating $SYSTEMD_DAEMON_UNIT: it pins endpoint flags (--hostname/--port) from an older release,"
       say "  which override the controlPlane settings on every boot. The daemon now resolves its endpoint from"
       say "  settings at startup."
+      backup_unit_file "$_rp"
       write_systemd_unit "$_rp"
       command -v systemctl >/dev/null 2>&1 && systemctl --user daemon-reload 2>/dev/null || true
       say "  rewrote    $_rp (config-derived launch)"
@@ -643,8 +657,9 @@ restart_systemd_unit() {
       # daemon with no binary to relaunch, and disabling/renaming is exactly
       # the never-touch violation this gate exists to prevent. Say so.
       say ""
-      say "NOTE: ${unit} points at $exec_bin, which no longer exists, and the unit is hand-written —"
-      say "  leaving it (and its running daemon, which may be executing a deleted binary) untouched."
+      say "NOTE: ${unit} points at $exec_bin, which no longer exists, and the unit is not one this"
+      say "  tool may replace — leaving it (and its running daemon, which may be executing a deleted"
+      say "  binary) untouched."
       say "  Fix the unit's ExecStart yourself, then: systemctl --user restart $unit"
       return 0
     fi
@@ -802,7 +817,13 @@ restart_running_daemon() {
     restart_bare_processes '[g]oodvibes-daemon' "$INSTALL_DIR/goodvibes-daemon"
     return 0
   fi
-  restart_systemd_unit "$SYSTEMD_DAEMON_UNIT" "$INSTALL_DIR/goodvibes-daemon" && return 0
+  # The broken-ExecStart replacement branch is provenance-gated at EVERY
+  # call site: only a provably platform-managed canonical unit may be
+  # replaced; a hand-written (or unreadable/absent-file) one is never
+  # disabled, renamed, or rewritten — not even in the corpse state.
+  _canon_replace=0
+  [ "$(canonical_unit_provenance "$(systemd_daemon_unit_path)")" = "managed" ] && _canon_replace=1
+  restart_systemd_unit "$SYSTEMD_DAEMON_UNIT" "$INSTALL_DIR/goodvibes-daemon" "$_canon_replace" && return 0
   case "$(unit_active_state "$LEGACY_SYSTEMD_DAEMON_UNIT")" in
     active)
       # The daemon is supervised by the LEGACY goodvibes-daemon.service unit.
@@ -856,7 +877,10 @@ restart_running_agent() {
     restart_bare_processes '[g]oodvibes-agent' "$INSTALL_DIR/goodvibes-agent"
     return 0
   fi
-  restart_systemd_unit goodvibes-agent.service "$INSTALL_DIR/goodvibes-agent" && return 0
+  # The installer never writes a goodvibes-agent.service unit, so any agent
+  # unit on disk is product- or hand-written: the replacement branch is
+  # always gated off here.
+  restart_systemd_unit goodvibes-agent.service "$INSTALL_DIR/goodvibes-agent" 0 && return 0
   restart_bare_processes '[g]oodvibes-agent' "$INSTALL_DIR/goodvibes-agent"
 }
 
@@ -1197,14 +1221,25 @@ migrate_legacy_systemd_unit() {
     if [ -f "$canonical_path" ] && unit_is_endpoint_pinned "$canonical_path"; then
       case "$(canonical_unit_provenance "$canonical_path")" in
         managed)
+          backup_unit_file "$canonical_path"
           write_systemd_unit "$canonical_path"
           say "  rewrote    $canonical_path (replaced older pinned endpoint flags with the config-derived launch)"
           ;;
         *)
           say "  NOTE: the existing $SYSTEMD_DAEMON_UNIT pins endpoint flags (--hostname/--port) and is not"
           say "  recognizably platform-managed — transferring supervision onto it could bind the wrong endpoint."
-          say "  Nothing was changed; remove those flags yourself, or migrate deliberately with:"
+          say "  The units were not changed; remove those flags yourself, or migrate deliberately with:"
           say "    goodvibes-daemon migrate-service"
+          # The restart path deferred the in-place restart to this transfer
+          # ('the migration step below transfers it') — the promise must not
+          # die with the refusal: restart the legacy unit here so the swapped
+          # binary actually starts serving.
+          if systemctl --user restart "$LEGACY_SYSTEMD_DAEMON_UNIT" 2>/dev/null; then
+            say "  restarted  $LEGACY_SYSTEMD_DAEMON_UNIT — the daemon keeps running there, now on the upgraded binary."
+          else
+            say "  NOTE: could not restart $LEGACY_SYSTEMD_DAEMON_UNIT — the running daemon is still the previous"
+            say "  binary; restart it yourself:  systemctl --user restart $LEGACY_SYSTEMD_DAEMON_UNIT"
+          fi
           return 0
           ;;
       esac
