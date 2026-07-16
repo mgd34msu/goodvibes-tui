@@ -109,7 +109,7 @@ describe('voiceStatusLines — unsupported platform (no pin at all)', () => {
     expect(isSttPinnedButUnpublished(status)).toBe(false);
     const text = voiceStatusLines(status).join('\n');
     expect(text).toContain('tts (piper): unsupported on this platform');
-    expect(text).toContain('stt (whisper-cpp): not yet published for this platform');
+    expect(text).toContain('stt (whisper-cpp): unsupported on this platform');
     expect(text).not.toContain('run /voice setup'); // offerBytes null → no offer
   });
 });
