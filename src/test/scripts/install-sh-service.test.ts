@@ -187,6 +187,7 @@ function stubDualUnitServiceBin(root: string): string {
     '  case "$unit" in',
     '    canon) printf %s "$STUB_CANON_STATE_FILE" ;;',
     '    legacy) printf %s "$STUB_LEGACY_STATE_FILE" ;;',
+    '    agent) printf %s "$STUB_AGENT_STATE_FILE" ;;',
     '    *) printf %s "" ;;',
     '  esac',
     '}',
@@ -924,7 +925,7 @@ describe('install.sh — supervised transfer from an ACTIVE legacy unit (the dom
     expect(calls).not.toContain('stop goodvibes-daemon.service');
     expect(readFileSync(t.legacyState, 'utf-8')).toContain('active');
     // Honest note: names the corpse state and the manual fix.
-    expect(out.stdout).toContain('the unit is hand-written');
+    expect(out.stdout).toContain('not one this');
     expect(out.stdout).toContain("Fix the unit's ExecStart yourself");
     expect(out.stdout).not.toContain('replacing it');
   });
@@ -976,6 +977,131 @@ describe('install.sh — supervised transfer from an ACTIVE legacy unit (the dom
         }
       }
     }
+  });
+
+  test('hand-written CANONICAL unit in the corpse state: the canonical restart site never disables, renames, or replaces it', () => {
+    // Pins the verifier's B2 probe: the replace-broken gate was plumbed at
+    // only the legacy call site — a hand-written goodvibes.service (no
+    // marker, no product fingerprint) whose ExecStart binary was deleted got
+    // disable --now'd (killing the serving daemon), renamed to .bak, and
+    // later replaced by a fresh installer unit.
+    const t = stageLegacyOnlyActive('gv-handwritten-canonical-corpse');
+    writeFileSync(t.legacyState, 'inactive\n');
+    writeFileSync(t.canonState, 'active\n'); // hand-written canonical, ACTIVE
+    const deletedBin = join(t.root, 'gone', 'goodvibes-daemon'); // never created
+    const handWritten = `[Service]\nExecStart=${deletedBin}\n`;
+    writeFileSync(t.canonicalPath, handWritten);
+    const log = join(t.root, 'systemctl-log');
+
+    const out = runLib('restart_running_daemon; setup_daemon_service', {
+      ...t.env,
+      STUB_EXEC_BIN: deletedBin,
+      STUB_SYSTEMCTL_LOG: log,
+    });
+    expect(out.code).toBe(0);
+
+    // Untouched under its own name; no backup rename; no replacement written.
+    expect(readFileSync(t.canonicalPath, 'utf-8')).toBe(handWritten);
+    expect(readdirSync(join(t.home, '.config/systemd/user')).some((f) => f.includes('.bak.'))).toBe(false);
+    const calls = readFileSync(log, 'utf-8');
+    expect(calls).not.toContain('disable');
+    expect(out.stdout).toContain("Fix the unit's ExecStart yourself");
+    expect(out.stdout).not.toContain('replacing it');
+    // setup never overwrites the existing (still active) unit either.
+    expect(out.stdout).not.toContain('Setting up the goodvibes daemon');
+  });
+
+  test('an AGENT unit in the corpse state is never replaced — the installer never writes agent units, so none is ever its to replace', () => {
+    const t = stageLegacyOnlyActive('gv-agent-corpse');
+    const agentState = join(t.root, 'agent-state');
+    writeFileSync(agentState, 'active\n');
+    const deletedBin = join(t.root, 'gone', 'goodvibes-agent');
+    const unitDir = join(t.home, '.config/systemd/user');
+    const agentUnit = join(unitDir, 'goodvibes-agent.service');
+    const content = `[Service]\nExecStart=${deletedBin}\n`;
+    writeFileSync(agentUnit, content);
+    const log = join(t.root, 'systemctl-log');
+
+    const out = runLib('restart_running_agent', {
+      ...t.env,
+      STUB_AGENT_STATE_FILE: agentState,
+      STUB_EXEC_BIN: deletedBin,
+      STUB_SYSTEMCTL_LOG: log,
+    });
+    expect(out.code).toBe(0);
+
+    expect(readFileSync(agentUnit, 'utf-8')).toBe(content);
+    expect(readdirSync(unitDir).some((f) => f.startsWith('goodvibes-agent.service.bak.'))).toBe(false);
+    expect(readFileSync(log, 'utf-8')).not.toContain('disable');
+    expect(out.stdout).not.toContain('replacing it');
+  });
+
+  test('regenerating a fingerprint-classified (user-editable) unit keeps a timestamped backup with the original content, named in the receipt', () => {
+    // Pins the verifier's fp probe: a user-customized v1.14-v1.18 unit
+    // (product Description retained; Environment lines and a custom binary
+    // path added) is classified managed and regenerated — the prior content
+    // must survive as a .bak, because fingerprint provenance is only
+    // PROBABLY platform-owned.
+    const root = scratch('gv-refresh-backup');
+    const home = join(root, 'home');
+    const installDir = join(root, 'bin');
+    const unitDir = join(home, '.config/systemd/user');
+    mkdirSync(installDir, { recursive: true });
+    mkdirSync(unitDir, { recursive: true });
+    const canonicalPath = join(unitDir, 'goodvibes.service');
+    const customized = [
+      '[Unit]',
+      'Description=GoodVibes daemon (shared session broker + companion host)',
+      '',
+      '[Service]',
+      'Environment=HTTPS_PROXY=http://proxy.corp:3128',
+      'ExecStart=/home/user/.local/bin/goodvibes-daemon --daemon-home /home/user --hostname 0.0.0.0 --port 4000',
+      '',
+    ].join('\n');
+    writeFileSync(canonicalPath, customized);
+
+    const out = runLib('refresh_pinned_canonical_unit', {
+      HOME: home,
+      GOODVIBES_INSTALL_DIR: installDir,
+      PATH: `${stubDualUnitServiceBin(root)}:${process.env.PATH ?? ''}`,
+    });
+    expect(out.code).toBe(0);
+
+    expect(out.stdout).toContain(`backed up  ${canonicalPath} -> `);
+    const bak = readdirSync(unitDir).find((f) => f.startsWith('goodvibes.service.bak.'));
+    expect(bak).toBeDefined();
+    // The backup carries the user's customization verbatim — recovery is one mv.
+    expect(readFileSync(join(unitDir, bak as string), 'utf-8')).toBe(customized);
+    expect(readFileSync(canonicalPath, 'utf-8')).not.toContain('HTTPS_PROXY');
+  });
+
+  test('when the transfer refuses (hand-written pinned canonical), the promised upgrade still lands: the legacy unit is restarted in place', () => {
+    // Pins the verifier's promise-then-nothing probe: the managed-legacy arm
+    // prints 'the migration step below transfers it', the transfer then
+    // refuses at the hand-written-pinned gate — previously with zero
+    // restarts anywhere, so the swapped binary never started serving and
+    // every re-run repeated identically.
+    const t = stageLegacyOnlyActive('gv-promise-fulfilled');
+    const pinned = `[Service]\nExecStart=${t.installDir}/goodvibes-daemon --daemon-home ${t.home} --hostname 10.0.0.9 --port 4000\n`;
+    writeFileSync(t.canonicalPath, pinned);
+    const log = join(t.root, 'systemctl-log');
+
+    const out = runLib('restart_running_daemon; migrate_legacy_installer_unit', {
+      ...t.env,
+      STUB_SYSTEMCTL_LOG: log,
+    });
+    expect(out.code).toBe(0);
+
+    // The promise printed, the refusal printed, AND the legacy unit was
+    // restarted so the upgraded binary serves.
+    expect(out.stdout).toContain('the migration step below transfers it');
+    expect(out.stdout).toContain('pins endpoint flags');
+    expect(out.stdout).toContain('restarted  goodvibes-daemon.service — the daemon keeps running there, now on the upgraded binary');
+    const calls = readFileSync(log, 'utf-8').split('\n');
+    expect(calls.some((c) => c.includes('restart') && c.includes('goodvibes-daemon.service'))).toBe(true);
+    // The refusal itself stayed non-destructive.
+    expect(readFileSync(t.canonicalPath, 'utf-8')).toBe(pinned);
+    expect(existsSync(t.legacyPath)).toBe(true);
   });
 
   test('hand-written legacy unit ACTIVE: the installer restarts it in place — no false transfer promise, no silent no-upgrade', () => {
@@ -1281,12 +1407,13 @@ describe('install.sh — supervised transfer from an ACTIVE legacy unit (the dom
     expect(out.code).toBe(0);
 
     expect(out.stdout).toContain('pins endpoint flags');
-    expect(out.stdout).toContain('Nothing was changed');
-    // Untouched on both sides: legacy still active and serving, canonical verbatim.
+    expect(out.stdout).toContain('The units were not changed');
+    // Untouched on both sides: legacy still active and serving (restarted in
+    // place so the upgraded binary lands), canonical verbatim.
     expect(readFileSync(t.canonicalPath, 'utf-8')).toBe(pinned);
     expect(existsSync(t.legacyPath)).toBe(true);
     expect(readFileSync(t.legacyState, 'utf-8')).toContain('active');
-    expect(out.stdout).not.toContain('retired');
+    expect(out.stdout).not.toContain('retired ');
   });
 
   test('rollback: when the canonical unit fails to come up, legacy supervision is restored and NOTHING is removed', () => {
@@ -1823,7 +1950,9 @@ describe('install.sh — restart path validates the target before restarting/rel
     // out from under the bun-era unit.
     const deletedBin = join(root, 'bun-vendor', 'goodvibes-daemon');
     const unitPath = join(unitDir, 'goodvibes.service');
-    writeFileSync(unitPath, `[Service]\nExecStart=${deletedBin}\nRestart=on-failure\n`);
+    // The corpse unit carries the product Description fingerprint: only a
+    // provably platform-managed unit may be replaced by the corpse branch.
+    writeFileSync(unitPath, `[Unit]\nDescription=GoodVibes daemon (shared session broker + companion host)\n\n[Service]\nExecStart=${deletedBin}\nRestart=on-failure\n`);
 
     const stateFile = join(root, 'state');
     writeFileSync(stateFile, 'active\n');
