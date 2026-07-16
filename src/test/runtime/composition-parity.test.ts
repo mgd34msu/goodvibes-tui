@@ -135,18 +135,21 @@ describe('composition parity — memory governance is composed (governor default
   test('managed voice provisioning is composed so voice.local.status/install are invokable', () => {
     expect(services).toContain('wireVoiceSetup({');
     const helper = read('src/runtime/voice-setup-services.ts');
-    expect(helper).toContain('const voiceSetup: VoiceSetupService = {');
+    // The composer is now the SDK's exported createVoiceSetupService (SDK 1.10.1
+    // added ./platform/runtime/voice-setup); the fork's wiring delegates to it.
+    expect(helper).toContain('createVoiceSetupService({');
     const attachIdx = services.indexOf('attachWsOnlyGatewayVerbHandlers(gatewayMethods,');
     expect(services.slice(attachIdx)).toContain('voiceSetup,');
   });
 
-  test('the daemon serves LIVE install progress: the tracker is wired and merged onto status()', () => {
+  test('the daemon serves LIVE install progress: the fork consumes the SDK composer that carries it', () => {
+    // The single-flight install, the progress tracker folded onto status(), the
+    // ownership-aware preconfigure and the admission gate all live in the SDK's
+    // createVoiceSetupService now — the fork consumes it through the exported
+    // subpath rather than rebuilding it from the voice primitives.
     const helper = read('src/runtime/voice-setup-services.ts');
-    expect(helper).toContain('createVoiceInstallProgressTracker(');
-    expect(helper).toContain('progress.begin()');
-    expect(helper).toContain('onProgress: (p) => progress.onProgress(p)');
-    expect(helper).toContain('progress.end()');
-    expect(helper).toContain('installInProgress: snapshot');
+    expect(helper).toContain("from '@pellux/goodvibes-sdk/platform/runtime/voice-setup'");
+    expect(helper).toContain('createVoiceSetupService');
   });
 });
 
