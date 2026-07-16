@@ -4,6 +4,38 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [1.19.0] — 2026-07-16
+
+### Changes
+- 654eae83 deps: adopt published SDK 1.10.0 and regenerate operator contract artifact
+- a7055269 docs: regenerate command reference + foundation artifacts for the new surfaces
+- 17bcce8a voice setup: live per-component install progress
+- cd1d1889 extract knowledge + voice-setup construction to hold services.ts under the 800-line cap
+- 6eabbe16 compose the memory governor + managed voice provisioning in the daemon
+- 4ea80514 voice status: render the real STT enums honestly
+- c7c99a05 memory: doctor/status surface + pressure notice over ops.memory.get
+- 49b5ac83 voice settings: size-labeled local-engine setup offer beside ElevenLabs
+- f2bf0bb6 voice: /voice setup + /voice status one-act over the managed local-voice verbs
+- f7bb30f6 changelog: macOS in-app fleet coverage, regeneration backups, provenance-gated replacement, kept promises, honest not-probed
+- c26ad724 cli: not-probed is a tri-state on control-plane status and listener test — never a definite reachable:false
+- 50e10f36 installer: the macOS in-app fleet is reachable — both LaunchAgent identities, structural plist provenance, zero silence on pinned plists
+- ac27ebdd installer: replace-broken gate at every call site, backups before fingerprint regeneration, promises fulfilled on transfer refusal
+- 576b3665 changelog: modern-systemd vocabulary, fielded pinned-unit repair, never-touch hand-written units, honest bind displays
+- e63581be cli: every display surface routes endpoint bindings through one formatter seam
+- 4c3c471e installer: hand-written units survive the corpse state untouched; launchd cannot-ask is never free-to-kill
+- 1d3b42d8 installer: re-derive fielded pinned-endpoint units on upgrade (systemd + launchd, transfer + plain paths)
+- 49fa896e tri-state honesty for modern systemd and flapping probes: rc-4 'no such unit' is ABSENT, a failed MainPID query is UNKNOWN
+- 0019f2bf runtime: split the startup reconcile into legacy-daemon-reconcile.ts
+- 3986860e changelog: config-derived units, fail-safe installer, serving-proof reconcile
+- 9433bb11 installer: fail-safe on unknown service state, config-derived unit, endpoint-aware retirement, launchd run-state parity
+- 5b66a3a1 daemon: endpoint-serving proof + never-stop-a-running-daemon on the reconcile; config-derived unit content; display parity flags
+- eba26f90 changelog: describe the hardened migration, reconcile guards, and bind-honest banner
+- b7e7a36e daemon: serving-proof + self-kill guards on the reconcile, timeout-bounded systemctl, bind-honest banner
+- b10000df installer: supervised transfer for the legacy-active upgrade state, exit-status-checked retirement, quoting, launchd analog
+- e55eb1e7 changelog: installer unit unification, honest daemon startup, legacy-unit reconcile
+- 366560a0 daemon: honest startup identity and unattended legacy-unit reconcile
+- 615d60aa installer: unify the daemon service on the canonical goodvibes.service unit
+
 ## [Unreleased]
 
 ### Fixed
