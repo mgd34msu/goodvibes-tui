@@ -13,18 +13,9 @@ import { resolvePairingWebOrigin } from '../core/pairing-origin.ts';
 import { attachWsOnlyGatewayVerbHandlers } from '@pellux/goodvibes-terminal-shell';
 import { WatcherRegistry } from '@pellux/goodvibes-sdk/platform/watchers';
 import { ArtifactStore } from '@pellux/goodvibes-sdk/platform/artifacts';
-import {
-  HomeGraphService,
-  GOODVIBES_AGENT_KNOWLEDGE_DB_FILE,
-  HOME_GRAPH_KNOWLEDGE_EXTENSION,
-  KnowledgeService,
-  KnowledgeSemanticService,
-  KnowledgeStore,
-  ProjectPlanningService,
-  createProviderBackedKnowledgeSemanticLlm,
-  createWebKnowledgeGapRepairer,
-  projectPlanningProjectIdFromPath,
-} from '@pellux/goodvibes-sdk/platform/knowledge';
+import { createWebKnowledgeGapRepairer } from '@pellux/goodvibes-sdk/platform/knowledge';
+import type { HomeGraphService, KnowledgeService, ProjectPlanningService } from '@pellux/goodvibes-sdk/platform/knowledge';
+import { createKnowledgeServices } from './knowledge-services.ts';
 import { MediaProviderRegistry, ensureBuiltinMediaProviders } from '@pellux/goodvibes-sdk/platform/media';
 import { MultimodalService } from '@pellux/goodvibes-sdk/platform/multimodal';
 import { AgentMessageBus, AgentOrchestrator, ArchetypeLoader, WrfcController } from '@pellux/goodvibes-sdk/platform/agents';
@@ -47,10 +38,10 @@ import {
   IdempotencyStore, ComponentHealthMonitor, WorktreeRegistry, SandboxSessionRegistry, createShellPathService,
   type ShellPathService, type FeatureFlagManager, createFeatureFlagManager, PolicyRuntimeState,
 } from '@/runtime/index.ts';
-import { VoiceProviderRegistry, VoiceService, ensureBuiltinVoiceProviders, localVoiceRuntimeStatus, preconfigureLocalVoiceKeys, provisionLocalVoiceRuntime, readVoiceInstallStamp, writeVoiceInstallStamp } from '@pellux/goodvibes-sdk/platform/voice';
-import { singleFlight } from '@pellux/goodvibes-sdk/platform/utils';
+import { VoiceProviderRegistry, VoiceService, ensureBuiltinVoiceProviders } from '@pellux/goodvibes-sdk/platform/voice';
 import { CacheRegistry, PauseController, type MemoryGovernor } from '@pellux/goodvibes-sdk/platform/runtime/memory';
 import { wireMemoryGovernance } from './memory-governance-services.ts';
+import { wireVoiceSetup } from './voice-setup-services.ts';
 import { WebSearchProviderRegistry, WebSearchService } from '@pellux/goodvibes-sdk/platform/web-search';
 import { PanelManager } from '../panels/panel-manager.ts';
 import { HookActivityTracker } from '@pellux/goodvibes-sdk/platform/hooks';
@@ -73,7 +64,7 @@ import { createFleetServices } from './fleet-services.ts';
 import { createWorkstreamServices, type OrchestrationEngine, type WorkstreamCommandService } from './workstream-services.ts';
 import { wireFleetNeedsInputPush } from './fleet-needs-input-push.ts';
 import { codeIndexDbPath, createCodeIndexServices, isCodeInjectionSettingEnabled } from './code-index-services.ts';
-import { WorkPlanStore } from '../work-plans/work-plan-store.ts';
+import type { WorkPlanStore } from '../work-plans/work-plan-store.ts';
 import { registerDaemonHandlers, type DaemonHandlerSurfaces } from '../daemon/handlers/index.ts';
 import type { HandlerContext, HandlerLogger } from '../daemon/handlers/context.ts';
 import { createDaemonCredentialStore } from '../daemon/handlers/credentials.ts';
@@ -87,8 +78,6 @@ import { registerRemoteSurface } from '../daemon/handlers/remote/index.ts';
 import { WorkspaceTrustManager } from './trust/workspace-trust.ts';
 import { ensureConfiguredModelIsRoutable } from './provider-fallback.ts';
 
-const REGULAR_KNOWLEDGE_DB_FILE = 'knowledge-wiki.sqlite';
-const HOME_GRAPH_KNOWLEDGE_DB_FILE = 'knowledge-home-graph.sqlite';
 export interface RuntimeServicesOptions {
   readonly runtimeBus: RuntimeEventBus;
   readonly runtimeStore: RuntimeStore;
@@ -453,68 +442,13 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
       return record.id;
     },
   });
-  const knowledgeStore = new KnowledgeStore({
-    configManager,
-    dbFileName: REGULAR_KNOWLEDGE_DB_FILE,
-  });
-  const agentKnowledgeStore = new KnowledgeStore({
-    configManager,
-    dbFileName: GOODVIBES_AGENT_KNOWLEDGE_DB_FILE,
-  });
-  const homeGraphKnowledgeStore = new KnowledgeStore({
-    configManager,
-    dbFileName: HOME_GRAPH_KNOWLEDGE_DB_FILE,
-  });
-  const knowledgeSemanticLlm = createProviderBackedKnowledgeSemanticLlm(providerRegistry, {
-    timeoutMs: 20_000,
-    maxConcurrent: 1,
-  });
-  const knowledgeSemanticService = new KnowledgeSemanticService(knowledgeStore, {
-    llm: knowledgeSemanticLlm,
-    maxLlmSourcesPerReindex: 3,
-    isBackgroundPaused: isKnowledgeBackgroundPaused,
-    admitExpensiveWork,
-  });
-  const homeGraphSemanticService = new KnowledgeSemanticService(homeGraphKnowledgeStore, {
-    llm: knowledgeSemanticLlm,
-    maxLlmSourcesPerReindex: 3,
-    objectProfiles: HOME_GRAPH_KNOWLEDGE_EXTENSION.objectProfiles,
-    isBackgroundPaused: isKnowledgeBackgroundPaused,
-    admitExpensiveWork,
-  });
-  const agentKnowledgeSemanticService = new KnowledgeSemanticService(agentKnowledgeStore, {
-    llm: knowledgeSemanticLlm,
-    maxLlmSourcesPerReindex: 3,
-    isBackgroundPaused: isKnowledgeBackgroundPaused,
-    admitExpensiveWork,
-  });
-  const knowledgeService = new KnowledgeService(knowledgeStore, artifactStore, undefined, {
-    memoryRegistry,
-    runtimeBus: options.runtimeBus,
-    semanticService: knowledgeSemanticService,
-    admitExpensiveWork,
-  });
-  knowledgeService.attachRuntimeBus(options.runtimeBus);
-  const agentKnowledgeService = new KnowledgeService(agentKnowledgeStore, artifactStore, undefined, {
-    memoryRegistry,
-    runtimeBus: options.runtimeBus,
-    semanticService: agentKnowledgeSemanticService,
-    admitExpensiveWork,
-  });
-  agentKnowledgeService.attachRuntimeBus(options.runtimeBus);
-  const homeGraphService = new HomeGraphService(homeGraphKnowledgeStore, artifactStore, {
-    semanticService: homeGraphSemanticService,
-    admitExpensiveWork,
-  });
-  const projectPlanningProjectId = projectPlanningProjectIdFromPath(workingDirectory);
-  const projectPlanningService = new ProjectPlanningService(knowledgeStore, {
-    defaultProjectId: projectPlanningProjectId,
-  });
-  const workPlanStore = new WorkPlanStore({
-    homeDirectory,
-    projectId: projectPlanningProjectId,
-    projectRoot: workingDirectory,
-  });
+  // Knowledge/wiki + home-graph stack (governor backpressure wired in) — see knowledge-services.ts.
+  const {
+    knowledgeStore, agentKnowledgeStore, homeGraphKnowledgeStore,
+    knowledgeSemanticService, homeGraphSemanticService, agentKnowledgeSemanticService,
+    knowledgeService, agentKnowledgeService, homeGraphService,
+    projectPlanningService, projectPlanningProjectId, workPlanStore,
+  } = createKnowledgeServices({ configManager, providerRegistry, artifactStore, memoryRegistry, runtimeBus: options.runtimeBus, workingDirectory, homeDirectory, isBackgroundPaused: isKnowledgeBackgroundPaused, admitExpensiveWork });
   const voiceProviders = new VoiceProviderRegistry();
   ensureBuiltinVoiceProviders(voiceProviders, { readConfig: (key) => configManager.get(key as Parameters<typeof configManager.get>[0]) });
   const voiceService = new VoiceService(voiceProviders);
@@ -669,50 +603,9 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
   });
   admitExpensiveWorkRef.current = (label) => memoryGovernor.admitExpensiveWork(label);
 
-  // Managed local-voice provisioning: status read + one-act install that
-  // provisions the piper engine + a default voice (and whisper STT where a
-  // bundle is published) and pre-configures the voice.local.* keys (user-set
-  // keys preserved). Single-flight: concurrent installs join the in-progress
-  // promise instead of starting parallel multi-hundred-MB downloads. Mirrors
-  // the SDK's own createRuntimeServices voiceSetup composition.
-  const managedVoiceRoot = shellPaths.resolveUserPath('voice');
-  const runVoiceInstall = singleFlight(async () => {
-    const provision = await provisionLocalVoiceRuntime({ managedRoot: managedVoiceRoot });
-    let configured: { set: { key: string; value: string }[]; skipped: { key: string; reason: string }[] } = { set: [], skipped: [] };
-    if (provision.tts.state === 'provisioned' && provision.tts.binaryPath && provision.tts.modelPath) {
-      const stamp = readVoiceInstallStamp(managedVoiceRoot);
-      const receipt = preconfigureLocalVoiceKeys({
-        getConfig: (k) => String(configManager.get(k as Parameters<typeof configManager.get>[0]) ?? ''),
-        setConfig: (k, v) => configManager.setDynamic(k as Parameters<typeof configManager.setDynamic>[0], v),
-        ttsEngine: provision.tts.engine,
-        ttsBinary: provision.tts.binaryPath,
-        ttsModelPath: provision.tts.modelPath,
-        ...(provision.stt.state === 'provisioned' && provision.stt.binaryPath && provision.stt.modelPath
-          ? { sttEngine: provision.stt.engine, sttBinary: provision.stt.binaryPath, sttModelPath: provision.stt.modelPath }
-          : {}),
-        priorInstallWrites: stamp?.configWrites,
-      });
-      configured = { set: [...receipt.set], skipped: [...receipt.skipped] };
-      if (stamp) {
-        writeVoiceInstallStamp(managedVoiceRoot, { ...stamp, configWrites: { ...stamp.configWrites, ...receipt.installWrites } });
-      }
-      // A successful (re-)install clears any tripped local-engine breaker.
-      voiceProviders.get('local')?.resetEngineFailureState?.();
-    }
-    return { provisioned: provision.tts.state === 'provisioned', platform: provision.platform, tts: provision.tts, stt: provision.stt, components: provision.components, configured };
-  });
-  const voiceSetup = {
-    status: () => localVoiceRuntimeStatus({ managedRoot: managedVoiceRoot }),
-    install: async () => {
-      // Critical-tier admission: a provision run allocates archive + model
-      // buffers — refuse honestly instead of piling onto memory pressure.
-      const admission = admitExpensiveWork('voice runtime install');
-      if (!admission.allowed) {
-        throw new Error(admission.reason ?? 'voice runtime install refused: daemon is under critical memory pressure.');
-      }
-      return runVoiceInstall();
-    },
-  };
+  // Managed local-voice provisioning (voice.local.status/install) — single-flight
+  // one-act install + no-network status; see voice-setup-services.ts.
+  const { voiceSetup } = wireVoiceSetup({ configManager, shellPaths, voiceProviders, admitExpensiveWork });
 
   // Terminal-shell wrapper over the SDK registerGatewayVerbGroups (gateway-verbs.ts); checkin.*/fleet-needs-input/pairing.* register only when their deps are present. memoryGovernor lights up ops.memory.get; voiceSetup lights up voice.local.status/install.
   attachWsOnlyGatewayVerbHandlers(gatewayMethods, { processRegistry, workspaceCheckpointManager, conversationRewindPort: createSessionConversationRewindPort(), sessionBroker, secretsManager, stepUpService, approvalBroker, requestApproval: (input) => approvalBroker.requestApproval(input), watcherRegistry, userPermissionRuleStore, shellPaths, configManager, runtimeStore: options.runtimeStore, channelDeliveryRouter, providerRegistry, automationManager, sessionLister: sessionBroker, sessionIntake: sessionBroker, workingDirectory, memoryRegistry, pairingTokens, sessionLiveTurnControls, powerManager, memoryGovernor, voiceSetup, relayAvailable: () => configManager.get('relay.enabled') === true, pairingWebOrigin: () => resolvePairingWebOrigin(configManager).origin, ...wireFleetNeedsInputPush({ registry: processRegistry, runtimeBus: options.runtimeBus, sessionBroker }) });

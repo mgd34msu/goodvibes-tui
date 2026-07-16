@@ -98,8 +98,8 @@ describe('composition parity — memory governance is composed (governor default
     expect(services).toContain('new CacheRegistry()');
     expect(services).toContain('new PauseController()');
     expect(services).toContain("MEMORY_BACKGROUND_JOB_IDS = ['knowledge-self-improvement', 'memory-consolidation', 'code-index-reindex']");
-    // The seams are built before the knowledge semantic services (which consult them).
-    expect(services.indexOf('new CacheRegistry()')).toBeLessThan(services.indexOf('new KnowledgeSemanticService('));
+    // The seams are built before the knowledge services (which consult them via the passed-in gate).
+    expect(services.indexOf('new CacheRegistry()')).toBeLessThan(services.indexOf('createKnowledgeServices('));
   });
 
   test('createRuntimeServices constructs + starts the governor via the tail helper and late-binds the admission gate', () => {
@@ -133,7 +133,9 @@ describe('composition parity — memory governance is composed (governor default
   });
 
   test('managed voice provisioning is composed so voice.local.status/install are invokable', () => {
-    expect(services).toContain('const voiceSetup = {');
+    expect(services).toContain('wireVoiceSetup({');
+    const helper = read('src/runtime/voice-setup-services.ts');
+    expect(helper).toContain('const voiceSetup: VoiceSetupService = {');
     const attachIdx = services.indexOf('attachWsOnlyGatewayVerbHandlers(gatewayMethods,');
     expect(services.slice(attachIdx)).toContain('voiceSetup,');
   });
