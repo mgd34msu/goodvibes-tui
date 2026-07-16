@@ -104,8 +104,8 @@
     "@anthropic-ai/vertex-sdk": "^0.16.0",
     "@ast-grep/napi": "^0.42.0",
     "@aws/bedrock-token-generator": "^1.1.0",
-    "@pellux/goodvibes-sdk": "file:/home/buzzkill/.claude/jobs/e28eaafb/tmp/tarballs-tui-5357f09e/pellux-goodvibes-sdk-1.9.0.tgz",
-    "@pellux/goodvibes-terminal-shell": "file:/home/buzzkill/.claude/jobs/e28eaafb/tmp/tarballs-tui-5357f09e/pellux-goodvibes-terminal-shell-1.9.0.tgz",
+    "@pellux/goodvibes-sdk": "1.10.0",
+    "@pellux/goodvibes-terminal-shell": "1.10.0",
     "bash-language-server": "^5.6.0",
     "fuse.js": "^7.1.0",
     "graphql": "^16.13.2",
@@ -138,16 +138,6 @@
   },
   "trustedDependencies": [],
   "overrides": {
-    "minimatch": "^10.2.5",
-    "@pellux/goodvibes-sdk": "file:/home/buzzkill/.claude/jobs/e28eaafb/tmp/tarballs-tui-5357f09e/pellux-goodvibes-sdk-1.9.0.tgz",
-    "@pellux/goodvibes-contracts": "file:/home/buzzkill/.claude/jobs/e28eaafb/tmp/tarballs-tui-5357f09e/pellux-goodvibes-contracts-1.9.0.tgz",
-    "@pellux/goodvibes-daemon-sdk": "file:/home/buzzkill/.claude/jobs/e28eaafb/tmp/tarballs-tui-5357f09e/pellux-goodvibes-daemon-sdk-1.9.0.tgz",
-    "@pellux/goodvibes-errors": "file:/home/buzzkill/.claude/jobs/e28eaafb/tmp/tarballs-tui-5357f09e/pellux-goodvibes-errors-1.9.0.tgz",
-    "@pellux/goodvibes-operator-sdk": "file:/home/buzzkill/.claude/jobs/e28eaafb/tmp/tarballs-tui-5357f09e/pellux-goodvibes-operator-sdk-1.9.0.tgz",
-    "@pellux/goodvibes-peer-sdk": "file:/home/buzzkill/.claude/jobs/e28eaafb/tmp/tarballs-tui-5357f09e/pellux-goodvibes-peer-sdk-1.9.0.tgz",
-    "@pellux/goodvibes-terminal-shell": "file:/home/buzzkill/.claude/jobs/e28eaafb/tmp/tarballs-tui-5357f09e/pellux-goodvibes-terminal-shell-1.9.0.tgz",
-    "@pellux/goodvibes-transport-core": "file:/home/buzzkill/.claude/jobs/e28eaafb/tmp/tarballs-tui-5357f09e/pellux-goodvibes-transport-core-1.9.0.tgz",
-    "@pellux/goodvibes-transport-http": "file:/home/buzzkill/.claude/jobs/e28eaafb/tmp/tarballs-tui-5357f09e/pellux-goodvibes-transport-http-1.9.0.tgz",
-    "@pellux/goodvibes-transport-realtime": "file:/home/buzzkill/.claude/jobs/e28eaafb/tmp/tarballs-tui-5357f09e/pellux-goodvibes-transport-realtime-1.9.0.tgz"
+    "minimatch": "^10.2.5"
   }
 }
