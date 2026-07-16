@@ -265,8 +265,18 @@ function stubDualUnitServiceBin(root: string): string {
     '  print)',
     // 113 = launchd's could-not-find-service (affirmatively not loaded);
     // 64 = 'Bad request' (gui domain unreachable, e.g. over ssh) — cannot-ask.
+    // STUB_LAUNCHD_LABEL_WITH_PID stages exactly ONE loaded label (suffix
+    // match on the gui/<uid>/<label> target); every other label answers 113.
     '    [ "$STUB_LAUNCHCTL_PRINT_FAILS" = "1" ] && exit 113',
     '    [ "$STUB_LAUNCHCTL_PRINT_BADREQ" = "1" ] && exit 64',
+    '    if [ -n "$STUB_LAUNCHD_LABEL_WITH_PID" ]; then',
+    '      case "$2" in',
+    '        */"$STUB_LAUNCHD_LABEL_WITH_PID")',
+    '          printf \'    pid = %s\\n\' "${STUB_LAUNCHD_DAEMON_PID:-0}"',
+    '          exit 0 ;;',
+    '        *) exit 113 ;;',
+    '      esac',
+    '    fi',
     '    [ -n "$STUB_LAUNCHD_DAEMON_PID" ] && printf \'    pid = %s\\n\' "$STUB_LAUNCHD_DAEMON_PID"',
     '    exit 0 ;;',
     'esac',
@@ -1657,7 +1667,7 @@ describe('install.sh — launchd migration analog (macOS upgrades get the args-d
       STUB_LAUNCHCTL_LOG: launchctlLog,
     });
     expect(out.code).toBe(0);
-    expect(out.stdout).toContain('Upgrading the installer-managed LaunchAgent');
+    expect(out.stdout).toContain('Upgrading the platform-managed LaunchAgent');
     expect(out.stdout).toContain('reloaded');
 
     const plist = readFileSync(plistPath, 'utf-8');
@@ -1752,12 +1762,211 @@ describe('install.sh — launchd migration analog (macOS upgrades get the args-d
     });
     expect(out.code).toBe(0);
 
-    expect(out.stdout).toContain('Upgrading the installer-managed LaunchAgent');
+    expect(out.stdout).toContain('Upgrading the platform-managed LaunchAgent');
     const plist = readFileSync(plistPath, 'utf-8');
     expect(plist).toContain('<string>--daemon-home</string>');
     expect(plist).not.toContain('--hostname');
     expect(plist).not.toContain('--port');
   });
+
+  test('a MARKER-FREE pinned plist whose first argument is the goodvibes-managed binary is structurally recognized and regenerated — never silent', () => {
+    // Pins the verifier's D1 probe: an in-app-written plist carries no
+    // installer marker and structurally CANNOT carry the product Description
+    // fingerprint (the SDK's plist writer drops the description — SDK-owned
+    // gap). The old marker gate returned with ZERO output, leaving the pinned
+    // endpoint overriding settings forever. ProgramArguments[0] naming the
+    // managed binary is the structural provenance that permits re-derivation.
+    const root = scratch('gv-launchd-inapp');
+    const home = join(root, 'home');
+    const installDir = join(root, 'bin');
+    mkdirSync(installDir, { recursive: true });
+    const plistPath = join(home, 'Library/LaunchAgents/sh.goodvibes.daemon.plist');
+    mkdirSync(join(home, 'Library/LaunchAgents'), { recursive: true });
+    // Faithful SDK render: Label/ProgramArguments/WorkingDirectory/RunAtLoad/
+    // KeepAlive only — no marker, no Description.
+    const inApp = [
+      '<?xml version="1.0" encoding="UTF-8"?>',
+      '<plist version="1.0">',
+      '<dict>',
+      '  <key>Label</key>',
+      '  <string>sh.goodvibes.daemon</string>',
+      '  <key>ProgramArguments</key>',
+      '  <array>',
+      `    <string>${installDir}/goodvibes-daemon</string>`,
+      '    <string>--daemon-home</string>',
+      `    <string>${home}</string>`,
+      '    <string>--hostname</string>',
+      '    <string>127.0.0.1</string>',
+      '    <string>--port</string>',
+      '    <string>3421</string>',
+      '  </array>',
+      '  <key>RunAtLoad</key>',
+      '  <true/>',
+      '  <key>KeepAlive</key>',
+      '  <true/>',
+      '</dict>',
+      '</plist>',
+      '',
+    ].join('\n');
+    writeFileSync(plistPath, inApp);
+    const launchctlLog = join(root, 'launchctl-log');
+
+    const out = runLib('migrate_legacy_launchd_plist', {
+      HOME: home,
+      GOODVIBES_INSTALL_DIR: installDir,
+      PATH: `${stubDualUnitServiceBin(root)}:${process.env.PATH ?? ''}`,
+      STUB_LAUNCHCTL_LOG: launchctlLog,
+    });
+    expect(out.code).toBe(0);
+
+    expect(out.stdout).toContain('Upgrading the platform-managed LaunchAgent');
+    expect(out.stdout).toContain('backed up  ');
+    const plist = readFileSync(plistPath, 'utf-8');
+    expect(plist).not.toContain('--hostname');
+    expect(plist).not.toContain('--port');
+    expect(plist).toContain('<string>--daemon-home</string>');
+    // The prior content survives as a .bak.
+    const bak = readdirSync(join(home, 'Library/LaunchAgents')).find((f) => f.startsWith('sh.goodvibes.daemon.plist.bak.'));
+    expect(bak).toBeDefined();
+    expect(readFileSync(join(home, 'Library/LaunchAgents', bak as string), 'utf-8')).toBe(inApp);
+  });
+
+  test('a MARKER-FREE pinned plist pointing at a FOREIGN binary gets the honest notice — untouched, but never silent', () => {
+    const root = scratch('gv-launchd-foreign-pinned');
+    const home = join(root, 'home');
+    const installDir = join(root, 'bin');
+    mkdirSync(installDir, { recursive: true });
+    const plistPath = join(home, 'Library/LaunchAgents/sh.goodvibes.daemon.plist');
+    mkdirSync(join(home, 'Library/LaunchAgents'), { recursive: true });
+    const foreign = [
+      '<plist version="1.0"><dict>',
+      '  <key>Label</key><string>sh.goodvibes.daemon</string>',
+      '  <key>ProgramArguments</key><array>',
+      '    <string>/opt/custom/goodvibes-daemon</string>',
+      '    <string>--hostname</string><string>10.0.0.9</string>',
+      '    <string>--port</string><string>4000</string>',
+      '  </array>',
+      '</dict></plist>',
+      '',
+    ].join('\n');
+    writeFileSync(plistPath, foreign);
+
+    const out = runLib('migrate_legacy_launchd_plist', {
+      HOME: home,
+      GOODVIBES_INSTALL_DIR: installDir,
+      PATH: `${stubDualUnitServiceBin(root)}:${process.env.PATH ?? ''}`,
+    });
+    expect(out.code).toBe(0);
+
+    expect(readFileSync(plistPath, 'utf-8')).toBe(foreign);
+    expect(out.stdout).toContain('pins endpoint flags');
+    expect(out.stdout).toContain('not recognizably platform-managed');
+    expect(out.stdout).not.toContain('Upgrading');
+  });
+
+  test("the PRODUCT's in-app plist (~/Library/LaunchAgents/goodvibes.plist, label 'goodvibes') is found and re-derived, keeping its own label", () => {
+    // Pins the verifier's label blind-spot probe: the in-app LaunchAgent
+    // lives at a path and label no installer code previously read — the
+    // pinned endpoint survived every upgrade with zero notice.
+    const root = scratch('gv-launchd-product-label');
+    const home = join(root, 'home');
+    const installDir = join(root, 'bin');
+    mkdirSync(installDir, { recursive: true });
+    const plistPath = join(home, 'Library/LaunchAgents/goodvibes.plist');
+    mkdirSync(join(home, 'Library/LaunchAgents'), { recursive: true });
+    writeFileSync(plistPath, [
+      '<plist version="1.0"><dict>',
+      '  <key>Label</key><string>goodvibes</string>',
+      '  <key>ProgramArguments</key><array>',
+      `    <string>${installDir}/goodvibes-daemon</string>`,
+      '    <string>--daemon-home</string>',
+      `    <string>${home}</string>`,
+      '    <string>--hostname</string><string>127.0.0.1</string>',
+      '    <string>--port</string><string>3421</string>',
+      '  </array>',
+      '  <key>RunAtLoad</key><true/>',
+      '  <key>KeepAlive</key><true/>',
+      '</dict></plist>',
+      '',
+    ].join('\n'));
+    const launchctlLog = join(root, 'launchctl-log');
+
+    const out = runLib('migrate_legacy_launchd_plist', {
+      HOME: home,
+      GOODVIBES_INSTALL_DIR: installDir,
+      PATH: `${stubDualUnitServiceBin(root)}:${process.env.PATH ?? ''}`,
+      STUB_LAUNCHCTL_LOG: launchctlLog,
+    });
+    expect(out.code).toBe(0);
+
+    expect(out.stdout).toContain("Upgrading the platform-managed LaunchAgent (goodvibes)");
+    const plist = readFileSync(plistPath, 'utf-8');
+    // Label/path correspondence survives: the regenerated plist keeps 'goodvibes'.
+    expect(plist).toContain('<string>goodvibes</string>');
+    expect(plist).not.toContain('<string>sh.goodvibes.daemon</string>');
+    expect(plist).not.toContain('--hostname');
+    expect(plist).not.toContain('--port');
+    // The reload targeted the product label.
+    const log = readFileSync(launchctlLog, 'utf-8');
+    expect(log).toContain('bootout gui/');
+    expect(log.split('\n').some((l) => l.endsWith('/goodvibes'))).toBe(true);
+  });
+
+  test(
+    "a daemon supervised under the PRODUCT label 'goodvibes' is restarted in place — never classified free and kill/nohup'd",
+    async () => {
+      // Pins the verifier's consequence-B probe: pid_supervision asked only
+      // sh.goodvibes.daemon/sh.goodvibes.agent, so a daemon owned by loaded
+      // label 'goodvibes' answered 'free' and got SIGTERM+nohup'd against
+      // its KeepAlive respawn.
+      const root = scratch('gv-macos-product-label');
+      const home = join(root, 'home');
+      const installDir = join(root, 'bin');
+      mkdirSync(installDir, { recursive: true });
+      copyFileSync('/bin/sleep', join(installDir, 'goodvibes-daemon'));
+      chmodSync(join(installDir, 'goodvibes-daemon'), 0o755);
+      const proc = Bun.spawn([join(installDir, 'goodvibes-daemon'), '300'], { stdio: ['ignore', 'ignore', 'ignore'] });
+      const pid = proc.pid;
+      const isAlive = () => {
+        try {
+          process.kill(pid, 0);
+          return true;
+        } catch {
+          return false;
+        }
+      };
+      const launchctlLog = join(root, 'launchctl-log');
+
+      try {
+        await new Promise((r) => setTimeout(r, 300));
+        const out = runLib('os_tag=macos; restart_running_daemon', {
+          HOME: home,
+          GOODVIBES_INSTALL_DIR: installDir,
+          PATH: `${stubDualUnitServiceBin(root)}:${process.env.PATH ?? ''}`,
+          STUB_LAUNCHD_LABEL_WITH_PID: 'goodvibes',
+          STUB_LAUNCHD_DAEMON_PID: String(pid),
+          STUB_LAUNCHCTL_LOG: launchctlLog,
+        });
+        expect(out.code).toBe(0);
+
+        expect(out.stdout).toContain('Restarting the running goodvibes (launchd user agent)');
+        expect(out.stdout).toContain('restarted  goodvibes');
+        expect(out.stdout).not.toContain('not relaunching');
+        expect(isAlive()).toBe(true); // never killed
+        const log = readFileSync(launchctlLog, 'utf-8');
+        expect(log.split('\n').some((l) => l.includes('kickstart -k') && l.endsWith('/goodvibes'))).toBe(true);
+      } finally {
+        if (isAlive()) {
+          try {
+            process.kill(pid, 'SIGKILL');
+          } catch {
+            /* gone */
+          }
+        }
+      }
+    },
+    20000,
+  );
 
   test('a hand-written plist (no marker) is left byte-identical', () => {
     const root = scratch('gv-launchd-handwritten');
