@@ -4,6 +4,7 @@ import {
   classifyVoiceProvisionError,
   createVoiceProvisionGateway,
   renderVoiceProvision,
+  runVoiceSetupWithProgress,
   VOICE_SETUP_ANNOUNCEMENT,
   type VoiceProvisionGatewayResolution,
 } from '../../core/voice-provision-gateway.ts';
@@ -88,6 +89,80 @@ describe('renderVoiceProvision — mocked daemon (injected resolution)', () => {
     const out = await renderVoiceProvision('status', failingResolution(new Error('connection reset')));
     expect(out).toContain('could not read status');
     expect(out).toContain('connection reset');
+  });
+});
+
+describe('runVoiceSetupWithProgress — live progress polling (no real timers)', () => {
+  function progressStatus(component: string, phase: string, bytesTotal?: number, bytesDone?: number): VoiceRuntimeStatusResult {
+    return { ...STATUS, installInProgress: { startedAt: 1, components: [{ component, phase, ...(bytesTotal !== undefined ? { bytesTotal } : {}), ...(bytesDone !== undefined ? { bytesDone } : {}) }] } } as VoiceRuntimeStatusResult;
+  }
+
+  test('polls status while the install runs and prints per-component progress, then the receipt', async () => {
+    const printed: string[] = [];
+    let resolveInstall!: (r: VoiceLocalInstallResult) => void;
+    const installPromise = new Promise<VoiceLocalInstallResult>((r) => { resolveInstall = r; });
+    let step = 0;
+    const resolution: VoiceProvisionGatewayResolution = {
+      available: true,
+      gateway: {
+        runInstall: () => installPromise,
+        fetchStatus: async () => {
+          step += 1;
+          if (step === 1) return progressStatus('piper-engine', 'download', 100, 50);
+          if (step === 2) return progressStatus('piper-engine', 'done', 100, 100);
+          return STATUS;
+        },
+      },
+    };
+    // Fake sleep: on the 3rd tick, settle the install so the loop exits.
+    let sleeps = 0;
+    const sleep = async (): Promise<void> => { sleeps += 1; if (sleeps === 3) resolveInstall(RECEIPT); };
+
+    await runVoiceSetupWithProgress(resolution, { print: (b) => printed.push(b), sleep, pollMs: 0 });
+
+    const text = printed.join('\n');
+    expect(text).toContain('piper-engine: downloading (50 B/100 B)');
+    expect(text).toContain('piper-engine: done');
+    expect(text).toContain('Local Voice Setup — receipt');
+    expect(text).toContain('result: local voice provisioned');
+  });
+
+  test('a phase that has not changed is not re-printed (no per-poll spam)', async () => {
+    const printed: string[] = [];
+    let resolveInstall!: (r: VoiceLocalInstallResult) => void;
+    const installPromise = new Promise<VoiceLocalInstallResult>((r) => { resolveInstall = r; });
+    const resolution: VoiceProvisionGatewayResolution = {
+      available: true,
+      gateway: {
+        runInstall: () => installPromise,
+        // Always the SAME phase — only the first observation prints.
+        fetchStatus: async () => progressStatus('piper-engine', 'download', 100, 50),
+      },
+    };
+    let sleeps = 0;
+    const sleep = async (): Promise<void> => { sleeps += 1; if (sleeps === 3) resolveInstall(RECEIPT); };
+    await runVoiceSetupWithProgress(resolution, { print: (b) => printed.push(b), sleep, pollMs: 0 });
+    const downloadingLines = printed.filter((b) => b.includes('piper-engine: downloading'));
+    expect(downloadingLines).toHaveLength(1);
+  });
+
+  test('unavailable resolution prints the honest reason and never polls', async () => {
+    const printed: string[] = [];
+    await runVoiceSetupWithProgress({ available: false, reason: 'the daemon is disabled' }, { print: (b) => printed.push(b), sleep: async () => {}, pollMs: 0 });
+    expect(printed.join('\n')).toContain('Local Voice Setup unavailable: the daemon is disabled');
+  });
+
+  test('an install rejection (501) renders the honest unavailable line, not a fake receipt', async () => {
+    const printed: string[] = [];
+    const resolution: VoiceProvisionGatewayResolution = {
+      available: true,
+      gateway: {
+        runInstall: async () => { throw new GoodVibesSdkError('no handler', { status: 501 }); },
+        fetchStatus: async () => STATUS,
+      },
+    };
+    await runVoiceSetupWithProgress(resolution, { print: (b) => printed.push(b), sleep: async () => {}, pollMs: 0 });
+    expect(printed.join('\n')).toContain('does not serve managed voice provisioning yet');
   });
 });
 

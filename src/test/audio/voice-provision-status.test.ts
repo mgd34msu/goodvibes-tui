@@ -6,8 +6,12 @@ import {
   voiceStatusLines,
   voiceEngineOutcomeLine,
   voiceInstallReceiptLines,
+  voiceProgressPhaseLabel,
+  voiceInstallComponentLine,
+  voiceInstallProgressLines,
   type VoiceRuntimeStatusResult,
   type VoiceLocalInstallResult,
+  type VoiceInstallProgress,
 } from '../../core/voice-provision-status.ts';
 
 // Fixture builders that mirror the exact typed verb output shapes
@@ -124,6 +128,37 @@ describe('voiceEngineOutcomeLine — honest terminal states', () => {
     expect(voiceEngineOutcomeLine('stt (whisper-cpp)', 'bundle-unavailable', undefined)).toContain('not yet published for this platform');
     expect(voiceEngineOutcomeLine('stt (whisper-cpp)', 'sideload-mismatch', undefined)).toContain('sideloaded bundle');
     expect(voiceEngineOutcomeLine('stt (whisper-cpp)', 'unsupported-platform', undefined)).toContain('unsupported on this platform');
+  });
+});
+
+describe('live install progress (installInProgress)', () => {
+  const progress: VoiceInstallProgress = {
+    startedAt: 1_000,
+    components: [
+      { component: 'piper-engine', phase: 'download', bytesTotal: 26_460_462, bytesDone: 26_460_462 },
+      { component: 'piper-voice-onnx', phase: 'verify', bytesTotal: 63_201_294 },
+      { component: 'whisper-engine', phase: 'extract' },
+      { component: 'piper-engine', phase: 'error', message: 'HTTP 503' },
+    ],
+  } as VoiceInstallProgress;
+
+  test('phase labels are human', () => {
+    expect(voiceProgressPhaseLabel('download')).toBe('downloading');
+    expect(voiceProgressPhaseLabel('verify')).toBe('verifying');
+    expect(voiceProgressPhaseLabel('extract')).toBe('extracting');
+    expect(voiceProgressPhaseLabel('error')).toBe('failed');
+  });
+
+  test('a component line shows phase, done/total size, and a message', () => {
+    expect(voiceInstallComponentLine(progress.components[0]!)).toBe('    piper-engine: downloading (25 MB/25 MB)');
+    expect(voiceInstallComponentLine(progress.components[1]!)).toBe('    piper-voice-onnx: verifying (60 MB)');
+    expect(voiceInstallComponentLine(progress.components[2]!)).toBe('    whisper-engine: extracting');
+    expect(voiceInstallComponentLine(progress.components[3]!)).toContain('failed');
+    expect(voiceInstallComponentLine(progress.components[3]!)).toContain('HTTP 503');
+  });
+
+  test('voiceInstallProgressLines renders one line per component', () => {
+    expect(voiceInstallProgressLines(progress)).toHaveLength(4);
   });
 });
 
