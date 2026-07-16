@@ -34,7 +34,7 @@ import type { StoreSnapshotScheduler } from '@pellux/goodvibes-sdk/platform/stat
 import type { UserPermissionRuleStore } from '@pellux/goodvibes-sdk/platform/permissions';
 import { buildExecPromptAnswerHandler } from '@pellux/goodvibes-sdk/platform/runtime/permissions/exec-prompt-wiring';
 import { buildLocalhostFetchApproval } from '@pellux/goodvibes-sdk/platform/runtime/permissions/localhost-fetch-approval';
-import { createNotificationDispatcher, wireRuntimeNotificationBridge, type NotificationDispatcher } from './notification-dispatch.ts';
+import { createNotificationDispatcher, wireRuntimeNotificationBridge, wireMemoryPressureNotice, type NotificationDispatcher } from './notification-dispatch.ts';
 import { createDurabilityServices } from './durability-services.ts';
 import { MemorySpineClient, createLocalMemoryAccess } from '@pellux/goodvibes-sdk/platform/runtime/memory-spine';
 import { WorkspaceCheckpointManager } from '@pellux/goodvibes-sdk/platform/workspace';
@@ -680,6 +680,9 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
   // panel feed (panel_only and burst-collapsed decisions land there).
   const notificationDispatcher = createNotificationDispatcher(configManager);
   wireRuntimeNotificationBridge(options.runtimeBus, notificationDispatcher);
+  // OPS_MEMORY_PRESSURE is lifted into the notice feed on its own targeted
+  // bridge (the high-churn 'ops' domain stays out of the wholesale allowlist).
+  wireMemoryPressureNotice(options.runtimeBus, notificationDispatcher);
 
   return {
     workingDirectory,

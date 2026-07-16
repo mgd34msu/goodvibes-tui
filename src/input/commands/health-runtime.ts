@@ -21,6 +21,8 @@ import {
 } from './runtime-services.ts';
 import { getOperatorRpc, describeOperatorRpcError } from './operator-rpc.ts';
 import { formatQuotaSnapshotLine, renderMetricMap, telemetryScopeRefusalLine } from './health-metrics-format.ts';
+import { createMemoryDiagnosticsGateway, renderMemoryDiagnostics } from '../../core/memory-diagnostics-gateway.ts';
+import { requireShellPaths } from './runtime-services.ts';
 
 function renderSandboxHealthSummary(configManager: ConfigManager): string[] {
   const backend = String(configManager.get('sandbox.vmBackend') ?? 'local');
@@ -42,13 +44,25 @@ export function registerHealthRuntimeCommands(registry: CommandRegistry): void {
     name: 'health',
     aliases: ['doctor'],
     description: 'Health workspace for startup posture, service readiness, sandbox posture, and provider health',
-    usage: '[report|review|open|setup|services|sandbox|provider|accounts|auth|settings|intelligence|remote|mcp|metrics|continuity|worktrees|maintenance|term|repair [domain]] — bare and report stay a cross-domain transcript report (see also /health provider for the providers modal)',
+    usage: '[report|review|open|setup|services|sandbox|provider|accounts|auth|settings|intelligence|remote|mcp|memory|metrics|continuity|worktrees|maintenance|term|repair [domain]] — bare and report stay a cross-domain transcript report (see also /health provider for the providers modal)',
     async handler(args, ctx) {
       const sub = (args[0] ?? 'review').toLowerCase();
       const readModels = requireReadModels(ctx);
 
       if (sub === 'open' || sub === 'panel' || sub === 'provider') {
         ctx.openModal?.('providers-modal'); // provider-health panel -> config modal
+        return;
+      }
+
+      if (sub === 'memory') {
+        // The MemoryGovernor snapshot (ops.memory.get): tier, budget vs RSS,
+        // per-cache footprints, paused jobs, tripwire — read-only, honest 501
+        // when a daemon predates the governor verb.
+        const resolution = createMemoryDiagnosticsGateway({
+          configManager: ctx.platform.configManager,
+          homeDirectory: () => requireShellPaths(ctx).homeDirectory,
+        });
+        ctx.print(await renderMemoryDiagnostics(resolution));
         return;
       }
 

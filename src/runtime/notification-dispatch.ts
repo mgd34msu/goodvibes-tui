@@ -15,6 +15,7 @@ import { createNotificationRouter, type NotificationRouter } from '@pellux/goodv
 import type { Notification, RoutingDecision, RuntimeEventBus, RuntimeEventDomain } from '@/runtime/index.ts';
 import type { ConfigManager } from '../config/index.ts';
 import { getSharedNotificationFeed, type PanelNotificationFeed } from '../panels/notifications-feed.ts';
+import { memoryPressureLine, memoryPressureLevel, type MemoryPressurePayload } from '../core/memory-status.ts';
 
 export interface NotificationDispatcher {
   /** Route a notification; a panel_only (or burst-collapsed) decision lands in the feed. Returns the decision. */
@@ -83,6 +84,33 @@ export function createNotificationDispatcher(
       }
     },
   };
+}
+
+/**
+ * Bridge OPS_MEMORY_PRESSURE specifically into the notification feed as an
+ * attention line. The MemoryGovernor emits this on the 'ops' domain when the
+ * pressure tier changes or the leak tripwire fires; that domain also carries
+ * high-churn audit/metric events, so it is deliberately NOT in
+ * NOTIFICATION_BRIDGE_DOMAINS — this targeted bridge lifts only the
+ * memory-pressure event into notices (critical at the critical tier / on a
+ * tripwire, warning at high), leaving the rest of the ops churn out of the
+ * feed. Returns an unsubscribe function.
+ */
+export function wireMemoryPressureNotice(
+  runtimeBus: RuntimeEventBus,
+  dispatcher: Pick<NotificationDispatcher, 'dispatch'>,
+): () => void {
+  return runtimeBus.onDomain('ops', (envelope) => {
+    if (envelope.type !== 'OPS_MEMORY_PRESSURE') return;
+    const payload = envelope.payload as MemoryPressurePayload;
+    dispatcher.dispatch({
+      id: envelope.traceId ?? `ops-OPS_MEMORY_PRESSURE-${envelope.ts}`,
+      domain: 'ops',
+      level: memoryPressureLevel(payload),
+      title: memoryPressureLine(payload),
+      timestamp: envelope.ts,
+    });
+  });
 }
 
 /**
