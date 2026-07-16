@@ -3,6 +3,7 @@ import { VoiceProviderRegistry, ensureBuiltinVoiceProviders } from '@pellux/good
 import { buildSettingGroups } from '../../input/settings-modal-data.ts';
 import { createTestManagers } from '../helpers/test-managers.ts';
 import { formatCostAttributionSection, type CostAttributionResult } from '../../input/commands/cost-attribution-format.ts';
+import { localVoiceSetupOffer } from '../../input/voice-local-settings.ts';
 
 // ---------------------------------------------------------------------------
 // STEP 5 — voice settings: the voice.local.* keys surface in their domain with
@@ -57,6 +58,37 @@ describe('voice provider selection — local beside elevenlabs (STEP 5)', () => 
     // Empty config → configurable-not-configured, never a thrown error.
     expect(status!.state).toBe('unconfigured');
     expect(status!.configured).toBe(false);
+  });
+});
+
+describe('local-voice setup offer — size-labeled one-act beside ElevenLabs (STEP 5)', () => {
+  test('unprovisioned local voice offers the size-labeled /voice setup one-act', () => {
+    const offer = localVoiceSetupOffer(() => ''); // empty config = unconfigured
+    expect(offer.provisioned).toBe(false);
+    if (offer.supported) {
+      // A managed piper build exists for this platform: the offer declares the
+      // download size up front and points at the one-act install.
+      expect(offer.detail).toContain('run /voice setup');
+      expect(offer.detail).toMatch(/~[\d.]+ [KMG]B/);
+      expect(offer.sizeLabel).toMatch(/~[\d.]+ [KMG]B/);
+      expect(offer.actions).toContain('/voice setup');
+    } else {
+      // No managed build for this platform: honest, never a fabricated offer.
+      expect(offer.detail).toContain('no managed build for this platform');
+      expect(offer.sizeLabel).toBe('unavailable on this platform');
+    }
+  });
+
+  test('a provisioned local engine (tts binary + model set) reads configured, no setup offer', () => {
+    const config: Record<string, string> = {
+      'voice.local.ttsBinary': '/managed/voice/tts/piper',
+      'voice.local.ttsModelPath': '/managed/voice/tts/en_US-amy-medium.onnx',
+    };
+    const offer = localVoiceSetupOffer((key) => config[key] ?? '');
+    expect(offer.provisioned).toBe(true);
+    expect(offer.detail).toContain('configured');
+    expect(offer.detail).not.toContain('run /voice setup');
+    expect(offer.actions).toBe('[Enter] set provider');
   });
 });
 
