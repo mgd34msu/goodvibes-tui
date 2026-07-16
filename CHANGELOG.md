@@ -83,6 +83,35 @@ All notable changes to GoodVibes TUI.
   hand-written unit whose launch binary no longer exists is left exactly as it
   is (no disable, no rename, no replacement unit written over it) with an
   honest note about how to fix it.
+- macOS installs made by the app itself now get every upgrade repair. The
+  in-app service setup registers the daemon under its own LaunchAgent name and
+  file, which the installer previously never looked at: pinned endpoints there
+  survived every upgrade silently, and the upgrade's restart path could kill
+  and orphan a daemon supervised under that name. The installer now handles
+  both LaunchAgent identities, restarts either in place, recognizes
+  product-installed launch files by their launch command when no marker is
+  present, and never stays silent about a launch file that pins the endpoint —
+  it is either regenerated (with a timestamped backup and a receipt) or called
+  out with instructions.
+- Regenerating a recognized service unit always keeps a backup. A unit
+  identified as product-written by its description line may still carry user
+  customizations (proxy environment lines, a different binary path); the prior
+  file is saved as a timestamped backup next to the original, named in the
+  output, before any rewrite.
+- No service unit is replaced unless it is provably platform-managed. The
+  broken-unit replacement path (for units whose launch binary vanished) now
+  checks provenance at every entry point — a hand-written daemon or agent unit
+  is never disabled, renamed, or replaced, even when broken; the installer
+  never writes agent units, so it never replaces one.
+- The upgrade promise is always kept. When the installer defers a daemon
+  restart to the migration step and the migration then declines (for example, a
+  hand-written unit with pinned endpoint flags is in the way), the old unit is
+  restarted in place so the freshly installed binary actually starts serving,
+  with the reason explained.
+- "Not probed" is reported as exactly that. Control-plane status and the
+  listener test no longer show "reachable: no" (or machine-readable false) for
+  an endpoint they deliberately did not probe; the output says it was not
+  probed and why.
 - Status displays never invent a bind address. Every command that shows an
   endpoint (status, doctor, control-plane status, web, listener test, service
   posture, surfaces) now goes through one shared formatter: an unrecognized
