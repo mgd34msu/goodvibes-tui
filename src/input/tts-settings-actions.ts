@@ -2,6 +2,7 @@ import type { ConfigKey } from '@pellux/goodvibes-sdk/platform/config';
 import type { CommandContext } from './command-registry.ts';
 import type { SelectionItem } from './selection-modal.ts';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
+import { localVoiceSetupOffer } from './voice-local-settings.ts';
 
 function getStreamingTtsProviders(ctx: CommandContext): Array<{ id: string; label: string; capabilities: readonly string[] }> {
   const registry = ctx.platform.voiceProviderRegistry;
@@ -28,14 +29,32 @@ export function openTtsProviderPicker(ctx: CommandContext): boolean {
   }
 
   const current = String(ctx.platform.configManager.get('tts.provider') ?? '').trim();
-  const items: SelectionItem[] = providers.map((provider) => ({
-    id: provider.id,
-    label: provider.label,
-    detail: provider.id === current ? `${provider.id}  (current)` : provider.id,
-    category: 'streaming TTS providers',
-    primaryAction: 'select',
-    actions: '[Enter] set provider',
-  }));
+  const items: SelectionItem[] = providers.map((provider) => {
+    // The managed local engine renders beside ElevenLabs; when it is not yet
+    // provisioned, its detail line offers the size-labeled one-act install so
+    // the operator sees the download cost before committing to /voice setup.
+    if (provider.id === 'local') {
+      const offer = localVoiceSetupOffer((key) => ctx.platform.configManager.get(key as Parameters<typeof ctx.platform.configManager.get>[0]));
+      if (!offer.provisioned) {
+        return {
+          id: provider.id,
+          label: provider.label,
+          detail: provider.id === current ? `${offer.detail}  (current)` : offer.detail,
+          category: 'streaming TTS providers',
+          primaryAction: 'select',
+          actions: offer.actions,
+        };
+      }
+    }
+    return {
+      id: provider.id,
+      label: provider.label,
+      detail: provider.id === current ? `${provider.id}  (current)` : provider.id,
+      category: 'streaming TTS providers',
+      primaryAction: 'select',
+      actions: '[Enter] set provider',
+    };
+  });
 
   ctx.openSelection('Choose TTS Provider', items, { preSelectId: current, allowSearch: true }, (result) => {
     if (!result) return;
