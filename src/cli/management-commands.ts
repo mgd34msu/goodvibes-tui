@@ -315,7 +315,8 @@ export interface ControlPlaneStatusResult {
   readonly port: number;
   readonly recognized: boolean;
   readonly posture: ReturnType<typeof classifyBindPosture>;
-  readonly reachable: boolean;
+  /** undefined = NOT PROBED (unrecognized host mode) — a tri-state, never coerced to false. */
+  readonly reachable: boolean | undefined;
   readonly auth: ReturnType<typeof readAuthPaths>;
   readonly service: {
     readonly enabled: unknown;
@@ -329,8 +330,12 @@ export async function buildControlPlaneStatusResult(runtime: CliCommandRuntime):
   const binding = resolveRuntimeEndpointBinding(runtime.configManager, 'controlPlane');
   const enabled = runtime.configManager.get('controlPlane.enabled');
   // Never TCP-probe the fallback endpoint of an unrecognized hostMode — a
-  // probe asserts a binding that does not exist.
-  const reachable = enabled === true && binding.recognized ? await probeTcp(binding.host, binding.port) : false;
+  // probe asserts a binding that does not exist. Not-probed is its own state
+  // (undefined), NEVER coerced to a definite false: a daemon launched with
+  // flag overrides can be serving healthily regardless of the stored mode.
+  const reachable = enabled === true
+    ? (binding.recognized ? await probeTcp(binding.host, binding.port) : undefined)
+    : false;
   const auth = readAuthPaths(runtime);
   const service = {
     enabled: runtime.configManager.get('service.enabled'),
@@ -362,7 +367,7 @@ export function formatControlPlaneStatus(runtime: CliCommandRuntime, value: Cont
     `  enabled: ${yesNo(value.enabled)}`,
     `  bind: ${formatRuntimeEndpointBinding(value)}`,
     `  bind posture: ${value.recognized ? value.posture.label : 'unknown (unrecognized host mode)'}`,
-    `  reachable: ${yesNo(value.reachable)}`,
+    `  reachable: ${value.reachable === undefined ? 'not probed (unrecognized host mode)' : yesNo(value.reachable)}`,
     `  service: enabled=${yesNo(value.service.enabled)} autostart=${yesNo(value.service.autostart)} restartOnFailure=${yesNo(value.service.restartOnFailure)}`,
     `  local auth users: ${value.auth.userStorePresent ? 'present' : 'missing'}`,
     `  bootstrap credential: ${value.auth.bootstrapCredentialPresent ? 'present' : 'missing'}`,
