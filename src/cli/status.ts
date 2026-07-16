@@ -1,8 +1,8 @@
 import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import { resolveDaemonEnabled } from '@pellux/goodvibes-sdk/platform/config';
 import type { OnboardingCheckMarkersState } from '../runtime/onboarding/index.ts';
-import { resolveRuntimeEndpointBinding } from './endpoints.ts';
-import type { RuntimeEndpointId } from './endpoints.ts';
+import { formatRuntimeEndpointBinding, resolveRuntimeEndpointBinding } from './endpoints.ts';
+import type { RuntimeEndpointBinding, RuntimeEndpointId } from './endpoints.ts';
 import { classifyBindPosture, isNetworkFacing } from './network-posture.ts';
 import type { GoodVibesCliOutputFormat } from './types.ts';
 import type { CliServicePosture } from './service-posture.ts';
@@ -165,8 +165,8 @@ function secretPolicyLabel(policy: unknown): string {
   return String(policy ?? 'unknown');
 }
 
-function bindLine(label: string, enabled: unknown, binding: { readonly hostMode: string; readonly host: string; readonly port: number }): string {
-  return `  ${label}: ${yesNo(enabled)} (${binding.hostMode} ${binding.host}:${binding.port})`;
+function bindLine(label: string, enabled: unknown, binding: RuntimeEndpointBinding): string {
+  return `  ${label}: ${yesNo(enabled)} (${formatRuntimeEndpointBinding(binding)})`;
 }
 
 /** Describe registration coverage for the Workspace status section. */
@@ -300,8 +300,8 @@ export function buildCliExposureReport(options: CliStatusOptions): readonly CliE
       id: surface.id,
       label: surface.label,
       enabled,
-      bind: `${binding.hostMode} ${binding.host}:${binding.port}`,
-      reach: classifyBindPosture(binding).label,
+      bind: formatRuntimeEndpointBinding(binding),
+      reach: binding.recognized ? classifyBindPosture(binding).label : 'Unknown (unrecognized host mode)',
       networkFacing,
       authMode: surfaceAuthMode(networkFacing, options.auth),
       originAllowlist: surfaceOriginAllowlist(surface.id, config),
@@ -332,6 +332,27 @@ export function buildCliDoctorFindings(options: CliStatusOptions): readonly CliD
   ].filter(([, enabled, binding]) => isNetworkFacing(enabled, binding as typeof controlPlaneBinding));
 
   const findings: CliDoctorFinding[] = [];
+
+  // An unrecognized hostMode has NO binding the SDK can produce (its bind
+  // resolver has no default case — the daemon throws before binding), so it
+  // is surfaced as a doctor finding on every endpoint that carries one,
+  // instead of the fallback loopback binding being presented as fact.
+  for (const [endpointId, endpointLabel, endpointBinding] of [
+    ['controlPlane', 'control plane', controlPlaneBinding],
+    ['httpListener', 'HTTP listener', httpListenerBinding],
+    ['web', 'web surface', webBinding],
+  ] as const) {
+    if (endpointBinding.recognized) continue;
+    findings.push({
+      id: `unrecognized-host-mode-${endpointId}`,
+      area: 'service',
+      severity: 'warning',
+      summary: `${endpointLabel} hostMode '${endpointBinding.hostMode}' is not a recognized mode.`,
+      cause: `${endpointId}.hostMode is set to '${endpointBinding.hostMode}', but only local|network|custom are recognized.`,
+      impact: 'The daemon cannot resolve a binding for this endpoint and will fail to start it; displays cannot show a real bind address.',
+      action: `Set ${endpointId}.hostMode to local, network, or custom.`,
+    });
+  }
 
   if (serverBackedEnabled && !serviceEnabled) {
     findings.push({

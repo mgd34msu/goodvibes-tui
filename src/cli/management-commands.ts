@@ -10,7 +10,7 @@ import { ensurePublicBaseUrl } from '../core/pairing-origin.ts';
 import { formatPairingOffers, formatPostureCapabilities, pairingPostureNotice } from '../core/pairing-offers.ts';
 import { defaultPairingTokenName } from '../core/pairing-handoff.ts';
 import { stableUrlHostForBindHost } from '../core/stable-host.ts';
-import { resolveRuntimeEndpointBinding } from './endpoints.ts';
+import { formatRuntimeEndpointBinding, resolveRuntimeEndpointBinding } from './endpoints.ts';
 import { classifyBindPosture, isNetworkFacing } from './network-posture.ts';
 import type { CliCommandRuntime } from './types.ts';
 import type { RuntimeServices } from '../runtime/services.ts';
@@ -313,6 +313,7 @@ export interface ControlPlaneStatusResult {
   readonly configuredHost: string;
   readonly host: string;
   readonly port: number;
+  readonly recognized: boolean;
   readonly posture: ReturnType<typeof classifyBindPosture>;
   readonly reachable: boolean;
   readonly auth: ReturnType<typeof readAuthPaths>;
@@ -327,7 +328,9 @@ export interface ControlPlaneStatusResult {
 export async function buildControlPlaneStatusResult(runtime: CliCommandRuntime): Promise<ControlPlaneStatusResult> {
   const binding = resolveRuntimeEndpointBinding(runtime.configManager, 'controlPlane');
   const enabled = runtime.configManager.get('controlPlane.enabled');
-  const reachable = enabled === true ? await probeTcp(binding.host, binding.port) : false;
+  // Never TCP-probe the fallback endpoint of an unrecognized hostMode — a
+  // probe asserts a binding that does not exist.
+  const reachable = enabled === true && binding.recognized ? await probeTcp(binding.host, binding.port) : false;
   const auth = readAuthPaths(runtime);
   const service = {
     enabled: runtime.configManager.get('service.enabled'),
@@ -335,7 +338,8 @@ export async function buildControlPlaneStatusResult(runtime: CliCommandRuntime):
     restartOnFailure: runtime.configManager.get('service.restartOnFailure'),
   };
   const issues: string[] = [];
-  if (enabled === true && !reachable) issues.push(`Control plane is enabled but not reachable on ${binding.host}:${binding.port}.`);
+  if (!binding.recognized) issues.push(`controlPlane.hostMode '${binding.hostMode}' is not a recognized mode (local|network|custom) — the daemon cannot bind until it is corrected.`);
+  if (enabled === true && binding.recognized && !reachable) issues.push(`Control plane is enabled but not reachable on ${binding.host}:${binding.port}.`);
   if (enabled === true && service.enabled !== true) issues.push('Control plane is enabled but service mode is off.');
   if (enabled === true && service.autostart !== true) issues.push('Control plane is enabled but service autostart is off.');
   if (enabled === true && service.restartOnFailure !== true) issues.push('Control plane is enabled but service restart-on-failure is off.');
@@ -356,8 +360,8 @@ export function formatControlPlaneStatus(runtime: CliCommandRuntime, value: Cont
   return formatJsonOrText(runtime.cli)(value, [
     'GoodVibes control-plane status',
     `  enabled: ${yesNo(value.enabled)}`,
-    `  bind: ${value.hostMode} ${value.host}:${value.port}`,
-    `  bind posture: ${value.posture.label}`,
+    `  bind: ${formatRuntimeEndpointBinding(value)}`,
+    `  bind posture: ${value.recognized ? value.posture.label : 'unknown (unrecognized host mode)'}`,
     `  reachable: ${yesNo(value.reachable)}`,
     `  service: enabled=${yesNo(value.service.enabled)} autostart=${yesNo(value.service.autostart)} restartOnFailure=${yesNo(value.service.restartOnFailure)}`,
     `  local auth users: ${value.auth.userStorePresent ? 'present' : 'missing'}`,
@@ -486,7 +490,7 @@ export function renderWeb(runtime: CliCommandRuntime): string {
   return formatJsonOrText(runtime.cli)(value, [
     'GoodVibes web',
     `  enabled: ${yesNo(value.enabled)}`,
-    `  bind: ${value.hostMode} ${value.host}:${value.port}`,
+    `  bind: ${formatRuntimeEndpointBinding(value)}`,
     `  url: ${value.url}`,
     ...(runtime.cli.flags.open ? [`  open: ${openBrowser(value.url)}`] : []),
   ].join('\n'));

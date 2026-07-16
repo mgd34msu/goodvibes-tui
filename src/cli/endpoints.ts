@@ -48,6 +48,20 @@ export interface RuntimeEndpointBinding {
   readonly recognized: boolean;
 }
 
+/**
+ * THE one display seam for endpoint bindings: every surface that renders a
+ * binding as text goes through this, so no surface can present the resolver's
+ * loopback fallback as a definite bind for a hostMode the SDK cannot handle
+ * (its bind resolver has no default case — the daemon throws before binding).
+ * The recognized case renders the familiar `<mode> <host>:<port>`.
+ */
+export function formatRuntimeEndpointBinding(binding: RuntimeEndpointBinding): string {
+  if (binding.recognized) {
+    return `${binding.hostMode} ${binding.host}:${binding.port}`;
+  }
+  return `'${binding.hostMode}' — not a recognized host mode (expected local|network|custom); the daemon cannot bind this endpoint until it is corrected`;
+}
+
 export function hostModeForHostname(hostname: string): RuntimeHostMode {
   const normalized = hostname.toLowerCase();
   if (normalized === '0.0.0.0' || normalized === '::') return 'network';

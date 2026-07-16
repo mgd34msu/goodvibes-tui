@@ -181,6 +181,30 @@ describe('CLI status and doctor output', () => {
 });
 
 describe('CLI exposure report', () => {
+  test("an unrecognized hostMode ('LAN') is never presented as a definite loopback binding — bind row warns, reach is unknown, doctor flags it", () => {
+    // Pins the verifier's probe: a hand-edited controlPlane.hostMode 'LAN'
+    // used to render bind 'LAN 127.0.0.1:3421' with reach 'Local only' —
+    // asserting the resolver's fallback as fact for a config the SDK cannot
+    // bind at all (its resolver has no default case; the daemon throws
+    // before binding). Every display surface now routes through the one
+    // formatter seam.
+    const options = makeOptions({ 'controlPlane.hostMode': 'LAN' });
+
+    const report = buildCliExposureReport(options);
+    const controlPlane = report.find((surface) => surface.id === 'controlPlane');
+    expect(controlPlane?.bind).toContain('not a recognized host mode');
+    expect(controlPlane?.bind).not.toBe('LAN 127.0.0.1:3421');
+    expect(controlPlane?.reach).toContain('Unknown');
+
+    const findings = buildCliDoctorFindings(options);
+    const finding = findings.find((f) => f.id === 'unrecognized-host-mode-controlPlane');
+    expect(finding).toBeDefined();
+    expect(finding?.summary).toContain("'LAN'");
+    expect(finding?.action).toContain('local, network, or custom');
+    // The recognized surfaces stay clean.
+    expect(findings.some((f) => f.id === 'unrecognized-host-mode-web')).toBe(false);
+  });
+
   test('reports bind, auth mode, and origin allowlist per surface', () => {
     const report = buildCliExposureReport(makeOptions({
       'controlPlane.enabled': true,
