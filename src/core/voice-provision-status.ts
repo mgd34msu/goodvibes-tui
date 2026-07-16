@@ -77,12 +77,17 @@ export function voiceStatusLines(status: VoiceRuntimeStatusResult): string[] {
     lines.push(`  tts (${tts.engine}): not installed${have.length ? ` (have ${have.join(' + ')})` : ''}`);
   }
 
-  // STT — whisper, hosted only where a pinned bundle is published.
+  // STT — whisper, hosted only where a pinned bundle is published. Render the
+  // REAL state honestly: a platform with no pinned build (supported === false,
+  // or state 'unsupported-platform' — every platform except linux-x64 today)
+  // reads "unsupported on this platform"; a platform whose bundle is pinned but
+  // not yet hosted (supported === true, unprovisioned, with a reason) reads
+  // "not yet published for this platform".
   const stt = status.stt;
   if (stt.binaryPresent && stt.modelPresent) {
     lines.push(`  stt (${stt.engine}): installed`);
-  } else if (!stt.supported) {
-    lines.push(`  stt (${stt.engine}): not yet published for this platform`);
+  } else if (!stt.supported || stt.state === 'unsupported-platform') {
+    lines.push(`  stt (${stt.engine}): unsupported on this platform`);
     if (stt.reason) lines.push(`    ${stt.reason}`);
   } else if (isSttPinnedButUnpublished(status)) {
     lines.push(`  stt (${stt.engine}): not yet published for this platform`);
