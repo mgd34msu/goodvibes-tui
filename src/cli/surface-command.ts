@@ -6,7 +6,7 @@ import {
   resolveGoodVibesNtfyTopics,
 } from '@pellux/goodvibes-sdk/platform/integrations';
 import { enableFeatureFlags, getMissingSurfaceFeatureFlags, getServerSurfaceFeatureFlags, surfaceFeatureGateSettingsKeys } from '../runtime/surface-feature-flags.ts';
-import { resolveRuntimeEndpointBinding } from './endpoints.ts';
+import { formatRuntimeEndpointBinding, resolveRuntimeEndpointBinding } from './endpoints.ts';
 import { classifyBindPosture, isNetworkFacing } from './network-posture.ts';
 import type { CliCommandRuntime } from './types.ts';
 import {
@@ -103,9 +103,9 @@ export async function handleSurfacesCommand(runtime: CliCommandRuntime): Promise
   const shouldProbeListener = includeProbe && (!target || targetExternalSurface);
   const [controlPlaneReachable, webReachable, listenerReachable] = includeProbe
     ? await Promise.all([
-      shouldProbeControlPlane ? probeTcp(controlPlane.host, controlPlane.port) : Promise.resolve(undefined),
-      shouldProbeWeb ? probeTcp(web.host, web.port) : Promise.resolve(undefined),
-      shouldProbeListener ? probeTcp(httpListener.host, httpListener.port) : Promise.resolve(undefined),
+      shouldProbeControlPlane && controlPlane.recognized ? probeTcp(controlPlane.host, controlPlane.port) : Promise.resolve(undefined),
+      shouldProbeWeb && web.recognized ? probeTcp(web.host, web.port) : Promise.resolve(undefined),
+      shouldProbeListener && httpListener.recognized ? probeTcp(httpListener.host, httpListener.port) : Promise.resolve(undefined),
     ])
     : [undefined, undefined, undefined];
   const externalSurfaces = SURFACE_CONFIGS.map(([id, label, requiredKeys]) => {
@@ -129,13 +129,18 @@ export async function handleSurfacesCommand(runtime: CliCommandRuntime): Promise
     remoteTopic: String(config.get('surfaces.ntfy.remoteTopic' as ConfigKey) || GOODVIBES_NTFY_REMOTE_TOPIC),
   });
   const readinessIssues: string[] = [];
-  if (shouldProbeControlPlane && config.get('controlPlane.enabled') === true && !controlPlaneReachable) {
+  for (const [endpointLabel, endpointBinding] of [['controlPlane', controlPlane], ['web', web], ['httpListener', httpListener]] as const) {
+    if (!endpointBinding.recognized) {
+      readinessIssues.push(`${endpointLabel}.hostMode '${endpointBinding.hostMode}' is not a recognized mode (local|network|custom) — the daemon cannot bind this endpoint until it is corrected.`);
+    }
+  }
+  if (shouldProbeControlPlane && controlPlane.recognized && config.get('controlPlane.enabled') === true && !controlPlaneReachable) {
     readinessIssues.push(`Control plane is enabled but not reachable on ${controlPlane.host}:${controlPlane.port}.`);
   }
-  if (shouldProbeWeb && config.get('web.enabled') === true && !webReachable) {
+  if (shouldProbeWeb && web.recognized && config.get('web.enabled') === true && !webReachable) {
     readinessIssues.push(`Web surface is enabled but not reachable on ${web.host}:${web.port}.`);
   }
-  if (shouldProbeListener && config.get('danger.httpListener') === true && !listenerReachable) {
+  if (shouldProbeListener && httpListener.recognized && config.get('danger.httpListener') === true && !listenerReachable) {
     readinessIssues.push(`HTTP listener is enabled but not reachable on ${httpListener.host}:${httpListener.port}.`);
   }
   for (const surface of filteredSurfaces) {
@@ -157,6 +162,7 @@ export async function handleSurfacesCommand(runtime: CliCommandRuntime): Promise
       configuredHost: controlPlane.configuredHost,
       host: controlPlane.host,
       port: controlPlane.port,
+      recognized: controlPlane.recognized,
       reachable: controlPlaneReachable,
     },
     web: {
@@ -165,6 +171,7 @@ export async function handleSurfacesCommand(runtime: CliCommandRuntime): Promise
       configuredHost: web.configuredHost,
       host: web.host,
       port: web.port,
+      recognized: web.recognized,
       reachable: webReachable,
     },
     httpListener: {
@@ -173,6 +180,7 @@ export async function handleSurfacesCommand(runtime: CliCommandRuntime): Promise
       configuredHost: httpListener.configuredHost,
       host: httpListener.host,
       port: httpListener.port,
+      recognized: httpListener.recognized,
       reachable: listenerReachable,
     },
     surfaces: filteredSurfaces,
@@ -180,9 +188,9 @@ export async function handleSurfacesCommand(runtime: CliCommandRuntime): Promise
   };
   const output = formatJsonOrText(runtime.cli)(value, [
     'GoodVibes surfaces',
-    `  control-plane: ${yesNo(value.controlPlane.enabled)} (${value.controlPlane.hostMode} ${value.controlPlane.host}:${value.controlPlane.port})${includeProbe ? ` reachable=${yesNo(value.controlPlane.reachable)}` : ''}`,
-    `  web: ${yesNo(value.web.enabled)} (${value.web.hostMode} ${value.web.host}:${value.web.port})${includeProbe ? ` reachable=${yesNo(value.web.reachable)}` : ''}`,
-    `  http-listener: ${yesNo(value.httpListener.enabled)} (${value.httpListener.hostMode} ${value.httpListener.host}:${value.httpListener.port})${includeProbe ? ` reachable=${yesNo(value.httpListener.reachable)}` : ''}`,
+    `  control-plane: ${yesNo(value.controlPlane.enabled)} (${formatRuntimeEndpointBinding(value.controlPlane)})${includeProbe && value.controlPlane.reachable !== undefined ? ` reachable=${yesNo(value.controlPlane.reachable)}` : ''}`,
+    `  web: ${yesNo(value.web.enabled)} (${formatRuntimeEndpointBinding(value.web)})${includeProbe && value.web.reachable !== undefined ? ` reachable=${yesNo(value.web.reachable)}` : ''}`,
+    `  http-listener: ${yesNo(value.httpListener.enabled)} (${formatRuntimeEndpointBinding(value.httpListener)})${includeProbe && value.httpListener.reachable !== undefined ? ` reachable=${yesNo(value.httpListener.reachable)}` : ''}`,
     '',
     'External surfaces:',
     ...value.surfaces.map((surface) => `  ${surface.label.padEnd(16)} enabled=${yesNo(surface.enabled)} ready=${yesNo(surface.ready)}${surface.enabled && surface.missing.length > 0 ? ` missing=${surface.missing.join(',')}` : ''}${surface.enabled && surface.missingFeatureFlags.length > 0 ? ` settingsOff=${surfaceFeatureGateSettingsKeys(surface.missingFeatureFlags).join(',')}` : ''}`),
@@ -208,6 +216,7 @@ export interface ListenerTestResult {
   readonly configuredHost: string;
   readonly host: string;
   readonly port: number;
+  readonly recognized: boolean;
   readonly posture: ReturnType<typeof classifyBindPosture>;
   readonly reachable: boolean;
   readonly service: {
@@ -231,7 +240,7 @@ export async function buildListenerTestResult(runtime: CliCommandRuntime): Promi
   const enabled = runtime.configManager.get('danger.httpListener');
   const binding = resolveRuntimeEndpointBinding(runtime.configManager, 'httpListener');
   const posture = classifyBindPosture(binding);
-  const reachable = enabled === true ? await probeTcp(binding.host, binding.port) : false;
+  const reachable = enabled === true && binding.recognized ? await probeTcp(binding.host, binding.port) : false;
   const auth = readAuthPaths(runtime);
   const service = {
     enabled: runtime.configManager.get('service.enabled'),
@@ -252,6 +261,7 @@ export async function buildListenerTestResult(runtime: CliCommandRuntime): Promi
     };
   }).filter((surface) => surface.enabled === true);
   const issues: string[] = [];
+  if (!binding.recognized) issues.push(`httpListener.hostMode '${binding.hostMode}' is not a recognized mode (local|network|custom) — the daemon cannot bind until it is corrected.`);
   if (enabled !== true) issues.push('HTTP listener is disabled.');
   if (enabled === true && service.enabled !== true) issues.push('HTTP listener is enabled but service mode is off.');
   if (enabled === true && service.autostart !== true) issues.push('HTTP listener is enabled but service autostart is off.');
@@ -269,8 +279,8 @@ export function formatListenerTestResult(runtime: CliCommandRuntime, value: List
   return formatJsonOrText(runtime.cli)(value, [
     'GoodVibes listener test',
     `  enabled: ${yesNo(value.enabled)}`,
-    `  endpoint: ${value.hostMode} ${value.host}:${value.port}`,
-    `  bind posture: ${value.posture.label}`,
+    `  endpoint: ${formatRuntimeEndpointBinding(value)}`,
+    `  bind posture: ${value.recognized ? value.posture.label : 'unknown (unrecognized host mode)'}`,
     `  reachable: ${yesNo(value.reachable)}`,
     `  service: enabled=${yesNo(value.service.enabled)} autostart=${yesNo(value.service.autostart)} restartOnFailure=${yesNo(value.service.restartOnFailure)}`,
     `  local auth users: ${value.auth.userStorePresent ? 'present' : 'missing'}`,

@@ -7,7 +7,7 @@ import { PlatformServiceManager } from '@pellux/goodvibes-sdk/platform/daemon';
 import type { ManagedServiceStatus } from '@pellux/goodvibes-sdk/platform/daemon';
 import { resolveDaemonEnabled } from '@pellux/goodvibes-sdk/platform/config';
 import type { ConfigManager } from '../config/index.ts';
-import { resolveRuntimeEndpointBinding } from './endpoints.ts';
+import { formatRuntimeEndpointBinding, resolveRuntimeEndpointBinding } from './endpoints.ts';
 import type { RuntimeEndpointBinding, RuntimeEndpointId } from './endpoints.ts';
 import { classifyBindPosture, isNetworkFacing } from './network-posture.ts';
 import { redactText } from './redaction.ts';
@@ -395,7 +395,9 @@ export async function buildCliServicePosture(
       binding,
       bindPosture: classifyBindPosture(binding),
       networkFacing: isNetworkFacing(enabled, binding),
-      ...(options.probe && enabled ? { reachable: await probeTcp(binding.host, binding.port) } : {}),
+      // Never TCP-probe the fallback endpoint of an unrecognized hostMode —
+      // a probe asserts a binding that does not exist.
+      ...(options.probe && enabled && binding.recognized ? { reachable: await probeTcp(binding.host, binding.port) } : {}),
     };
   }));
 
@@ -485,7 +487,7 @@ export function formatCliServicePosture(posture: CliServicePosture, json = false
     '',
     'Endpoints:',
     ...posture.endpoints.map((endpoint) =>
-      `  ${endpoint.label}: enabled=${yesNo(endpoint.enabled)} ${endpoint.binding.hostMode} ${endpoint.binding.host}:${endpoint.binding.port} posture=${endpoint.bindPosture.label}${endpoint.reachable === undefined ? '' : ` reachable=${yesNo(endpoint.reachable)}`}`,
+      `  ${endpoint.label}: enabled=${yesNo(endpoint.enabled)} ${formatRuntimeEndpointBinding(endpoint.binding)} posture=${endpoint.binding.recognized ? endpoint.bindPosture.label : 'unknown'}${endpoint.reachable === undefined ? '' : ` reachable=${yesNo(endpoint.reachable)}`}`,
     ),
     '',
     posture.issues.length === 0 ? 'Readiness: ready' : 'Readiness: needs attention',
