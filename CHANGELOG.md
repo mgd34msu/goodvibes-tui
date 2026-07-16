@@ -4,6 +4,11 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [1.19.1] — 2026-07-16
+
+### Changes
+- 7e97ce37 deps: adopt SDK 1.10.1 and consume the exported voice-setup composer
+
 ## [1.19.0] — 2026-07-16
 
 ### Changes
