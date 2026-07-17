@@ -37,13 +37,13 @@ import { pruneStaleOperatorTokens } from '@pellux/goodvibes-sdk/platform/pairing
 import { resolveDaemonCompanionToken, workspaceOperatorTokenCandidates } from './operator-token-cleanup.ts';
 import type { UiRuntimeServices } from './ui-services.ts';
 import { initializeBootstrapCore } from './bootstrap-core.ts';
-import { ensureConfiguredModelIsRoutable } from './provider-fallback.ts';
+import { ensureBootModelResolvable } from './provider-fallback.ts';
 import { createBootstrapShell } from './bootstrap-shell.ts';
 import { announceResumeState } from './resume-notice.ts';
 import { announceInstallSelfCheck } from './install-self-check-startup.ts';
 import { buildSharedOrchestratorCoreServices, refreshMemoryRecallSnapshot } from './orchestrator-core-services.ts';
 import { consumeDaemonAttachNotices, consumeExternalDaemonAttachNotices } from './daemon-attach-notices.ts';
-import { createContextAccountingSource } from './context-accounting-source.ts';
+import { wireContextAccountingSource } from './context-accounting-source.ts';
 import { createEmbeddedServiceFactories } from './embedded-service-factories.ts';
 import { buildRelayExternalServiceMethods } from './relay-reachability-bridge.ts';
 import { startMcpConfigAutoReload } from '../mcp/runtime-reload.ts';
@@ -195,30 +195,8 @@ export async function bootstrapRuntime(
     panelManager,
     pluginManager,
   } = services;
-
-  // Custom providers register asynchronously (services.ts fires
-  // initCustomProviders() without awaiting), while everything below resolves
-  // the current model synchronously. Without this await, a saved
-  // provider.model that points at a custom provider throws "not in registry"
-  // before the first frame renders. The routability guard must re-run here:
-  // its services-composition pass bails when the provider itself isn't
-  // registered yet, which is exactly the custom-provider case.
-  await providerRegistry.ready();
-  ensureConfiguredModelIsRoutable(providerRegistry, configManager);
-  try {
-    providerRegistry.getCurrentModel();
-  } catch (err) {
-    // The configured provider no longer exists at all (e.g. its provider file
-    // was deleted). Booting on a real selectable model with a warning beats
-    // dying before the UI exists.
-    const configured = String(configManager.get('provider.model') ?? '');
-    const replacement = providerRegistry.getSelectableModels()[0]?.registryKey;
-    if (!replacement) throw err;
-    providerRegistry.setCurrentModel(replacement);
-    configManager.set('provider.model', replacement);
-    logger.warn(`[bootstrap] Configured model '${configured}' is not resolvable (its provider is not registered); switched to '${replacement}'.`);
-  }
-
+  // A saved custom-provider model must never crash boot — see provider-fallback.ts.
+  await ensureBootModelResolvable(providerRegistry, configManager);
   // A liveness flip is only PAINTED once something calls requestRender(); without
   // this, the footer's spine segment sat correct-but-undrawn until incidental activity redrew it (minutes, during an idle stretch).
   sessionUnionCache.setOnTransition(() => requestRender());
@@ -272,11 +250,9 @@ export async function bootstrapRuntime(
   conversation.setSessionLineageTracker(services.sessionLineageTracker);
 
   // Bind context_accounting's session source to the live Orchestrator (see context-accounting-source.ts).
-  const contextAccountingSourceHandle = createContextAccountingSource({
+  wireContextAccountingSource({
     orchestrator, providerRegistry, sessionLineageTracker: services.sessionLineageTracker, runtimeBus, sessionId: runtime.sessionId,
-  });
-  services.contextAccountingHolder.setSource(contextAccountingSourceHandle.source);
-  bootstrapUnsubs.push(contextAccountingSourceHandle.dispose);
+  }, services.contextAccountingHolder, bootstrapUnsubs);
 
   const acpManager = new AcpManager({
     requestPermission: (request) => permissionPromptRef.requestPermission(request),

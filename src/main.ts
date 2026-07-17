@@ -45,7 +45,7 @@ import { deriveComposerState } from './core/composer-state.ts';
 import { buildPersistedSessionContext, getReturnContextMode, maybeAssistReturnContextSummary } from '@/runtime/index.ts';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 import { prepareShellCliRuntime } from './cli/entrypoint.ts';
-import { applyInitialTuiCliState } from './cli/tui-startup.ts';
+import { applyInitialTuiCliState, reportFatalStartupError } from './cli/tui-startup.ts';
 import { applyConfiguredHitlMode, applyRuntimeConfigValue, applyTuiRuntimeConfigDefaults } from './cli/config-overrides.ts';
 import { renderToolCallBlock } from './renderer/tool-call.ts';
 import { wireSpokenTurnRuntime } from './audio/spoken-turn-wiring.ts';
@@ -797,14 +797,4 @@ async function main() {
 
 }
 
-main().catch((err: unknown) => {
-  // A bare Error JSON-serializes to {} in structured logs, and background
-  // timers keep the process alive after a boot failure — the historical
-  // result was a blank screen and a useless `Fatal error {"error": {}}` log
-  // line. Log real fields, tell the user what broke, and exit.
-  const message = err instanceof Error ? err.message : String(err);
-  const stack = err instanceof Error ? err.stack : undefined;
-  logger.error('Fatal error', { message, ...(stack ? { stack } : {}) });
-  process.stderr.write(`goodvibes failed to start: ${message}\n${stack ? `${stack}\n` : ''}`);
-  process.exit(1);
-});
+main().catch(reportFatalStartupError);

@@ -101,3 +101,17 @@ export function createContextAccountingSource(deps: ContextAccountingSourceDeps)
     dispose: () => { for (const unsub of unsubs) unsub(); },
   };
 }
+
+/**
+ * Create the source, install it on the holder, and register its dispose on
+ * the caller's unsubscribe list — the one-call bootstrap wiring.
+ */
+export function wireContextAccountingSource(
+  deps: ContextAccountingSourceDeps,
+  holder: { setSource: (source: ContextAccountingSourceHandle['source']) => void },
+  unsubs: Array<() => void>,
+): void {
+  const handle = createContextAccountingSource(deps);
+  holder.setSource(handle.source);
+  unsubs.push(handle.dispose);
+}

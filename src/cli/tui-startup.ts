@@ -5,6 +5,7 @@ import type { WorkspaceRegistrationManager } from '../runtime/trust/workspace-re
 import { hasResumableWizardProgress, readOnboardingCheckMarker, readWizardProgress } from '../runtime/onboarding/index.ts';
 import { startOnboardingFastPath } from '../runtime/onboarding/fast-path.ts';
 import { readLastSessionPointer } from '@/runtime/index.ts';
+import { logger } from '@pellux/goodvibes-sdk/platform/utils';
 import type { GoodVibesCliParseResult } from './types.ts';
 
 export type TuiStartupShellPaths = Parameters<typeof readOnboardingCheckMarker>[0] & {
@@ -172,4 +173,29 @@ export function applyInitialTuiCliState(options: {
     // trust (if still undecided) is asked at the first non-read tool
     // request, not here — see main.ts's trustPromptRef wiring.
   }
+}
+
+/**
+ * reportFatalStartupError — the main() catch handler. A bare Error
+ * JSON-serializes to {} in structured logs, and background timers keep the
+ * process alive after a boot failure — the historical result was a blank
+ * screen and a useless `Fatal error {"error": {}}` log line. Log real
+ * fields, tell the user what broke, and exit. Both writes are individually
+ * best-effort — a failing logger or torn-down stderr must never hide the
+ * original launch failure.
+ */
+export function reportFatalStartupError(err: unknown): void {
+  const message = err instanceof Error ? err.message : String(err);
+  const stack = err instanceof Error ? err.stack : undefined;
+  try {
+    logger.error('Fatal error', { message, ...(stack ? { stack } : {}) });
+  } catch {
+    // Startup diagnostics must never hide the original launch failure.
+  }
+  try {
+    process.stderr.write(`goodvibes failed to start: ${message}\n${stack ? `${stack}\n` : ''}`);
+  } catch {
+    // Ignore secondary stderr failures during process teardown.
+  }
+  process.exit(1);
 }
