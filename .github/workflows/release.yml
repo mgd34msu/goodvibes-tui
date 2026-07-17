@@ -1,10 +1,16 @@
 name: Release
 
+# By-reference release (see goodvibes-cicd-design). The tagged commit's push-CI
+# run is verified per-job green (reusable-release-verify) instead of re-running
+# gates; then the binary matrix, GH release, and the exact publish topology
+# (platform packages before the main package; GH Release before either
+# registry; npmjs then a rescoped GitHub Packages mirror) run in order.
+
 on:
   workflow_dispatch:
     inputs:
       ref:
-        description: "Git ref to release (branch for dry run or tag for full release)"
+        description: "Git ref to dry-run (branch for a dry build, tag for a full release preview)"
         required: false
         default: "main"
   push:
@@ -13,15 +19,55 @@ on:
 
 concurrency:
   group: tui-release-${{ github.event.inputs.ref || github.ref_name || github.run_id }}
+  # Never cancel an in-progress release — a half-published release is worse than
+  # a duplicate run (publishes are idempotent).
   cancel-in-progress: false
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  validate-release:
+  # ── By-reference validation (push/tag only). Replaces the serialized
+  #    validate-release re-run: verify the tagged commit's push-CI run was
+  #    per-job green. ──────────────────────────────────────────────────────
+  release-verify:
+    if: github.event_name == 'push'
+    uses: mgd34msu/goodvibes-sdk/.github/workflows/reusable-release-verify.yml@main
+    with:
+      sha: ${{ github.sha }}
+      workflow: ci.yml
+      event: push
+      toolchain-source: registry
+      bun-version: "1.3.14"
+    secrets:
+      token: ${{ secrets.GITHUB_TOKEN }}
+
+  # ── 4-target binary matrix (necessary builds only). On a tag push it gates on
+  #    release-verify; on a manual dispatch it builds for dry validation. The
+  #    linux-x64 leg runs the toolchain banner smoke; the daemon HTTP smoke and
+  #    the native-arm64 smoke are TUI-specific jobs below. ───────────────────
+  binaries:
+    needs: [release-verify]
+    if: ${{ always() && (github.event_name == 'workflow_dispatch' || needs.release-verify.result == 'success') }}
+    uses: mgd34msu/goodvibes-sdk/.github/workflows/reusable-binary-matrix.yml@main
+    with:
+      targets: >-
+        [{"key":"linux-x64","runner":"ubuntu-latest","smoke":true},
+         {"key":"linux-arm64","runner":"ubuntu-latest","smoke":false},
+         {"key":"darwin-x64","runner":"ubuntu-latest","smoke":false},
+         {"key":"darwin-arm64","runner":"ubuntu-latest","smoke":false}]
+      artifact-prefix: binaries
+      artifact-glob: |
+        dist/goodvibes-*
+        dist/lib
+      bun-version: "1.3.14"
+
+  # ── TUI-specific daemon HTTP smoke on linux-x64 (no toolchain equivalent). ─
+  daemon-smoke:
+    needs: binaries
+    if: ${{ always() && needs.binaries.result == 'success' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 15
     steps:
       - name: Checkout
         uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
@@ -29,114 +75,48 @@ jobs:
           ref: ${{ github.event.inputs.ref || github.ref }}
       - name: Setup
         uses: ./.github/actions/setup
-      - name: Configure git for tests
-        run: |
-          git config --global user.name "CI"
-          git config --global user.email "ci@test.com"
-      - name: Typecheck
-        run: bun x tsc --noEmit --pretty false
-      - name: Tests
-        run: bun run test
-      - name: Coverage gate
-        run: bun run test:coverage
-      - name: Architecture check
-        run: bun run architecture:check
-      - name: Workflow structure check
-        run: bun run workflows:check
-      - name: Performance check
-        run: bun run perf:check
-      - name: Eval gate
-        run: bun run eval:gate
-      - name: Foundation artifacts
-        run: bun run foundation:artifacts
-      - name: Build
-        run: bun run build
-      - name: Publish package check
-        run: bun run publish:check
-        env:
-          GOODVIBES_SKIP_NPM_AUTH_CHECK: "1"
-      - name: Live verifier (warn-only)
-        # Runs verification ledger and home-audit checks without a compiled binary
-        # (binary is built in the subsequent build job). Binary-presence and CLI
-        # command checks will record a skip/fail that is absorbed by continue-on-error.
-        # Daemon HTTP checks skip automatically when no bearer token is available.
-        # This step never blocks the release; failures annotate the step summary only.
-        continue-on-error: true
-        run: |
-          if bun run verification:live --out /tmp/live-verify-report 2>/tmp/live-verify-err; then
-            echo "Live verifier: PASS" >> "$GITHUB_STEP_SUMMARY"
-          else
-            echo "Live verifier: WARN (non-blocking)" >> "$GITHUB_STEP_SUMMARY"
-          fi
-          if [ -f /tmp/live-verify-report/live-verification.md ]; then
-            echo "" >> "$GITHUB_STEP_SUMMARY"
-            echo "## Live Verifier Report" >> "$GITHUB_STEP_SUMMARY"
-            cat /tmp/live-verify-report/live-verification.md >> "$GITHUB_STEP_SUMMARY"
-          fi
-
-  build:
-    name: Build ${{ matrix.target }}
-    needs: validate-release
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - target: linux-x64
-            bun_target: bun-linux-x64
-            app_artifact: goodvibes-linux-x64
-            daemon_artifact: goodvibes-daemon-linux-x64
-          - target: linux-arm64
-            bun_target: bun-linux-arm64
-            app_artifact: goodvibes-linux-arm64
-            daemon_artifact: goodvibes-daemon-linux-arm64
-          - target: darwin-x64
-            bun_target: bun-darwin-x64
-            app_artifact: goodvibes-macos-x64
-            daemon_artifact: goodvibes-daemon-macos-x64
-          - target: darwin-arm64
-            bun_target: bun-darwin-arm64
-            app_artifact: goodvibes-macos-arm64
-            daemon_artifact: goodvibes-daemon-macos-arm64
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
+      - name: Download linux-x64 binaries
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          ref: ${{ github.event.inputs.ref || github.ref }}
-      - name: Setup
-        uses: ./.github/actions/setup
-      - name: Build binary (${{ matrix.target }})
-        # Delegates to scripts/build.ts which runs prebuild, applies
-        # native-addon externalization (F5), copies native addons, and
-        # builds both TUI and daemon binaries for the given target.
-        run: bun run scripts/build.ts --target ${{ matrix.target }}
-      - name: Report binary size
-        run: ls -lh dist/${{ matrix.app_artifact }} dist/${{ matrix.daemon_artifact }}
-      - name: TUI binary smoke test (linux-x64 only)
-        # linux-arm64: QEMU cannot reliably exec a compiled Bun binary; the
-        # linux-arm64 binary is structurally validated by the install-smoke job
-        # (npm pack + install + version-print). Intentional, not a gap.
-        if: matrix.target == 'linux-x64'
-        run: bun run smoke:tui
-      - name: Post-build smoke test (linux-x64 only)
-        if: matrix.target == 'linux-x64'
+          name: binaries-linux-x64
+          path: dist/
+      - name: Restore executable bit
+        run: chmod +x dist/goodvibes-linux-x64 dist/goodvibes-daemon-linux-x64
+      - name: Daemon HTTP smoke (linux-x64)
         run: bun run smoke:daemon
-      - name: Upload artifact
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: ${{ matrix.target }}-binaries
-          path: |
-            dist/${{ matrix.app_artifact }}
-            dist/${{ matrix.daemon_artifact }}
-            dist/lib/
-          retention-days: 1
 
+  # ── TUI-specific native-arm64 smoke (banner + daemon HTTP) on macos-14. ────
+  smoke-macos:
+    needs: binaries
+    if: ${{ always() && needs.binaries.result == 'success' }}
+    runs-on: macos-14
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
+        with:
+          ref: ${{ github.event.inputs.ref || github.ref }}
+      - name: Setup
+        uses: ./.github/actions/setup
+      - name: Download darwin-arm64 binaries
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: binaries-darwin-arm64
+          path: dist/
+      - name: Restore executable bit
+        run: chmod +x dist/goodvibes-macos-arm64 dist/goodvibes-daemon-macos-arm64
+      - name: TUI banner smoke (macos-arm64)
+        run: bun run smoke:tui --binary dist/goodvibes-macos-arm64
+      - name: Daemon HTTP smoke (macos-arm64)
+        run: bun run smoke:daemon
+
+  # ── TUI-specific npm-install smoke (push/tag only). ──────────────────────
   install-smoke:
     name: npm install smoke
-    if: github.event_name == 'push' || startsWith(github.event.inputs.ref, 'v') || startsWith(github.event.inputs.ref, 'refs/tags/v')
-    needs: build
+    needs: binaries
+    if: ${{ always() && needs.binaries.result == 'success' && (github.event_name == 'push' || startsWith(github.event.inputs.ref, 'v') || startsWith(github.event.inputs.ref, 'refs/tags/v')) }}
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - name: Checkout
         uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
@@ -179,58 +159,22 @@ jobs:
           test "$(node_modules/.bin/goodvibes --version)" = "goodvibes ${VERSION}"
           test "$(node_modules/.bin/goodvibes-daemon --version)" = "goodvibes-daemon ${VERSION}"
 
-  smoke-macos:
-    name: Binary smoke (macos-arm64)
-    # macos-14 runners are arm64 — can natively execute darwin-arm64 compiled Bun binaries.
-    # linux-arm64 strategy: QEMU cannot reliably exec a compiled Bun binary that
-    # starts an HTTP daemon and polls it. The linux-arm64 binary is structurally
-    # validated by the install-smoke job (npm pack + install + --version assertion).
-    # This is an intentional, documented choice — not a silent gap.
-    needs: build
-    runs-on: macos-14
+  # ── Stage flat release assets (push/tag only): merge all target artifacts,
+  #    flatten each platform's sqlite-vec addon to an installer-parseable name,
+  #    and hand the 8 binaries + 4 addons to the reusable GH-release as one
+  #    artifact. A missing addon is fatal. ────────────────────────────────────
+  stage-release-assets:
+    needs: [binaries, install-smoke, smoke-macos, daemon-smoke]
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - name: Checkout
-        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
-        with:
-          ref: ${{ github.event.inputs.ref || github.ref }}
-      - name: Setup
-        uses: ./.github/actions/setup
-      - name: Download darwin-arm64 artifact
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          name: darwin-arm64-binaries
-          path: dist/
-      - name: Mark binaries executable
-        run: chmod +x dist/goodvibes-macos-arm64 dist/goodvibes-daemon-macos-arm64
-      - name: TUI binary smoke (macos-arm64)
-        run: bun run smoke:tui
-      - name: Daemon binary smoke (macos-arm64)
-        run: bun run smoke:daemon
-
-  release:
-    name: Create GitHub Release
-    if: github.event_name == 'push' || startsWith(github.event.inputs.ref, 'v') || startsWith(github.event.inputs.ref, 'refs/tags/v')
-    needs: [build, install-smoke, smoke-macos]
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
-        with:
-          fetch-depth: 0
-      - name: Download all artifacts
+      - name: Download all target artifacts
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           path: dist/
           merge-multiple: true
-      - name: Stage sqlite-vec addons as flat release assets
-        # The per-target build (scripts/build.ts) copied each platform's
-        # sqlite-vec native addon into dist/lib/sqlite-vec-<os>-<arch>/vec0.<suffix>;
-        # the artifact download merged all four platforms' lib/ trees together.
-        # Flatten them to installer-parseable asset names (sqlite-vec-<os>-<arch>.<suffix>).
-        # Every platform's addon MUST be present — a missing one would silently
-        # ship a binary that loses semantic vector search, which is exactly the
-        # regression this asset closes, so a missing file is fatal here.
+      - name: Flatten sqlite-vec addons as flat release assets
         run: |
           set -eu
           cd dist
@@ -248,85 +192,42 @@ jobs:
           stage sqlite-vec-linux-arm64 so
           stage sqlite-vec-darwin-x64 dylib
           stage sqlite-vec-darwin-arm64 dylib
-      - name: Generate release checksums
-        run: |
-          cd dist
-          sha256sum \
-            goodvibes-linux-x64 \
-            goodvibes-linux-arm64 \
-            goodvibes-macos-x64 \
-            goodvibes-macos-arm64 \
-            goodvibes-daemon-linux-x64 \
-            goodvibes-daemon-linux-arm64 \
-            goodvibes-daemon-macos-x64 \
-            goodvibes-daemon-macos-arm64 \
-            sqlite-vec-linux-x64.so \
-            sqlite-vec-linux-arm64.so \
-            sqlite-vec-darwin-x64.dylib \
-            sqlite-vec-darwin-arm64.dylib \
-            > SHA256SUMS.txt
-      - name: Extract version
-        id: version
-        run: |
-          if [ "${GITHUB_EVENT_NAME}" = "push" ]; then
-            TAG="${GITHUB_REF_NAME}"
-          else
-            TAG="${{ github.event.inputs.ref }}"
-            TAG="${TAG#refs/tags/}"
-          fi
-          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
-          echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
-      - name: Extract changelog excerpt
-        id: changelog
-        run: |
-          VERSION=${{ steps.version.outputs.version }}
-          RELEASE_DOC="docs/releases/${VERSION}.md"
-          if [ -f "$RELEASE_DOC" ]; then
-            cp "$RELEASE_DOC" /tmp/release_notes.md
-          else
-            awk -v version="$VERSION" '
-              $0 ~ "^## \\[" version "\\]" { in_section=1; next }
-              in_section && $0 ~ "^## \\[" { exit }
-              in_section { print }
-            ' CHANGELOG.md > /tmp/release_notes.md
-            if [ ! -s /tmp/release_notes.md ] || ! grep -q '[^[:space:]]' /tmp/release_notes.md; then
-              printf 'Release %s\n' "$VERSION" > /tmp/release_notes.md
-            fi
-          fi
-          echo "excerpt_file=/tmp/release_notes.md" >> "$GITHUB_OUTPUT"
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@b4309332981a82ec1c5618f44dd2e27cc8bfbfda # v3.0.0
+      - name: Upload staged release assets
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          tag_name: ${{ steps.version.outputs.tag }}
-          name: ${{ steps.version.outputs.tag }}
-          body_path: ${{ steps.changelog.outputs.excerpt_file }}
-          draft: false
-          prerelease: false
-          files: |
-            dist/goodvibes-linux-x64
-            dist/goodvibes-linux-arm64
-            dist/goodvibes-macos-x64
-            dist/goodvibes-macos-arm64
-            dist/goodvibes-daemon-linux-x64
-            dist/goodvibes-daemon-linux-arm64
-            dist/goodvibes-daemon-macos-x64
-            dist/goodvibes-daemon-macos-arm64
-            dist/sqlite-vec-linux-x64.so
-            dist/sqlite-vec-linux-arm64.so
-            dist/sqlite-vec-darwin-x64.dylib
-            dist/sqlite-vec-darwin-arm64.dylib
-            dist/SHA256SUMS.txt
+          name: release-assets
+          path: |
+            dist/goodvibes-*
+            dist/sqlite-vec-*
+          if-no-files-found: error
+          retention-days: 1
 
+  # ── GitHub Release (push/tag only): reusable changelog excerpt + SHA256SUMS
+  #    over the 8 binaries + 4 addons + pinned softprops upload. ──────────────
+  gh-release:
+    needs: stage-release-assets
+    if: github.event_name == 'push'
+    uses: mgd34msu/goodvibes-sdk/.github/workflows/reusable-gh-release.yml@main
+    with:
+      tag: ${{ github.ref_name }}
+      artifact-name: release-assets
+      assets-glob: |
+        dist/goodvibes-*
+        dist/sqlite-vec-*
+      bun-version: "1.3.14"
+
+  # ── Publish platform binary packages to npmjs (BEFORE the main package). ──
   publish-platform-packages:
     name: Publish platform binary packages to npm
-    if: (github.event_name == 'push' || startsWith(github.event.inputs.ref, 'v') || startsWith(github.event.inputs.ref, 'refs/tags/v')) && vars.PUBLISH_NPM == 'true'
-    needs: release
+    needs: gh-release
+    if: github.event_name == 'push' && vars.PUBLISH_NPM == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - name: Checkout
         uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
         with:
-          ref: ${{ github.event.inputs.ref || github.ref }}
+          ref: ${{ github.ref }}
       - name: Setup
         uses: ./.github/actions/setup
       - name: Setup Node
@@ -346,51 +247,40 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
+  # ── Publish the main package to npmjs (AFTER platform packages, with
+  #    provenance) via the reusable staged publish. ──────────────────────────
   publish-npm:
     name: Publish to npm
-    if: (github.event_name == 'push' || startsWith(github.event.inputs.ref, 'v') || startsWith(github.event.inputs.ref, 'refs/tags/v')) && vars.PUBLISH_NPM == 'true'
-    needs: [release, publish-platform-packages]
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
-        with:
-          ref: ${{ github.event.inputs.ref || github.ref }}
-      - name: Setup
-        uses: ./.github/actions/setup
-      - name: Setup Node
-        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
-        with:
-          node-version: "22"
-          registry-url: "https://registry.npmjs.org"
-      - name: Publish package check
-        run: bun run publish:check
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-      - name: Publish to npm
-        run: bun run publish:package
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+    needs: [gh-release, publish-platform-packages]
+    if: github.event_name == 'push' && vars.PUBLISH_NPM == 'true'
+    uses: mgd34msu/goodvibes-sdk/.github/workflows/reusable-npm-publish.yml@main
+    with:
+      package-name: "@pellux/goodvibes-tui"
+      environment: production
+      registry: "https://registry.npmjs.org"
+      publish-command: "GOODVIBES_SKIP_NPM_AUTH_CHECK=1 bun run publish:check && bunx @pellux/goodvibes-toolchain goodvibes-publish-package --poll"
+      bun-version: "1.3.14"
+    secrets:
+      npm-token: ${{ secrets.NPM_TOKEN }}
 
+  # ── GitHub Packages mirror: platform packages rescoped to the repo owner. ──
   publish-github-platform-packages:
     name: Publish platform binary packages to GitHub Packages
-    if: github.event_name == 'push' || startsWith(github.event.inputs.ref, 'v') || startsWith(github.event.inputs.ref, 'refs/tags/v')
-    needs: release
+    needs: gh-release
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     permissions:
       contents: read
       packages: write
     env:
-      # Rescope the @pellux platform packages onto the repo owner's scope so they
-      # can be mirrored to GitHub Packages (which requires the owner scope). The
-      # payload-package mirror below rescopes its optionalDependencies to match.
       GOODVIBES_PUBLIC_PACKAGE_SCOPE: ${{ format('@{0}', github.repository_owner) }}
       GOODVIBES_PUBLISH_REGISTRY: https://npm.pkg.github.com
     steps:
       - name: Checkout
         uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
         with:
-          ref: ${{ github.event.inputs.ref || github.ref }}
+          ref: ${{ github.ref }}
       - name: Setup
         uses: ./.github/actions/setup
       - name: Setup Node
@@ -410,11 +300,13 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+  # ── GitHub Packages mirror: main package rescoped to the repo owner. ──────
   publish-github-packages:
     name: Publish to GitHub Packages
-    if: github.event_name == 'push' || startsWith(github.event.inputs.ref, 'v') || startsWith(github.event.inputs.ref, 'refs/tags/v')
-    needs: [release, publish-github-platform-packages]
+    needs: [gh-release, publish-github-platform-packages]
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     permissions:
       contents: read
       packages: write
@@ -425,7 +317,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
         with:
-          ref: ${{ github.event.inputs.ref || github.ref }}
+          ref: ${{ github.ref }}
       - name: Setup
         uses: ./.github/actions/setup
       - name: Setup Node
@@ -438,9 +330,9 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Publish to GitHub Packages
+        run: bun run publish:package
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: bun run publish:package
       - name: Verify GitHub Packages publish
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

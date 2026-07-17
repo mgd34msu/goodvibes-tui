@@ -8,7 +8,10 @@ on:
 
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  # Cancel superseded runs on PRs only. A push to main (including a pin/release
+  # commit) always runs to completion so its per-job-green verdict is never lost
+  # to an auto-cancel that later reads as red.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
