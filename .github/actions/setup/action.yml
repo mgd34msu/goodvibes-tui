@@ -6,8 +6,12 @@ description: Pin Bun, restore its install cache, and install dependencies. THE
 
 inputs:
   bun-version:
-    description: Bun version to pin. Single source of truth for this repo; pass a
-      repo variable (e.g. ${{ vars.BUN_VERSION }}) to override the default.
+    # NOTE: GitHub template-evaluates action metadata INCLUDING descriptions, and
+    # the vars context does not exist in composite actions — a literal
+    # dollar-brace expression anywhere in this file fails every job at load
+    # time. Keep this text expression-free.
+    description: Bun version to pin. Single source of truth for this repo;
+      callers may override the default with a repo variable.
     required: false
     # 1.3.14: 1.3.10's `bun build --compile` had a module-scope symbol-dedup bug
     # that emitted an undefined `SnapshotPruner2` reference in the darwin-arm64
