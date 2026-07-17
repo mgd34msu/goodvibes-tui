@@ -4,6 +4,20 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [1.19.2] - 2026-07-17
+
+### Changes
+
+- f095f361 deps: adopt published SDK 1.11.0 + toolchain 1.11.0 from the registry
+- f2b67cfd ci: caller jobs must grant the permissions their called reusable workflows request
+- 831a7d97 release: smoke matrix legs carry their own binary per the updated contract
+- 353774ad cicd: pin newline-separated glob inputs in the shape suite + setup train note
+- 683c3398 release: restore the per-release notes override via gh-release notes-file
+- 526d2dae cicd: rewire workflows onto the shared composite + reusable workflows
+- 4ad63923 cicd: swap release/build/gate scripts to thin toolchain invocations
+- 224f9b4b cicd: add toolchain.config.json contract + platform optional-deps sync
+- 1484f09a build: dev-link @pellux/goodvibes-toolchain from SDK 20093d41 tarball
+
 ## [1.19.1] — 2026-07-16
 
 ### Changes
