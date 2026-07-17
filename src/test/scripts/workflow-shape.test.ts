@@ -124,6 +124,20 @@ describe("release.yml: by-reference release on the reusable workflows", () => {
     expect(needsOf(gh)).toContain("stage-release-assets");
   });
 
+  test("gh-release passes the per-release notes-file override (docs/releases, no v prefix)", () => {
+    const gh = rel.jobs!["gh-release"]! as Job & { with?: Record<string, unknown> };
+    const notesFile = String(gh.with?.["notes-file"] ?? "");
+    expect(notesFile).toStartWith("docs/releases/");
+    expect(notesFile).toEndWith(".md");
+    // Version comes from the stage job's tag-derived output, which strips the
+    // v prefix — docs/releases files are named <version>.md, not v<version>.md.
+    expect(notesFile).toContain("needs.stage-release-assets.outputs.version");
+    expect(notesFile).not.toContain("docs/releases/v");
+    // The producing job must actually expose that output.
+    const stage = rel.jobs!["stage-release-assets"]! as Job & { outputs?: Record<string, string> };
+    expect(String(stage.outputs?.["version"] ?? "")).toContain("steps.version.outputs.version");
+  });
+
   test("publish-npm calls the reusable npm-publish at @main and is push-gated", () => {
     const pub = rel.jobs!["publish-npm"]!;
     expect(pub.uses).toBe(`${REUSABLE}/reusable-npm-publish.yml@main`);
