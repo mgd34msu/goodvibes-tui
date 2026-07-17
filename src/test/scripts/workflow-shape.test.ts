@@ -151,6 +151,26 @@ describe("release.yml: by-reference release on the reusable workflows", () => {
     expect(npm).toContain("publish-platform-packages");
   });
 
+  test("artifact-glob and assets-glob inputs are newline-separated multi-line blocks", () => {
+    // The reusable workflows expand these globs one-per-line; a space-separated
+    // single-line value silently becomes one glob that matches nothing (an
+    // adjacent repo shipped exactly that and its shape suite passed over it).
+    const globInputs: Array<{ job: string; input: string }> = [
+      { job: "binaries", input: "artifact-glob" },
+      { job: "gh-release", input: "assets-glob" },
+    ];
+    for (const { job, input } of globInputs) {
+      const def = rel.jobs![job]! as Job & { with?: Record<string, unknown> };
+      const value = String(def.with?.[input] ?? "");
+      expect(value, `${job}.with.${input} must be set`).not.toBe("");
+      const globs = value.split("\n").map((l) => l.trim()).filter((l) => l.length > 0);
+      expect(globs.length, `${job}.with.${input} must list multiple globs, one per line`).toBeGreaterThan(1);
+      for (const glob of globs) {
+        expect(glob, `${job}.with.${input} line "${glob}" must not be space-separated`).not.toMatch(/\s/);
+      }
+    }
+  });
+
   test("the GitHub Packages mirror jobs elevate packages: write", () => {
     for (const name of ["publish-github-packages", "publish-github-platform-packages"]) {
       expect(rel.jobs![name]!.permissions?.["packages"]).toBe("write");

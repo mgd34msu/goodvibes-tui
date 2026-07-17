@@ -31,4 +31,10 @@ runs:
           ${{ runner.os }}-bun-
     - name: Install dependencies
       shell: bash
+      # TRAIN NOTE: bare `bun install` (not --frozen-lockfile) is deliberate
+      # while @pellux/goodvibes-toolchain is dev-linked via a local file:
+      # tarball — a frozen install would fail on runners where that path does
+      # not exist. After the next release train re-pins the toolchain to the
+      # published registry version, flip this to `bun install --frozen-lockfile`
+      # to match the shared setup contract.
       run: bun install
