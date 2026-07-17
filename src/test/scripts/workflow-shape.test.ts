@@ -114,6 +114,27 @@ describe("release.yml: by-reference release on the reusable workflows", () => {
     expect(String(rv.if)).toContain("github.event_name == 'push'");
   });
 
+  test("caller jobs grant the permissions the called reusable workflows request", () => {
+    // GitHub validates this at workflow startup: a called workflow's job may
+    // only use permissions the caller job grants; an under-granting caller is
+    // rejected with startup_failure and jobs: [] before anything runs (this
+    // killed the SDK's v1.11.0 release run). The reusables' requested
+    // permissions are their documented contract: release-verify reads run/job
+    // conclusions (actions+checks read), gh-release creates the release
+    // (contents write), npm-publish mints provenance (id-token write).
+    const contract: Record<string, Record<string, string>> = {
+      "release-verify": { actions: "read", checks: "read" },
+      "gh-release": { contents: "write" },
+      "publish-npm": { "id-token": "write" },
+    };
+    for (const [jobName, required] of Object.entries(contract)) {
+      const job = rel.jobs![jobName]! as Job & { permissions?: Record<string, string> };
+      for (const [scope, level] of Object.entries(required)) {
+        expect(job.permissions?.[scope], `${jobName} must grant ${scope}: ${level}`).toBe(level);
+      }
+    }
+  });
+
   test("the binary matrix calls the reusable workflow at @main", () => {
     expect(rel.jobs!["binaries"]!.uses).toBe(`${REUSABLE}/reusable-binary-matrix.yml@main`);
   });

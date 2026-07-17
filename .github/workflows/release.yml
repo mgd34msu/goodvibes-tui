@@ -32,6 +32,12 @@ jobs:
   #    per-job green. ──────────────────────────────────────────────────────
   release-verify:
     if: github.event_name == 'push'
+    # Caller permissions must be a superset of what the called workflow's jobs
+    # request, or GitHub rejects the whole workflow at startup (jobs: []).
+    permissions:
+      contents: read
+      actions: read
+      checks: read
     uses: mgd34msu/goodvibes-sdk/.github/workflows/reusable-release-verify.yml@main
     with:
       sha: ${{ github.sha }}
@@ -215,6 +221,9 @@ jobs:
   gh-release:
     needs: stage-release-assets
     if: github.event_name == 'push'
+    # The called workflow's job requests contents:write (release creation).
+    permissions:
+      contents: write
     uses: mgd34msu/goodvibes-sdk/.github/workflows/reusable-gh-release.yml@main
     with:
       tag: ${{ github.ref_name }}
@@ -265,6 +274,10 @@ jobs:
     name: Publish to npm
     needs: [gh-release, publish-platform-packages]
     if: github.event_name == 'push' && vars.PUBLISH_NPM == 'true'
+    # The called workflow's job requests id-token:write (npm provenance).
+    permissions:
+      contents: read
+      id-token: write
     uses: mgd34msu/goodvibes-sdk/.github/workflows/reusable-npm-publish.yml@main
     with:
       package-name: "@pellux/goodvibes-tui"
