@@ -9,8 +9,16 @@ name: Release
 on:
   workflow_dispatch:
     inputs:
+      mode:
+        description: "dry-run (default; build/smoke preview, no publish) or release (publish the dispatched tag)"
+        required: false
+        type: choice
+        options:
+          - dry-run
+          - release
+        default: dry-run
       ref:
-        description: "Git ref to dry-run (branch for a dry build, tag for a full release preview)"
+        description: "Git ref to dry-run (ignored in release mode, which uses the dispatched tag ref)"
         required: false
         default: "main"
   push:
@@ -18,7 +26,7 @@ on:
       - 'v*'
 
 concurrency:
-  group: tui-release-${{ github.event.inputs.ref || github.ref_name || github.run_id }}
+  group: tui-release-${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.mode == 'release' && github.ref_name) || github.event.inputs.ref || github.ref_name || github.run_id }}
   # Never cancel an in-progress release — a half-published release is worse than
   # a duplicate run (publishes are idempotent).
   cancel-in-progress: false
@@ -31,7 +39,9 @@ jobs:
   #    validate-release re-run: verify the tagged commit's push-CI run was
   #    per-job green. ──────────────────────────────────────────────────────
   release-verify:
-    if: github.event_name == 'push'
+    if: >-
+      github.event_name == 'push' ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.mode == 'release')
     # Caller permissions must be a superset of what the called workflow's jobs
     # request, or GitHub rejects the whole workflow at startup (jobs: []).
     permissions:
@@ -54,7 +64,16 @@ jobs:
   #    the native-arm64 smoke are TUI-specific jobs below. ───────────────────
   binaries:
     needs: [release-verify]
-    if: ${{ always() && (github.event_name == 'workflow_dispatch' || needs.release-verify.result == 'success') }}
+    # A non-release dispatch (the default dry-run mode) always builds for dry
+    # validation, same as before. A release-mode dispatch now behaves like a
+    # push: it must wait on release-verify (which runs for release-mode
+    # dispatch too) succeeding before the binary matrix builds.
+    if: >-
+      always() &&
+      (
+        (github.event_name == 'workflow_dispatch' && github.event.inputs.mode != 'release') ||
+        needs.release-verify.result == 'success'
+      )
     uses: mgd34msu/goodvibes-sdk/.github/workflows/reusable-binary-matrix.yml@main
     with:
       # Smoke legs must name their own built artifact (binary is required when
@@ -81,7 +100,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
         with:
-          ref: ${{ github.event.inputs.ref || github.ref }}
+          # Release-mode dispatch runs at the tag ref (github.ref, since the
+          # auto-release job dispatches with --ref refs/tags/vX.Y.Z); a
+          # non-release dispatch uses its ref input; a push uses the pushed tag.
+          ref: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.mode == 'release' && github.ref) || github.event.inputs.ref || github.ref }}
       - name: Setup
         uses: ./.github/actions/setup
       - name: Download linux-x64 binaries
@@ -104,7 +126,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
         with:
-          ref: ${{ github.event.inputs.ref || github.ref }}
+          # Release-mode dispatch runs at the tag ref (github.ref, since the
+          # auto-release job dispatches with --ref refs/tags/vX.Y.Z); a
+          # non-release dispatch uses its ref input; a push uses the pushed tag.
+          ref: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.mode == 'release' && github.ref) || github.event.inputs.ref || github.ref }}
       - name: Setup
         uses: ./.github/actions/setup
       - name: Download darwin-arm64 binaries
@@ -119,11 +144,18 @@ jobs:
       - name: Daemon HTTP smoke (macos-arm64)
         run: bun run smoke:daemon
 
-  # ── TUI-specific npm-install smoke (push/tag only). ──────────────────────
+  # ── TUI-specific npm-install smoke (push/tag/release-mode dispatch only). ─
   install-smoke:
     name: npm install smoke
     needs: binaries
-    if: ${{ always() && needs.binaries.result == 'success' && (github.event_name == 'push' || startsWith(github.event.inputs.ref, 'v') || startsWith(github.event.inputs.ref, 'refs/tags/v')) }}
+    if: >-
+      always() && needs.binaries.result == 'success' &&
+      (
+        github.event_name == 'push' ||
+        (github.event_name == 'workflow_dispatch' && github.event.inputs.mode == 'release') ||
+        startsWith(github.event.inputs.ref, 'v') ||
+        startsWith(github.event.inputs.ref, 'refs/tags/v')
+      )
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -146,7 +178,10 @@ jobs:
         run: npm pack
       - name: Install tarball in clean temp project
         run: |
-          if [ "${GITHUB_EVENT_NAME}" = "push" ]; then
+          # Release-mode dispatch resolves GITHUB_REF_NAME to the dispatched
+          # tag (same as push) — it must NOT fall into the inputs.ref branch,
+          # whose default is "main" and would resolve no version at all.
+          if [ "${GITHUB_EVENT_NAME}" = "push" ] || [ "${{ github.event.inputs.mode }}" = "release" ]; then
             VERSION="${GITHUB_REF_NAME#v}"
           else
             TAG="${{ github.event.inputs.ref }}"
@@ -174,7 +209,9 @@ jobs:
   #    artifact. A missing addon is fatal. ────────────────────────────────────
   stage-release-assets:
     needs: [binaries, install-smoke, smoke-macos, daemon-smoke]
-    if: github.event_name == 'push'
+    if: >-
+      github.event_name == 'push' ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.mode == 'release')
     runs-on: ubuntu-latest
     timeout-minutes: 10
     outputs:
@@ -220,7 +257,9 @@ jobs:
   #    over the 8 binaries + 4 addons + pinned softprops upload. ──────────────
   gh-release:
     needs: stage-release-assets
-    if: github.event_name == 'push'
+    if: >-
+      github.event_name == 'push' ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.mode == 'release')
     # The called workflow's job requests contents:write (release creation).
     permissions:
       contents: write
@@ -241,7 +280,11 @@ jobs:
   publish-platform-packages:
     name: Publish platform binary packages to npm
     needs: gh-release
-    if: github.event_name == 'push' && vars.PUBLISH_NPM == 'true'
+    if: >-
+      (
+        github.event_name == 'push' ||
+        (github.event_name == 'workflow_dispatch' && github.event.inputs.mode == 'release')
+      ) && vars.PUBLISH_NPM == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -273,7 +316,11 @@ jobs:
   publish-npm:
     name: Publish to npm
     needs: [gh-release, publish-platform-packages]
-    if: github.event_name == 'push' && vars.PUBLISH_NPM == 'true'
+    if: >-
+      (
+        github.event_name == 'push' ||
+        (github.event_name == 'workflow_dispatch' && github.event.inputs.mode == 'release')
+      ) && vars.PUBLISH_NPM == 'true'
     # The called workflow's job requests id-token:write (npm provenance).
     permissions:
       contents: read
@@ -292,7 +339,9 @@ jobs:
   publish-github-platform-packages:
     name: Publish platform binary packages to GitHub Packages
     needs: gh-release
-    if: github.event_name == 'push'
+    if: >-
+      github.event_name == 'push' ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.mode == 'release')
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
@@ -329,7 +378,9 @@ jobs:
   publish-github-packages:
     name: Publish to GitHub Packages
     needs: [gh-release, publish-github-platform-packages]
-    if: github.event_name == 'push'
+    if: >-
+      github.event_name == 'push' ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.mode == 'release')
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
@@ -362,7 +413,10 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          if [ "${GITHUB_EVENT_NAME}" = "push" ]; then
+          # Release-mode dispatch resolves GITHUB_REF_NAME to the dispatched
+          # tag (same as push) — it must NOT fall into the inputs.ref branch,
+          # whose default is "main" and would resolve no version at all.
+          if [ "${GITHUB_EVENT_NAME}" = "push" ] || [ "${{ github.event.inputs.mode }}" = "release" ]; then
             VERSION="${GITHUB_REF_NAME#v}"
           else
             TAG="${{ github.event.inputs.ref }}"

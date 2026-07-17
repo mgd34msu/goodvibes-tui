@@ -38,6 +38,11 @@ function needsOf(job: Job): string[] {
 function steps(job: Job): Array<Record<string, unknown>> {
   return job.steps ?? [];
 }
+function stepText(job: Job): string {
+  return steps(job)
+    .map((s) => String(s.run ?? ""))
+    .join("\n");
+}
 
 describe("all workflows: baseline hygiene", () => {
   const files = readdirSync(WF_DIR).filter((f) => f.endsWith(".yml"));
@@ -97,6 +102,64 @@ describe("ci.yml: the eight-job gate graph", () => {
 
   test("cancel-in-progress is scoped to pull requests only", () => {
     expect(String(ci.concurrency?.["cancel-in-progress"])).toContain("pull_request");
+  });
+});
+
+describe("ci.yml: zero-touch auto-release", () => {
+  const ci = load("ci.yml");
+  const gatingJobs = [
+    "typecheck",
+    "test",
+    "coverage",
+    "architecture-check",
+    "perf-check",
+    "eval-gate",
+    "build",
+    "action-self-test",
+  ];
+
+  test("auto-release needs EVERY other ci.yml job (only runs when all are green)", () => {
+    const auto = ci.jobs!["auto-release"]!;
+    const needs = needsOf(auto);
+    for (const job of gatingJobs) {
+      expect(needs, `auto-release must need ${job} so it only runs when that gate is green`).toContain(job);
+    }
+    // And its needs set is exactly the other jobs — no gate omitted, no self-need.
+    const otherJobs = jobs(ci)
+      .map(([n]) => n)
+      .filter((n) => n !== "auto-release");
+    expect([...needs].sort()).toEqual([...otherJobs].sort());
+  });
+
+  test("auto-release is gated to pushes on main", () => {
+    const cond = String(ci.jobs!["auto-release"]!.if);
+    expect(cond).toContain("github.ref == 'refs/heads/main'");
+    expect(cond).toContain("github.event_name == 'push'");
+  });
+
+  test("auto-release grants contents:write and actions:write", () => {
+    const perms = ci.jobs!["auto-release"]!.permissions ?? {};
+    expect(perms.contents).toBe("write");
+    expect(perms.actions).toBe("write");
+  });
+
+  test("auto-release checks tag existence BEFORE creating the tag", () => {
+    const text = stepText(ci.jobs!["auto-release"]!);
+    const existenceCheck = text.indexOf("git ls-remote --tags origin");
+    const tagCreate = text.indexOf("git tag -a");
+    expect(existenceCheck).toBeGreaterThanOrEqual(0);
+    expect(tagCreate).toBeGreaterThanOrEqual(0);
+    // The idempotent existence check must precede tag creation.
+    expect(existenceCheck).toBeLessThan(tagCreate);
+  });
+
+  test("auto-release dispatches release.yml with mode=release, not a bare tag push", () => {
+    const text = stepText(ci.jobs!["auto-release"]!);
+    expect(text).toContain("gh workflow run release.yml");
+    expect(text).toContain("mode=release");
+    // The dispatch uses the tag ref so github.ref/github.sha point at the tag.
+    expect(text).toContain("--ref");
+    expect(text).toContain("refs/tags/");
   });
 });
 
@@ -192,6 +255,73 @@ describe("release.yml: by-reference release on the reusable workflows", () => {
     const pub = rel.jobs!["publish-npm"]!;
     expect(pub.uses).toBe(`${REUSABLE}/reusable-npm-publish.yml@main`);
     expect(String(pub.if)).toContain("github.event_name == 'push'");
+  });
+
+  test("dispatch is dry-run unless mode=release", () => {
+    // A release-mode dispatch is now a first-class publish path (the zero-touch
+    // auto-release job in ci.yml dispatches release.yml with mode=release), so
+    // the publish jobs run on a push OR a release-mode dispatch — while
+    // install-smoke's non-release-dispatch legs and the binaries job's
+    // dry-validation leg stay fenced off to a non-release dispatch so they can
+    // never publish.
+    const publishJobs = [
+      "stage-release-assets",
+      "gh-release",
+      "publish-platform-packages",
+      "publish-npm",
+      "publish-github-platform-packages",
+      "publish-github-packages",
+    ];
+    for (const name of publishJobs) {
+      const cond = String(rel.jobs![name]!.if);
+      expect(cond, `${name}.if must still gate on push`).toContain("github.event_name == 'push'");
+      expect(cond, `${name}.if must also allow a release-mode dispatch`).toContain("inputs.mode == 'release'");
+    }
+
+    const binariesIf = String(rel.jobs!["binaries"]!.if);
+    expect(binariesIf).toContain("github.event_name == 'workflow_dispatch'");
+    expect(binariesIf).toContain("inputs.mode != 'release'");
+  });
+
+  test("workflow_dispatch exposes a mode input defaulting to dry-run", () => {
+    const inputs = (
+      rel.on as {
+        workflow_dispatch?: { inputs?: Record<string, { default?: string; type?: string; options?: string[] }> };
+      }
+    ).workflow_dispatch?.inputs ?? {};
+    expect(inputs.mode).toBeTruthy();
+    expect(inputs.mode?.default).toBe("dry-run");
+    expect(inputs.mode?.type).toBe("choice");
+    expect(inputs.mode?.options).toEqual(expect.arrayContaining(["dry-run", "release"]));
+  });
+
+  test("the tag-push publish path is preserved unchanged (manual redo)", () => {
+    // Every release job that gates on a release-mode dispatch must still also
+    // gate on a plain push, so pushing a v* tag by hand releases exactly as before.
+    for (const name of [
+      "release-verify",
+      "stage-release-assets",
+      "gh-release",
+      "publish-platform-packages",
+      "publish-npm",
+      "publish-github-platform-packages",
+      "publish-github-packages",
+    ]) {
+      expect(String(rel.jobs![name]!.if)).toContain("github.event_name == 'push'");
+    }
+  });
+
+  test("checkouts that could default to the ref input's \"main\" instead resolve the tag ref in release mode", () => {
+    // daemon-smoke and smoke-macos checkout `github.event.inputs.ref || github.ref`,
+    // which would silently resolve to the ref input's "main" default on a
+    // release-mode dispatch (inputs.ref is never set by the auto-release
+    // job's dispatch call) unless a release-mode branch takes priority.
+    for (const name of ["daemon-smoke", "smoke-macos"]) {
+      const job = rel.jobs![name]!;
+      const checkout = steps(job).find((s) => String(s.uses ?? "").startsWith("actions/checkout@"));
+      const ref = String((checkout?.with as { ref?: string } | undefined)?.ref ?? "");
+      expect(ref, `${name} checkout ref must special-case a release-mode dispatch`).toContain("inputs.mode == 'release'");
+    }
   });
 
   test("platform packages publish BEFORE the main package, and both AFTER the GH release", () => {
