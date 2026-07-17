@@ -38,10 +38,10 @@
         "typescript": "^5.9.3",
       },
       "optionalDependencies": {
-        "@pellux/goodvibes-tui-darwin-arm64": "1.19.2",
-        "@pellux/goodvibes-tui-darwin-x64": "1.19.2",
-        "@pellux/goodvibes-tui-linux-arm64": "1.19.2",
-        "@pellux/goodvibes-tui-linux-x64": "1.19.2",
+        "@pellux/goodvibes-tui-darwin-arm64": "1.19.3",
+        "@pellux/goodvibes-tui-darwin-x64": "1.19.3",
+        "@pellux/goodvibes-tui-linux-arm64": "1.19.3",
+        "@pellux/goodvibes-tui-linux-x64": "1.19.3",
       },
     },
   },
@@ -218,14 +218,6 @@
     "@pellux/goodvibes-transport-http": ["@pellux/goodvibes-transport-http@1.11.2", "", { "dependencies": { "@pellux/goodvibes-contracts": "1.11.2", "@pellux/goodvibes-errors": "1.11.2", "@pellux/goodvibes-transport-core": "1.11.2", "zod": "^4.3.6" } }, "sha512-rBPVHc/yZjEnzM6b2fFXwmsSabHrZAdwanGnixbtfUOoR963oLbxx+6qx4+eV5ZgHC1BV9E6ycLQi34XYP9BEA=="],
 
     "@pellux/goodvibes-transport-realtime": ["@pellux/goodvibes-transport-realtime@1.11.2", "", { "dependencies": { "@pellux/goodvibes-contracts": "1.11.2", "@pellux/goodvibes-errors": "1.11.2", "@pellux/goodvibes-transport-core": "1.11.2", "@pellux/goodvibes-transport-http": "1.11.2" } }, "sha512-0ECzaq32rLuuXcjmf+DeOComU9YwRlZwUEBE7osT1c7yX1uLHs5ezg9xECfYhGozy7lsspKifDmvRuhYa8nGXw=="],
-
-    "@pellux/goodvibes-tui-darwin-arm64": ["@pellux/goodvibes-tui-darwin-arm64@1.19.2", "", { "os": "darwin", "cpu": "arm64" }, "sha512-EAnWx3g5BNoV6/hVo2bHyHBi7Qs+AAXM3yVJ/eBmW121xoJsotjhDlhMe62CFMq5OPgSzeFuX9cAQ3zoKWL8Ow=="],
-
-    "@pellux/goodvibes-tui-darwin-x64": ["@pellux/goodvibes-tui-darwin-x64@1.19.2", "", { "os": "darwin", "cpu": "x64" }, "sha512-6w4XvzuFhvyk1ppK9pfSQhxAoNsUtVr3KPHl7+eFZdthuYfnDAAYFCGXnBF37rCFHw1j+6fkxiqpa7n33Ul2iQ=="],
-
-    "@pellux/goodvibes-tui-linux-arm64": ["@pellux/goodvibes-tui-linux-arm64@1.19.2", "", { "os": "linux", "cpu": "arm64" }, "sha512-pGBKZVSev89MJhbAtDJoyC5UyKUu9qo2IESF20MMVOFLzVgNj6UV5IczvS8nK/JG0JtPps+j9GXmJON/3heNjQ=="],
-
-    "@pellux/goodvibes-tui-linux-x64": ["@pellux/goodvibes-tui-linux-x64@1.19.2", "", { "os": "linux", "cpu": "x64" }, "sha512-7Uz/hCa+BlV1sf3LmraPQFDdgCGuh6JbscTviEaFlS8hxMfjpED+zO42eI/Qjl31WWKeBRrRz8S6enrmgwvT4A=="],
 
     "@simple-git/args-pathspec": ["@simple-git/args-pathspec@1.0.3", "", {}, "sha512-ngJMaHlsWDTfjyq9F3VIQ8b7NXbBLq5j9i5bJ6XLYtD6qlDXT7fdKY2KscWWUF8t18xx052Y/PUO1K1TRc9yKA=="],
 
