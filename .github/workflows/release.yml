@@ -51,8 +51,11 @@ jobs:
     if: ${{ always() && (github.event_name == 'workflow_dispatch' || needs.release-verify.result == 'success') }}
     uses: mgd34msu/goodvibes-sdk/.github/workflows/reusable-binary-matrix.yml@main
     with:
+      # Smoke legs must name their own built artifact (binary is required when
+      # smoke is true — each leg only builds its own suffixed artifact, so the
+      # config's smoke.binaryDefault can never serve the matrix path).
       targets: >-
-        [{"key":"linux-x64","runner":"ubuntu-latest","smoke":true},
+        [{"key":"linux-x64","runner":"ubuntu-latest","smoke":true,"binary":"dist/goodvibes-linux-x64"},
          {"key":"linux-arm64","runner":"ubuntu-latest","smoke":false},
          {"key":"darwin-x64","runner":"ubuntu-latest","smoke":false},
          {"key":"darwin-arm64","runner":"ubuntu-latest","smoke":false}]
