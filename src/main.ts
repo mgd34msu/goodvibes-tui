@@ -797,4 +797,14 @@ async function main() {
 
 }
 
-main().catch(err => logger.error('Fatal error', { error: err }));
+main().catch((err: unknown) => {
+  // A bare Error JSON-serializes to {} in structured logs, and background
+  // timers keep the process alive after a boot failure — the historical
+  // result was a blank screen and a useless `Fatal error {"error": {}}` log
+  // line. Log real fields, tell the user what broke, and exit.
+  const message = err instanceof Error ? err.message : String(err);
+  const stack = err instanceof Error ? err.stack : undefined;
+  logger.error('Fatal error', { message, ...(stack ? { stack } : {}) });
+  process.stderr.write(`goodvibes failed to start: ${message}\n${stack ? `${stack}\n` : ''}`);
+  process.exit(1);
+});

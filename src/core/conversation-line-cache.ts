@@ -224,7 +224,7 @@ function renderOne(
   cfg: RenderConfig,
 ): void {
   if (message.role === 'user') {
-    renderConversationUserMessage(ctx, message, width);
+    renderConversationUserMessage(ctx, message, width, absoluteIdx);
   } else if (message.role === 'assistant') {
     renderConversationAssistantMessage(ctx, message, width, cfg.lineNumberMode, cfg.collapseThreshold, absoluteIdx);
   } else if (message.role === 'system') {

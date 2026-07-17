@@ -37,6 +37,7 @@ import { pruneStaleOperatorTokens } from '@pellux/goodvibes-sdk/platform/pairing
 import { resolveDaemonCompanionToken, workspaceOperatorTokenCandidates } from './operator-token-cleanup.ts';
 import type { UiRuntimeServices } from './ui-services.ts';
 import { initializeBootstrapCore } from './bootstrap-core.ts';
+import { ensureConfiguredModelIsRoutable } from './provider-fallback.ts';
 import { createBootstrapShell } from './bootstrap-shell.ts';
 import { announceResumeState } from './resume-notice.ts';
 import { announceInstallSelfCheck } from './install-self-check-startup.ts';
@@ -194,6 +195,29 @@ export async function bootstrapRuntime(
     panelManager,
     pluginManager,
   } = services;
+
+  // Custom providers register asynchronously (services.ts fires
+  // initCustomProviders() without awaiting), while everything below resolves
+  // the current model synchronously. Without this await, a saved
+  // provider.model that points at a custom provider throws "not in registry"
+  // before the first frame renders. The routability guard must re-run here:
+  // its services-composition pass bails when the provider itself isn't
+  // registered yet, which is exactly the custom-provider case.
+  await providerRegistry.ready();
+  ensureConfiguredModelIsRoutable(providerRegistry, configManager);
+  try {
+    providerRegistry.getCurrentModel();
+  } catch (err) {
+    // The configured provider no longer exists at all (e.g. its provider file
+    // was deleted). Booting on a real selectable model with a warning beats
+    // dying before the UI exists.
+    const configured = String(configManager.get('provider.model') ?? '');
+    const replacement = providerRegistry.getSelectableModels()[0]?.registryKey;
+    if (!replacement) throw err;
+    providerRegistry.setCurrentModel(replacement);
+    configManager.set('provider.model', replacement);
+    logger.warn(`[bootstrap] Configured model '${configured}' is not resolvable (its provider is not registered); switched to '${replacement}'.`);
+  }
 
   // A liveness flip is only PAINTED once something calls requestRender(); without
   // this, the footer's spine segment sat correct-but-undrawn until incidental activity redrew it (minutes, during an idle stretch).
