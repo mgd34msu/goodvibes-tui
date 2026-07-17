@@ -233,6 +233,15 @@ describe("release.yml: by-reference release on the reusable workflows", () => {
 });
 
 describe("composite setup action: single Bun source", () => {
+  test("action metadata never references the vars context", () => {
+    // GitHub template-evaluates the ENTIRE action manifest — including input
+    // descriptions — and the vars context does not exist in composite actions.
+    // A literal vars expression anywhere in this file fails every consuming
+    // job at load time (this took down all six bun jobs on the v1.19.2 run).
+    const raw = readFileSync(resolve(ROOT, ".github/actions/setup/action.yml"), "utf8");
+    expect(raw).not.toMatch(/\$\{\{\s*vars\./);
+  });
+
   test("exposes a bun-version input with a default", () => {
     const action = Bun.YAML.parse(readFileSync(resolve(ROOT, ".github/actions/setup/action.yml"), "utf8")) as {
       inputs?: { "bun-version"?: { default?: string } };
