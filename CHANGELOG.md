@@ -8,6 +8,7 @@ All notable changes to GoodVibes TUI.
 
 ### Changes
 
+- deps: adopt published SDK 1.11.1 + toolchain 1.11.1 from the registry (1.11.1 ships the toolchain dispatcher bin that fixes consumer release verification)
 - f095f361 deps: adopt published SDK 1.11.0 + toolchain 1.11.0 from the registry
 - f2b67cfd ci: caller jobs must grant the permissions their called reusable workflows request
 - 831a7d97 release: smoke matrix legs carry their own binary per the updated contract
