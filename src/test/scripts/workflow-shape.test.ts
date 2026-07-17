@@ -118,6 +118,35 @@ describe("release.yml: by-reference release on the reusable workflows", () => {
     expect(rel.jobs!["binaries"]!.uses).toBe(`${REUSABLE}/reusable-binary-matrix.yml@main`);
   });
 
+  test("every smoke:true matrix leg carries its own binary path matching the config's appArtifact", () => {
+    // reusable-binary-matrix contract: targets is {key, runner, smoke, binary}
+    // and `binary` is REQUIRED when smoke is true — each leg only builds its
+    // own suffixed artifact, so the smoke step hard-fails without it (the
+    // config's smoke.binaryDefault serves local CLI runs only).
+    const binaries = rel.jobs!["binaries"]! as Job & { with?: Record<string, unknown> };
+    const targets = JSON.parse(String(binaries.with?.["targets"] ?? "[]")) as Array<{
+      key: string;
+      runner: string;
+      smoke: boolean;
+      binary?: string;
+    }>;
+    expect(targets.length).toBe(4);
+    const config = JSON.parse(readFileSync(resolve(ROOT, "toolchain.config.json"), "utf8")) as {
+      build: { outDir: string; targets: Array<{ key: string; appArtifact: string }> };
+    };
+    const appArtifactByKey = new Map(config.build.targets.map((t) => [t.key, t.appArtifact]));
+    let smokeLegs = 0;
+    for (const target of targets) {
+      expect(appArtifactByKey.has(target.key), `matrix key ${target.key} must exist in toolchain.config.json`).toBe(true);
+      if (target.smoke) {
+        smokeLegs += 1;
+        expect(target.binary, `smoke leg ${target.key} must carry binary`).toBeTruthy();
+        expect(target.binary).toBe(`${config.build.outDir}/${appArtifactByKey.get(target.key)}`);
+      }
+    }
+    expect(smokeLegs).toBeGreaterThan(0);
+  });
+
   test("gh-release calls the reusable workflow at @main and gates on staged assets", () => {
     const gh = rel.jobs!["gh-release"]!;
     expect(gh.uses).toBe(`${REUSABLE}/reusable-gh-release.yml@main`);
