@@ -4,6 +4,15 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [1.19.4] - 2026-07-17
+
+### Changes
+
+Fixed: selecting a custom-provider model no longer crashes the app at the next startup — boot now waits for custom providers to load before resolving the current model, and falls back to a selectable model (with a logged warning) if the configured provider's file was removed.
+Fixed: startup failures now print a clear "goodvibes failed to start" message with the real error and exit, instead of hanging on a blank screen while the log recorded an empty error object.
+Fixed: after an automatic context compaction, the transcript shows a compact expandable "compaction handoff" block instead of re-printing the entire re-injected instruction text every time.
+Updated: @pellux/goodvibes-sdk and @pellux/goodvibes-terminal-shell to 1.11.3 (quieter startup when no hooks file exists; error summaries no longer mangle redacted paths).
+
 ## [1.19.3] - 2026-07-17
 
 ### Changes
