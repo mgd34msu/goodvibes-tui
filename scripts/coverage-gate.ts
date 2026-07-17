@@ -1,61 +1,64 @@
 /**
- * coverage-gate.ts — aggregate coverage enforcement.
+ * coverage-gate.ts — aggregate coverage enforcement (thin toolchain adapter).
  *
- * Why this exists as a separate script:
+ * The parse + floor-comparison mechanic is owned by
+ * @pellux/goodvibes-toolchain (evaluateCoverageGate / parseCoverageSummary);
+ * the floors and the coverage command live in this repo's toolchain.config.json
+ * (single source). This module is a thin adapter that keeps the TUI-specific
+ * evidence layer — the exact reported lines and the cross-file-interference
+ * note — and preserves the exported API its unit tests exercise.
+ *
+ * Why a separate whole-suite process at all:
  * - "bun run test" (scripts/run-tests.ts) spawns one bun process PER FILE for
- *   TMPDIR isolation. A bunfig coverageThreshold would therefore gate each
- *   file individually, which is meaningless and spuriously fails low-coverage
- *   single files. Aggregate enforcement needs one whole-suite process.
- * - The whole-suite single-process run currently has a small number of
- *   test failures caused by cross-file interference (they pass under the
- *   per-file runner). Correctness is gated by "bun run test"; THIS script
- *   gates coverage only, and reports interference failures without
- *   pretending they are coverage problems.
- * - IMPORTANT: bunfig.toml must not set "coverage = false". In bun 1.3.10
- *   that bunfig key overrides the CLI --coverage flag, the child run emits
- *   no coverage table, and the gate fails unconditionally.
- *
- * Floors are a ratchet: set just below the measured baseline, raised as
- * coverage improves, never lowered without an explicit decision.
+ *   TMPDIR isolation; a bunfig coverageThreshold would gate each file. Aggregate
+ *   enforcement needs one whole-suite process.
+ * - The whole-suite single-process run has a small number of cross-file
+ *   interference failures (they pass under the per-file runner). Correctness is
+ *   gated by "bun run test"; this gate reports interference without pretending
+ *   they are coverage problems.
+ * - IMPORTANT: bunfig.toml must not set "coverage = false" — in bun that key
+ *   overrides the CLI --coverage flag and the child emits no coverage table.
  */
+import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import {
+  evaluateCoverageGate,
+  parseCoverageSummary as toolchainParseCoverageSummary,
+} from "@pellux/goodvibes-toolchain";
 
-// Measured baseline 2026-06-11 (whole-suite): Funcs 73.14%, Lines 76.80%.
-export const FUNCS_FLOOR = 71;
-export const LINES_FLOOR = 75;
+interface CoverageConfigShape {
+  readonly funcsFloor: number;
+  readonly linesFloor: number;
+  readonly command?: readonly string[];
+}
+
+function loadCoverageConfig(root: string = process.cwd()): CoverageConfigShape {
+  const raw = JSON.parse(readFileSync(join(root, "toolchain.config.json"), "utf8")) as { coverage?: CoverageConfigShape };
+  if (!raw.coverage) throw new Error("toolchain.config.json has no `coverage` section");
+  return raw.coverage;
+}
+
+const coverageConfig = loadCoverageConfig();
+
+// Floors are a ratchet: set just below the measured baseline, raised as
+// coverage improves, never lowered without an explicit decision. Sourced from
+// toolchain.config.json so the value has a single home.
+export const FUNCS_FLOOR = coverageConfig.funcsFloor;
+export const LINES_FLOOR = coverageConfig.linesFloor;
 
 export interface CoverageSummary {
   funcsPct: number;
   linesPct: number;
 }
 
-/**
- * Parse the bun text coverage reporter output. The table ends with a row:
- *   All files          |   73.14 |   76.80 |
- * Column order is File | % Funcs | % Lines per the bun text reporter.
- */
+/** Parse the bun text coverage "All files" row (delegates to the toolchain). */
 export function parseCoverageSummary(output: string): CoverageSummary | null {
-  // The nested bun process colorizes the table when FORCE_COLOR is present in
-  // the environment (even empty), which broke the startsWith match below.
-  // Parse color-blind: the gate must not depend on the caller's shell.
-  const plain = output.replace(/\x1b\[[0-9;]*m/g, "");
-  for (const line of plain.split("\n")) {
-    const trimmed = line.trim();
-    if (!trimmed.startsWith("All files")) continue;
-    const cells = trimmed.split("|").map((cell) => cell.trim());
-    if (cells.length < 3) continue;
-    const funcsPct = Number.parseFloat(cells[1] ?? "");
-    const linesPct = Number.parseFloat(cells[2] ?? "");
-    if (Number.isFinite(funcsPct) && Number.isFinite(linesPct)) {
-      return { funcsPct, linesPct };
-    }
-  }
-  return null;
+  return toolchainParseCoverageSummary(output);
 }
 
 /** Extract "N fail" from the bun run summary; null when absent. */
 export function parseFailCount(output: string): number | null {
-  const match = output.match(/^\s*(\d+)\s+fail\s*$/m);
+  const match = output.replace(/\x1b\[[0-9;]*m/g, "").match(/^\s*(\d+)\s+fail\s*$/m);
   if (!match) return null;
   return Number.parseInt(match[1] ?? "", 10);
 }
@@ -66,20 +69,19 @@ export interface GateResult {
 }
 
 export function evaluateGate(output: string): GateResult {
-  const lines: string[] = [];
-  const summary = parseCoverageSummary(output);
-  if (!summary) {
+  const evaluated = evaluateCoverageGate(output, { funcsFloor: FUNCS_FLOOR, linesFloor: LINES_FLOOR });
+  if (!evaluated.summary) {
     return {
       pass: false,
       lines: ["coverage-gate: FAIL — no coverage table found in output (did the run crash before reporting?)"],
     };
   }
-  const funcsOk = summary.funcsPct >= FUNCS_FLOOR;
-  const linesOk = summary.linesPct >= LINES_FLOOR;
-  lines.push(
-    "coverage-gate: functions " + summary.funcsPct.toFixed(2) + "% (floor " + FUNCS_FLOOR + "%) — " + (funcsOk ? "OK" : "BELOW FLOOR"),
-    "coverage-gate: lines     " + summary.linesPct.toFixed(2) + "% (floor " + LINES_FLOOR + "%) — " + (linesOk ? "OK" : "BELOW FLOOR"),
-  );
+  const funcsOk = evaluated.summary.funcsPct >= FUNCS_FLOOR;
+  const linesOk = evaluated.summary.linesPct >= LINES_FLOOR;
+  const lines: string[] = [
+    "coverage-gate: functions " + evaluated.summary.funcsPct.toFixed(2) + "% (floor " + FUNCS_FLOOR + "%) — " + (funcsOk ? "OK" : "BELOW FLOOR"),
+    "coverage-gate: lines     " + evaluated.summary.linesPct.toFixed(2) + "% (floor " + LINES_FLOOR + "%) — " + (linesOk ? "OK" : "BELOW FLOOR"),
+  ];
   const failCount = parseFailCount(output);
   if (failCount !== null && failCount > 0) {
     lines.push(
@@ -94,7 +96,7 @@ export function evaluateGate(output: string): GateResult {
 }
 
 export interface RunGateOptions {
-  /** Command to spawn; defaults to the whole-suite coverage run. */
+  /** Command to spawn; defaults to the configured whole-suite coverage run. */
   cmd?: string[];
   /** Working directory; defaults to process.cwd(). */
   cwd?: string;
@@ -106,7 +108,8 @@ export interface RunGateOptions {
  */
 export async function runCoverageGate(options: RunGateOptions = {}): Promise<GateResult> {
   const cwd = options.cwd ?? process.cwd();
-  const cmd = options.cmd ?? ["bun", "test", "--coverage", join(cwd, "src")];
+  const configured = coverageConfig.command ? [...coverageConfig.command] : ["bun", "test", "--coverage", "src"];
+  const cmd = options.cmd ?? configured;
   const proc = Bun.spawn(cmd, { cwd, stdout: "pipe", stderr: "pipe" });
   const [stdout, stderr] = await Promise.all([
     new Response(proc.stdout).text(),

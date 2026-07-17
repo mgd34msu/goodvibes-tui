@@ -106,7 +106,7 @@ function resolveAddonPath(): string {
 }
 const addonPath = resolveAddonPath();
 if (!existsSync(addonPath)) {
-  fail(`Native addon missing: ${addonPath} — F5 regression: scripts/build.ts did not copy sqlite-vec addon to dist/lib/`);
+  fail(`Native addon missing: ${addonPath} — regression: the binary build (goodvibes-build-binaries) did not copy the sqlite-vec addon to dist/lib/`);
 }
 
 // ---------------------------------------------------------------------------
