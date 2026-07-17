@@ -133,3 +133,74 @@ jobs:
         # self-test covers install + version + doctor. Consumers with a credential
         # can pass the action's `prompt` input to run a real turn.
         run: echo "goodvibes run --non-interactive exists but requires a provider credential; not exercised here."
+
+  # ---------------------------------------------------------------------------
+  # Zero-touch release. Runs only after EVERY gating job above is green (its
+  # `needs` covers all of them, so GitHub schedules it last and only on full
+  # success), and only for pushes to main. When the release commit's version has
+  # no tag yet, it creates the annotated tag at this SHA and dispatches
+  # release.yml at that tag with mode=release.
+  #
+  # Why the dispatch (not just the tag push): a tag pushed with GITHUB_TOKEN does
+  # NOT trigger workflows, so the tag alone would never start release.yml. The
+  # documented exception is that a workflow_dispatch API call made with
+  # GITHUB_TOKEN DOES create a run — so we push the tag (for provenance + the
+  # manual redo path) and then explicitly dispatch the release at that tag ref.
+  # Idempotent: an already-existing tag is a logged no-op.
+  # ---------------------------------------------------------------------------
+  auto-release:
+    name: Auto-release (tag + dispatch on green)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    needs:
+      - typecheck
+      - test
+      - coverage
+      - architecture-check
+      - perf-check
+      - eval-gate
+      - build
+      - action-self-test
+    permissions:
+      contents: write
+      actions: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+      - name: Read version from package.json
+        id: version
+        run: echo "version=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
+      - name: Tag the release and dispatch release.yml (idempotent)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.version.outputs.version }}
+          SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          TAG="v${VERSION}"
+          # Idempotent no-op if the tag already exists on the remote (a re-run,
+          # or a manual tag already pushed): do not re-tag or re-dispatch.
+          if git ls-remote --tags origin "refs/tags/${TAG}" | grep -q "refs/tags/${TAG}"; then
+            echo "Tag ${TAG} already exists on origin — nothing to do."
+            exit 0
+          fi
+          git config user.name "GoodVibes CI"
+          git config user.email "ci@goodvibes.local"
+          git tag -a "${TAG}" -m "release ${VERSION}" "${SHA}"
+          # Push with GITHUB_TOKEN: this does NOT trigger release.yml (token
+          # pushes never trigger workflows), which is why we dispatch below.
+          git push origin "refs/tags/${TAG}"
+          echo "Created and pushed ${TAG} at ${SHA}."
+          # Dispatch release.yml at the tag ref. workflow_dispatch via the API
+          # under GITHUB_TOKEN DOES create a run (the documented exception).
+          for attempt in 1 2 3 4 5 6 7 8; do
+            if gh workflow run release.yml --ref "refs/tags/${TAG}" -f mode=release; then
+              echo "Dispatched release.yml for ${TAG} (mode=release)."
+              exit 0
+            fi
+            echo "gh workflow run failed (attempt ${attempt}/8); retrying in 7s…" >&2
+            sleep 7
+          done
+          echo "ERROR: failed to dispatch release.yml for ${TAG} after 8 attempts." >&2
+          exit 1

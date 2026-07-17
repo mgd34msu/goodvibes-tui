@@ -11,8 +11,8 @@
         "@anthropic-ai/vertex-sdk": "^0.16.0",
         "@ast-grep/napi": "^0.42.0",
         "@aws/bedrock-token-generator": "^1.1.0",
-        "@pellux/goodvibes-sdk": "1.11.1",
-        "@pellux/goodvibes-terminal-shell": "1.11.1",
+        "@pellux/goodvibes-sdk": "1.11.2",
+        "@pellux/goodvibes-terminal-shell": "1.11.2",
         "bash-language-server": "^5.6.0",
         "fuse.js": "^7.1.0",
         "graphql": "^16.13.2",
@@ -34,7 +34,6 @@
         "zustand": "^5.0.12",
       },
       "devDependencies": {
-        "@pellux/goodvibes-toolchain": "1.11.1",
         "@types/bun": "^1.3.10",
         "typescript": "^5.9.3",
       },
@@ -198,27 +197,35 @@
 
     "@one-ini/wasm": ["@one-ini/wasm@0.2.0", "", {}, "sha512-n+L/BvrwKUn7q5O3wHGo+CJZAqfewh38+37sk+eBzv/39lM9pPgPRd4sOZRvSRzo0ukLxzyXso4WlGj2oKZ5hA=="],
 
-    "@pellux/goodvibes-contracts": ["@pellux/goodvibes-contracts@1.11.1", "", { "dependencies": { "zod": "^4.3.6" } }, "sha512-2hQC2ePDUpkVuQfEfQtHzZnpMwggcuza6wBvmLuHsS3ufdnFkyXDVKy2FaVjp55xYIWiYd2lRNwbB5vpUktaQQ=="],
+    "@pellux/goodvibes-contracts": ["@pellux/goodvibes-contracts@1.11.2", "", { "dependencies": { "zod": "^4.3.6" } }, "sha512-w+DO7LR+QQnF1DQL8DKQMJOoYJHwe97EcgezPLEIg5/WnyyVx7gU15aa/L1ssaIb4YsX2/7EKtnjyvsmZe/drg=="],
 
-    "@pellux/goodvibes-daemon-sdk": ["@pellux/goodvibes-daemon-sdk@1.11.1", "", { "dependencies": { "@pellux/goodvibes-contracts": "1.11.1", "@pellux/goodvibes-errors": "1.11.1", "@pellux/goodvibes-transport-core": "1.11.1" }, "bin": { "goodvibes-relay": "dist/relay-server-entry.js" } }, "sha512-bD4KHveWYfGLB+hRzYZv+6L2BH1Jq426fU+nKsWmNSSG2fksJKLJ6I+J1xXvYJY5HMLZ9DteKxgMPpY3tHc3mw=="],
+    "@pellux/goodvibes-daemon-sdk": ["@pellux/goodvibes-daemon-sdk@1.11.2", "", { "dependencies": { "@pellux/goodvibes-contracts": "1.11.2", "@pellux/goodvibes-errors": "1.11.2", "@pellux/goodvibes-transport-core": "1.11.2" }, "bin": { "goodvibes-relay": "dist/relay-server-entry.js" } }, "sha512-zeaiFxFfRpU0lUc5mnfYg9cKAGyvGdtFt95h0pUi9il7laR0JmFOS654hVrJoJbTQ7dwPyET/nl+r0JL8/w2+A=="],
 
-    "@pellux/goodvibes-errors": ["@pellux/goodvibes-errors@1.11.1", "", {}, "sha512-l0qmRlegq4MvJqZmstWXp7PvNnKgL55Du2Za7zPtfMH+4BQrDu1MGpYKqmMsUB5GdOm5oebAFyJH1AHzxBXmhQ=="],
+    "@pellux/goodvibes-errors": ["@pellux/goodvibes-errors@1.11.2", "", {}, "sha512-QVcGgMWA+k17PwtxML9NlBwLhDUHExlcYqE6bWMb7TYSYWI0MLWt5lheR8tGFCvKJWUdMpFFvI8KZoDh6Z+PSQ=="],
 
-    "@pellux/goodvibes-operator-sdk": ["@pellux/goodvibes-operator-sdk@1.11.1", "", { "dependencies": { "@pellux/goodvibes-contracts": "1.11.1", "@pellux/goodvibes-errors": "1.11.1", "@pellux/goodvibes-transport-http": "1.11.1", "zod": "^4.3.6" } }, "sha512-67Z60d0kzaHTaaVXcZkFteCBfteh55QO/0tHAviT5SUO7LDn9Fw2GLpoat5jZHP8gqnBBfNf++tP4bb/tq7VOQ=="],
+    "@pellux/goodvibes-operator-sdk": ["@pellux/goodvibes-operator-sdk@1.11.2", "", { "dependencies": { "@pellux/goodvibes-contracts": "1.11.2", "@pellux/goodvibes-errors": "1.11.2", "@pellux/goodvibes-transport-http": "1.11.2", "zod": "^4.3.6" } }, "sha512-SZI2RBEBj2PsKYFosP9gWfV+dP+zV4Zi6ypshpJHBLiU2BM4ZcObWy3kMruV6kUJozaIf3Y7g3e8mw0seNzPOg=="],
 
-    "@pellux/goodvibes-peer-sdk": ["@pellux/goodvibes-peer-sdk@1.11.1", "", { "dependencies": { "@pellux/goodvibes-contracts": "1.11.1", "@pellux/goodvibes-errors": "1.11.1", "@pellux/goodvibes-transport-http": "1.11.1" } }, "sha512-7vbtlT7l2lNUMEX1kfsi6mM89LM+CiaFlnKsZ7hBOQI7A7vA2SMvVYjqadtnFVcmQmJbsqy2eKzLiYUCAA1qXg=="],
+    "@pellux/goodvibes-peer-sdk": ["@pellux/goodvibes-peer-sdk@1.11.2", "", { "dependencies": { "@pellux/goodvibes-contracts": "1.11.2", "@pellux/goodvibes-errors": "1.11.2", "@pellux/goodvibes-transport-http": "1.11.2" } }, "sha512-sZ9po+BaNxyKbIs9uBWSyuvG7QzuWn/Pkm11RpKukmsT7DfDvl0ig1hp/9i68Oe/oU9Zy9YPIrUml6yX6ylMjw=="],
 
-    "@pellux/goodvibes-sdk": ["@pellux/goodvibes-sdk@1.11.1", "", { "dependencies": { "@pellux/goodvibes-contracts": "1.11.1", "@pellux/goodvibes-daemon-sdk": "1.11.1", "@pellux/goodvibes-errors": "1.11.1", "@pellux/goodvibes-operator-sdk": "1.11.1", "@pellux/goodvibes-peer-sdk": "1.11.1", "@pellux/goodvibes-transport-core": "1.11.1", "@pellux/goodvibes-transport-http": "1.11.1", "@pellux/goodvibes-transport-realtime": "1.11.1" }, "optionalDependencies": { "@agentclientprotocol/sdk": "^0.21.0", "@anthropic-ai/bedrock-sdk": "^0.29.1", "@anthropic-ai/sdk": "^0.92.0", "@ast-grep/napi": "^0.42.0", "@mozilla/readability": "^0.6.0", "bash-language-server": "file:vendor/bash-language-server", "bplist-parser": "^0.3.2", "cloudflare": "6.0.0", "fuse.js": "^7.1.0", "google-auth-library": "10.6.2", "graphql": "^16.13.2", "jsdom": "^29.1.0", "jszip": "^3.10.1", "node-edge-tts": "^1.2.10", "openai": "6.46.0", "pdfjs-dist": "5.7.284", "pyright": "^1.1.408", "simple-git": "^3.33.0", "sql.js": "^1.14.1", "sqlite-vec": "^0.1.9", "tree-sitter-css": "^0.25.0", "tree-sitter-javascript": "^0.25.0", "tree-sitter-json": "^0.24.8", "tree-sitter-python": "^0.25.0", "tree-sitter-typescript": "^0.23.2", "typescript-language-server": "^5.1.3", "vscode-langservers-extracted": "^4.10.0", "web-tree-sitter": "^0.26.7", "zustand": "^5.0.12" }, "peerDependencies": { "expo-secure-store": ">=13.0.0", "react-native-keychain": ">=8.0.0" }, "optionalPeers": ["expo-secure-store", "react-native-keychain"] }, "sha512-PJd+L9h2FY5cUmEXP4wuCc9a2DXryl1ckbmi/q8L5JHcATrIlYL0ViRL7FlIAhgV+2GNqzZA48cTxABTv/72Yw=="],
+    "@pellux/goodvibes-sdk": ["@pellux/goodvibes-sdk@1.11.2", "", { "dependencies": { "@pellux/goodvibes-contracts": "1.11.2", "@pellux/goodvibes-daemon-sdk": "1.11.2", "@pellux/goodvibes-errors": "1.11.2", "@pellux/goodvibes-operator-sdk": "1.11.2", "@pellux/goodvibes-peer-sdk": "1.11.2", "@pellux/goodvibes-toolchain": "1.11.2", "@pellux/goodvibes-transport-core": "1.11.2", "@pellux/goodvibes-transport-http": "1.11.2", "@pellux/goodvibes-transport-realtime": "1.11.2" }, "optionalDependencies": { "@agentclientprotocol/sdk": "^0.21.0", "@anthropic-ai/bedrock-sdk": "^0.29.1", "@anthropic-ai/sdk": "^0.92.0", "@ast-grep/napi": "^0.42.0", "@mozilla/readability": "^0.6.0", "bash-language-server": "file:vendor/bash-language-server", "bplist-parser": "^0.3.2", "cloudflare": "6.0.0", "fuse.js": "^7.1.0", "google-auth-library": "10.6.2", "graphql": "^16.13.2", "jsdom": "^29.1.0", "jszip": "^3.10.1", "node-edge-tts": "^1.2.10", "openai": "6.46.0", "pdfjs-dist": "5.7.284", "pyright": "^1.1.408", "simple-git": "^3.33.0", "sql.js": "^1.14.1", "sqlite-vec": "^0.1.9", "tree-sitter-css": "^0.25.0", "tree-sitter-javascript": "^0.25.0", "tree-sitter-json": "^0.24.8", "tree-sitter-python": "^0.25.0", "tree-sitter-typescript": "^0.23.2", "typescript-language-server": "^5.1.3", "vscode-langservers-extracted": "^4.10.0", "web-tree-sitter": "^0.26.7", "zustand": "^5.0.12" }, "peerDependencies": { "expo-secure-store": ">=13.0.0", "react-native-keychain": ">=8.0.0" }, "optionalPeers": ["expo-secure-store", "react-native-keychain"] }, "sha512-pL4LixSoKS5yzGGaRCEBXoRm0aw1ExNSO7ZXFfH/2KbnRvRMqw79EyO4kQmcWJtVuh/B3YJbK9sQP6viIpPlDA=="],
 
-    "@pellux/goodvibes-terminal-shell": ["@pellux/goodvibes-terminal-shell@1.11.1", "", { "dependencies": { "@pellux/goodvibes-contracts": "1.11.1", "@pellux/goodvibes-sdk": "1.11.1" } }, "sha512-AvStvvkxD0yDYTT1CUntYFhBHh/k1o0czpHqwyDuHMM/Kbrzvl/XhN5wuMDYEe9P5mHbFeRChzCeJc9BkLzm5Q=="],
+    "@pellux/goodvibes-terminal-shell": ["@pellux/goodvibes-terminal-shell@1.11.2", "", { "dependencies": { "@pellux/goodvibes-contracts": "1.11.2", "@pellux/goodvibes-sdk": "1.11.2" } }, "sha512-csnwu17t0GKwwUunhYU+rzmehTBPcX6mIz8hY7adkKrwivLZz10FCOC8dk3eKYw5JUcdEzGJiN9h9f/R27hD9g=="],
 
-    "@pellux/goodvibes-toolchain": ["@pellux/goodvibes-toolchain@1.11.1", "", { "bin": { "goodvibes-toolchain": "dist/bin/toolchain.js", "goodvibes-sdk-pin-gate": "dist/bin/sdk-pin-gate.js", "goodvibes-build-binaries": "dist/bin/build-binaries.js", "goodvibes-release-cut": "dist/bin/release-cut.js", "goodvibes-coverage-gate": "dist/bin/coverage-gate.js", "goodvibes-verification-ledger": "dist/bin/verification-ledger.js", "goodvibes-post-build-smoke": "dist/bin/post-build-smoke.js", "goodvibes-package-install-check": "dist/bin/package-install-check.js", "goodvibes-publish-package": "dist/bin/publish-package.js", "goodvibes-per-job-green": "dist/bin/per-job-green.js", "goodvibes-changelog-gate": "dist/bin/changelog-gate.js", "goodvibes-sha256sums": "dist/bin/sha256sums.js" } }, "sha512-RPMZ1yug2Ai5f3eh5OseYuufaSDLhOJPuXt2fpETzOfz4+O4klM7PQIDNLBxUmJLaUu5nbz9Vzlw10MtjO43pw=="],
+    "@pellux/goodvibes-toolchain": ["@pellux/goodvibes-toolchain@1.11.2", "", { "bin": { "goodvibes-toolchain": "dist/bin/toolchain.js", "goodvibes-sdk-pin-gate": "dist/bin/sdk-pin-gate.js", "goodvibes-build-binaries": "dist/bin/build-binaries.js", "goodvibes-release-cut": "dist/bin/release-cut.js", "goodvibes-coverage-gate": "dist/bin/coverage-gate.js", "goodvibes-verification-ledger": "dist/bin/verification-ledger.js", "goodvibes-post-build-smoke": "dist/bin/post-build-smoke.js", "goodvibes-package-install-check": "dist/bin/package-install-check.js", "goodvibes-publish-package": "dist/bin/publish-package.js", "goodvibes-per-job-green": "dist/bin/per-job-green.js", "goodvibes-changelog-gate": "dist/bin/changelog-gate.js", "goodvibes-sha256sums": "dist/bin/sha256sums.js" } }, "sha512-+e8/yFR6zEBgWCanrhsfVLsS0XAtRlJPj3sthS0OiaRtiNFvJoeK4QE+tgPO7W+iJ4pbnXM3I9b4YNGXdMHG9Q=="],
 
-    "@pellux/goodvibes-transport-core": ["@pellux/goodvibes-transport-core@1.11.1", "", { "dependencies": { "@pellux/goodvibes-errors": "1.11.1" } }, "sha512-nZXsVQio8lLnzPDGWTlC7AewG36dvo9+LWiUr/EaicK/0jDQnc01q+rFg3QwShGyRDbrhY60PZf7McYRf2/udQ=="],
+    "@pellux/goodvibes-transport-core": ["@pellux/goodvibes-transport-core@1.11.2", "", { "dependencies": { "@pellux/goodvibes-errors": "1.11.2" } }, "sha512-kl5hbEOOSRw9k6j9ZaX6B0HhxqNkUO0PUSpATw6RxOCpvZdUC0uodLuCdtrEfYwyuWV3rtdsfv7AqW9XpLDx5g=="],
 
-    "@pellux/goodvibes-transport-http": ["@pellux/goodvibes-transport-http@1.11.1", "", { "dependencies": { "@pellux/goodvibes-contracts": "1.11.1", "@pellux/goodvibes-errors": "1.11.1", "@pellux/goodvibes-transport-core": "1.11.1", "zod": "^4.3.6" } }, "sha512-DxzzVgtCHeTMKzlWhncrrzFmkIPPSd6INkoRfNCjU89RXXY8jN0L7BHekltgLj6n4UT7XC3mQwhdhiA+cnoszg=="],
+    "@pellux/goodvibes-transport-http": ["@pellux/goodvibes-transport-http@1.11.2", "", { "dependencies": { "@pellux/goodvibes-contracts": "1.11.2", "@pellux/goodvibes-errors": "1.11.2", "@pellux/goodvibes-transport-core": "1.11.2", "zod": "^4.3.6" } }, "sha512-rBPVHc/yZjEnzM6b2fFXwmsSabHrZAdwanGnixbtfUOoR963oLbxx+6qx4+eV5ZgHC1BV9E6ycLQi34XYP9BEA=="],
 
-    "@pellux/goodvibes-transport-realtime": ["@pellux/goodvibes-transport-realtime@1.11.1", "", { "dependencies": { "@pellux/goodvibes-contracts": "1.11.1", "@pellux/goodvibes-errors": "1.11.1", "@pellux/goodvibes-transport-core": "1.11.1", "@pellux/goodvibes-transport-http": "1.11.1" } }, "sha512-ZngRY3191IzwqV9vbH2wERqS+xlLgsGJZgKBV1Np1C5iFsE4ZxjOF/CHGrz/bXGVZ/uDt0Bderd1yv8EulDwKA=="],
+    "@pellux/goodvibes-transport-realtime": ["@pellux/goodvibes-transport-realtime@1.11.2", "", { "dependencies": { "@pellux/goodvibes-contracts": "1.11.2", "@pellux/goodvibes-errors": "1.11.2", "@pellux/goodvibes-transport-core": "1.11.2", "@pellux/goodvibes-transport-http": "1.11.2" } }, "sha512-0ECzaq32rLuuXcjmf+DeOComU9YwRlZwUEBE7osT1c7yX1uLHs5ezg9xECfYhGozy7lsspKifDmvRuhYa8nGXw=="],
+
+    "@pellux/goodvibes-tui-darwin-arm64": ["@pellux/goodvibes-tui-darwin-arm64@1.19.2", "", { "os": "darwin", "cpu": "arm64" }, "sha512-EAnWx3g5BNoV6/hVo2bHyHBi7Qs+AAXM3yVJ/eBmW121xoJsotjhDlhMe62CFMq5OPgSzeFuX9cAQ3zoKWL8Ow=="],
+
+    "@pellux/goodvibes-tui-darwin-x64": ["@pellux/goodvibes-tui-darwin-x64@1.19.2", "", { "os": "darwin", "cpu": "x64" }, "sha512-6w4XvzuFhvyk1ppK9pfSQhxAoNsUtVr3KPHl7+eFZdthuYfnDAAYFCGXnBF37rCFHw1j+6fkxiqpa7n33Ul2iQ=="],
+
+    "@pellux/goodvibes-tui-linux-arm64": ["@pellux/goodvibes-tui-linux-arm64@1.19.2", "", { "os": "linux", "cpu": "arm64" }, "sha512-pGBKZVSev89MJhbAtDJoyC5UyKUu9qo2IESF20MMVOFLzVgNj6UV5IczvS8nK/JG0JtPps+j9GXmJON/3heNjQ=="],
+
+    "@pellux/goodvibes-tui-linux-x64": ["@pellux/goodvibes-tui-linux-x64@1.19.2", "", { "os": "linux", "cpu": "x64" }, "sha512-7Uz/hCa+BlV1sf3LmraPQFDdgCGuh6JbscTviEaFlS8hxMfjpED+zO42eI/Qjl31WWKeBRrRz8S6enrmgwvT4A=="],
 
     "@simple-git/args-pathspec": ["@simple-git/args-pathspec@1.0.3", "", {}, "sha512-ngJMaHlsWDTfjyq9F3VIQ8b7NXbBLq5j9i5bJ6XLYtD6qlDXT7fdKY2KscWWUF8t18xx052Y/PUO1K1TRc9yKA=="],
 
