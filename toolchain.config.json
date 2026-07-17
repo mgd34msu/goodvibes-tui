@@ -1,0 +1,121 @@
+{
+  "//": "TOOLCHAIN-PIN: @pellux/goodvibes-toolchain is dev-linked from a locally-built tarball (SDK commit 20093d41, packed 1.10.1). It is NOT on npm yet. The next release train must re-pin the PUBLISHED version in package.json (devDependencies + overrides) and the reusable-workflow refs stay at mgd34msu/goodvibes-sdk@main. This file is the repo-specific contract consumed by @pellux/goodvibes-toolchain CLIs; behavior lives in the package.",
+  "packageName": "@pellux/goodvibes-tui",
+  "sdkPin": {
+    "sdkPackage": "@pellux/goodvibes-sdk",
+    "pinSource": "dependencies",
+    "lockfile": "bun.lock",
+    "overlayMarker": "node_modules/@pellux/goodvibes-sdk/.local-sdk-overlay.json",
+    "sourceRoots": ["src"],
+    "enforceExportsMap": false
+  },
+  "build": {
+    "appEntrypoint": "src/main.ts",
+    "daemonEntrypoint": "src/daemon/cli.ts",
+    "outDir": "dist",
+    "addonOutDir": "dist/lib",
+    "prebuild": [["bun", "run", "scripts/prebuild.ts"]],
+    "targets": [
+      {
+        "key": "linux-x64",
+        "bunTarget": "bun-linux-x64",
+        "appArtifact": "goodvibes-linux-x64",
+        "daemonArtifact": "goodvibes-daemon-linux-x64",
+        "nativeAddonPackage": "sqlite-vec-linux-x64",
+        "nativeAddonFile": "vec0.so"
+      },
+      {
+        "key": "linux-arm64",
+        "bunTarget": "bun-linux-arm64",
+        "appArtifact": "goodvibes-linux-arm64",
+        "daemonArtifact": "goodvibes-daemon-linux-arm64",
+        "nativeAddonPackage": "sqlite-vec-linux-arm64",
+        "nativeAddonFile": "vec0.so"
+      },
+      {
+        "key": "darwin-x64",
+        "bunTarget": "bun-darwin-x64",
+        "appArtifact": "goodvibes-macos-x64",
+        "daemonArtifact": "goodvibes-daemon-macos-x64",
+        "nativeAddonPackage": "sqlite-vec-darwin-x64",
+        "nativeAddonFile": "vec0.dylib"
+      },
+      {
+        "key": "darwin-arm64",
+        "bunTarget": "bun-darwin-arm64",
+        "appArtifact": "goodvibes-macos-arm64",
+        "daemonArtifact": "goodvibes-daemon-macos-arm64",
+        "nativeAddonPackage": "sqlite-vec-darwin-arm64",
+        "nativeAddonFile": "vec0.dylib"
+      }
+    ]
+  },
+  "coverage": {
+    "funcsFloor": 71,
+    "linesFloor": 75,
+    "command": ["bun", "test", "--coverage", "src"]
+  },
+  "smoke": {
+    "bannerPrefix": "goodvibes ",
+    "forbiddenStrings": ["sqlite-vec", "$bunfs/root"],
+    "binaryDefault": "dist/goodvibes-linux-x64"
+  },
+  "releaseCut": {
+    "branch": "main",
+    "versionFiles": [
+      "platform-packages/linux-x64/package.json",
+      "platform-packages/linux-arm64/package.json",
+      "platform-packages/darwin-x64/package.json",
+      "platform-packages/darwin-arm64/package.json"
+    ],
+    "syncCommands": [
+      ["bun", "run", "scripts/sync-platform-optional-deps.ts"],
+      ["bun", "run", "scripts/prebuild.ts"],
+      ["bun", "run", "scripts/export-foundation-artifacts.ts"]
+    ],
+    "commitPaths": [
+      "package.json",
+      "src/version.ts",
+      "README.md",
+      "CHANGELOG.md",
+      "docs/foundation-artifacts",
+      "platform-packages"
+    ],
+    "changelogHeading": "bracket",
+    "changelogInsertMarker": "first-separator"
+  },
+  "publish": {
+    "packageName": "@pellux/goodvibes-tui",
+    "defaultRegistry": "https://registry.npmjs.org",
+    "requiredTarballPaths": [
+      "README.md",
+      "CHANGELOG.md",
+      "package.json",
+      "src/main.ts",
+      "src/daemon/cli.ts",
+      "bin/goodvibes",
+      "bin/goodvibes-daemon",
+      "scripts/check-bun.sh",
+      "scripts/postinstall.js",
+      ".goodvibes/GOODVIBES.md"
+    ],
+    "forbiddenTarballPrefixes": [
+      ".github/",
+      "src/test/",
+      "src/.test/",
+      ".goodvibes/memory/",
+      "vendor/"
+    ],
+    "maxTarballBytes": 52428800
+  },
+  "perJobGreen": {
+    "owner": "mgd34msu",
+    "repo": "goodvibes-tui",
+    "workflow": "ci.yml",
+    "event": "push",
+    "pollIntervalMs": 20000,
+    "deadlineMs": 1800000,
+    "retryAttempts": 8,
+    "retryDelayMs": 7000
+  }
+}
