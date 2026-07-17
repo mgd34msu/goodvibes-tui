@@ -71,7 +71,8 @@
     "syncCommands": [
       ["bun", "run", "scripts/sync-platform-optional-deps.ts"],
       ["bun", "run", "scripts/prebuild.ts"],
-      ["bun", "run", "scripts/export-foundation-artifacts.ts"]
+      ["bun", "run", "scripts/export-foundation-artifacts.ts"],
+      ["bun", "install"]
     ],
     "commitPaths": [
       "package.json",
@@ -79,7 +80,8 @@
       "README.md",
       "CHANGELOG.md",
       "docs/foundation-artifacts",
-      "platform-packages"
+      "platform-packages",
+      "bun.lock"
     ],
     "changelogHeading": "bracket",
     "changelogInsertMarker": "first-separator"
