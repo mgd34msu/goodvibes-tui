@@ -34,18 +34,20 @@
         "zustand": "^5.0.12",
       },
       "devDependencies": {
+        "@pellux/goodvibes-toolchain": "file:/home/buzzkill/.claude/jobs/e28eaafb/tmp/tarball-toolchain-20093d41/pellux-goodvibes-toolchain-1.10.1.tgz",
         "@types/bun": "^1.3.10",
         "typescript": "^5.9.3",
       },
       "optionalDependencies": {
-        "@pellux/goodvibes-tui-darwin-arm64": "1.19.0",
-        "@pellux/goodvibes-tui-darwin-x64": "1.19.0",
-        "@pellux/goodvibes-tui-linux-arm64": "1.19.0",
-        "@pellux/goodvibes-tui-linux-x64": "1.19.0",
+        "@pellux/goodvibes-tui-darwin-arm64": "1.19.1",
+        "@pellux/goodvibes-tui-darwin-x64": "1.19.1",
+        "@pellux/goodvibes-tui-linux-arm64": "1.19.1",
+        "@pellux/goodvibes-tui-linux-x64": "1.19.1",
       },
     },
   },
   "overrides": {
+    "@pellux/goodvibes-toolchain": "file:/home/buzzkill/.claude/jobs/e28eaafb/tmp/tarball-toolchain-20093d41/pellux-goodvibes-toolchain-1.10.1.tgz",
     "minimatch": "^10.2.5",
   },
   "packages": {
@@ -211,19 +213,21 @@
 
     "@pellux/goodvibes-terminal-shell": ["@pellux/goodvibes-terminal-shell@1.10.1", "", { "dependencies": { "@pellux/goodvibes-contracts": "1.10.1", "@pellux/goodvibes-sdk": "1.10.1" } }, "sha512-g8+FEErPp+vkHKvp9NLzh8fZsdlyv4wRmiLc+2tZYZnllkxodCLOJmSEwrO65evD+k7tyoImCoGB0mtpJ97iuw=="],
 
+    "@pellux/goodvibes-toolchain": ["@pellux/goodvibes-toolchain@/home/buzzkill/.claude/jobs/e28eaafb/tmp/tarball-toolchain-20093d41/pellux-goodvibes-toolchain-1.10.1.tgz", { "bin": { "goodvibes-sdk-pin-gate": "./dist/bin/sdk-pin-gate.js", "goodvibes-build-binaries": "./dist/bin/build-binaries.js", "goodvibes-release-cut": "./dist/bin/release-cut.js", "goodvibes-coverage-gate": "./dist/bin/coverage-gate.js", "goodvibes-verification-ledger": "./dist/bin/verification-ledger.js", "goodvibes-post-build-smoke": "./dist/bin/post-build-smoke.js", "goodvibes-package-install-check": "./dist/bin/package-install-check.js", "goodvibes-publish-package": "./dist/bin/publish-package.js", "goodvibes-per-job-green": "./dist/bin/per-job-green.js", "goodvibes-changelog-gate": "./dist/bin/changelog-gate.js", "goodvibes-sha256sums": "./dist/bin/sha256sums.js" } }, "sha512-RmICQU359nALo9TJ+Cvypf9GgZeC3vRRR2w9TiWb52U6RhdwpH9S3ZoiXpoJq3kAIUlRyRYize92DJdYGieHFA=="],
+
     "@pellux/goodvibes-transport-core": ["@pellux/goodvibes-transport-core@1.10.1", "", { "dependencies": { "@pellux/goodvibes-errors": "1.10.1" } }, "sha512-pOdCEaoPkqxg3YRxfsDCXHABfqoFh/egOGEhJwxbbmHJQjTpilciSTfs4zrWaiztnAZkhRgfWIz0MQhpY3PRUA=="],
 
     "@pellux/goodvibes-transport-http": ["@pellux/goodvibes-transport-http@1.10.1", "", { "dependencies": { "@pellux/goodvibes-contracts": "1.10.1", "@pellux/goodvibes-errors": "1.10.1", "@pellux/goodvibes-transport-core": "1.10.1", "zod": "^4.3.6" } }, "sha512-C2Z3TZ2++LZ9t1FyvjaKwRzfi3m1A33tCjKTKzupuqIyL8PwibbsZ3Jx7gi9nv6bJoJOxpUEZtzzwy5Ej1uerQ=="],
 
     "@pellux/goodvibes-transport-realtime": ["@pellux/goodvibes-transport-realtime@1.10.1", "", { "dependencies": { "@pellux/goodvibes-contracts": "1.10.1", "@pellux/goodvibes-errors": "1.10.1", "@pellux/goodvibes-transport-core": "1.10.1", "@pellux/goodvibes-transport-http": "1.10.1" } }, "sha512-oqRpBU/Sw3Q0/+ahC9wB3uzqNm6/amUDX9Ac0HkdqD2YZkvxzGiKVWQ7IPbFDG5CA2egDM580C/1orc1LOA4lw=="],
 
-    "@pellux/goodvibes-tui-darwin-arm64": ["@pellux/goodvibes-tui-darwin-arm64@1.19.0", "", { "os": "darwin", "cpu": "arm64" }, "sha512-ObmzncYsiisfjL3xTPHc2HvCuGM44Ip1jy9VvpVBj1JOXP5L8R2ZHM3hVjwiJrzkXXgydwpoecD5b0lb7cNTlg=="],
+    "@pellux/goodvibes-tui-darwin-arm64": ["@pellux/goodvibes-tui-darwin-arm64@1.19.1", "", { "os": "darwin", "cpu": "arm64" }, "sha512-W2/SJgfn9T4ygxFdRNOXjR9IvsTWxkyhoEqUkUkmMg9Sj7ACEBALJwiTyMO4iDe+sNlr0pW/4kvARboJyb8lZg=="],
 
-    "@pellux/goodvibes-tui-darwin-x64": ["@pellux/goodvibes-tui-darwin-x64@1.19.0", "", { "os": "darwin", "cpu": "x64" }, "sha512-VlTHKwvxo9cQEDZokZVw9DfDiOmpnyyw/kjLfCHG5VAxfWqCCj2yRvL9V+WOqrc4mUQ+yRdmGGmro1MpX7gklQ=="],
+    "@pellux/goodvibes-tui-darwin-x64": ["@pellux/goodvibes-tui-darwin-x64@1.19.1", "", { "os": "darwin", "cpu": "x64" }, "sha512-L14bo5ef+16LwBEXcyUqEl0Nceii9qTqg/jLhzPvEJL+2nn6D9nyWcwdFZ6mwUrIo5egQ8a9U3NU0O9uOm53mg=="],
 
-    "@pellux/goodvibes-tui-linux-arm64": ["@pellux/goodvibes-tui-linux-arm64@1.19.0", "", { "os": "linux", "cpu": "arm64" }, "sha512-BLwei35dHPefuo6HAEdPkrIIsD+EauifjRHFzHt5gfkHUN0cwZh2NkQWVhXqdgZAneJsdq1TbBGqdsJK0dpjSQ=="],
+    "@pellux/goodvibes-tui-linux-arm64": ["@pellux/goodvibes-tui-linux-arm64@1.19.1", "", { "os": "linux", "cpu": "arm64" }, "sha512-SIsoFr/kUttWsoaWNb8DZh7gNpBUFqjwL1YrLzhMk6qthLIqwqTQ7ne0O9Bb69uYXIlBFFJH+SXa3EJ9jJhZnQ=="],
 
-    "@pellux/goodvibes-tui-linux-x64": ["@pellux/goodvibes-tui-linux-x64@1.19.0", "", { "os": "linux", "cpu": "x64" }, "sha512-ahIaijWvQW9S2kmc/27VOjpPf8GyUkOJo7BydcX1oXkMmbQuqzQUhjSg61tF6KC/HM9ArxoEOOluVBwe5rlfVA=="],
+    "@pellux/goodvibes-tui-linux-x64": ["@pellux/goodvibes-tui-linux-x64@1.19.1", "", { "os": "linux", "cpu": "x64" }, "sha512-tKEdn6OuQJVVT0A8ljH7RnkuJANGnwsjZ4cjm/jfReRvS+DbZJ+nt4G7zxXaCd9NepYr0P3ykAQhCD70llKm2w=="],
 
     "@simple-git/args-pathspec": ["@simple-git/args-pathspec@1.0.3", "", {}, "sha512-ngJMaHlsWDTfjyq9F3VIQ8b7NXbBLq5j9i5bJ6XLYtD6qlDXT7fdKY2KscWWUF8t18xx052Y/PUO1K1TRc9yKA=="],
 
