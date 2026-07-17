@@ -1,6 +1,6 @@
 {
   "name": "@pellux/goodvibes-tui",
-  "version": "1.19.2",
+  "version": "1.19.3",
   "description": "Terminal-native GoodVibes product for coding, operations, automation, knowledge, channels, and daemon-backed control-plane workflows.",
   "type": "module",
   "main": "src/main.ts",
@@ -131,10 +131,10 @@
     "typescript": "^5.9.3"
   },
   "optionalDependencies": {
-    "@pellux/goodvibes-tui-linux-x64": "1.19.2",
-    "@pellux/goodvibes-tui-linux-arm64": "1.19.2",
-    "@pellux/goodvibes-tui-darwin-x64": "1.19.2",
-    "@pellux/goodvibes-tui-darwin-arm64": "1.19.2"
+    "@pellux/goodvibes-tui-linux-x64": "1.19.3",
+    "@pellux/goodvibes-tui-linux-arm64": "1.19.3",
+    "@pellux/goodvibes-tui-darwin-x64": "1.19.3",
+    "@pellux/goodvibes-tui-darwin-arm64": "1.19.3"
   },
   "trustedDependencies": [],
   "overrides": {

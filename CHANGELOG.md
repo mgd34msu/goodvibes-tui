@@ -4,6 +4,14 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [1.19.3] - 2026-07-17
+
+### Changes
+
+- Adopt published SDK 1.11.2, which now carries `@pellux/goodvibes-toolchain` as a real dependency of its own — the toolchain devDependency pin is no longer needed here and has been dropped; it resolves transitively through the SDK.
+- Adopt zero-touch releases: a green CI run on a push to main now tags the release commit and dispatches the release workflow automatically (`ci.yml`'s new `auto-release` job), instead of requiring a manual tag push. `release.yml` gains a `workflow_dispatch` `mode` input (`dry-run` default, `release`) so a release-mode dispatch runs the full publish topology that used to be push-only, while a plain dispatch still behaves as the existing dry-validation path.
+- e1e4f446 deps: adopt published SDK 1.11.2 + zero-touch release adoption
+
 ## [1.19.2] - 2026-07-17
 
 ### Changes
