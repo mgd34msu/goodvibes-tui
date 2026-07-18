@@ -49,7 +49,7 @@ describe('summarizeToolResult (item 3)', () => {
     expect(summarizeToolResult('exec', content)).toBe('exit 0 · 10ms · 1 line');
   });
 
-  test('exec — withheld_env names are rendered compactly', () => {
+  test('exec — withheld_env never reaches the collapsed line', () => {
     const content = JSON.stringify({
       cmd: 'env',
       exit_code: 0,
@@ -58,10 +58,10 @@ describe('summarizeToolResult (item 3)', () => {
       success: true,
       withheld_env: ['AWS_SECRET_ACCESS_KEY', 'GITHUB_TOKEN'],
     });
-    expect(summarizeToolResult('exec', content)).toBe('exit 0 · 10ms · withheld: AWS_SECRET_ACCESS_KEY, GITHUB_TOKEN');
+    expect(summarizeToolResult('exec', content)).toBe('exit 0 · 10ms');
   });
 
-  test('exec — withheld_env caps the shown names and counts the rest', () => {
+  test('exec — a large withheld set also stays off the collapsed line', () => {
     const content = JSON.stringify({
       cmd: 'env',
       exit_code: 0,
@@ -70,10 +70,10 @@ describe('summarizeToolResult (item 3)', () => {
       success: true,
       withheld_env: ['A_TOKEN', 'B_TOKEN', 'C_TOKEN', 'D_TOKEN', 'E_TOKEN'],
     });
-    expect(summarizeToolResult('exec', content)).toBe('exit 0 · 10ms · withheld: A_TOKEN, B_TOKEN, C_TOKEN, +2 more');
+    expect(summarizeToolResult('exec', content)).toBe('exit 0 · 10ms');
   });
 
-  test('exec — multiple commands union withheld names across the batch', () => {
+  test('exec — batch results also keep withheld names off the collapsed line', () => {
     const content = JSON.stringify({
       total: 2,
       commands: [
@@ -81,7 +81,7 @@ describe('summarizeToolResult (item 3)', () => {
         { success: true, withheld_env: ['GITHUB_TOKEN', 'AWS_SECRET_ACCESS_KEY'] },
       ],
     });
-    expect(summarizeToolResult('exec', content)).toBe('2 commands · all ok · withheld: AWS_SECRET_ACCESS_KEY, GITHUB_TOKEN');
+    expect(summarizeToolResult('exec', content)).toBe('2 commands · all ok');
   });
 
   test('exec — a run outside the sandbox (no sandboxed field) stays quiet', () => {

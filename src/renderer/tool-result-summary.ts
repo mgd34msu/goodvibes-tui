@@ -93,21 +93,12 @@ function summarizeEdit(obj: Record<string, unknown>): string | null {
   return `${verb} ${applied} edit${applied === 1 ? '' : 's'}${target}${failText}`;
 }
 
-/** Credential-bearing env-var names withheld from the spawn (never values). Empty when the field is absent/empty. */
-function withheldEnvNames(obj: Record<string, unknown>): string[] {
-  const raw = obj.withheld_env;
-  if (!Array.isArray(raw)) return [];
-  return raw.filter((n): n is string => typeof n === 'string' && n.length > 0);
-}
-
-/** Compact "withheld: NAME, NAME, …" suffix, capped so a long scrub list doesn't dominate the collapsed line. */
-function withheldEnvSuffix(names: readonly string[]): string {
-  if (names.length === 0) return '';
-  const MAX_SHOWN = 3;
-  const shown = names.slice(0, MAX_SHOWN).join(', ');
-  const more = names.length > MAX_SHOWN ? `, +${names.length - MAX_SHOWN} more` : '';
-  return ` · withheld: ${shown}${more}`;
-}
+// The credential scrub's withheld_env report stays OUT of the collapsed line
+// entirely. It withholds the same standing set of names on every spawn, so any
+// per-result rendering repeats identical env-var noise all session long — the
+// dominant transcript spam for anyone with several keys exported. The report
+// only matters when a command fails because a needed credential was scrubbed,
+// and for that case the full name list is one expand away in the raw payload.
 
 /**
  * Compact per-command exec-sandbox suffix: `sandboxed` fields are present
@@ -141,17 +132,16 @@ function summarizeExecOne(obj: Record<string, unknown>): string | null {
   const exit = obj.exit_code;
   const dur = asNumber(obj.duration_ms);
   const durText = dur !== undefined ? ` · ${formatDuration(dur)}` : '';
-  const withheldText = withheldEnvSuffix(withheldEnvNames(obj));
   const sandboxText = sandboxSuffix(obj);
-  if (obj.timed_out === true) return `timed out${durText}${withheldText}${sandboxText}`;
-  if (obj.cancelled === true) return `cancelled${durText}${withheldText}${sandboxText}`;
+  if (obj.timed_out === true) return `timed out${durText}${sandboxText}`;
+  if (obj.cancelled === true) return `cancelled${durText}${sandboxText}`;
   const stdout = typeof obj.stdout === 'string' ? obj.stdout : '';
   const lineCount = stdout.length === 0
     ? 0
     : stdout.replace(/\n$/, '').split('\n').length;
   const lineText = lineCount > 0 ? ` · ${lineCount} line${lineCount === 1 ? '' : 's'}` : '';
   const code = typeof exit === 'number' ? String(exit) : '?';
-  return `exit ${code}${durText}${lineText}${withheldText}${sandboxText}`;
+  return `exit ${code}${durText}${lineText}${sandboxText}`;
 }
 
 /** exec: single { cmd, exit_code, ... } or multi { commands: [...], total }. */
@@ -161,15 +151,6 @@ function summarizeExec(obj: Record<string, unknown>): string | null {
     const failed = obj.commands.filter(
       (c) => c && typeof c === 'object' && (c as Record<string, unknown>).success === false,
     ).length;
-    // Union of withheld names across every command in the batch — the scrub
-    // runs per-spawn, so different commands can withhold different names.
-    const withheldAcrossCommands = new Set<string>();
-    for (const c of obj.commands) {
-      if (c && typeof c === 'object') {
-        for (const name of withheldEnvNames(c as Record<string, unknown>)) withheldAcrossCommands.add(name);
-      }
-    }
-    const withheldText = withheldEnvSuffix([...withheldAcrossCommands]);
     // Count sandboxed commands across the batch — a compact "N sandboxed" beats
     // repeating each command's full boundary detail on the collapsed line.
     const sandboxedCount = obj.commands.filter(
@@ -177,8 +158,8 @@ function summarizeExec(obj: Record<string, unknown>): string | null {
     ).length;
     const sandboxText = sandboxedCount > 0 ? ` · ${sandboxedCount} sandboxed` : '';
     return failed > 0
-      ? `${total} commands · ${failed} failed${withheldText}${sandboxText}`
-      : `${total} commands · all ok${withheldText}${sandboxText}`;
+      ? `${total} commands · ${failed} failed${sandboxText}`
+      : `${total} commands · all ok${sandboxText}`;
   }
   if ('exit_code' in obj || 'timed_out' in obj || 'cancelled' in obj) {
     return summarizeExecOne(obj);
