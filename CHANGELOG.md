@@ -4,6 +4,14 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [1.19.5] - 2026-07-18
+
+### Changes
+
+Fixed: command results no longer print the credential-scrub env-var name list ("withheld: ...") on every collapsed line — the dominant transcript noise for anyone with several API keys exported. The full detail remains in the expanded result payload.
+Fixed: the encrypted secrets store can no longer be silently orphaned by key changes — key generation is race-safe, writes refuse a stale cached key (and restore a missing keyfile), and a mismatched store now reports exactly which key wrote it.
+Updated: bundled platform runtime to 1.11.4.
+
 ## [1.19.4] - 2026-07-17
 
 ### Changes
