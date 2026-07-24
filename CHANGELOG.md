@@ -4,6 +4,12 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [1.19.6] - 2026-07-24
+
+### Changes
+
+- 4e5bbca7 fix: explicit-only session restore at launch; fold tool results into collapsible groups
+
 ## [1.19.5] - 2026-07-18
 
 ### Changes
