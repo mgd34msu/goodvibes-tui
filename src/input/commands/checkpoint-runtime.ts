@@ -19,8 +19,8 @@ import type { CommandContext, CommandRegistry } from '../command-registry.ts';
 // Formatting helpers
 // ---------------------------------------------------------------------------
 
-/** Drop the redundant 'wcp_' prefix and cap length for compact listing. Full ids (and any unambiguous prefix of one) are still accepted by /rewind. */
-function shortId(id: string): string {
+/** Drop the redundant 'wcp_' prefix and cap length for compact listing. Full ids (and any unambiguous prefix of one) are still accepted by /rewind. Exported: /rewind's no-anchors checkpoint fallback (rewind-runtime.ts) reuses this same formatting. */
+export function shortId(id: string): string {
   const stripped = id.startsWith('wcp_') ? id.slice(4) : id;
   return stripped.length > 12 ? stripped.slice(0, 12) : stripped;
 }
@@ -77,7 +77,7 @@ export function registerCheckpointRuntimeCommands(registry: CommandRegistry): vo
       // them would cost one diff spawn per checkpoint (O(checkpoints)), which
       // stops being cheap once there are more than a handful. /rewind <id>
       // loads exactly one diff, so the exact file list is available there.
-      ctx.print('Use /rewind to preview and restore a completed turn (files and/or conversation) — it reuses these checkpoints for the files half.');
+      ctx.print('Use /rewind to preview and restore a completed turn (files and/or conversation) — it reuses these checkpoints for the files half. With no completed turns recorded this run (e.g. right after a restart), /rewind falls back to restoring one of these checkpoints directly, by number or id — files only, no conversation state.');
     },
   });
 

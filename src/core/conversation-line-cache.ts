@@ -323,7 +323,7 @@ export class MessageLineCache {
     // turn under a single collapsible header (see conversation-tool-groups.ts).
     // Computed once per pass, over the same slice+offset appendConversationMessages
     // would see, so both entry points fold identically.
-    const toolGroupMembership = computeToolGroupMembership(messages, msgIndexOffset);
+    const toolGroupMembership = computeToolGroupMembership(messages, msgIndexOffset, width);
     const renderContext: ConversationRenderContext = { ...context, completedToolCallIds, toolGroupMembership };
 
     const touched = new Set<number>();

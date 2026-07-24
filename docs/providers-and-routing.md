@@ -87,6 +87,54 @@ Key properties:
 
 For free-tier synthetic models, the runtime can also cascade to the next-best free model when every backend for the current synthetic model is exhausted.
 
+### Setting up failover
+
+Failover needs more than one backend to fail over to, so set API keys for several free providers. A workable minimum:
+
+```sh
+export GROQ_API_KEY="..."
+export HF_API_KEY="..."
+export NVIDIA_API_KEY="..."
+export OLLAMA_CLOUD_API_KEY="..."
+export OPENROUTER_API_KEY="..."
+export AIHUBMIX_API_KEY="..."
+```
+
+Then pick any model from the `synthetic` provider. Keys can equally be stored with `/secrets set <NAME> <value>`; environment variables win when both are set.
+
+### What synthetic models are
+
+Synthetic models are models available from multiple providers, automatically grouped by the system under a single selectable entry. When you pick a synthetic model, the system routes your request to the best available backend — you never need to think about which provider is serving it.
+
+Models with different naming across providers (for example `GPT-4o` vs `gpt 4o`) are automatically merged into one entry. Each synthetic model shows how many providers are available for failover in the model picker.
+
+### Transparent failover rules
+
+- **Rate limit (429)** — retries the next provider in the pool immediately.
+- **Server error (500) or network error** — retries the next provider after a five-second cooldown.
+- **Client error (400)** — does not trigger failover. A 400 means the request itself is at fault, not the provider, so switching providers would not help.
+- **All providers cooling down with short cooldowns (120 seconds or less)** — the system waits for the shortest cooldown to expire and retries.
+
+Failover is silent by default: the model name in the status bar does not change when the runtime switches backends for the same synthetic model.
+
+### Cross-model failover (free tier only)
+
+When every backend for a free synthetic model is exhausted and cooldowns are too long to wait out, the system falls back to the next-best free model ranked by benchmark score, notifies inline without blocking the turn, and cascades until it finds a working free model. Free, paid, and subscription tiers never mix — this cascade only happens within the free tier.
+
+> **Cost-accrual caveat:** this system is not perfect, and charges can accrue in ways it cannot always catch — notably when a provider moves a model from free to paid while a session has been running longer than 24 hours without a model refresh, since the system has no way to know the model is now paid. Refreshes happen automatically when a session is started or resumed after the 24-hour catalog TTL expires; for long-running sessions, refresh the model list daily.
+
+### Paid and subscription exhaustion
+
+Paid and subscription models do not auto-switch to a different model, because the user made a deliberate, cost-conscious choice. When a paid or subscription model is exhausted, the system shows recovery options instead:
+
+- wait for the cooldown to expire and retry
+- switch model with `/model`
+- switch to a free synthetic model
+
+### Model picker grouping
+
+Synthetic models are split into **Top Models** (S-tier or A-tier by benchmark) and **All Synthetic**. Each entry shows how many providers are available for failover, and quality tier badges (S/A/B/C) are shown next to model names based on composite benchmark score.
+
 ### Failover notices and cost delta
 
 When a turn fails over to another provider, the transcript shows a notice naming both the source and destination providers alongside the error class. If the catalog contains per-1M-token pricing for both models, the notice also includes the cost delta in the form:
@@ -113,13 +161,41 @@ goodvibes models chain --json        # JSON output for scripting
 
 Each entry shows the model id, tier, configured/total backend count, and a position-numbered list of `provider/model` rungs.
 
+Many model providers also support configurable reasoning effort levels. Selectable options include `instant`, `low`, `medium`, and `high`.
+
 ## Custom providers
 
 Any OpenAI-compatible API can be added by dropping JSON into:
 
 - `~/.goodvibes/tui/providers/*.json`
 
-Provider JSON is hot-reloaded, so custom provider definitions appear in the model/runtime surfaces without restarting the process.
+For example:
+
+```json
+{
+  "name": "openrouter",
+  "displayName": "OpenRouter",
+  "type": "openai-compat",
+  "baseURL": "https://openrouter.ai/api/v1",
+  "apiKeyEnv": "OPENROUTER_API_KEY",
+  "models": [
+    {
+      "id": "anthropic/claude-sonnet-4-6",
+      "displayName": "Claude Sonnet 4.6 (via OpenRouter)",
+      "description": "Anthropic Claude Sonnet 4.6 via OpenRouter",
+      "contextWindow": 200000,
+      "capabilities": {
+        "toolCalling": true,
+        "codeEditing": true,
+        "reasoning": true,
+        "multimodal": true
+      }
+    }
+  ]
+}
+```
+
+Provider JSON is hot-reloaded, so custom provider definitions appear in the model/runtime surfaces without restarting the process. Use the `/add-provider` skill for interactive guided setup with smart defaults for popular providers.
 
 ## Daemon OpenAI-Compatible API
 

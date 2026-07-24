@@ -4,12 +4,12 @@
 |    │ Core Navigation  │    |
 |    │ ──────────────── │    |
 |    │ Up / Down             |
-|    │ Scroll / history      |
-|    │ recall                |
+|    │ Recall input          |
+|    │ history; Down at      |
+|    │ bottom focuses the    |
+|    │ process indicator     |
 |    │ PageUp / PageDn       |
-|    │ Scroll by full page   |
-|    │ Ctrl+F                |
-|    │ [1-8 of 49]      │    |
+|    │ [1-8 of 52]      │    |
 |    └─[Up/Down] Scrol…─┘    |
 @STYLES
 0 4 fg=#475569

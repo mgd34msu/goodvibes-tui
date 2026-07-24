@@ -14,7 +14,8 @@ import type { SessionManager } from '@pellux/goodvibes-sdk/platform/sessions';
 import type { PanelManager } from '../panels/panel-manager.ts';
 import type { ProviderRegistry } from '@pellux/goodvibes-sdk/platform/providers';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
-import { replayJournalForSession } from '../core/session-recovery.ts';
+import { resumeSessionCore } from '../core/session-resume-core.ts';
+import type { SessionSurface } from '@/runtime/index.ts';
 
 export interface ResumeSessionOptions {
   readonly runtimeBus: RuntimeEventBus;
@@ -31,77 +32,94 @@ export interface ResumeSessionOptions {
   readonly hookDispatcher: HookDispatcher;
   readonly sessionManager: SessionManager;
   readonly panelManager: PanelManager;
+  /** The app's declare-once session-storage handle — the same one /session resume threads. */
+  readonly surface: SessionSurface;
+  /**
+   * Multi-instance guard for this seam. Resolves false when the operator
+   * declines to fork a session another terminal still has open. Optional so a
+   * host without a modal surface keeps the seam's original behavior.
+   */
+  readonly confirmLiveResume?: (sessionId: string) => Promise<boolean>;
   readonly configManager: Pick<ConfigManager, 'get' | 'getCategory'>;
   readonly providerRegistry: Pick<ProviderRegistry, 'get' | 'getCurrentModel' | 'getForModel' | 'require' | 'resolveModelPricing'>;
-  readonly homeDirectory: string;
   /** See CommandSessionServices.hydrateSessionUsage (command-registry.ts). */
   readonly hydrateSessionUsage?: () => void;
+  /**
+   * Reselects the resumed session's saved model through the live provider
+   * registry (matches session-workflow.ts's `/session resume` reselection
+   * fallback — see core/session-resume-core.ts). Optional so a caller without
+   * a provider API wired still gets the direct-assignment behavior this seam
+   * always had.
+   */
+  readonly selectModel?: (model: string) => Promise<{ readonly registryKey: string; readonly providerId: string }>;
 }
 
-export function createResumeSessionHandler(options: ResumeSessionOptions): (sessionId: string) => void {
-  return (sessionId: string): void => {
+/**
+ * Delegates the mechanical resume sequence to resumeSessionCore (the same
+ * routine session-workflow.ts's `/session resume` calls) so the two seams
+ * cannot diverge on restoreTurnAnchors, resetAll-before-fromJSON, model
+ * reselection, or the modal-redirect panel-reopen skip — see
+ * core/session-resume-core.ts's header doc for the full list of divergences
+ * this closes. Everything below the resumeSessionCore call is plumbing only
+ * this seam performs (hook fire, session-spine mirror, shared-broker
+ * reopen, last-session pointer) plus this seam's own log/render idiom.
+ */
+export function createResumeSessionHandler(options: ResumeSessionOptions): (sessionId: string) => Promise<void> {
+  return async (sessionId: string): Promise<void> => {
     try {
-      const { messages, meta } = options.sessionManager.load(sessionId);
+      // Multi-instance safety, matching what `/session resume` already does
+      // for the text path: never fork a session another terminal is holding
+      // open without the operator saying so.
+      if (options.confirmLiveResume && !(await options.confirmLiveResume(sessionId))) {
+        options.conversation.log('Resume cancelled — the session is still open in another terminal.', { fg: '244' });
+        options.requestRender();
+        return;
+      }
+      // Pre-read purely for the emitSessionResumed announcement's turnCount,
+      // which reports the raw saved-snapshot size — resumeSessionCore performs
+      // its own load() right after this (SessionManager.load is a cheap JSONL
+      // parse; the tiny duplicate read keeps this announcement's meaning
+      // unchanged rather than repurposing it to a post-replay count).
+      const { messages: rawMessages } = options.sessionManager.load(sessionId);
       emitSessionResumed(options.runtimeBus, {
         sessionId: options.runtime.sessionId,
         traceId: `${options.runtime.sessionId}:session-resume:${sessionId}`,
         source: 'bootstrap',
       }, {
         sessionId,
-        turnCount: messages.length,
+        turnCount: rawMessages.length,
       });
-      options.conversation.fromJSON({
-        messages: messages as Parameters<typeof options.conversation.fromJSON>[0]['messages'],
-        title: meta.title,
-        titleSource: meta.titleSource,
-      });
-      options.runtime.sessionId = sessionId;
-      replayJournalForSession({
-        homeDirectory: options.homeDirectory,
-        sessionId,
-        snapshotTimestamp: meta.timestamp ?? 0,
+
+      const outcome = await resumeSessionCore(sessionId, {
+        sessionManager: options.sessionManager,
         conversation: options.conversation,
-        persistSnapshot: (replayedMessages) => {
-          options.sessionManager.save(sessionId, replayedMessages as never[], {
-            title: options.conversation.title || meta.title,
-            model: meta.model,
-            provider: meta.provider,
-            timestamp: Date.now(),
-            titleSource: meta.titleSource,
-            returnContext: meta.returnContext,
-          });
-        },
+        runtime: options.runtime,
+        surface: options.surface,
+        panelManager: options.panelManager,
+        selectModel: options.selectModel,
+        hydrateSessionUsage: options.hydrateSessionUsage,
       });
-      // Hydrate the footer's token counters from the resumed history now that
-      // fromJSON()/journal replay are both applied — before requestRender() below.
-      options.hydrateSessionUsage?.();
+      const { meta, panels } = outcome;
+
       options.onSessionIdChanged?.(sessionId);
-      if (meta?.model) options.runtime.model = meta.model;
-      if (meta?.provider) options.runtime.provider = meta.provider;
       options.writeLastSessionPointer(sessionId);
       void options.sharedSessionBroker.reopenSession(sessionId).catch((err) => { logger.debug('session broker reopen session failed', { err }); });
       // Fire-and-forget spine mirror (reopen:true — the user resume verb).
       options.sessionSpine.reopen({ sessionId, project: options.project, title: options.conversation.title || meta.title });
       options.conversation.log(`Resumed session: ${sessionId}`, { fg: '135' });
-      const reopenedPanels: string[] = [];
-      if (meta.returnContext?.openPanels?.length) {
-        for (const panelId of meta.returnContext.openPanels.slice(0, 4)) {
-          try {
-            options.panelManager.open(panelId);
-            reopenedPanels.push(panelId);
-          } catch {
-            // Ignore unavailable panels during restore.
-          }
-        }
-        if (reopenedPanels.length > 0) options.panelManager.show();
+      if (panels.movedToModal.length > 0) {
+        options.conversation.log(`Resume: ${panels.movedToModal.join(', ')} moved to a modal — reopen via its command instead of as a panel.`, { fg: '244' });
+      }
+      if (panels.notReopened.length > 0) {
+        options.conversation.log(`Resume: …and ${panels.notReopened.length} more not reopened (/panels to open)`, { fg: '244' });
       }
       const returnContextMode = getReturnContextMode(options.configManager);
       if (returnContextMode !== 'off' && meta.returnContext) {
         for (const line of formatReturnContextForDisplay(meta.returnContext)) {
           options.conversation.log(`Resume: ${line}`, { fg: '244' });
         }
-        if (reopenedPanels.length > 0) {
-          options.conversation.log(`Resume: Reopened panels: ${reopenedPanels.join(', ')}`, { fg: '244' });
+        if (panels.reopened.length > 0) {
+          options.conversation.log(`Resume: Reopened panels: ${panels.reopened.join(', ')}`, { fg: '244' });
         }
         if ((meta.returnContext.remoteRunners?.length ?? 0) > 0) {
           options.conversation.log(`Resume: Remote re-entry -> /remote recover ${meta.returnContext.remoteRunners![0]}`, { fg: '244' });

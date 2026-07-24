@@ -113,21 +113,29 @@ export interface UpdateSettings {
   readonly autoUpdateAtLaunch?: boolean;
   /** How long the launch-time version check may take before it is skipped. Defaults to 2500; clamped to [250, 30000]. */
   readonly launchCheckTimeoutMs?: number;
+  /** How long the launch-time download+verify+swap may take before it is deferred to the next launch. Defaults to 45000; clamped to [5000, 300000]. */
+  readonly applyTimeoutMs?: number;
 }
 
 const LAUNCH_CHECK_MIN_TIMEOUT_MS = 250;
 const LAUNCH_CHECK_MAX_TIMEOUT_MS = 30_000;
+const LAUNCH_APPLY_MIN_TIMEOUT_MS = 5_000;
+const LAUNCH_APPLY_MAX_TIMEOUT_MS = 300_000;
 
 /** Read `update.*` from settings.json, validating and clamping the timeout. */
 export function readUpdateSettings(configManager: Pick<ConfigManager, 'getRaw'>): UpdateSettings {
   const src = readNamespace(configManager, 'update');
   if (!src) return {};
-  const out: { autoUpdateAtLaunch?: boolean; launchCheckTimeoutMs?: number } = {};
+  const out: { autoUpdateAtLaunch?: boolean; launchCheckTimeoutMs?: number; applyTimeoutMs?: number } = {};
   const autoUpdateAtLaunch = readBoolean(src, 'autoUpdateAtLaunch');
   if (autoUpdateAtLaunch !== undefined) out.autoUpdateAtLaunch = autoUpdateAtLaunch;
   const launchCheckTimeoutMs = readPositiveInt(src, 'launchCheckTimeoutMs');
   if (launchCheckTimeoutMs !== undefined) {
     out.launchCheckTimeoutMs = Math.min(LAUNCH_CHECK_MAX_TIMEOUT_MS, Math.max(LAUNCH_CHECK_MIN_TIMEOUT_MS, launchCheckTimeoutMs));
+  }
+  const applyTimeoutMs = readPositiveInt(src, 'applyTimeoutMs');
+  if (applyTimeoutMs !== undefined) {
+    out.applyTimeoutMs = Math.min(LAUNCH_APPLY_MAX_TIMEOUT_MS, Math.max(LAUNCH_APPLY_MIN_TIMEOUT_MS, applyTimeoutMs));
   }
   return out;
 }

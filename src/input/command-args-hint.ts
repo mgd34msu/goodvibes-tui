@@ -1,12 +1,21 @@
 import type { CommandRegistry } from './command-registry.ts';
+import { SESSION_SUBCOMMAND_ARG_HINTS } from './commands/session.ts';
 
+/**
+ * Per-command subcommand → argument-hint maps. `session`'s entries come
+ * straight from session.ts (SESSION_SUBCOMMAND_ARG_HINTS) — the same table
+ * the `/session` switch itself is built from — so the two can never drift
+ * apart; the others are hand-maintained here since they're small and their
+ * owning modules don't export an equivalent table. A drift test
+ * (src/test/input/command-args-hint.test.ts) checks every top-level key
+ * below resolves to a real registered command.
+ */
 const SUBCOMMAND_HINTS: Record<string, Record<string, string>> = {
-  session: { rename: '<name>', resume: '<id|name>', info: '<id>', export: '<id> [format]', search: '<query>', delete: '<id>' },
+  session: SESSION_SUBCOMMAND_ARG_HINTS,
   template: { save: '<name>', use: '<name> [args]', edit: '<name>', delete: '<name>' },
   secrets: { set: '<KEY> <value>', get: '<KEY>', delete: '<KEY>' },
   permissions: { tool: '<name> allow|prompt|deny' },
   config: { reset: '<key>' },
-  danger: {},
   plugin: { enable: '<name>', disable: '<name>', reload: '' },
 };
 

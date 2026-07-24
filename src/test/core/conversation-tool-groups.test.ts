@@ -14,7 +14,18 @@ import {
   detectToolGroups,
   computeToolGroupMembership,
 } from '../../core/conversation-tool-groups.ts';
+import { renderExpandedToolResultLines } from '../../renderer/tool-result-expanded-lines.ts';
 import type { ConversationMessageSnapshot } from '@pellux/goodvibes-sdk/platform/core';
+
+const WIDTH = 80;
+
+/** Expected post-render line count for one or more tool-result bodies at
+ *  WIDTH — mirrors what buildToolGroupMembership sums for `totalLines`, so
+ *  these tests assert the real invariant (matches the render) rather than a
+ *  hand-computed magic number that would silently drift from the renderer. */
+function expectedLines(...contents: string[]): number {
+  return contents.reduce((sum, content) => sum + renderExpandedToolResultLines(content, WIDTH).length, 0);
+}
 
 type Message = ConversationMessageSnapshot;
 
@@ -133,11 +144,43 @@ describe('computeToolGroupMembership', () => {
       toolResult('a', 'line one\nline two'), // 2 lines
       toolResult('b', 'single line'),          // 1 line
     ];
-    const membership = computeToolGroupMembership(messages, 0);
-    expect(membership.get(1)).toEqual({ groupKey: 'group_0', isFirst: true, toolCount: 2, totalLines: 3, memberIndexes: [1, 2] });
-    expect(membership.get(2)).toEqual({ groupKey: 'group_0', isFirst: false, toolCount: 2, totalLines: 3, memberIndexes: [1, 2] });
+    const membership = computeToolGroupMembership(messages, 0, WIDTH);
+    const totalLines = expectedLines('line one\nline two', 'single line');
+    expect(membership.get(1)).toEqual({ groupKey: 'group_0', isFirst: true, toolCount: 2, totalLines, toolNames: ['exec', 'exec'], memberIndexes: [1, 2] });
+    expect(membership.get(2)).toEqual({ groupKey: 'group_0', isFirst: false, toolCount: 2, totalLines, toolNames: ['exec', 'exec'], memberIndexes: [1, 2] });
     // The assistant message itself is never a membership key.
     expect(membership.has(0)).toBe(false);
+  });
+
+  test('the "N lines" total matches what expanding every member actually renders, not raw content length', () => {
+    // A JSON blob is one raw line but pretty-prints to several once expanded —
+    // the group total must count the expanded form, matching each member's
+    // own badge (see conversation-rendering.ts / tool-result-expanded-lines.ts).
+    const jsonContent = JSON.stringify({ a: 1, b: 2, c: 3 });
+    const messages: Message[] = [
+      assistantWithTools(['a', 'b']),
+      toolResult('a', jsonContent),
+      toolResult('b', 'plain'),
+    ];
+    const membership = computeToolGroupMembership(messages, 0, WIDTH);
+    const expected = expectedLines(jsonContent, 'plain');
+    expect(expected).toBeGreaterThan(2); // sanity: the JSON really did expand past 1 raw line
+    expect(membership.get(1)?.totalLines).toBe(expected);
+  });
+
+  test('deduplicates tool names with counts for the group header summary', () => {
+    const messages: Message[] = [
+      { role: 'assistant', content: '', toolCalls: [
+        { id: 'a', name: 'read', arguments: {} },
+        { id: 'b', name: 'read', arguments: {} },
+        { id: 'c', name: 'exec', arguments: {} },
+      ] },
+      { role: 'tool', callId: 'a', content: 'x', toolName: 'read' },
+      { role: 'tool', callId: 'b', content: 'y', toolName: 'read' },
+      { role: 'tool', callId: 'c', content: 'z', toolName: 'exec' },
+    ];
+    const membership = computeToolGroupMembership(messages, 0, WIDTH);
+    expect(membership.get(1)?.toolNames).toEqual(['read', 'read', 'exec']);
   });
 
   test('an ungrouped (single-result) run produces no membership entries', () => {
@@ -145,7 +188,7 @@ describe('computeToolGroupMembership', () => {
       assistantWithTools(['a']),
       toolResult('a'),
     ];
-    expect(computeToolGroupMembership(messages, 0).size).toBe(0);
+    expect(computeToolGroupMembership(messages, 0, WIDTH).size).toBe(0);
   });
 
   test('two separate assistant turns produce two independently-keyed groups', () => {
@@ -157,7 +200,7 @@ describe('computeToolGroupMembership', () => {
       toolResult('c'),
       toolResult('d'),
     ];
-    const membership = computeToolGroupMembership(messages, 0);
+    const membership = computeToolGroupMembership(messages, 0, WIDTH);
     expect(membership.get(1)?.groupKey).toBe('group_0');
     expect(membership.get(2)?.groupKey).toBe('group_0');
     expect(membership.get(4)?.groupKey).toBe('group_3');

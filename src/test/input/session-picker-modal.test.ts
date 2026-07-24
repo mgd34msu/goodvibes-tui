@@ -6,6 +6,7 @@ import { rmSync, existsSync } from 'fs';
 import { SessionPickerModal } from '../../input/session-picker-modal.ts';
 import { SessionManager } from '@pellux/goodvibes-sdk/platform/sessions';
 import { makeProjectTempDir } from '../helpers/project-temp.ts';
+import { makeTestSurface } from '../helpers/session-surface.ts';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -28,7 +29,7 @@ describe('SessionPickerModal', () => {
 
   beforeEach(() => {
     tmpDir = makeTmpDir();
-    sm = new SessionManager(tmpDir, { surfaceRoot: 'tui' });
+    sm = new SessionManager(tmpDir, { surface: makeTestSurface(tmpDir) });
   });
 
   afterEach(() => {

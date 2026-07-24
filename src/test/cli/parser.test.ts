@@ -7,6 +7,7 @@ import {
   SessionManager,
 } from '@pellux/goodvibes-sdk/platform/sessions';
 import { persistConversation, readLastSessionPointer } from '@/runtime/index.ts';
+import { makeTestSurface } from '../helpers/session-surface.ts';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -347,7 +348,7 @@ describe('pointer-file resume (--continue integration)', () => {
     homeDir = join(base, 'home');
     mkdirSync(cwdDir, { recursive: true });
     mkdirSync(homeDir, { recursive: true });
-    sessionManager = new SessionManager(cwdDir, { surfaceRoot: 'tui' });
+    sessionManager = new SessionManager(cwdDir, { surface: makeTestSurface(cwdDir) });
   });
 
   afterEach(() => {
@@ -390,7 +391,7 @@ describe('pointer-file resume (--continue integration)', () => {
       'openai:gpt-5.2',
       'openai',
       'Hello',
-      { workingDirectory: cwdDir, homeDirectory: homeDir, sessionManager, surfaceRoot: 'tui' },
+      { surface: makeTestSurface(cwdDir, homeDir) },
     );
 
     const pointer = readLastSessionPointer({
@@ -417,7 +418,7 @@ describe('pointer-file resume (--continue integration)', () => {
         'openai:gpt-5.2',
         'openai',
         sessionId,
-        { workingDirectory: cwdDir, homeDirectory: homeDir, sessionManager, surfaceRoot: 'tui' },
+        { surface: makeTestSurface(cwdDir, homeDir) },
       );
     }
     const pointer = readLastSessionPointer({

@@ -84,6 +84,7 @@ import type { PermissionRequest } from '@pellux/goodvibes-sdk/platform/permissio
 import { resolveApprovalRequester } from '../../permissions/hunk-selection.ts';
 import { ModalFactory } from '../../renderer/modal-factory.ts';
 import type { Cell, Line } from '../../types/grid.ts';
+import { makeTestSurface } from '../helpers/session-surface.ts';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -820,8 +821,8 @@ const GROUP_TOOL_RESULT_B = {
   content: 'Wrote 3 lines to output.ts',
 };
 const GROUP_MEMBERSHIP = new Map<number, ToolGroupMembership>([
-  [0, { groupKey: 'group_test', isFirst: true, toolCount: 2, totalLines: 3 }],
-  [1, { groupKey: 'group_test', isFirst: false, toolCount: 2, totalLines: 3 }],
+  [0, { groupKey: 'group_test', isFirst: true, toolCount: 2, totalLines: 3, toolNames: ['read', 'write'], memberIndexes: [0, 1] }],
+  [1, { groupKey: 'group_test', isFirst: false, toolCount: 2, totalLines: 3, toolNames: ['read', 'write'], memberIndexes: [0, 1] }],
 ]);
 
 function renderToolGroupCollapsedSurface(): Line[] {
@@ -1110,7 +1111,7 @@ function renderSessionPickerSurface(width: number, height: number): Line[] {
   return withUtcTz(() => {
     const rootDir = mkdtempSync(join(tmpdir(), 'gv-golden-session-picker-'));
     try {
-      const sessionManager = new SessionManager(rootDir, { surfaceRoot: 'tui' });
+      const sessionManager = new SessionManager(rootDir, { surface: makeTestSurface(rootDir) });
       const modal = new SessionPickerModal(sessionManager);
       modal.active = true;
       modal.sessions = [

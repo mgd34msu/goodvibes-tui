@@ -1,7 +1,7 @@
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { copyToClipboard, pasteFromClipboard, pasteImageFromClipboard } from '../utils/clipboard.ts';
 import type { InfiniteBuffer } from '../core/history.ts';
-import type { ConversationManager } from '../core/conversation';
+import type { BlockMeta, ConversationManager } from '../core/conversation';
 import type { PermissionCategory } from '@pellux/goodvibes-sdk/platform/permissions';
 import type { ContentPart } from '@pellux/goodvibes-sdk/platform/providers';
 import type { CommandContext } from './command-registry.ts';
@@ -243,6 +243,30 @@ export function findMarkerAtPos(prompt: string, pos: number): { start: number; e
   return null;
 }
 
+/**
+ * describeBlockForReceipt - Honest, human-readable name for a block, used by
+ * every anchor-based action's receipt (Ctrl+Y/B/S/A, Tab, block-actions menu)
+ * so the transcript always says exactly what was acted on — never just an
+ * internal collapseKey or a bare "done".
+ */
+export function describeBlockForReceipt(block: BlockMeta): string {
+  const lineText = `${block.lineCount} line${block.lineCount === 1 ? '' : 's'}`;
+  switch (block.type) {
+    case 'tool':
+      return block.toolName ? `tool result: ${block.toolName} (${lineText})` : `tool result (${lineText})`;
+    case 'tool_group':
+      return `tool result group (${lineText})`;
+    case 'diff':
+      return block.filePath ? `diff: ${block.filePath} (${lineText})` : `diff (${lineText})`;
+    case 'code':
+      return `code block (${lineText})`;
+    case 'thinking':
+      return `thinking (${lineText})`;
+    default:
+      return `${block.type} (${lineText})`;
+  }
+}
+
 export function handleCopy(
   selection: SelectionManager,
   getHistory: () => InfiniteBuffer,
@@ -256,30 +280,42 @@ export function handleCopy(
   setTimeout(() => requestRender(), 2005);
 }
 
+/**
+ * handleBlockCopy - Ctrl+Y: copy the content of the block the user is
+ * actually looking at. `getAnchorLine` resolves to the viewport's
+ * bottom-most visible line (see getViewportBottomLine in
+ * conversation-layout.ts), not the raw scroll position — the top of the
+ * viewport is off-screen-above once the transcript is longer than one page.
+ */
 export function handleBlockCopy(
   conversationManager: ConversationManager | null,
-  getScrollTop: () => number,
+  getAnchorLine: () => number,
   requestRender: () => void,
   onCopied: () => void,
 ): void {
   if (!conversationManager) return;
-  const lineIndex = getScrollTop();
-  const content = conversationManager.getBlockContentAtLine(lineIndex);
-  if (!content) return;
-  copyToClipboard(content);
+  const lineIndex = getAnchorLine();
+  const nearest = conversationManager.findNearestBlock(lineIndex);
+  if (!nearest) {
+    conversationManager.log('[Ctrl+Y: No block found nearby]', { fg: '240' });
+    requestRender();
+    return;
+  }
+  copyToClipboard(nearest.rawContent);
   onCopied();
+  conversationManager.log(`[Copied ${describeBlockForReceipt(nearest)}]`, { fg: '#22c55e' });
   requestRender();
   setTimeout(() => requestRender(), 2005);
 }
 
 export function handleBookmark(
   conversationManager: ConversationManager | null,
-  getScrollTop: () => number,
+  getAnchorLine: () => number,
   requestRender: () => void,
   bookmarkManager: BookmarkManager,
 ): void {
   if (!conversationManager) return;
-  const lineIndex = getScrollTop();
+  const lineIndex = getAnchorLine();
   const nearest = conversationManager.findNearestBlock(lineIndex);
   if (!nearest) {
     conversationManager.log('[Ctrl+B: No block found nearby]', { fg: '240' });
@@ -288,80 +324,68 @@ export function handleBookmark(
   }
   const label = `${nearest.type}: ${nearest.rawContent.slice(0, 40).replace(/\n/g, ' ')}`;
   const added = bookmarkManager.toggle(nearest.collapseKey, label);
+  const target = describeBlockForReceipt(nearest);
   const msg = added
-    ? `[Bookmarked: ${nearest.collapseKey}]`
-    : `[Bookmark removed: ${nearest.collapseKey}]`;
+    ? `[Bookmarked: ${target}]`
+    : `[Bookmark removed: ${target}]`;
   conversationManager.log(msg, { fg: added ? '#22c55e' : '244' });
   requestRender();
 }
 
 export function handleBlockSave(
   conversationManager: ConversationManager | null,
-  getScrollTop: () => number,
+  getAnchorLine: () => number,
   requestRender: () => void,
   bookmarkManager: BookmarkManager,
 ): void {
   if (!conversationManager) return;
-  const lineIndex = getScrollTop();
-  const content = conversationManager.getBlockContentAtLine(lineIndex);
-  if (!content) {
+  const lineIndex = getAnchorLine();
+  const nearest = conversationManager.findNearestBlock(lineIndex);
+  if (!nearest) {
     conversationManager.log('[Ctrl+S: No block found nearby]', { fg: '240' });
     requestRender();
     return;
   }
-  const nearest = conversationManager.findNearestBlock(lineIndex);
-  const label = nearest?.type ?? 'block';
+  const target = describeBlockForReceipt(nearest);
   try {
-    const filePath = bookmarkManager.saveToFile(content, label);
+    const filePath = bookmarkManager.saveToFile(nearest.rawContent, nearest.type);
     const homePath = process.env.HOME || process.env.USERPROFILE || '';
     const displayPath = homePath ? filePath.replace(homePath, '~') : filePath;
-    conversationManager.log(`[Saved to: ${displayPath}]`, { fg: '#22c55e' });
+    conversationManager.log(`[Saved ${target} to: ${displayPath}]`, { fg: '#22c55e' });
   } catch (err) {
     const msg = summarizeError(err);
-    conversationManager.log(`[Save failed: ${msg}]`, { fg: '#ef4444' });
-  }
-  requestRender();
-}
-
-export function handleBlockRerun(
-  conversationManager: ConversationManager | null,
-  getScrollTop: () => number,
-  requestRender: () => void,
-): void {
-  if (!conversationManager) return;
-  const lineIndex = getScrollTop();
-  const nearest = conversationManager.findNearestBlock(lineIndex, 'tool');
-  if (!nearest) {
-    conversationManager.log('[Re-run: No tool block found nearby]', { fg: '240' });
-    requestRender();
-    return;
+    conversationManager.log(`[Save failed (${target}): ${msg}]`, { fg: '#ef4444' });
   }
   requestRender();
 }
 
 export function handleBlockToggle(
   conversationManager: ConversationManager | null,
-  getScrollTop: () => number,
+  getAnchorLine: () => number,
   requestRender: () => void,
 ): void {
   if (!conversationManager) return;
-  const lineIndex = getScrollTop();
+  const lineIndex = getAnchorLine();
+  const nearest = conversationManager.findNearestBlock(lineIndex);
+  if (!nearest) return;
+  const wasCollapsed = conversationManager.isCollapsed(nearest.blockIndex);
   const blockIdx = conversationManager.toggleCollapseAtLine(lineIndex);
   if (blockIdx >= 0) {
+    conversationManager.log(`[${wasCollapsed ? 'Expanded' : 'Collapsed'} ${describeBlockForReceipt(nearest)}]`, { fg: '244' });
     requestRender();
   }
 }
 
 export function handleDiffApply(
   conversationManager: ConversationManager | null,
-  getScrollTop: () => number,
+  getAnchorLine: () => number,
   commandContext: CommandContext | undefined,
   requestRender: () => void,
   getCallId: () => string,
   category: PermissionCategory,
 ): boolean {
   if (!conversationManager) return false;
-  const lineIndex = getScrollTop();
+  const lineIndex = getAnchorLine();
   const diff = conversationManager.getDiffAtLine(lineIndex);
   if (!diff || !diff.filePath) return false;
   const projectRoot = commandContext?.workspace.shellPaths?.workingDirectory

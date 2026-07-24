@@ -624,7 +624,7 @@ export class UIFactory {
     // them; keep the elapsed timer since "how long the approval has waited" is honest.
     const speedSuffix = (!approvalPending && tokenSpeed !== undefined && tokenSpeed > 0) ? ` (${Math.round(tokenSpeed)} tok/s)` : '';
     const elapsedSuffix = elapsedMs !== undefined ? ` (${formatElapsed(elapsedMs)})` : '';
-    const ttftSuffix = (!approvalPending && ttftMs !== undefined && ttftMs > 0) ? ` ttft:${ttftMs}ms` : '';
+    const ttftSuffix = (!approvalPending && ttftMs !== undefined && ttftMs > 0) ? ` (first token ${formatElapsed(ttftMs)})` : '';
     const text = `  ${spinner} ${phrase}${speedSuffix}${elapsedSuffix}${ttftSuffix} `;
 
     const textWidth = Math.max(1, getDisplayWidth(text) - 1);

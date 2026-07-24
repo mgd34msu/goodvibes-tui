@@ -7,14 +7,16 @@ import { afterAll } from 'bun:test';
 import {
   applyUpdate,
   checkForUpdate,
+  createUpdateSwapProgress,
   detectDaemonServiceManaged,
   rollbackUpdate,
   PREVIOUS_FILE_SUFFIX,
+  UPDATE_ABORTED_MESSAGE,
   type ApplyUpdateOptions,
   type RunCommand,
 } from '../../input/commands/update-runtime.ts';
 import type { UpdateFetchLike } from '../../runtime/update-check.ts';
-import type { UpdateFileIo } from '@pellux/goodvibes-sdk/platform/runtime/self-update';
+import { realUpdateFileIo, type UpdateFileIo } from '@pellux/goodvibes-sdk/platform/runtime/self-update';
 
 // This suite pins fixture versions ('1.0.0' / '1.1.0' / 'v9.9.9') rather than
 // the live build VERSION, per this repo's rule that tests must never compare
@@ -329,6 +331,100 @@ describe('applyUpdate — binary install, checksum verification', () => {
   });
 });
 
+describe('applyUpdate — cancellation, honoured only up to the moment before the swap', () => {
+  const APP_PATH = '/home/user/.local/bin/goodvibes';
+
+  test('an already-aborted signal stops the update before the first request and before any file is touched', async () => {
+    const calls: string[] = [];
+    const fs = memoryIo({ [APP_PATH]: 'old-app' });
+    const controller = new AbortController();
+    controller.abort();
+    const progress = createUpdateSwapProgress();
+
+    await expect(
+      applyUpdate(
+        baseApplyOptions({
+          execPath: APP_PATH,
+          currentVersion: '1.0.0',
+          fetchImpl: buildStubFetch({ latestTag: 'v1.1.0', calls }),
+          io: fs.io,
+          signal: controller.signal,
+          progress,
+        }),
+      ),
+    ).rejects.toThrow(UPDATE_ABORTED_MESSAGE);
+
+    expect(calls).toEqual([]); // not one request, let alone a download
+    expect(fs.mutations).toEqual([]);
+    expect(fs.read(APP_PATH)).toBe('old-app');
+    expect(progress).toEqual({ begun: false, committed: false, targetTag: null });
+  });
+
+  test('an abort that lands between steps stops at the next boundary: the manifest is never requested and nothing swaps', async () => {
+    const calls: string[] = [];
+    const fs = memoryIo({ [APP_PATH]: 'old-app' });
+    const controller = new AbortController();
+    const progress = createUpdateSwapProgress();
+    const tagFetch = buildStubFetch({ latestTag: 'v1.1.0', calls });
+    // Cancelled while the version lookup is in flight: the tag still resolves,
+    // and the step after it is the one that must not run.
+    const fetchImpl: UpdateFetchLike = async (url, init) => {
+      const response = await tagFetch(url, init);
+      controller.abort();
+      return response;
+    };
+
+    await expect(
+      applyUpdate(
+        baseApplyOptions({
+          execPath: APP_PATH,
+          currentVersion: '1.0.0',
+          fetchImpl,
+          io: fs.io,
+          signal: controller.signal,
+          progress,
+        }),
+      ),
+    ).rejects.toThrow(UPDATE_ABORTED_MESSAGE);
+
+    expect(calls).toEqual([`HEAD ${RELEASES_LATEST_URL}`]);
+    expect(fs.mutations).toEqual([]);
+    expect(fs.read(APP_PATH)).toBe('old-app');
+    // The target is already named, so a caller that gave up can still say
+    // which version was on the way — but nothing was begun or committed.
+    expect(progress.targetTag).toBe('v1.1.0');
+    expect(progress.begun).toBe(false);
+    expect(progress.committed).toBe(false);
+  });
+
+  test('the signal rides on every request, so the download itself is cancellable rather than merely abandoned', async () => {
+    const seenSignals: Array<AbortSignal | undefined> = [];
+    const controller = new AbortController();
+    const appBuffer = Buffer.from('new-app-bytes');
+    const checksumText = `${sha256Hex(appBuffer)}  goodvibes-linux-x64\n`;
+    const inner = buildStubFetch({ latestTag: 'v1.1.0', checksumText, appBuffer });
+    const fetchImpl = (async (url: string, init?: { method?: string; signal?: AbortSignal }) => {
+      seenSignals.push(init?.signal);
+      return await inner(url, init);
+    }) as UpdateFetchLike;
+
+    await applyUpdate(
+      baseApplyOptions({
+        execPath: APP_PATH,
+        currentVersion: '1.0.0',
+        fetchImpl,
+        io: memoryIo({ [APP_PATH]: 'old-app' }).io,
+        signal: controller.signal,
+      }),
+    );
+
+    // Tag lookup, manifest pre-read, manifest again inside the verified apply,
+    // and the app artifact — every one of them carrying the caller's signal.
+    expect(seenSignals.length).toBeGreaterThanOrEqual(4);
+    expect(seenSignals.every((signal) => signal === controller.signal)).toBe(true);
+  });
+});
+
 describe('checkForUpdate', () => {
   test('reports isCurrent=true when the running version matches the latest tag', async () => {
     const result = await checkForUpdate(buildStubFetch({ latestTag: 'v1.0.0' }), '1.0.0');
@@ -416,6 +512,46 @@ describe('applyUpdate — the real swap keeps the outgoing binary at .previous',
     expect(readFileSync(execPath, 'utf-8')).toBe('new-app-bytes');
     expect(readFileSync(`${execPath}${PREVIOUS_FILE_SUFFIX}`, 'utf-8')).toBe('old-app-bytes');
     expect(printed.join('\n')).toContain('Updated to v1.1.0.');
+  });
+
+  test('an abort raised the instant the swap starts writing never interrupts it: the new bytes land and .previous still holds the old ones', async () => {
+    const dir = scratchDir();
+    const execPath = join(dir, 'goodvibes');
+    writeFileSync(execPath, 'old-app-bytes');
+
+    const appBuffer = Buffer.from('new-app-bytes');
+    const checksumText = `${sha256Hex(appBuffer)}  goodvibes-linux-x64\n`;
+    const controller = new AbortController();
+    const progress = createUpdateSwapProgress();
+    // Fires on the first byte the swap writes — the exact boundary past which
+    // cancellation must have no effect at all. Everything else is the REAL
+    // filesystem swap, in a scratch directory.
+    const io: UpdateFileIo = {
+      ...realUpdateFileIo,
+      writeFile: (path, data) => {
+        controller.abort();
+        realUpdateFileIo.writeFile(path, data);
+      },
+    };
+
+    await applyUpdate({
+      fetchImpl: buildStubFetch({ latestTag: 'v1.1.0', checksumText, appBuffer }),
+      execPath,
+      platform: 'linux',
+      arch: 'x64',
+      currentVersion: '1.0.0',
+      print: () => {},
+      configManager: { get: () => undefined },
+      runCommand: () => ({ status: 3, stdout: '' }),
+      io,
+      signal: controller.signal,
+      progress,
+    });
+
+    expect(readFileSync(execPath, 'utf-8')).toBe('new-app-bytes');
+    expect(readFileSync(`${execPath}${PREVIOUS_FILE_SUFFIX}`, 'utf-8')).toBe('old-app-bytes');
+    expect(progress.begun).toBe(true);
+    expect(progress.committed).toBe(true);
   });
 });
 

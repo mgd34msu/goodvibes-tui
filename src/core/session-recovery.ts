@@ -35,6 +35,7 @@
 import { journalPathFor, openTranscriptJournal, replayJournal } from './transcript-journal.ts';
 import type { ConversationManager } from './conversation.ts';
 import type { ConversationMessageSnapshot } from '@pellux/goodvibes-sdk/platform/core';
+import type { SessionSurface } from '@/runtime/index.ts';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -145,9 +146,65 @@ export function replayJournalIntoConversation(
  */
 export function replayJournalForSession(
   options: Omit<ReplayIntoConversationOptions, 'journalPath'> & {
-    readonly homeDirectory: string;
+    readonly surface: SessionSurface;
   },
 ): ReplayIntoConversationResult {
-  const journalPath = journalPathFor(options.homeDirectory, options.sessionId);
+  const journalPath = journalPathFor(options.surface, options.sessionId);
   return replayJournalIntoConversation({ ...options, journalPath });
+}
+
+// ─── Prompted crash-snapshot restore ────────────────────────────────────────
+
+/** What a crash-recovery snapshot carries back from disk. */
+export interface RecoverySnapshotPayload {
+  readonly messages: Array<Record<string, unknown>>;
+  readonly title?: string | undefined;
+  readonly titleSource?: string | undefined;
+  readonly timestamp?: number | undefined;
+}
+
+export interface ApplyRecoverySnapshotResult {
+  /** Messages the conversation holds once the snapshot (plus any journal tail) is in place. */
+  readonly messageCount: number;
+  /** Journal records that post-dated the snapshot and were folded in on top of it. */
+  readonly journalReplay: ReplayIntoConversationResult;
+}
+
+/**
+ * Apply a crash-recovery snapshot the user explicitly asked to resume.
+ *
+ * This is deliberately the same sequence `resumeSessionCore` runs for a saved
+ * session — reset, fromJSON, rebuildHistory, then fold in any journal records
+ * newer than the snapshot — with one difference: the messages come from the
+ * recovery file the SDK just handed back (`consumeRecovery`) instead of the
+ * session store, because a session that crashed before its first clean save
+ * has no entry in the store to load. Nothing here decides WHETHER to restore;
+ * the caller has already asked the user (see runtime/recovery-prompt.ts).
+ */
+export function applyRecoverySnapshot(options: {
+  readonly snapshot: RecoverySnapshotPayload;
+  readonly sessionId: string;
+  readonly conversation: ConversationManager;
+  readonly surface: SessionSurface;
+  readonly persistSnapshot: (messages: ConversationMessageSnapshot[]) => void;
+}): ApplyRecoverySnapshotResult {
+  const { snapshot, sessionId, conversation, surface, persistSnapshot } = options;
+
+  conversation.resetAll();
+  conversation.fromJSON({
+    messages: snapshot.messages as never[],
+    title: snapshot.title,
+    titleSource: snapshot.titleSource as never,
+  });
+  conversation.rebuildHistory();
+
+  const journalReplay = replayJournalForSession({
+    surface,
+    sessionId,
+    snapshotTimestamp: snapshot.timestamp ?? 0,
+    conversation,
+    persistSnapshot,
+  });
+
+  return { messageCount: conversation.getMessageCount(), journalReplay };
 }

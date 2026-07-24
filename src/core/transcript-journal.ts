@@ -67,6 +67,7 @@ import {
 } from 'node:fs';
 import { dirname, join } from 'node:path';
 import type { ConversationMessageSnapshot } from '@pellux/goodvibes-sdk/platform/core';
+import type { SessionSurface } from '@/runtime/index.ts';
 
 // ─── Constants ──────────────────────────────────────────────────────────────
 
@@ -128,6 +129,17 @@ export interface TranscriptJournal {
 
   /** Absolute path to the journal file. */
   readonly path: string;
+
+  /**
+   * Point this journal at a different session's file, resetting the sequence
+   * counter and initialization flag. Used when the session a journal was
+   * opened for is switched out from under it (e.g. `/session resume` or
+   * `/session fork` reassigning `runtime.sessionId`) — without this, the
+   * journal keeps appending the NEW session's records into the OLD session's
+   * file. Does not touch the old file on disk; it is simply no longer
+   * written to.
+   */
+  rebind(journalPath: string, sessionId: string): void;
 }
 
 // ─── Factory ────────────────────────────────────────────────────────────────
@@ -148,11 +160,15 @@ export function openTranscriptJournal(
 /**
  * Build the canonical journal path for a session.
  *
- * @param homeDirectory  The goodvibes home directory (e.g. ~/.goodvibes).
- * @param sessionId      The session identifier.
+ * Both the home directory and the scope segment come off the caller's
+ * SessionSurface, so the journal lands beside the sessions and recovery
+ * snapshots it fills gaps for rather than under a separately-spelled scope.
+ *
+ * @param surface    The app's declare-once session-storage handle.
+ * @param sessionId  The session identifier.
  */
-export function journalPathFor(homeDirectory: string, sessionId: string): string {
-  return join(homeDirectory, '.goodvibes', 'tui', `transcript-${sessionId}.journal`);
+export function journalPathFor(surface: SessionSurface, sessionId: string): string {
+  return join(surface.homeDirectory, '.goodvibes', surface.surfaceRoot, `transcript-${sessionId}.journal`);
 }
 
 /**
@@ -248,14 +264,24 @@ export function replayJournal(
 // ─── Implementation ─────────────────────────────────────────────────────────
 
 class TranscriptJournalImpl implements TranscriptJournal {
-  readonly path: string;
-  private readonly _sessionId: string;
+  // Not `readonly` at the class level (unlike the public interface) so
+  // rebind() can repoint it; external callers only ever see it through the
+  // `TranscriptJournal` interface, which keeps it read-only for them.
+  path: string;
+  private _sessionId: string;
   private _seq = 0;
   private _initialised = false;
 
   constructor(journalPath: string, sessionId: string) {
     this.path = journalPath;
     this._sessionId = sessionId;
+  }
+
+  rebind(journalPath: string, sessionId: string): void {
+    this.path = journalPath;
+    this._sessionId = sessionId;
+    this._seq = 0;
+    this._initialised = false;
   }
 
   appendRecord(type: JournalEventType, messages: ConversationMessageSnapshot[]): void {

@@ -1,6 +1,7 @@
 import { describe, test, expect, beforeEach } from 'bun:test';
 import { SearchManager } from '../../input/search.ts';
 import { InfiniteBuffer } from '../../core/history.ts';
+import { ConversationManager } from '../../core/conversation';
 import type { Cell } from '../../types/grid.ts';
 
 // ---------------------------------------------------------------------------
@@ -288,5 +289,180 @@ describe('SearchManager', () => {
     expect(sm.wrapAround).toBe(true);
     sm.open();
     expect(sm.wrapAround).toBe(false);
+  });
+
+  // --- collapsed-content search (auto-expand) ---
+
+  describe('search() with a conversationManager auto-expands a matching collapsed block', () => {
+    function buildLongToolResult(): { cm: ConversationManager; needle: string } {
+      const cm = new ConversationManager(() => 80);
+      const needle = 'zzzFindableMarkerZzz';
+      // A long tool result (>200 chars, no recognized summarizer shape) stays
+      // collapsed by default — its needle is nowhere in the 1-line collapsed
+      // preview, only in the raw content.
+      const longContent = `line one\nline two with ${needle} inside\n` + 'padding '.repeat(60);
+      cm.addAssistantMessage('', { toolCalls: [{ id: 'c1', name: 'exec', arguments: {} }] });
+      cm.addToolResults([{ callId: 'c1', success: true, output: longContent }]);
+      cm.getDisplayBlocks();
+      return { cm, needle };
+    }
+
+    test('a query matching only the raw (collapsed) content finds nothing without a conversationManager', () => {
+      const { cm, needle } = buildLongToolResult();
+      sm.open();
+      sm.search(needle, cm.history); // no conversationManager passed — old behavior
+      expect(sm.matches).toHaveLength(0);
+    });
+
+    test('the same query finds a real, navigable match once conversationManager is passed', () => {
+      const { cm, needle } = buildLongToolResult();
+      const block = cm.getBlockRegistry().find((b) => b.type === 'tool');
+      expect(block).toBeDefined();
+      expect(cm.isCollapsed(block!.blockIndex)).toBe(true);
+
+      sm.open();
+      sm.search(needle, cm.history, cm);
+
+      expect(sm.matches.length).toBeGreaterThan(0);
+      // The block auto-expanded — collapsed no longer holds true.
+      expect(cm.isCollapsed(block!.blockIndex)).toBe(false);
+      // The match count is honest: it's derived from a rescan of the now-
+      // expanded buffer, not a claim about content that isn't actually shown.
+      const matchLine = sm.getCurrentMatchLine();
+      expect(matchLine).toBeGreaterThanOrEqual(0);
+      const renderedLineText = cm.history.getAllLines()[matchLine].map((c) => c.char).join('');
+      expect(renderedLineText).toContain(needle);
+    });
+
+    test('never re-collapses a block that was already expanded by an earlier keystroke', () => {
+      const { cm, needle } = buildLongToolResult();
+      const block = cm.getBlockRegistry().find((b) => b.type === 'tool');
+      sm.open();
+      sm.search(needle, cm.history, cm);
+      expect(cm.isCollapsed(block!.blockIndex)).toBe(false);
+      // A subsequent search for something that no longer matches must not
+      // fold the block back up — only ever expands, never hides content
+      // the user already revealed.
+      sm.search('nonexistent_query_xyz', cm.history, cm);
+      expect(cm.isCollapsed(block!.blockIndex)).toBe(false);
+    });
+  });
+
+  // --- folded tool-result group members (search reaches inside the fold) ---
+
+  describe('search() reaches text that lives only inside a folded tool-group member', () => {
+    const NEEDLE = 'zzzGroupedMarkerZzz';
+
+    /** Two consecutive results for one assistant turn fold into a single
+     *  'tool_group' block (see conversation-tool-groups.ts): the header line is
+     *  the group's entire visible representation, and no member registers a
+     *  BlockMeta of its own while it stays folded. The needle lives ONLY in the
+     *  second member's content — never in the group's summary header. */
+    function buildFoldedToolGroup(): { cm: ConversationManager; hitMemberIdx: number } {
+      const cm = new ConversationManager(() => 80);
+      // Long enough that each member is collapsed-by-default on its own too,
+      // so expanding the group header alone would not reveal the needle.
+      const padded = (marker: string) => `alpha\nbeta ${marker} inside\n` + 'padding '.repeat(60);
+      cm.addUserMessage('run the tools');
+      cm.addAssistantMessage('', { toolCalls: [
+        { id: 'c1', name: 'read', arguments: {} },
+        { id: 'c2', name: 'exec', arguments: {} },
+      ] });
+      cm.addToolResults([
+        { callId: 'c1', success: true, output: padded('nothing to see') },
+        { callId: 'c2', success: true, output: padded(NEEDLE) },
+      ]);
+      cm.getDisplayBlocks();
+      const group = cm.getBlockRegistry().find((b) => b.type === 'tool_group');
+      expect(group).toBeDefined();
+      expect(group!.groupMemberIndexes).toHaveLength(2);
+      return { cm, hitMemberIdx: group!.groupMemberIndexes![1] };
+    }
+
+    test('the group is folded and its own rawContent is only the summary line', () => {
+      const { cm } = buildFoldedToolGroup();
+      const group = cm.getBlockRegistry().find((b) => b.type === 'tool_group');
+      // The defect this covers: the needle is in no block's rawContent at all,
+      // because the members contributed no BlockMeta.
+      expect(cm.isCollapsed(group!.blockIndex)).toBe(true);
+      expect(group!.rawContent).not.toContain(NEEDLE);
+      expect(cm.getBlockRegistry().some((b) => b.rawContent.includes(NEEDLE))).toBe(false);
+    });
+
+    test('a member-only needle finds nothing without a conversationManager', () => {
+      const { cm } = buildFoldedToolGroup();
+      sm.open();
+      sm.search(NEEDLE, cm.history);
+      expect(sm.matches).toHaveLength(0);
+    });
+
+    test('the same needle expands the group AND the hit member, and lands on the needle line', () => {
+      const { cm, hitMemberIdx } = buildFoldedToolGroup();
+      sm.open();
+      sm.search(NEEDLE, cm.history, cm);
+
+      expect(sm.matches.length).toBeGreaterThan(0);
+
+      const registry = cm.getBlockRegistry();
+      const group = registry.find((b) => b.type === 'tool_group');
+      expect(cm.isCollapsed(group!.blockIndex)).toBe(false);
+      // The hit member now has a block of its own, and it is expanded — the
+      // header alone would have left its content invisible.
+      const member = registry.find((b) => b.collapseKey === `msg_${hitMemberIdx}`);
+      expect(member).toBeDefined();
+      expect(cm.isCollapsed(member!.blockIndex)).toBe(false);
+      // The landed line is the real one: the match count comes from a rescan
+      // of the now-expanded buffer, so navigation reaches actual text.
+      const matchLine = sm.getCurrentMatchLine();
+      expect(matchLine).toBeGreaterThanOrEqual(0);
+      const renderedLineText = cm.history.getAllLines()[matchLine].map((c) => c.char).join('');
+      expect(renderedLineText).toContain(NEEDLE);
+    });
+
+    test('a needle present nowhere finds nothing and expands nothing', () => {
+      const { cm } = buildFoldedToolGroup();
+      const group = cm.getBlockRegistry().find((b) => b.type === 'tool_group');
+      sm.open();
+      sm.search('nonexistent_needle_qqq', cm.history, cm);
+
+      expect(sm.matches).toHaveLength(0);
+      expect(sm.getCurrentMatchLine()).toBe(-1);
+      const registry = cm.getBlockRegistry();
+      expect(cm.isCollapsed(group!.blockIndex)).toBe(true);
+      // No member materialized — the fold is untouched.
+      expect(registry.some((b) => b.collapseKey.startsWith('msg_'))).toBe(false);
+    });
+
+    test('a group whose members are already expanded still matches, and stays expanded', () => {
+      const { cm, hitMemberIdx } = buildFoldedToolGroup();
+      const group = cm.getBlockRegistry().find((b) => b.type === 'tool_group');
+      cm.setCollapsed(group!.collapseKey, false);
+      for (const memberIdx of group!.groupMemberIndexes!) {
+        cm.setCollapsed(`msg_${memberIdx}`, false);
+      }
+      cm.getDisplayBlocks();
+
+      sm.open();
+      sm.search(NEEDLE, cm.history, cm);
+
+      expect(sm.matches.length).toBeGreaterThan(0);
+      const registry = cm.getBlockRegistry();
+      expect(cm.isCollapsed(registry.find((b) => b.type === 'tool_group')!.blockIndex)).toBe(false);
+      expect(cm.isCollapsed(registry.find((b) => b.collapseKey === `msg_${hitMemberIdx}`)!.blockIndex)).toBe(false);
+    });
+
+    test('member indexes that outlived their messages are skipped, not thrown on', () => {
+      // undo() splices the messages tail while the (unflushed) block registry
+      // still names the group's member indexes — so the member lookup runs
+      // against a snapshot shorter than those indexes.
+      const { cm } = buildFoldedToolGroup();
+      expect(cm.undo()).toBe(true);
+      expect(cm.getMessageSnapshot().length).toBe(0);
+      expect(cm.getBlockRegistry().some((b) => b.type === 'tool_group')).toBe(true);
+
+      sm.open();
+      expect(() => sm.search(NEEDLE, cm.history, cm)).not.toThrow();
+      expect(sm.matches).toHaveLength(0);
+    });
   });
 });

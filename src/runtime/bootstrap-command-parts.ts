@@ -32,7 +32,7 @@ import type { HookWorkbench } from '@pellux/goodvibes-sdk/platform/hooks';
 import type { WorktreeRegistry } from '@/runtime/index.ts';
 import type { SandboxSessionRegistry } from '@/runtime/index.ts';
 import type { UiReadModels } from './ui-read-models.ts';
-import type { ShellPathService } from '@/runtime/index.ts';
+import type { ShellPathService, SessionSurface } from '@/runtime/index.ts';
 import type {
   ShellAgentManagerService,
   ShellAutomationManagerRuntimeService,
@@ -95,6 +95,8 @@ export interface BootstrapCommandSectionOptions {
   readonly policyRuntimeState: PolicyRuntimeState;
   readonly readModels: UiReadModels;
   readonly shellPaths: ShellPathService;
+  /** The runtime's declare-once session-storage handle (runtime/services.ts). */
+  readonly surface: SessionSurface;
   readonly fileUndoManager: FileUndoManager;
   readonly workspaceCheckpointManager?: WorkspaceCheckpointManager;
   readonly gatewayMethods?: GatewayMethodCatalog;
@@ -372,12 +374,13 @@ export function createBootstrapCommandProviderSection(
 export function createBootstrapCommandWorkspaceSection(
   options: Pick<
     BootstrapCommandSectionOptions,
-    'keybindingsManager' | 'fileUndoManager' | 'workspaceCheckpointManager' | 'gatewayMethods' | 'workspaceTrustManager' | 'workspaceRegistrationManager' | 'panelManager' | 'profileManager' | 'bookmarkManager'
+    'surface' | 'keybindingsManager' | 'fileUndoManager' | 'workspaceCheckpointManager' | 'gatewayMethods' | 'workspaceTrustManager' | 'workspaceRegistrationManager' | 'panelManager' | 'profileManager' | 'bookmarkManager'
     | 'projectPlanningService' | 'projectPlanningProjectId' | 'workPlanStore'
   >,
   shellServices: BootstrapCommandShellServices,
 ): BootstrapCommandWorkspaceSection {
   return {
+    surface: options.surface,
     keybindingsManager: options.keybindingsManager,
     fileUndoManager: options.fileUndoManager,
     workspaceCheckpointManager: options.workspaceCheckpointManager,

@@ -1,7 +1,9 @@
 /**
  * renderHelpOverlay — renders the help overlay with keyboard shortcuts and slash commands.
  *
- * Toggle with `?` key or `/help` command.
+ * Opened via `/commands`. `?` and `/help` open the searchable command
+ * browser (a selection modal that runs the picked command) instead — they
+ * are a different, complementary surface, not this one.
  */
 
 import { type Line } from '../types/grid.ts';
@@ -68,22 +70,27 @@ export function renderHelpOverlay(
   const shortcutRows: string[] = [
     '  Core Navigation',
     '  ' + '\u2500'.repeat(40),
-    `  ${'Up / Down'.padEnd(20)}  Scroll / history recall`,
+    `  ${'Up / Down'.padEnd(20)}  Recall input history; Down at bottom focuses the process indicator`,
     `  ${'PageUp / PageDn'.padEnd(20)}  Scroll by full page`,
     `  ${kb('search').padEnd(20)}  Search conversation (Ctrl+F)`,
     '',
     '  Prompt And Editing',
     '  ' + '\u2500'.repeat(40),
-    `  ${'Enter'.padEnd(20)}  Submit message`,
+    `  ${'Enter'.padEnd(20)}  Submit message (composer empty: open the block-actions menu)`,
     `  ${'Shift+Enter'.padEnd(20)}  Insert newline`,
     `  ${kb('paste').padEnd(20)}  Paste (image priority)`,
     `  ${(kb('undo') + ' / ' + kb('redo')).padEnd(20)}  Undo / redo`,
+    shortcutLine('(paste >8 lines)', 'Folds to [TEXT: pN, M lines] — /pastes previews it before you submit'),
     '',
     '  Overlays And Panels',
     '  ' + '\u2500'.repeat(40),
-    shortcutLine('?', 'Toggle help'),
-    shortcutLine('/shortcuts', 'Full keyboard shortcuts'),
-    shortcutLine('Tab', 'Swap focus between input and workspace'),
+    shortcutLine('?  or  /help', 'Open the command browser (search & run any command)'),
+    shortcutLine('/commands', 'This reference: keyboard shortcuts + full command list'),
+    shortcutLine('/shortcuts', 'Keyboard-shortcuts-only reference (a separate, generated overlay)'),
+    // Precedence (highest first): a visible panel workspace claims Tab for
+    // focus-swap; failing that, a partial path under the cursor claims it for
+    // completion; only then does it fall through to collapse/expand.
+    shortcutLine('Tab', 'Panel focus-swap, else path-complete, else collapse/expand block'),
     ...panelBindingRows,
     '',
     // The shared in-panel contract every workspace panel honors. These are not
@@ -149,7 +156,7 @@ export function renderHelpOverlay(
     ['sessions',    'Browse and resume saved sessions'],
     ['save',        'Save the current session'],
     ['compact',     'Compact the conversation history'],
-    ['clear',       'Clear the conversation'],
+    ['clear',       'Clear the conversation display (keeps LLM context)'],
     ['keybindings', 'List and customize key bindings'],
     ['panel',       'Open, focus, or manage panels'],
   ];
@@ -197,10 +204,11 @@ export function renderHelpOverlay(
     }
   } else if (!hasCommand('help')) {
     commandRows.push('', '  Essentials', '  ' + '\u2500'.repeat(40));
-    commandRows.push('  /help               Show this help overlay');
+    commandRows.push('  /commands           Show this help overlay');
+    commandRows.push('  /help               Browse & run any command');
     commandRows.push('  /shortcuts          Keyboard shortcut reference');
     commandRows.push('  /model              Select LLM model');
-    commandRows.push('  /clear              Clear conversation');
+    commandRows.push('  /clear              Clear the conversation display (keeps LLM context)');
   }
 
   const allRows = [...shortcutRows, ...commandRows];
@@ -255,61 +263,69 @@ export function renderShortcutsOverlay(
     return `  ${keyCol}  ${desc}`;
   }
 
-  // Helper: get the label for a bindable action, falling back to literal string.
-  const kb = (action: Parameters<typeof keybindingsManager.getComboLabel>[0]) => keybindingsManager.getComboLabel(action);
+  // Keys that are real, but not KeyAction entries in keybindingsManager
+  // (context-dependent chords, or literal characters rather than bindable
+  // actions) \u2014 a maintained table rather than hand-picked getAll() calls, so
+  // adding a new KeyAction automatically shows up below without anyone
+  // remembering to also add a row for it here.
+  const HARDCODED_ROWS: ReadonlyArray<[key: string, desc: string]> = [
+    ['Up / Down', 'Recall input history; Down at bottom focuses the process indicator'],
+    ['PageUp / PageDn', 'Scroll by full page'],
+    ['Home / End', 'Jump to start / end of line'],
+    ['n / N (search)', 'Next / previous match'],
+    ['Mouse wheel', 'Scroll conversation or hovered panel'],
+    ['Enter', 'Submit message (composer empty: open the block-actions menu)'],
+    ['Shift+Enter', 'Insert newline'],
+    ['@', 'Open file picker'],
+    ['/', 'Slash command mode'],
+    ['Esc', 'Close overlay / cancel generation / clear prompt (context-dependent)'],
+    ['Shift+Tab', 'Cycle permission mode (auto-approve / prompt / manual)'],
+    ['F2', 'Open the Fleet panel'],
+    ['?  or  /help', 'Open the command browser (search & run any command)'],
+    // Precedence (highest first): panel focus-swap, else path-completion,
+    // else collapse/expand \u2014 see the Panels section's Tab row below for the
+    // full chain; this row is the "what does it do here" short form.
+    ['Tab', 'Collapse/expand block (composer empty \u2014 see Panels: Tab for full precedence)'],
+  ];
+
+  const IN_PANEL_ROWS: ReadonlyArray<[key: string, desc: string]> = [
+    ['j / k', 'Move selection down / up'],
+    ['g / G', 'Jump to top / bottom'],
+    ['/', 'Filter the list'],
+  ];
+
+  // Generated from the live keybindings table (default bindings AND any user
+  // overrides) so this listing can never drift from what a key actually
+  // does \u2014 no action is hand-picked, none can be silently missed.
+  const allBindings = keybindingsManager.getAll();
+  const panelActionRows = allBindings
+    .filter((entry) => entry.action.startsWith('panel-'))
+    .map((entry) => row(entry.combos.map((c) => keybindingsManager.formatCombo(c)).join(', '), entry.description));
+  const otherActionRows = allBindings
+    .filter((entry) => !entry.action.startsWith('panel-'))
+    .map((entry) => row(entry.combos.map((c) => keybindingsManager.formatCombo(c)).join(', '), entry.description));
 
   const allRows: string[] = [
-    '  Navigation',
+    '  Navigation & Editing',
     '  ' + '\u2500'.repeat(40),
-    row('Up / Down', 'Scroll / history recall'),
-    row('PageUp / PageDn', 'Scroll by full page'),
-    row('Home / End', 'Jump to start / end of line'),
-    row(kb('search'), 'Search conversation'),
-    row('n / N (search)', 'Next / previous match'),
-    row('Mouse wheel', 'Scroll conversation or hovered panel'),
+    ...HARDCODED_ROWS.map(([key, desc]) => row(key, desc)),
     '',
-    '  Editing',
+    '  Actions & Shortcuts (customize via /keybindings)',
     '  ' + '\u2500'.repeat(40),
-    row('Enter', 'Submit message'),
-    row('Shift+Enter', 'Insert newline'),
-    row('@', 'Open file picker'),
-    row('/', 'Slash command mode'),
-    row(kb('paste'), 'Paste (image priority)'),
-    row(`${kb('undo')} / ${kb('redo')}`, 'Undo / redo'),
-    row(kb('clear-prompt'), 'Clear prompt'),
-    row(kb('delete-word'), 'Delete word backward'),
-    row(kb('kill-line'), 'Kill to end of line'),
-    row(kb('apply-diff-line-start'), 'Apply diff / line start'),
-    row(kb('next-error-line-end'), 'Next error / line end'),
-    '',
-    '  Actions',
-    '  ' + '\u2500'.repeat(40),
-    row('Tab', 'Collapse/expand block'),
-    row(kb('bookmark'), 'Bookmark block'),
-    row(kb('block-copy'), 'Copy block to clipboard'),
-    row(kb('block-save'), 'Save block to file'),
-    row(kb('copy-selection'), 'Copy selection'),
-    row('F2', 'Open the Fleet panel'),
-    row('?', 'Help overlay'),
-    row(`${kb('clear-cancel')} x2`, 'Exit'),
+    ...otherActionRows,
     '',
     '  Panels',
     '  ' + '\u2500'.repeat(40),
-    row('Tab', 'Swap focus between input and panel workspace'),
-    row(kb('panel-picker'), 'Open / focus / hide panel workspace'),
-    row(kb('panel-tab-next'), 'Next workspace panel tab'),
-    row(kb('panel-tab-prev'), 'Previous workspace panel tab'),
-    row(`${kb('panel-tab-1')}\u2026${kb('panel-tab-9')}`, 'Jump to workspace tab 1-9'),
-    row(kb('panel-focus-toggle'), 'Swap focus between top / bottom pane'),
-    row(kb('panel-close'), 'Close active panel'),
-    row(kb('panel-close-all'), 'Close all panels'),
-    row(kb('panel-ops'), 'Open and focus the Fleet panel'),
+    // Full Tab precedence, stated once here as the authoritative chain: a
+    // visible panel workspace claims Tab for focus-swap first; failing that,
+    // a partial path under the cursor claims it for completion; only then
+    // does it fall through to collapse/expand (the Actions section's row).
+    row('Tab', 'Panel focus-swap (1st) > path-complete (2nd) > collapse/expand block (3rd)'),
+    ...panelActionRows,
     '',
     '  In-Panel Controls',
     '  ' + '\u2500'.repeat(40),
-    row('j / k', 'Move selection down / up'),
-    row('g / G', 'Jump to top / bottom'),
-    row('/', 'Filter the list'),
+    ...IN_PANEL_ROWS.map(([key, desc]) => row(key, desc)),
     '',
     `  Config: /keybindings to list and customize`,
   ];

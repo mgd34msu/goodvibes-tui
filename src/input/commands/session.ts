@@ -22,6 +22,7 @@ import type { CancellationScope, CrossSessionTaskRef } from '@pellux/goodvibes-s
 import { VALID_SCOPES } from '@pellux/goodvibes-sdk/platform/sessions';
 import { handleSessionWorkflowCommand } from './session-workflow.ts';
 import { requireSessionOrchestration, requireSessionManager } from './runtime-services.ts';
+import { filterUserFacingSessions } from './session-picker-filter.ts';
 
 // ── Argument parsing helpers ──────────────────────────────────────────────────
 
@@ -317,6 +318,37 @@ function handleCancel(args: string[], context: CommandContext): void {
 // ── Top-level command definition ───────────────────────────────────────────────
 
 /**
+ * SESSION_SUBCOMMAND_ARG_HINTS — the single source of truth for each
+ * `/session <subcommand>` argument hint, co-located with the switch below so
+ * the two can't silently drift apart (command-args-hint.ts imports this
+ * directly instead of hand-maintaining its own copy; a drift test —
+ * src/test/input/command-args-hint.test.ts — cross-checks every key here
+ * against the default usage text's own subcommand list). Aliases (`link`,
+ * `ho`, `g`) share their canonical subcommand's hint text.
+ */
+export const SESSION_SUBCOMMAND_ARG_HINTS: Record<string, string> = {
+  list: '',
+  rename: '<name>',
+  resume: '<id|name>',
+  fork: '[name]',
+  save: '[name]',
+  info: '[id]',
+  export: '<id|.> [markdown|text]',
+  search: '<query>',
+  delete: '<id>',
+  events: '[kind]',
+  groups: '[kind]',
+  hotspots: '',
+  'link-task': '<taskId> [--session <sid>] [--depends-on <sid:taskId>] [--label <label>]',
+  link: '<taskId> [--session <sid>] [--depends-on <sid:taskId>] [--label <label>]',
+  handoff: '<taskId> --to <sid> [--session <sid>] [--reason <reason>]',
+  ho: '<taskId> --to <sid> [--session <sid>] [--reason <reason>]',
+  graph: '[--session <sid>] [--format text|json]',
+  g: '[--session <sid>] [--format text|json]',
+  cancel: '<taskId> [--scope task|subtree|session] [--session <sid>] [--reason <reason>]',
+};
+
+/**
  * sessionCommand — The `/session` slash command.
  *
  * The ONE front-door for all session operations. Owns two domains:
@@ -446,7 +478,10 @@ export const resumeCommand: SlashCommand = {
       return;
     }
     const sm = requireSessionManager(ctx);
-    const sessions = sm.list().filter((s) => s.name !== ctx.session.runtime.sessionId);
+    // Excludes the current session and subagent-shaped transcripts (see
+    // session-picker-filter.ts) — a direct `/resume agent-xxxxxxxx` still
+    // reaches them, this only keeps the picker itself readable.
+    const sessions = filterUserFacingSessions(sm.list()).filter((s) => s.name !== ctx.session.runtime.sessionId);
     if (sessions.length === 0) {
       ctx.print('No previous sessions to resume yet. /session save [name] stores the current one explicitly.');
       return;

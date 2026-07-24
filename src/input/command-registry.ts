@@ -23,6 +23,7 @@ import type { FeatureFlagManager } from '@/runtime/index.ts';
 import type { OperatorClient } from '@/runtime/index.ts';
 import type { PeerClient } from '@/runtime/index.ts';
 import type { DirectTransport } from '@/runtime/index.ts';
+import type { SessionSurface } from '@/runtime/index.ts';
 import type { VoiceProviderRegistry, VoiceService } from '@pellux/goodvibes-sdk/platform/voice';
 import type { UiPlatformServices } from '../runtime/ui-services.ts';
 import type {
@@ -80,6 +81,14 @@ export interface CommandUiActions {
     kind: 'image' | 'text' | 'none';
     marker?: string;
   };
+  /**
+   * Read-only view of pending `[TEXT: pN, M lines]` fold markers currently
+   * sitting in the composer (registerPaste in handler-content-actions.ts) —
+   * backs /pastes, which previews a folded paste's actual content before the
+   * user submits it. A paste over the fold threshold is otherwise invisible
+   * until the LLM sees it.
+   */
+  getPendingPastes?: () => ReadonlyMap<string, string>;
   executeCommand?: (name: string, args: string[]) => Promise<boolean>;
   /** Arm the one-key jump to a spawned CI fix-session (the surface attaches on the jump key; the user never retypes an id). */
   armFixSessionAttach?: (fixSessionId: string) => void;
@@ -152,6 +161,8 @@ export interface CommandShellUiOpeners {
   jumpToBookmark?: (key: string) => void;
   scrollToLine?: (line: number) => void;
   openHelpOverlay?: () => void;
+  /** Toggle the transcript search overlay (same action as Ctrl+F) — backs /find. */
+  openTranscriptSearch?: () => void;
   openSelection?: (
     title: string,
     items: SelectionItem[],
@@ -270,6 +281,14 @@ export interface CommandProviderServices {
  * runtime surfaces exported from runtime/shell-command-services.ts.
  */
 export interface CommandWorkspaceUiServices {
+  /**
+   * The app's declare-once session-storage handle (runtime/services.ts). Every
+   * command that reads or writes session state — resume, save, the liveness
+   * markers, the rewind anchor sidecar — takes its paths from here instead of
+   * re-deriving a scope from shellPaths, so a command can never land on a
+   * different directory than the runtime that wrote the file.
+   */
+  surface?: SessionSurface;
   keybindingsManager?: KeybindingsManager;
   fileUndoManager?: FileUndoManager;
   workspaceCheckpointManager?: WorkspaceCheckpointManager;

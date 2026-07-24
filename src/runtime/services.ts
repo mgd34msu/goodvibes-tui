@@ -37,7 +37,9 @@ import {
   type RuntimeEventBus, DistributedRuntimeManager, RemoteRunnerRegistry, RemoteSupervisor, IntegrationHelperService,
   IdempotencyStore, ComponentHealthMonitor, WorktreeRegistry, SandboxSessionRegistry, createShellPathService,
   type ShellPathService, type FeatureFlagManager, createFeatureFlagManager, PolicyRuntimeState,
+  type SessionSurface,
 } from '@/runtime/index.ts';
+import { createSessionStorageServices } from './session-storage-services.ts';
 import { VoiceProviderRegistry, VoiceService, ensureBuiltinVoiceProviders } from '@pellux/goodvibes-sdk/platform/voice';
 import { CacheRegistry, PauseController, type MemoryGovernor } from '@pellux/goodvibes-sdk/platform/runtime/memory';
 import { wireMemoryGovernance } from './memory-governance-services.ts';
@@ -63,7 +65,7 @@ import { type ArchivableProcessRegistry } from '@pellux/goodvibes-sdk/platform/r
 import { createFleetServices } from './fleet-services.ts';
 import { createWorkstreamServices, type OrchestrationEngine, type WorkstreamCommandService } from './workstream-services.ts';
 import { wireFleetNeedsInputPush } from './fleet-needs-input-push.ts';
-import { codeIndexDbPath, createCodeIndexServices, isCodeInjectionSettingEnabled } from './code-index-services.ts';
+import { codeIndexDbPath, createCodeIndexServices, createStoreRerooter, isCodeInjectionSettingEnabled } from './code-index-services.ts';
 import type { WorkPlanStore } from '../work-plans/work-plan-store.ts';
 import { registerDaemonHandlers, type DaemonHandlerSurfaces } from '../daemon/handlers/index.ts';
 import type { HandlerContext, HandlerLogger } from '../daemon/handlers/context.ts';
@@ -99,6 +101,8 @@ export interface RuntimeServicesOptions {
 export interface RuntimeServices {
   readonly workingDirectory: string;
   readonly homeDirectory: string;
+  /** The declare-once session-storage handle every session reader and writer threads through — see session-storage-services.ts. */
+  readonly surface: SessionSurface;
   readonly shellPaths: ShellPathService;
   readonly configManager: ConfigManager;
   readonly featureFlags: FeatureFlagManager;
@@ -231,6 +235,8 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
     workingDirectory,
     homeDirectory,
   });
+  // Built before anything that touches session state — see session-storage-services.ts.
+  const { surface, sessionManager } = createSessionStorageServices({ workingDirectory, homeDirectory });
   const workspaceTrustManager = new WorkspaceTrustManager({ shellPaths });
   const configManager = options.configManager;
   const featureFlags = options.featureFlags ?? createFeatureFlagManager();
@@ -318,9 +324,8 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
   });
   const profileManager = new ProfileManager(shellPaths.resolveUserPath('tui', 'profiles'));
   const bookmarkManager = new BookmarkManager(shellPaths.resolveUserPath('tui', 'bookmarks'));
-  const sessionManager = new SessionManager(workingDirectory, { surfaceRoot: 'tui' });
   const sessionOrchestration = new CrossSessionTaskRegistry(
-    shellPaths.resolveProjectPath('tui', 'sessions', 'task-graph.json'),
+    join(surface.sessionsDir, 'task-graph.json'),
   );
   const hookActivityTracker = new HookActivityTracker();
   const watcherRegistry = new WatcherRegistry({
@@ -564,7 +569,7 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
   // Store snapshots + durable remembered-approval rules + the live credential
   // chain, mirroring the SDK composition — see durability-services.ts.
   const { storeSnapshotScheduler, userPermissionRuleStore } = createDurabilityServices({
-    configManager, secretsManager, providerRegistry, memoryDbPath, codeIndexDbPath: codeIndexDbPath(workingDirectory), workingDirectory, surfaceRoot: 'tui', homeDirectory, shellPaths, // + retention-sweep roots & live config watch (mirrors the SDK)
+    configManager, secretsManager, providerRegistry, memoryDbPath, codeIndexDbPath: codeIndexDbPath(workingDirectory), surface, shellPaths, // + retention-sweep roots & live config watch (mirrors the SDK)
   });
   const codeInjectionOrchestratorDeps = { codeIndex: codeIndexStore, isCodeInjectionSettingEnabled: () => isCodeInjectionSettingEnabled(configManager), codeIndexReindexScheduler }; // Code-injection seam (agent here; main via orchestrator-core-services.ts)
   const { processRegistry } = createFleetServices({ // Shared archive-aware fleet registry (+ daemon observed rows) — see fleet-services.ts
@@ -578,7 +583,7 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
     observeExternalAgents: options.observeExternalAgents, providerRegistry, // observeExternalAgents is daemon-side only
   });
   const modeManager = new ModeManager(); const fileUndoManager = new FileUndoManager();
-  const workspaceCheckpointManager = createWorkspaceCheckpointing({ workspaceRoot: workingDirectory, runtimeBus: options.runtimeBus, configManager });
+  const workspaceCheckpointManager = createWorkspaceCheckpointing({ workspaceRoot: workingDirectory, surface, runtimeBus: options.runtimeBus, configManager });
   // memory-consolidation honors governor backpressure: it ticks only when idle
   // AND the 'memory-consolidation' job is not paused AND expensive work is
   // admitted (mirrors the SDK's own createRuntimeServices idle gate).
@@ -610,8 +615,7 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
   // Terminal-shell wrapper over the SDK registerGatewayVerbGroups (gateway-verbs.ts); checkin.*/fleet-needs-input/pairing.* register only when their deps are present. memoryGovernor lights up ops.memory.get; voiceSetup lights up voice.local.status/install.
   attachWsOnlyGatewayVerbHandlers(gatewayMethods, { processRegistry, workspaceCheckpointManager, conversationRewindPort: createSessionConversationRewindPort(), sessionBroker, secretsManager, stepUpService, approvalBroker, requestApproval: (input) => approvalBroker.requestApproval(input), watcherRegistry, userPermissionRuleStore, shellPaths, configManager, runtimeStore: options.runtimeStore, channelDeliveryRouter, providerRegistry, automationManager, sessionLister: sessionBroker, sessionIntake: sessionBroker, workingDirectory, memoryRegistry, pairingTokens, sessionLiveTurnControls, powerManager, memoryGovernor, voiceSetup, relayAvailable: () => configManager.get('relay.enabled') === true, pairingWebOrigin: () => resolvePairingWebOrigin(configManager).origin, ...wireFleetNeedsInputPush({ registry: processRegistry, runtimeBus: options.runtimeBus, sessionBroker }) });
   const integrationHelpers = new IntegrationHelperService({
-    workingDirectory,
-    homeDirectory,
+    surface, // surface-scoped: continuity's recovery-file check must read the SAME paths the app writes with, not the unscoped legacy pair.
     runtimeStore: options.runtimeStore,
     runtimeBus: options.runtimeBus,
     configManager,
@@ -636,7 +640,7 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
   // Exec stuck on a terminal prompt rides the approval broker; the typed answer feeds the continuing run. Built once and shared (like localhostFetchApproval) so the tool registry AND every setDependencies site — incl. the post-clobber rewire in bootstrap-core — install the SAME handler; otherwise a wholesale replace drops it and interactive prompts hang.
   const execPromptAnswerHandler = buildExecPromptAnswerHandler({ requestApproval: (input) => approvalBroker.requestApproval(input) });
   agentOrchestrator.setDependencies({
-    surfaceRoot: 'tui',
+    surfaceRoot: surface.surfaceRoot,
     execPromptAnswerHandler,
     localhostFetchApproval,
     fileCache,
@@ -678,6 +682,7 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
   return {
     workingDirectory,
     homeDirectory,
+    surface,
     shellPaths,
     workspaceTrustManager,
     configManager,
@@ -785,13 +790,6 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
     fileUndoManager,
     workspaceCheckpointManager,
     integrationHelpers,
-    async rerootStores(newWorkingDir: string): Promise<void> {
-      // The memory store is the home-scoped canonical cross-surface store and
-      // deliberately does NOT reroot per-project (that would re-silo memory back
-      // into per-project stores). Only working-tree-bound stores (code index,
-      // project index) reroot.
-      await codeIndexStore.reroot(newWorkingDir, codeIndexDbPath(newWorkingDir));
-      await projectIndex.reroot(newWorkingDir);
-    },
+    rerootStores: createStoreRerooter({ codeIndexStore, projectIndex }),
   };
 }

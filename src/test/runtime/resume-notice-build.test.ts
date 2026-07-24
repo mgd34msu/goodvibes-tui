@@ -121,20 +121,18 @@ describe('buildResumeNotice', () => {
       checkpointCount: null,
       lastChainOutcome: null,
       memoryAvailable: false,
-      recoverySnapshot: null,
     })).toBeNull();
   });
 
-  test('session only: reports turns and 0 checkpoints, hints /session resume <id> with the real id, no checkpoints/recall hint', () => {
+  test('session only: reports turns and 0 checkpoints, leads with /resume and keeps the exact-id form secondary, no checkpoints/recall hint', () => {
     const notice = buildResumeNotice({
       turnCount: 5,
       lastSessionId: 'abc123',
       checkpointCount: 0,
       lastChainOutcome: null,
       memoryAvailable: false,
-      recoverySnapshot: null,
     });
-    expect(notice).toBe('Previous session found: 5 turns, 0 checkpoints — /session resume abc123 to continue');
+    expect(notice).toBe('Previous session found: 5 turns, 0 checkpoints — /resume to continue (or /session resume abc123 directly)');
   });
 
   test('session + checkpoints: adds the /checkpoints hint', () => {
@@ -144,9 +142,8 @@ describe('buildResumeNotice', () => {
       checkpointCount: 3,
       lastChainOutcome: null,
       memoryAvailable: false,
-      recoverySnapshot: null,
     });
-    expect(notice).toBe('Previous session found: 1 turn, 3 checkpoints — /session resume abc123 to continue · /checkpoints to browse');
+    expect(notice).toBe('Previous session found: 1 turn, 3 checkpoints — /resume to continue (or /session resume abc123 directly) · /checkpoints to browse');
   });
 
   test('session + checkpoints + chain history: adds the last-chain clause', () => {
@@ -156,10 +153,9 @@ describe('buildResumeNotice', () => {
       checkpointCount: 2,
       lastChainOutcome: 'cancelled',
       memoryAvailable: false,
-      recoverySnapshot: null,
     });
     expect(notice).toBe(
-      'Previous session found: 4 turns, 2 checkpoints, last chain: cancelled — /session resume abc123 to continue · /checkpoints to browse',
+      'Previous session found: 4 turns, 2 checkpoints, last chain: cancelled — /resume to continue (or /session resume abc123 directly) · /checkpoints to browse',
     );
   });
 
@@ -170,9 +166,8 @@ describe('buildResumeNotice', () => {
       checkpointCount: 0,
       lastChainOutcome: null,
       memoryAvailable: true,
-      recoverySnapshot: null,
     });
-    expect(notice).toBe('Previous session found: 1 turn, 0 checkpoints — /session resume abc123 to continue · /recall for memory');
+    expect(notice).toBe('Previous session found: 1 turn, 0 checkpoints — /resume to continue (or /session resume abc123 directly) · /recall for memory');
   });
 
   test('no chain history means no chain clause at all (not a fabricated "none")', () => {
@@ -182,7 +177,6 @@ describe('buildResumeNotice', () => {
       checkpointCount: 0,
       lastChainOutcome: null,
       memoryAvailable: false,
-      recoverySnapshot: null,
     });
     expect(notice).not.toContain('last chain');
   });
@@ -194,9 +188,8 @@ describe('buildResumeNotice', () => {
       checkpointCount: null,
       lastChainOutcome: null,
       memoryAvailable: false,
-      recoverySnapshot: null,
     });
-    expect(notice).toBe('Previous session found: 2 turns — /session resume abc123 to continue');
+    expect(notice).toBe('Previous session found: 2 turns — /resume to continue (or /session resume abc123 directly)');
     expect(notice).not.toContain('checkpoint');
   });
 
@@ -207,7 +200,6 @@ describe('buildResumeNotice', () => {
       checkpointCount: 4,
       lastChainOutcome: 'passed',
       memoryAvailable: false,
-      recoverySnapshot: null,
     });
     expect(notice).toBe('Workspace history found: 4 checkpoints, last chain: passed — /checkpoints to browse');
     expect(notice).not.toContain('/session resume');
@@ -220,64 +212,39 @@ describe('buildResumeNotice', () => {
       checkpointCount: 0,
       lastChainOutcome: null,
       memoryAvailable: false,
-      recoverySnapshot: null,
     })).toBeNull();
   });
 
-  // ── recovery snapshot clause (bare-launch never auto-restores; the notice
-  // is the only surface for a live recovery snapshot — it never claims a
-  // crash happened, since checkRecoveryFile has no liveness check and a
-  // second TUI still running in the same workspace would see the same file) ──
+  // ── recovery snapshots (deliberately absent from this notice) ────────────
+  //
+  // A crash-recovery snapshot used to get a clause here. It now gets an
+  // explicit ask-then-retire modal instead (runtime/recovery-prompt.ts), so
+  // this notice must not mention one — two announcements of the same snapshot
+  // is not more honest than one, it is just noisier, and the passive clause
+  // was the half that could not actually restore anything.
 
-  test('a resumable recovery snapshot for a DIFFERENT session adds a distinct restore hint and summary clause', () => {
+  test('the notice has no recovery-snapshot vocabulary at all, whatever the state', () => {
     const notice = buildResumeNotice({
       turnCount: 5,
       lastSessionId: 'abc123',
-      checkpointCount: 0,
-      lastChainOutcome: null,
-      memoryAvailable: false,
-      recoverySnapshot: { sessionId: 'xyz789', resumable: true },
+      checkpointCount: 2,
+      lastChainOutcome: 'passed',
+      memoryAvailable: true,
     });
-    expect(notice).toBe(
-      'Previous session found: 5 turns, 0 checkpoints, recovery snapshot found — /session resume abc123 to continue · /session resume xyz789 to restore it',
-    );
+    expect(notice).not.toContain('recovery');
+    expect(notice).not.toContain('snapshot');
   });
 
-  test('a recovery snapshot for the SAME session as the one already hinted does not repeat the command', () => {
-    const notice = buildResumeNotice({
-      turnCount: 5,
-      lastSessionId: 'abc123',
-      checkpointCount: 0,
-      lastChainOutcome: null,
-      memoryAvailable: false,
-      recoverySnapshot: { sessionId: 'abc123', resumable: true },
-    });
-    expect(notice).toBe('Previous session found: 5 turns, 0 checkpoints, recovery snapshot found — /session resume abc123 to continue');
-    expect(notice!.match(/\/session resume/g)?.length).toBe(1);
-  });
-
-  test('a recovery snapshot whose session was never fully saved (not resumable) is reported without a command', () => {
-    const notice = buildResumeNotice({
+  test('a workspace whose ONLY state was a recovery snapshot now prints nothing here', () => {
+    // No prior session, no checkpoints, no chain history. Previously this
+    // printed "Workspace history found: recovery snapshot found"; the modal
+    // is what speaks for that state now.
+    expect(buildResumeNotice({
       turnCount: null,
       lastSessionId: null,
       checkpointCount: null,
       lastChainOutcome: null,
       memoryAvailable: false,
-      recoverySnapshot: { sessionId: 'xyz789', resumable: false },
-    });
-    expect(notice).toBe('Workspace history found: recovery snapshot found');
-    expect(notice).not.toContain('/session resume');
-  });
-
-  test('no recovery snapshot: no recovery-snapshot clause at all (not a fabricated one)', () => {
-    const notice = buildResumeNotice({
-      turnCount: 1,
-      lastSessionId: 'abc123',
-      checkpointCount: 0,
-      lastChainOutcome: null,
-      memoryAvailable: false,
-      recoverySnapshot: null,
-    });
-    expect(notice).not.toContain('recovery snapshot');
+    })).toBeNull();
   });
 });

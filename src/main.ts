@@ -37,13 +37,16 @@ import { selfUpdateAtLaunch } from './cli/launch-auto-update.ts';
 import { buildSharedOrchestratorCoreServices, refreshMemoryRecallSnapshot } from './runtime/orchestrator-core-services.ts';
 import { createSessionContinuityHintsBuilder } from './runtime/session-continuity-hints.ts';
 import { resolveWebSurfaceUrl } from '@pellux/goodvibes-sdk/platform/runtime/feature-announcements';
-import { readLastSessionPointer, writeRecoveryFile } from '@/runtime/index.ts';
+import { readLastSessionPointer } from '@/runtime/index.ts';
+import { startRecoveryAutosave } from './runtime/recovery-autosave.ts';
+import { scheduleRecoveryOffer } from './runtime/recovery-prompt.ts';
+import { buildRecoveryOfferWiring } from './runtime/recovery-offer-wiring.ts';
 import { handleBlockingShellInput, type PendingPermissionState } from './shell/blocking-input.ts';
 import { handleErrorAffordanceKey } from './shell/recovery-input-helpers.ts';
+import { createRetryAffordanceState, disarmRetryAffordance, retryAffordanceHint, wireRetryAffordanceOnError } from './shell/retry-affordance.ts';
 import { wireShellUiOpeners } from './shell/ui-openers.ts';
 import { deriveComposerState } from './core/composer-state.ts';
 import { resolveFoldedBookmarkLine } from './core/bookmark-navigation.ts';
-import { buildPersistedSessionContext, getReturnContextMode, maybeAssistReturnContextSummary } from '@/runtime/index.ts';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 import { prepareShellCliRuntime } from './cli/entrypoint.ts';
 import { applyInitialTuiCliState, reportFatalStartupError } from './cli/tui-startup.ts';
@@ -60,7 +63,7 @@ import { footerFleetCost } from './panels/fleet-read-model.ts';
 import { formatUserFacingErrorLine } from './core/format-user-error.ts';
 import { wireStreamEventMetrics, createStreamMetrics, type StreamMetrics, type WireStreamEventMetricsResult } from './core/stream-event-wiring.ts';
 import { wireTurnEventHandlers } from './core/turn-event-wiring.ts';
-import { buildContextStatusHint } from './renderer/context-status-hint.ts';
+import { resolveContextStatusHint } from './renderer/context-status-hint.ts';
 import { isEffectiveDangerMode } from './config/index.ts';
 import { createScriptableStatusline } from './core/scriptable-statusline.ts';
 import { applyComposerCapture } from './input/composer-capture.ts';
@@ -77,6 +80,7 @@ import { setPanelFrameRequester } from './panels/base-panel.ts';
 
 import { ALT_SCREEN_ENTER, ALT_SCREEN_EXIT, MOUSE_ENABLE, MOUSE_DISABLE, CURSOR_HIDE, CURSOR_SHOW, CLEAR_SCREEN, KEYBOARD_EXT_ENABLE, KEYBOARD_EXT_DISABLE, PASTE_ENABLE, PASTE_DISABLE, FOCUS_ENABLE, FOCUS_DISABLE } from './renderer/terminal-escapes.ts';
 import { installBackgroundThemeProbe } from './renderer/terminal-bg-probe.ts';
+import { VERSION } from './version.ts';
 
 async function main() {
   const stdout = process.stdout;
@@ -85,6 +89,12 @@ async function main() {
     defaultWorkingDirectory: process.env['GOODVIBES_WORKING_DIR'] ?? process.cwd(),
     homeDirectory: homedir(),
   }, 'goodvibes');
+
+  // Between binary start and the first frame, boot used to be silent (config
+  // load, trust manager, memory init, hooks). One honest pre-alt-screen line,
+  // placed after the help/version/completion early-exits above so those stay
+  // byte-clean.
+  stdout.write(`goodvibes v${VERSION} starting…\n`);
 
   // Launch-time self-update, before any bootstrap or terminal mode change; on
   // an installed update this restarts onto the swapped binary and never returns.
@@ -135,8 +145,11 @@ async function main() {
   applyConfiguredHitlMode(configManager, modeManager);
   applyTuiRuntimeConfigDefaults(configManager);
 
-  // Re-surface pre-TUI launch-update lines in-session (the alt screen wipes stdout).
-  for (const line of launchUpdateLines) systemMessageRouter.high(`[Update] ${line}`);
+  // Re-surface pre-TUI launch-update lines in-session (the alt screen wipes
+  // stdout). Launch-time update mechanics are routine, not urgent — low
+  // priority, not high (a skipped/deferred check is not the kind of thing
+  // that should compete with real session alerts for attention).
+  for (const line of launchUpdateLines) systemMessageRouter.low(`[Update] ${line}`);
 
   const panelManager = ctx.services.panelManager;
   const buildSessionContinuityHints = createSessionContinuityHintsBuilder({ readModels: uiServices.readModels, panelManager });
@@ -324,6 +337,9 @@ async function main() {
   commandContext.submitInput = submitInput;
   commandContext.submitSpokenInput = (text, content) => submitInput(text, content, { spokenOutput: true });
   commandContext.stopSpokenOutput = () => spokenTurns.stop(); commandContext.pasteFromClipboard = () => input.handlePaste();
+  // Read-only view of pending [TEXT: pN, M lines] fold markers, so /pastes
+  // can preview a folded paste's actual content before the user submits it.
+  commandContext.getPendingPastes = () => input.pasteRegistry;
   commandContext.executeCommand = (name, args) => commandRegistry.execute(name, args, commandContext);
   // Late-patched: bootstrap.ts populates uiServices.platform.externalServices AFTER commandContext is built.
   commandContext.platform.externalServices = uiServices.platform.externalServices;
@@ -423,7 +439,7 @@ async function main() {
     model: runtime.model,
     provider: runtime.provider,
     toolCount,
-    lastSessionId: readLastSessionPointer({ workingDirectory: workingDir, homeDirectory, surfaceRoot: 'tui' }) ?? undefined,
+    lastSessionId: readLastSessionPointer({ surface: ctx.services.surface }) ?? undefined,
   };
 
   const renderNow = () => {
@@ -457,16 +473,10 @@ async function main() {
       hasAttachments: input.getImageAttachments().size > 0,
       turnState: sessionSnapshot.turnState,
     });
-    const maintenanceStatus = evaluateSessionMaintenance({
-      configManager,
+    const contextStatusHint = resolveContextStatusHint({
+      evaluate: (args) => evaluateSessionMaintenance({ configManager, ...args, sessionMemoryCount: ctx.services.sessionMemoryStore.list().length }),
       currentTokens: orchestrator.lastInputTokens,
       contextWindow,
-      sessionMemoryCount: ctx.services.sessionMemoryStore.list().length,
-    });
-    const contextStatusHint = buildContextStatusHint({
-      level: maintenanceStatus.level,
-      autoCompactEnabled: maintenanceStatus.autoCompactEnabled,
-      usagePct: maintenanceStatus.usagePct,
     });
     const footerLines = buildShellFooter({
       width,
@@ -486,6 +496,7 @@ async function main() {
       provider: runtime.provider,
       contextWindow,
       contextStatusHint,
+      retryHint: retryAffordanceHint(retryAffordance),
       scriptableStatusLine: scriptableStatusline.current(),
       // Compact footer posture on short terminals so the shell stays usable.
       compact: height < 30,
@@ -680,9 +691,7 @@ async function main() {
     providerRegistry,
     systemMessageRouter,
     hookDispatcher,
-    workingDir,
-    homeDirectory,
-    sessionManager: ctx.services.sessionManager,
+    surface: ctx.services.surface,
     gitStatusProvider,
     lastGitInfoRef,
     buildSessionContinuityHints,
@@ -696,7 +705,10 @@ async function main() {
   let retryCtx: { count: number; text: string; content?: ContentPart[]; opts?: Parameters<typeof orchestrator.handleUserInput>[2] } | null = null;
   // One-key retry affordance, active right after a user-visible TURN_ERROR: 'r' re-submits on the
   // current provider, 'm' opens the model picker, any other character clears it and routes normally.
-  let errorAffordanceActive = false;
+  // Surfaced as a transient FOOTER hint (see retryAffordanceHint below), not a transcript message.
+  // Time-bounded: onExpire repaints once the 60s disarm timer fires, so a stray keypress hours
+  // later can never trigger a real retry — see retry-affordance.ts.
+  const retryAffordance = createRetryAffordanceState({ onExpire: render });
   const retryTurn = (): void => {
     if (!retryCtx) return;
     const { count, text, content: rContent, opts: rOpts } = retryCtx;
@@ -712,13 +724,7 @@ async function main() {
   });
   unsubs.push(...streamResult.unsubs);
   // Activate one-key retry affordance when a user-visible error surfaces.
-  streamResult.onErrorSurfaced((exhausted) => {
-    if (retryCtx) {
-      errorAffordanceActive = true;
-      systemMessageRouter.low(exhausted ? '[Retry] r retry same provider · m switch model' : '[Retry] r retry · m switch model');
-      render();
-    }
-  });
+  wireRetryAffordanceOnError(streamResult.onErrorSurfaced, retryAffordance, () => retryCtx !== null, render);
 
   // Register terminal-restoring crash/termination handlers BEFORE entering raw mode so a throw
   // during setup or the initial render still restores the terminal; 'exit' is the final safety net.
@@ -736,7 +742,8 @@ async function main() {
   // OSC 11 probe and repaints once if light wins. filterInput strips the reply from stdin.
   const themeProbe = installBackgroundThemeProbe({ configManager, isTTY: Boolean(stdout.isTTY), env: process.env, writeQuery: (b) => allowTerminalWrite(() => stdout.write(b)), requestRepaint: () => { compositor.resetDiff(); render(); } });
 
-  applyInitialTuiCliState({ cli, input, commandRegistry, commandContext, shellPaths: ctx.services.shellPaths, render });
+  // continueRecovery lets --continue/bare --resume check the target session for a live crash snapshot newer than its store before resuming (see tui-startup.ts).
+  applyInitialTuiCliState({ cli, input, commandRegistry, commandContext, shellPaths: ctx.services.shellPaths, surface: ctx.services.surface, render, continueRecovery: { sessionManager: ctx.services.sessionManager, runtime, conversation, writeLastSessionPointer, receipt: (line) => systemMessageRouter.high(line) } });
 
   stdin.on('data', (raw: string) => {
     const data = themeProbe.filterInput(raw); if (data.length === 0) return;
@@ -749,9 +756,10 @@ async function main() {
       return;
     }
     // One-key retry affordance: armed after a user-visible TURN_ERROR; any key other than r/m dismisses it and routes normally.
-    if (errorAffordanceActive) {
-      errorAffordanceActive = false;
+    if (retryAffordance.armed) {
+      disarmRetryAffordance(retryAffordance);
       if (handleErrorAffordanceKey(data, { retryArmed: retryCtx !== null, retry: retryTurn, openModelPicker: () => commandContext.openModelPicker?.(), render })) return;
+      render(); // disarm must repaint immediately so the footer hint clears even when the key fell through
     }
     // One-key jump to a spawned CI fix-session: 'j' attaches, any other key dismisses and routes normally.
     if (fixSessionAttachArmed !== null) {
@@ -768,28 +776,24 @@ async function main() {
 
   // State restores happen ONLY when the user explicitly asks — a CLI flag
   // (--continue/--resume/--fork), a slash command (/session resume,
-  // /checkpoints, /rewind), or the boot resume notice's advertised command.
-  // There is deliberately no unconditional auto-restore here: a bare launch
-  // never loads a saved conversation on its own (owner ruling). Any live
-  // recovery snapshot is surfaced (never applied) by the boot resume
-  // notice — see announceResumeState in runtime/resume-notice.ts.
+  // /checkpoints, /rewind), or the startup recovery offer's modal. There is
+  // deliberately no unconditional auto-restore here: a bare launch never
+  // loads a saved conversation on its own (owner ruling).
 
   // Initial render
   conversation.rebuildHistory();
   render();
 
-  // --- Auto-save to recovery file every 60s ---
-  recoveryInterval = setInterval(() => {
-    const snapshot = conversation.toJSON() as { messages: Array<import('./core/conversation.ts').ConversationMessageSnapshot> };
-    const persisted = buildPersistedSessionContext(snapshot.messages, conversation.getTitleSource(), buildSessionContinuityHints());
-    writeRecoveryFile(
-      { ...snapshot, ...persisted },
-      runtime.sessionId,
-      conversation.title ?? '',
-      { workingDirectory: workingDir, homeDirectory },
-    );
-  }, 60_000);
+  // Crash-recovery snapshot: asked, never assumed. Scheduled after the first
+  // frame so the question is drawn rather than posed at a blank terminal.
+  scheduleRecoveryOffer(buildRecoveryOfferWiring({
+    surface: ctx.services.surface, sessionManager: ctx.services.sessionManager, runtime, conversation, commandContext,
+    writeLastSessionPointer, receipt: (line) => systemMessageRouter.high(line), render,
+  }));
 
+  // Auto-save to recovery file every 60s + multi-instance liveness-marker
+  // refresh — see runtime/recovery-autosave.ts.
+  recoveryInterval = startRecoveryAutosave({ conversation, runtime, surface: ctx.services.surface, buildSessionContinuityHints });
 }
 
 main().catch(reportFatalStartupError);

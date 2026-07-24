@@ -1,15 +1,135 @@
-# Configuration reference — TUI-extension keys
+# Configuration reference
 
-Most settings live under the schema owned by the platform config system and are
-editable from `/settings` (or `/config`). This page documents the additional
-TUI-owned namespaces you can add by hand to your settings file:
+Settings are layered, not stored in a single working-directory file:
 
-- global settings: `~/.goodvibes/tui/settings.json`
+- defaults
+- global TUI settings: `~/.goodvibes/tui/settings.json`
 - project settings: `.goodvibes/tui/settings.json`
+- CLI/runtime overrides
 
-Project settings win over global settings. These namespaces are read directly
-from the settings file; a missing or malformed value falls back to the built-in
-default rather than erroring.
+Project settings win over global settings, and CLI/runtime overrides win over
+both. The shared file `~/.goodvibes/goodvibes.json` is reserved for future
+cross-app state; TUI settings do not live there.
+
+Most settings live under the schema owned by the platform config system and
+are editable live from the fullscreen `/config` workspace or `/settings` — see
+[Key Settings](#key-settings) below for the full table. This page also
+documents the additional TUI-owned namespaces you can add by hand to your
+settings file (further down): these are read directly from the settings file,
+and a missing or malformed value falls back to the built-in default rather
+than erroring.
+
+Related storage paths:
+
+- secure secrets: `~/.goodvibes/tui/secrets.enc` and project/ancestor `.goodvibes/tui/secrets.enc`
+- plaintext compatibility secrets: `~/.goodvibes/goodvibes.secrets.json` and project/ancestor `.goodvibes/goodvibes.secrets.json`
+- service registry: `.goodvibes/tui/services.json`, with service-backed auth/account surfaces in the TUI and daemon
+- custom provider JSON: `~/.goodvibes/tui/providers/*.json`
+- keybindings: `~/.goodvibes/tui/keybindings.json`
+- REPL history: `.goodvibes/tui/repl-history.json`
+- schedules: `.goodvibes/tui/schedules.json`
+
+## Key Settings
+
+These settings live in the platform-owned config schema, not in the
+TUI-extension namespaces documented further down this page. Edit them from the
+fullscreen `/config` workspace or `/settings`; the table below is listed here
+for reference.
+
+| Key | Default | Description |
+|-----|---------|-------------|
+| `display.stream` | `true` | Stream responses token by token |
+| `display.lineNumbers` | `off` | Line-number mode: `off`, `code`, or `all` |
+| `display.collapseThreshold` | `30` | Lines before a block auto-collapses |
+| `display.theme` | `vaporwave` | Color theme |
+| `display.showThinking` | `false` | Show model thinking traces |
+| `display.showTokenSpeed` | `false` | Show tokens/sec in status bar |
+| `provider.model` | `openrouter:openrouter/free` | Active model ID, provider-qualified as `<provider>:<model>` |
+| `provider.reasoningEffort` | `medium` | Reasoning depth for supported models |
+| `provider.systemPromptFile` | `` | Path to a custom system prompt file |
+| `behavior.autoApprove` | `false` | Auto-approve all tool permission prompts |
+| `behavior.autoCompactThreshold` | `80` | Context % before auto-compact triggers |
+| `behavior.saveHistory` | `true` | Persist conversation history |
+| `behavior.returnContextMode` | `off` | Session return-context mode: `off`, `local`, `assisted` |
+| `behavior.notifyOnComplete` | `true` | Emit terminal bell and desktop notification when a long turn completes |
+| `behavior.guidanceMode` | `minimal` | Operational guidance mode: `off`, `minimal`, `guided` |
+| `storage.secretPolicy` | `preferred_secure` | Secret storage policy: prefer secure backing store, fall back when allowed |
+| `permissions.mode` | `prompt` | Permission mode: `prompt`, `accept-edits`, `plan`, `allow-all`, `custom` |
+| `permissions.backgroundAgents` | `inherit` | How background/subagent tool calls consult the permission layer: `inherit` or `allow-all` |
+| `ui.systemMessages` | `panel` | Route general system messages to `panel`, `conversation`, or `both` |
+| `ui.operationalMessages` | `panel` | Route operational runtime notices to `panel`, `conversation`, or `both` |
+| `ui.wrfcMessages` | `both` | Route WRFC/orchestration updates to `panel`, `conversation`, or `both` |
+| `service.enabled` | `true` | Enable service-install and daemon-management verbs, including the standalone daemon's self-promotion to a supervised service at its first idle moment |
+| `service.autostart` | `false` | Install/enable or disable/remove the OS autostart service |
+| `service.restartOnFailure` | `true` | Restart managed daemon services after failure |
+| `controlPlane.hostMode` | `local` | Control-plane bind mode: `local`, `network`, or `custom` |
+| `controlPlane.port` | `3421` | Control-plane daemon/API port |
+| `httpListener.port` | `3422` | Webhook/event listener port |
+| `web.enabled` | `true` | Enable the browser operator surface (bound to loopback until `web.hostMode` is widened) |
+| `web.hostMode` | `local` | Web surface bind mode: `local`, `network`, or `custom` |
+| `web.port` | `3423` | Web/browser surface port |
+| `orchestration.recursionEnabled` | `false` | Allow recursive agent orchestration under bounded policy controls |
+| `orchestration.maxDepth` | `0` | Maximum recursive orchestration depth: `0` disables, higher values (up to `5`) allow deeper bounded recursion |
+| `daemon.enabled` | `true` | Run the local session daemon (loopback-bound; on by default) |
+| `danger.httpListener` | `false` | Enable HTTP webhook listener |
+| `tools.autoHeal` | `false` | Auto-fix syntax errors on write/edit |
+| `tools.hooksFile` | `hooks.json` | Hook configuration file name |
+| `cache.enabled` | `true` | Enable provider-aware prompt caching |
+| `cache.stableTtl` | `1h` | TTL for stable content (system prompt + tools) |
+| `cache.monitorHitRate` | `true` | Track and warn on low cache hit rates |
+| `helper.enabled` | `false` | Route grunt work to a cheaper helper model |
+| `helper.globalProvider` | `` | Helper model provider (e.g., `ollama`) |
+| `helper.globalModel` | `` | Helper model ID (e.g., `llama3.2:3b`) |
+
+## Permission Modes
+
+`permissions.mode` takes five values:
+
+- **`prompt`** (default, shown as `normal`) — auto-approve reads, ask before write, edit, exec, fetch, agent, workflow, and MCP calls
+- **`accept-edits`** — file write and edit tools auto-approve; exec and the other risky classes still ask
+- **`plan`** — read-only tools are allowed and every mutating or exec tool is refused with a structured plan-mode denial
+- **`allow-all`** (shown as `auto`) — never prompt, allow everything
+- **`custom`** — per-tool overrides using `permissions.tools.<name>` keys
+
+Per-tool values: `allow`, `prompt`, `deny`.
+
+`Shift+Tab` cycles the four session postures in order — `normal` → `accept-edits`
+→ `plan` → `auto` → `normal` — and `/plan` toggles plan mode directly. `custom`
+is a per-rule policy rather than a session posture, so it is left out of the
+cycle; cycling from `custom` starts again at `normal`.
+
+`permissions.backgroundAgents` decides how background and subagent tool calls
+consult that mode. `inherit` (the default) runs them through the same session
+mode as the foreground turn loop, brokering asks through the same
+blocked-on-user machinery with subagent attribution; `allow-all` exempts
+background agents entirely regardless of the session mode.
+
+Changing `service.autostart` or `service.enabled` from `/config` reconciles
+the OS service where supported. On Linux this installs/enables, disables, or
+rewrites the user `systemd` service so the daemon state matches the setting
+instead of only changing JSON.
+
+## Policy, Permissions, And Trust
+
+The permission system is more than a prompt toggle. The runtime includes:
+
+- layered policy evaluation for prefix rules, arg-shape rules, path scope, network scope, and mode constraints
+- decision logs for audit and review
+- policy preflight review before applying bundles
+- rule suggestion generation from actual approval decisions
+- policy signing and signature verification
+- simulation and divergence reporting for candidate policy bundles before promotion
+- policy runtime state with bundle lifecycle, promote, rollback, and diff support
+
+The adjacent trust layer covers:
+
+- plugin trust tiers
+- quarantine and degraded posture
+- marketplace and MCP trust review
+- security/policy control-room surfaces for review and remediation
+
+The result is that approvals, policy rollout, trust posture, and plugin
+degradation are inspectable product behavior.
 
 ## `checkpoints.*` — workspace checkpoint root guard
 
@@ -75,6 +195,18 @@ Example (`.goodvibes/tui/settings.json`):
   }
 }
 ```
+
+## `behavior.*` — TUI-local notification keys
+
+These two keys are read directly by the TUI's notifier modules rather than by
+the platform schema, so they do not appear in the Key Settings table above.
+They are still editable from `/config behavior`, which injects them into the
+behavior group alongside the schema-owned keys.
+
+| Key | Type | Default | Meaning |
+| --- | --- | --- | --- |
+| `behavior.notifyAfterSeconds` | number | `60` | Seconds a turn must run before a push notification fires; `0` turns it off. Delivers to the desktop (`notify-send` / `osascript`) and to any configured ntfy/webhook URLs. Notification text is metadata only — task kind, elapsed time, ok/fail, session id — never conversation content. |
+| `behavior.notifyOnlyWhenUnfocused` | boolean | `true` | Master gate over every alert class: alerts fire only when the terminal is unfocused, or when focus state was never observed. Set `false` to fire regardless of focus. |
 
 ## `session.*` — session behavior
 

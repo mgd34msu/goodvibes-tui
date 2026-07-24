@@ -7,6 +7,7 @@ import { logger } from '@pellux/goodvibes-sdk/platform/utils';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 import type { HookDispatcher, HookPhase, HookCategory, HookEventPath } from '@pellux/goodvibes-sdk/platform/hooks';
 import type { ConversationManager } from './conversation.ts';
+import type { SessionSurface } from '@/runtime/index.ts';
 import { journalPathFor, openTranscriptJournal, type TranscriptJournal } from './transcript-journal.ts';
 import type { WebhookNotifier } from '@pellux/goodvibes-sdk/platform/integrations';
 import { notifyCompletion } from '@pellux/goodvibes-sdk/platform/utils';
@@ -15,9 +16,6 @@ import type { FocusTracker } from './focus-tracker.ts';
 import { shouldFireAlert, FORCE_NOTIFY_DURATION_MS } from './alert-gating.ts';
 import { createBudgetBreachNotifier, type BudgetBreachNotifier } from './budget-breach-notifier.ts';
 import { readBudgetAlertUsd } from '../export/cost-utils.ts';
-
-/** Infer the options param of persistConversation to pick up SessionManager correctly. */
-type PersistOptions = NonNullable<Parameters<typeof persistConversation>[5]>;
 
 /** Minimal orchestrator surface required by turn-event wiring. */
 interface TurnOrchestrator {
@@ -64,9 +62,14 @@ export interface WireTurnEventHandlersOptions {
   readonly providerRegistry: TurnProviderRegistry;
   readonly systemMessageRouter: TurnSystemMessageRouter;
   readonly hookDispatcher: HookDispatcher;
-  readonly workingDir: string;
-  readonly homeDirectory: string;
-  readonly sessionManager: PersistOptions['sessionManager'];
+  /**
+   * The app's declare-once session-storage handle. The turn snapshot, the
+   * last-session pointer it writes, the transcript journal, and the rewind
+   * anchor sidecar all resolve off this one handle — so the boot notice and
+   * `--continue`, which read through the same handle, land on the files this
+   * writer actually produced.
+   */
+  readonly surface: SessionSurface;
   readonly gitStatusProvider: { refresh(): Promise<unknown> };
   readonly lastGitInfoRef: { value: unknown };
   readonly buildSessionContinuityHints: () => Record<string, unknown>;
@@ -104,6 +107,32 @@ export interface WireTurnEventHandlersOptions {
   readonly _clock?: () => number;
 }
 
+/**
+ * Wrap a TranscriptJournal so every write first checks whether
+ * `runtime.sessionId` has moved on from the session the journal is currently
+ * bound to, rebinding to the new session's file when it has. See the
+ * `transcriptJournal` construction above for why this is necessary.
+ */
+function wrapJournalWithSessionRebind(
+  journal: TranscriptJournal,
+  surface: SessionSurface,
+  runtime: { readonly sessionId: string },
+): TranscriptJournal {
+  let boundSessionId = runtime.sessionId;
+  const ensureBoundToCurrentSession = (): void => {
+    if (runtime.sessionId !== boundSessionId) {
+      boundSessionId = runtime.sessionId;
+      journal.rebind(journalPathFor(surface, boundSessionId), boundSessionId);
+    }
+  };
+  return {
+    get path(): string { return journal.path; },
+    appendRecord: (type, messages) => { ensureBoundToCurrentSession(); journal.appendRecord(type, messages); },
+    rotate: () => { ensureBoundToCurrentSession(); journal.rotate(); },
+    rebind: (path, sessionId) => { boundSessionId = sessionId; journal.rebind(path, sessionId); },
+  };
+}
+
 export interface WireTurnEventHandlersResult {
   /** Trigger a git status refresh; may be called from external code after tool execution. */
   readonly refreshGit: () => void;
@@ -134,7 +163,7 @@ export function wireTurnEventHandlers(
 ): WireTurnEventHandlersResult {
   const {
     events, conversation, runtime, configManager, hookDispatcher, orchestrator, providerRegistry,
-    workingDir, homeDirectory, sessionManager, gitStatusProvider,
+    surface, gitStatusProvider,
     lastGitInfoRef, buildSessionContinuityHints, render, webhookNotifier, focusTracker,
     terminalNotifier, runtimeBus, systemMessageRouter,
     _clock = Date.now,
@@ -145,9 +174,19 @@ export function wireTurnEventHandlers(
 
   // Create the per-session transcript journal. Path mirrors recovery-file
   // convention (homeDirectory-scoped). Created lazily on first append.
-  const transcriptJournal: TranscriptJournal = openTranscriptJournal(
-    journalPathFor(homeDirectory, runtime.sessionId),
-    runtime.sessionId,
+  //
+  // `runtime` is the same MutableRuntimeState object /session resume and
+  // /session fork reassign `sessionId` on in place (session-workflow.ts,
+  // bootstrap-hook-bridge.ts), so a session switch is visible here just by
+  // re-reading `runtime.sessionId`. Wrapped so every write re-checks it and
+  // rebinds to the new session's file first — otherwise the journal opened
+  // for the OLD session keeps appending the NEW session's snapshots into the
+  // OLD session's file, and a later resume of the old session replays the
+  // wrong conversation.
+  const transcriptJournal: TranscriptJournal = wrapJournalWithSessionRebind(
+    openTranscriptJournal(journalPathFor(surface, runtime.sessionId), runtime.sessionId),
+    surface,
+    runtime,
   );
 
   // Track turn start time for long-task notification threshold.
@@ -210,7 +249,11 @@ export function wireTurnEventHandlers(
         runtime.model,
         runtime.provider,
         conversation.title || '',
-        { workingDirectory: workingDir, homeDirectory, sessionManager },
+        { surface },
+        // Turn-completion persistence is machinery, not a user act: stated
+        // explicitly so the retention sweep can tell it apart from a session
+        // the user asked to keep via /session save.
+        'auto',
       );
       hookDispatcher.fire({ path: 'Lifecycle:session:save' as HookEventPath, phase: 'Lifecycle' as HookPhase, category: 'session' as HookCategory, specific: 'save', sessionId: runtime.sessionId, timestamp: Date.now(), payload: { sessionId: runtime.sessionId } }).catch((err: unknown) => logger.debug('hook fire error', { error: summarizeError(err) }));
       // Snapshot succeeded — rotate the journal (gap-filler no longer needed).
@@ -238,7 +281,7 @@ export function wireTurnEventHandlers(
       });
       // Mirror the anchors to the session's sidecar so message-anchored /rewind
       // survives a resume (the in-memory registry alone is process-local).
-      persistTurnAnchors(runtime.sessionId, workingDir);
+      persistTurnAnchors(runtime.sessionId, surface);
     } catch { /* best-effort; a rewind-anchor miss must never break the turn */ }
     // Auto-compaction is owned by the SDK Orchestrator's post-turn maintenance
     // (handlePostTurnContextMaintenance), which runs on every turn against the

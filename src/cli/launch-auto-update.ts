@@ -14,6 +14,14 @@
  *   - a successful update restarts into the new binary and the restarted
  *     process prints a receipt naming both versions, so the swap is never
  *     silent.
+ *   - the install gets a budget too, and running out of it is reported for
+ *     what actually happened rather than assumed. The budget cancels the work
+ *     through a real AbortSignal, so a download that is still in flight is
+ *     genuinely stopped and "deferred — will retry next launch" is true. Once
+ *     the swap has begun it is never interrupted, so that outcome says the
+ *     binary WAS replaced and asks for a restart instead. The two are told
+ *     apart by the swap state the install reports back (UpdateSwapProgress),
+ *     never by guessing.
  *   - every swap keeps the outgoing file at `<path>.previous`; rollback is
  *     one command (`/update rollback`).
  *
@@ -29,7 +37,12 @@
  */
 import { spawnSync } from 'node:child_process';
 import { detectInstallKind, normalizeVersion, type UpdateFetchLike } from '../runtime/update-check.ts';
-import { applyUpdate, checkForUpdate, type ApplyUpdateOptions } from '../input/commands/update-runtime.ts';
+import {
+  applyUpdate,
+  checkForUpdate,
+  createUpdateSwapProgress,
+  type ApplyUpdateOptions,
+} from '../input/commands/update-runtime.ts';
 import { readUpdateSettings, type UpdateSettings } from '../config/tui-extension-settings.ts';
 import type { ConfigManager } from '../config/index.ts';
 import { VERSION } from '../version.ts';
@@ -46,10 +59,23 @@ export const LAUNCH_UPDATED_FROM_ENV = 'GOODVIBES_LAUNCH_UPDATED_FROM';
 /** Default budget for the launch-time version check; user-tunable via update.launchCheckTimeoutMs. */
 export const LAUNCH_UPDATE_CHECK_TIMEOUT_MS = 2500;
 
+/** Default budget for the launch-time download+verify+swap; user-tunable via update.applyTimeoutMs. Generous — a binary download over a slow connection genuinely takes a while — but bounded so launch is never held hostage. */
+export const LAUNCH_APPLY_TIMEOUT_MS = 45_000;
+
 export type LaunchAutoUpdateOutcome =
   | {
       readonly action: 'continue';
-      readonly reason: 'just-updated' | 'disabled' | 'not-swappable-install' | 'already-current' | 'check-skipped' | 'update-failed';
+      readonly reason:
+        | 'just-updated'
+        | 'disabled'
+        | 'not-swappable-install'
+        | 'already-current'
+        | 'check-skipped'
+        | 'update-failed'
+        /** The budget ran out before anything was written, and the work was cancelled. */
+        | 'update-deferred'
+        /** The budget ran out after the swap had begun; the swap finished, so a restart picks up the new version. */
+        | 'update-in-background';
     }
   | { readonly action: 'restart'; readonly latestTag: string };
 
@@ -66,6 +92,8 @@ export interface RunLaunchAutoUpdateOptions {
   /** Injectable so tests observe the install step instead of swapping real files. */
   readonly apply?: (options: ApplyUpdateOptions) => Promise<void>;
   readonly timeoutMs?: number;
+  /** Overrides the download+verify+swap budget; defaults to settings.applyTimeoutMs ?? LAUNCH_APPLY_TIMEOUT_MS. */
+  readonly applyTimeoutMs?: number;
 }
 
 /** Resolves to 'timeout' when `promise` does not settle within `ms`; the timer never keeps the process alive. */
@@ -114,16 +142,24 @@ export async function runLaunchAutoUpdate(options: RunLaunchAutoUpdateOptions): 
     check = 'timeout';
   }
   if (check === 'timeout') {
-    options.print('update check skipped: offline');
+    // Honest about WHY the check was skipped — a timeout most commonly means
+    // the update server could not be reached in time, not necessarily that
+    // the whole machine is offline (a slow/flaky connection is just as
+    // common), so this no longer overclaims "offline".
+    options.print("couldn't reach the update server — check skipped");
     return { action: 'continue', reason: 'check-skipped' };
   }
   if (check.isCurrent) {
     return { action: 'continue', reason: 'already-current' };
   }
 
+  const applyTimeoutMs = options.applyTimeoutMs ?? options.settings.applyTimeoutMs ?? LAUNCH_APPLY_TIMEOUT_MS;
+  options.print(`downloading ${check.latestTag}…`);
+  const controller = new AbortController();
+  const progress = createUpdateSwapProgress();
   try {
     const apply = options.apply ?? applyUpdate;
-    await apply({
+    const applyPromise = apply({
       fetchImpl: options.fetchImpl,
       execPath: options.execPath,
       platform: options.platform,
@@ -131,7 +167,30 @@ export async function runLaunchAutoUpdate(options: RunLaunchAutoUpdateOptions): 
       currentVersion: options.currentVersion,
       print: options.print,
       configManager: options.configManager,
+      signal: controller.signal,
+      progress,
     });
+    // Losing the race abandons this promise, and a cancelled download rejects
+    // shortly after: that rejection is the expected end of the work, not an
+    // unhandled failure, so it is absorbed here. The race below still sees
+    // every rejection that arrives before the budget runs out.
+    applyPromise.catch(() => {});
+    const applyResult = await withTimeout(applyPromise, applyTimeoutMs);
+    if (applyResult === 'timeout') {
+      if (!progress.begun) {
+        // Nothing has been written yet, so the work can genuinely be called
+        // off — cancel the download in flight, then say it was deferred.
+        controller.abort();
+        options.print('update deferred — will retry next launch');
+        return { action: 'continue', reason: 'update-deferred' };
+      }
+      // The swap had already started when the budget ran out. A swap is never
+      // interrupted, so the binary on disk is the new one — cancelling here
+      // would be a lie in the other direction. Report the replacement and the
+      // restart it needs instead of claiming a deferral that did not happen.
+      options.print(`updated in background; restart to use v${normalizeVersion(progress.targetTag ?? check.latestTag)}`);
+      return { action: 'continue', reason: 'update-in-background' };
+    }
     options.print(`auto-update: ${check.latestTag} installed — restarting onto the new version`);
     return { action: 'restart', latestTag: check.latestTag };
   } catch (error) {

@@ -9,6 +9,7 @@ import { requireSessionManager, requireSessionMemoryStore, requireShellPaths } f
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 import { sessionCommand } from './session.ts';
 import { undoLastRewind, redoLastRewind } from './rewind-runtime.ts';
+import { filterUserFacingSessions } from './session-picker-filter.ts';
 
 export function registerSessionContentCommands(registry: CommandRegistry): void {
   registry.register({
@@ -113,6 +114,10 @@ export function registerSessionContentCommands(registry: CommandRegistry): void 
         model: ctx.session.runtime.model,
         provider: ctx.session.runtime.provider,
         timestamp: Date.now(),
+        // `/save` is the user asking to keep this conversation. Stamped so
+        // the session-conversations retention sweep never expires it, unlike
+        // the automatic per-turn snapshot (turn-event-wiring.ts, 'auto').
+        saveSource: 'user' as const,
       };
       try {
         const agentManager = ctx.ops.agentManager;
@@ -263,7 +268,10 @@ export function registerSessionContentCommands(registry: CommandRegistry): void 
         return;
       }
       const sessionManager = requireSessionManager(ctx);
-      const sessions = sessionManager.list();
+      // Excludes subagent-shaped transcripts (see session-picker-filter.ts) —
+      // an unfiltered list here drowns real user sessions in spawned-agent
+      // noise. A direct `/sessions resume agent-xxxxxxxx` still reaches them.
+      const sessions = filterUserFacingSessions(sessionManager.list());
       if (ctx.openSelection) {
         const deleteAction = new Map([['d', 'delete' as const]]);
         const items: SelectionItem[] = sessions.length === 0

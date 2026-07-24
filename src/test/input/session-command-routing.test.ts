@@ -341,12 +341,12 @@ describe('session-command-routing (TASK-032)', () => {
 
   // ── /sessions resume <id> hygiene ───────────────────────────────────────
   //
-  // splash-lines.ts advertises "/sessions resume <id>" (plural, matching the
-  // registered command's own name), but the plural /sessions command took
-  // (_args, ctx) and ignored args entirely — it always just listed sessions,
-  // silently dropping the resume subcommand + id on the floor. The singular
-  // /session command is what actually implements `resume`. /sessions now
-  // forwards any args to /session's own handler instead of listing.
+  // The plural /sessions command used to take (_args, ctx) and ignore args
+  // entirely — it always just listed sessions, silently dropping a resume
+  // subcommand + id on the floor. The singular /session command is what
+  // actually implements `resume` (also reachable, more discoverably, via the
+  // bare /resume picker — see session.ts). /sessions now forwards any args
+  // to /session's own handler instead of listing.
 
   test('/sessions resume <id> forwards to /session\'s resume handling instead of silently listing', async () => {
     const registryForSessions = new CommandRegistry();
@@ -384,5 +384,77 @@ describe('session-command-routing (TASK-032)', () => {
 
     const output = ctx.printed.join('\n');
     expect(output).toContain('Saved sessions:');
+  });
+
+  test('/session list notes overflow honestly when a saved layout has more than 3 open panels (item 7)', async () => {
+    const cmd = registry.get('session')!;
+    const ctx = makeCtx({
+      sessionManager: {
+        ...stubSessionManager,
+        list: () => ([
+          {
+            name: 'sess-many-panels', title: 'Many panels', timestamp: Date.now(), messageCount: 4, model: 'm', provider: 'p', filePath: '/tmp/x',
+            returnContext: {
+              activityLabel: 'idle', statusLabel: 'idle', pendingApprovals: 0, toolCallCount: 0,
+              toolResultCount: 0, assistantTurnCount: 0, userTurnCount: 0, lines: [],
+              openPanels: ['git', 'tasks', 'diff', 'ops-control', 'help'],
+            },
+          },
+        ]),
+      } as typeof stubSessionManager,
+    });
+
+    await cmd.handler(['list'], ctx as unknown as CommandContext);
+
+    const output = ctx.printed.join('\n');
+    expect(output).toContain('panels=git,tasks,diff');
+    expect(output).toContain('(+2 more)');
+  });
+
+  test('/session list omits the overflow note when a saved layout has 3 or fewer open panels', async () => {
+    const cmd = registry.get('session')!;
+    const ctx = makeCtx({
+      sessionManager: {
+        ...stubSessionManager,
+        list: () => ([
+          {
+            name: 'sess-few-panels', title: 'Few panels', timestamp: Date.now(), messageCount: 4, model: 'm', provider: 'p', filePath: '/tmp/y',
+            returnContext: {
+              activityLabel: 'idle', statusLabel: 'idle', pendingApprovals: 0, toolCallCount: 0,
+              toolResultCount: 0, assistantTurnCount: 0, userTurnCount: 0, lines: [],
+              openPanels: ['git', 'tasks'],
+            },
+          },
+        ]),
+      } as typeof stubSessionManager,
+    });
+
+    await cmd.handler(['list'], ctx as unknown as CommandContext);
+
+    const output = ctx.printed.join('\n');
+    expect(output).toContain('panels=git,tasks');
+    expect(output).not.toContain('more)');
+  });
+
+  test('/sessions excludes subagent transcripts (agent-* names) from the listing — mixed fixture', async () => {
+    const registryForSessions = new CommandRegistry();
+    registerBuiltinCommands(registryForSessions);
+    const ctx = makeCtx({
+      sessionManager: {
+        ...stubSessionManager,
+        list: () => ([
+          { name: 'user-1111', title: 'user work', timestamp: 3, messageCount: 5, model: 'm', provider: 'p', filePath: '/tmp/user-1111.jsonl' },
+          { name: 'agent-2222', title: 'subagent transcript', timestamp: 2, messageCount: 20, model: 'm', provider: 'p', filePath: '/tmp/agent-2222.jsonl' },
+          { name: 'agent-3333', title: 'another subagent transcript', timestamp: 1, messageCount: 8, model: 'm', provider: 'p', filePath: '/tmp/agent-3333.jsonl' },
+        ]),
+      } as typeof stubSessionManager,
+    });
+
+    await registryForSessions.execute('sessions', [], ctx as unknown as CommandContext);
+
+    const output = ctx.printed.join('\n');
+    expect(output).toContain('user-1111');
+    expect(output).not.toContain('agent-2222');
+    expect(output).not.toContain('agent-3333');
   });
 });

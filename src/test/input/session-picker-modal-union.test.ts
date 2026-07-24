@@ -24,6 +24,7 @@ import { SessionPickerModal } from '../../input/session-picker-modal.ts';
 import { renderSessionPickerModal } from '../../renderer/session-picker-modal.ts';
 import { linesToText } from '../setup.ts';
 import { makeProjectTempDir } from '../helpers/project-temp.ts';
+import { makeTestSurface } from '../helpers/session-surface.ts';
 
 function record(id: string, over: Partial<SharedSessionRecord> = {}): SharedSessionRecord {
   return {
@@ -63,7 +64,7 @@ const silent = { debug: () => {} };
 
 function makeSessionManager(): { sessionManager: SessionManager; dir: string } {
   const dir = makeProjectTempDir('gv-sess-picker-union-test');
-  return { sessionManager: new SessionManager(dir, { surfaceRoot: 'tui' }), dir };
+  return { sessionManager: new SessionManager(dir, { surface: makeTestSurface(dir) }), dir };
 }
 
 describe('SessionPickerModal — cross-surface union (W3-T2)', () => {

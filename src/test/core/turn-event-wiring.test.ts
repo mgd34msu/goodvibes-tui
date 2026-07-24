@@ -12,11 +12,15 @@
  *   focus + the per-class config keys.
  */
 
-import { describe, test, expect, mock, spyOn } from 'bun:test';
+import { describe, test, expect, mock, spyOn, afterEach, beforeEach } from 'bun:test';
+import { existsSync, readFileSync, rmSync } from 'node:fs';
 import { wireTurnEventHandlers } from '../../core/turn-event-wiring.ts';
 import type { WireTurnEventHandlersOptions } from '../../core/turn-event-wiring.ts';
 import type { WebhookNotifier } from '@pellux/goodvibes-sdk/platform/integrations';
 import { FocusTracker } from '../../core/focus-tracker.ts';
+import { journalPathFor } from '../../core/transcript-journal.ts';
+import { makeProjectTempDir } from '../helpers/project-temp.ts';
+import { makeTestSurface } from '../helpers/session-surface.ts';
 
 // ---------------------------------------------------------------------------
 // Minimal fake event bus
@@ -120,9 +124,7 @@ function makeMinimalOptions(
     hookDispatcher: {
       fire: mock(async () => ({})) as WireTurnEventHandlersOptions['hookDispatcher']['fire'],
     } as WireTurnEventHandlersOptions['hookDispatcher'],
-    workingDir: '/tmp/test-workdir',
-    homeDirectory: '/tmp/test-home',
-    sessionManager: undefined as WireTurnEventHandlersOptions['sessionManager'],
+    surface: makeTestSurface('/tmp/test-workdir', '/tmp/test-home'),
     gitStatusProvider: { refresh: async () => null },
     lastGitInfoRef: { value: null },
     buildSessionContinuityHints: () => ({}),
@@ -469,3 +471,97 @@ describe('wireTurnEventHandlers — agent/chain-failure alerts', () => {
 function spyOnStdoutWrite(): ReturnType<typeof spyOn> {
   return spyOn(process.stdout, 'write').mockImplementation(() => true);
 }
+
+// ---------------------------------------------------------------------------
+// — transcript journal rebinds across a session switch (cross-session
+//   contamination regression — see turn-event-wiring.ts's transcriptJournal
+//   construction)
+// ---------------------------------------------------------------------------
+
+describe('wireTurnEventHandlers — transcript journal rebinds on session switch', () => {
+  let tmpHome: string;
+
+  beforeEach(() => {
+    tmpHome = makeProjectTempDir('gv-turn-wiring-journal-rebind');
+  });
+
+  afterEach(() => {
+    if (existsSync(tmpHome)) rmSync(tmpHome, { recursive: true, force: true });
+  });
+
+  /** A conversation stub whose toJSON() reflects a mutable marker so each
+   *  appended journal record is distinguishable in the test's assertions —
+   *  appendRecord persists conversation.toJSON(), not the TURN_SUBMITTED
+   *  event payload. */
+  function makeMarkedConversation(): { conversation: WireTurnEventHandlersOptions['conversation']; setMarker: (m: string) => void } {
+    let marker = '';
+    return {
+      conversation: {
+        toJSON: () => ({ messages: [{ role: 'user', content: marker }] }),
+        getTitleSource: () => 'stub',
+        title: '',
+      } as WireTurnEventHandlersOptions['conversation'],
+      setMarker: (m: string) => { marker = m; },
+    };
+  }
+
+  test('switching runtime.sessionId rebinds the journal — each file only ever contains its own session', () => {
+    // `runtime` is mutated in place the same way /session resume and
+    // /session fork reassign sessionId on the shared MutableRuntimeState object.
+    const runtime = { sessionId: 'sess-A', model: 'm', provider: 'p' };
+    const { conversation, setMarker } = makeMarkedConversation();
+    const opts = makeMinimalOptions({ surface: makeTestSurface(tmpHome), runtime, conversation });
+    wireTurnEventHandlers(opts);
+
+    // Turn under session A.
+    setMarker('marker-first');
+    opts.emitTurn('TURN_SUBMITTED', { type: 'TURN_SUBMITTED', turnId: 'a-1', prompt: 'first' });
+
+    const pathA = journalPathFor(makeTestSurface(tmpHome), 'sess-A');
+    expect(existsSync(pathA)).toBe(true);
+    const contentAAfterFirst = readFileSync(pathA, 'utf-8');
+    expect(contentAAfterFirst).toContain('sess-A');
+    expect(contentAAfterFirst).toContain('marker-first');
+
+    // Simulate a resume: the shared runtime object's sessionId is reassigned.
+    runtime.sessionId = 'sess-B';
+
+    // A turn under the new session must land in session B's own journal file,
+    // never appended into session A's file.
+    setMarker('marker-second');
+    opts.emitTurn('TURN_SUBMITTED', { type: 'TURN_SUBMITTED', turnId: 'b-1', prompt: 'second' });
+
+    const pathB = journalPathFor(makeTestSurface(tmpHome), 'sess-B');
+    expect(existsSync(pathB)).toBe(true);
+    const contentB = readFileSync(pathB, 'utf-8');
+    expect(contentB).toContain('sess-B');
+    expect(contentB).toContain('marker-second');
+
+    // Session A's file is unchanged by the post-switch write.
+    const contentAAfterSwitch = readFileSync(pathA, 'utf-8');
+    expect(contentAAfterSwitch).toBe(contentAAfterFirst);
+    expect(contentAAfterSwitch).not.toContain('marker-second');
+  });
+
+  test('a second switch back to a previously-seen session rebinds again (no stale binding)', () => {
+    const runtime = { sessionId: 'sess-X', model: 'm', provider: 'p' };
+    const { conversation, setMarker } = makeMarkedConversation();
+    const opts = makeMinimalOptions({ surface: makeTestSurface(tmpHome), runtime, conversation });
+    wireTurnEventHandlers(opts);
+
+    setMarker('marker-x');
+    opts.emitTurn('TURN_SUBMITTED', { type: 'TURN_SUBMITTED', turnId: 'x-1', prompt: 'x' });
+    runtime.sessionId = 'sess-Y';
+    setMarker('marker-y');
+    opts.emitTurn('TURN_SUBMITTED', { type: 'TURN_SUBMITTED', turnId: 'y-1', prompt: 'y' });
+    runtime.sessionId = 'sess-X';
+    setMarker('marker-x-again');
+    opts.emitTurn('TURN_SUBMITTED', { type: 'TURN_SUBMITTED', turnId: 'x-2', prompt: 'x again' });
+
+    const pathX = journalPathFor(makeTestSurface(tmpHome), 'sess-X');
+    const contentX = readFileSync(pathX, 'utf-8');
+    expect(contentX).toContain('marker-x-again');
+    // Never contaminated with session Y's record.
+    expect(contentX).not.toContain('marker-y');
+  });
+});

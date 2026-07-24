@@ -28,6 +28,7 @@ import { resolveMemoryVectorDbPath } from '@pellux/goodvibes-sdk/platform/state'
 import { StoreSnapshotScheduler } from '@pellux/goodvibes-sdk/platform/state/store-snapshots';
 import { UserPermissionRuleStore } from '@pellux/goodvibes-sdk/platform/permissions';
 import { logger, summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
+import type { SessionSurface } from '@/runtime/index.ts';
 
 export interface DurabilityServicesInput {
   readonly configManager: {
@@ -39,10 +40,13 @@ export interface DurabilityServicesInput {
   readonly providerRegistry: { refreshProviderCredentials(): Promise<void> };
   readonly memoryDbPath: string;
   readonly codeIndexDbPath: string;
-  /** Retention-sweep roots (mirrors the SDK's own createRuntimeServices roots). */
-  readonly workingDirectory: string;
-  readonly surfaceRoot: string;
-  readonly homeDirectory: string;
+  /**
+   * The app's declare-once storage handle. The retention-sweep roots below
+   * are read straight off it rather than re-declared here, so the janitor can
+   * never sweep a different scope than the one sessions and recovery
+   * snapshots are actually written to.
+   */
+  readonly surface: SessionSurface;
   readonly shellPaths: { resolveUserPath(...segments: string[]): string };
 }
 
@@ -71,9 +75,9 @@ export function createDurabilityServices(input: DurabilityServicesInput): Durabi
   // swallows its own errors).
   operations.runStartupAppendOnlySweep(
     {
-      workingDirectory: input.workingDirectory,
-      surfaceRoot: input.surfaceRoot,
-      homeDirectory: input.homeDirectory,
+      workingDirectory: input.surface.workingDirectory,
+      surfaceRoot: input.surface.surfaceRoot,
+      homeDirectory: input.surface.homeDirectory,
       logDir: input.shellPaths.resolveUserPath('logs'),
       telemetryDir: input.shellPaths.resolveUserPath('telemetry'),
     },

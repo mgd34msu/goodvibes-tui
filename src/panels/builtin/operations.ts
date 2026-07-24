@@ -9,6 +9,7 @@ import { LocalAuthPanel } from '../local-auth-panel.ts';
 import { NotificationsPanel } from '../notifications-panel.ts';
 import type { ResolvedBuiltinPanelDeps } from './shared.ts';
 import { requireUiServices } from './shared.ts';
+import { GOODVIBES_TUI_SURFACE_ROOT } from '../../config/surface.ts';
 
 // the former single 'monitoring' category (33 panels pre-merge) is
 // split into five operator domains, applied per-registration below. Kept in
@@ -113,7 +114,7 @@ export function registerOperationsPanels(manager: PanelManager, deps: ResolvedBu
       // (AgentManager's bounded retention ring), empty once evicted (the
       // panel degrades to the on-disk ledger fallback in that case).
       getConversationSnapshot: (agentId: string) => ui.agents.agentManager.getConversationSnapshot(agentId),
-      resolveSessionLogPath: (agentId: string) => ui.environment.shellPaths.resolveProjectPath('tui', 'sessions', `${agentId}.jsonl`),
+      resolveSessionLogPath: (agentId: string) => ui.environment.shellPaths.resolveProjectPath(GOODVIBES_TUI_SURFACE_ROOT, 'sessions', `${agentId}.jsonl`),
       // Queue a message for a live in-process agent/wrfc-subtask member.
       steer: (id: string, text: string) => fleetReadModel.steer(id, text),
     }, deps.configManager, fleetActs, fleetSpawn),

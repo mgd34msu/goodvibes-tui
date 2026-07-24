@@ -103,6 +103,25 @@ export function codeIndexDbPath(workingDirectory: string): string {
 }
 
 /**
+ * Build the runtime's `rerootStores` implementation — called by
+ * WorkspaceSwapManager after it has verified a new working directory.
+ *
+ * Only working-tree-bound stores move. The memory store is deliberately NOT
+ * rerooted: it is the home-scoped canonical cross-surface store, and moving
+ * it per project would re-silo memory back into the per-project stores that
+ * were consolidated away.
+ */
+export function createStoreRerooter(deps: {
+  readonly codeIndexStore: Pick<CodeIndexStore, 'reroot'>;
+  readonly projectIndex: { reroot(dir: string): Promise<unknown> };
+}): (newWorkingDir: string) => Promise<void> {
+  return async (newWorkingDir: string): Promise<void> => {
+    await deps.codeIndexStore.reroot(newWorkingDir, codeIndexDbPath(newWorkingDir));
+    await deps.projectIndex.reroot(newWorkingDir);
+  };
+}
+
+/**
  * Whether the code index's initial build should auto-start on construction.
  * Exported so /codebase status and the settings modal read the exact same
  * config key + default this module decides auto-start from.

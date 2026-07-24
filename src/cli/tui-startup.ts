@@ -4,8 +4,12 @@ import type { SelectionItem } from '../input/selection-modal.ts';
 import type { WorkspaceRegistrationManager } from '../runtime/trust/workspace-registration.ts';
 import { hasResumableWizardProgress, readOnboardingCheckMarker, readWizardProgress } from '../runtime/onboarding/index.ts';
 import { startOnboardingFastPath } from '../runtime/onboarding/fast-path.ts';
-import { readLastSessionPointer } from '@/runtime/index.ts';
+import { checkRecoveryForSession, readLastSessionPointer, type SessionSurface } from '@/runtime/index.ts';
 import { logger } from '@pellux/goodvibes-sdk/platform/utils';
+import { offerRecoverySnapshot } from '../runtime/recovery-prompt.ts';
+import { buildRecoveryOfferWiring } from '../runtime/recovery-offer-wiring.ts';
+import type { ConversationManager } from '../core/conversation.ts';
+import type { SessionManager } from '@pellux/goodvibes-sdk/platform/sessions';
 import type { GoodVibesCliParseResult } from './types.ts';
 
 export type TuiStartupShellPaths = Parameters<typeof readOnboardingCheckMarker>[0] & {
@@ -14,6 +18,109 @@ export type TuiStartupShellPaths = Parameters<typeof readOnboardingCheckMarker>[
 };
 
 export type FirstOpenTrustLevel = 'trusted' | 'restricted';
+
+/**
+ * What `resumeNamedSessionWithRecoveryCheck` needs to actually APPLY an
+ * accepted crash-recovery snapshot — the same shape `buildRecoveryOfferWiring`
+ * (runtime/recovery-offer-wiring.ts) takes, minus `surface` and
+ * `commandContext` which this module already has in scope. Optional: a caller
+ * that omits it (or a snapshot-free boot) gets exactly today's behavior —
+ * straight resume from the durable store, no modal.
+ */
+export interface TuiStartupRecoveryDeps {
+  readonly sessionManager: Pick<SessionManager, 'save'>;
+  readonly runtime: { sessionId: string; model: string; provider: string };
+  readonly conversation: ConversationManager;
+  readonly writeLastSessionPointer: (sessionId: string) => void;
+  readonly receipt: (line: string) => void;
+}
+
+/**
+ * resumeNamedSessionWithRecoveryCheck — the pre-resume guard for `--continue`
+ * and the bare `--resume` (pointer) path.
+ *
+ * Resuming a named session straight from its durable store is exactly the
+ * post-crash reflex that silently drops an autosave tail: if that session
+ * also has a crash-recovery snapshot NEWER than its store, the snapshot (not
+ * the shorter store copy) is the live state. `checkRecoveryForSession` is the
+ * read-only probe for that; when it finds one, this routes through the same
+ * ask-then-retire modal flow the general boot offer uses
+ * (runtime/recovery-prompt.ts), scoped to this one session via
+ * `targetSessionId` — never auto-applied.
+ *
+ *   - No live snapshot (or `recovery` deps not wired): straight resume, same
+ *     as before this check existed.
+ *   - Resume chosen: the snapshot is applied (via `buildRecoveryOfferWiring`'s
+ *     `applySnapshot`, which rebinds the runtime session id and replays any
+ *     journal tail) and the plain store resume is skipped — the snapshot IS
+ *     the more complete copy.
+ *   - "Not now" (or a dismissal, or a failed load): falls through to the
+ *     plain store resume, after the follow-up Keep/Remove question the
+ *     established flow always asks on decline.
+ *
+ * The modal itself is deferred to the next macrotask, mirroring
+ * `scheduleRecoveryOffer`'s own reasoning: `applyInitialTuiCliState` runs
+ * before the shell's first render, so asking a question here synchronously
+ * would draw it at a blank terminal. The synchronous `checkRecoveryForSession`
+ * probe above needs no such deferral — only opening the modal does.
+ */
+async function resumeNamedSessionWithRecoveryCheck(options: {
+  readonly sessionId: string;
+  readonly surface: SessionSurface;
+  readonly commandRegistry: CommandRegistry;
+  readonly commandContext: CommandContext;
+  readonly render: () => void;
+  readonly recovery: TuiStartupRecoveryDeps | undefined;
+}): Promise<void> {
+  const { sessionId, surface, commandRegistry, commandContext, render, recovery } = options;
+  const plainResume = (): Promise<void> =>
+    commandRegistry.execute('session', ['resume', sessionId], commandContext).then(() => render());
+
+  if (!recovery) {
+    await plainResume();
+    return;
+  }
+
+  const info = checkRecoveryForSession(surface, sessionId);
+  if (!info) {
+    await plainResume();
+    return;
+  }
+
+  await new Promise<void>((resolve) => {
+    const timer = setTimeout(() => {
+      void (async () => {
+        try {
+          const deps = buildRecoveryOfferWiring({
+            surface,
+            sessionManager: recovery.sessionManager,
+            runtime: recovery.runtime,
+            conversation: recovery.conversation,
+            commandContext,
+            writeLastSessionPointer: recovery.writeLastSessionPointer,
+            receipt: recovery.receipt,
+            render,
+          });
+          const outcome = await offerRecoverySnapshot({ ...deps, targetSessionId: sessionId });
+          if (outcome !== 'resumed') {
+            await plainResume();
+          }
+        } catch {
+          // Best-effort by construction (mirrors offerRecoverySnapshot's own
+          // guarantee): a failure here must fall back to the plain resume
+          // rather than leave the boot with nothing resumed at all.
+          await plainResume().catch(() => {
+            // A failing plain resume here is no worse than the pre-existing
+            // behavior when session resume itself fails.
+          });
+        } finally {
+          resolve();
+        }
+      })();
+    }, 0);
+    timer.unref?.();
+  });
+}
 
 /**
  * decodeFirstOpenChoice — pure mapping from a chosen selection-item id (or
@@ -79,9 +186,24 @@ export function applyInitialTuiCliState(options: {
   readonly commandRegistry: CommandRegistry;
   readonly commandContext: CommandContext;
   readonly shellPaths: TuiStartupShellPaths;
+  /**
+   * The app's declare-once session-storage handle — the SAME one the runtime
+   * writes the last-session pointer through. `--continue` and bare `--resume`
+   * read that pointer below; deriving its path independently here is exactly
+   * how this read used to land on a file nothing ever wrote.
+   */
+  readonly surface: SessionSurface;
   readonly render: () => void;
+  /**
+   * Enables the crash-recovery check ahead of `--continue` / bare `--resume`
+   * (see `resumeNamedSessionWithRecoveryCheck` above). Omitted, the two flags
+   * resume straight from the durable store exactly as before this check
+   * existed — main.ts always wires this; only tests that don't care about
+   * recovery snapshots leave it out.
+   */
+  readonly continueRecovery?: TuiStartupRecoveryDeps;
 }): Promise<void> | undefined {
-  const { cli, input, commandRegistry, commandContext, shellPaths, render } = options;
+  const { cli, input, commandRegistry, commandContext, shellPaths, surface, render, continueRecovery } = options;
   const globalOnboardingMarker = readOnboardingCheckMarker(shellPaths, 'user');
 
   // Registration self-records on every launch of an already-trusted
@@ -109,27 +231,21 @@ export function applyInitialTuiCliState(options: {
       return commandRegistry.execute('session', ['resume', target], commandContext).then(() => render());
     }
   } else if (cli.flags.continueLast) {
-    // --continue: resume the last session tracked by the pointer file
-    const lastId = readLastSessionPointer({
-      workingDirectory: shellPaths.workingDirectory,
-      homeDirectory: shellPaths.homeDirectory,
-      surfaceRoot: 'tui',
-    });
+    // --continue: resume the last session tracked by the pointer file. Checked
+    // for a live crash-recovery snapshot first — see
+    // resumeNamedSessionWithRecoveryCheck's doc comment.
+    const lastId = readLastSessionPointer({ surface });
     if (lastId) {
-      return commandRegistry.execute('session', ['resume', lastId], commandContext).then(() => render());
+      return resumeNamedSessionWithRecoveryCheck({ sessionId: lastId, surface, commandRegistry, commandContext, render, recovery: continueRecovery });
     }
   } else if (cli.flags.resume !== undefined) {
     // --resume [id]: explicit id dispatches directly; bare form (sentinel 'latest') resolves via pointer
     if (cli.flags.resume !== 'latest') {
       return commandRegistry.execute('session', ['resume', cli.flags.resume], commandContext).then(() => render());
     } else {
-      const lastId = readLastSessionPointer({
-        workingDirectory: shellPaths.workingDirectory,
-        homeDirectory: shellPaths.homeDirectory,
-        surfaceRoot: 'tui',
-      });
+      const lastId = readLastSessionPointer({ surface });
       if (lastId) {
-        return commandRegistry.execute('session', ['resume', lastId], commandContext).then(() => render());
+        return resumeNamedSessionWithRecoveryCheck({ sessionId: lastId, surface, commandRegistry, commandContext, render, recovery: continueRecovery });
       }
     }
   } else if (cli.flags.fork !== undefined) {

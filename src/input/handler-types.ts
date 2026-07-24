@@ -130,7 +130,10 @@ export interface InputHandlerLike {
   handleBookmark(): void;
   handleBlockToggle(): void;
   handleDiffApply(): boolean;
-  handleBlockRerun(): void;
+  /** The absolute history line of the bottom-most visible block — the block
+   *  the user is actually looking at — used to anchor every one of the
+   *  actions above instead of the (possibly off-screen-above) raw scrollTop. */
+  getBlockAnchorLine(): number;
 
   // ── Methods: onboarding ───────────────────────────────────────────────────
   hydrateOnboardingWizardFromRuntime(hydrationSerial: number): Promise<void>;

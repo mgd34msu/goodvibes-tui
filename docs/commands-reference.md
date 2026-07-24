@@ -6,7 +6,7 @@
 
 # Command Reference
 
-GoodVibes ships **148** built-in slash commands across **71** categories. Every command below is generated directly from the command registry, so this list is always complete and current. Type a command in the composer prefixed with `/`, or press `Ctrl+K` (or run `/palette`) to search them all in the command palette.
+GoodVibes ships **150** built-in slash commands across **71** categories. Every command below is generated directly from the command registry, so this list is always complete and current. Type a command in the composer prefixed with `/`, or press `Ctrl+K` (or run `/palette`) to search them all in the command palette.
 
 ## Categories
 
@@ -70,7 +70,7 @@ GoodVibes ships **148** built-in slash commands across **71** categories. Every 
 - [Sessions & Replay](#sessions-replay) — 3
 - [Settings Sync](#settings-sync) — 1
 - [Sharing](#sharing) — 1
-- [Shell & Session](#shell-session) — 18
+- [Shell & Session](#shell-session) — 20
 - [Skills](#skills) — 1
 - [Subscriptions](#subscriptions) — 1
 - [Tasks](#tasks) — 1
@@ -278,7 +278,7 @@ GoodVibes ships **148** built-in slash commands across **71** categories. Every 
 | `/incident-review` | — | — | Alias for /incident open |
 | `/pin` | — | `<model-id>` | Pin a model to the favorites list |
 | `/refresh-models` | — | — | Refresh model catalog, benchmarks, and token limits |
-| `/secrets` | — | `set <KEY> <value> [--user\|--project] [--secure\|--plaintext] \| link <KEY> <secret-ref> [--user\|--project] [--secure\|--plaintext] \| get <KEY> \| test <secret-ref> \| providers \| list \| delete <KEY> [--user\|--project] [--secure\|--plaintext]` | Manage hierarchy-aware secrets, external secret refs, and secure/plaintext storage policy controls |
+| `/secrets` | — | `set <KEY> <value> [--user\|--project] [--secure\|--plaintext] \| link <KEY> <secret-ref> [--user\|--project] [--secure\|--plaintext] \| get <KEY> \| test <secret-ref> \| providers \| list \| delete <KEY> [--user\|--project] [--secure\|--plaintext]` | Persistent secret storage: hierarchy-aware, external secret refs, providers (a quick one-off masked value instead: /secret) |
 | `/tools` | `/t` | `[review\|panel]` | List available tools and review compact native tool capability surfaces |
 | `/unpin` | — | `<model-id>` | Unpin a model from the favorites list |
 
@@ -453,7 +453,7 @@ GoodVibes ships **148** built-in slash commands across **71** categories. Every 
 
 | Command | Aliases | Usage | Description |
 | --- | --- | --- | --- |
-| `/secret` | — | `/secret <NAME>` | Enter a secret with concealed (masked) input and store it as an environment variable — plaintext never enters the transcript |
+| `/secret` | — | `/secret <NAME>` | Quick one-off: type a value with masked input, stored as an env var for THIS session only (persistent storage + providers: /secrets) |
 
 ## Security
 
@@ -512,12 +512,14 @@ GoodVibes ships **148** built-in slash commands across **71** categories. Every 
 | `/compact-history` | `/compaction-history` | — | Show compaction history for this session |
 | `/debug` | — | — | Toggle debug mode |
 | `/effort` | `/e` | `[level]` | Show or set reasoning effort level |
+| `/find` | `/findtext` | — | Search THIS conversation transcript (same as Ctrl+F) — searching the web instead? use /search |
 | `/help` | `/h`, `/?` | — | Browse every command with its description; picking one runs it |
 | `/keep` | — | `<text>` | Pin text to session memory (survives compaction) |
 | `/keybindings` | `/kb` | — | List current keyboard bindings and their config file path |
 | `/model` | `/m` | `[model-id]` | Select or display the current LLM model |
 | `/palette` | `/k` | — | Open the command palette to search and run any slash command |
 | `/paste` | `/clip` | — | Insert clipboard text or image into the prompt |
+| `/pastes` | `/pending-pastes` | `[pN]` | Preview the actual content behind each [TEXT: pN, M lines] fold in the composer, before you submit |
 | `/power` | — | `[status \| on \| off \| toggle]` | Host sleep ownership — show status and toggle keep-awake |
 | `/queue` | `/q` | `[list \| edit <n> <text> \| delete <n>]` | Mid-turn message queue — list, edit, or delete still-undelivered messages |
 | `/quit` | `/:q` | — | Exit the application |
@@ -565,7 +567,7 @@ GoodVibes ships **148** built-in slash commands across **71** categories. Every 
 
 | Command | Aliases | Usage | Description |
 | --- | --- | --- | --- |
-| `/search` | — | `<query> [--limit <n>]` | Search the web and render ranked results with source labels |
+| `/search` | — | `<query> [--limit <n>]` | Web search — ranked results with source labels (searching THIS transcript? use /find) |
 
 ## Work Plans
 

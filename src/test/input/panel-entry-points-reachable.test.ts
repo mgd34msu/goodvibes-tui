@@ -49,6 +49,7 @@ describe('panel/process-modal entry points stay reachable during an active turn'
       commandContext: undefined,
       autocomplete: null,
       blockActionsMenu: { open: () => {} },
+      getBlockAnchorLine: () => 0,
       openFleetPanel: () => { opened.push('fleet'); },
       modalOpened: mock(() => {}),
       saveUndoState: () => {},

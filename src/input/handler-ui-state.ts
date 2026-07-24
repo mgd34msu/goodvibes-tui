@@ -2,6 +2,7 @@ import type { InputToken } from '@pellux/goodvibes-sdk/platform/core';
 import type { InfiniteBuffer } from '../core/history.ts';
 import type { SearchManager } from './search.ts';
 import type { HistorySearch } from './input-history.ts';
+import type { ConversationManager } from '../core/conversation';
 import type {
   OnboardingWizardController,
   OnboardingWizardMode,
@@ -202,6 +203,9 @@ type SearchRouteState = {
   scroll: (delta: number) => void;
   getScrollTop: () => number;
   getViewportHeight: () => number;
+  /** Optional — when present, search() also expands collapsed blocks whose
+   *  raw content matches (see SearchManager.search's doc). */
+  conversationManager?: ConversationManager | null;
 };
 
 export function handleSearchModeToken(
@@ -216,7 +220,7 @@ export function handleSearchModeToken(
   if (!searchManager.locked) {
     if (token.type === 'text') {
       const newQuery = searchManager.query + token.value;
-      searchManager.search(newQuery, history);
+      searchManager.search(newQuery, history, state.conversationManager);
     } else if (token.type === 'key') {
       if (token.logicalName === 'escape') {
         searchManager.close();
@@ -230,7 +234,7 @@ export function handleSearchModeToken(
         }
       } else if (token.logicalName === 'backspace') {
         const newQuery = searchManager.query.slice(0, -1);
-        searchManager.search(newQuery, history);
+        searchManager.search(newQuery, history, state.conversationManager);
       } else if (matchesSearchShortcut) {
         searchManager.close();
       }

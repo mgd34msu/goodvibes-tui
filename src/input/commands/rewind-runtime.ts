@@ -39,12 +39,13 @@ import {
   type RewindWorkspacePort,
 } from '@pellux/goodvibes-sdk/platform/rewind';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
-import type { WorkspaceCheckpointManager } from '@pellux/goodvibes-sdk/platform/workspace';
+import type { WorkspaceCheckpoint, WorkspaceCheckpointManager } from '@pellux/goodvibes-sdk/platform/workspace';
 import type { CommandContext, CommandRegistry } from '../command-registry.ts';
 import { buildRewindReceiptBlock } from '../../core/rewind-receipt.ts';
 import { getTurnAnchors, type TurnAnchor } from '../../core/rewind-turn-anchors.ts';
 import { createConversationRewindPort, type ConversationRewindPort } from '../../runtime/conversation-rewind-port.ts';
 import { requirePanelManager } from './runtime-services.ts';
+import { shortId } from './checkpoint-runtime.ts';
 
 export type RewindScope = SdkRewindScope;
 const REWIND_SCOPES: readonly RewindScope[] = ['files', 'conversation', 'both'];
@@ -232,6 +233,127 @@ function parseScope(token: string | undefined): RewindScope | null {
 }
 
 // ---------------------------------------------------------------------------
+// Checkpoint-only fallback — no completed turns recorded THIS run (e.g. right
+// after a restart) means the message-anchored picker above has nothing to
+// list, even though real workspace checkpoints exist on disk. Rather than
+// dead-ending on "no completed turns" while /checkpoints and the boot notice
+// both point back here, /rewind falls back to listing and restoring
+// checkpoints directly — a FILES-ONLY restore (there is no turn anchor to
+// join a conversation boundary against), reusing the same diff-panel
+// preview/confirm idiom as the turn-anchored path above.
+// ---------------------------------------------------------------------------
+
+const CHECKPOINT_FALLBACK_NO_ANCHORS_MESSAGE = 'No completed turns recorded this run yet. /rewind targets turns completed in the current session run.';
+
+function renderCheckpointFallbackList(checkpoints: readonly WorkspaceCheckpoint[]): string {
+  const lines = [
+    'No completed turns recorded this run yet — falling back to workspace checkpoints (FILES ONLY, no conversation state):',
+    ...checkpoints.slice(0, 20).map((cp, i) => `  ${String(i + 1).padStart(2)}. ${shortId(cp.id).padEnd(12)} ${cp.kind.padEnd(9)} ${cp.label}  (${formatAge(cp.createdAt)})`),
+    'Restore one: /rewind <n|id> — files only; conversation history is untouched.',
+  ];
+  return lines.join('\n');
+}
+
+/** Resolve a user ref ('1'..'N' newest-first, or a checkpoint id / id prefix) to a checkpoint. */
+function resolveCheckpointRef(checkpoints: readonly WorkspaceCheckpoint[], ref: string): WorkspaceCheckpoint | { error: string } {
+  if (/^\d+$/.test(ref)) {
+    const idx = Number(ref) - 1;
+    const cp = checkpoints[idx];
+    return cp ? cp : { error: `No checkpoint #${ref}. Run /rewind to list checkpoints (1–${checkpoints.length}).` };
+  }
+  const exact = checkpoints.find((cp) => cp.id === ref);
+  if (exact) return exact;
+  const prefix = checkpoints.filter((cp) => cp.id.startsWith(ref) || shortId(cp.id).startsWith(ref));
+  if (prefix.length === 1) return prefix[0]!;
+  if (prefix.length > 1) return { error: `Checkpoint ref "${ref}" is ambiguous (${prefix.length} matches). Use the list number instead.` };
+  return { error: `Unknown checkpoint ref "${ref}". Run /rewind to list checkpoints.` };
+}
+
+/**
+ * Handles bare `/rewind` and `/rewind <ref>` when this run has recorded no
+ * turn anchors at all. Returns true if it handled the invocation (always,
+ * once called), false is never returned — kept boolean-shaped only to mirror
+ * the calling convention at the call site.
+ */
+async function handleCheckpointOnlyRewind(args: string[], ctx: CommandContext): Promise<void> {
+  const mgr = ctx.workspace.workspaceCheckpointManager;
+  if (!mgr) {
+    ctx.print(CHECKPOINT_FALLBACK_NO_ANCHORS_MESSAGE);
+    return;
+  }
+  let checkpoints: WorkspaceCheckpoint[];
+  try {
+    checkpoints = await mgr.list();
+  } catch {
+    checkpoints = [];
+  }
+  if (checkpoints.length === 0) {
+    ctx.print(CHECKPOINT_FALLBACK_NO_ANCHORS_MESSAGE);
+    return;
+  }
+
+  if (args.length === 0) {
+    ctx.print(renderCheckpointFallbackList(checkpoints));
+    return;
+  }
+
+  const resolved = resolveCheckpointRef(checkpoints, args[0]!);
+  if ('error' in resolved) {
+    ctx.print(resolved.error);
+    return;
+  }
+  const checkpoint = resolved;
+
+  const { DiffPanel } = await import('../../panels/diff-panel.ts');
+  const pm = requirePanelManager(ctx);
+  let panel = pm.getAllOpen().find((p) => p.id === 'diff');
+  if (!panel) {
+    try { panel = pm.open('diff'); } catch { ctx.print('Could not open diff panel.'); return; }
+  }
+  pm.activateById('diff');
+  if (!pm.isVisible()) pm.show();
+  ctx.focusPanels?.();
+  const diffPanel = panel as InstanceType<typeof DiffPanel>;
+
+  try {
+    const diff = await mgr.diff(checkpoint.id);
+    if (diff.unifiedDiff.trim()) diffPanel.loadRawDiff(diff.unifiedDiff);
+    else diffPanel.showDiff('(no file changes)', '@@ -0,0 +0,0 @@\n Working tree already matches this checkpoint.');
+  } catch {
+    diffPanel.showDiff('(preview unavailable)', '@@ -0,0 +0,0 @@\n Could not load the checkpoint diff.');
+  }
+
+  diffPanel.confirmOverlay.arm({
+    id: checkpoint.id,
+    label: `${checkpoint.label} — restore FILES ONLY (no conversation state this run)`,
+    verb: 'Restore',
+    onConfirm: async () => {
+      try {
+        await mgr.restore(checkpoint.id, { safetyCheckpoint: true });
+        ctx.session.conversationManager.addTypedSystemMessage(
+          `[Rewind] Restored files from checkpoint ${shortId(checkpoint.id)} ("${checkpoint.label}"). Files only — no turn anchors exist this run, so conversation state is unchanged.`,
+          'operational',
+        );
+        pm.close('diff');
+        ctx.focusPrompt?.();
+        ctx.renderRequest();
+      } catch (err) {
+        ctx.print(`Checkpoint restore failed: ${summarizeError(err)}`);
+      }
+    },
+    onCancel: () => {
+      ctx.print('Restore cancelled — nothing changed.');
+      pm.close('diff');
+      ctx.focusPrompt?.();
+      ctx.renderRequest();
+    },
+  });
+
+  ctx.print(`Previewing checkpoint restore: "${checkpoint.label}" (FILES ONLY — no conversation state this run). Confirm in the diff panel: Enter/y to restore, n/Esc to cancel.`);
+  ctx.renderRequest();
+}
+
+// ---------------------------------------------------------------------------
 // Command registration
 // ---------------------------------------------------------------------------
 
@@ -243,6 +365,15 @@ export function registerRewindRuntimeCommands(registry: CommandRegistry): void {
     argsHint: '[<n> [files|conversation|both]]',
     handler: async (args, ctx: CommandContext) => {
       const sessionId = ctx.session.runtime.sessionId;
+
+      // No turn anchors recorded this run (most commonly: right after a
+      // restart, before /session resume has restored any) — fall back to a
+      // files-only restore over the real workspace checkpoints instead of a
+      // dead end (see handleCheckpointOnlyRewind's header doc).
+      if (recentTurnsNewestFirst(sessionId).length === 0) {
+        await handleCheckpointOnlyRewind(args, ctx);
+        return;
+      }
 
       if (args.length === 0) {
         ctx.print(renderTurnList(sessionId));

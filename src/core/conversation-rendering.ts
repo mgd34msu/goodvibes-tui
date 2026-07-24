@@ -1,6 +1,6 @@
 import { UIFactory } from '../renderer/ui-factory.ts';
 import { renderMarkdownTracked } from '../renderer/markdown.ts';
-import { renderDiffView } from '../renderer/diff-view.ts';
+import { isDiffContent, renderExpandedToolResultLines } from '../renderer/tool-result-expanded-lines.ts';
 import { activeTheme, activeUiTones } from '../renderer/theme.ts';
 import { renderToolCallBlock } from '../renderer/tool-call.ts';
 import { summarizeToolResult } from '../renderer/tool-result-summary.ts';
@@ -207,8 +207,34 @@ export function renderConversationAssistantMessage(
     const thinkingStartLine = context.history.getLineCount();
     const thinkingBlockIdx = context.blockRegistry.length;
     const thinkingCollapseKey = `msg_${msgIdx}_thinking`;
-    const thinkingLines = renderThinkingBlock(message.reasoningContent, width);
-    context.history.addLines(thinkingLines);
+    // Collapsed by default, like every other collapsible block — Tab (or the
+    // block-actions menu) expands it via the same collapseKey the BlockMeta
+    // below registers. Previously this key was registered but never
+    // consulted: the toggle existed but did nothing.
+    const isThinkingCollapsed = context.collapseState.has(thinkingCollapseKey)
+      ? context.collapseState.get(thinkingCollapseKey)!
+      : true;
+    if (!context.collapseState.has(thinkingCollapseKey)) {
+      context.collapseState.set(thinkingCollapseKey, true);
+    }
+    if (isThinkingCollapsed) {
+      const thinkingLineCount = message.reasoningContent.split('\n').length;
+      const rendered = renderConversationCollapsedFragment(
+        `thinking · ${thinkingLineCount} line${thinkingLineCount === 1 ? '' : 's'}`,
+        width,
+        {
+          prefix: ' ▌ ',
+          prefixFg: T.reasoningAccent,
+          text: '244',
+          bodyBg: T.collapsedBodyBg,
+          dim: true,
+        },
+      );
+      context.history.addLines(rendered);
+    } else {
+      const thinkingLines = renderThinkingBlock(message.reasoningContent, width);
+      context.history.addLines(thinkingLines);
+    }
     context.history.addLine(createEmptyLine(width));
     const thinkingRenderedLines = context.history.getLineCount() - thinkingStartLine;
     context.blockRegistry.push({
@@ -341,6 +367,30 @@ export function isFoldedGroupMember(
 }
 
 /**
+ * Dedupe a group's per-member tool names into a compact, honest summary —
+ * "read×3 exec write" rather than either a bare count or a full repeated
+ * list. Truncates with an honest "…+N more" tail rather than silently
+ * dropping names once the list gets long.
+ */
+function summarizeToolNames(names: readonly string[]): string {
+  const counts = new Map<string, number>();
+  const order: string[] = [];
+  for (const name of names) {
+    if (!counts.has(name)) {
+      counts.set(name, 0);
+      order.push(name);
+    }
+    counts.set(name, counts.get(name)! + 1);
+  }
+  const MAX_SHOWN = 4;
+  const parts = order.map((name) => (counts.get(name)! > 1 ? `${name}×${counts.get(name)}` : name));
+  if (parts.length > MAX_SHOWN) {
+    return `${parts.slice(0, MAX_SHOWN).join(' ')} …+${parts.length - MAX_SHOWN} more`;
+  }
+  return parts.join(' ');
+}
+
+/**
  * Render the synthetic header line for a folded run of >=2 tool-result
  * messages: one line + one BlockMeta (type 'tool_group'), shared by every
  * member under `membership.groupKey`. Returns whether the group is currently
@@ -363,6 +413,7 @@ function renderToolGroupHeader(
 
   const blockIdx = context.blockRegistry.length;
   const startLine = context.history.getLineCount();
+  const toolNamesSummary = summarizeToolNames(membership.toolNames);
   context.history.addLine(renderConversationEventLine(width, {
     marker: GLYPHS.surface.altCursor,
     markerFg: T.toolAccent,
@@ -371,6 +422,7 @@ function renderToolGroupHeader(
     detailFg: '244',
   }, [
     { text: ` ${membership.toolCount} tool${membership.toolCount === 1 ? '' : 's'} `, fg: T.toolAccent },
+    ...(toolNamesSummary ? [{ text: ` ${toolNamesSummary} `, fg: T.toolNameFg }] : []),
     { text: ` ${isCollapsed ? GLYPHS.navigation.collapsed : GLYPHS.navigation.expanded} ${membership.totalLines} line${membership.totalLines === 1 ? '' : 's'} `, fg: '244', dim: true },
   ]));
 
@@ -380,7 +432,7 @@ function renderToolGroupHeader(
     type: 'tool_group',
     startLine,
     lineCount: 1,
-    rawContent: `${membership.toolCount} tool result${membership.toolCount === 1 ? '' : 's'} folded (${membership.totalLines} line${membership.totalLines === 1 ? '' : 's'} total)`,
+    rawContent: `${membership.toolCount} tool result${membership.toolCount === 1 ? '' : 's'} folded (${toolNamesSummary}, ${membership.totalLines} line${membership.totalLines === 1 ? '' : 's'} total)`,
     groupMemberIndexes: membership.memberIndexes,
   });
 
@@ -409,14 +461,18 @@ export function renderConversationToolMessage(
   const blockIdx = context.blockRegistry.length;
   const startLine = context.history.getLineCount();
   const contentLines = message.content.split('\n');
-  const lineCount = contentLines.length;
-  const hasDiffHeader = contentLines.some((l) => l.startsWith('--- ')) && contentLines.some((l) => l.startsWith('+++ '));
-  const hasHunk = contentLines.some((l) => l.startsWith('@@ '));
-  const isDiff = hasDiffHeader && hasHunk;
+  const isDiff = isDiffContent(message.content);
   const blockType: 'diff' | 'tool' = isDiff ? 'diff' : 'tool';
   // Parsed once, ahead of the collapse check, so it's available for the
   // block-registry meta merge below regardless of collapsed/expanded state.
   const diffParse = isDiff ? parseDiffForApply(message.content) : undefined;
+  // The EXPANDED render, computed unconditionally (even while collapsed) so
+  // the header's "N lines" badge always names what Tab would actually reveal
+  // — a raw JSON blob that pretty-prints to 50 lines must say 50, not 1, even
+  // while it's still folded. Reused below as the actual body when expanded,
+  // so this is never rendered twice.
+  const expandedLines = renderExpandedToolResultLines(message.content, width);
+  const lineCount = expandedLines.length;
 
   // Human one-line summary for tool results (write/read/exec/edit): shown as the
   // collapsed line so the transcript reads "wrote foo.txt (532 B)" instead of a
@@ -485,22 +541,11 @@ export function renderConversationToolMessage(
       dim: true,
     });
     context.history.addLines(rendered);
-  } else if (isDiff) {
-    // No filename banner: the diff text's own --- / +++ headers already
-    // identify the file (matches the pre-v0.9.6 call site in tool-call.ts).
-    context.history.addLines(renderDiffView(message.content, width));
   } else {
-    let contentToRender = message.content;
-    const trimmed = contentToRender.trimStart();
-    if ((trimmed.startsWith('{') || trimmed.startsWith('[')) && contentToRender.length < 100_000) {
-      try {
-        const parsed = JSON.parse(contentToRender);
-        contentToRender = `\`\`\`json\n${JSON.stringify(parsed, null, 2)}\n\`\`\``;
-      } catch {
-        // Leave invalid JSON as-is.
-      }
-    }
-    context.history.addLines(renderMarkdownTracked(contentToRender, width).lines);
+    // Diff or plain result — either way this is exactly `expandedLines`,
+    // already computed above (and already what the header's line count is
+    // honest about), so there is nothing left to render here.
+    context.history.addLines(expandedLines);
   }
 
   const renderedLineCount = context.history.getLineCount() - startLine;
@@ -511,6 +556,7 @@ export function renderConversationToolMessage(
     startLine,
     lineCount: renderedLineCount,
     rawContent: message.content,
+    toolName: message.toolName,
   };
 
   if (isDiff && diffParse) {
@@ -545,7 +591,7 @@ export function appendConversationMessages(
   // unless the caller already supplied membership (the line-cache path
   // computes it once per renderInto call and threads it through).
   const toolGroupMembership = renderContext.toolGroupMembership
-    ?? computeToolGroupMembership(messages, msgIndexOffset);
+    ?? computeToolGroupMembership(messages, msgIndexOffset, width);
   const groupedContext: ConversationRenderContext = renderContext.toolGroupMembership !== undefined
     ? renderContext
     : { ...renderContext, toolGroupMembership };

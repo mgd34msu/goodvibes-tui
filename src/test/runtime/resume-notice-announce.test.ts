@@ -11,6 +11,7 @@ import { writeLastSessionPointer } from '@/runtime/index.ts';
 import type { WrfcChain } from '@pellux/goodvibes-sdk/platform/agents';
 import { announceResumeState, type ResumeNoticeDeps } from '@/runtime/resume-notice.ts';
 import { makeProjectTempDir } from '../helpers/project-temp.ts';
+import { makeTestSurface } from '../helpers/session-surface.ts';
 
 function makeChain(overrides: Partial<WrfcChain> = {}): WrfcChain {
   return {
@@ -32,21 +33,19 @@ function makeChain(overrides: Partial<WrfcChain> = {}): WrfcChain {
 }
 
 function saveFixtureSession(workingDirectory: string, sessionId: string, userTurns: number): void {
-  const sm = new SessionManager(workingDirectory, { surfaceRoot: 'tui' });
+  const sm = new SessionManager(workingDirectory, { surface: makeTestSurface(workingDirectory) });
   const messages = Array.from({ length: userTurns }, (_, i) => ([
     { role: 'user', content: `turn ${i}` },
     { role: 'assistant', content: `reply ${i}` },
   ])).flat();
   sm.save(sessionId, messages, { title: 'fixture', model: 'test-model', provider: 'test', timestamp: Date.now() });
-  writeLastSessionPointer(sessionId, { workingDirectory, homeDirectory: workingDirectory, surfaceRoot: 'tui' });
+  writeLastSessionPointer(sessionId, { surface: makeTestSurface(workingDirectory) });
 }
 
 function baseDeps(workingDirectory: string): Omit<ResumeNoticeDeps, 'router' | 'checkpointManager' | 'chainHistory' | 'memoryAvailable'> {
   return {
-    workingDirectory,
-    homeDirectory: workingDirectory,
-    surfaceRoot: 'tui',
-    sessionManager: new SessionManager(workingDirectory, { surfaceRoot: 'tui' }),
+    surface: makeTestSurface(workingDirectory),
+    sessionManager: new SessionManager(workingDirectory, { surface: makeTestSurface(workingDirectory) }),
   };
 }
 
@@ -80,7 +79,7 @@ describe('announceResumeState — fixture-dir matrix', () => {
     });
 
     expect(messages).toHaveLength(1);
-    expect(messages[0]).toBe('Previous session found: 3 turns, 0 checkpoints — /session resume sess-abc to continue');
+    expect(messages[0]).toBe('Previous session found: 3 turns, 0 checkpoints — /resume to continue (or /session resume sess-abc directly)');
     // Truthful: no fabricated checkpoints/recall/chain hints.
     expect(messages[0]).not.toContain('/checkpoints');
     expect(messages[0]).not.toContain('/recall');
@@ -101,7 +100,7 @@ describe('announceResumeState — fixture-dir matrix', () => {
     });
 
     expect(messages).toHaveLength(1);
-    expect(messages[0]).toBe('Previous session found: 1 turn, 2 checkpoints — /session resume sess-abc to continue · /checkpoints to browse');
+    expect(messages[0]).toBe('Previous session found: 1 turn, 2 checkpoints — /resume to continue (or /session resume sess-abc directly) · /checkpoints to browse');
   });
 
   test('+chain history: same session + checkpoints, plus a retained terminal chain (cancelled)', async () => {
@@ -120,7 +119,7 @@ describe('announceResumeState — fixture-dir matrix', () => {
 
     expect(messages).toHaveLength(1);
     expect(messages[0]).toBe(
-      'Previous session found: 2 turns, 1 checkpoint, last chain: cancelled — /session resume sess-abc to continue · /checkpoints to browse',
+      'Previous session found: 2 turns, 1 checkpoint, last chain: cancelled — /resume to continue (or /session resume sess-abc directly) · /checkpoints to browse',
     );
   });
 
@@ -142,7 +141,7 @@ describe('announceResumeState — fixture-dir matrix', () => {
 
   test('a stale last-session.json pointing at a deleted session file is treated as no session (never a broken /session resume hint)', async () => {
     const dir = makeProjectTempDir('gv-resume-stale-pointer');
-    writeLastSessionPointer('ghost-session-id', { workingDirectory: dir, homeDirectory: dir, surfaceRoot: 'tui' });
+    writeLastSessionPointer('ghost-session-id', { surface: makeTestSurface(dir) });
     const messages: string[] = [];
 
     await announceResumeState({
@@ -174,7 +173,7 @@ describe('announceResumeState — fixture-dir matrix', () => {
       router: { high: (m) => messages.push(m) },
     });
 
-    expect(messages[0]).toBe('Previous session found: 1 turn — /session resume sess-abc to continue');
+    expect(messages[0]).toBe('Previous session found: 1 turn — /resume to continue (or /session resume sess-abc directly)');
     expect(messages[0]).not.toContain('checkpoint');
   });
 });

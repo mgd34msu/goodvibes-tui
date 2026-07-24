@@ -181,14 +181,14 @@ export function buildProviderHealthDomainSummaries(
     summary: continuity.recoveryFilePresent
       ? `recovery file present for ${continuity.sessionId || '(unknown session)'}`
       : continuity.lastSessionPointer ? `last session pointer ${continuity.lastSessionPointer}` : 'no last-session pointer',
-    next: continuity.recoveryFilePresent ? '/session resume <id>' : '/session list',
+    next: continuity.recoveryFilePresent ? '/resume <id>' : '/session list',
     details: [
       continuity.returnContext ? `last activity: ${continuity.returnContext.activityLabel}` : '',
       continuity.returnContext ? `resume posture: ${continuity.returnContext.statusLabel}` : '',
       !continuity.lastSessionPointer ? 'no persisted last-session pointer recorded' : '',
     ].filter(Boolean),
     nextSteps: continuity.recoveryFilePresent
-      ? ['/session list', '/session resume <id>', '/health continuity']
+      ? ['/session list', '/resume <id>', '/health continuity']
       : ['/session list'],
   });
 
