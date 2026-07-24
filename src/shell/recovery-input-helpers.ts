@@ -24,11 +24,15 @@ export interface ErrorAffordanceDeps {
 /**
  * Handle one keypress while the error-retry affordance is active.
  * 'r' retries on the current provider when armed; 'm' opens the model
- * picker. Returns true when the key was consumed; any other key returns
- * false so the caller routes it as normal input.
+ * picker — also gated on armed, since switching models here only makes
+ * sense in service of the same retry this affordance is offering, not as a
+ * general-purpose model-picker shortcut. Returns true when the key was
+ * consumed; any other key (or 'm'/'r' while unarmed) returns false so the
+ * caller routes it as normal input.
  */
 export function handleErrorAffordanceKey(data: string, deps: ErrorAffordanceDeps): boolean {
-  if (data === 'r' && deps.retryArmed) {
+  if (!deps.retryArmed) return false;
+  if (data === 'r') {
     deps.retry();
     deps.render();
     return true;

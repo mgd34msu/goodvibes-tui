@@ -344,6 +344,11 @@ export type KeyRouteState = {
   commandRegistry?: CommandRegistry | null;
   autocomplete: AutocompleteEngine | null;
   blockActionsMenu: { open: (block: BlockMeta) => void };
+  /** The absolute history line of the bottom-most visible block — the block
+   *  the user is actually looking at (see getViewportBottomLine's doc).
+   *  Anchors Enter-on-empty-composer's block-actions menu to that block
+   *  instead of an arbitrary fixed line. */
+  getBlockAnchorLine: () => number;
   /** F2 opens+focuses the Fleet panel (which subsumes the retired process modal). */
   openFleetPanel: () => void;
   modalOpened: (name: string) => void;
@@ -430,7 +435,9 @@ export function handlePromptKeyToken(state: KeyRouteState, token: InputToken): {
 
     const text = prompt.trim();
     if (!text && !commandMode) {
-      const lineIndex = 0;
+      // Target the block the user is actually reading, not the conversation's
+      // oldest block (a fixed lineIndex 0 would always resolve there).
+      const lineIndex = state.getBlockAnchorLine();
       const nearest = state.conversationManager?.findNearestBlock(lineIndex);
       if (nearest) {
         state.modalOpened('blockActions');
@@ -603,6 +610,13 @@ export function handlePromptKeyToken(state: KeyRouteState, token: InputToken): {
   }
 
   if (token.logicalName === 'down') {
+    // Announce the focus move honestly — this handoff is otherwise silent
+    // and easy to miss (the next keystrokes look like they're doing nothing,
+    // because they're now landing on the indicator, not the composer).
+    const announceIndicatorFocus = () => {
+      indicatorFocused = true;
+      state.commandContext?.print('[Down] Focus moved to the process indicator — Up or Esc returns to the composer.');
+    };
     const move = computeCursorVerticalMove(prompt, cursorPos, inputScrollTop, state.contentWidth, state.maxInputRows, 1);
     if (move.moved) {
       cursorPos = move.cursorPos;
@@ -617,10 +631,10 @@ export function handlePromptKeyToken(state: KeyRouteState, token: InputToken): {
           cursorPos = recalled.length;
           ensureLocalInputCursorVisible();
         } else {
-          indicatorFocused = true;
+          announceIndicatorFocus();
         }
       } else {
-        indicatorFocused = true;
+        announceIndicatorFocus();
       }
     }
     return { handled: true, prompt, cursorPos, inputScrollTop, commandMode, indicatorFocused };

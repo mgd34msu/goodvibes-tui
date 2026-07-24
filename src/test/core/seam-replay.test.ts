@@ -39,6 +39,7 @@ import {
 import { ConversationManager } from '../../core/conversation.ts';
 import { createResumeSessionHandler } from '../../runtime/bootstrap-hook-bridge.ts';
 import type { ResumeSessionOptions } from '../../runtime/bootstrap-hook-bridge.ts';
+import { makeTestSurface } from '../helpers/session-surface.ts';
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -92,7 +93,7 @@ describe('seam-replay: seam 1 — CLI/command resume (replayJournalForSession)',
   test('replays journal turns that post-date the snapshot into the conversation', () => {
     const sessionId = 'seam1-ses';
     const homeDirectory = tmpDir;
-    const journalPath = journalPathFor(homeDirectory, sessionId);
+    const journalPath = journalPathFor(makeTestSurface(homeDirectory), sessionId);
     const snapshotTimestamp = Date.now() - 5000;
 
     // Write two post-snapshot records. Last record has 4 messages.
@@ -104,7 +105,7 @@ describe('seam-replay: seam 1 — CLI/command resume (replayJournalForSession)',
 
     // This is the exact call made by session-workflow.ts after fromJSON.
     const result = replayJournalForSession({
-      homeDirectory,
+      surface: makeTestSurface(homeDirectory),
       sessionId,
       snapshotTimestamp,
       conversation,
@@ -129,7 +130,7 @@ describe('seam-replay: seam 1 — CLI/command resume (replayJournalForSession)',
     let persistCalled = false;
 
     const result = replayJournalForSession({
-      homeDirectory,
+      surface: makeTestSurface(homeDirectory),
       sessionId,
       snapshotTimestamp: Date.now(),
       conversation,
@@ -147,7 +148,7 @@ describe('seam-replay: seam 1 — CLI/command resume (replayJournalForSession)',
     const homeDirectory = tmpDir;
     const snapshotTimestamp = Date.now() - 5000;
 
-    writeJournalWithRecords(journalPathFor(homeDirectory, sessionId), sessionId, 1, snapshotTimestamp);
+    writeJournalWithRecords(journalPathFor(makeTestSurface(homeDirectory), sessionId), sessionId, 1, snapshotTimestamp);
 
     const conversation = new ConversationManager(() => 80);
     // Pre-load a title as session-workflow.ts would after fromJSON.
@@ -155,7 +156,7 @@ describe('seam-replay: seam 1 — CLI/command resume (replayJournalForSession)',
     expect(conversation.title).toBe('My Important Session');
 
     const result = replayJournalForSession({
-      homeDirectory,
+      surface: makeTestSurface(homeDirectory),
       sessionId,
       snapshotTimestamp,
       conversation,
@@ -171,10 +172,10 @@ describe('seam-replay: seam 1 — CLI/command resume (replayJournalForSession)',
 // ── Seam 2: In-TUI panel resume (bootstrap-hook-bridge.ts path) ───────────────
 
 describe('seam-replay: seam 2 — in-TUI panel resume (createResumeSessionHandler)', () => {
-  test('replays journal turns newer than session snapshot onto conversation', () => {
+  test('replays journal turns newer than session snapshot onto conversation', async () => {
     const sessionId = 'seam3-ses';
     const homeDirectory = tmpDir;
-    const journalPath = journalPathFor(homeDirectory, sessionId);
+    const journalPath = journalPathFor(makeTestSurface(homeDirectory), sessionId);
     const snapshotTimestamp = Date.now() - 5000;
 
     // Pre-populate journal with 2 post-snapshot records.
@@ -194,7 +195,7 @@ describe('seam-replay: seam 2 — in-TUI panel resume (createResumeSessionHandle
     };
 
     const options: ResumeSessionOptions = {
-      homeDirectory,
+      surface: makeTestSurface(homeDirectory),
       conversation,
       requestRender: () => {},
       runtimeBus: { emit: () => {} } as never,
@@ -237,7 +238,7 @@ describe('seam-replay: seam 2 — in-TUI panel resume (createResumeSessionHandle
     };
 
     const resumeSession = createResumeSessionHandler(options);
-    resumeSession(sessionId);
+    await resumeSession(sessionId);
 
     // After panel resume, journal records are replayed onto the conversation.
     expect(conversation.getMessageCount()).toBeGreaterThan(0);
@@ -251,10 +252,10 @@ describe('seam-replay: seam 2 — in-TUI panel resume (createResumeSessionHandle
   // bootstrap-shell.ts) after fromJSON()+journal replay are both applied, so the
   // caller can recompute orchestrator.usage from the now-complete history before
   // the next render — otherwise the footer shows Input: 0 post-resume.
-  test('calls hydrateSessionUsage after fromJSON + journal replay, before requestRender', () => {
+  test('calls hydrateSessionUsage after fromJSON + journal replay, before requestRender', async () => {
     const sessionId = 'seam3-hydrate';
     const homeDirectory = tmpDir;
-    const journalPath = journalPathFor(homeDirectory, sessionId);
+    const journalPath = journalPathFor(makeTestSurface(homeDirectory), sessionId);
     const snapshotTimestamp = Date.now() - 5000;
     writeJournalWithRecords(journalPath, sessionId, 2, snapshotTimestamp);
 
@@ -272,7 +273,7 @@ describe('seam-replay: seam 2 — in-TUI panel resume (createResumeSessionHandle
 
     let messageCountAtHydration = -1;
     const options: ResumeSessionOptions = {
-      homeDirectory,
+      surface: makeTestSurface(homeDirectory),
       conversation,
       requestRender: () => { callOrder.push('requestRender'); },
       runtimeBus: { emit: () => {} } as never,
@@ -316,7 +317,7 @@ describe('seam-replay: seam 2 — in-TUI panel resume (createResumeSessionHandle
     };
 
     const resumeSession = createResumeSessionHandler(options);
-    resumeSession(sessionId);
+    await resumeSession(sessionId);
 
     expect(callOrder).toContain('hydrateSessionUsage');
     // hydrateSessionUsage ran before requestRender...
@@ -326,7 +327,7 @@ describe('seam-replay: seam 2 — in-TUI panel resume (createResumeSessionHandle
     expect(messageCountAtHydration).toBeGreaterThan(0);
   });
 
-  test('no-op when journal is absent for the resumed session', () => {
+  test('no-op when journal is absent for the resumed session', async () => {
     const sessionId = 'seam3-nojournal';
     const homeDirectory = tmpDir;
     const conversation = new ConversationManager(() => 80);
@@ -342,7 +343,7 @@ describe('seam-replay: seam 2 — in-TUI panel resume (createResumeSessionHandle
     };
 
     const options: ResumeSessionOptions = {
-      homeDirectory,
+      surface: makeTestSurface(homeDirectory),
       conversation,
       requestRender: () => {},
       runtimeBus: { emit: () => {} } as never,
@@ -385,7 +386,7 @@ describe('seam-replay: seam 2 — in-TUI panel resume (createResumeSessionHandle
     };
 
     const resumeSession = createResumeSessionHandler(options);
-    resumeSession(sessionId);
+    await resumeSession(sessionId);
 
     // No journal means no replay; only snapshot messages (none in our stub).
     expect(conversation.getMessageCount()).toBe(0);
@@ -399,7 +400,7 @@ describe('seam-replay: title/titleSource preservation (T25)', () => {
   test('post-snapshot replay preserves the seam-restored title and titleSource', () => {
     const sessionId = 'seam-title-ses';
     const homeDirectory = tmpDir;
-    const journalPath = journalPathFor(homeDirectory, sessionId);
+    const journalPath = journalPathFor(makeTestSurface(homeDirectory), sessionId);
     const snapshotTimestamp = Date.now() - 5000;
 
     // Journal carries POST-snapshot records (messages only — journal records
@@ -442,7 +443,7 @@ describe('seam-replay: title/titleSource preservation (T25)', () => {
 describe('seam-replay: seq-collision authoritative-record selection (T30)', () => {
   test('newest-ts append wins over a stale high-seq tail from a non-rotated journal', () => {
     const sessionId = 'seam-seqcollision';
-    const journalPath = journalPathFor(tmpDir, sessionId);
+    const journalPath = journalPathFor(makeTestSurface(tmpDir), sessionId);
     const snapshotTimestamp = Date.now() - 10_000;
     const base = Date.now() - 5000;
 
@@ -494,7 +495,7 @@ describe('seam-replay: seq-collision authoritative-record selection (T30)', () =
 
   test('ties on ts are broken by the highest seq', () => {
     const sessionId = 'seam-seqtie';
-    const journalPath = journalPathFor(tmpDir, sessionId);
+    const journalPath = journalPathFor(makeTestSurface(tmpDir), sessionId);
     const snapshotTimestamp = Date.now() - 10_000;
     const sameTs = Date.now() - 1000;
 

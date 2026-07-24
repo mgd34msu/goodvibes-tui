@@ -21,7 +21,7 @@ function toEnvVarName(raw: string): string {
 export function registerSecretRuntimeCommands(registry: CommandRegistry): void {
   registry.register({
     name: 'secret',
-    description: 'Enter a secret with concealed (masked) input and store it as an environment variable — plaintext never enters the transcript',
+    description: 'Quick one-off: type a value with masked input, stored as an env var for THIS session only (persistent storage + providers: /secrets)',
     usage: '/secret <NAME>',
     argsHint: '<NAME>',
     handler(args, ctx) {

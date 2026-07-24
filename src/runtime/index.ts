@@ -285,6 +285,18 @@ export const getRecoveryDir = operations.getRecoveryDir;
 export const getLastSessionPointerPath = operations.getLastSessionPointerPath;
 export const writeLastSessionPointer = operations.writeLastSessionPointer;
 export const readLastSessionPointer = operations.readLastSessionPointer;
+// The declare-once storage handle (platform/runtime/session-surface.ts) plus
+// the two prompted-recovery primitives that only accept it. Every session
+// path in this app derives from one surface built in runtime/services.ts.
+export const createSessionSurface = operations.createSessionSurface;
+export type SessionSurface = Operations.SessionSurface;
+export const consumeRecovery = operations.consumeRecovery;
+export const removeRecoveryPoint = operations.removeRecoveryPoint;
+// Probe for a NAMED session's live snapshot (per-session supersession — see
+// session-recovery.ts's header) without retiring anything. Backs the
+// --continue / --resume pre-resume check in cli/tui-startup.ts.
+export const checkRecoveryForSession = operations.checkRecoveryForSession;
+export type RecoveryFileInfo = Operations.RecoveryFileInfo;
 export const exportRemoteArtifactForAgent = operations.exportRemoteArtifactForAgent;
 export const importRemoteArtifact = operations.importRemoteArtifact;
 export const RemoteRunnerRegistry = operations.RemoteRunnerRegistry;

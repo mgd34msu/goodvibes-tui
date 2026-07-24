@@ -22,6 +22,7 @@ import { createSystemMessageRouter, type SystemMessageRouter } from '../core/sys
 import { getConfigSnapshot } from '../config/index.ts';
 import { createBootstrapCommandContext } from './bootstrap-command-context.ts';
 import { createResumeSessionHandler } from './bootstrap-hook-bridge.ts';
+import { confirmLiveResume } from './session-resume-liveness-confirm.ts';
 import { logger } from '@pellux/goodvibes-sdk/platform/utils';
 import { loadBootstrapSystemPrompt } from '@/runtime/index.ts';
 import { createShellPlanRuntime, createShellRemoteCommandService } from '@/runtime/index.ts';
@@ -102,25 +103,9 @@ export function createBootstrapShell(options: BootstrapShellOptions): BootstrapS
     orchestrator.usage = usage;
     orchestrator.lastInputTokens = lastInputTokens;
   };
-  const resumeSession = createResumeSessionHandler({
-    runtimeBus,
-    runtime,
-    conversation,
-    requestRender,
-    onSessionIdChanged,
-    sharedSessionBroker: services.sessionBroker,
-    sessionSpine,
-    project: services.workingDirectory,
-    writeLastSessionPointer,
-    hookDispatcher: services.hookDispatcher,
-    sessionManager: services.sessionManager,
-    panelManager: services.panelManager,
-    configManager,
-    providerRegistry: services.providerRegistry,
-    homeDirectory: services.homeDirectory,
-    hydrateSessionUsage,
-  });
-
+  // Built before resumeSession below so its providerApi.selectModel is
+  // available for the resume handler's model-reselection step (matches
+  // session-workflow.ts's /session resume — see core/session-resume-core.ts).
   const foundationClients = createRuntimeFoundationClients({
     runtimeServices: services,
     tasksReadModel: uiServices.readModels.tasks,
@@ -135,6 +120,35 @@ export function createBootstrapShell(options: BootstrapShellOptions): BootstrapS
     opsApi,
     providerApi,
   } = foundationClients;
+
+  const resumeSession = createResumeSessionHandler({
+    runtimeBus,
+    runtime,
+    conversation,
+    requestRender,
+    onSessionIdChanged,
+    sharedSessionBroker: services.sessionBroker,
+    sessionSpine,
+    project: services.workingDirectory,
+    writeLastSessionPointer,
+    hookDispatcher: services.hookDispatcher,
+    sessionManager: services.sessionManager,
+    panelManager: services.panelManager,
+    surface: services.surface,
+    // Read lazily on purpose. The selection modal lives on the command
+    // context, which is composed further down this function (and whose
+    // openSelection is patched later still, by wireShellUiOpeners); a resume
+    // only ever happens long after both. An unpatched opener reads as "no
+    // surface to ask through", and the resume proceeds as it always did.
+    confirmLiveResume: (sessionId) => confirmLiveResume(sessionId, {
+      surface: services.surface,
+      openSelection: () => commandContext.openSelection,
+    }),
+    configManager,
+    providerRegistry: services.providerRegistry,
+    hydrateSessionUsage,
+    selectModel: (model) => providerApi.selectModel(model),
+  });
   const planRuntime = createShellPlanRuntime({
     adaptivePlanner: services.adaptivePlanner,
     runtimeBus,
@@ -263,6 +277,7 @@ export function createBootstrapShell(options: BootstrapShellOptions): BootstrapS
     policyRuntimeState,
     readModels: uiServices.readModels,
     shellPaths: services.shellPaths,
+    surface: services.surface,
     remoteRuntime,
     planRuntime,
     fileUndoManager: services.fileUndoManager,

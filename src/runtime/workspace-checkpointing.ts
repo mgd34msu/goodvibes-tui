@@ -1,7 +1,7 @@
 import { WorkspaceCheckpointManager } from '@pellux/goodvibes-sdk/platform/workspace';
 import { withCheckpointGuardSettings } from '../config/tui-extension-settings.ts';
 import type { ConfigManager } from '../config/index.ts';
-import type { RuntimeEventBus } from '@/runtime/index.ts';
+import type { RuntimeEventBus, SessionSurface } from '@/runtime/index.ts';
 
 /**
  * createWorkspaceCheckpointing — build the per-workspace checkpoint manager and
@@ -10,13 +10,21 @@ import type { RuntimeEventBus } from '@/runtime/index.ts';
  */
 export function createWorkspaceCheckpointing(opts: {
   workspaceRoot: string;
+  /**
+   * The app's declare-once storage handle. Passing it resolves the checkpoint
+   * git store to `surface.checkpointsDir` (`<workingDirectory>/.goodvibes/tui/
+   * checkpoints`) instead of the unscoped `<workspaceRoot>/.goodvibes/
+   * checkpoints` every product using this SDK would otherwise share. The SDK
+   * migrates an existing legacy store into the scoped location on first use.
+   */
+  surface: SessionSurface;
   runtimeBus: RuntimeEventBus;
   configManager: ConfigManager;
 }): WorkspaceCheckpointManager {
   // Checkpoint root-guard from the user's `checkpoints.*` config (docs/configuration.md;
   // inert until the platform SDK's checkpoint manager exposes the keys — see the reader's note).
   const manager = new WorkspaceCheckpointManager(
-    withCheckpointGuardSettings({ workspaceRoot: opts.workspaceRoot, runtimeBus: opts.runtimeBus }, opts.configManager),
+    withCheckpointGuardSettings({ workspaceRoot: opts.workspaceRoot, surface: opts.surface, runtimeBus: opts.runtimeBus }, opts.configManager),
   );
   // Fire-and-forget: subscriptions go live immediately if init() succeeds.
   // If it rejects, WorkspaceCheckpointManager caches that rejection on

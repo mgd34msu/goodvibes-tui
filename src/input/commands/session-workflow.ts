@@ -6,9 +6,9 @@ import type { TranscriptEventKind } from '@pellux/goodvibes-sdk/platform/core';
 import type { ConversationTitleSource } from '../../core/conversation';
 import type { SessionReturnContextSummary } from '@/runtime/index.ts';
 import { formatReturnContextForDisplay, getReturnContextMode, maybeAssistReturnContextSummary } from '@/runtime/index.ts';
-import { requirePanelManager, requireProviderApi, requireSessionManager, requireShellPaths } from './runtime-services.ts';
-import { replayJournalForSession } from '../../core/session-recovery.ts';
-import { restoreTurnAnchors } from '../../core/rewind-turn-anchors.ts';
+import { requirePanelManager, requireProviderApi, requireSessionManager, requireSurface } from './runtime-services.ts';
+import { resumeSessionCore, reopenPanelsWithModalSkip, DEFAULT_PANEL_REOPEN_LIMIT } from '../../core/session-resume-core.ts';
+import { checkSessionLiveness } from '../../runtime/session-liveness-marker.ts';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 
 function parseTranscriptKind(raw: string | undefined): TranscriptEventKind | 'all' {
@@ -83,32 +83,20 @@ function buildTranscriptReviewLines(
 // Exported (test-only concern) so the MIGRATE-TO-MODAL redirect-skip honesty
 // (W6 review, finding 3: saved-layout restore with 'sessions' must not lie)
 // can be unit-tested directly instead of through a full /resume harness.
+// Delegates to the shared reopenPanelsWithModalSkip (core/session-resume-core.ts)
+// — the same routine resumeSessionCore uses — so this standalone entry point
+// and the canonical resume sequence can never diverge on panel-reopen behavior.
 export function reopenPanelsFromReturnContext(ctx: CommandContext, summary: SessionReturnContextSummary | undefined): string[] {
   if (!summary?.openPanels || summary.openPanels.length === 0) return [];
   const panelManager = requirePanelManager(ctx);
-  const reopened: string[] = [];
-  const movedToModal: string[] = [];
-  for (const panelId of summary.openPanels.slice(0, 4)) {
-    // (the purge): a MIGRATE-TO-MODAL id has no panel to restore — a modal
-    // is not part of the saved panel layout. Skip it (don't pop a modal
-    // mid-resume) and note it once, rather than firing openModal + revealing an
-    // empty workspace during resume.
-    if (panelManager.getModalRedirect(panelId) !== undefined) {
-      movedToModal.push(panelId);
-      continue;
-    }
-    try {
-      panelManager.open(panelId);
-      reopened.push(panelId);
-    } catch {
-      // Ignore unknown or currently unavailable panel ids during resume.
-    }
-  }
-  if (reopened.length > 0) panelManager.show();
+  const { reopened, movedToModal, notReopened } = reopenPanelsWithModalSkip(panelManager, summary.openPanels, DEFAULT_PANEL_REOPEN_LIMIT);
   if (movedToModal.length > 0) {
     ctx.print(`Note: ${movedToModal.join(', ')} moved to a modal — reopen via its command instead of as a panel.`);
   }
-  return reopened;
+  if (notReopened.length > 0) {
+    ctx.print(`  …and ${notReopened.length} more not reopened (/panels to open)`);
+  }
+  return [...reopened];
 }
 
 function printSessionExport(
@@ -198,7 +186,9 @@ export async function handleSessionWorkflowCommand(args: string[], ctx: CommandC
           session.returnContext.activeTasks ? `active=${session.returnContext.activeTasks}` : null,
           session.returnContext.blockedTasks ? `blocked=${session.returnContext.blockedTasks}` : null,
           session.returnContext.pendingApprovals ? `approvals=${session.returnContext.pendingApprovals}` : null,
-          session.returnContext.openPanels?.length ? `panels=${session.returnContext.openPanels.slice(0, 3).join(',')}` : null,
+          session.returnContext.openPanels?.length
+            ? `panels=${session.returnContext.openPanels.slice(0, 3).join(',')}${session.returnContext.openPanels.length > 3 ? ` (+${session.returnContext.openPanels.length - 3} more)` : ''}`
+            : null,
         ].filter(Boolean).join('  ');
         if (posture) lines.push(`     posture: ${posture}`);
       }
@@ -222,6 +212,10 @@ export async function handleSessionWorkflowCommand(args: string[], ctx: CommandC
           model: ctx.session.runtime.model,
           provider: ctx.session.runtime.provider,
           timestamp: Date.now(),
+          // Naming a session is an act of curation, so the file this
+          // materializes for rename to act on is a user save, not machinery —
+          // the retention sweep must not expire something the user named.
+          saveSource: 'user',
         });
       }
       sm.rename(ctx.session.runtime.sessionId, newName);
@@ -235,9 +229,13 @@ export async function handleSessionWorkflowCommand(args: string[], ctx: CommandC
   }
 
   if (sub === 'resume') {
-    const target = args.slice(1).join(' ').trim();
+    // '--force' bypasses the multi-instance liveness confirm below — never a
+    // session-id/name token itself (session ids never start with '--').
+    const rawArgs = args.slice(1);
+    const force = rawArgs.includes('--force');
+    const target = rawArgs.filter((a) => a !== '--force').join(' ').trim();
     if (!target) {
-      ctx.print('Usage: /session resume <session-id-or-name>');
+      ctx.print('Usage: /session resume <session-id-or-name> [--force]');
       return true;
     }
     const sessions = sm.list();
@@ -250,56 +248,36 @@ export async function handleSessionWorkflowCommand(args: string[], ctx: CommandC
       ctx.print(`Session not found: ${target}\nUse /session list to see available sessions.`);
       return true;
     }
+
+    // Multi-instance safety: warn (and require --force) when this session
+    // looks open in another still-running terminal right now — resuming it
+    // here would fork its live state out from under that other instance.
+    // Best-effort: a missing/stale marker (or this process's OWN marker,
+    // e.g. re-resuming the session already active here) never blocks anything.
+    const liveness = checkSessionLiveness(requireSurface(ctx), found.name);
+    if (liveness.live && liveness.pid !== process.pid && !force) {
+      ctx.print(
+        `Session appears open in another terminal (pid ${liveness.pid}) — resuming will fork its live state.\n` +
+        `Re-run \`/session resume ${found.name} --force\` to proceed anyway.`,
+      );
+      return true;
+    }
+
     try {
-      const { meta, messages } = sm.load(found.name);
       const providerApi = requireProviderApi(ctx);
-      ctx.session.conversationManager.resetAll();
-      ctx.session.conversationManager.fromJSON({ messages: messages as never[], title: meta.title, titleSource: meta.titleSource });
-      ctx.session.conversationManager.rebuildHistory();
-      ctx.session.runtime.sessionId = found.name;
-
-      // Restore the resumed session's message-anchored rewind anchors from its
-      // sidecar so /rewind works identically before and after the resume. The
-      // in-memory registry is process-local, so a fresh process would otherwise
-      // start with no anchors for the loaded session.
-      const restoredAnchorCount = restoreTurnAnchors(found.name, requireShellPaths(ctx).workingDirectory);
-
-      // Journal replay: recover turns that post-date the loaded snapshot.
-      const shellPaths = requireShellPaths(ctx);
-      const journalReplay = replayJournalForSession({
-        homeDirectory: shellPaths.homeDirectory,
-        snapshotTimestamp: meta.timestamp,
+      const outcome = await resumeSessionCore(found.name, {
+        sessionManager: sm,
         conversation: ctx.session.conversationManager,
-        sessionId: found.name,
-        persistSnapshot: (replayedMessages) => {
-          sm.save(found.name, replayedMessages as never[], {
-            title: ctx.session.conversationManager.title || meta.title,
-            model: meta.model,
-            provider: meta.provider,
-            timestamp: Date.now(),
-            titleSource: meta.titleSource,
-            returnContext: meta.returnContext,
-          });
-        },
+        runtime: ctx.session.runtime,
+        surface: requireSurface(ctx),
+        panelManager: requirePanelManager(ctx),
+        selectModel: (model) => providerApi.selectModel(model),
+        hydrateSessionUsage: ctx.session.hydrateSessionUsage,
       });
-      // Hydrate the footer's token counters from the resumed (+ journal-replayed)
-      // history now, before ctx.renderRequest() below.
-      ctx.session.hydrateSessionUsage?.();
+      const { meta, journalReplay, restoredAnchorCount, resumedMessageCount, panels } = outcome;
 
-      if (meta.model) {
-        try {
-          const selected = await providerApi.selectModel(meta.model);
-          ctx.session.runtime.model = selected.registryKey;
-          ctx.session.runtime.provider = selected.providerId;
-        } catch {
-          ctx.session.runtime.model = meta.model;
-          // model may not exist locally
-        }
-      }
-      if (meta.provider) ctx.session.runtime.provider = meta.provider;
       ctx.renderRequest();
-      const resumedMsgCount = ctx.session.conversationManager.getMessageCount();
-      ctx.print(`Resumed session: ${found.name}\n  Name: ${meta.title || '(untitled)'}\n  Messages: ${resumedMsgCount}\n  Model: ${meta.model || ctx.session.runtime.model}`);
+      ctx.print(`Resumed session: ${found.name}\n  Name: ${meta.title || '(untitled)'}\n  Messages: ${resumedMessageCount}\n  Model: ${meta.model || ctx.session.runtime.model}`);
       if (restoredAnchorCount > 0) {
         ctx.print(`  Rewind: restored ${restoredAnchorCount} turn anchor(s) — /rewind is available for this resumed session.`);
       }
@@ -311,14 +289,19 @@ export async function handleSessionWorkflowCommand(args: string[], ctx: CommandC
       } else if (journalReplay.hadCorruptTail) {
         ctx.print('  [Recovery] Journal tail was partially corrupt (quarantined). Replay stopped at last good record.');
       }
-      const reopenedPanels = reopenPanelsFromReturnContext(ctx, meta.returnContext);
+      if (panels.movedToModal.length > 0) {
+        ctx.print(`Note: ${panels.movedToModal.join(', ')} moved to a modal — reopen via its command instead of as a panel.`);
+      }
+      if (panels.notReopened.length > 0) {
+        ctx.print(`  …and ${panels.notReopened.length} more not reopened (/panels to open)`);
+      }
       const returnContextMode = getReturnContextMode(ctx.platform.configManager);
       if (returnContextMode !== 'off' && meta.returnContext) {
         for (const line of formatReturnContextForDisplay(meta.returnContext)) {
           ctx.print(`  ${line}`);
         }
-        if (reopenedPanels.length > 0) {
-          ctx.print(`  Reopened panels: ${reopenedPanels.join(', ')}`);
+        if (panels.reopened.length > 0) {
+          ctx.print(`  Reopened panels: ${panels.reopened.join(', ')}`);
         }
         if ((meta.returnContext.remoteRunners?.length ?? 0) > 0) {
           ctx.print(`  Remote re-entry: /remote recover ${meta.returnContext.remoteRunners![0]}`);
@@ -354,6 +337,8 @@ export async function handleSessionWorkflowCommand(args: string[], ctx: CommandC
       timestamp: Date.now(),
       titleSource: exportData.titleSource,
       returnContext: exportData.returnContext,
+      // The operator asked for this fork by name; it is not turn machinery.
+      saveSource: 'user',
     };
     try {
       sm.save(newId, messages, meta);
@@ -378,6 +363,10 @@ export async function handleSessionWorkflowCommand(args: string[], ctx: CommandC
       timestamp: Date.now(),
       titleSource: exportData.titleSource,
       returnContext: exportData.returnContext,
+      // The one unambiguous "keep this" act in the app. Marked so the
+      // session-conversations retention sweep never expires it, unlike the
+      // automatic per-turn snapshot (turn-event-wiring.ts, saveSource 'auto').
+      saveSource: 'user',
     };
     try {
       const { filePath, sanitizedName } = sm.save(rawName, messages, meta);

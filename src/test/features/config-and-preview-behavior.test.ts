@@ -193,8 +193,8 @@ describe('tool preview truncation', () => {
     expect(lines).toHaveLength(3);
     const spinnerLine = lines[1];
     const text = spinnerLine.map(c => c.char).join('');
-    // Should include ttft suffix e.g. 'ttft:350ms'
-    expect(text).toContain('ttft:350ms');
+    // Human phrasing, e.g. '(first token 0.3s)' — not the raw 'ttft:350ms' form.
+    expect(text).toContain('(first token 0.3s)');
   });
 
   it('UIFactory.createThinkingFragment includes both elapsed and TTFT when both provided', () => {
@@ -204,7 +204,7 @@ describe('tool preview truncation', () => {
     const spinnerLine = lines[1];
     const text = spinnerLine.map(c => c.char).join('');
     expect(text).toContain('(5s)');
-    expect(text).toContain('ttft:280ms');
+    expect(text).toContain('(first token 0.2s)');
   });
 
   it('UIFactory.createThinkingFragment elapsed suffix omitted when elapsedMs is undefined', () => {

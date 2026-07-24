@@ -39,4 +39,13 @@ export type BlockMeta = Omit<SdkBlockMeta, 'type'> & {
    * individually while the group stays collapsed.
    */
   groupMemberIndexes?: readonly number[];
+  /**
+   * The tool call's name, when this block renders a 'tool' result (or is the
+   * header of a 'tool_group' whose members share a run — the header carries
+   * the first member's name). Used to name the block honestly in action
+   * receipts (e.g. "tool result: exec") — see describeBlockForReceipt in
+   * handler-content-actions.ts. Undefined for non-tool block types and for
+   * standalone tool results with no recorded name.
+   */
+  toolName?: string;
 };

@@ -13,20 +13,32 @@ import { join } from 'node:path';
  */
 const GOODVIBES_IGNORE_PATTERN = /(^|\n)[ \t]*\/?\.goodvibes\/?\*?[ \t]*(\n|$)/;
 
-export function ensureGoodvibesGitignore(projectRoot: string): void {
+/**
+ * Ensures the project's .gitignore excludes .goodvibes/, appending the rule
+ * exactly once if it is verifiably absent.
+ *
+ * @returns true only the FIRST time the rule is actually written this call —
+ * i.e. this specific invocation just appended/created it. Every subsequent
+ * launch (rule already present) and every no-op case (not a git repo, or the
+ * write failed) return false. The caller uses this to print a one-time
+ * notice instead of staying silent about an edit to the user's own project file.
+ */
+export function ensureGoodvibesGitignore(projectRoot: string): boolean {
   try {
-    if (!existsSync(join(projectRoot, '.git'))) return; // only matters for git projects
+    if (!existsSync(join(projectRoot, '.git'))) return false; // only matters for git projects
     const gitignorePath = join(projectRoot, '.gitignore');
     const existing = existsSync(gitignorePath) ? readFileSync(gitignorePath, 'utf-8') : '';
-    if (GOODVIBES_IGNORE_PATTERN.test(existing)) return; // already excluded
+    if (GOODVIBES_IGNORE_PATTERN.test(existing)) return false; // already excluded
     const rule = '# goodvibes-tui transient state\n.goodvibes/\n';
     if (existing.length === 0) {
       writeFileSync(gitignorePath, rule);
-      return;
+      return true;
     }
     const separator = existing.endsWith('\n') ? '\n' : '\n\n';
     appendFileSync(gitignorePath, separator + rule);
+    return true;
   } catch {
     // Best-effort only — never block startup on a gitignore write failure.
+    return false;
   }
 }

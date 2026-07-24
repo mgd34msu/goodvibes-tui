@@ -21,6 +21,12 @@ describe('entrypoint wiring', () => {
     expect(src).toContain("import { ensureGoodvibesGitignore } from './ensure-goodvibes-gitignore.ts';");
     expect(src).toContain('ensureGoodvibesGitignore(bootstrapWorkingDir)');
   });
+
+  test('the entrypoint only prints a notice when the rule was actually just added (gated on the return value)', () => {
+    const src = readFileSync(join(import.meta.dir, '../../cli/entrypoint.ts'), 'utf-8');
+    expect(src).toContain('if (ensureGoodvibesGitignore(bootstrapWorkingDir)) {');
+    expect(src).toContain("added '.goodvibes/' to .gitignore");
+  });
 });
 
 const dirs: string[] = [];
@@ -74,5 +80,39 @@ describe('ensureGoodvibesGitignore', () => {
     const dir = makeProjectDir(false);
     ensureGoodvibesGitignore(dir);
     expect(existsSync(join(dir, '.gitignore'))).toBe(false);
+  });
+
+  // ── Return-value contract (item 9): the caller prints a one-time notice
+  // gated on this, so it must be true exactly once — the call that actually
+  // wrote the rule — and false for every no-op / already-present / non-git case.
+  describe('return value — "did this call just write the rule" (item 9)', () => {
+    test('returns true when it creates a fresh .gitignore', () => {
+      const dir = makeProjectDir();
+      expect(ensureGoodvibesGitignore(dir)).toBe(true);
+    });
+
+    test('returns true when it appends to an existing .gitignore', () => {
+      const dir = makeProjectDir();
+      writeFileSync(join(dir, '.gitignore'), 'node_modules/\n');
+      expect(ensureGoodvibesGitignore(dir)).toBe(true);
+    });
+
+    test('returns false on every subsequent call once the rule is present (only the first launch notices)', () => {
+      const dir = makeProjectDir();
+      expect(ensureGoodvibesGitignore(dir)).toBe(true);
+      expect(ensureGoodvibesGitignore(dir)).toBe(false);
+      expect(ensureGoodvibesGitignore(dir)).toBe(false);
+    });
+
+    test('returns false when the rule already exists in some other form', () => {
+      const dir = makeProjectDir();
+      writeFileSync(join(dir, '.gitignore'), '# my rules\n.goodvibes/*\n');
+      expect(ensureGoodvibesGitignore(dir)).toBe(false);
+    });
+
+    test('returns false outside a git repository', () => {
+      const dir = makeProjectDir(false);
+      expect(ensureGoodvibesGitignore(dir)).toBe(false);
+    });
   });
 });

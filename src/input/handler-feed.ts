@@ -34,6 +34,7 @@ import {
 } from './handler-feed-routes.ts';
 import type { PanelBurstGuardState } from './panel-paste-flood-guard.ts';
 import type { WrappedPromptInfo } from './handler-prompt-buffer.ts';
+import { getViewportBottomLine } from '../renderer/conversation-layout.ts';
 import { handleModalTokenRoutes } from './handler-modal-token-routes.ts';
 import { handleCommandModeToken } from './handler-command-route.ts';
 import { handleGlobalShortcutToken } from './handler-shortcuts.ts';
@@ -224,6 +225,7 @@ export function feedInputTokens(context: InputFeedContext, tokens: readonly Inpu
 
     const modalRoute = handleModalTokenRoutes({
       history,
+      conversationManager: context.conversationManager,
       searchShortcutMatch: token.type === 'key' && keybindings.matches('search', token),
       selectionModal: context.selectionModal,
       selectionCallback: context.selectionCallback,
@@ -477,6 +479,7 @@ export function feedInputTokens(context: InputFeedContext, tokens: readonly Inpu
         submitConcealedInput: context.submitConcealedInput,
         autocomplete: context.autocomplete,
         blockActionsMenu: { open: (block: BlockMeta) => context.blockActionsMenu.open(block) },
+        getBlockAnchorLine: () => getViewportBottomLine(scrollTop, viewportHeight, lineCount),
         openFleetPanel,
         modalOpened: context.modalOpened,
         saveUndoState: context.saveUndoState,

@@ -8,9 +8,10 @@ import { SessionPickerModal } from '../../input/session-picker-modal.ts';
 import { SessionManager } from '@pellux/goodvibes-sdk/platform/sessions';
 import { renderSessionPickerModal } from '../../renderer/session-picker-modal.ts';
 import { lineToString, linesToText } from '../setup.ts';
+import { makeTestSurface } from '../helpers/session-surface.ts';
 
 const W = 120;
-const sessionManager = new SessionManager(join(tmpdir(), 'gv-renderer-session-picker'), { surfaceRoot: 'tui' });
+const sessionManager = new SessionManager(join(tmpdir(), 'gv-renderer-session-picker'), { surface: makeTestSurface(join(tmpdir(), 'gv-renderer-session-picker')) });
 
 function makeModal(overrides: Partial<SessionPickerModal> = {}): SessionPickerModal {
   const modal = new SessionPickerModal(sessionManager);

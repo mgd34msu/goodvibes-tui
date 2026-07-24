@@ -83,6 +83,91 @@ async function downloadText(fetchImpl: UpdateFetchLike, url: string): Promise<st
 }
 
 /**
+ * Where cancellation stops being allowed. An update is genuinely abortable up
+ * to and including the moment BEFORE the first file is written: every fetch on
+ * the way there carries the caller's signal, and every await boundary re-checks
+ * it. From the first write onward the swap owns the installed files and always
+ * runs to completion — a half-applied swap is the one outcome worse than a slow
+ * one.
+ *
+ * This record makes that boundary readable from outside the call. The launch
+ * updater gives `applyUpdate` a budget and abandons the promise when it runs
+ * out, so it cannot learn from the return value which side of the line the work
+ * was on — it reads these flags instead, and prints the receipt that is
+ * actually true (see src/cli/launch-auto-update.ts).
+ */
+export interface UpdateSwapProgress {
+  /** True from the first file write of the swap phase; from here the swap is never interrupted. */
+  begun: boolean;
+  /** True once every target file has been swapped into place and the update is fully installed. */
+  committed: boolean;
+  /** The release tag being installed, set as soon as the target is resolved (before any download). */
+  targetTag: string | null;
+}
+
+export function createUpdateSwapProgress(): UpdateSwapProgress {
+  return { begun: false, committed: false, targetTag: null };
+}
+
+/** The failure an aborted update ends with — raised only while nothing has been written yet. */
+export const UPDATE_ABORTED_MESSAGE = 'update cancelled before any file was replaced';
+
+function throwIfAborted(signal: AbortSignal | undefined): void {
+  if (signal?.aborted) {
+    throw new Error(UPDATE_ABORTED_MESSAGE);
+  }
+}
+
+/**
+ * The shared UpdateFetchLike init shape predates cancellation, so the signal
+ * rides on a widened version of it: the real `fetch` reads it — which is what
+ * makes the DOWNLOAD itself cancellable rather than merely abandoned — and a
+ * test stub that ignores the extra field behaves exactly as it did before.
+ */
+type AbortableFetchInit = NonNullable<Parameters<UpdateFetchLike>[1]> & { signal?: AbortSignal };
+
+function abortableFetch(fetchImpl: UpdateFetchLike, signal: AbortSignal | undefined): UpdateFetchLike {
+  if (!signal) return fetchImpl;
+  const withSignal = fetchImpl as (url: string, init?: AbortableFetchInit) => ReturnType<UpdateFetchLike>;
+  return async (url, init) => {
+    throwIfAborted(signal);
+    return await withSignal(url, { ...init, signal });
+  };
+}
+
+/**
+ * Wraps the filesystem seam so the first MUTATING call flips `begun`. The swap
+ * phase is the only part of the apply path that writes anything, so that first
+ * write is exactly the point after which cancellation must no longer be
+ * honoured. Reads (the daemon-present probe, the target-exists check inside the
+ * swap) leave the flag alone.
+ */
+function trackSwapProgress(io: UpdateFileIo, progress: UpdateSwapProgress): UpdateFileIo {
+  const begin = (): void => {
+    progress.begun = true;
+  };
+  return {
+    writeFile: (path, data) => {
+      begin();
+      io.writeFile(path, data);
+    },
+    rename: (from, to) => {
+      begin();
+      io.rename(from, to);
+    },
+    chmod: (path, mode) => {
+      begin();
+      io.chmod(path, mode);
+    },
+    mkdir: (path) => {
+      begin();
+      io.mkdir(path);
+    },
+    exists: (path) => io.exists(path),
+  };
+}
+
+/**
  * Suffix under which every swap keeps the file it replaced — re-exported
  * from the SDK's canonical update policy module so rollback and swap share
  * one definition everywhere.
@@ -153,6 +238,16 @@ export interface ApplyUpdateOptions {
   readonly runCommand?: RunCommand;
   /** Injectable filesystem seam (the SDK's UpdateFileIo) so tests observe swaps in memory. */
   readonly io?: UpdateFileIo;
+  /**
+   * Cancels the update — for real: it is passed to every fetch in the path and
+   * re-checked at every await boundary, so an abort stops the download instead
+   * of leaving it running unwatched. Honoured only up to the moment before the
+   * swap begins; from the first file write onward it is deliberately ignored
+   * (see UpdateSwapProgress).
+   */
+  readonly signal?: AbortSignal;
+  /** Shared record letting the caller tell a cancelled update apart from one whose swap had already started. */
+  readonly progress?: UpdateSwapProgress;
 }
 
 /**
@@ -178,7 +273,14 @@ export async function applyUpdate(options: ApplyUpdateOptions): Promise<void> {
     return;
   }
 
-  const latestTag = await resolveLatestReleaseTag(options.fetchImpl, REPO_RELEASES_LATEST_URL);
+  // Every network call from here carries the caller's signal, so an abort
+  // cancels the request in flight rather than orphaning it.
+  const signal = options.signal;
+  const progress = options.progress;
+  const fetchImpl = abortableFetch(options.fetchImpl, signal);
+
+  throwIfAborted(signal);
+  const latestTag = await resolveLatestReleaseTag(fetchImpl, REPO_RELEASES_LATEST_URL);
   if (compareVersions(options.currentVersion, latestTag) >= 0) {
     options.print(`Already current: running v${normalizeVersion(options.currentVersion)}, latest release is ${latestTag}.`);
     return;
@@ -189,6 +291,10 @@ export async function applyUpdate(options: ApplyUpdateOptions): Promise<void> {
     options.print(`No prebuilt binaries are published for ${options.platform}-${options.arch}; cannot self-update. Update with: ${fallbackUpdateCommand('source')}`);
     return;
   }
+
+  // Named before the first download, so a caller that gives up on a slow apply
+  // can still report WHICH version the work was installing.
+  if (progress) progress.targetTag = latestTag;
 
   options.print(`Update available: ${latestTag} (running v${normalizeVersion(options.currentVersion)}). Downloading and verifying...`);
 
@@ -209,7 +315,8 @@ export async function applyUpdate(options: ApplyUpdateOptions): Promise<void> {
   // file is refreshed for consistency even though the platform blocks extension
   // loading. This inclusion decision needs one manifest pre-read; the swap
   // itself re-verifies every included artifact inside applyVerifiedUpdate.
-  const checksumText = await downloadText(options.fetchImpl, `${baseUrl}/${CHECKSUM_MANIFEST_NAME}`);
+  throwIfAborted(signal);
+  const checksumText = await downloadText(fetchImpl, `${baseUrl}/${CHECKSUM_MANIFEST_NAME}`);
   const checksums = parseChecksumFile(checksumText);
   const addon = resolveSqliteVecAsset(options.platform, options.arch);
   const addonIncluded = addon !== null && checksums.get(addon.assetName) !== undefined;
@@ -230,13 +337,22 @@ export async function applyUpdate(options: ApplyUpdateOptions): Promise<void> {
   // One mechanism everywhere: downloads + verifies ALL targets before any
   // write, then swaps each atomically with the outgoing file kept at
   // `<path>.previous`.
+  //
+  // This is the last point at which the update can be called off. The
+  // downloads inside applyVerifiedUpdate are still cancellable (the signal
+  // rides on every request), but its swap loop is synchronous and runs to
+  // completion once its first write lands — which is precisely what
+  // `progress.begun` records, and why nothing below this call re-checks the
+  // signal.
+  throwIfAborted(signal);
   await applyVerifiedUpdate({
-    fetchImpl: options.fetchImpl,
+    fetchImpl,
     downloadBaseUrl: baseUrl,
     targets,
-    io,
+    io: progress ? trackSwapProgress(io, progress) : io,
     platform: options.platform,
   });
+  if (progress) progress.committed = true;
 
   const serviceInfo = detectDaemonServiceManaged(options.platform, options.configManager, options.runCommand);
 

@@ -5,6 +5,7 @@ import {
   runLaunchAutoUpdate,
   type RunLaunchAutoUpdateOptions,
 } from '@/cli/launch-auto-update.ts';
+import type { ApplyUpdateOptions } from '@/input/commands/update-runtime.ts';
 import type { UpdateFetchLike } from '@/runtime/update-check.ts';
 
 // Decision-logic coverage for the launch-time self-update, with every seam
@@ -35,6 +36,14 @@ const failingFetch: UpdateFetchLike = async () => {
 
 /** A fetch that never settles — the timeout path, without a real slow network. */
 const hangingFetch: UpdateFetchLike = () => new Promise(() => {});
+
+/** A couple of milliseconds of real time, only ever used to prove that work STOPPED. */
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    const timer = setTimeout(resolve, ms);
+    timer.unref?.();
+  });
+}
 
 function baseOptions(overrides: Partial<RunLaunchAutoUpdateOptions>): { options: RunLaunchAutoUpdateOptions; printed: string[] } {
   const printed: string[] = [];
@@ -98,14 +107,14 @@ describe('runLaunchAutoUpdate', () => {
     const { options, printed } = baseOptions({ fetchImpl: failingFetch });
     const outcome = await runLaunchAutoUpdate(options);
     expect(outcome).toEqual({ action: 'continue', reason: 'check-skipped' });
-    expect(printed).toEqual(['update check skipped: offline']);
+    expect(printed).toEqual(["couldn't reach the update server — check skipped"]);
   });
 
   test('a check that outlives its budget is skipped the same way (launch is never held hostage)', async () => {
     const { options, printed } = baseOptions({ fetchImpl: hangingFetch, timeoutMs: 10 });
     const outcome = await runLaunchAutoUpdate(options);
     expect(outcome).toEqual({ action: 'continue', reason: 'check-skipped' });
-    expect(printed).toEqual(['update check skipped: offline']);
+    expect(printed).toEqual(["couldn't reach the update server — check skipped"]);
   });
 
   test('an already-current binary continues silently', async () => {
@@ -133,7 +142,7 @@ describe('runLaunchAutoUpdate', () => {
     const outcome = await runLaunchAutoUpdate(options);
     expect(outcome).toEqual({ action: 'restart', latestTag: 'v1.1.0' });
     expect(applyCalls).toEqual([{ execPath: '/opt/goodvibes/goodvibes', currentVersion: '1.0.0' }]);
-    expect(printed).toEqual(['Updated to v1.1.0.', 'auto-update: v1.1.0 installed — restarting onto the new version']);
+    expect(printed).toEqual(['downloading v1.1.0…', 'Updated to v1.1.0.', 'auto-update: v1.1.0 installed — restarting onto the new version']);
   });
 
   test('a failed install states the failure and starts the current version', async () => {
@@ -145,8 +154,152 @@ describe('runLaunchAutoUpdate', () => {
     const outcome = await runLaunchAutoUpdate(options);
     expect(outcome).toEqual({ action: 'continue', reason: 'update-failed' });
     expect(printed).toEqual([
+      'downloading v1.1.0…',
       'auto-update failed: checksum mismatch for goodvibes-linux-x64 — starting the current version v1.0.0',
     ]);
+  });
+
+  test('an apply that outlives its own (generous) budget is deferred, not left hanging launch forever', async () => {
+    const { options, printed } = baseOptions({
+      apply: () => new Promise(() => { /* never resolves — simulates a stalled download */ }),
+      applyTimeoutMs: 10,
+    });
+    const outcome = await runLaunchAutoUpdate(options);
+    expect(outcome).toEqual({ action: 'continue', reason: 'update-deferred' });
+    expect(printed).toEqual(['downloading v1.1.0…', 'update deferred — will retry next launch']);
+  });
+
+  test('update.applyTimeoutMs from settings is honored when no explicit override is passed', async () => {
+    const { options, printed } = baseOptions({
+      settings: { applyTimeoutMs: 10 },
+      apply: () => new Promise(() => { /* never resolves */ }),
+    });
+    const outcome = await runLaunchAutoUpdate(options);
+    expect(outcome).toEqual({ action: 'continue', reason: 'update-deferred' });
+    expect(printed).toEqual(['downloading v1.1.0…', 'update deferred — will retry next launch']);
+  });
+
+  // ── the receipt has to match what actually happened ───────────────────────
+  // Losing the race only stops the launcher WAITING for the install. On its
+  // own that would leave the download and the swap running, so "deferred"
+  // could be printed while the binary was being replaced underneath the
+  // session. The install now takes a real AbortSignal and reports its swap
+  // state back, and these cases pin both halves of that.
+
+  interface StalledDownloadRecord {
+    sawSignal: boolean;
+    abortListenerFired: boolean;
+    steps: number;
+    stepsAtAbort: number | null;
+    stopped: boolean;
+  }
+
+  function newStalledDownloadRecord(): StalledDownloadRecord {
+    return { sawSignal: false, abortListenerFired: false, steps: 0, stepsAtAbort: null, stopped: false };
+  }
+
+  /**
+   * An install stuck in its download phase, honouring the signal the way
+   * applyUpdate does: it steps through the download on a 1ms timer, stops the
+   * moment the signal fires, and never reaches a swap.
+   */
+  function stalledDownloadApply(record: StalledDownloadRecord): (options: ApplyUpdateOptions) => Promise<void> {
+    return (applyOptions) =>
+      new Promise<void>((_resolve, reject) => {
+        record.sawSignal = applyOptions.signal !== undefined;
+        applyOptions.signal?.addEventListener('abort', () => {
+          record.abortListenerFired = true;
+          record.stepsAtAbort = record.steps;
+          record.stopped = true;
+          reject(new Error('update cancelled before any file was replaced'));
+        });
+        const step = (): void => {
+          if (record.stopped) return;
+          record.steps += 1;
+          const timer = setTimeout(step, 1);
+          timer.unref?.();
+        };
+        step();
+      });
+  }
+
+  test('a stalled install is genuinely cancelled: the signal reaches it, its download stops, and the deferral is true', async () => {
+    const record = newStalledDownloadRecord();
+    const { options, printed } = baseOptions({ apply: stalledDownloadApply(record), applyTimeoutMs: 10 });
+
+    const outcome = await runLaunchAutoUpdate(options);
+
+    expect(outcome).toEqual({ action: 'continue', reason: 'update-deferred' });
+    // The signal was delivered and actually fired, not merely accepted.
+    expect(record.sawSignal).toBe(true);
+    expect(record.abortListenerFired).toBe(true);
+    expect(record.steps).toBeGreaterThan(0);
+    // And the download stopped there instead of running on unwatched.
+    const stepsAtAbort = record.stepsAtAbort;
+    expect(stepsAtAbort).not.toBeNull();
+    await delay(5);
+    expect(record.steps).toBe(stepsAtAbort!);
+    expect(printed).toEqual(['downloading v1.1.0…', 'update deferred — will retry next launch']);
+  });
+
+  test('a budget that runs out BEFORE the swap begins prints only the deferral, never the background line', async () => {
+    let signalSeen: AbortSignal | undefined;
+    const { options, printed } = baseOptions({
+      applyTimeoutMs: 10,
+      apply: (applyOptions) => {
+        signalSeen = applyOptions.signal;
+        // Still downloading: nothing written, so there is nothing to keep.
+        return new Promise<void>(() => {});
+      },
+    });
+
+    const outcome = await runLaunchAutoUpdate(options);
+
+    expect(outcome).toEqual({ action: 'continue', reason: 'update-deferred' });
+    expect(signalSeen?.aborted).toBe(true);
+    expect(printed).toContain('update deferred — will retry next launch');
+    expect(printed.some((line) => line.includes('updated in background'))).toBe(false);
+  });
+
+  test('a budget that runs out AFTER the swap began names the installed version and never cancels the swap', async () => {
+    let signalSeen: AbortSignal | undefined;
+    const { options, printed } = baseOptions({
+      applyTimeoutMs: 10,
+      apply: (applyOptions) => {
+        signalSeen = applyOptions.signal;
+        // The swap has started; from here it always runs to completion, so a
+        // deferral would be a false receipt in the other direction.
+        applyOptions.progress!.targetTag = 'v1.1.0';
+        applyOptions.progress!.begun = true;
+        return new Promise<void>(() => {});
+      },
+    });
+
+    const outcome = await runLaunchAutoUpdate(options);
+
+    expect(outcome).toEqual({ action: 'continue', reason: 'update-in-background' });
+    expect(printed).toEqual(['downloading v1.1.0…', 'updated in background; restart to use v1.1.0']);
+    expect(printed).not.toContain('update deferred — will retry next launch');
+    // Cancellation is never signalled once the files are being replaced.
+    expect(signalSeen?.aborted).toBe(false);
+  });
+
+  test('the background receipt names the version the install actually resolved, not just the checked tag', async () => {
+    const { options, printed } = baseOptions({
+      applyTimeoutMs: 10,
+      apply: (applyOptions) => {
+        // A release published between the check and the install: the receipt
+        // must name what is being written, not what was checked.
+        applyOptions.progress!.targetTag = 'v1.2.0';
+        applyOptions.progress!.begun = true;
+        return new Promise<void>(() => {});
+      },
+    });
+
+    const outcome = await runLaunchAutoUpdate(options);
+
+    expect(outcome).toEqual({ action: 'continue', reason: 'update-in-background' });
+    expect(printed).toEqual(['downloading v1.1.0…', 'updated in background; restart to use v1.2.0']);
   });
 
   test('never throws: even a fetch that rejects after the race resolves leaves the outcome honest', async () => {

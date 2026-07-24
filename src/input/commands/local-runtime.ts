@@ -165,7 +165,7 @@ export function registerLocalRuntimeCommands(registry: CommandRegistry): void {
 
   registry.register({
     name: 'secrets',
-    description: 'Manage hierarchy-aware secrets, external secret refs, and secure/plaintext storage policy controls',
+    description: 'Persistent secret storage: hierarchy-aware, external secret refs, providers (a quick one-off masked value instead: /secret)',
     usage: 'set <KEY> <value> [--user|--project] [--secure|--plaintext] | link <KEY> <secret-ref> [--user|--project] [--secure|--plaintext] | get <KEY> | test <secret-ref> | providers | list | delete <KEY> [--user|--project] [--secure|--plaintext]',
     argsHint: '<set|link|get|test|providers|list|delete> [KEY]',
     async handler(args, ctx) {

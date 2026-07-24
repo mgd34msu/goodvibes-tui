@@ -54,6 +54,14 @@ export interface ShellFooterBuildOptions {
    */
   readonly scriptableStatusLine?: string | null;
   /**
+   * The one-key retry/switch-model affordance's transient hint text (see
+   * retry-affordance.ts). Rendered as its own line ABOVE the context
+   * pressure hint while armed; present here only means "show it now" — the
+   * caller is responsible for passing null the instant it disarms, so this
+   * is a time-bounded status line, never a lingering claim.
+   */
+  readonly retryHint?: string | null;
+  /**
    * Compact footer posture for short terminals (~<30 rows). Collapses the
    * footer to its essentials (prompt box + token/cost line + help) and drops
    * the process indicator, context bar, context-info line and posture block.
@@ -172,6 +180,13 @@ export function buildShellFooter(
     if (options.contextStatusHint) {
       const hintLine = UIFactory.stringToLine(options.contextStatusHint, options.width, { fg: DIM_STATUS_FG });
       lines.unshift(hintLine);
+    }
+    // Retry affordance — topmost of the passive hint lines while armed (an
+    // actionable, time-bounded prompt outranks the passive status hints
+    // below it); simply absent the instant it disarms.
+    if (options.retryHint) {
+      const retryLine = UIFactory.stringToLine(options.retryHint, options.width, { fg: DIM_STATUS_FG, bold: true });
+      lines.unshift(retryLine);
     }
   }
   lastRenderedFooterHeight = { compact: options.compact ?? false, height: lines.length };

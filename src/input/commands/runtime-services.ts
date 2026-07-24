@@ -12,7 +12,7 @@ import type { CompactionContext, CompactionEvent } from '@pellux/goodvibes-sdk/p
 import { recordCompactionQualityScore, scoreCompactionRun } from '../../renderer/compaction-quality.ts';
 import type { CompactionQualityScore } from '../../renderer/compaction-quality.ts';
 import type { UiReadModels } from '../../runtime/ui-read-models.ts';
-import type { ShellPathService } from '@/runtime/index.ts';
+import type { ShellPathService, SessionSurface } from '@/runtime/index.ts';
 import type { EcosystemCatalogPathOptions } from '@/runtime/index.ts';
 import type { PluginPathOptions } from '../../plugins/loader';
 import type { DirectTransport } from '@/runtime/index.ts';
@@ -70,6 +70,16 @@ export function requireReadModels(context: CommandContext): UiReadModels {
 
 export function requireShellPaths(context: Pick<CommandContext, 'workspace'>): ShellPathService {
   return requireContextValue(context.workspace.shellPaths, 'workspace.shellPaths');
+}
+
+/**
+ * The runtime's declare-once session-storage handle. Commands that touch
+ * session state take their paths from here rather than rebuilding a scope out
+ * of shellPaths, so a command and the runtime that wrote the file always agree
+ * on where it lives.
+ */
+export function requireSurface(context: Pick<CommandContext, 'workspace'>): SessionSurface {
+  return requireContextValue(context.workspace.surface, 'workspace.surface');
 }
 
 export function requireEcosystemCatalogPaths(

@@ -35,7 +35,7 @@ function parseSearchArgs(args: string[]): ParsedSearchArgs {
 export function registerWebSearchRuntimeCommands(registry: CommandRegistry): void {
   registry.register({
     name: 'search',
-    description: 'Search the web and render ranked results with source labels',
+    description: 'Web search — ranked results with source labels (searching THIS transcript? use /find)',
     usage: '<query> [--limit <n>]',
     argsHint: '<query> [--limit <n>]',
     async handler(args, ctx) {

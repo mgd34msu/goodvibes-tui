@@ -1,16 +1,22 @@
-import { describe, expect, test } from 'bun:test';
-import { mkdirSync } from 'node:fs';
+import { beforeEach, describe, expect, test } from 'bun:test';
+import { resetAnsweredRecoveryOffersForTest } from '../../runtime/recovery-prompt.ts';
+import { existsSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { createShellPathService, persistConversation } from '@/runtime/index.ts';
+import { createShellPathService, persistConversation, writeRecoveryFile } from '@/runtime/index.ts';
 import { SessionManager } from '@pellux/goodvibes-sdk/platform/sessions';
 import { CommandRegistry } from '../../input/command-registry.ts';
 import { applyInitialTuiCliState } from '../../cli/tui-startup.ts';
 import { writeOnboardingCheckMarker } from '../../runtime/onboarding/index.ts';
 import { writeWizardProgress } from '../../runtime/onboarding/index.ts';
+import { ConversationManager } from '../../core/conversation.ts';
+import { bindWriteLastSessionPointerToSurface } from '../../runtime/session-pointer-surface.ts';
 import type { CommandContext } from '../../input/command-registry.ts';
 import type { InputHandler } from '../../input/handler.ts';
 import type { GoodVibesCliParseResult } from '../../cli/types.ts';
+import { makeTestSurface } from '../helpers/session-surface.ts';
+
+beforeEach(() => { resetAnsweredRecoveryOffersForTest(); });
 
 function makeShellPaths() {
   const root = join(tmpdir(), `gv-tui-startup-${Date.now()}-${Math.random().toString(16).slice(2)}`);
@@ -74,6 +80,7 @@ function runStartup(shellPaths: ReturnType<typeof makeShellPaths>): { readonly o
     commandRegistry: new CommandRegistry(),
     commandContext: {} as CommandContext,
     shellPaths,
+    surface: makeTestSurface(shellPaths.workingDirectory, shellPaths.homeDirectory),
     render: () => {},
   });
 
@@ -107,6 +114,7 @@ function runStartupWithCli(
     commandRegistry: registry,
     commandContext: {} as CommandContext,
     shellPaths,
+    surface: makeTestSurface(shellPaths.workingDirectory, shellPaths.homeDirectory),
     render: () => {},
   });
 
@@ -186,6 +194,7 @@ describe('initial TUI onboarding startup check', () => {
       commandRegistry: new CommandRegistry(),
       commandContext: {} as CommandContext,
       shellPaths,
+      surface: makeTestSurface(shellPaths.workingDirectory, shellPaths.homeDirectory),
       render: () => {},
     });
 
@@ -211,7 +220,8 @@ describe('session lifecycle flags at startup', () => {
   }
 
   function persistSession(shellPaths: ReturnType<typeof makeSessionShellPaths>, sessionId: string) {
-    const sessionManager = new SessionManager(shellPaths.workingDirectory, { surfaceRoot: 'tui' });
+    const surface = makeTestSurface(shellPaths.workingDirectory, shellPaths.homeDirectory);
+    void new SessionManager(shellPaths.workingDirectory, { surface });
     persistConversation(
       sessionId,
       {
@@ -223,7 +233,7 @@ describe('session lifecycle flags at startup', () => {
       'openai:gpt-5.2',
       'openai',
       sessionId,
-      { workingDirectory: shellPaths.workingDirectory, homeDirectory: shellPaths.homeDirectory, sessionManager, surfaceRoot: 'tui' },
+      { surface },
     );
   }
 
@@ -332,6 +342,178 @@ describe('session lifecycle flags at startup', () => {
     expect(dispatched.some((d) => d.name === 'session' && d.args[0] === 'resume' && d.args[1] === 'user-source-session')).toBe(true);
     // Then: fork is dispatched after resume resolves
     expect(dispatched.some((d) => d.name === 'session' && d.args[0] === 'fork')).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// checkRecoveryForSession pre-resume check — --continue / bare --resume must
+// never silently resume the shorter durable-store copy when the target
+// session also has a crash-recovery snapshot strictly newer than that store
+// (the autosave tail a plain resume would otherwise drop). See
+// resumeNamedSessionWithRecoveryCheck in cli/tui-startup.ts.
+// ---------------------------------------------------------------------------
+
+describe('recovery-aware --continue / bare --resume', () => {
+  function makeRecoveryShellPaths() {
+    const root = join(tmpdir(), `gv-tui-recovery-continue-${Date.now()}-${Math.random().toString(16).slice(2)}`);
+    const workspace = join(root, 'workspace');
+    const home = join(root, 'home');
+    mkdirSync(workspace, { recursive: true });
+    mkdirSync(home, { recursive: true });
+    return createShellPathService({ workingDirectory: workspace, homeDirectory: home });
+  }
+
+  /** Scripted operator: answers each modal in turn with the given item ids (null = dismissed). */
+  function scriptedOpener(answers: Array<string | null>): NonNullable<CommandContext['openSelection']> {
+    let i = 0;
+    return (_title, _items, _opts, cb) => {
+      const id = answers[i] ?? null;
+      i += 1;
+      cb(id === null ? null : { item: { id, label: id }, action: 'select' });
+    };
+  }
+
+  /** A durable store save, then (after a real gap so mtimes order correctly) a STRICTLY NEWER recovery snapshot for the same session — the exact shape a mid-turn crash leaves behind. */
+  async function persistSessionThenNewerCrash(shellPaths: ReturnType<typeof makeRecoveryShellPaths>, sessionId: string, tailMessage: string) {
+    const surface = makeTestSurface(shellPaths.workingDirectory, shellPaths.homeDirectory);
+    void new SessionManager(shellPaths.workingDirectory, { surface });
+    persistConversation(
+      sessionId,
+      { messages: [{ role: 'user', content: 'saved before the crash' }], timestamp: Date.now(), titleSource: 'user', returnContext: undefined as never },
+      'openai:gpt-5.2', 'openai', sessionId, { surface },
+    );
+    await Bun.sleep(20); // real gap so the recovery snapshot's mtime is unambiguously newer than the store's
+    writeRecoveryFile(
+      { messages: [{ role: 'user', content: 'saved before the crash' }, { role: 'assistant', content: 'working...' }, { role: 'user', content: tailMessage }], title: 'Crash tail', timestamp: Date.now() },
+      sessionId, 'Crash tail', { surface },
+    );
+    return surface;
+  }
+
+  function makeContinueRecoveryDeps(shellPaths: ReturnType<typeof makeRecoveryShellPaths>, surface: ReturnType<typeof makeTestSurface>, receipts: string[]) {
+    return {
+      sessionManager: new SessionManager(shellPaths.workingDirectory, { surface }),
+      runtime: { sessionId: 'fresh-boot-session', model: 'test-model', provider: 'test-provider' },
+      conversation: new ConversationManager(() => 80),
+      writeLastSessionPointer: bindWriteLastSessionPointerToSurface(surface),
+      receipt: (line: string) => receipts.push(line),
+    };
+  }
+
+  test('--continue with a newer recovery snapshot offers it; choosing Resume applies the snapshot instead of a plain store resume', async () => {
+    const shellPaths = makeRecoveryShellPaths();
+    const surface = await persistSessionThenNewerCrash(shellPaths, 'crash-continue-resume', 'unsaved tail message');
+    const dispatched: Array<{ name: string; args: string[] }> = [];
+    const receipts: string[] = [];
+    const recovery = makeContinueRecoveryDeps(shellPaths, surface, receipts);
+
+    const chain = applyInitialTuiCliState({
+      cli: makeCli({ flags: { ...makeCli().flags, continueLast: true } }),
+      input: { prompt: '', cursorPos: 0, openOnboardingWizard: () => {} } as unknown as InputHandler,
+      commandRegistry: { execute: async (name: string, args: string[]) => { dispatched.push({ name, args }); return true; } } as unknown as CommandRegistry,
+      commandContext: { openSelection: scriptedOpener(['resume']) } as unknown as CommandContext,
+      shellPaths,
+      surface,
+      render: () => {},
+      continueRecovery: recovery,
+    });
+
+    await chain;
+
+    // No plain store resume dispatched — the snapshot itself was applied.
+    expect(dispatched.some((d) => d.name === 'session' && d.args[0] === 'resume')).toBe(false);
+    // The snapshot's 3 messages (including the unsaved tail) landed in the live conversation.
+    expect(recovery.conversation.getMessageCount()).toBe(3);
+    // The runtime adopted the recovered session id.
+    expect(recovery.runtime.sessionId).toBe('crash-continue-resume');
+    expect(receipts.some((r) => r.includes('crash-continue-resume'))).toBe(true);
+    // Load-then-delete: the recovery point is retired once resumed.
+    expect(existsSync(surface.recoveryFile('crash-continue-resume'))).toBe(false);
+  });
+
+  test('--continue with a newer recovery snapshot: "Not now" falls through to the plain store resume (after the established Keep/Remove question)', async () => {
+    const shellPaths = makeRecoveryShellPaths();
+    const surface = await persistSessionThenNewerCrash(shellPaths, 'crash-continue-decline', 'unsaved tail message 2');
+    const dispatched: Array<{ name: string; args: string[] }> = [];
+    const receipts: string[] = [];
+    const recovery = makeContinueRecoveryDeps(shellPaths, surface, receipts);
+
+    const chain = applyInitialTuiCliState({
+      cli: makeCli({ flags: { ...makeCli().flags, continueLast: true } }),
+      input: { prompt: '', cursorPos: 0, openOnboardingWizard: () => {} } as unknown as InputHandler,
+      commandRegistry: { execute: async (name: string, args: string[]) => { dispatched.push({ name, args }); return true; } } as unknown as CommandRegistry,
+      commandContext: { openSelection: scriptedOpener(['not-now', 'keep']) } as unknown as CommandContext,
+      shellPaths,
+      surface,
+      render: () => {},
+      continueRecovery: recovery,
+    });
+
+    await chain;
+
+    // The plain store resume proceeds after the decline.
+    expect(dispatched.some((d) => d.name === 'session' && d.args[0] === 'resume' && d.args[1] === 'crash-continue-decline')).toBe(true);
+    // Nothing was applied to the live conversation from the snapshot.
+    expect(recovery.conversation.getMessageCount()).toBe(0);
+    expect(recovery.runtime.sessionId).toBe('fresh-boot-session');
+    // Kept: the snapshot survives on disk, to be offered again next launch.
+    expect(existsSync(surface.recoveryFile('crash-continue-decline'))).toBe(true);
+  });
+
+  test('--continue with continueRecovery wired but no live snapshot resumes straight from the store — no modal is ever opened', async () => {
+    const shellPaths = makeRecoveryShellPaths();
+    const surface = makeTestSurface(shellPaths.workingDirectory, shellPaths.homeDirectory);
+    void new SessionManager(shellPaths.workingDirectory, { surface });
+    persistConversation(
+      'crash-continue-none',
+      { messages: [{ role: 'user', content: 'test' }], timestamp: Date.now(), titleSource: 'user', returnContext: undefined as never },
+      'openai:gpt-5.2', 'openai', 'crash-continue-none', { surface },
+    );
+    const dispatched: Array<{ name: string; args: string[] }> = [];
+    const receipts: string[] = [];
+    let openSelectionCalls = 0;
+    const recovery = makeContinueRecoveryDeps(shellPaths, surface, receipts);
+
+    const chain = applyInitialTuiCliState({
+      cli: makeCli({ flags: { ...makeCli().flags, continueLast: true } }),
+      input: { prompt: '', cursorPos: 0, openOnboardingWizard: () => {} } as unknown as InputHandler,
+      commandRegistry: { execute: async (name: string, args: string[]) => { dispatched.push({ name, args }); return true; } } as unknown as CommandRegistry,
+      commandContext: { openSelection: () => { openSelectionCalls += 1; } } as unknown as CommandContext,
+      shellPaths,
+      surface,
+      render: () => {},
+      continueRecovery: recovery,
+    });
+
+    await chain;
+
+    expect(dispatched.some((d) => d.name === 'session' && d.args[0] === 'resume' && d.args[1] === 'crash-continue-none')).toBe(true);
+    expect(openSelectionCalls).toBe(0);
+  });
+
+  test('bare --resume (pointer form) with a newer recovery snapshot: choosing Resume applies the snapshot, same as --continue', async () => {
+    const shellPaths = makeRecoveryShellPaths();
+    const surface = await persistSessionThenNewerCrash(shellPaths, 'crash-bare-resume', 'unsaved tail message 3');
+    const dispatched: Array<{ name: string; args: string[] }> = [];
+    const receipts: string[] = [];
+    const recovery = makeContinueRecoveryDeps(shellPaths, surface, receipts);
+
+    const chain = applyInitialTuiCliState({
+      cli: makeCli({ flags: { ...makeCli().flags, resume: 'latest' } }),
+      input: { prompt: '', cursorPos: 0, openOnboardingWizard: () => {} } as unknown as InputHandler,
+      commandRegistry: { execute: async (name: string, args: string[]) => { dispatched.push({ name, args }); return true; } } as unknown as CommandRegistry,
+      commandContext: { openSelection: scriptedOpener(['resume']) } as unknown as CommandContext,
+      shellPaths,
+      surface,
+      render: () => {},
+      continueRecovery: recovery,
+    });
+
+    await chain;
+
+    expect(dispatched.some((d) => d.name === 'session' && d.args[0] === 'resume')).toBe(false);
+    expect(recovery.conversation.getMessageCount()).toBe(3);
+    expect(recovery.runtime.sessionId).toBe('crash-bare-resume');
   });
 });
 

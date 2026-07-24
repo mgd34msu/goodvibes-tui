@@ -21,6 +21,7 @@
  */
 
 import type { ConversationMessageSnapshot } from '@pellux/goodvibes-sdk/platform/core';
+import { renderExpandedToolResultLines } from '../renderer/tool-result-expanded-lines.ts';
 
 type Message = ConversationMessageSnapshot;
 
@@ -44,10 +45,15 @@ export interface ToolGroupMembership {
   readonly isFirst: boolean;
   /** Matched tool-result messages in the group (the header's "N tools"). */
   readonly toolCount: number;
-  /** Sum of each member's raw content line count (the header's "N lines") —
-   *  the same count each member already shows on its own "N lines" badge, so
-   *  the group total is honest by construction, not an estimate. */
+  /** Sum of each member's EXPANDED render line count (the header's "N lines") —
+   *  the same post-render count each member's own "N lines" badge shows, so
+   *  the group total matches what expanding every member actually reveals,
+   *  not a raw-content estimate (a folded JSON result can pretty-print to far
+   *  more lines than its raw content has). */
   readonly totalLines: number;
+  /** Each member's tool name, in order (falls back to 'tool' when a result
+   *  carries no name) — the header dedupes these into e.g. "read×3 exec". */
+  readonly toolNames: readonly string[];
   /**
    * Absolute indexes of every tool-result message in the group, in order —
    * the same list for every member. Carried onto the group's BlockMeta so a
@@ -56,10 +62,6 @@ export interface ToolGroupMembership {
    * toggle individually (see local-runtime.ts's toggleBlocks).
    */
   readonly memberIndexes: readonly number[];
-}
-
-function rawLineCount(content: string): number {
-  return content.split('\n').length;
 }
 
 /**
@@ -103,19 +105,28 @@ export function detectToolGroups(
   return groups;
 }
 
-/** Build the per-tool-message membership lookup used by the renderer/cache. */
+/** Build the per-tool-message membership lookup used by the renderer/cache.
+ *  `width` must match the width the transcript is actually rendered at — it
+ *  feeds the same expanded-render line count each member's own badge uses
+ *  (see renderExpandedToolResultLines), so the group total is never computed
+ *  against a different width than what the member badges show. */
 export function buildToolGroupMembership(
   groups: readonly ToolGroup[],
   messages: readonly Message[],
   indexOffset: number,
+  width: number,
 ): ReadonlyMap<number, ToolGroupMembership> {
   const membership = new Map<number, ToolGroupMembership>();
   for (const group of groups) {
     const groupKey = `group_${group.assistantIdx}`;
     let totalLines = 0;
+    const toolNames: string[] = [];
     for (const absIdx of group.toolMessageIndexes) {
       const message = messages[absIdx - indexOffset];
-      if (message && message.role === 'tool') totalLines += rawLineCount(message.content);
+      if (message && message.role === 'tool') {
+        totalLines += renderExpandedToolResultLines(message.content, width).length;
+        toolNames.push(message.toolName ?? 'tool');
+      }
     }
     group.toolMessageIndexes.forEach((absIdx, idx) => {
       membership.set(absIdx, {
@@ -123,6 +134,7 @@ export function buildToolGroupMembership(
         isFirst: idx === 0,
         toolCount: group.toolMessageIndexes.length,
         totalLines,
+        toolNames,
         memberIndexes: group.toolMessageIndexes,
       });
     });
@@ -134,6 +146,7 @@ export function buildToolGroupMembership(
 export function computeToolGroupMembership(
   messages: readonly Message[],
   indexOffset = 0,
+  width = 80,
 ): ReadonlyMap<number, ToolGroupMembership> {
-  return buildToolGroupMembership(detectToolGroups(messages, indexOffset), messages, indexOffset);
+  return buildToolGroupMembership(detectToolGroups(messages, indexOffset), messages, indexOffset, width);
 }

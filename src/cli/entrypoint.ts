@@ -104,7 +104,11 @@ export async function prepareShellCliRuntime(
     homeDirectory: bootstrapHomeDirectory,
   } = resolveShellEntrypointOwnership(roots, cli.flags.workingDir ?? (cli.command === 'tui' ? cli.commandArgs[0] : undefined));
   configureActivityLogger(join(bootstrapWorkingDir, '.goodvibes', 'logs'));
-  ensureGoodvibesGitignore(bootstrapWorkingDir);
+  // Only prints the first time the rule is actually appended (not on every
+  // launch) — see ensureGoodvibesGitignore's return-value doc.
+  if (ensureGoodvibesGitignore(bootstrapWorkingDir)) {
+    console.log("[goodvibes] added '.goodvibes/' to .gitignore — this directory holds transient TUI state (logs, session cache, exec output), not project source.");
+  }
   const configManager = new ConfigManager({
     workingDir: bootstrapWorkingDir,
     homeDir: bootstrapHomeDirectory,

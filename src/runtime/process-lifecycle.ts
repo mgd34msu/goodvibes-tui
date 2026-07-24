@@ -18,14 +18,37 @@
  * are assigned later and read at exit time (injected as getters/setter). The
  * `unsubs` registry is shared by reference and drained on exit.
  */
+import { existsSync } from 'node:fs';
 import { logger, summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 import { createTerminalLifecycle, TERMINAL_ESCAPES } from '@pellux/goodvibes-terminal-shell';
 import { formatUserFacingErrorLine } from '../core/format-user-error.ts';
 import { allowTerminalWrite } from './terminal-output-guard.ts';
 import { buildPersistedSessionContext, deleteRecoveryFile } from '@/runtime/index.ts';
+import type { SessionSurface } from '@/runtime/index.ts';
+import { removeLivenessMarker } from './session-liveness-marker.ts';
 import type { BootstrapContext } from './bootstrap.ts';
 import type { InputHandler } from '../input/handler.ts';
 import type { ConversationMessageSnapshot } from '../core/conversation.ts';
+
+/** Shutdown grace period before the "saving session…" line prints. Below this, exit stays quiet. */
+const SAVE_NOTICE_AFTER_MS = 300;
+/** Hard shutdown timeout — matches the pre-existing race below (was previously an inline literal). */
+const SHUTDOWN_HARD_TIMEOUT_MS = 3000;
+
+/**
+ * Whether a recovery snapshot actually exists on disk for this session. The
+ * periodic autosave (see recovery-autosave.ts) only writes on a 60s tick and
+ * skips empty conversations entirely, so a session that dies sooner than that
+ * (or never had anything in it) has no snapshot at all — the exit receipt
+ * must not claim otherwise. Never throws: a stat failure just means "absent".
+ */
+function defaultRecoverySnapshotExists(surface: SessionSurface, sessionId: string): boolean {
+  try {
+    return existsSync(surface.recoveryFile(sessionId));
+  } catch {
+    return false;
+  }
+}
 
 /** ANSI escape sequences used by the synchronous terminal restore. */
 export interface ProcessLifecycleAnsi {
@@ -59,6 +82,16 @@ export interface ProcessLifecycleDeps {
   readonly getRecoveryInterval: () => ReturnType<typeof setInterval> | null;
   readonly setRecoveryInterval: (value: ReturnType<typeof setInterval> | null) => void;
   readonly getStopSpokenOutputForExit: () => (() => void | Promise<void>) | null;
+  /** Overridable for tests; defaults to SAVE_NOTICE_AFTER_MS (300ms). */
+  readonly saveNoticeAfterMs?: number;
+  /** Overridable for tests; defaults to SHUTDOWN_HARD_TIMEOUT_MS (3000ms). */
+  readonly shutdownHardTimeoutMs?: number;
+  /**
+   * Overridable for tests; defaults to a real filesystem existence check
+   * (defaultRecoverySnapshotExists). Never throws — a stat failure reads as
+   * "absent" rather than taking the exit path down.
+   */
+  readonly recoverySnapshotExists?: (surface: SessionSurface, sessionId: string) => boolean;
 }
 
 export interface ProcessLifecycleHandlers {
@@ -95,6 +128,9 @@ export function installProcessLifecycle(deps: ProcessLifecycleDeps): ProcessLife
     getRecoveryInterval,
     setRecoveryInterval,
     getStopSpokenOutputForExit,
+    saveNoticeAfterMs = SAVE_NOTICE_AFTER_MS,
+    shutdownHardTimeoutMs = SHUTDOWN_HARD_TIMEOUT_MS,
+    recoverySnapshotExists = defaultRecoverySnapshotExists,
   } = deps;
 
   const sigintHandler = (): void => getInput().feed('\x03');
@@ -202,6 +238,12 @@ export function installProcessLifecycle(deps: ProcessLifecycleDeps): ProcessLife
     restoreTerminal();
     const snapshot = ctx.conversation.toJSON() as { messages: Array<ConversationMessageSnapshot>; timestamp?: number };
     let shutdownOk = false;
+    // Quiet exit stays quiet: only speak up if the save is taking a moment.
+    // The terminal is already restored above, so a plain stdout line lands on
+    // the shell prompt exactly like any other command's output would.
+    const saveNoticeTimer = setTimeout(() => {
+      try { stdout.write('saving session…\n'); } catch { /* best-effort */ }
+    }, saveNoticeAfterMs);
     try {
       // Race the graceful shutdown against a hard timeout — externalServices.stop() can hang
       // and we must still exit; deferredStartup.drain only budgets 100ms internally.
@@ -211,19 +253,38 @@ export function installProcessLifecycle(deps: ProcessLifecycleDeps): ProcessLife
         spokenOutputDrain,
         Promise.race([
           ctx.shutdown({ ...snapshot, ...buildPersistedSessionContext(snapshot.messages, ctx.conversation.getTitleSource(), buildSessionContinuityHints()) }).then(() => { shutdownOk = true; }),
-          new Promise<void>((resolve) => setTimeout(resolve, 3000)),
+          new Promise<void>((resolve) => setTimeout(resolve, shutdownHardTimeoutMs)),
         ]),
       ]);
     } catch (err) {
       logger.debug('ctx.shutdown error during exitApp (non-fatal)', { error: summarizeError(err) });
     }
+    clearTimeout(saveNoticeTimer);
     // Only remove the recovery fallback once the durable shutdown save actually completed,
     // so an interrupted or timed-out shutdown leaves the snapshot for the next launch.
     // Scoped to THIS session's id: without it, one session's clean exit wipes
     // every session's crash snapshot (the concurrent-session isolation bug).
     if (shutdownOk) {
-      deleteRecoveryFile({ homeDirectory: ctx.services.homeDirectory }, ctx.runtime.sessionId);
+      deleteRecoveryFile({ surface: ctx.services.surface }, ctx.runtime.sessionId);
+    } else {
+      // The hard timeout won the race — the durable save never confirmed, so
+      // whatever the periodic autosave last wrote (see recovery-autosave.ts)
+      // is deliberately kept above. But that autosave only ticks every 60s
+      // and skips empty conversations, so a session that dies sooner than
+      // that (or never had anything in it) has no snapshot to keep — check
+      // before claiming otherwise, since a silent exit here previously left
+      // no trace that anything was amiss.
+      const kept = recoverySnapshotExists(ctx.services.surface, ctx.runtime.sessionId);
+      const line = kept
+        ? 'exit before save completed — a recovery snapshot was kept for next launch\n'
+        : 'exit before save completed — no recovery snapshot had been written yet\n';
+      try { stdout.write(line); } catch { /* best-effort */ }
     }
+    // Best-effort, unconditional: this process is exiting either way, so its
+    // multi-instance liveness marker (see session-liveness-marker.ts) should
+    // stop claiming the session is live regardless of whether the durable
+    // save itself completed in time.
+    removeLivenessMarker(ctx.services.surface, ctx.runtime.sessionId);
     process.exit(0);
   };
 

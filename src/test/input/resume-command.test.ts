@@ -70,6 +70,36 @@ describe('/resume', () => {
     expect(call.items[0]!.detail).toContain('openai:gpt-5.5');
   });
 
+  test('subagent transcripts (agent-* names) are excluded from the picker — a mixed fixture of user + agent sessions', async () => {
+    const { ctx, pickerCalls } = makeCtx({
+      sessions: [
+        { name: 'user-2cf82b10', title: 'real work', timestamp: 5, messageCount: 4 },
+        { name: 'agent-f56ac81c', title: 'subagent transcript', timestamp: 4, messageCount: 30 },
+        { name: 'agent-972d20f3', title: 'another subagent transcript', timestamp: 3, messageCount: 12 },
+        { name: 'fork-of-abcdef01', title: 'a fork (not agent-prefixed)', timestamp: 2, messageCount: 6 },
+      ],
+    });
+    await resumeCommand.handler([], ctx);
+
+    expect(pickerCalls).toHaveLength(1);
+    const ids = pickerCalls[0]!.items.map((i) => i.id);
+    expect(ids).toEqual(['user-2cf82b10', 'fork-of-abcdef01']);
+    expect(ids).not.toContain('agent-f56ac81c');
+    expect(ids).not.toContain('agent-972d20f3');
+  });
+
+  test('all sessions being agent-shaped reports the honest empty message, not an empty picker', async () => {
+    const { ctx, printed, pickerCalls } = makeCtx({
+      sessions: [
+        { name: 'agent-aaaaaaaa', title: 'x', timestamp: 2, messageCount: 1 },
+        { name: 'agent-bbbbbbbb', title: 'y', timestamp: 1, messageCount: 1 },
+      ],
+    });
+    await resumeCommand.handler([], ctx);
+    expect(pickerCalls).toHaveLength(0);
+    expect(printed.join('\n')).toContain('No previous sessions to resume');
+  });
+
   test('no saved sessions prints an honest empty message instead of an empty picker', async () => {
     const { ctx, printed, pickerCalls } = makeCtx({ sessions: [] });
     await resumeCommand.handler([], ctx);

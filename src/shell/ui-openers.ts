@@ -369,6 +369,15 @@ export function wireShellUiOpeners(options: WireShellUiOpenersOptions): void {
     render();
   };
 
+  // Mirrors the Ctrl+F chord's own toggle exactly (handler-shortcuts.ts's
+  // 'search' case) — the transcript search overlay isn't tracked on the
+  // modal stack, so this doesn't call modalOpened either.
+  commandContext.openTranscriptSearch = () => {
+    if (input.searchManager.active) input.searchManager.close();
+    else input.searchManager.open();
+    render();
+  };
+
   commandContext.openShortcutsOverlay = () => {
     if (!input.shortcutsOverlayActive) input.modalOpened('shortcuts');
     input.shortcutsOverlayActive = !input.shortcutsOverlayActive;

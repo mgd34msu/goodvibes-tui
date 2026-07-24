@@ -16,6 +16,7 @@ import { renderSessionPickerModal } from './session-picker-modal.ts';
 import { renderProfilePickerModal } from './profile-picker-modal.ts';
 import { renderBookmarkModal } from './bookmark-modal.ts';
 import { renderHelpOverlay, renderShortcutsOverlay } from './help-overlay.ts';
+import { renderBlockActionsMenu } from './block-actions-overlay.ts';
 import { renderAutocompleteOverlay } from './autocomplete-overlay.ts';
 import { renderOnboardingWizard } from './onboarding/onboarding-wizard.ts';
 import { overlayViewportBottom, replaceViewportWithOverlay } from './conversation-layout.ts';
@@ -115,6 +116,11 @@ export function applyConversationOverlays(
 
   if (!fullscreenClaimed && input.bookmarkModal.active) {
     const lines = renderBookmarkModal(input.bookmarkModal, conversationWidth, viewportHeight);
+    next = overlayViewportBottom(next, lines, conversationWidth, viewportHeight, bottomDockInset);
+  }
+
+  if (!fullscreenClaimed && input.blockActionsMenu.active) {
+    const lines = renderBlockActionsMenu(input.blockActionsMenu, conversationWidth, viewportHeight);
     next = overlayViewportBottom(next, lines, conversationWidth, viewportHeight, bottomDockInset);
   }
 

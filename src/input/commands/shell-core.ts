@@ -71,7 +71,20 @@ export function registerShellCoreCommands(registry: CommandRegistry): void {
         ctx.openShortcutsOverlay();
         return;
       }
-      ctx.print('Use ? key or /help for shortcuts');
+      ctx.print('Use /commands for shortcuts');
+    },
+  });
+
+  registry.register({
+    name: 'find',
+    aliases: ['findtext'],
+    description: 'Search THIS conversation transcript (same as Ctrl+F) — searching the web instead? use /search',
+    handler(_args, ctx) {
+      if (ctx.openTranscriptSearch) {
+        ctx.openTranscriptSearch();
+        return;
+      }
+      ctx.print('Transcript search is not available in this context — try Ctrl+F.');
     },
   });
 
@@ -81,10 +94,18 @@ export function registerShellCoreCommands(registry: CommandRegistry): void {
     description: 'List current keyboard bindings and their config file path',
     handler(_args, ctx) {
       const km = requireKeybindingsManager(ctx);
+      // The full binding table (~45 rows) is presented via the same
+      // generated, scrollable overlay /shortcuts opens (see
+      // renderShortcutsOverlay) rather than a one-shot transcript dump —
+      // the file path (dynamic, per-user) still gets a short transcript
+      // line since the overlay itself doesn't show it.
+      ctx.print(`Keybindings config: ${km.getConfigPath()}  (create it to override any binding: { "action": { "key": "x", "ctrl": true } })`);
+      if (ctx.openShortcutsOverlay) {
+        ctx.openShortcutsOverlay();
+        return;
+      }
       const all = km.getAll();
       const lines: string[] = [
-        `Keybindings config: ${km.getConfigPath()}`,
-        '',
         `  ${'Action'.padEnd(28)}  ${'Binding'.padEnd(20)}  Description`,
         `  ${'─'.repeat(28)}  ${'─'.repeat(20)}  ${'─'.repeat(34)}`,
       ];
@@ -92,8 +113,6 @@ export function registerShellCoreCommands(registry: CommandRegistry): void {
         const label = combos.map((combo) => km.formatCombo(combo)).join(', ');
         lines.push(`  ${action.padEnd(28)}  ${label.padEnd(20)}  ${description}`);
       }
-      lines.push('');
-      lines.push('To customize: create the config file with { "action": { "key": "x", "ctrl": true } }');
       ctx.print(lines.join('\n'));
     },
   });
@@ -111,6 +130,39 @@ export function registerShellCoreCommands(registry: CommandRegistry): void {
       if (!result.pasted) {
         ctx.print('Clipboard does not contain supported text or image data.');
       }
+    },
+  });
+
+  registry.register({
+    name: 'pastes',
+    aliases: ['pending-pastes'],
+    description: 'Preview the actual content behind each [TEXT: pN, M lines] fold in the composer, before you submit',
+    usage: '[pN]',
+    argsHint: '[pN]',
+    handler(args, ctx) {
+      const pending = ctx.getPendingPastes?.();
+      if (!pending || pending.size === 0) {
+        ctx.print('[Pastes] No folded pastes are currently in the composer (pastes over 8 lines fold to [TEXT: pN, M lines]).');
+        return;
+      }
+      const requestedId = args[0]?.trim();
+      if (requestedId) {
+        const content = pending.get(requestedId);
+        if (!content) {
+          ctx.print(`[Pastes] No pending paste with id "${requestedId}". Pending: ${[...pending.keys()].join(', ')}`);
+          return;
+        }
+        ctx.print(`[Pastes] ${requestedId} (${content.split('\n').length} lines):\n${content}`);
+        return;
+      }
+      const lines = ['[Pastes] Folded in the composer right now:'];
+      for (const [id, content] of pending) {
+        const contentLines = content.split('\n');
+        const preview = contentLines[0].slice(0, 80);
+        lines.push(`  ${id} — ${contentLines.length} lines — ${preview}${contentLines.length > 1 || preview.length < contentLines[0].length ? '…' : ''}`);
+      }
+      lines.push('', 'Full text: /pastes <id>');
+      ctx.print(lines.join('\n'));
     },
   });
 

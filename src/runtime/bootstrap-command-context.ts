@@ -30,7 +30,7 @@ import type { HookWorkbench } from '@pellux/goodvibes-sdk/platform/hooks';
 import type { WorktreeRegistry } from '@/runtime/index.ts';
 import type { SandboxSessionRegistry } from '@/runtime/index.ts';
 import type { UiReadModels } from './ui-read-models.ts';
-import type { ShellPathService } from '@/runtime/index.ts';
+import type { ShellPathService, SessionSurface } from '@/runtime/index.ts';
 import type {
   ShellAgentManagerService,
   ShellAutomationManagerRuntimeService,
@@ -76,6 +76,8 @@ export type CreateBootstrapCommandContextOptions = {
   policyRuntimeState: PolicyRuntimeState;
   readModels: UiReadModels;
   shellPaths: ShellPathService;
+  /** The runtime's declare-once session-storage handle (runtime/services.ts). */
+  surface: SessionSurface;
   remoteRuntime?: RemoteCommandService;
   planRuntime?: PlanRuntimeService;
   fileUndoManager: FileUndoManager;
@@ -163,6 +165,7 @@ export function createBootstrapCommandContext(
     policyRuntimeState,
     readModels,
     shellPaths,
+    surface,
     remoteRuntime,
     planRuntime,
     fileUndoManager,
@@ -277,6 +280,7 @@ export function createBootstrapCommandContext(
     benchmarkStore,
   });
   const workspace = createBootstrapCommandWorkspaceSection({
+    surface,
     keybindingsManager,
     fileUndoManager,
     workspaceCheckpointManager,

@@ -84,17 +84,55 @@ bun install
 
 ## Configure a model provider
 
+API keys resolve from environment variables first, then from the GoodVibes
+secret store. The local store can hold encrypted values directly or
+provider-backed secret references for Bitwarden, Vaultwarden, Bitwarden
+Secrets Manager, 1Password, files, and command-backed resolvers.
+
 The fastest path is an environment variable:
 
 ```sh
 export OPENAI_API_KEY=...
 ```
 
-GoodVibes also supports:
+| Provider | Primary Env Var | Accepted Aliases | Type |
+|----------|----------------|-----------------|------|
+| Anthropic | `ANTHROPIC_API_KEY` | `CLAUDE_API_KEY` | Paid |
+| OpenAI | `OPENAI_API_KEY` | `OPENAI_KEY` | Paid |
+| Google Gemini | `GEMINI_API_KEY` | `GOOGLE_API_KEY`, `GOOGLE_GEMINI_API_KEY` | Paid |
+| InceptionLabs | `INCEPTION_API_KEY` | — | Paid |
+| Mistral | `MISTRAL_API_KEY` | — | Paid |
+| OpenRouter | `OPENROUTER_API_KEY` | — | Free tier available |
+| Groq | `GROQ_API_KEY` | — | Free (LPU inference) |
+| Cerebras | `CEREBRAS_API_KEY` | — | Free (wafer-scale inference) |
+| AIHubMix | `AIHUBMIX_API_KEY` | — | Free tier (rate-limited) |
+| HuggingFace | `HF_API_KEY` | `HUGGINGFACE_API_KEY`, `HF_TOKEN` | Free tier (rate-limited) |
+| Ollama Cloud | `OLLAMA_CLOUD_API_KEY` | `OLLAMA_API_KEY` | Free |
+| NVIDIA NIM | `NVIDIA_API_KEY` | — | 1000 free credits |
+| LLM7 | `LLM7_API_KEY` | — | Free |
 
-- encrypted local secrets via `/secrets`
-- provider-backed secret references for Bitwarden, Vaultwarden, Bitwarden Secrets Manager, and 1Password
-- file-backed and command-backed secret resolvers
+Additional built-in integrations resolve from the same env/secrets path:
+
+- LLM/gateway providers: `AWS_BEARER_TOKEN_BEDROCK`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `GOOGLE_APPLICATION_CREDENTIALS`, `ANTHROPIC_VERTEX_PROJECT_ID`, `GOOGLE_CLOUD_PROJECT`, `COPILOT_GITHUB_TOKEN`, `GH_TOKEN`, `GITHUB_TOKEN`, `DEEPSEEK_API_KEY`, `FIREWORKS_API_KEY`, `AZURE_OPENAI_API_KEY`, `MINIMAX_API_KEY`, `MOONSHOT_API_KEY`, `QIANFAN_API_KEY`, `QWEN_API_KEY`, `DASHSCOPE_API_KEY`, `MODELSTUDIO_API_KEY`, `SGLANG_API_KEY`, `STEPFUN_API_KEY`, `TOGETHER_API_KEY`, `VENICE_API_KEY`, `VOLCANO_ENGINE_API_KEY`, `XAI_API_KEY`, `XIAOMI_API_KEY`, `ZAI_API_KEY`, `CLOUDFLARE_AI_GATEWAY_API_KEY`, `AI_GATEWAY_API_KEY`, `LITELLM_API_KEY`, `COPILOT_PROXY_API_KEY`
+- Search and media: `PERPLEXITY_API_KEY`, `DEEPGRAM_API_KEY`, `ELEVENLABS_API_KEY`, `XI_API_KEY`, `VYDRA_API_KEY`, `BYTEPLUS_API_KEY`, `FAL_KEY`, `FAL_API_KEY`, `COMFY_API_KEY`, `RUNWAYML_API_SECRET`, `RUNWAY_API_KEY`
+
+Alternatively, store keys encrypted using the `/secrets` command:
+
+```sh
+/secrets set OPENAI_API_KEY sk-...
+```
+
+For self-hosted or external secret managers, link a GoodVibes key to a
+provider-backed secret reference:
+
+```sh
+/secrets link OPENAI_API_KEY goodvibes://secrets/bitwarden?item=GoodVibes%20OpenAI&field=password&sessionEnv=BW_SESSION
+/secrets link SLACK_BOT_TOKEN goodvibes://secrets/vaultwarden?item=GoodVibes%20Slack&field=password&server=https%3A%2F%2Fvault.example.test
+/secrets link STRIPE_TOKEN goodvibes://secrets/bws/00000000-0000-0000-0000-000000000000?field=value&accessTokenEnv=BWS_ACCESS_TOKEN
+/secrets link OPENAI_API_KEY goodvibes://secrets/1password?vault=Private&item=GoodVibes%20OpenAI&field=API%20Key
+```
+
+Use `/secrets providers` for supported provider shapes and `/secrets test <secret-ref>` to validate a ref without printing its value.
 
 Environment variables take precedence over stored secrets when both are present.
 
@@ -123,7 +161,46 @@ bun run build
 
 `bun run build` compiles `src/main.ts` into `dist/goodvibes`. The compiled binary runs the TUI and can also host the daemon and HTTP listener in-process when those services are enabled in config.
 
+## Launch and resume
+
+Opening the TUI in a workspace starts a fresh session. Previous work is reached
+deliberately: `--continue` reopens the most recently active session for the
+working directory, `--resume [id]` reopens a named one, and `--fork [id]`
+branches from one — see [CLI session lifecycle flags](tools-and-commands.md#cli-session-lifecycle-flags).
+After the splash, a short notice summarizes the resumable state that actually
+exists on disk (saved sessions, workspace checkpoints, chain history) and names
+the command that reaches each one.
+
+### The startup recovery modal
+
+If a session crashed before saving, its periodic snapshot survives on disk. At
+the next launch, right after the first frame is drawn, the TUI asks about it
+instead of leaving a sentence for you to act on. Nothing loads unless you choose
+Resume.
+
+The ask is two steps:
+
+1. **Recovery snapshot found** — `Resume it` loads the snapshot into the current
+   session and retires the recovery point once the load succeeds; `Not now`
+   starts fresh. The row detail names the facts actually known about the
+   snapshot: session id, age, the title when it carries one, and the file size
+   when it can be read.
+2. **Remove recovery point?** — asked only after you decline. `Keep it` is first
+   and preselected: the snapshot stays on disk and is offered again the next
+   time the workspace opens. `Remove it` deletes it, and the conversation it
+   holds cannot be recovered afterwards.
+
+Escape is not an answer. Dismissing either modal leaves the snapshot exactly
+where it is — only `Remove it` deletes anything, and a failed load leaves the
+file in place to be offered again next launch. A snapshot whose session still
+has a live process marker is never offered at all: another terminal is
+refreshing it, so it is that instance's live state rather than an orphaned
+crash. Keeping (or dismissing) stays quiet for the rest of the run.
+
 ## Common paths
+
+Project runtime data — sessions, hooks, MCP config, artifacts, and local state
+— lives under `.goodvibes/` in the working directory.
 
 - global settings: `~/.goodvibes/tui/settings.json`
 - project settings: `.goodvibes/tui/settings.json`
@@ -135,6 +212,10 @@ bun run build
 - custom providers: `~/.goodvibes/tui/providers/*.json`
 - schedules: `.goodvibes/tui/schedules.json`
 - REPL history: `.goodvibes/tui/repl-history.json`
+- keybindings: `~/.goodvibes/tui/keybindings.json`
+- agent archetypes: `.goodvibes/agents/*.md`
+- MCP server config: `.goodvibes/mcp.json`
+- hook config: `.goodvibes/hooks.json` (or the file named by `tools.hooksFile`)
 
 ## First things to open in the product
 

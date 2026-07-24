@@ -71,7 +71,10 @@ describe('BlockActionsMenu', () => {
     expect(ids).toContain('copy');
     expect(ids).toContain('bookmark');
     expect(ids).toContain('toggle');
-    expect(ids).toContain('rerun');
+    // 'rerun' was a dead action — always listed but never actually did
+    // anything (handleBlockRerun only called requestRender()). Removed
+    // rather than kept as a lie.
+    expect(ids).not.toContain('rerun');
     expect(ids).not.toContain('apply');
   });
 
@@ -94,12 +97,12 @@ describe('BlockActionsMenu', () => {
     expect(ids).not.toContain('rerun');
   });
 
-  test('getActionForKey returns correct action', () => {
+  test('getActionForKey returns correct action, and no key resolves to the removed rerun action', () => {
     const menu = new BlockActionsMenu();
     menu.open({ blockIndex: 0, type: 'tool', startLine: 0, lineCount: 5, rawContent: 'result', collapseKey: 'k0' });
     expect(menu.getActionForKey('c')?.id).toBe('copy');
     expect(menu.getActionForKey('b')?.id).toBe('bookmark');
-    expect(menu.getActionForKey('r')?.id).toBe('rerun');
+    expect(menu.getActionForKey('r')).toBeNull();
     expect(menu.getActionForKey('x')).toBeNull();
   });
 

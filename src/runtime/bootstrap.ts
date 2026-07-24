@@ -25,11 +25,12 @@ import type { Compositor } from '../renderer/compositor.ts';
 import type { RuntimeContext, BootstrapOptions } from './context.ts';
 import type { SystemMessageRouter } from '../core/system-message-router.ts';
 import {
-  shutdownRuntime, fireSessionStart, saveSession, createTaskManager, OpsControlPlane, AcpTaskAdapter,
-  emitSessionReady, emitSessionStarted, loadLastConversation, writeLastSessionPointer,
+  shutdownRuntime, fireSessionStart, createTaskManager, OpsControlPlane, AcpTaskAdapter,
+  emitSessionReady, emitSessionStarted, loadLastConversation,
   scheduleBackgroundMcpDiscovery, startBackgroundProviderRegistration, restoreSavedModel, startExternalServices,
   type ExternalServicesHandle, type HostServiceStatus, createHttpTransport, createDeferredStartupCoordinator,
 } from '@/runtime/index.ts';
+import { bindWriteLastSessionPointerToSurface } from './session-pointer-surface.ts';
 import { foldLegacySpineStore, deriveSpineFooterStatus } from '@pellux/goodvibes-sdk/platform/runtime/session-spine';
 import { createTuiSpineTransport, type SpineSessionsClient } from './session-spine-transport.ts';
 import { syncMemorySpineToHostStatus, type MemorySpineActiveRef } from './memory-spine-transport.ts';
@@ -103,8 +104,6 @@ export type BootstrapContext = RuntimeContext & {
   loadLastConversation: () => { messages: Array<Record<string, unknown>> } | null;
   /** Write the last-session pointer file (used after session resume). */
   _writeLastSessionPointer: (sessionId: string) => void;
-  /** Save a conversation snapshot to disk. */
-  _saveSession: typeof saveSession;
   /** Retrieve pinned model IDs for the model picker. */
   _getPinned: () => Promise<string[]>;
   /** Retrieve configured provider IDs for the model picker. */
@@ -272,6 +271,12 @@ export async function bootstrapRuntime(
     ? new OpsControlPlane(opsTaskManager, runtimeBus, store, userSessionId)
     : undefined;
 
+  // One surface-bound pointer writer, shared by the resume seam below and the
+  // context's `_writeLastSessionPointer`. Both slots want a one-argument
+  // function; handing them the SDK's two-argument export directly is what
+  // silently stopped the pointer from ever being written (see
+  // session-pointer-surface.ts).
+  const writeSessionPointer = bindWriteLastSessionPointerToSurface(services.surface);
   const shell = createBootstrapShell({
     configManager,
     runtimeBus,
@@ -286,7 +291,7 @@ export async function bootstrapRuntime(
     onSessionIdChanged: (sessionId) => {
       runtimeSessionIdRef.value = sessionId;
     },
-    writeLastSessionPointer,
+    writeLastSessionPointer: writeSessionPointer,
     getControlPlaneRecentEvents: (limit) => controlPlaneRecentEventsRef.value(limit),
     toolRegistry,
     forensicsRegistry,
@@ -308,9 +313,7 @@ export async function bootstrapRuntime(
   // `void workspaceCheckpointManager.init().catch(() => {})` — local file I/O only,
   // resolves well before a human can react to the first rendered frame.
   void announceResumeState({
-    workingDirectory: services.workingDirectory,
-    homeDirectory: services.homeDirectory,
-    surfaceRoot: 'tui',
+    surface: services.surface,
     sessionManager: services.sessionManager,
     checkpointManager: services.workspaceCheckpointManager,
     chainHistory: wrfcPersistence.knownChains,
@@ -718,16 +721,8 @@ export async function bootstrapRuntime(
     orchestratorRefs,
     setRenderRequest,
     permissionPromptRef, trustPromptRef,
-    loadLastConversation: () => loadLastConversation({
-      workingDirectory: services.workingDirectory,
-      homeDirectory: services.homeDirectory,
-      sessionManager: services.sessionManager,
-    }),
-    _writeLastSessionPointer: (sessionId) => writeLastSessionPointer(sessionId, {
-      workingDirectory: services.workingDirectory,
-      homeDirectory: services.homeDirectory,
-    }),
-    _saveSession: saveSession,
+    loadLastConversation: () => loadLastConversation({ surface: services.surface }),
+    _writeLastSessionPointer: writeSessionPointer,
     _getPinned: () => services.favoritesStore.getPinned(),
     _getConfiguredProviderIds: () => services.providerRegistry.getConfiguredProviderIds(),
     commandRegistry,

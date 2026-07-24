@@ -2,7 +2,7 @@ import { afterEach, describe, expect, test } from 'bun:test';
 import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { operations } from '@pellux/goodvibes-sdk/platform/runtime';
+import { makeTestSurface } from '../helpers/session-surface.ts';
 import {
   clearTurnAnchors,
   getTurnAnchors,
@@ -35,13 +35,13 @@ describe('rewind-turn-anchors persistence', () => {
 
     recordTurnAnchor(sessionId, anchor('t1', 6));
     recordTurnAnchor(sessionId, anchor('t2', 14));
-    persistTurnAnchors(sessionId, workingDir);
+    persistTurnAnchors(sessionId, makeTestSurface(workingDir));
 
     // Simulate a fresh process: the in-memory registry is gone.
     clearTurnAnchors(sessionId);
     expect(getTurnAnchors(sessionId)).toHaveLength(0);
 
-    const restored = restoreTurnAnchors(sessionId, workingDir);
+    const restored = restoreTurnAnchors(sessionId, makeTestSurface(workingDir));
     expect(restored).toBe(2);
 
     const anchors = getTurnAnchors(sessionId);
@@ -52,16 +52,16 @@ describe('rewind-turn-anchors persistence', () => {
 
   test('restore is a no-op (returns 0) when no sidecar exists', () => {
     const workingDir = makeWorkingDir();
-    expect(restoreTurnAnchors('user-never-saved', workingDir)).toBe(0);
+    expect(restoreTurnAnchors('user-never-saved', makeTestSurface(workingDir))).toBe(0);
   });
 
   test('a malformed sidecar restores nothing and does not throw', () => {
     const workingDir = makeWorkingDir();
     const sessionId = 'user-corrupt';
-    const sessionsDir = operations.getUserSessionsDir(workingDir, 'tui');
+    const sessionsDir = makeTestSurface(workingDir).sessionsDir;
     mkdirSync(sessionsDir, { recursive: true });
     writeFileSync(join(sessionsDir, `${sessionId}.anchors.json`), '{ not valid json');
-    expect(restoreTurnAnchors(sessionId, workingDir)).toBe(0);
+    expect(restoreTurnAnchors(sessionId, makeTestSurface(workingDir))).toBe(0);
     expect(getTurnAnchors(sessionId)).toHaveLength(0);
   });
 
@@ -69,10 +69,10 @@ describe('rewind-turn-anchors persistence', () => {
     const workingDir = makeWorkingDir();
     const sessionId = 'user-idempotent';
     recordTurnAnchor(sessionId, anchor('t1', 6));
-    persistTurnAnchors(sessionId, workingDir);
+    persistTurnAnchors(sessionId, makeTestSurface(workingDir));
     clearTurnAnchors(sessionId);
 
-    restoreTurnAnchors(sessionId, workingDir);
+    restoreTurnAnchors(sessionId, makeTestSurface(workingDir));
     // A live turn re-records the same turnId after resume — must not duplicate.
     recordTurnAnchor(sessionId, anchor('t1', 6));
     expect(getTurnAnchors(sessionId)).toHaveLength(1);
@@ -81,16 +81,16 @@ describe('rewind-turn-anchors persistence', () => {
 
   test('persist writes nothing (no crash) for an empty registry', () => {
     const workingDir = makeWorkingDir();
-    persistTurnAnchors('user-empty', workingDir);
-    expect(restoreTurnAnchors('user-empty', workingDir)).toBe(0);
+    persistTurnAnchors('user-empty', makeTestSurface(workingDir));
+    expect(restoreTurnAnchors('user-empty', makeTestSurface(workingDir))).toBe(0);
   });
 
   test('a sessionId with a path separator is refused (no directory escape)', () => {
     const workingDir = makeWorkingDir();
     recordTurnAnchor('safe', anchor('t1', 3));
     // Should not throw and should not write outside the sessions dir.
-    persistTurnAnchors('../escape', workingDir);
-    expect(restoreTurnAnchors('../escape', workingDir)).toBe(0);
+    persistTurnAnchors('../escape', makeTestSurface(workingDir));
+    expect(restoreTurnAnchors('../escape', makeTestSurface(workingDir))).toBe(0);
     clearTurnAnchors('safe');
   });
 });

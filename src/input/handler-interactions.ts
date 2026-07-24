@@ -2,7 +2,7 @@ import { buildProviderAccountSnapshot } from '@/runtime/index.ts';
 import { enrichProviderAccountsSnapshot } from '../runtime/onboarding/provider-key-capture.ts';
 import type { OnboardingWizardMode } from './onboarding/onboarding-wizard.ts';
 import { collectOnboardingSnapshot } from '../runtime/onboarding/index.ts';
-import { cleanupMarkerRegistry, expandPrompt, findMarkerAtPos, handleBlockCopy, handleBlockRerun, handleBlockSave, handleBlockToggle, handleBookmark, handleClipboardPaste, handleCopy, handleCtrlC, handleDiffApply, registerPaste } from './handler-content-actions.ts';
+import { cleanupMarkerRegistry, expandPrompt, findMarkerAtPos, handleBlockCopy, handleBlockSave, handleBlockToggle, handleBookmark, handleClipboardPaste, handleCopy, handleCtrlC, handleDiffApply, registerPaste } from './handler-content-actions.ts';
 import { clearModalStack, handleEscape, modalOpened } from './handler-modal-stack.ts';
 import { openOnboardingWizardState, type OpenOnboardingWizardOptions } from './handler-ui-state.ts';
 import type { InputHandlerLike as InputHandler } from './handler-types.ts';
@@ -110,31 +110,34 @@ export function handleCopyForHandler(handler: InputHandler): void {
   }
 
   /**
-   * handleBlockCopy - Ctrl+Y: Copy the content of the nearest code/tool block.
+   * handleBlockCopy - Ctrl+Y: Copy the content of the block the user is
+   * looking at (the viewport's bottom-most visible block — see
+   * InputHandler.getBlockAnchorLine).
    */
 export function handleBlockCopyForHandler(handler: InputHandler): void {
-    handleBlockCopy(handler.conversationManager, handler.getScrollTop, handler.requestRender, () => {
+    handleBlockCopy(handler.conversationManager, () => handler.getBlockAnchorLine(), handler.requestRender, () => {
       handler.lastBlockCopyTime = Date.now();
     });
   }
 
   /**
-   * handleBookmark - Ctrl+B: Toggle bookmark on the nearest block.
+   * handleBookmark - Ctrl+B: Toggle bookmark on the block the user is looking at.
    */
 export function handleBookmarkForHandler(handler: InputHandler): void {
-    handleBookmark(handler.conversationManager, handler.getScrollTop, handler.requestRender, handler.uiServices.shell.bookmarkManager);
+    handleBookmark(handler.conversationManager, () => handler.getBlockAnchorLine(), handler.requestRender, handler.uiServices.shell.bookmarkManager);
   }
 
   /**
-   * handleBlockSave - Ctrl+S: Save nearest block content to a file.
+   * handleBlockSave - Ctrl+S: Save the block the user is looking at to a file.
    */
 export function handleBlockSaveForHandler(handler: InputHandler): void {
-    handleBlockSave(handler.conversationManager, handler.getScrollTop, handler.requestRender, handler.uiServices.shell.bookmarkManager);
+    handleBlockSave(handler.conversationManager, () => handler.getBlockAnchorLine(), handler.requestRender, handler.uiServices.shell.bookmarkManager);
   }
 
   /**
-   * executeBlockAction - Execute a block action ID on the nearest block.
-   * Called when the user selects an action from the BlockActionsMenu.
+   * executeBlockAction - Execute a block action ID on the block the
+   * BlockActionsMenu was opened for. Called when the user selects an action
+   * from the menu.
    */
 export function executeBlockActionForHandler(handler: InputHandler, actionId: string): void {
     switch (actionId) {
@@ -142,33 +145,26 @@ export function executeBlockActionForHandler(handler: InputHandler, actionId: st
       case 'bookmark': handler.handleBookmark(); break;
       case 'toggle':   handler.handleBlockToggle(); break;
       case 'apply':    handler.handleDiffApply(); break;
-      case 'rerun':    handler.handleBlockRerun(); break;
     }
   }
 
   /**
-   * handleBlockRerun - Re-run the tool call for the nearest tool block.
-   * Emits a tool-rerun event for the orchestrator to handle.
-   */
-export function handleBlockRerunForHandler(handler: InputHandler): void {
-    handleBlockRerun(handler.conversationManager, handler.getScrollTop, handler.requestRender);
-  }
-
-  /**
-   * handleBlockToggle - Tab (non-command mode): Toggle collapse of nearest block.
+   * handleBlockToggle - Tab (non-command mode): Toggle collapse of the block
+   * the user is looking at.
    */
 export function handleBlockToggleForHandler(handler: InputHandler): void {
-    handleBlockToggle(handler.conversationManager, handler.getScrollTop, handler.requestRender);
+    handleBlockToggle(handler.conversationManager, () => handler.getBlockAnchorLine(), handler.requestRender);
   }
 
   /**
-   * handleDiffApply - Ctrl+A when a diff block is nearest: request approval and apply the diff.
-   * Returns true if a diff was found and applied (so caller can skip default Ctrl+A).
+   * handleDiffApply - Ctrl+A when a diff block is the one the user is
+   * looking at: request approval and apply the diff. Returns true if a diff
+   * was found and applied (so caller can skip default Ctrl+A).
    */
 export function handleDiffApplyForHandler(handler: InputHandler): boolean {
     return handleDiffApply(
       handler.conversationManager,
-      handler.getScrollTop,
+      () => handler.getBlockAnchorLine(),
       handler.commandContext,
       handler.requestRender,
       () => `diff-apply-${Date.now()}`,

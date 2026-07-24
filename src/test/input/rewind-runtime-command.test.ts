@@ -209,6 +209,89 @@ describe('/rewind conversation — no checkpoint required', () => {
   });
 });
 
+describe('/rewind — checkpoint-only fallback (no completed turns recorded this run)', () => {
+  test('bare /rewind with real checkpoints on disk but zero turn anchors lists checkpoints, not the dead-end message', async () => {
+    const dir = makeScratchWorkspace();
+    writeFileSync(join(dir, 'a.txt'), 'v1');
+    const mgr = new WorkspaceCheckpointManager({ workspaceRoot: dir });
+    const cp = await mgr.create({ kind: 'manual', label: 'pre-restart checkpoint', retentionClass: 'standard' });
+    expect(cp).not.toBeNull();
+
+    const { conv } = makeFakeConversation(0);
+    const { ctx, printed } = makeCtx(dir, mgr, conv);
+    const registry = new CommandRegistry();
+    registerRewindRuntimeCommands(registry);
+
+    await registry.execute('rewind', [], ctx);
+
+    const output = printed.join('\n');
+    expect(output).toContain('falling back to workspace checkpoints');
+    expect(output).toContain('pre-restart checkpoint');
+    expect(output).not.toContain('No completed turns recorded this run yet.');
+  });
+
+  test('bare /rewind with no checkpoints AND no turn anchors keeps the honest dead-end message', async () => {
+    const dir = makeScratchWorkspace();
+    const mgr = new WorkspaceCheckpointManager({ workspaceRoot: dir });
+    const { conv } = makeFakeConversation(0);
+    const { ctx, printed } = makeCtx(dir, mgr, conv);
+    const registry = new CommandRegistry();
+    registerRewindRuntimeCommands(registry);
+
+    await registry.execute('rewind', [], ctx);
+
+    expect(printed.some((l) => l.includes('No completed turns recorded this run yet.'))).toBe(true);
+  });
+
+  test('/rewind <n> against the checkpoint fallback previews and, on confirm, restores files only (never touches conversation)', async () => {
+    const dir = makeScratchWorkspace();
+    writeFileSync(join(dir, 'a.txt'), 'v1');
+    const mgr = new WorkspaceCheckpointManager({ workspaceRoot: dir });
+    await mgr.create({ kind: 'manual', label: 'checkpoint one', retentionClass: 'standard' });
+    writeFileSync(join(dir, 'a.txt'), 'v2 — drifted after the checkpoint');
+
+    const fake = makeFakeConversation(3);
+    const { ctx, printed, opened, getDiffPanel } = makeCtx(dir, mgr, fake.conv);
+    const registry = new CommandRegistry();
+    registerRewindRuntimeCommands(registry);
+
+    await registry.execute('rewind', ['1'], ctx);
+    expect(opened).toEqual(['diff']);
+    expect(printed.some((l) => l.includes('Previewing checkpoint restore'))).toBe(true);
+    expect(printed.some((l) => l.includes('FILES ONLY'))).toBe(true);
+
+    const panel = getDiffPanel()!;
+    expect(panel.confirmOverlay.pending).toBe(true);
+    expect(panel.handleInput('y')).toBe(true);
+    await waitFor(() => fake.systemMessages.length > 0);
+
+    expect(readFileSync(join(dir, 'a.txt'), 'utf-8')).toBe('v1');
+    // Conversation is completely untouched — still the original 3 messages.
+    expect(fake.getMessages().length).toBe(3);
+    const receipt = fake.systemMessages[0]!;
+    expect(receipt).toContain('[Rewind]');
+    expect(receipt).toContain('Files only');
+  });
+
+  test('an unknown checkpoint ref reports an honest error instead of opening the diff panel', async () => {
+    const dir = makeScratchWorkspace();
+    writeFileSync(join(dir, 'a.txt'), 'v1');
+    const mgr = new WorkspaceCheckpointManager({ workspaceRoot: dir });
+    const cp = await mgr.create({ kind: 'manual', label: 'only one', retentionClass: 'standard' });
+    expect(cp).not.toBeNull();
+
+    const { conv } = makeFakeConversation(0);
+    const { ctx, printed, opened } = makeCtx(dir, mgr, conv);
+    const registry = new CommandRegistry();
+    registerRewindRuntimeCommands(registry);
+
+    await registry.execute('rewind', ['99'], ctx);
+
+    expect(opened).toEqual([]);
+    expect(printed.some((l) => l.includes('No checkpoint #99'))).toBe(true);
+  });
+});
+
 describe('/rewind — single-use confirm token', () => {
   test('a stale plan cannot be applied twice (token consumed on first confirm)', async () => {
     const dir = makeScratchWorkspace();

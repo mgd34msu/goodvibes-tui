@@ -1,4 +1,3 @@
-import { ServiceRegistry } from '@pellux/goodvibes-sdk/platform/config';
 import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import { probeTermCaps } from '../../renderer/term-caps.ts';
 import { evaluateSessionMaintenance, formatSessionMaintenanceLines } from '@/runtime/index.ts';
@@ -8,7 +7,6 @@ import { buildSetupReviewSnapshot } from './local-setup-review.ts';
 import { buildProviderAccountSnapshot } from '@/runtime/index.ts';
 import { getSettingsControlPlaneSnapshot } from '@/runtime/index.ts';
 import { listPersistedWorktreeMeta, summarizeWorktreeOwnership } from '@/runtime/index.ts';
-import { checkRecoveryFile, readLastSessionPointer } from '@/runtime/index.ts';
 import {
   openCommandPanel,
   requireLocalUserAuthManager,
@@ -425,7 +423,7 @@ export function registerHealthRuntimeCommands(registry: CommandRegistry): void {
         } else if (domain === 'continuity') {
           lines.push('  domain: continuity');
           lines.push('  /session list');
-          lines.push('  /session resume <id>');
+          lines.push('  /resume <id>');
           lines.push('  /session hotspots');
           lines.push('  verify: /health continuity');
         } else if (domain === 'maintenance') {

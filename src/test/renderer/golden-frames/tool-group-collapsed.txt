@@ -1,5 +1,5 @@
 # GV_GOLDEN surface=tool-group-collapsed width=100 height=1
-|   ▌  tool results  2 tools  ▸ 3 lines                                                              |
+|   ▌  tool results  2 tools  read write  ▸ 3 lines                                                  |
 @STYLES
 0 3 fg=#38bdf8
 0 3 bold=1
@@ -40,25 +40,37 @@
 0 25 fg=#38bdf8
 0 26 fg=#38bdf8
 0 27 fg=#38bdf8
-0 28 fg=244
-0 28 dim=1
-0 29 fg=244
-0 29 dim=1
-0 30 fg=244
-0 30 dim=1
-0 31 fg=244
-0 31 dim=1
-0 32 fg=244
-0 32 dim=1
-0 33 fg=244
-0 33 dim=1
-0 34 fg=244
-0 34 dim=1
-0 35 fg=244
-0 35 dim=1
-0 36 fg=244
-0 36 dim=1
-0 37 fg=244
-0 37 dim=1
-0 38 fg=244
-0 38 dim=1
+0 28 fg=#e2e8f0
+0 29 fg=#e2e8f0
+0 30 fg=#e2e8f0
+0 31 fg=#e2e8f0
+0 32 fg=#e2e8f0
+0 33 fg=#e2e8f0
+0 34 fg=#e2e8f0
+0 35 fg=#e2e8f0
+0 36 fg=#e2e8f0
+0 37 fg=#e2e8f0
+0 38 fg=#e2e8f0
+0 39 fg=#e2e8f0
+0 40 fg=244
+0 40 dim=1
+0 41 fg=244
+0 41 dim=1
+0 42 fg=244
+0 42 dim=1
+0 43 fg=244
+0 43 dim=1
+0 44 fg=244
+0 44 dim=1
+0 45 fg=244
+0 45 dim=1
+0 46 fg=244
+0 46 dim=1
+0 47 fg=244
+0 47 dim=1
+0 48 fg=244
+0 48 dim=1
+0 49 fg=244
+0 49 dim=1
+0 50 fg=244
+0 50 dim=1

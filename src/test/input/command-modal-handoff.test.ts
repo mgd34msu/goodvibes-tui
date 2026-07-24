@@ -643,6 +643,7 @@ describe('command modal handoff', () => {
       commandRegistry: new CommandRegistry(),
       autocomplete: null,
       blockActionsMenu: { open: () => {} },
+      getBlockAnchorLine: () => 0,
       processModal: { open: () => {} },
       modalOpened: () => {},
       saveUndoState: () => {},

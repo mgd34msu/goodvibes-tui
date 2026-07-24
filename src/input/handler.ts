@@ -2,7 +2,8 @@ import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node
 import { dirname } from 'node:path';
 import { InputTokenizer } from '@pellux/goodvibes-sdk/platform/core';
 import { createOAuthLocalListener } from '@pellux/goodvibes-sdk/platform/config';
-import { clearModalStackForHandler, cleanupMarkerRegistryForHandler, executeBlockActionForHandler, expandPromptForHandler, findMarkerAtPosForHandler, getImageAttachmentsForHandler, handleBlockCopyForHandler, handleBlockRerunForHandler, handleBlockSaveForHandler, handleBlockToggleForHandler, handleBookmarkForHandler, handleCopyForHandler, handleCtrlCForHandler, handleDiffApplyForHandler, handleEscapeForHandler, hydrateOnboardingWizardFromRuntimeForHandler, modalOpenedForHandler, openOnboardingWizardForHandler, registerPasteForHandler } from './handler-interactions.ts';
+import { clearModalStackForHandler, cleanupMarkerRegistryForHandler, executeBlockActionForHandler, expandPromptForHandler, findMarkerAtPosForHandler, getImageAttachmentsForHandler, handleBlockCopyForHandler, handleBlockSaveForHandler, handleBlockToggleForHandler, handleBookmarkForHandler, handleCopyForHandler, handleCtrlCForHandler, handleDiffApplyForHandler, handleEscapeForHandler, hydrateOnboardingWizardFromRuntimeForHandler, modalOpenedForHandler, openOnboardingWizardForHandler, registerPasteForHandler } from './handler-interactions.ts';
+import { getViewportBottomLine } from '../renderer/conversation-layout.ts';
 import { clearOnboardingModelPickerCancelStateForHandler, clearOnboardingPendingModelPickerTargetForHandler, completeOpenAiSubscriptionFromListenerForHandler, getOnboardingConfigValueForHandler, getOnboardingRuntimePostureForHandler, handleModelPickerCommitForHandler, handleOnboardingActionForHandler, handleOpenAiSubscriptionFinishForHandler, handleOpenAiSubscriptionStartForHandler, openModelPickerWithTargetForHandler, openProviderModelPickerWithTargetForHandler, refreshOnboardingHydrationForHandler, restartOnboardingExternalServicesIfNeededForHandler, restoreOnboardingModelPickerCancelStateForHandler, saveWizardProgressForHandler, syncRuntimeFromOnboardingRequestForHandler, verifyOnboardingRuntimePostureForHandler, } from './handler-onboarding.ts';
 import type { OnboardingRuntimePosture } from './handler-types.ts';
 import { beginOpenAICodexLogin, exchangeOpenAICodexCode } from '@pellux/goodvibes-sdk/platform/config';
@@ -48,7 +49,6 @@ import {
   findMarkerAtPos,
   formatFileSize,
   handleBlockCopy,
-  handleBlockRerun,
   handleBlockSave,
   handleBlockToggle,
   handleBookmark,
@@ -83,6 +83,7 @@ import {
 import { KillRing } from './kill-ring.ts';
 import { maskConcealedText, beginConcealedInputFor, submitConcealedInputFor, cancelConcealedInputFor, type ConcealedInputRequest } from './concealed-input.ts';
 import { clearModalStack, handleEscape, modalOpened } from './handler-modal-stack.ts';
+import { SelectionModalQueue, attachSelectionModalQueue } from './selection-modal-queue.ts';
 import { handleModalTokenRoutes } from './handler-modal-token-routes.ts';
 import {
   captureOnboardingWizardSnapshot,
@@ -222,6 +223,8 @@ export class InputHandler implements InputHandlerLike {
   public conversationManager: ConversationManager | null = null;
   public selectionCallback: SelectionModalCallback | null = null;
   public syncFeedSelectionCallback: ((callback: SelectionModalCallback | null) => void) | null = null;
+  /** FIFO queue for overlapping openSelection() calls — see selection-modal-queue.ts. */
+  private selectionQueue!: SelectionModalQueue;
   /** Time of last [COPIED] block feedback, for brief display. */
   public lastBlockCopyTime = 0;
   public mouseDownRow = -1;
@@ -282,6 +285,7 @@ export class InputHandler implements InputHandlerLike {
     this.bookmarkModal = new BookmarkModal(uiServices.shell.bookmarkManager);
     this.sessionPickerModal = new SessionPickerModal(uiServices.sessions.sessionManager, uiServices.sessions.sessionBroker);
     this.profilePickerModal = new ProfilePickerModal(uiServices.shell.profileManager);
+    this.selectionQueue = attachSelectionModalQueue(this); // wires exitApp teardown too — see selection-modal-queue.ts
     this.initFeedContext();
   }
 
@@ -404,6 +408,8 @@ export class InputHandler implements InputHandlerLike {
   /**
    * openSelection - Open the generic selection modal with a callback.
    * The callback receives SelectionResult on selection, or null on cancel/escape.
+   * A second call while one is already showing queues FIFO instead of
+   * overwriting it — see selection-modal-queue.ts.
    */
   public openSelection(
     title: string,
@@ -416,13 +422,8 @@ export class InputHandler implements InputHandlerLike {
     } | undefined,
     callback: SelectionModalCallback,
   ): void {
-    this.modalOpened('selection');
-    this.selectionModal.open(title, items, opts);
-    this.selectionCallback = callback;
-    this.syncFeedSelectionCallback?.(callback);
-    this.requestRender();
+    this.selectionQueue.request({ title, items, opts, callback });
   }
-
 
   public openOnboardingWizard(
     modeOrOptions: OnboardingWizardMode | OpenOnboardingWizardOptions = 'new',
@@ -439,7 +440,16 @@ export class InputHandler implements InputHandlerLike {
   public handleBookmark(): void { handleBookmarkForHandler(this); }
   public handleBlockSave(): void { handleBlockSaveForHandler(this); }
   public executeBlockAction(actionId: string): void { executeBlockActionForHandler(this, actionId); }
-  public handleBlockRerun(): void { handleBlockRerunForHandler(this); }
+  /** The block the user is actually looking at: the viewport's bottom-most
+   *  visible line (see getViewportBottomLine's doc) — not the raw scrollTop,
+   *  which is off-screen-above once the transcript exceeds one page. Every
+   *  anchor-based block action (Ctrl+Y/B/S/A, Tab, the block-actions menu)
+   *  resolves its target through this, so they all agree on what "nearest
+   *  block" means. */
+  public getBlockAnchorLine(): number {
+    const lineCount = this.conversationManager?.history.getLineCount() ?? 0;
+    return getViewportBottomLine(this.getScrollTop(), this.getViewportHeight(), lineCount);
+  }
   public handleBlockToggle(): void { handleBlockToggleForHandler(this); }
   public handleDiffApply(): boolean { return handleDiffApplyForHandler(this); }
   public handleCtrlC(): void { handleCtrlCForHandler(this); }

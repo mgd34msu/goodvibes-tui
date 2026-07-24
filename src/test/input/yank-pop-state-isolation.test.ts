@@ -55,7 +55,7 @@ function makeKeyState(overrides: Partial<KeyRouteState> & { killRing: KillRing }
     commandContext: undefined,
     autocomplete: null,
     blockActionsMenu: { open: mock(() => {}) } as unknown as KeyRouteState['blockActionsMenu'],
-    processModal: { open: mock(() => {}) } as unknown as KeyRouteState['processModal'],
+    getBlockAnchorLine: () => 0,
     modalOpened: mock(() => {}),
     saveUndoState: mock(() => {}),
     breakUndoCoalesce: mock(() => {}),

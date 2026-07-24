@@ -36,6 +36,7 @@ import {
   replayJournalIntoConversation,
 } from '../../core/session-recovery.ts';
 import { ConversationManager } from '../../core/conversation.ts';
+import { makeTestSurface } from '../helpers/session-surface.ts';
 
 // Minimal ConversationMessageSnapshot stub.
 type MsgStub = { role: string; content: string };
@@ -62,7 +63,7 @@ describe('transcript-journal', () => {
   // ── journalPathFor ─────────────────────────────────────────────────────────
 
   test('journalPathFor builds canonical path', () => {
-    const result = journalPathFor('/home/user', 'ses-abc123');
+    const result = journalPathFor(makeTestSurface('/home/user'), 'ses-abc123');
     expect(result).toBe('/home/user/.goodvibes/tui/transcript-ses-abc123.journal');
   });
 

@@ -1,6 +1,6 @@
 import type { BlockMeta } from '../core/conversation';
 
-export type BlockActionId = 'copy' | 'bookmark' | 'toggle' | 'apply' | 'rerun';
+export type BlockActionId = 'copy' | 'bookmark' | 'toggle' | 'apply';
 
 export interface BlockAction {
   id: BlockActionId;
@@ -13,7 +13,6 @@ const ALL_ACTIONS: BlockAction[] = [
   { id: 'bookmark', label: 'Bookmark',       key: 'b' },
   { id: 'toggle',   label: 'Collapse/Expand',key: 'Tab' },
   { id: 'apply',    label: 'Apply diff',     key: 'a' },
-  { id: 'rerun',    label: 'Re-run tool',    key: 'r' },
 ];
 
 /**
@@ -37,7 +36,6 @@ export class BlockActionsMenu {
     this.block = block;
     this.actions = ALL_ACTIONS.filter(a => {
       if (a.id === 'apply') return block.type === 'diff';
-      if (a.id === 'rerun') return block.type === 'tool';
       return true;
     });
     this.selectedIndex = 0;

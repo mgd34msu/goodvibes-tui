@@ -1,3 +1,15 @@
+/**
+ * runtime/session-persistence.test.ts — the SDK persistence contract as seen
+ * through the TUI's runtime barrel.
+ *
+ * DELIBERATE legacy-form survivor. Every call here passes the loose
+ * `{ workingDirectory, homeDirectory, surfaceRoot }` option shape rather than
+ * a SessionSurface, on purpose: that compat path still exists in the SDK and
+ * this file is what proves it keeps working byte-for-byte. Application code
+ * has moved to the surface form (see runtime/session-storage-services.ts) —
+ * do not "modernise" this file to match; converting it would delete the only
+ * coverage the legacy path has.
+ */
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'fs';
 import { join } from 'path';

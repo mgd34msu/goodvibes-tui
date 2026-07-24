@@ -1,3 +1,13 @@
+/**
+ * sessions/manager.test.ts — the SDK SessionManager contract.
+ *
+ * DELIBERATE legacy-form survivor: constructions here pass the loose
+ * `{ surfaceRoot }` option rather than a SessionSurface, because that compat
+ * path still exists in the SDK and this file is what keeps it honest.
+ * Application code has moved to the surface form (see
+ * runtime/session-storage-services.ts); converting this file would delete the
+ * only coverage the legacy constructor has.
+ */
 import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
 import { mkdirSync, rmSync, existsSync, writeFileSync } from 'fs';
 import { join } from 'path';

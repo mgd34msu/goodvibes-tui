@@ -23,9 +23,8 @@
  */
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { operations } from '@pellux/goodvibes-sdk/platform/runtime';
+import type { SessionSurface } from '@/runtime/index.ts';
 
-const { getUserSessionsDir } = operations;
 
 /** One recorded turn boundary — the rewind coordinator's per-turn anchor. */
 export interface TurnAnchor {
@@ -87,18 +86,18 @@ export function clearTurnAnchors(sessionId: string): void {
 // --- Cross-resume persistence -------------------------------------------------
 //
 // The TUI mirrors the in-memory registry to a sidecar next to the session file.
-// Surface is always 'tui' (the sessions the TUI reads/writes live under the same
-// scoped directory), matching how the session JSONL itself is persisted.
-const ANCHOR_SIDECAR_SURFACE = 'tui';
+// The directory comes off the caller's SessionSurface (`surface.sessionsDir`),
+// the same handle the session JSONL itself is written through — so the sidecar
+// and its session can never end up in different directories.
 const ANCHOR_SIDECAR_VERSION = 1;
 
 /** Absolute path to a session's anchor sidecar, or null when inputs are unusable. */
-function anchorSidecarPath(sessionId: string, workingDirectory: string): string | null {
-  if (!sessionId || !workingDirectory) return null;
+function anchorSidecarPath(sessionId: string, surface: SessionSurface): string | null {
+  if (!sessionId || !surface.sessionsDir) return null;
   // A sessionId is a filename component; refuse anything with path separators so
   // a malformed id can never escape the sessions directory.
   if (/[\\/]/.test(sessionId)) return null;
-  return join(getUserSessionsDir(workingDirectory, ANCHOR_SIDECAR_SURFACE), `${sessionId}.anchors.json`);
+  return join(surface.sessionsDir, `${sessionId}.anchors.json`);
 }
 
 function isTurnAnchor(value: unknown): value is TurnAnchor {
@@ -118,13 +117,13 @@ function isTurnAnchor(value: unknown): value is TurnAnchor {
  * torn write must never break the turn that triggered it. Called after each
  * `recordTurnAnchor` at TURN_COMPLETED.
  */
-export function persistTurnAnchors(sessionId: string, workingDirectory: string): void {
-  const path = anchorSidecarPath(sessionId, workingDirectory);
+export function persistTurnAnchors(sessionId: string, surface: SessionSurface): void {
+  const path = anchorSidecarPath(sessionId, surface);
   if (!path) return;
   const list = registry.get(sessionId) ?? [];
   if (list.length === 0) return; // nothing to mirror yet
   try {
-    mkdirSync(getUserSessionsDir(workingDirectory, ANCHOR_SIDECAR_SURFACE), { recursive: true });
+    mkdirSync(surface.sessionsDir, { recursive: true });
     const payload = JSON.stringify({ version: ANCHOR_SIDECAR_VERSION, sessionId, anchors: list });
     const tmp = `${path}.tmp-${process.pid}`;
     writeFileSync(tmp, payload);
@@ -140,8 +139,8 @@ export function persistTurnAnchors(sessionId: string, workingDirectory: string):
  * unreadable). Idempotent via `recordTurnAnchor`'s per-turnId dedup, so a resume
  * that later re-records the same turn keeps a single entry.
  */
-export function restoreTurnAnchors(sessionId: string, workingDirectory: string): number {
-  const path = anchorSidecarPath(sessionId, workingDirectory);
+export function restoreTurnAnchors(sessionId: string, surface: SessionSurface): number {
+  const path = anchorSidecarPath(sessionId, surface);
   if (!path || !existsSync(path)) return 0;
   try {
     const parsed = JSON.parse(readFileSync(path, 'utf8')) as { anchors?: unknown };

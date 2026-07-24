@@ -350,7 +350,7 @@ export async function initializeBootstrapCore(
 
   const toolRegistry = new ToolRegistry();
   const { fileCache, projectIndex } = registerAllTools(toolRegistry, {
-    surfaceRoot: 'tui',
+    surfaceRoot: services.surface.surfaceRoot,
     localhostFetchApproval: services.localhostFetchApproval, // loopback-fetch ask, built once in the services composition
     execPromptAnswerHandler: services.execPromptAnswerHandler, // terminal prompt-answer path, built once in the services composition
     fileUndoManager: services.fileUndoManager,
@@ -384,7 +384,7 @@ export async function initializeBootstrapCore(
   });
   // Note: installWrfcAgentToolGuard is called after routeOrBuffer is defined (further below) so the onTrace callback routes guard decisions through the pre-router buffer.
   services.agentOrchestrator.setDependencies({
-    surfaceRoot: 'tui',
+    surfaceRoot: services.surface.surfaceRoot,
     // setDependencies is a wholesale replace: re-install the prompt-answer handler and the loopback-fetch ask here or this rewire silently drops them.
     execPromptAnswerHandler: services.execPromptAnswerHandler,
     localhostFetchApproval: services.localhostFetchApproval,
@@ -507,7 +507,7 @@ export async function initializeBootstrapCore(
 
   // ── WRFC chain persistence ──────────────────────────────────────────────────────────
   const wrfcPersistence = createWrfcPersistence({
-    snapshotPath: join(workingDir, '.goodvibes', 'tui', 'wrfc-chains.json'),
+    snapshotPath: join(workingDir, '.goodvibes', services.surface.surfaceRoot, 'wrfc-chains.json'),
     getSystemMessageRouter: () => systemMessageRouterRef.value,
     controller: services.wrfcController,
   });

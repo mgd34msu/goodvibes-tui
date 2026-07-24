@@ -85,7 +85,7 @@ export function getSplashLines(columns: number, opts: SplashOptions = {}): strin
 
   // Last-session resume pointer (readLastSessionPointer result), when recorded.
   if (opts.lastSessionId) {
-    lines.push(metaLine(`↩ resume last session — /sessions resume ${opts.lastSessionId}`, columns));
+    lines.push(metaLine(`↩ resume last session — /resume ${opts.lastSessionId}`, columns));
   }
 
   lines.push('');

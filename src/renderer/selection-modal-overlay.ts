@@ -69,6 +69,41 @@ function rowCostFor(item: SelectionItem, remaining: number): number {
   return 1 + (computeDetailLayout(item, remaining).wrappedDetail?.length ?? 0);
 }
 
+const MODAL_MARGIN = 4;
+const MODAL_MAX_WIDTH = 72;
+const INDICATOR_WIDTH = 2;
+/** Rows kept clear between the box and the top/bottom of the terminal. */
+const VIEWPORT_INSET_ROWS = 2;
+
+/**
+ * Rows the box spends on its own frame, counted as they are actually pushed
+ * below: top and bottom border, the title, the section row (a search label,
+ * search input and divider when the modal searches), the "Results" header and
+ * the footer hint. `chromeRows` is the budget-math constant the surface
+ * metrics subtract from a total; this is the physical count, and it is what
+ * decides how tall the box may really grow.
+ */
+function frameRowsFor(modal: SelectionModal): number {
+  return modal.allowSearch ? 8 : 6;
+}
+
+/**
+ * Physical rows every row of the list needs, category headers included — the
+ * height the box would have to give the list for nothing to be scrolled away.
+ */
+function totalContentRowsFor(modal: SelectionModal, remaining: number): number {
+  let rows = 0;
+  let lastCategory: string | undefined;
+  for (const item of modal.filteredItems) {
+    if (item.category && item.category !== lastCategory) {
+      lastCategory = item.category;
+      rows += 1;
+    }
+    rows += rowCostFor(item, remaining);
+  }
+  return rows;
+}
+
 /**
  * Render the selection modal as Line[] for overlay in the viewport.
  */
@@ -79,9 +114,29 @@ export function renderSelectionModalOverlay(
 ): Line[] {
   const lines: Line[] = [];
   const chromeRows = modal.allowSearch ? 5 : 4;
+  // Width does not depend on the row budget, so the box layout is settled
+  // first: the list's real height can only be measured once the wrap width is
+  // known. `createOverlayBoxLayout` resolves the requested max width the same
+  // way `getOverlaySurfaceMetrics` does, so both agree on the box.
+  const layout = createOverlayBoxLayout(width, MODAL_MARGIN, MODAL_MAX_WIDTH);
+  const remaining = layout.innerWidth - INDICATOR_WIDTH;
+
+  // Size to content before falling back to the viewport's height ratio. When
+  // every row (and its wrapped detail) fits in the space the terminal
+  // actually has, ask for exactly that many rows, so a short list is never
+  // split behind a "(n below)" hint with screen still empty below the box —
+  // a two-item question in particular must always show both its answers. A
+  // list genuinely taller than the terminal keeps the ratio-derived budget
+  // and scrolls as before.
+  const neededContentRows = totalContentRowsFor(modal, remaining);
+  const fittableContentRows = viewportHeight - VIEWPORT_INSET_ROWS - frameRowsFor(modal);
+  const growToFitTotalRows = neededContentRows > 0 && neededContentRows <= fittableContentRows
+    ? neededContentRows + chromeRows
+    : undefined;
+
   const metrics = getOverlaySurfaceMetrics(width, viewportHeight, {
-    margin: 4,
-    maxWidth: 72,
+    margin: MODAL_MARGIN,
+    maxWidth: MODAL_MAX_WIDTH,
     chromeRows,
     minContentRows: 6,
     // Modals size to content: items whose detail wraps onto extra lines can
@@ -89,8 +144,11 @@ export function renderSelectionModalOverlay(
     // ceiling grows with the viewport rather than staying pinned at a small
     // constant (still bounded — never larger than the terminal can show).
     maxContentRows: Math.max(10, viewportHeight - chromeRows - 4),
+    // A floor only. The shared budget keeps its own target and ceiling, so a
+    // modal whose content is shorter than that target is unaffected: this can
+    // raise the budget to fit the list, never lower it.
+    minTotalRows: growToFitTotalRows,
   });
-  const layout = createOverlayBoxLayout(width, metrics.margin, metrics.boxWidth);
 
   lines.push(createOverlayFilledBorderLine(width, layout, OVERLAY_GLYPHS.topLeft, OVERLAY_GLYPHS.horizontal, OVERLAY_GLYPHS.topRight, BORDER_FG, DEFAULT_OVERLAY_PALETTE.titleBg));
 
@@ -143,8 +201,6 @@ export function renderSelectionModalOverlay(
     putText(line, layout.margin + 2, layout.innerWidth, fitDisplay(message, layout.innerWidth), { fg: MUTED_FG, dim: true });
     lines.push(line);
   } else {
-    const indicatorWidth = 2;
-    const remaining = layout.innerWidth - indicatorWidth;
     const rowBudget = Math.max(1, metrics.contentRows);
 
     // Row-budget-aware windowing: rather than assuming one physical row per
@@ -210,12 +266,12 @@ export function renderSelectionModalOverlay(
       const detailLayout = computeDetailLayout(item, remaining);
       const labelWidth = detailLayout.labelWidth;
       const labelLine = createOverlayContentLine(width, layout, BORDER_FG, isSelected ? SELECTED_BG : DEFAULT_OVERLAY_PALETTE.bodyBg);
-        putText(labelLine, layout.margin + 2, indicatorWidth, indicator, {
+        putText(labelLine, layout.margin + 2, INDICATOR_WIDTH, indicator, {
           fg: isSelected ? TITLE_FG : MUTED_FG,
           bg: isSelected ? SELECTED_BG : DEFAULT_OVERLAY_PALETTE.bodyBg,
           bold: isSelected,
         });
-      putText(labelLine, layout.margin + 2 + indicatorWidth, labelWidth, fitDisplay(truncateDisplay(item.label, labelWidth), labelWidth), {
+      putText(labelLine, layout.margin + 2 + INDICATOR_WIDTH, labelWidth, fitDisplay(truncateDisplay(item.label, labelWidth), labelWidth), {
         fg: labelColor,
         bg: isSelected ? SELECTED_BG : DEFAULT_OVERLAY_PALETTE.bodyBg,
         bold: isSelected,
@@ -223,11 +279,11 @@ export function renderSelectionModalOverlay(
       if (item.detail) {
         if (detailLayout.wrappedDetail === null) {
           // Fits beside the label at a readable width — no truncation needed.
-          putText(labelLine, layout.margin + 2 + indicatorWidth + labelWidth, 2, '  ', {
+          putText(labelLine, layout.margin + 2 + INDICATOR_WIDTH + labelWidth, 2, '  ', {
             fg: BODY_FG,
             bg: isSelected ? SELECTED_BG : DEFAULT_OVERLAY_PALETTE.bodyBg,
           });
-          putText(labelLine, layout.margin + 2 + indicatorWidth + labelWidth + 2, detailLayout.detailWidth, fitDisplay(item.detail, detailLayout.detailWidth), {
+          putText(labelLine, layout.margin + 2 + INDICATOR_WIDTH + labelWidth + 2, detailLayout.detailWidth, fitDisplay(item.detail, detailLayout.detailWidth), {
             fg: detailColor,
             bg: isSelected ? SELECTED_BG : DEFAULT_OVERLAY_PALETTE.bodyBg,
           });
@@ -238,7 +294,7 @@ export function renderSelectionModalOverlay(
           lines.push(labelLine);
           for (const detailLineText of detailLayout.wrappedDetail) {
             const detailLine = createOverlayContentLine(width, layout, BORDER_FG, isSelected ? SELECTED_BG : DEFAULT_OVERLAY_PALETTE.bodyBg);
-            putText(detailLine, layout.margin + 2 + indicatorWidth, remaining, fitDisplay(detailLineText, remaining), {
+            putText(detailLine, layout.margin + 2 + INDICATOR_WIDTH, remaining, fitDisplay(detailLineText, remaining), {
               fg: detailColor,
               bg: isSelected ? SELECTED_BG : DEFAULT_OVERLAY_PALETTE.bodyBg,
               dim: !isSelected,

@@ -2,6 +2,17 @@
 
 GoodVibes can run REPL and MCP isolation through a local QEMU guest. The TUI owns the setup bundle that turns the user-level `~/.goodvibes/tui/sandbox` directory into a repeatable Debian cloud-image sandbox.
 
+## Isolation Modes
+
+QEMU is one option within a broader sandbox control plane that governs both evaluation runtimes and MCP isolation. The available modes are:
+
+- REPL isolation: `shared-vm` or `per-runtime-vm`
+- MCP isolation: `disabled`, `shared-vm`, `hybrid`, or `per-server-vm`
+- host posture on Windows: `native-basic` or `require-wsl`
+- VM backend: `local` or `qemu`
+
+The rest of this document covers the `qemu` VM backend specifically: bootstrapping the guest, generated files, guest runtime packages, and troubleshooting.
+
 ## When To Use It
 
 Use QEMU when you want tool and REPL execution isolated from the host while still giving GoodVibes a synced workspace at `/workspace`.

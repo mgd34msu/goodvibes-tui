@@ -72,7 +72,10 @@ function oldBinarySource(): string {
     "const base = process.env['GV_TEST_RELEASES_BASE'] ?? '';",
     '// The one seam: point the hardcoded GitHub release URLs at the local server.',
     `const fetchImpl = (url, init) => fetch(url.replace(${JSON.stringify(GITHUB_BASE)}, base), init);`,
-    "const settings = process.env['GV_TEST_DISABLE'] === '1' ? { autoUpdateAtLaunch: false } : { launchCheckTimeoutMs: 5000 };",
+    "const applyTimeoutMs = process.env['GV_TEST_APPLY_TIMEOUT_MS'];",
+    "const settings = process.env['GV_TEST_DISABLE'] === '1'",
+    '  ? { autoUpdateAtLaunch: false }',
+    '  : { launchCheckTimeoutMs: 5000, ...(applyTimeoutMs ? { applyTimeoutMs: Number(applyTimeoutMs) } : {}) };',
     'const outcome = await runLaunchAutoUpdate({',
     '  fetchImpl,',
     '  execPath: process.argv[1],',
@@ -161,7 +164,7 @@ function installOldVersion(prefix: string): Install {
 const NEW_DAEMON_BYTES = 'new-daemon-payload-bytes\n';
 
 /** A real local HTTP server speaking the exact GitHub releases shapes the updater consumes. */
-function serveRelease(options: { appBytes: string; corruptAppChecksum?: boolean }): string {
+function serveRelease(options: { appBytes: string; corruptAppChecksum?: boolean; stallAppDownload?: boolean }): string {
   if (!artifacts) throw new Error('unsupported test platform');
   const appHash = options.corruptAppChecksum ? sha256Hex('not-the-real-bytes') : sha256Hex(options.appBytes);
   const manifest = [`${appHash}  ${artifacts.app}`, `${sha256Hex(NEW_DAEMON_BYTES)}  ${artifacts.daemon}`, ''].join('\n');
@@ -179,6 +182,11 @@ function serveRelease(options: { appBytes: string; corruptAppChecksum?: boolean 
         return new Response(manifest);
       }
       if (path === `/releases/download/${NEW_TAG}/${artifacts.app}`) {
+        if (options.stallAppDownload) {
+          // Never answers: the launch budget has to CANCEL this request, not
+          // wait it out and leave it running.
+          return new Promise<Response>(() => {});
+        }
         return new Response(options.appBytes);
       }
       if (path === `/releases/download/${NEW_TAG}/${artifacts.daemon}`) {
@@ -290,6 +298,31 @@ describe.if(artifacts !== null)('launch auto-update — end to end with real pro
     expect(() => readFileSync(`${install.daemonPath}${PREVIOUS_FILE_SUFFIX}`)).toThrow();
   }, 30_000);
 
+  test('a download that outlives the budget is cancelled for real: the deferral is printed, nothing is swapped, and the process exits clean', async () => {
+    const install = installOldVersion('gv-e2e-deferred');
+    // The app artifact request is accepted and then never answered, so the
+    // install can only end by being cancelled.
+    const base = serveRelease({ appBytes: newBinarySource(), stallAppDownload: true });
+
+    const run = await runInstalledBinary(install, ['--slow-download'], {
+      GV_TEST_RELEASES_BASE: base,
+      GV_TEST_APPLY_TIMEOUT_MS: '1500',
+    });
+
+    // The receipt matches what happened: the swap never started, so this
+    // really will be retried next launch.
+    expect(run.stdout).toContain('update deferred — will retry next launch');
+    expect(run.stdout).not.toContain('updated in background');
+    expect(run.stdout).toContain(`RUNNING v${OLD_VERSION} argv=["--slow-download"] outcome=continue:update-deferred`);
+    // A cancelled download is an expected ending, not a crash: the abandoned
+    // request's rejection must not take the process down.
+    expect(run.exitCode).toBe(0);
+    // Nothing was written: live bytes untouched, nothing parked at .previous.
+    expect(readFileSync(install.appPath).equals(install.oldAppBytes)).toBe(true);
+    expect(readFileSync(install.daemonPath).equals(install.oldDaemonBytes)).toBe(true);
+    expect(() => readFileSync(`${install.appPath}${PREVIOUS_FILE_SUFFIX}`)).toThrow();
+  }, 30_000);
+
   test('a dead release server yields exactly one offline line and the current version proceeds untouched', async () => {
     const install = installOldVersion('gv-e2e-offline');
     // A server that once existed and is gone: connection refused, instantly.
@@ -300,7 +333,7 @@ describe.if(artifacts !== null)('launch auto-update — end to end with real pro
     const run = await runInstalledBinary(install, ['--offline-work'], { GV_TEST_RELEASES_BASE: deadBase });
 
     expect(run.exitCode).toBe(0);
-    const offlineLines = run.stdout.split('\n').filter((line) => line === 'update check skipped: offline');
+    const offlineLines = run.stdout.split('\n').filter((line) => line === "couldn't reach the update server — check skipped");
     expect(offlineLines).toHaveLength(1);
     expect(run.stdout).toContain(`RUNNING v${OLD_VERSION} argv=["--offline-work"] outcome=continue:check-skipped`);
     expect(readFileSync(install.appPath).equals(install.oldAppBytes)).toBe(true);

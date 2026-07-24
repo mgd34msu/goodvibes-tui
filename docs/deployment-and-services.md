@@ -257,6 +257,68 @@ The runtime also supports:
 - session revocation
 - local-auth review surfaces in the TUI and operator APIs
 
+## Services, profiles, and setup transfer
+
+The services/config side is productized beyond a flat JSON file. It includes:
+
+- a named service registry with inspect, auth resolution, connectivity tests, auth review, and doctor output
+- first-class SecretRef-backed service credentials through env, GoodVibes local storage, file, exec, 1Password, Bitwarden, Vaultwarden, and Bitwarden Secrets Manager providers
+- live profile management plus portable profile sync bundle export/import
+- setup transfer bundles that can move config/services/ecosystem posture between environments
+
+Key commands:
+
+- `/services inspect|test|resolve|auth|auth-review|doctor|export|import`
+- `/profiles`
+- `/profile-sync` (alias: `/profilesync`)
+- `/setup transfer export|inspect|import`
+
+Service entries can use an existing `tokenKey` field, a SecretRef in the key field, or explicit `tokenRef` / `passwordRef` / `webhookUrlRef` / `signingSecretRef` / `publicKeyRef` / `appTokenRef` fields:
+
+```json
+{
+  "slack": {
+    "name": "slack",
+    "authType": "bearer",
+    "tokenKey": "SLACK_BOT_TOKEN",
+    "appTokenKey": "SLACK_APP_TOKEN",
+    "tokenRef": {
+      "source": "vaultwarden",
+      "item": "GoodVibes Slack",
+      "field": "password",
+      "server": "https://vault.example.test"
+    },
+    "appTokenRef": {
+      "source": "vaultwarden",
+      "item": "GoodVibes Slack App",
+      "field": "password",
+      "server": "https://vault.example.test"
+    }
+  }
+}
+```
+
+## Integration helpers
+
+GoodVibes exposes integration-helper and control/state APIs for external clients and helpers — this layer is explicitly control/state APIs, not a UI protocol. It is meant for callers like another GoodVibes instance, a future web frontend or companion app, setup/auth helpers, and operational integrations that need session, approval, account, health, knowledge, search, artifact, or delivery posture.
+
+The front doors into this layer:
+
+- provider login/logout flows
+- install and update posture review
+- trust review bundles
+- bridge status/review/export/import paths
+- setup deep links and portable install/update/auth review bundles
+- deeplink review and bundle packaging for operator surfaces
+
+The setup surface is broader than a single readiness screen, and also covers:
+
+- onboarding and doctor flows
+- service, hook, remote, and sandbox review
+- support-bundle export
+- setup-transfer export / inspect / import
+- deep links into the cockpit, security, remote, knowledge, incident, hooks, orchestration, and tasks operator surfaces
+
 ## Core control-plane entrypoints
 
 The daemon exposes broad HTTP and streaming surfaces. The most important entrypoints are:

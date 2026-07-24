@@ -1,5 +1,6 @@
 import type { InputToken } from '@pellux/goodvibes-sdk/platform/core';
 import type { InfiniteBuffer } from '../core/history.ts';
+import type { ConversationManager } from '../core/conversation';
 import type { SelectionResult, SelectionModal } from './selection-modal.ts';
 import type { BookmarkModal } from './bookmark-modal.ts';
 import type { SettingsModal } from './settings-modal.ts';
@@ -34,6 +35,9 @@ import {
 
 export type ModalTokenRouteState = {
   history: InfiniteBuffer;
+  /** Threaded into SearchManager.search() so a matching but currently-
+   *  collapsed block gets auto-expanded before the buffer is scanned. */
+  conversationManager?: ConversationManager | null;
   searchShortcutMatch: boolean;
   selectionModal: SelectionModal;
   selectionCallback: ((result: SelectionResult | null) => void) | null;
@@ -108,6 +112,7 @@ export function handleModalTokenRoutes(state: ModalTokenRouteState, token: Input
     scroll: state.scroll,
     getScrollTop: state.getScrollTop,
     getViewportHeight: state.getViewportHeight,
+    conversationManager: state.conversationManager,
   }, token, state.history, state.searchShortcutMatch)) {
     return withState(state, true);
   }

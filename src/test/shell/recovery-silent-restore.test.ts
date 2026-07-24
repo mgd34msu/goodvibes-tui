@@ -4,26 +4,42 @@
  * Owner ruling: state restores happen ONLY when the user explicitly asks —
  * via a CLI argument, a slash command, or a prompt. Never automatically. The
  * old silent-restore-at-startup path (autoRestoreRecoverySession, formerly
- * called unconditionally from main.ts on every bare launch) is gone
- * entirely. A live recovery snapshot on disk is now surfaced, never
- * applied, by the boot resume notice (announceResumeState /
- * buildResumeNotice in runtime/resume-notice.ts): it prints an honest
- * one-line notice and, only when the snapshot's session id is genuinely
- * reachable via /session resume <id>, the exact command to restore it. The
- * notice never mutates the live conversation, never replays the journal, and
- * never deletes the recovery file — it only reports.
+ * called unconditionally from main.ts on every bare launch) is gone entirely.
+ *
+ * What changed since: a live recovery snapshot used to get a passive clause
+ * in the boot resume notice, which meant the only route back to a crashed
+ * session was reading a sentence and retyping a command — and for a session
+ * that crashed before its first clean save there was no command that reached
+ * it at all. The snapshot is now an explicit ask-then-retire modal
+ * (runtime/recovery-prompt.ts, covered in recovery-prompt.test.ts), and the
+ * resume notice no longer mentions recovery snapshots at all — announcing the
+ * same snapshot twice would be worse, not better.
+ *
+ * What this file still pins:
+ *   - The boot notice never mutates the conversation, never replays the
+ *     journal, and never deletes a recovery file. It reports; that is all.
+ *   - The notice stays silent about recovery snapshots specifically, so the
+ *     modal is the single place that offer is made.
+ *   - Per-session delete isolation: retiring one session's snapshot leaves a
+ *     concurrent session's snapshot alone.
  */
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { existsSync, mkdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { ConversationManager } from '../../core/conversation.ts';
 import { announceResumeState } from '../../runtime/resume-notice.ts';
-import { checkRecoveryFile, deleteRecoveryFile, getRecoveryFilePath, writeRecoveryFile } from '@/runtime/index.ts';
+import { checkRecoveryFile, deleteRecoveryFile, writeRecoveryFile } from '@/runtime/index.ts';
+import type { SessionSurface } from '@/runtime/index.ts';
 import { journalPathFor, openTranscriptJournal } from '../../core/transcript-journal.ts';
 import { makeProjectTempDir } from '../helpers/project-temp.ts';
+import { makeTestSurface } from '../helpers/session-surface.ts';
 
 let tmpDir: string;
-beforeEach(() => { tmpDir = makeProjectTempDir('gv-silent-restore-test'); });
+let surface: SessionSurface;
+beforeEach(() => {
+  tmpDir = makeProjectTempDir('gv-silent-restore-test');
+  surface = makeTestSurface(tmpDir);
+});
 afterEach(() => { if (existsSync(tmpDir)) rmSync(tmpDir, { recursive: true, force: true }); });
 
 function writeCrash(sessionId: string, messages: Array<{ role: string; content: string }>, title: string): void {
@@ -31,13 +47,13 @@ function writeCrash(sessionId: string, messages: Array<{ role: string; content: 
     { messages: messages as never, title, titleSource: 'auto', timestamp: Date.now() - 5000 },
     sessionId,
     title,
-    { workingDirectory: tmpDir, homeDirectory: tmpDir },
+    { surface },
   );
 }
 
 /** Write one post-snapshot journal record for `sessionId`, mirroring what a live session would leave behind mid-turn. Returns the journal's path. */
 function writeJournalRecord(sessionId: string): string {
-  const journalPath = journalPathFor(tmpDir, sessionId);
+  const journalPath = journalPathFor(surface, sessionId);
   const dir = join(journalPath, '..');
   if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
   const journal = openTranscriptJournal(journalPath, sessionId);
@@ -51,14 +67,11 @@ describe('bare launch never restores state', () => {
     const journalPath = writeJournalRecord('sess-A');
     const conversation = new ConversationManager(() => 80);
 
-    // The boot resume notice is the ONLY thing touching recovery state at
-    // startup now; it takes no `conversation` dependency at all (see
-    // ResumeNoticeDeps) — there is nothing left in the bare-launch path that
-    // could apply this snapshot to a live conversation.
+    // The boot resume notice takes no `conversation` dependency at all (see
+    // ResumeNoticeDeps) — there is nothing in the bare-launch path that could
+    // apply this snapshot to a live conversation on its own.
     await announceResumeState({
-      workingDirectory: tmpDir,
-      homeDirectory: tmpDir,
-      surfaceRoot: 'tui',
+      surface,
       sessionManager: { load: () => { throw new Error('sess-A was never fully saved'); } },
       checkpointManager: undefined,
       chainHistory: [],
@@ -70,18 +83,16 @@ describe('bare launch never restores state', () => {
     // Journal not replayed/rotated.
     expect(existsSync(journalPath)).toBe(true);
     // Recovery file not consumed/deleted — still the newest live snapshot.
-    expect(existsSync(getRecoveryFilePath(tmpDir, 'sess-A'))).toBe(true);
-    expect(checkRecoveryFile({ workingDirectory: tmpDir, homeDirectory: tmpDir })?.sessionId).toBe('sess-A');
+    expect(existsSync(surface.recoveryFile('sess-A'))).toBe(true);
+    expect(checkRecoveryFile({ surface })?.sessionId).toBe('sess-A');
   });
 
-  test('no explicit resume intent + a recovery file present: the boot notice reports it, without a command, when its session was never fully saved', async () => {
+  test('the boot notice says nothing about a recovery snapshot — the ask-then-retire modal owns that offer', async () => {
     writeCrash('sess-A', [{ role: 'user', content: 'hi' }], 'Interrupted work');
     const receipts: string[] = [];
 
     await announceResumeState({
-      workingDirectory: tmpDir,
-      homeDirectory: tmpDir,
-      surfaceRoot: 'tui',
+      surface,
       sessionManager: { load: () => { throw new Error('not saved'); } },
       checkpointManager: undefined,
       chainHistory: [],
@@ -89,20 +100,17 @@ describe('bare launch never restores state', () => {
       router: { high: (m) => receipts.push(m) },
     });
 
-    expect(receipts).toHaveLength(1);
-    expect(receipts[0]).toContain('recovery snapshot');
-    // Never a fabricated restore command for a session that isn't actually loadable.
-    expect(receipts[0]).not.toContain('/session resume');
+    // No prior session, no checkpoints, no chain history — and a recovery
+    // snapshot is no longer a reason for this notice to speak at all.
+    expect(receipts).toHaveLength(0);
   });
 
-  test('no explicit resume intent + a recovery file whose session IS resumable: the boot notice names the exact working command', async () => {
+  test('a resumable recovery snapshot does not add a clause either — no double announcement', async () => {
     writeCrash('sess-B', [{ role: 'user', content: 'hi' }], 'Interrupted work');
     const receipts: string[] = [];
 
     await announceResumeState({
-      workingDirectory: tmpDir,
-      homeDirectory: tmpDir,
-      surfaceRoot: 'tui',
+      surface,
       sessionManager: {
         load: (id: string) => {
           if (id !== 'sess-B') throw new Error('not found');
@@ -115,8 +123,9 @@ describe('bare launch never restores state', () => {
       router: { high: (m) => receipts.push(m) },
     });
 
-    expect(receipts).toHaveLength(1);
-    expect(receipts[0]).toContain('/session resume sess-B');
+    expect(receipts.join('\n')).not.toContain('recovery');
+    // And the snapshot itself is untouched by the notice.
+    expect(existsSync(surface.recoveryFile('sess-B'))).toBe(true);
   });
 });
 
@@ -124,13 +133,13 @@ describe('concurrent-session delete isolation', () => {
   test('deleteRecoveryFile with a sessionId removes ONLY that session, leaving concurrent snapshots intact', () => {
     writeCrash('sess-A', [{ role: 'user', content: 'a' }], 'A');
     writeCrash('sess-B', [{ role: 'user', content: 'b' }], 'B');
-    expect(existsSync(getRecoveryFilePath(tmpDir, 'sess-A'))).toBe(true);
-    expect(existsSync(getRecoveryFilePath(tmpDir, 'sess-B'))).toBe(true);
+    expect(existsSync(surface.recoveryFile('sess-A'))).toBe(true);
+    expect(existsSync(surface.recoveryFile('sess-B'))).toBe(true);
 
-    deleteRecoveryFile({ homeDirectory: tmpDir }, 'sess-A');
+    deleteRecoveryFile({ surface }, 'sess-A');
 
-    expect(existsSync(getRecoveryFilePath(tmpDir, 'sess-A'))).toBe(false);
+    expect(existsSync(surface.recoveryFile('sess-A'))).toBe(false);
     // The concurrent session's snapshot must survive — the bug this fixes.
-    expect(existsSync(getRecoveryFilePath(tmpDir, 'sess-B'))).toBe(true);
+    expect(existsSync(surface.recoveryFile('sess-B'))).toBe(true);
   });
 });
