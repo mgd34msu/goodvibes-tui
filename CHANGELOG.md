@@ -4,6 +4,12 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [1.20.0] - 2026-07-24
+
+### Changes
+
+- f919db89 feat: friction round — explicit-only state restores, honest visible text, complete interaction surfaces
+
 ## [1.19.6] - 2026-07-24
 
 ### Changes
