@@ -1,18 +1,25 @@
 /**
- * recovery-silent-restore.test.ts — the silent crash-recovery restore (no
- * Ctrl+R prompt, no .preserved dance) and the concurrent-session delete
- * isolation fix.
+ * recovery-silent-restore.test.ts — the bare-launch no-auto-restore contract.
  *
- *   • autoRestoreRecoverySession restores the newest crash snapshot in place
- *     and emits a single one-line receipt; a no-op when nothing is on disk.
- *   • deleteRecoveryFile(options, sessionId) removes ONLY that session's
- *     snapshot — one session's exit never wipes a concurrent session's.
+ * Owner ruling: state restores happen ONLY when the user explicitly asks —
+ * via a CLI argument, a slash command, or a prompt. Never automatically. The
+ * old silent-restore-at-startup path (autoRestoreRecoverySession, formerly
+ * called unconditionally from main.ts on every bare launch) is gone
+ * entirely. A live recovery snapshot on disk is now surfaced, never
+ * applied, by the boot resume notice (announceResumeState /
+ * buildResumeNotice in runtime/resume-notice.ts): it prints an honest
+ * one-line notice and, only when the snapshot's session id is genuinely
+ * reachable via /session resume <id>, the exact command to restore it. The
+ * notice never mutates the live conversation, never replays the journal, and
+ * never deletes the recovery file — it only reports.
  */
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { existsSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, rmSync } from 'node:fs';
+import { join } from 'node:path';
 import { ConversationManager } from '../../core/conversation.ts';
-import { autoRestoreRecoverySession } from '../../shell/recovery-input-helpers.ts';
-import { deleteRecoveryFile, getRecoveryFilePath, writeRecoveryFile } from '@/runtime/index.ts';
+import { announceResumeState } from '../../runtime/resume-notice.ts';
+import { checkRecoveryFile, deleteRecoveryFile, getRecoveryFilePath, writeRecoveryFile } from '@/runtime/index.ts';
+import { journalPathFor, openTranscriptJournal } from '../../core/transcript-journal.ts';
 import { makeProjectTempDir } from '../helpers/project-temp.ts';
 
 let tmpDir: string;
@@ -21,54 +28,95 @@ afterEach(() => { if (existsSync(tmpDir)) rmSync(tmpDir, { recursive: true, forc
 
 function writeCrash(sessionId: string, messages: Array<{ role: string; content: string }>, title: string): void {
   writeRecoveryFile(
-    { messages: messages as never, title, titleSource: 'auto', timestamp: Date.now() - 1000 },
+    { messages: messages as never, title, titleSource: 'auto', timestamp: Date.now() - 5000 },
     sessionId,
     title,
     { workingDirectory: tmpDir, homeDirectory: tmpDir },
   );
 }
 
-describe('silent crash-recovery restore', () => {
-  test('restores the snapshot in place, emits one receipt, and deletes the file', () => {
-    writeCrash('sess-A', [{ role: 'user', content: 'hi' }, { role: 'assistant', content: 'hello' }], 'Interrupted work');
-    const conversation = new ConversationManager(() => 80);
-    const receipts: string[] = [];
-    const reopened: unknown[] = [];
+/** Write one post-snapshot journal record for `sessionId`, mirroring what a live session would leave behind mid-turn. Returns the journal's path. */
+function writeJournalRecord(sessionId: string): string {
+  const journalPath = journalPathFor(tmpDir, sessionId);
+  const dir = join(journalPath, '..');
+  if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+  const journal = openTranscriptJournal(journalPath, sessionId);
+  journal.appendRecord('assistant_turn', [{ role: 'user', content: 'post-crash turn' }] as never);
+  return journalPath;
+}
 
-    const restored = autoRestoreRecoverySession({
+describe('bare launch never restores state', () => {
+  test('a live recovery file + journal on disk are left untouched: no fromJSON, no journal replay, no delete', async () => {
+    writeCrash('sess-A', [{ role: 'user', content: 'hi' }, { role: 'assistant', content: 'hello' }], 'Interrupted work');
+    const journalPath = writeJournalRecord('sess-A');
+    const conversation = new ConversationManager(() => 80);
+
+    // The boot resume notice is the ONLY thing touching recovery state at
+    // startup now; it takes no `conversation` dependency at all (see
+    // ResumeNoticeDeps) — there is nothing left in the bare-launch path that
+    // could apply this snapshot to a live conversation.
+    await announceResumeState({
       workingDirectory: tmpDir,
       homeDirectory: tmpDir,
-      conversation,
-      persistSnapshot: () => {},
-      reopenPanels: (s) => { reopened.push(s); },
-      systemMessageRouter: { high: (m) => receipts.push(m) },
+      surfaceRoot: 'tui',
+      sessionManager: { load: () => { throw new Error('sess-A was never fully saved'); } },
+      checkpointManager: undefined,
+      chainHistory: [],
+      memoryAvailable: false,
+      router: { high: () => {} },
     });
 
-    expect(restored).toBe(true);
-    expect(conversation.getMessageCount()).toBe(2);
-    // Exactly one receipt line, and it is the SDK's honest "Restored ..." wording.
-    expect(receipts).toHaveLength(1);
-    expect(receipts[0]).toContain('Restored an interrupted session');
-    expect(receipts[0]).toContain('Interrupted work');
-    // The snapshot's panels are reopened, and the file is gone (scoped delete).
-    expect(reopened).toHaveLength(1);
-    expect(existsSync(getRecoveryFilePath(tmpDir, 'sess-A'))).toBe(false);
+    expect(conversation.getMessageCount()).toBe(0);
+    // Journal not replayed/rotated.
+    expect(existsSync(journalPath)).toBe(true);
+    // Recovery file not consumed/deleted — still the newest live snapshot.
+    expect(existsSync(getRecoveryFilePath(tmpDir, 'sess-A'))).toBe(true);
+    expect(checkRecoveryFile({ workingDirectory: tmpDir, homeDirectory: tmpDir })?.sessionId).toBe('sess-A');
   });
 
-  test('is a silent no-op (returns false, emits nothing) when there is nothing to restore', () => {
-    const conversation = new ConversationManager(() => 80);
+  test('no explicit resume intent + a recovery file present: the boot notice reports it, without a command, when its session was never fully saved', async () => {
+    writeCrash('sess-A', [{ role: 'user', content: 'hi' }], 'Interrupted work');
     const receipts: string[] = [];
-    const restored = autoRestoreRecoverySession({
+
+    await announceResumeState({
       workingDirectory: tmpDir,
       homeDirectory: tmpDir,
-      conversation,
-      persistSnapshot: () => {},
-      reopenPanels: () => {},
-      systemMessageRouter: { high: (m) => receipts.push(m) },
+      surfaceRoot: 'tui',
+      sessionManager: { load: () => { throw new Error('not saved'); } },
+      checkpointManager: undefined,
+      chainHistory: [],
+      memoryAvailable: false,
+      router: { high: (m) => receipts.push(m) },
     });
-    expect(restored).toBe(false);
-    expect(receipts).toHaveLength(0);
-    expect(conversation.getMessageCount()).toBe(0);
+
+    expect(receipts).toHaveLength(1);
+    expect(receipts[0]).toContain('recovery snapshot');
+    // Never a fabricated restore command for a session that isn't actually loadable.
+    expect(receipts[0]).not.toContain('/session resume');
+  });
+
+  test('no explicit resume intent + a recovery file whose session IS resumable: the boot notice names the exact working command', async () => {
+    writeCrash('sess-B', [{ role: 'user', content: 'hi' }], 'Interrupted work');
+    const receipts: string[] = [];
+
+    await announceResumeState({
+      workingDirectory: tmpDir,
+      homeDirectory: tmpDir,
+      surfaceRoot: 'tui',
+      sessionManager: {
+        load: (id: string) => {
+          if (id !== 'sess-B') throw new Error('not found');
+          return { messages: [], meta: { title: 'Interrupted work', timestamp: Date.now() } } as never;
+        },
+      },
+      checkpointManager: undefined,
+      chainHistory: [],
+      memoryAvailable: false,
+      router: { high: (m) => receipts.push(m) },
+    });
+
+    expect(receipts).toHaveLength(1);
+    expect(receipts[0]).toContain('/session resume sess-B');
   });
 });
 

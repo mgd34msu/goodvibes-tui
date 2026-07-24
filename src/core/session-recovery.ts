@@ -8,14 +8,12 @@
  * it replays those records onto the live conversation and writes a fresh
  * snapshot so the gap is permanently closed.
  *
- * Seams (all three must call replayJournalForSession)
- * ────────────────────────────────────────────────────
+ * Seams (both must call replayJournalForSession)
+ * ───────────────────────────────────────────────
  * 1. CLI / command resume — session-workflow.ts, after `fromJSON` +
  *    `rebuildHistory` complete. Handles --continue, --resume, /session resume,
  *    and --fork.
- * 2. Ctrl+R crash recovery — blocking-input.ts, after `conversation.fromJSON`
- *    in the Ctrl+R branch. Handles SIGKILL-era recovery files.
- * 3. In-TUI panel resume — bootstrap-hook-bridge.ts
+ * 2. In-TUI panel resume — bootstrap-hook-bridge.ts
  *    `createResumeSessionHandler`, after `options.runtime.sessionId` is
  *    assigned. Handles the session browser / panel-driven resume.
  *

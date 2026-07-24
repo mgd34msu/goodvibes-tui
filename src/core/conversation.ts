@@ -644,6 +644,23 @@ export class ConversationManager extends SdkConversationManager {
     return nearest.blockIndex;
   }
 
+  /** First rendered line for message `absoluteIdx` (undefined if never
+   *  rendered). For a folded tool-group member this is the group's own
+   *  header line, not the following message's position — see
+   *  messageLineRegistry's doc. Flushes history if dirty. */
+  public getMessageLine(absoluteIdx: number): number | undefined {
+    this.flushHistory();
+    return this.messageLineRegistry[absoluteIdx];
+  }
+
+  /** Set a collapseKey's state directly, bypassing block lookup — needed for
+   *  a key with no BlockMeta yet (a folded tool-group member's own
+   *  `msg_<idx>` key only becomes a real block once its group expands). */
+  public setCollapsed(collapseKey: string, collapsed: boolean): void {
+    this.collapseState.set(collapseKey, collapsed);
+    this.markDirty();
+  }
+
   /** Returns a read-only view of the block registry for external consumers. */
   public getBlockRegistry(): readonly BlockMeta[] {
     return this.blockRegistry;

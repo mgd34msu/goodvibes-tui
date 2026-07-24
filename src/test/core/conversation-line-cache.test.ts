@@ -195,6 +195,64 @@ describe('cache-vs-cold equivalence', () => {
     assertCacheMatchesCold(cm);
   });
 
+  test('toggling a tool-result group invalidates exactly its members', () => {
+    // Two tool calls in one assistant turn fold under a single group header
+    // (see conversation-tool-groups.ts). A message entirely BEFORE the group
+    // keeps its cached Line[] instance across the toggle — proof the group's
+    // collapseState key is read (and invalidates) only the entries that
+    // actually depend on it, not the whole conversation.
+    //
+    // A message AFTER the group is a different story: collapsing/expanding
+    // this group changes how many BlockMeta entries the group's messages
+    // contribute (1 header block folded vs. 1 header + 2 member blocks
+    // unfolded), which shifts blockBase — the block-registry length embedded
+    // in every later message's cache key — for everything that follows. That
+    // cascade is the SAME existing mechanism that already invalidates
+    // everything after a code block whose collapse changes its line count
+    // (see this file's blockBase doc comment); it is correct, not something
+    // this test claims is scoped away.
+    const cm = new ConversationManager(() => 100);
+    cm.addUserMessage('an earlier message, unrelated to the tool group');
+    cm.addAssistantMessage('reading and writing now', {
+      toolCalls: [
+        { id: 'call-1', name: 'Read', arguments: { path: 'foo.ts' } },
+        { id: 'call-2', name: 'Write', arguments: { path: 'bar.ts' } },
+      ],
+    });
+    cm.addToolResults([
+      { callId: 'call-1', success: true, output: 'file one contents' },
+      { callId: 'call-2', success: true, output: 'wrote bar.ts' },
+    ]);
+    cm.addUserMessage('a later message, also unrelated');
+
+    const before = [...cm.getDisplayBlocks()]; // warm the cache; group defaults collapsed
+
+    const groupBlock = cm.getBlockRegistry().find((b) => b.type === 'tool_group');
+    expect(groupBlock).toBeDefined();
+
+    // Toggle the group open.
+    cm.toggleCollapseAtLine(groupBlock!.startLine);
+    const afterExpand = cm.getDisplayBlocks();
+
+    // The leading, unrelated message keeps the SAME Line[] object instance.
+    expect(afterExpand[0]).toBe(before[0]);
+
+    // Expanded: the header plus both individual tool-result blocks are visible.
+    const expandedRegistry = cm.getBlockRegistry();
+    expect(expandedRegistry.filter((b) => b.type === 'tool_group').length).toBe(1);
+    expect(expandedRegistry.filter((b) => b.type === 'tool').length).toBe(2);
+    assertCacheMatchesCold(cm);
+
+    // Toggle it collapsed again — the two member blocks disappear from the
+    // registry; only the header block remains.
+    const groupBlock2 = cm.getBlockRegistry().find((b) => b.type === 'tool_group');
+    cm.toggleCollapseAtLine(groupBlock2!.startLine);
+    assertCacheMatchesCold(cm);
+    const collapsedRegistry = cm.getBlockRegistry();
+    expect(collapsedRegistry.filter((b) => b.type === 'tool_group').length).toBe(1);
+    expect(collapsedRegistry.filter((b) => b.type === 'tool').length).toBe(0);
+  });
+
   test('resize (width change) re-renders every message correctly', () => {
     const cm = new ConversationManager(() => 100);
     cm.fromJSON({ messages: buildMixed(120) as never[] });
@@ -230,6 +288,49 @@ describe('cache-vs-cold equivalence', () => {
     // A diff-shaped tool result arriving next.
     cm.addAssistantMessage('now editing', { toolCalls: [{ id: 'call-2', name: 'Edit', arguments: {} }] });
     cm.addToolResults([{ callId: 'call-2', success: true, output: DIFF_OUTPUT }]);
+    assertCacheMatchesCold(cm);
+  });
+
+  test('a tool call that completes while sibling calls in the same turn are still pending shows done immediately, not a stale pending glyph', () => {
+    // Regression: the cache used to key an assistant message's pending state
+    // on a single aggregate boolean ("does ANY call still lack a result").
+    // With 3 calls, after only the first result arrives the aggregate is
+    // STILL true (calls 2 and 3 are still pending), so the cached entry from
+    // before any result arrived stayed valid and was served unchanged — call
+    // 1 kept showing the pending glyph (◌) instead of flipping to done (✓)
+    // until the LAST of the three results arrived.
+    const cm = new ConversationManager(() => 100);
+    cm.addUserMessage('run three tools');
+    cm.addAssistantMessage('running now', {
+      toolCalls: [
+        { id: 'call-1', name: 'Read', arguments: { path: 'a.ts' } },
+        { id: 'call-2', name: 'Read', arguments: { path: 'b.ts' } },
+        { id: 'call-3', name: 'Read', arguments: { path: 'c.ts' } },
+      ],
+    });
+    cm.getDisplayBlocks(); // warm — cached with all three calls pending
+
+    const countGlyphs = (): { done: number; pending: number } => {
+      const text = cm.getDisplayBlocks().map((l) => l.map((c) => c.char).join('')).join('\n');
+      return {
+        done: (text.match(/✓/g) ?? []).length,
+        pending: (text.match(/◌/g) ?? []).length,
+      };
+    };
+
+    // Only the FIRST result arrives; calls 2 and 3 are still awaiting theirs.
+    cm.addToolResults([{ callId: 'call-1', success: true, output: 'contents of a.ts' }]);
+    expect(countGlyphs()).toEqual({ done: 1, pending: 2 });
+    assertCacheMatchesCold(cm);
+
+    // Second result arrives; call-3 alone is still pending.
+    cm.addToolResults([{ callId: 'call-2', success: true, output: 'contents of b.ts' }]);
+    expect(countGlyphs()).toEqual({ done: 2, pending: 1 });
+    assertCacheMatchesCold(cm);
+
+    // Final result arrives; nothing pending.
+    cm.addToolResults([{ callId: 'call-3', success: true, output: 'contents of c.ts' }]);
+    expect(countGlyphs()).toEqual({ done: 3, pending: 0 });
     assertCacheMatchesCold(cm);
   });
 

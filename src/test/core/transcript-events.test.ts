@@ -79,4 +79,45 @@ describe('transcript event index', () => {
     const prevLine = conversation.prevTranscriptEventLine(9999, 'tool_result');
     expect(prevLine).toBe(nextLine);
   });
+
+  test('folded tool-result group members resolve navigation to the group header, not past it to the next message', () => {
+    // Regression: a folded (non-owning) group member renders zero lines while
+    // its group stays collapsed, so its messageLineRegistry entry used to be
+    // left at whatever position the buffer happened to be at afterward — the
+    // position the FOLLOWING message's content starts at, not this member's
+    // own. 'tool_result' navigation from the group then skipped straight past
+    // it into the next message instead of landing on the group.
+    const conversation = new ConversationManager(() => 100);
+    conversation.addUserMessage('read two files');           // absolute index 0
+    conversation.addAssistantMessage('reading both now', {   // absolute index 1
+      toolCalls: [
+        { id: 'call-1', name: 'Read', arguments: { path: 'a.ts' } },
+        { id: 'call-2', name: 'Read', arguments: { path: 'b.ts' } },
+      ],
+      model: 'gpt-5.4',
+      provider: 'openai',
+    });
+    conversation.addToolResults([                             // absolute indexes 2, 3
+      { callId: 'call-1', success: true, output: 'contents of a.ts' },
+      { callId: 'call-2', success: true, output: 'contents of b.ts' },
+    ]);
+    conversation.addUserMessage('thanks, that is all');       // absolute index 4
+
+    conversation.flushHistory();
+
+    const groupBlock = conversation.getBlockRegistry().find((b) => b.type === 'tool_group');
+    expect(groupBlock).toBeDefined();
+    const trailingUserLine = conversation.getMessageLine(4);
+    expect(trailingUserLine).not.toBe(groupBlock!.startLine);
+
+    // Both tool-result events (call-1 owns the header, call-2 is folded
+    // under it) resolve to the SAME group header line while the group is
+    // collapsed by default — neither one skips ahead to the trailing user
+    // message.
+    const first = conversation.nextTranscriptEventLine(-1, 'tool_result');
+    expect(first).toBe(groupBlock!.startLine);
+    const second = conversation.nextTranscriptEventLine(first, 'tool_result');
+    expect(second).toBe(groupBlock!.startLine);
+    expect(second).not.toBe(trailingUserLine);
+  });
 });

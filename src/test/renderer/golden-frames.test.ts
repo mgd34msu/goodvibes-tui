@@ -46,6 +46,7 @@ import {
   addConversationSplashScreen,
   renderConversationToolMessage,
 } from '../../core/conversation-rendering.ts';
+import type { ToolGroupMembership } from '../../core/conversation-tool-groups.ts';
 import { KeybindingsManager } from '../../input/keybindings.ts';
 import { renderHelpOverlay, renderShortcutsOverlay } from '../../renderer/help-overlay.ts';
 import { renderSettingsModal } from '../../renderer/settings-modal.ts';
@@ -684,7 +685,10 @@ describe('golden-frames — splash (constraint 4)', () => {
  * renderConversationToolMessage/renderConversationUserMessage functions
  * directly. Only the fields those two functions actually read are needed.
  */
-function makeToolRenderContext(collapseState: Map<string, boolean> = new Map()): {
+function makeToolRenderContext(
+  collapseState: Map<string, boolean> = new Map(),
+  toolGroupMembership?: ReadonlyMap<number, ToolGroupMembership>,
+): {
   context: unknown;
   lines: Line[];
 } {
@@ -701,6 +705,7 @@ function makeToolRenderContext(collapseState: Map<string, boolean> = new Map()):
     messageKindRegistry: new Map(),
     configManager: null,
     splashOptions: {},
+    toolGroupMembership,
   };
   return { context, lines };
 }
@@ -793,6 +798,77 @@ describe('golden-frames — conversation: tool result (diff, expanded)', () => {
   test('render is deterministic (two consecutive renders match)', () => {
     const a = snapshotEncode('tool-result-diff-expanded', renderToolResultDiffExpandedSurface());
     const b = snapshotEncode('tool-result-diff-expanded', renderToolResultDiffExpandedSurface());
+    expect(a).toBe(b);
+  });
+});
+
+// Folded tool-result group — a run of >=2 consecutive tool-result messages
+// sharing one assistant turn, consolidated under one collapsible header (see
+// conversation-tool-groups.ts). Both messages are rendered through the real
+// renderConversationToolMessage, with a hand-built membership map standing in
+// for what computeToolGroupMembership would have produced for this pair.
+const GROUP_TOOL_RESULT_A = {
+  role: 'tool' as const,
+  callId: 'call-golden-group-01',
+  toolName: 'read',
+  content: 'File contents:\n  1  export const x = 1;',
+};
+const GROUP_TOOL_RESULT_B = {
+  role: 'tool' as const,
+  callId: 'call-golden-group-02',
+  toolName: 'write',
+  content: 'Wrote 3 lines to output.ts',
+};
+const GROUP_MEMBERSHIP = new Map<number, ToolGroupMembership>([
+  [0, { groupKey: 'group_test', isFirst: true, toolCount: 2, totalLines: 3 }],
+  [1, { groupKey: 'group_test', isFirst: false, toolCount: 2, totalLines: 3 }],
+]);
+
+function renderToolGroupCollapsedSurface(): Line[] {
+  // Fresh collapseState: the group defaults to collapsed on first render.
+  const { context, lines } = makeToolRenderContext(new Map(), GROUP_MEMBERSHIP);
+  renderConversationToolMessage(context as never, GROUP_TOOL_RESULT_A, NORMAL_W, 0);
+  renderConversationToolMessage(context as never, GROUP_TOOL_RESULT_B, NORMAL_W, 1);
+  return lines;
+}
+
+function renderToolGroupExpandedSurface(): Line[] {
+  const collapseState = new Map<string, boolean>([['group_test', false]]);
+  const { context, lines } = makeToolRenderContext(collapseState, GROUP_MEMBERSHIP);
+  renderConversationToolMessage(context as never, GROUP_TOOL_RESULT_A, NORMAL_W, 0);
+  renderConversationToolMessage(context as never, GROUP_TOOL_RESULT_B, NORMAL_W, 1);
+  return lines;
+}
+
+describe('golden-frames — conversation: tool group (collapsed)', () => {
+  test('matches committed golden snapshot', () => {
+    const lines = renderToolGroupCollapsedSurface();
+    expect(lines.length).toBeGreaterThan(0);
+    assertGolden('tool-group-collapsed', lines);
+  });
+  test('render is deterministic (two consecutive renders match)', () => {
+    const a = snapshotEncode('tool-group-collapsed', renderToolGroupCollapsedSurface());
+    const b = snapshotEncode('tool-group-collapsed', renderToolGroupCollapsedSurface());
+    expect(a).toBe(b);
+  });
+  test('collapsed group renders only the header line — the second member emits nothing', () => {
+    const { context, lines } = makeToolRenderContext(new Map(), GROUP_MEMBERSHIP);
+    renderConversationToolMessage(context as never, GROUP_TOOL_RESULT_A, NORMAL_W, 0);
+    const afterFirst = lines.length;
+    renderConversationToolMessage(context as never, GROUP_TOOL_RESULT_B, NORMAL_W, 1);
+    expect(lines.length).toBe(afterFirst);
+  });
+});
+
+describe('golden-frames — conversation: tool group (expanded)', () => {
+  test('matches committed golden snapshot', () => {
+    const lines = renderToolGroupExpandedSurface();
+    expect(lines.length).toBeGreaterThan(0);
+    assertGolden('tool-group-expanded', lines);
+  });
+  test('render is deterministic (two consecutive renders match)', () => {
+    const a = snapshotEncode('tool-group-expanded', renderToolGroupExpandedSurface());
+    const b = snapshotEncode('tool-group-expanded', renderToolGroupExpandedSurface());
     expect(a).toBe(b);
   });
 });

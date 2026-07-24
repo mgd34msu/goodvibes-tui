@@ -34,14 +34,31 @@ function toggleBlocks(typeFilter: string, collapsed: boolean, ctx: CommandContex
   let count = 0;
   for (let i = 0; i < blockRegistry.length; i++) {
     const block = blockRegistry[i];
+    // A folded tool-result group (type 'tool_group', see conversation-tool-groups.ts)
+    // is a run of tool results under one header, so '/expand tool'/'collapse tool'
+    // treats it the same as a plain 'tool' block — toggling the header's collapse
+    // key expands/collapses every member underneath it.
     const matchesType = typeFilter === 'all'
-      || (typeFilter === 'tool' && block.type === 'tool')
+      || (typeFilter === 'tool' && (block.type === 'tool' || block.type === 'tool_group'))
       || (typeFilter === 'code' && block.type === 'code')
       || (typeFilter === 'thinking' && block.type === 'thinking');
     if (!matchesType) continue;
     const isCurrentlyCollapsed = ctx.session.conversationManager.isCollapsed(i);
     if (collapsed ? !isCurrentlyCollapsed : isCurrentlyCollapsed) {
       ctx.session.conversationManager.toggleCollapseAtLine(block.startLine);
+      // Expanding a folded tool-result group also expands every member's own
+      // collapse key in the same pass. A folded member pushes no BlockMeta of
+      // its own while the group is collapsed, so it never surfaces from this
+      // loop to be toggled individually — without this, '/expand tool' only
+      // opens the group header and each member still renders at whatever its
+      // own default collapse state is, needing a second '/expand tool' pass.
+      // '/collapse tool' needs no matching step: collapsing the group hides
+      // every member regardless of its own key.
+      if (!collapsed && block.type === 'tool_group' && block.groupMemberIndexes) {
+        for (const memberIdx of block.groupMemberIndexes) {
+          ctx.session.conversationManager.setCollapsed(`msg_${memberIdx}`, false);
+        }
+      }
       count++;
     }
   }
