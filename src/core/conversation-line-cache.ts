@@ -25,6 +25,10 @@
  *   - the absolute message index (embedded in every collapseKey and used for the
  *     system-message kind lookup)
  *   - the system-message kind (drives the error-navigation registry side effect)
+ *   - this message's tool-group membership (see conversation-tool-groups.ts):
+ *     whether it's folded under a group header, which member owns that header,
+ *     and the group's honest tool/line counts — a group growing as new tool
+ *     results stream in changes these for every existing member
  *   - the live values of every collapseState key the render READS (recorded via a
  *     proxy during a miss; a collapse toggle flips a recorded value and
  *     invalidates exactly the owning message)
@@ -50,7 +54,9 @@ import {
   renderConversationToolMessage,
   renderConversationUserMessage,
   collectCompletedToolCallIds,
+  isFoldedGroupMember,
 } from './conversation-rendering.ts';
+import { computeToolGroupMembership, type ToolGroupMembership } from './conversation-tool-groups.ts';
 import type { ConversationMessageSnapshot } from '@pellux/goodvibes-sdk/platform/core';
 // SystemMessageKind imported from runtime directly to avoid a cycle, mirroring
 // conversation-rendering.ts's own import.
@@ -96,17 +102,42 @@ interface KeyMeta {
   readonly blockBase: number;
   readonly kind: SystemMessageKind | undefined;
   /**
-   * True when this (assistant) message has a tool call with no result yet — it
-   * renders as pending rather than done. Keyed so the entry invalidates and
-   * re-renders ✓ once the tool result arrives. (item 2c.)
+   * Per-call completion signature for an assistant message's tool calls (see
+   * pendingToolKeyOf) — undefined when the message has none. Each call's id
+   * is paired with whether it has a matching result yet, in call order, so a
+   * SINGLE call finishing invalidates and re-renders that call's glyph from
+   * ◌ to ✓ immediately. A prior aggregate boolean only flipped once EVERY
+   * call in the message had completed, so in a multi-call turn the earlier
+   * calls kept showing ◌ until the last result arrived.
    */
-  readonly hasPendingTool: boolean;
+  readonly pendingToolKey: string | undefined;
+  /**
+   * Tool-group membership fields (see conversation-tool-groups.ts), flattened
+   * so a change invalidates the cache like any other structural input — e.g.
+   * a group growing from 2 to 3 members as tool results stream in changes
+   * groupToolCount/groupTotalLines for every existing member, and must
+   * re-render all of them with the updated header counts. `groupKey` is
+   * undefined when the message isn't part of a folded group.
+   */
+  readonly groupKey: string | undefined;
+  readonly groupIsFirst: boolean;
+  readonly groupToolCount: number;
+  readonly groupTotalLines: number;
 }
 
-/** Whether an assistant message has any tool call still awaiting a result. */
-function hasPendingToolCall(m: Message, completed: ReadonlySet<string>): boolean {
-  if (m.role !== 'assistant' || !m.toolCalls) return false;
-  return m.toolCalls.some((tc) => tc.id === undefined || !completed.has(tc.id));
+/**
+ * Per-call completion signature for an assistant message's tool calls, in
+ * call order — `id:0` or `id:1` per call, joined. Undefined for a message
+ * with no tool calls at all (nothing to key). Comparing this instead of an
+ * aggregate boolean lets exactly the calls whose completion status changed
+ * invalidate the entry, rather than waiting for every call in the message to
+ * complete before any of them re-renders as done.
+ */
+function pendingToolKeyOf(m: Message, completed: ReadonlySet<string>): string | undefined {
+  if (m.role !== 'assistant' || !m.toolCalls || m.toolCalls.length === 0) return undefined;
+  return m.toolCalls
+    .map((tc) => `${tc.id ?? ''}:${tc.id !== undefined && completed.has(tc.id) ? 1 : 0}`)
+    .join('|');
 }
 
 interface CacheEntry {
@@ -288,31 +319,51 @@ export class MessageLineCache {
     // Tool calls with no matching tool-result message are still pending; the
     // render context and the cache key both depend on this. (item 2c.)
     const completedToolCallIds = collectCompletedToolCallIds(messages);
-    const renderContext: ConversationRenderContext = { ...context, completedToolCallIds };
+    // Fold runs of >=2 consecutive tool-result messages sharing one assistant
+    // turn under a single collapsible header (see conversation-tool-groups.ts).
+    // Computed once per pass, over the same slice+offset appendConversationMessages
+    // would see, so both entry points fold identically.
+    const toolGroupMembership = computeToolGroupMembership(messages, msgIndexOffset);
+    const renderContext: ConversationRenderContext = { ...context, completedToolCallIds, toolGroupMembership };
 
     const touched = new Set<number>();
+    // Header line of each currently-open tool-group, keyed by groupKey — the
+    // first member's own registered line, recorded as that member is reached
+    // below so later (non-first) members of the SAME group can resolve to it.
+    const groupHeaderLines = new Map<string, number>();
 
     for (let i = 0; i < messages.length; i++) {
       const message = messages[i]!;
       const absoluteIdx = msgIndexOffset + i;
       const base = context.history.getLineCount();
       const blockBase = context.blockRegistry.length;
-      messageLineRegistry[absoluteIdx] = base;
 
       const uncacheable = absoluteIdx === streamingPlaceholderAbsIdx;
       const kind = context.messageKindRegistry.get(absoluteIdx);
-      const hasPendingTool = hasPendingToolCall(message, completedToolCallIds);
+      const pendingToolKey = pendingToolKeyOf(message, completedToolCallIds);
+      const groupMembership = toolGroupMembership.get(absoluteIdx);
+
+      if (groupMembership?.isFirst) groupHeaderLines.set(groupMembership.groupKey, base);
+      // A folded (non-first, currently collapsed) group member renders zero
+      // lines of its own — `base` here is just wherever the buffer happens to
+      // sit after the last member that DID render, which is the position the
+      // NEXT real content starts at, not this message's own position. Anchor
+      // it at the group's header line instead, so transcript-event
+      // navigation lands on the group rather than skipping past it.
+      messageLineRegistry[absoluteIdx] = isFoldedGroupMember(groupMembership, context.collapseState)
+        ? (groupHeaderLines.get(groupMembership!.groupKey) ?? base)
+        : base;
 
       if (!uncacheable) {
         const existing = this.entries.get(absoluteIdx);
-        if (existing && this.isValid(existing, message, width, cfg, blockBase, kind, hasPendingTool, context.collapseState)) {
+        if (existing && this.isValid(existing, message, width, cfg, blockBase, kind, pendingToolKey, groupMembership, context.collapseState)) {
           this.applyEntry(context, existing, base);
           touched.add(absoluteIdx);
           continue;
         }
       }
 
-      const entry = this.renderScratch(renderContext, message, width, absoluteIdx, cfg, blockBase, kind, hasPendingTool);
+      const entry = this.renderScratch(renderContext, message, width, absoluteIdx, cfg, blockBase, kind, pendingToolKey, groupMembership);
       this.applyEntry(context, entry, base);
       if (!uncacheable) {
         this.entries.set(absoluteIdx, entry);
@@ -338,7 +389,8 @@ export class MessageLineCache {
     cfg: RenderConfig,
     blockBase: number,
     kind: SystemMessageKind | undefined,
-    hasPendingTool: boolean,
+    pendingToolKey: string | undefined,
+    groupMembership: ToolGroupMembership | undefined,
     collapseState: Map<string, boolean>,
   ): boolean {
     const k = entry.keyMeta;
@@ -351,7 +403,11 @@ export class MessageLineCache {
       k.showReasoningSummary !== cfg.showReasoningSummary ||
       k.blockBase !== blockBase ||
       k.kind !== kind ||
-      k.hasPendingTool !== hasPendingTool
+      k.pendingToolKey !== pendingToolKey ||
+      k.groupKey !== groupMembership?.groupKey ||
+      k.groupIsFirst !== (groupMembership?.isFirst ?? false) ||
+      k.groupToolCount !== (groupMembership?.toolCount ?? 0) ||
+      k.groupTotalLines !== (groupMembership?.totalLines ?? 0)
     ) {
       return false;
     }
@@ -376,7 +432,8 @@ export class MessageLineCache {
     cfg: RenderConfig,
     blockBase: number,
     kind: SystemMessageKind | undefined,
-    hasPendingTool: boolean,
+    pendingToolKey: string | undefined,
+    groupMembership: ToolGroupMembership | undefined,
   ): CacheEntry {
     const scratchLines: Line[] = [];
     const scratchHistory = {
@@ -401,11 +458,18 @@ export class MessageLineCache {
       configManager: context.configManager,
       splashOptions: context.splashOptions,
       completedToolCallIds: context.completedToolCallIds,
+      toolGroupMembership: context.toolGroupMembership,
     };
 
     renderOne(scratchCtx, message, width, absoluteIdx, cfg);
-    // Trailing blank line, exactly as appendConversationMessages appends per message.
-    scratchLines.push(createEmptyLine(width));
+    // Trailing blank line, exactly as appendConversationMessages appends per
+    // message — except a non-owning member of a currently-collapsed
+    // tool-result group (see conversation-tool-groups.ts) rendered nothing
+    // above and gets no filler line either; every other message keeps the
+    // unconditional separator.
+    if (!isFoldedGroupMember(groupMembership, context.collapseState)) {
+      scratchLines.push(createEmptyLine(width));
+    }
 
     const collapseDeps: Array<[string, boolean | undefined]> = [];
     for (const key of readKeys) collapseDeps.push([key, context.collapseState.get(key)]);
@@ -420,7 +484,11 @@ export class MessageLineCache {
         showReasoningSummary: cfg.showReasoningSummary,
         blockBase,
         kind,
-        hasPendingTool,
+        pendingToolKey,
+        groupKey: groupMembership?.groupKey,
+        groupIsFirst: groupMembership?.isFirst ?? false,
+        groupToolCount: groupMembership?.toolCount ?? 0,
+        groupTotalLines: groupMembership?.totalLines ?? 0,
       },
       contentSig: contentSigOf(message),
       lines: scratchLines,

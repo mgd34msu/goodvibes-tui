@@ -39,9 +39,10 @@ import { createSessionContinuityHintsBuilder } from './runtime/session-continuit
 import { resolveWebSurfaceUrl } from '@pellux/goodvibes-sdk/platform/runtime/feature-announcements';
 import { readLastSessionPointer, writeRecoveryFile } from '@/runtime/index.ts';
 import { handleBlockingShellInput, type PendingPermissionState } from './shell/blocking-input.ts';
-import { autoRestoreRecoverySession, createPersistRecoverySnapshot, createReopenRecoveryPanels, handleErrorAffordanceKey } from './shell/recovery-input-helpers.ts';
+import { handleErrorAffordanceKey } from './shell/recovery-input-helpers.ts';
 import { wireShellUiOpeners } from './shell/ui-openers.ts';
 import { deriveComposerState } from './core/composer-state.ts';
+import { resolveFoldedBookmarkLine } from './core/bookmark-navigation.ts';
 import { buildPersistedSessionContext, getReturnContextMode, maybeAssistReturnContextSummary } from '@/runtime/index.ts';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 import { prepareShellCliRuntime } from './cli/entrypoint.ts';
@@ -301,13 +302,14 @@ async function main() {
   const jumpToBookmark = (key: string) => {
     conversation.getDisplayBlocks();
     const block = conversation.getBlockRegistry().find((entry) => entry.collapseKey === key);
-    if (!block) {
+    const line = block?.startLine ?? resolveFoldedBookmarkLine(conversation, key);
+    if (line === null) {
       systemMessageRouter.high(`[Bookmark] Not found: ${key}`);
       render();
       return;
     }
     scrollLocked = false;
-    scrollTop = Math.max(0, block.startLine);
+    scrollTop = Math.max(0, line);
     render();
   };
 
@@ -764,20 +766,13 @@ async function main() {
   process.on('unhandledRejection', unhandledRejectionHandler);
   stdout.on('resize', resizeHandler);
 
-  // --- Silent crash-recovery restore (no prompt/banner) ---
-  // Restore the newest crash snapshot in place, replay any post-snapshot
-  // journal turns, reopen its panels, and emit a single one-line receipt. The
-  // SDK scopes both the load and the follow-up delete to that snapshot's own
-  // session id, so a concurrent session's snapshot is never touched. Runs
-  // before the initial render so the restored content shows immediately.
-  autoRestoreRecoverySession({
-    workingDirectory: workingDir,
-    homeDirectory,
-    conversation,
-    persistSnapshot: createPersistRecoverySnapshot({ sessionManager: ctx.services.sessionManager, runtime, conversation }),
-    reopenPanels: createReopenRecoveryPanels({ panelManager, render }),
-    systemMessageRouter,
-  });
+  // State restores happen ONLY when the user explicitly asks — a CLI flag
+  // (--continue/--resume/--fork), a slash command (/session resume,
+  // /checkpoints, /rewind), or the boot resume notice's advertised command.
+  // There is deliberately no unconditional auto-restore here: a bare launch
+  // never loads a saved conversation on its own (owner ruling). Any live
+  // recovery snapshot is surfaced (never applied) by the boot resume
+  // notice — see announceResumeState in runtime/resume-notice.ts.
 
   // Initial render
   conversation.rebuildHistory();

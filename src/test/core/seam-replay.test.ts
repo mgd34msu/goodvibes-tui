@@ -1,5 +1,5 @@
 /**
- * Seam-level replay tests — exercises each of the three wired resume paths.
+ * Seam-level replay tests — exercises each of the two wired resume paths.
  *
  * These tests drive the actual seam functions with real journals on disk,
  * asserting that replayed turns appear in the live conversation. They are
@@ -11,10 +11,16 @@
  *   1. CLI / command resume — session-workflow.ts calls replayJournalForSession
  *      after fromJSON + rebuildHistory. Here we call the same function through
  *      the same arguments to verify the path is correctly wired.
- *   2. Ctrl+R crash recovery — handleBlockingShellInput with recoveryPending=true
- *      and a newer journal. Asserts replayed messages appear in conversation.
- *   3. In-TUI panel resume — createResumeSessionHandler with a real journal.
+ *   2. In-TUI panel resume — createResumeSessionHandler with a real journal.
  *      Asserts replayed messages appear after the panel resume handler runs.
+ *
+ * A third seam used to live here: the silent startup auto-restore
+ * (autoRestoreRecoverySession in shell/recovery-input-helpers.ts). That
+ * function and its main.ts call site are gone — state restores happen ONLY
+ * on explicit user intent now (owner ruling), never automatically at bare
+ * launch. A live recovery snapshot is surfaced, never applied, by the
+ * boot resume notice (see runtime/resume-notice.ts and
+ * test/shell/recovery-silent-restore.test.ts).
  */
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
@@ -30,8 +36,6 @@ import {
   replayJournalForSession,
   replayJournalIntoConversation,
 } from '../../core/session-recovery.ts';
-import { autoRestoreRecoverySession } from '../../shell/recovery-input-helpers.ts';
-import { writeRecoveryFile } from '@/runtime/index.ts';
 import { ConversationManager } from '../../core/conversation.ts';
 import { createResumeSessionHandler } from '../../runtime/bootstrap-hook-bridge.ts';
 import type { ResumeSessionOptions } from '../../runtime/bootstrap-hook-bridge.ts';
@@ -164,80 +168,9 @@ describe('seam-replay: seam 1 — CLI/command resume (replayJournalForSession)',
   });
 });
 
-// ── Seam 2: silent crash recovery (autoRestoreRecoverySession) ───────────────
-// The Ctrl+R prompt is gone: recovery now restores silently at startup. This
-// seam proves that path still wires journal replay after loading the snapshot.
+// ── Seam 2: In-TUI panel resume (bootstrap-hook-bridge.ts path) ───────────────
 
-describe('seam-replay: seam 2 — silent crash recovery (autoRestoreRecoverySession)', () => {
-  test('replays journal turns newer than the recovery snapshot timestamp', () => {
-    const sessionId = 'seam2-ses';
-    const homeDirectory = tmpDir;
-    const journalPath = journalPathFor(homeDirectory, sessionId);
-    const snapshotTimestamp = Date.now() - 5000;
-
-    // Write a real crash snapshot (one seed message — the silent restore skips
-    // an empty snapshot) for this session, then a journal with 3 post-snapshot
-    // records that the restore must replay in on top of it.
-    writeRecoveryFile(
-      { messages: makeMessages(1) as never, title: 'seam2 test', titleSource: 'auto', timestamp: snapshotTimestamp },
-      sessionId, 'seam2 test', { workingDirectory: tmpDir, homeDirectory },
-    );
-    writeJournalWithRecords(journalPath, sessionId, 3, snapshotTimestamp);
-
-    const conversation = new ConversationManager(() => 80);
-    let persistCalled = false;
-    const receipts: string[] = [];
-
-    const restored = autoRestoreRecoverySession({
-      workingDirectory: tmpDir,
-      homeDirectory,
-      conversation,
-      persistSnapshot: () => { persistCalled = true; },
-      reopenPanels: () => {},
-      systemMessageRouter: { high: (m) => receipts.push(m) },
-    });
-
-    expect(restored).toBe(true);
-    // Conversation carries the seed message PLUS the replayed journal turns.
-    expect(conversation.getMessageCount()).toBeGreaterThan(1);
-    expect(persistCalled).toBe(true);
-    // Journal cleaned up by rotate() inside replayJournalForSession.
-    expect(existsSync(journalPath)).toBe(false);
-    // Exactly one one-line receipt.
-    expect(receipts).toHaveLength(1);
-    expect(receipts[0]).toContain('Restored an interrupted session');
-  });
-
-  test('recovers without journal when no journal exists (replay is a no-op)', () => {
-    const sessionId = 'seam2-nojournal';
-    const homeDirectory = tmpDir;
-    writeRecoveryFile(
-      { messages: makeMessages(2) as never, title: 'seam2 nojournal test', titleSource: 'manual', timestamp: Date.now() - 1000 },
-      sessionId, 'seam2 nojournal test', { workingDirectory: tmpDir, homeDirectory },
-    );
-    const conversation = new ConversationManager(() => 80);
-    let persistCalled = false;
-
-    const restored = autoRestoreRecoverySession({
-      workingDirectory: tmpDir,
-      homeDirectory,
-      conversation,
-      persistSnapshot: () => { persistCalled = true; },
-      reopenPanels: () => {},
-      systemMessageRouter: { high: () => {} },
-    });
-
-    expect(restored).toBe(true);
-    // Messages from snapshot only (no journal to replay).
-    expect(conversation.getMessageCount()).toBe(2);
-    // No replay occurred, persistSnapshot not called by the replay path.
-    expect(persistCalled).toBe(false);
-  });
-});
-
-// ── Seam 3: In-TUI panel resume (bootstrap-hook-bridge.ts path) ───────────────
-
-describe('seam-replay: seam 3 — in-TUI panel resume (createResumeSessionHandler)', () => {
+describe('seam-replay: seam 2 — in-TUI panel resume (createResumeSessionHandler)', () => {
   test('replays journal turns newer than session snapshot onto conversation', () => {
     const sessionId = 'seam3-ses';
     const homeDirectory = tmpDir;

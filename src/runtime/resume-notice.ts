@@ -27,9 +27,19 @@
  *   - Every clause is independently gated on real data: a claim about
  *     checkpoints/chain history is only made when that data is known; "no
  *     chain history" means no chain clause is printed, not a fabricated one.
+ *   - A live recovery snapshot (the SDK's checkRecoveryFile — a separate
+ *     on-disk file from the session store, written every 60s while a session
+ *     runs) is reported whenever one exists, but the specific
+ *     `/session resume <id>` restore command is only advertised when that
+ *     exact session id is ALSO loadable through the session manager
+ *     (verified with a real load attempt, not assumed). A snapshot whose
+ *     session never completed a full turn has no working command that
+ *     reaches it yet — reported honestly without one, rather than
+ *     advertising a command that would fail. This module never auto-applies
+ *     the snapshot itself; restoring it is always the user's explicit call.
  */
 
-import { readLastSessionPointer } from '@/runtime/index.ts';
+import { checkRecoveryFile, readLastSessionPointer } from '@/runtime/index.ts';
 import type { WrfcChain } from '@pellux/goodvibes-sdk/platform/agents';
 import type { SessionManager } from '@pellux/goodvibes-sdk/platform/sessions';
 import type { WorkspaceCheckpointManager } from '@pellux/goodvibes-sdk/platform/workspace';
@@ -90,6 +100,19 @@ export interface ResumeNoticeFacts {
   readonly lastChainOutcome: ChainOutcome | null;
   /** Whether /recall (memory) is wired up in this session. */
   readonly memoryAvailable: boolean;
+  /**
+   * A live recovery snapshot on disk (newer than the last clean save), if
+   * any — the SDK's checkRecoveryFile, written periodically while a session
+   * runs and left behind by one that never reached a clean save (a crash is
+   * one cause; a second TUI still running in the same workspace is another —
+   * this module has no liveness check, so it never claims a crash happened,
+   * only that a snapshot exists). `resumable` is true only when that exact
+   * session id is also loadable through the session manager, i.e.
+   * `/session resume <id>` genuinely reaches it; false means the snapshot
+   * exists but nothing reaches it yet (e.g. a crash during its very first
+   * turn, before any full save). Null when there is no live snapshot at all.
+   */
+  readonly recoverySnapshot: { readonly sessionId: string; readonly resumable: boolean } | null;
 }
 
 function plural(n: number, word: string): string {
@@ -107,8 +130,10 @@ export function buildResumeNotice(facts: ResumeNoticeFacts): string | null {
   const checkpointCount = facts.checkpointCount ?? 0;
   const hasCheckpoints = checkpointsKnown && checkpointCount > 0;
   const hasChainHistory = facts.lastChainOutcome !== null;
+  const recovery = facts.recoverySnapshot;
+  const hasRecovery = recovery !== null;
 
-  if (!hasSession && !hasCheckpoints && !hasChainHistory) return null;
+  if (!hasSession && !hasCheckpoints && !hasChainHistory && !hasRecovery) return null;
 
   const summary: string[] = [];
   if (hasSession) summary.push(plural(facts.turnCount!, 'turn'));
@@ -117,6 +142,9 @@ export function buildResumeNotice(facts: ResumeNoticeFacts): string | null {
   // without one) — never guessed when the manager is unavailable.
   if (checkpointsKnown && (hasSession || hasCheckpoints)) summary.push(plural(checkpointCount, 'checkpoint'));
   if (hasChainHistory) summary.push(`last chain: ${facts.lastChainOutcome}`);
+  // Reported whenever a live snapshot exists, independent of whether a
+  // restore command can be advertised for it (see the hint below).
+  if (hasRecovery) summary.push('recovery snapshot found');
 
   const lead = hasSession ? 'Previous session found' : 'Workspace history found';
   let notice = `${lead}: ${summary.join(', ')}`;
@@ -126,6 +154,12 @@ export function buildResumeNotice(facts: ResumeNoticeFacts): string | null {
   if (hasSession) hints.push(`/session resume ${facts.lastSessionId} to continue`);
   if (hasCheckpoints) hints.push('/checkpoints to browse');
   if (facts.memoryAvailable) hints.push('/recall for memory');
+  // Only advertise the recovery snapshot's restore command when it is
+  // verified-resumable AND names a session other than the one already
+  // hinted above — otherwise this would just repeat the same command.
+  if (hasRecovery && recovery!.resumable && recovery!.sessionId !== facts.lastSessionId) {
+    hints.push(`/session resume ${recovery!.sessionId} to restore it`);
+  }
   if (hints.length > 0) notice += ` — ${hints.join(' · ')}`;
 
   return notice;
@@ -175,6 +209,36 @@ function readLastSessionTurns(deps: Pick<ResumeNoticeDeps, 'workingDirectory' | 
   }
 }
 
+/**
+ * Whether a live recovery snapshot exists, and whether its exact
+ * session id is also resumable through the real `/session resume <id>` path.
+ * A real load attempt (not a guess) decides resumability: `sessionManager`
+ * and `checkRecoveryFile`'s recovery directory are genuinely separate
+ * on-disk stores (see resume-notice.ts's header doc), so a snapshot whose
+ * session never completed a full turn will not be in the session store yet.
+ * Returns null when there is no live snapshot at all.
+ */
+function readRecoverySnapshot(
+  deps: Pick<ResumeNoticeDeps, 'workingDirectory' | 'homeDirectory' | 'sessionManager'>,
+): { sessionId: string; resumable: boolean } | null {
+  // No surfaceRoot: the recovery file lives in the SHARED .goodvibes/recovery
+  // directory, the same way main.ts's writeRecoveryFile call and the SDK's
+  // own getContinuitySnapshot() read it — unlike the session store /
+  // last-session pointer above, which IS scoped to surfaceRoot 'tui'.
+  const info = checkRecoveryFile({
+    workingDirectory: deps.workingDirectory,
+    homeDirectory: deps.homeDirectory,
+  });
+  if (!info) return null;
+  let resumable = true;
+  try {
+    deps.sessionManager.load(info.sessionId);
+  } catch {
+    resumable = false;
+  }
+  return { sessionId: info.sessionId, resumable };
+}
+
 async function readCheckpointCount(mgr: ResumeNoticeDeps['checkpointManager']): Promise<number | null> {
   if (!mgr) return null;
   try {
@@ -189,13 +253,18 @@ async function readCheckpointCount(mgr: ResumeNoticeDeps['checkpointManager']): 
 /**
  * Gather real facts from disk/services and, if there is anything to report,
  * print ONE compact system message via `deps.router.high`. No-op (and no
- * message) when there is no prior session, no checkpoints, and no chain
- * history — a fresh working directory stays quiet.
+ * message) when there is no prior session, no checkpoints, no chain history,
+ * and no live recovery snapshot — a fresh working directory stays
+ * quiet. This is the ONLY thing a live recovery snapshot does at
+ * startup: it never mutates the conversation, never touches the journal, and
+ * never deletes the snapshot file — restoring it is always the user's
+ * explicit call (via the advertised /session resume <id>, when one exists).
  */
 export async function announceResumeState(deps: ResumeNoticeDeps): Promise<void> {
   const session = readLastSessionTurns(deps);
   const checkpointCount = await readCheckpointCount(deps.checkpointManager);
   const lastChain = mostRecentChain(deps.chainHistory);
+  const recoverySnapshot = readRecoverySnapshot(deps);
 
   const notice = buildResumeNotice({
     turnCount: session?.turnCount ?? null,
@@ -203,6 +272,7 @@ export async function announceResumeState(deps: ResumeNoticeDeps): Promise<void>
     checkpointCount,
     lastChainOutcome: lastChain ? describeChainOutcome(lastChain) : null,
     memoryAvailable: deps.memoryAvailable,
+    recoverySnapshot,
   });
 
   if (notice) deps.router.high(notice);
