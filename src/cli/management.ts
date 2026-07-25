@@ -13,7 +13,7 @@ import { beginOpenAICodexLogin, exchangeOpenAICodexCode } from '@pellux/goodvibe
 import { inspectProviderAuth } from '@/runtime/index.ts';
 import type { CliCommandRuntime, GoodVibesCliParseResult } from './types.ts';
 import { formatProviderAuthRoute, summarizeProviderAuthRoutes } from './provider-auth-routes.ts';
-import { classifyProviderSetup } from './provider-classification.ts';
+import { classifyProviderSetup } from '../providers/provider-classification.ts';
 import { resolveRuntimeEndpointBinding } from './endpoints.ts';
 import { applyRuntimeEndpointFlagOverrides } from './config-overrides.ts';
 import type { RuntimeEndpointId } from './endpoints.ts';

@@ -14,6 +14,7 @@ import {
 } from '@pellux/goodvibes-sdk/platform/core';
 import type { BlockMeta } from './conversation-types.ts';
 import { MessageLineCache } from './conversation-line-cache.ts';
+import { UserReceiptIndices } from './conversation-user-receipts.ts';
 import {
   addConversationSplashScreen,
   conversationTextToLines,
@@ -139,6 +140,8 @@ export class ConversationManager extends SdkConversationManager {
   private errorLineRegistry: number[] = [];
   /** Maps message index → SystemMessageKind for system-role messages. */
   private messageKindRegistry: Map<number, SystemMessageKind> = new Map();
+  /** See conversation-user-receipts.ts. */
+  private userReceiptIndices = new UserReceiptIndices();
   /** Streaming block start line in history buffer (for incremental streaming update). */
   private streamingStartLine = -1;
   /**
@@ -221,25 +224,21 @@ export class ConversationManager extends SdkConversationManager {
     // stale kind (e.g. 'operational') and silently mis-classify the new message.
     const nextIndex = this.getMessageSnapshot().length;
     this.messageKindRegistry.delete(nextIndex);
+    this.userReceiptIndices.delete(nextIndex);
     super.addSystemMessage(content);
     this.markDirty();
   }
 
   /**
-   * addTypedSystemMessage - Add a system message with an explicit kind tag.
-   * The kind is stored in messageKindRegistry (keyed by the message index that
-   * will be assigned after the push) so that renderConversationSystemMessage
-   * can use it instead of text-based pattern matching.
-   *
-   * Called by SystemMessageRouter.routeTypedSystemMessage when routing to the
-   * conversation surface. Falls back to addSystemMessage for callers that do
-   * not have kind information.
+   * addTypedSystemMessage - System message with an explicit kind tag, stored
+   * in messageKindRegistry. `isUserReceipt` (conversation-user-receipts.ts)
+   * additionally marks it for rebuildHistory()'s splash check — only for a
+   * direct receipt to an explicit user action, never ambient boot chatter.
    */
-  public addTypedSystemMessage(content: string, kind: SystemMessageKind): void {
-    // getMessageSnapshot().length is the index this message will receive after
-    // addSystemMessage appends it to the messages array.
+  public addTypedSystemMessage(content: string, kind: SystemMessageKind, opts?: { isUserReceipt?: boolean }): void {
     const nextIndex = this.getMessageSnapshot().length;
     this.messageKindRegistry.set(nextIndex, kind);
+    if (opts?.isUserReceipt) this.userReceiptIndices.add(nextIndex); else this.userReceiptIndices.delete(nextIndex);
     super.addSystemMessage(content);
     this.markDirty();
   }
@@ -256,6 +255,7 @@ export class ConversationManager extends SdkConversationManager {
       for (const key of this.messageKindRegistry.keys()) {
         if (key >= postUndoCount) this.messageKindRegistry.delete(key);
       }
+      this.userReceiptIndices.purgeFrom(postUndoCount);
       this.markDirty();
     }
     return result;
@@ -357,6 +357,7 @@ export class ConversationManager extends SdkConversationManager {
     this.messageLineRegistry = [];
     this.errorLineRegistry = [];
     this.messageKindRegistry = new Map();
+    this.userReceiptIndices.clear();
     this.streamingStartLine = -1;
     this._displayFromMessageIndex = 0; // full reset — show everything on next render
   }
@@ -478,12 +479,14 @@ export class ConversationManager extends SdkConversationManager {
     const displayStart = this._displayFromMessageIndex;
     const visibleSnapshot = displayStart > 0 ? renderSnapshot.slice(displayStart) : renderSnapshot;
 
-    // Tool messages ARE rendered (as collapsed blocks); this filter is only
-    // for determining whether to show the splash screen (tool-only messages
-    // don't count as visible conversation content for splash purposes).
-    const displayMessages = visibleSnapshot.filter(
-      (m) => m.role !== 'tool' && m.role !== 'system',
-    );
+    // Tool/system messages aren't visible splash-purposes content, except a
+    // system message in userReceiptIndices. visibleSnapshot mirrors the
+    // snapshot 1:1 (only front-sliced), so index i is absolute displayStart+i.
+    const displayMessages = visibleSnapshot.filter((m, i) => {
+      if (m.role === 'tool') return false;
+      if (m.role === 'system') return this.userReceiptIndices.has(displayStart + i);
+      return true;
+    });
 
     if (displayMessages.length === 0 && displayStart === 0 && !this.suppressSplash) {
       this.addSplashScreen(width);

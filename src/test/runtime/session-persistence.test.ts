@@ -27,6 +27,7 @@ import {
   writeRecoveryFile,
 } from '@/runtime/index.ts';
 import { makeProjectTempDir } from '../helpers/project-temp.ts';
+import { ageRecoverySnapshot } from '../helpers/session-surface.ts';
 
 function makeTmpDir(prefix: string): string {
   return makeProjectTempDir(prefix);
@@ -112,6 +113,9 @@ describe('runtime/session-persistence', () => {
       'Recovered Session',
       { workingDirectory: cwdDir, homeDirectory: homeDir, surfaceRoot: 'tui' },
     );
+    // checkRecoveryFile answers "is there an abandoned crash to offer", so the
+    // snapshot has to be old enough that no live writer is implied.
+    ageRecoverySnapshot(getRecoveryFilePath(homeDir, 'user-recovery', 'tui'));
 
     const info = checkRecoveryFile({ workingDirectory: cwdDir, homeDirectory: homeDir, surfaceRoot: 'tui' });
     expect(info).not.toBeNull();
@@ -162,6 +166,9 @@ describe('runtime/session-persistence', () => {
       'Recovered Session',
       { workingDirectory: cwdDir, homeDirectory: homeDir, surfaceRoot: 'tui' },
     );
+    // checkRecoveryFile answers "is there an abandoned crash to offer", so the
+    // snapshot has to be old enough that no live writer is implied.
+    ageRecoverySnapshot(getRecoveryFilePath(homeDir, 'user-recovery', 'tui'));
 
     const info = checkRecoveryFile({ workingDirectory: cwdDir, homeDirectory: homeDir, surfaceRoot: 'tui' });
     expect(info?.returnContext?.activityLabel).toBe('assistant replied');

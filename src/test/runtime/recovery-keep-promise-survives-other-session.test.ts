@@ -25,7 +25,7 @@ import { writeLastSessionPointer, writeRecoveryFile } from '@/runtime/index.ts';
 import type { SessionSurface } from '@/runtime/index.ts';
 import { offerRecoverySnapshot, type RecoveryPromptDeps, type SelectionOpener,  resetAnsweredRecoveryOffersForTest } from '../../runtime/recovery-prompt.ts';
 import { makeProjectTempDir } from '../helpers/project-temp.ts';
-import { makeTestSurface } from '../helpers/session-surface.ts';
+import { ageRecoverySnapshot, makeTestSurface } from '../helpers/session-surface.ts';
 
 let tmpDir: string;
 let surface: SessionSurface;
@@ -68,6 +68,7 @@ describe('the Keep promise survives unrelated session activity', () => {
       'Kept crash',
       { surface },
     );
+    ageRecoverySnapshot(surface.recoveryFile('kept-session'));
 
     // 1. Offer it; the operator chooses Keep.
     const first = scriptedOperator(['not-now', 'keep']);

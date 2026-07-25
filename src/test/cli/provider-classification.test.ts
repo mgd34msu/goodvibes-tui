@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { classifyProviderSetup } from '../../cli/provider-classification.ts';
+import { classifyProviderSetup } from '../../providers/provider-classification.ts';
 
 describe('provider setup classification', () => {
   test('classifies subscription providers separately from API-key OpenAI', () => {

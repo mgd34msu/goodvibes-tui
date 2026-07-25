@@ -12,7 +12,7 @@ import type { ConfigKey } from '../config/index.ts';
 import type { CliCommandRuntime } from './types.ts';
 import type { CliCommandOutput } from './types.ts';
 import { getPackageVersion } from './help.ts';
-import { classifyProviderSetup } from './provider-classification.ts';
+import { classifyProviderSetup } from '../providers/provider-classification.ts';
 import { buildCliServicePosture } from './service-posture.ts';
 import { REDACTED_VALUE, collectSensitiveConfigValues, isRedactedValue, redactConfig, redactSerializedSecrets } from './redaction.ts';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';

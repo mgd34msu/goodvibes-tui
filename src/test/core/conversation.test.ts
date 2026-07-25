@@ -156,6 +156,48 @@ describe('ConversationManager', () => {
     });
   });
 
+  describe('user-action receipts vs the splash', () => {
+    // Regression coverage for the boot defect where the recovery modal's
+    // Resume/Keep/Remove receipt landed in the transcript while the splash
+    // still owned the screen: addTypedSystemMessage's plain form is ambient
+    // boot chatter and must stay under the splash, while a message marked
+    // isUserReceipt (what SystemMessageRouter.userReceipt() sends for a
+    // recovery-modal answer) must displace it, exactly like a user message.
+
+    test('an ambient system message (no isUserReceipt) never displaces the splash', () => {
+      const c = new ConversationManager(() => 120);
+      c.addTypedSystemMessage('Provider anthropic registered — from last session', 'system');
+      const frame = c.getDisplayBlocks().map((line) => line.map((cell) => cell.char).join('')).join('\n');
+      expect(frame).toContain('██████╗');
+      expect(frame).not.toContain('Provider anthropic registered');
+    });
+
+    test('a user-action receipt (isUserReceipt: true) displaces the splash and is visible', () => {
+      const c = new ConversationManager(() => 120);
+      c.addTypedSystemMessage(
+        'Recovery point removed (session sess-abc123) — it will not be offered again, even if the file reappears.',
+        'system',
+        { isUserReceipt: true },
+      );
+      const frame = c.getDisplayBlocks().map((line) => line.map((cell) => cell.char).join('')).join('\n');
+      expect(frame).not.toContain('██████╗');
+      expect(frame).toContain('Recovery point removed (session sess-abc123)');
+    });
+
+    test('undo removes a receipt outright — a later message recycling its freed index is ordinary ambient content', () => {
+      const c = new ConversationManager(() => 120);
+      c.addUserMessage('first');
+      c.addAssistantMessage('reply');
+      c.addUserMessage('second');
+      c.addTypedSystemMessage('Recovery point kept (session sess-xyz) — it will be offered again next launch.', 'system', { isUserReceipt: true });
+      c.undo(); // removes the last turn ('second' + the receipt) as one unit
+      c.addTypedSystemMessage('Provider anthropic registered', 'system'); // recycles the freed index, ambient (no isUserReceipt)
+      const frame = c.getDisplayBlocks().map((line) => line.map((cell) => cell.char).join('')).join('\n');
+      expect(frame).not.toContain('██████╗'); // 'first'/'reply' remain — real content, splash stays hidden regardless
+      expect(frame).not.toContain('Recovery point kept'); // undone — gone from the transcript entirely
+    });
+  });
+
   describe('clearDisplay', () => {
     test('clearDisplay zeros getDisplayBlocks', () => {
       cm.addUserMessage('hello');
