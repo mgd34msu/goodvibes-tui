@@ -1,4 +1,10 @@
 import { getConfigSnapshot } from '../config/index.ts';
+import {
+  describeServingEffort,
+  publishActiveEffortOptions,
+  resolveRequestedEffortForServingModel,
+  toEffortModel,
+} from '../providers/reasoning-effort-surface.ts';
 import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import type { AdaptivePlanner } from '@pellux/goodvibes-sdk/platform/core';
 import type { ConversationManager } from '../core/conversation';
@@ -227,7 +233,7 @@ export function createBootstrapCommandActions(
     clearScreen: () => unwiredShellAction('clearScreen'),
     activatePlan,
     requestPermission: (request) => requestPermission(request),
-    completeModelSelection: ({ model, effort, contextCap, target }) => {
+    completeModelSelection: ({ model, effort, contextCap, target, effortChosenByUser }) => {
       if (!model) return;
       const def = model;
       const key = def.registryKey ?? `${def.provider}:${def.id}`;
@@ -257,13 +263,39 @@ export function createBootstrapCommandActions(
           providerRegistry.setCurrentModel(key);
           runtime.model = key;
           runtime.provider = def.provider;
-          runtime.reasoningEffort = effort as 'instant' | 'low' | 'medium' | 'high';
+          // Two levels, kept apart on purpose. Config `provider.reasoningEffort`
+          // holds what the USER asked for; `runtime.reasoningEffort` holds what
+          // the model now serving will actually receive, which is the requested
+          // level snapped DOWN to this model's own levels.
+          //
+          // Only the picker's effort STEP is a user choice, and only it writes
+          // the preference. Every other route into this callback (model-only
+          // commit, context-cap commit) carries a level merely carried over
+          // from the previous model; storing that is what used to ratchet the
+          // preference down for good — one hop through a model that caps at
+          // 'medium' and 'xhigh' was gone from config, so hopping back could
+          // not restore it.
+          //
+          // A stored 'xhigh' that becomes 'high' on the wire would make a
+          // single-value display a lie, so the display carries BOTH values with
+          // their provenance instead (describeServingEffort) rather than the
+          // preference being corrupted to match.
+          const effortModel = toEffortModel(def);
+          // Publish this model's real levels first, so both the preference
+          // write below and a later `config set provider.reasoningEffort` are
+          // validated against them.
+          publishActiveEffortOptions(effortModel);
+          if (effortChosenByUser && effort) configManager.set('provider.reasoningEffort', effort);
+          const serving = resolveRequestedEffortForServingModel(configManager, effortModel);
+          runtime.reasoningEffort = serving.effective ?? '';
           configManager.set('provider.model', key);
-          configManager.set('provider.reasoningEffort', effort as 'instant' | 'low' | 'medium' | 'high');
           const ctxNote = contextCap != null && contextCap > 0
             ? `, context cap: ${contextCap.toLocaleString()}`
             : '';
-          conversation.log(`Switched to model: ${def.displayName} (${def.provider}), effort: ${effort}${ctxNote}`, { fg: '135' });
+          conversation.log(`Switched to model: ${def.displayName} (${def.provider}), effort: ${describeServingEffort(serving, effortModel)}${ctxNote}`, { fg: '135' });
+          // The SDK's own sentence, printed verbatim so the explanation cannot
+          // drift from the resolution that produced it.
+          if (serving.note) conversation.log(serving.note, { fg: '214' });
         }
       } catch (e) {
         conversation.log(`Error switching model: ${summarizeError(e)}`, { fg: '#ef4444' });

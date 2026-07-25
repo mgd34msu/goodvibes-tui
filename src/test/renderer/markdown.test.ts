@@ -142,7 +142,9 @@ describe('renderMarkdown', () => {
     const text = textLines(result.lines).join('\n');
     expect(text).toContain('┌');
     expect(text).toContain('Feature');
-    expect(text).toContain('Race Condit');
+    // The label wraps within its column rather than being cut to "Race Condit…".
+    expect(text).toContain('Race');
+    expect(text).toContain('Conditions');
     expect(text).toContain('┴');
   });
 
@@ -162,14 +164,12 @@ describe('renderMarkdown', () => {
     expect(text).toContain('┼');
   });
 
-  test('truncates a table cell to ellipsis without stranding a wide glyph past the column edge', () => {
-    // A narrow overall width plus a wide second column forces the first
-    // column down to its 4-char floor. "ab日x" (display width 5: a=1, b=1,
-    // 日=2, x=1) then overflows exactly on the wide glyph's placeholder
-    // cell — the truncation must replace the glyph itself with the
-    // ellipsis, not just its placeholder, or the cell renders one column
-    // wider than its budget and the wide character survives past the
-    // ellipsis.
+  test('wraps a narrow table cell containing a wide glyph instead of ellipsizing it', () => {
+    // A narrow overall width plus a very wide second column squeezes the
+    // first column hard. "ab日x" (display width 5: a=1, b=1, 日=2, x=1)
+    // must still reach the buffer in full — wrapped across physical lines
+    // if the column is narrower than 5 — and the wide glyph keeps its
+    // placeholder cell so the column edge stays where the border expects.
     const md = [
       '| A | B |',
       '| :--- | :--- |',
@@ -177,8 +177,27 @@ describe('renderMarkdown', () => {
     ].join('\n');
     const result = renderMarkdown(md, 30);
     const text = textLines(result).join('\n');
-    expect(text).toContain('ab…');
-    expect(text).not.toContain('日');
+    expect(text).not.toContain('…');
+    expect(text).toContain('日');
+    // Border positions are read from the Cell array, not the joined string: a
+    // wide glyph occupies two array slots (the second is the placeholder cell
+    // whose char is ''), so buffer columns and string offsets differ.
+    const barCols = (line: import('../../types/grid.ts').Line): number[] => {
+      const cols: number[] = [];
+      for (let i = 0; i < line.length; i++) if (line[i].char === '│') cols.push(i);
+      return cols;
+    };
+    const rowLines = result.filter((line) => barCols(line).length > 0);
+    const reference = barCols(rowLines[0]);
+    expect(reference.length).toBe(3); // 2 columns => 3 verticals
+    for (const line of rowLines) expect(barCols(line)).toEqual(reference);
+
+    // Every character of the first cell survives, reading down its column.
+    const firstColumn = rowLines
+      .map((line) => line.slice(reference[0] + 1, reference[1]).map((c) => c.char).join(''))
+      .join('')
+      .replace(/\s+/g, '');
+    expect(firstColumn).toContain('ab日x');
   });
 });
 

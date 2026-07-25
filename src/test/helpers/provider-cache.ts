@@ -41,9 +41,12 @@ export function getProviderCachePaths(cacheDir: string): ProviderCachePaths {
 export function writeModelCatalogCache(models: CatalogModel[], cacheDir: string, fetchedAt = Date.now(), ttlMs = 86_400_000): void {
   const { catalogPath } = getProviderCachePaths(cacheDir);
   mkdirSync(cacheDir, { recursive: true });
-  // Envelope version 2 = the sdk's current CATALOG_CACHE_VERSION (the
-  // store-versioning round); an older version is rejected as malformed.
-  const payload = { version: 2 as const, fetchedAt, ttlMs, models };
+  // Envelope version 3 = the sdk's current CATALOG_CACHE_VERSION. Version 3
+  // added `reasoningOptions` (the models.dev `reasoning_options` array that
+  // decides which reasoning levels each model really accepts); a version-2
+  // envelope predates the field and is discarded as stale, which reads here as
+  // an empty catalog rather than as a parse error.
+  const payload = { version: 3 as const, fetchedAt, ttlMs, models };
   writeFileSync(catalogPath, JSON.stringify(payload, null, 2), 'utf-8');
 }
 

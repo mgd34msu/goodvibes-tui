@@ -101,6 +101,14 @@ export interface ReconcileRedundantLegacyUnitInput {
   readonly readOwnCgroup?: (() => string) | undefined;
   /** Timeout applied to the DEFAULT systemctl runner only. Defaults to SYSTEMCTL_TIMEOUT_MS. */
   readonly systemctlTimeoutMs?: number | undefined;
+  /**
+   * Program the DEFAULT runner executes. Defaults to `systemctl` (resolved on
+   * PATH). Tests that deliberately exercise the default (non-injected) runner
+   * point this at an absolute stub path: Bun resolves a spawned program from
+   * the PATH captured at process start, so mutating `process.env.PATH` inside
+   * a test cannot redirect the call and the host's real systemctl would answer.
+   */
+  readonly systemctlCommand?: string | undefined;
   /** Cumulative budget for the whole pass. Defaults to RECONCILE_DEADLINE_MS. */
   readonly deadlineMs?: number | undefined;
 }
@@ -201,6 +209,7 @@ export async function reconcileRedundantLegacyUnit(
     input.systemctlTimeoutMs ?? SYSTEMCTL_TIMEOUT_MS,
     input.deadlineMs ?? RECONCILE_DEADLINE_MS,
   );
+  const systemctl = input.systemctlCommand ?? 'systemctl';
   const canonicalUnit = `${input.trackedServiceName}.service`;
   const legacyUnit = `${LEGACY_SERVICE_UNIT_NAME}.service`;
   const deadlineNote = (): string[] =>
@@ -210,7 +219,7 @@ export async function reconcileRedundantLegacyUnit(
 
   // Guard 1: the canonical unit must report active. (A timed-out, skipped, or
   // failed probe — e.g. a wedged user bus — lands here too and refuses.)
-  const probe = run('systemctl', ['--user', 'is-active', canonicalUnit]);
+  const probe = run(systemctl, ['--user', 'is-active', canonicalUnit]);
   const canonicalActive = (probe.status ?? 1) === 0 && (probe.stdout ?? '').trim() === 'active';
   if (!canonicalActive) {
     return {
@@ -227,7 +236,7 @@ export async function reconcileRedundantLegacyUnit(
   // Guard 2: 'active' alone does not prove the canonical unit is the daemon
   // actually serving (Type=simple reports active from fork onward). Require
   // its MainPID to resolve and be a live process.
-  const canonicalPid = parseMainPid(run('systemctl', ['--user', 'show', '-p', 'MainPID', '--value', canonicalUnit]));
+  const canonicalPid = parseMainPid(run(systemctl, ['--user', 'show', '-p', 'MainPID', '--value', canonicalUnit]));
   const alive = input.processAlive ?? defaultProcessAlive;
   if (canonicalPid === undefined || !alive(canonicalPid)) {
     return {
@@ -253,7 +262,7 @@ export async function reconcileRedundantLegacyUnit(
   // it: in the wrong-port state the legacy daemon itself answers the
   // configured-endpoint probe). Unknown refuses.
   const ownPid = input.ownPid ?? process.pid;
-  const legacyPidReply = run('systemctl', ['--user', 'show', '-p', 'MainPID', '--value', legacyUnit]);
+  const legacyPidReply = run(systemctl, ['--user', 'show', '-p', 'MainPID', '--value', legacyUnit]);
   const legacyPidKnown = (legacyPidReply.status ?? 1) === 0;
   const legacyPid = parseMainPid(legacyPidReply);
   const ownCgroup = (input.readOwnCgroup ?? defaultReadOwnCgroup)();
@@ -359,7 +368,7 @@ export async function reconcileRedundantLegacyUnit(
   // unit file if the disable actually succeeded — otherwise the enablement
   // symlink dangles at a deleted file and this tool can never repair it (the
   // next pass no-ops at the file-exists check).
-  const disableResult = run('systemctl', ['--user', 'disable', '--now', legacyUnit]);
+  const disableResult = run(systemctl, ['--user', 'disable', '--now', legacyUnit]);
   const disableStatus = disableResult.status ?? 1;
   if (disableStatus !== 0) {
     if (disableResult.status === null) {
@@ -367,7 +376,7 @@ export async function reconcileRedundantLegacyUnit(
       // removes the enablement symlinks synchronously BEFORE waiting on the
       // stop job, so the disable may well have taken effect even though the
       // client was killed. Re-inspect instead of printing a blanket denial.
-      const reinspect = run('systemctl', ['--user', 'is-enabled', legacyUnit]);
+      const reinspect = run(systemctl, ['--user', 'is-enabled', legacyUnit]);
       const reinspectOut = (reinspect.stdout ?? '').trim();
       const confirmedDisabled = (reinspect.status !== null)
         && (reinspectOut === 'disabled' || reinspectOut === 'not-found');
@@ -381,7 +390,7 @@ export async function reconcileRedundantLegacyUnit(
         } catch (error) {
           removeErrorAfterTimeout = summarizeError(error);
         }
-        run('systemctl', ['--user', 'daemon-reload']);
+        run(systemctl, ['--user', 'daemon-reload']);
         const lines = [
           `reconciled: the disable command timed out waiting on the stop job, but re-inspection confirms the ` +
             `installer-managed ${legacyUnit} is no longer enabled${removeErrorAfterTimeout ? '' : ` — its unit file was removed (${path})`}. ` +
@@ -425,7 +434,7 @@ export async function reconcileRedundantLegacyUnit(
   } catch (error) {
     removeError = summarizeError(error);
   }
-  run('systemctl', ['--user', 'daemon-reload']);
+  run(systemctl, ['--user', 'daemon-reload']);
 
   const lines = [
     `reconciled: ${canonicalUnit} is active and serving, so the redundant installer-managed ${legacyUnit} ` +

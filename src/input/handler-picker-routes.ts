@@ -7,6 +7,7 @@ import { ensureProviderKeyThenSelect } from './provider-key-intake.ts';
 import { resolveAndValidatePath } from '@pellux/goodvibes-sdk/platform/utils';
 import { logger } from '@pellux/goodvibes-sdk/platform/utils';
 import type { BlockActionId } from '../renderer/block-actions.ts';
+import { offersConfigurableEffort, requestedEffortLevel, servingEffortForLevel, toEffortModel } from '../providers/reasoning-effort-surface.ts';
 
 type ModelPickerRouteState = {
   modelPicker: ModelPickerModal;
@@ -17,6 +18,31 @@ type ModelPickerRouteState = {
   handleEscape: () => void;
   onModelPickerCommit?: () => boolean;
 };
+
+/**
+ * The user's REQUESTED reasoning level for this session, or undefined when the
+ * command context is not attached. Read from config through the shared helper —
+ * never from `session.runtime.reasoningEffort`, which holds the EFFECTIVE level
+ * for whichever model is serving and would re-seed a resolution with an already
+ * snapped-down value.
+ */
+function readRequestedEffort(state: ModelPickerRouteState): string | undefined {
+  const configManager = state.commandContext?.platform?.configManager;
+  if (!configManager) return undefined;
+  return requestedEffortLevel(configManager) || undefined;
+}
+
+/**
+ * The level the effort step should open on for a model about to be selected:
+ * the requested level SNAPPED to that model. Opening on the raw requested level
+ * would miss the list entirely whenever the target model caps lower, and
+ * showEffortPicker falls back to index 0 — landing the cursor on the LOWEST
+ * level rather than on what pressing Enter would actually give you.
+ */
+function effortStepPreselect(state: ModelPickerRouteState, model: { id: string; provider?: string; displayName?: string }): string {
+  const requested = readRequestedEffort(state) ?? 'medium';
+  return servingEffortForLevel(requested, toEffortModel(model as never)).effective ?? requested;
+}
 
 export function handleModelPickerToken(state: ModelPickerRouteState, token: InputToken): boolean {
   if (!state.modelPicker.active) return false;
@@ -61,9 +87,17 @@ export function handleModelPickerToken(state: ModelPickerRouteState, token: Inpu
       if (mode === 'model') {
         const selected = state.modelPicker.getSelected();
         if (selected) {
-          const currentEffort = state.commandContext?.session.runtime.reasoningEffort ?? 'medium';
-          if (state.modelPicker.target === 'main' && selected.reasoningEffort && selected.reasoningEffort.length > 0) {
-            state.modelPicker.showEffortPicker(selected, currentEffort);
+          // Preselect the REQUESTED level, not the effective one: the effort step
+          // re-chooses the preference, so it must open on what the user asked for
+          // even while a model that caps lower is serving.
+          const currentEffort = readRequestedEffort(state) ?? 'medium';
+          // Whether an effort step appears at all is now this model's own
+          // resolved spec: a model with no configurable reasoning level — or
+          // one whose levels are only a labelled best guess the adapters will
+          // discard — skips straight to commit instead of showing a list it
+          // does not honour.
+          if (state.modelPicker.target === 'main' && offersConfigurableEffort(toEffortModel(selected))) {
+            state.modelPicker.showEffortPicker(selected, effortStepPreselect(state, selected));
           } else {
             const target = state.modelPicker.target;
             const handled = state.onModelPickerCommit?.() ?? false;
@@ -75,6 +109,9 @@ export function handleModelPickerToken(state: ModelPickerRouteState, token: Inpu
               // (concealed prompt → secrets manager → live re-register) and
               // only then completes the original selection.
               ensureProviderKeyThenSelect(ctx, selected.provider, () => {
+                // No effort step ran, so `currentEffort` is carried over, not
+                // chosen: the commit path re-resolves from the stored
+                // preference instead of treating this as a new choice.
                 ctx.completeModelSelection?.({ model: selected, effort: currentEffort, target });
               });
             }
@@ -98,7 +135,8 @@ export function handleModelPickerToken(state: ModelPickerRouteState, token: Inpu
         const ctx = state.commandContext;
         if (model && effort && !handled && ctx) {
           ensureProviderKeyThenSelect(ctx, model.provider, () => {
-            ctx.completeModelSelection?.({ model, effort, target });
+            // The effort STEP: the level below is one the user just picked.
+            ctx.completeModelSelection?.({ model, effort, target, effortChosenByUser: true });
           });
         }
       } else if (mode === 'embeddingProvider') {
@@ -119,7 +157,7 @@ export function handleModelPickerToken(state: ModelPickerRouteState, token: Inpu
           } else {
             state.modelPicker.contextCapError = null;
             const validCap = parsedCap !== null && parsedCap > 0 && parsedCap <= 10_000_000 ? parsedCap : null;
-            const effort = state.commandContext?.session.runtime.reasoningEffort ?? 'medium';
+            const effort = readRequestedEffort(state) ?? 'medium';
             const target = state.modelPicker.target;
             const handled = state.onModelPickerCommit?.() ?? false;
             state.modelPicker.close();

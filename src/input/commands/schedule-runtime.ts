@@ -10,6 +10,7 @@ import type { AutomationManager } from '@pellux/goodvibes-sdk/platform/automatio
 import type { AutomationJob } from '@pellux/goodvibes-sdk/platform/automation';
 import type { AutomationScheduleDefinition } from '@pellux/goodvibes-sdk/platform/automation';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
+import { REASONING_EFFORT_SEVERITY, reasoningEffortRank } from '@pellux/goodvibes-sdk/platform/providers';
 import { buildAutomationEmptyState } from '@pellux/goodvibes-sdk/platform/runtime/feature-announcements';
 import { parseNaturalLanguageSchedule } from './schedule-nl.ts';
 import type {
@@ -50,10 +51,22 @@ function parseAutomationTarget(raw: string | undefined): AutomationSessionTarget
   return { kind: 'session', sessionId: value, createIfMissing: true };
 }
 
+/**
+ * Validate a `--effort` argument.
+ *
+ * Not a fixed four-value list: which levels exist is per-model, so this checks
+ * the SDK's severity ladder, narrowed to the current model's own resolved
+ * levels whenever the runtime has published them. A scheduled job may well run
+ * on a different model than the one in use now, so a level this model does not
+ * offer is still accepted when it is a real level — it is re-resolved against
+ * whichever model actually serves the run.
+ */
 function parseReasoningEffort(raw: string | undefined): AutomationExecutionPolicy['reasoningEffort'] | undefined {
   if (!raw) return undefined;
-  if (raw === 'instant' || raw === 'low' || raw === 'medium' || raw === 'high') return raw;
-  throw new Error(`Invalid reasoning effort: "${raw}". Use instant, low, medium, or high.`);
+  if (reasoningEffortRank(raw) !== -1) return raw;
+  throw new Error(
+    `Invalid reasoning effort: "${raw}". Known levels: ${REASONING_EFFORT_SEVERITY.join(', ')}.`,
+  );
 }
 
 function parseWakeMode(raw: string | undefined): AutomationWakeMode | undefined {

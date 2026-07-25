@@ -198,6 +198,71 @@ describe('ConversationManager', () => {
     });
   });
 
+  describe('any submission retires the splash', () => {
+    // Owner ruling: the splash yields on EITHER text input OR command input.
+    // The user-action-receipt rule above stays for the boot-modal case; this
+    // is the general trigger and supersedes it — a slash command that renders
+    // nothing into the transcript must still take the splash down, and it must
+    // not come back while the run continues.
+
+    test('dismissSplash() takes the splash down with an empty transcript', () => {
+      const c = new ConversationManager(() => 120);
+      expect(c.getDisplayBlocks().map((line) => line.map((cell) => cell.char).join('')).join('\n')).toContain('██████╗');
+
+      c.dismissSplash(); // what a slash command submission does
+
+      const frame = c.getDisplayBlocks().map((line) => line.map((cell) => cell.char).join('')).join('\n');
+      expect(frame).not.toContain('██████╗');
+      expect(frame).not.toContain('Ctrl+P panels');
+    });
+
+    test('the splash stays gone for the rest of the run, including when the panel posture toggles', () => {
+      const c = new ConversationManager(() => 120);
+      c.getDisplayBlocks();
+      c.dismissSplash();
+      c.setSplashSuppressed(true);  // panel workspace opened
+      c.setSplashSuppressed(false); // …and closed again — the per-frame posture is back to "allowed"
+      const frame = c.getDisplayBlocks().map((line) => line.map((cell) => cell.char).join('')).join('\n');
+      expect(frame).not.toContain('██████╗');
+    });
+
+    test('a slash command\'s transcript output flows normally once the splash has yielded', () => {
+      const c = new ConversationManager(() => 120);
+      c.getDisplayBlocks();
+      c.dismissSplash();
+      c.addTypedSystemMessage('[Health] providers: 3 reachable', 'system', { isUserReceipt: true });
+      c.addUserMessage('hello');
+      c.addAssistantMessage('hi there');
+      const frame = c.getDisplayBlocks().map((line) => line.map((cell) => cell.char).join('')).join('\n');
+      expect(frame).not.toContain('██████╗');
+      // Command output and the later turn are both present, in order.
+      expect(frame.indexOf('[Health] providers: 3 reachable')).toBeGreaterThanOrEqual(0);
+      expect(frame.indexOf('hi there')).toBeGreaterThan(frame.indexOf('[Health] providers: 3 reachable'));
+    });
+
+    test('consumeSplashTransition() reports the splash→transcript edge exactly once', () => {
+      const c = new ConversationManager(() => 120);
+      c.getDisplayBlocks();                    // splash frame
+      expect(c.consumeSplashTransition()).toBe(false);
+
+      c.dismissSplash();
+      c.getDisplayBlocks();                    // first transcript frame
+      expect(c.consumeSplashTransition()).toBe(true);
+
+      c.addUserMessage('later content');
+      c.getDisplayBlocks();
+      expect(c.consumeSplashTransition()).toBe(false); // not re-armed by ordinary frames
+    });
+
+    test('a user message still takes the splash down on its own (no dismissal needed)', () => {
+      const c = new ConversationManager(() => 120);
+      c.getDisplayBlocks();
+      c.addUserMessage('hello');
+      c.getDisplayBlocks();
+      expect(c.consumeSplashTransition()).toBe(true);
+    });
+  });
+
   describe('clearDisplay', () => {
     test('clearDisplay zeros getDisplayBlocks', () => {
       cm.addUserMessage('hello');

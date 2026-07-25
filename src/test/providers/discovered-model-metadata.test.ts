@@ -46,7 +46,8 @@ describe('discovered model metadata', () => {
     const model = testManagers.providerRegistry.listModels().find((entry) => entry.registryKey === 'LM Studio:qwen3-thinking');
 
     expect(model?.capabilities.reasoning).toBe(true);
-    expect(model?.reasoningEffort).toEqual(['instant', 'low', 'medium', 'high']);
+    expect(model?.reasoningEffort?.kind).toBe('effort');
+    expect(model?.reasoningEffort?.values).toEqual(['instant', 'low', 'medium', 'high']);
   });
 
   test('Ollama discovered models advertise reasoning support and OAI compat fallback stays available', () => {
@@ -67,7 +68,8 @@ describe('discovered model metadata', () => {
     if (!provider) throw new Error('Expected discovered Ollama provider');
 
     expect(model?.capabilities.reasoning).toBe(true);
-    expect(model?.reasoningEffort).toEqual(['instant', 'low', 'medium', 'high']);
+    expect(model?.reasoningEffort?.kind).toBe('effort');
+    expect(model?.reasoningEffort?.values).toEqual(['instant', 'low', 'medium', 'high']);
     expect(provider.capabilities?.toolCalling).toBe(true);
     expect(provider.capabilities?.reasoningControls).toBe(true);
   });

@@ -106,12 +106,20 @@ describe('resolveInstalledDaemonBinary', () => {
  * and `workingDirectory`, and every systemctl dispatch goes through an
  * injected `actionRunner` — nothing here ever touches a real
  * `~/.config/systemd/user` entry or invokes a real `systemctl` binary.
+ *
+ * `baseInput` supplies that injected runner by DEFAULT (see `stubSystemctl`).
+ * Omitting it used to fall through to the SDK's real `spawnSync('systemctl',
+ * ['--user', 'is-active', …])`, which made `service-status` results depend on
+ * whether the developer running the suite happened to have goodvibes.service
+ * active — the whole file now answers every probe from an injected stub.
  */
 describe('runDaemonServiceCli (systemd path, real PlatformServiceManager, stubbed systemctl)', () => {
   let dir = '';
+  let defaultStub: { runner: ManagedServiceActionRunner; calls: string[][] };
 
   beforeEach(() => {
     dir = mkdtempSync(join(tmpdir(), 'gv-service-commands-'));
+    defaultStub = stubSystemctl();
   });
 
   afterEach(() => {
@@ -127,6 +135,23 @@ describe('runDaemonServiceCli (systemd path, real PlatformServiceManager, stubbe
     return { runner, calls };
   }
 
+  /**
+   * The default injected systemctl: records every dispatch and answers the
+   * SDK's read-only `is-active` liveness probe from `isActive` (default: the
+   * unit is NOT active) instead of from the host's systemd.
+   */
+  function stubSystemctl(options: { readonly isActive?: boolean } = {}): { runner: ManagedServiceActionRunner; calls: string[][] } {
+    const calls: string[][] = [];
+    const runner: ManagedServiceActionRunner = (command, args) => {
+      calls.push([command, ...args]);
+      if (args.includes('is-active')) {
+        return options.isActive === true ? { status: 0, stdout: 'active\n' } : { status: 3, stdout: 'inactive\n' };
+      }
+      return { status: 0 };
+    };
+    return { runner, calls };
+  }
+
   function baseInput(overrides: Partial<Parameters<typeof runDaemonServiceCli>[0]> = {}) {
     return {
       subcommand: 'install-service' as const,
@@ -134,6 +159,8 @@ describe('runDaemonServiceCli (systemd path, real PlatformServiceManager, stubbe
       homeDir: dir,
       host: '127.0.0.1',
       port: 3421,
+      // Injected by default: no test in this file may reach host systemd.
+      actionRunner: defaultStub.runner,
       ...overrides,
     };
   }
@@ -223,9 +250,9 @@ describe('runDaemonServiceCli (systemd path, real PlatformServiceManager, stubbe
     const result = await runDaemonServiceCli(baseInput({ subcommand: 'service-status' }));
 
     expect(result.status.installed).toBe(true);
-    // No pidfile is ever written on the systemd path (only the 'manual'
-    // platform's start() tracks a pid), so `running` honestly reports false
-    // here and the CLI adds a caveat rather than claiming certainty either way.
+    // `running` comes from the injected stub's `is-active` answer (not active),
+    // so this stays false on a developer machine whose own goodvibes.service is
+    // running, and the CLI adds a caveat rather than claiming certainty.
     expect(result.status.running).toBe(false);
     // An earlier finding: the old wording asserted HOW `running` was computed
     // ("only reflects processes this tool started directly") — true for the
@@ -234,6 +261,35 @@ describe('runDaemonServiceCli (systemd path, real PlatformServiceManager, stubbe
     // honestly via `is-active`. The caveat now just offers the escape hatch
     // without asserting a mechanism, so it stays true either way.
     expect(result.lines.some((line) => line.includes('verify directly'))).toBe(true);
+  });
+
+  /**
+   * Isolation contract for the whole file. `service-status` reports the unit's
+   * liveness from whatever `actionRunner` it was handed, so the reported state
+   * must follow the stub in BOTH directions — proving the host's own
+   * goodvibes.service (active or not) can never decide this suite's result.
+   */
+  test('service-status reads liveness from the injected runner, never from host systemd', async () => {
+    // Install first: status() short-circuits to running:false when the unit
+    // file is absent, which would pass regardless of where liveness came from.
+    await runDaemonServiceCli(baseInput());
+
+    const activeStub = stubSystemctl({ isActive: true });
+    const active = await runDaemonServiceCli(baseInput({ subcommand: 'service-status', actionRunner: activeStub.runner }));
+    expect(active.status.installed).toBe(true);
+    expect(active.status.running).toBe(true);
+    expect(activeStub.calls).toContainEqual(['systemctl', '--user', 'is-active', 'goodvibes.service']);
+
+    const inactiveStub = stubSystemctl({ isActive: false });
+    const inactive = await runDaemonServiceCli(baseInput({ subcommand: 'service-status', actionRunner: inactiveStub.runner }));
+    expect(inactive.status.installed).toBe(true);
+    expect(inactive.status.running).toBe(false);
+    expect(inactiveStub.calls).toContainEqual(['systemctl', '--user', 'is-active', 'goodvibes.service']);
+
+    // Every recorded dispatch on the status path is a read-only probe.
+    for (const call of [...activeStub.calls, ...inactiveStub.calls]) {
+      expect(call.some((token) => ['start', 'stop', 'enable', 'disable', 'restart', 'daemon-reload'].includes(token))).toBe(false);
+    }
   });
 });
 
@@ -1148,31 +1204,37 @@ describe('reconcileRedundantLegacyUnit — auto-retire a redundant install-scrip
   });
 
   test('default runner is hard-timeout-bounded: a hanging systemctl (wedged user bus) degrades to a fast refusal, never a boot hang', async () => {
-    // Reproduces the verifier's frozen-event-loop probe: a fake systemctl on
-    // PATH that sleeps forever. Without a spawnSync timeout the reconcile
-    // blocked the daemon's event loop indefinitely; with it, the probe times
-    // out (status null) and the guard refuses within the bound.
+    // Reproduces the verifier's frozen-event-loop probe: a fake systemctl that
+    // sleeps forever. Without a spawnSync timeout the reconcile blocked the
+    // daemon's event loop indefinitely; with it, the probe times out (status
+    // null) and the guard refuses within the bound.
+    //
+    // The stub is addressed by ABSOLUTE PATH through `systemctlCommand`. This
+    // test used to prepend its stub's directory to `process.env.PATH`, which
+    // does nothing under Bun (a spawned program is resolved from the PATH
+    // captured at process start): every run of this test actually queried the
+    // HOST's systemctl, so it only passed while the developer's own
+    // goodvibes.service happened to be inactive — and, with an active one, it
+    // could have dispatched a real `systemctl --user disable`.
     const dir = mkdtempSync(join(tmpdir(), 'gv-reconcile-timeout-'));
     const stub = join(dir, 'systemctl');
     writeFileSync(stub, '#!/bin/sh\nsleep 30\n');
     chmodSync(stub, 0o755);
-    const previousPath = process.env.PATH;
-    process.env.PATH = `${dir}:${previousPath ?? ''}`;
     try {
       const startedAt = Date.now();
       const result = await reconcileRedundantLegacyUnit(baseReconcileInput({
         // No actionRunner: exercises the DEFAULT spawnSync runner against the
         // hanging stub, with a short injected timeout to keep the suite fast.
+        systemctlCommand: stub,
         systemctlTimeoutMs: 500,
       }));
       const elapsedMs = Date.now() - startedAt;
 
       expect(result.action).toBe('noop');
       expect(result.reason).toBe('canonical-not-active'); // timed-out probe = not provably active
+      expect(elapsedMs).toBeGreaterThanOrEqual(400); // the hanging stub really ran and really timed out
       expect(elapsedMs).toBeLessThan(10_000); // bounded, not the stub's 30s hang
     } finally {
-      if (previousPath === undefined) delete process.env.PATH;
-      else process.env.PATH = previousPath;
       rmSync(dir, { recursive: true, force: true });
     }
   });
@@ -1181,18 +1243,36 @@ describe('reconcileRedundantLegacyUnit — auto-retire a redundant install-scrip
     // Pins the degraded-bus (slow-but-completing) shape: per-call timeouts
     // alone let ~5 sequential calls stack up. With the pass deadline already
     // exhausted, every call is skipped outright and the refusal says so.
-    const removed: string[] = [];
-    const result = await reconcileRedundantLegacyUnit(baseReconcileInput({
-      deadlineMs: 0,
-      legacyUnitFileRemove: (p) => removed.push(p),
-      // No actionRunner: the deadline wrapper must skip the DEFAULT runner's
-      // calls before any child process is spawned.
-    }));
+    //
+    // This is the one reconcile test that deliberately leaves `actionRunner`
+    // unset (the point is that the DEFAULT spawnSync runner never gets to run),
+    // so PATH is pointed at a systemctl stub that records its own invocation.
+    // If the deadline wrapper ever regressed, the marker file would appear and
+    // this test would say so — instead of quietly querying the host's systemd.
+    const dir = mkdtempSync(join(tmpdir(), 'gv-reconcile-deadline-'));
+    const marker = join(dir, 'systemctl-was-invoked');
+    const stub = join(dir, 'systemctl');
+    writeFileSync(stub, `#!/bin/sh\ntouch ${marker}\nexit 1\n`);
+    chmodSync(stub, 0o755);
+    const previousPath = process.env.PATH;
+    process.env.PATH = `${dir}:${previousPath ?? ''}`;
+    try {
+      const removed: string[] = [];
+      const result = await reconcileRedundantLegacyUnit(baseReconcileInput({
+        deadlineMs: 0,
+        legacyUnitFileRemove: (p) => removed.push(p),
+      }));
 
-    expect(result.action).toBe('noop');
-    expect(result.reason).toBe('canonical-not-active');
-    expect(removed).toEqual([]);
-    expect(result.lines.join('\n')).toContain('time budget');
+      expect(result.action).toBe('noop');
+      expect(result.reason).toBe('canonical-not-active');
+      expect(removed).toEqual([]);
+      expect(result.lines.join('\n')).toContain('time budget');
+      expect(existsSync(marker)).toBe(false); // no child process was spawned at all
+    } finally {
+      if (previousPath === undefined) delete process.env.PATH;
+      else process.env.PATH = previousPath;
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });
 

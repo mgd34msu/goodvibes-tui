@@ -5,8 +5,7 @@ import type { ToolCall, ToolResult } from '@pellux/goodvibes-sdk/platform/types'
 import type { ProviderMessage, ContentPart } from '@pellux/goodvibes-sdk/platform/providers';
 import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import type { TranscriptEventKind } from '@pellux/goodvibes-sdk/platform/core';
-// SystemMessageKind imported from runtime directly to avoid cycle:
-//   conversation.ts → system-message-router.ts → conversation.ts
+// SystemMessageKind imported from runtime directly to avoid cycle: conversation.ts → system-message-router.ts → conversation.ts
 import type { SystemMessageKind } from '@/runtime/index.ts';
 import {
   ConversationManager as SdkConversationManager,
@@ -15,6 +14,9 @@ import {
 import type { BlockMeta } from './conversation-types.ts';
 import { MessageLineCache } from './conversation-line-cache.ts';
 import { UserReceiptIndices } from './conversation-user-receipts.ts';
+import { SplashGateState } from './conversation-splash-state.ts';
+import { resolveTranscriptEventLine } from './conversation-event-navigation.ts';
+import { SearchExpansionTracker } from './conversation-search-expansion.ts';
 import {
   addConversationSplashScreen,
   conversationTextToLines,
@@ -111,6 +113,7 @@ export class ConversationManager extends SdkConversationManager {
   private _configManager: ConfigManager | null = null;
   /** Collapse state: stable key (msg_N) -> collapsed (true = collapsed). */
   private collapseState: Map<string, boolean> = new Map();
+  public readonly searchExpansion = new SearchExpansionTracker();
   /** Block registry: track rendered blocks for copy/apply. */
   protected blockRegistry: BlockMeta[] = [];
   /**
@@ -167,6 +170,8 @@ export class ConversationManager extends SdkConversationManager {
 
   public suppressSplash: boolean = false;
   public splashOptions: SplashOptions = {};
+  /** Run-sticky dismissal + the splash→transcript edge (conversation-splash-state.ts). */
+  private readonly splashGate = new SplashGateState();
 
   constructor(
     getWidth: () => number = () => process.stdout.columns || 80,
@@ -488,10 +493,12 @@ export class ConversationManager extends SdkConversationManager {
       return true;
     });
 
-    if (displayMessages.length === 0 && displayStart === 0 && !this.suppressSplash) {
+    if (displayMessages.length === 0 && displayStart === 0 && !this.suppressSplash && !this.splashGate.dismissed) {
       this.addSplashScreen(width);
+      this.splashGate.enter();
       return;
     }
+    this.splashGate.leave(); // latches the splash→transcript edge for consumeSplashTransition()
 
     // The in-progress streaming placeholder (rendered EMPTY above via
     // renderSnapshot) is left uncached: its content mutates in place per delta and
@@ -643,6 +650,7 @@ export class ConversationManager extends SdkConversationManager {
     if (!nearest) return -1;
     const current = this.collapseState.get(nearest.collapseKey) ?? false;
     this.collapseState.set(nearest.collapseKey, !current);
+    this.searchExpansion.noteUserTouch(nearest.collapseKey);
     this.markDirty();
     return nearest.blockIndex;
   }
@@ -704,36 +712,28 @@ export class ConversationManager extends SdkConversationManager {
 
   public nextTranscriptEventLine(currentLine: number, kind: TranscriptEventKind | 'all' = 'all'): number {
     this.flushHistory();
-    const index = this.getTranscriptEventIndex();
-    const events = kind === 'all' ? index.events : index.events.filter((event) => event.kind === kind);
-    if (events.length === 0) return -1;
-    const lines = events
-      .map((event) => this.messageLineRegistry[event.messageIndex] ?? -1)
-      .filter((line) => line >= 0)
-      .sort((a, b) => a - b);
-    if (lines.length === 0) return -1;
-    const after = lines.find((line) => line > currentLine);
-    return after ?? lines[0]!;
+    return resolveTranscriptEventLine(this.getTranscriptEventIndex().events, kind, this.messageLineRegistry, currentLine, 'next');
   }
 
   public prevTranscriptEventLine(currentLine: number, kind: TranscriptEventKind | 'all' = 'all'): number {
     this.flushHistory();
-    const index = this.getTranscriptEventIndex();
-    const events = kind === 'all' ? index.events : index.events.filter((event) => event.kind === kind);
-    if (events.length === 0) return -1;
-    const lines = events
-      .map((event) => this.messageLineRegistry[event.messageIndex] ?? -1)
-      .filter((line) => line >= 0)
-      .sort((a, b) => a - b);
-    if (lines.length === 0) return -1;
-    const before = [...lines].reverse().find((line) => line < currentLine);
-    return before ?? lines[lines.length - 1]!;
+    return resolveTranscriptEventLine(this.getTranscriptEventIndex().events, kind, this.messageLineRegistry, currentLine, 'prev');
   }
 
   public setSplashSuppressed(suppressed: boolean): void {
     if (this.suppressSplash === suppressed) return;
     this.suppressSplash = suppressed;
     this.markDirty();
+  }
+
+  /** Retire the splash for the run — any submission does it (SplashGateState). */
+  public dismissSplash(): void {
+    if (this.splashGate.dismiss()) this.markDirty();
+  }
+
+  /** True once, on the frame the splash gives way to transcript content. */
+  public consumeSplashTransition(): boolean {
+    return this.splashGate.consumeTransition();
   }
 
   private addSplashScreen(width: number): void {

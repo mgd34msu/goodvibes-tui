@@ -303,6 +303,11 @@ export function handleBlockCopy(
   }
   copyToClipboard(nearest.rawContent);
   onCopied();
+  // An explicit action on this block permanently exempts it from the
+  // search-close auto-re-collapse (see ConversationManager.noteUserTouch) —
+  // copying content the user just had search reveal is a deliberate choice
+  // to keep it visible, not an accident of typing a query.
+  conversationManager.searchExpansion.noteUserTouch(nearest.collapseKey);
   conversationManager.log(`[Copied ${describeBlockForReceipt(nearest)}]`, { fg: '#22c55e' });
   requestRender();
   setTimeout(() => requestRender(), 2005);
@@ -324,6 +329,8 @@ export function handleBookmark(
   }
   const label = `${nearest.type}: ${nearest.rawContent.slice(0, 40).replace(/\n/g, ' ')}`;
   const added = bookmarkManager.toggle(nearest.collapseKey, label);
+  // See handleBlockCopy's note — bookmarking is an explicit block action too.
+  conversationManager.searchExpansion.noteUserTouch(nearest.collapseKey);
   const target = describeBlockForReceipt(nearest);
   const msg = added
     ? `[Bookmarked: ${target}]`
@@ -346,6 +353,8 @@ export function handleBlockSave(
     requestRender();
     return;
   }
+  // See handleBlockCopy's note — saving to a file is an explicit block action too.
+  conversationManager.searchExpansion.noteUserTouch(nearest.collapseKey);
   const target = describeBlockForReceipt(nearest);
   try {
     const filePath = bookmarkManager.saveToFile(nearest.rawContent, nearest.type);

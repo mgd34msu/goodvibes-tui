@@ -1,8 +1,9 @@
 // ---------------------------------------------------------------------------
 // model-routing-chip.test.ts
-// The never-silent routing-chip decision: emit old→new (reason unknown) for a
-// real model change, but stay silent for a no-op change or one already narrated
-// by the richer [Failover] line (correlated via the fallback log).
+// The never-silent routing-chip decision: report every real model change, with
+// the fallback log's own reason when one correlates and "reason unknown" only
+// when nothing explains it. Silence is reserved for non-changes — the failover
+// path suppresses its own two switches at the listener (stream-event-wiring).
 // ---------------------------------------------------------------------------
 
 import { describe, test, expect } from 'bun:test';
@@ -38,6 +39,15 @@ describe('findRecentFallbackReason', () => {
   test('returns null when from/to do not match', () => {
     expect(findRecentFallbackReason(log, 'openai', 'google', NOW)).toBeNull();
   });
+  test('matches entries recorded as registry keys, not just bare provider ids', () => {
+    // The SDK's agent-orchestrator fallback records provider-qualified route
+    // labels in this same log. Reading only the bare form is what printed
+    // "(reason unknown)" for a failover whose reason was sitting right there.
+    const keyed: FallbackTransitionLike[] = [
+      { from: 'abacusai:route-llm', to: 'openai-subscriber:gpt-5.6-sol', reason: 'stream timeout', ts: NOW - 500 },
+    ];
+    expect(findRecentFallbackReason(keyed, 'abacusai', 'openai-subscriber', NOW)).toBe('stream timeout');
+  });
 });
 
 describe('buildRoutingChip', () => {
@@ -54,10 +64,23 @@ describe('buildRoutingChip', () => {
     expect(buildRoutingChip(change({ registryKey: 'anthropic:claude-a' }), [], NOW)).toBeNull();
   });
 
-  test('stays silent when the change was a failover already narrated by [Failover]', () => {
+  test('quotes the fallback log\'s reason instead of claiming the reason is unknown', () => {
     const c = change({ registryKey: 'anthropic:claude-b', provider: 'anthropic', previous: { registryKey: 'openai:gpt', provider: 'openai' } });
     const log: FallbackTransitionLike[] = [{ from: 'openai', to: 'anthropic', reason: 'timeout', ts: NOW - 100 }];
-    expect(buildRoutingChip(c, log, NOW)).toBeNull();
+    expect(buildRoutingChip(c, log, NOW)).toBe(`${ROUTING_CHIP_PREFIX} model changed: openai:gpt → anthropic:claude-b (failover: timeout)`);
+  });
+
+  test('quotes the reason for a registry-key-shaped log entry (the owner\'s abacusai → openai-subscriber case)', () => {
+    const c = change({
+      registryKey: 'openai-subscriber:gpt-5.6-sol', provider: 'openai-subscriber',
+      previous: { registryKey: 'abacusai:route-llm', provider: 'abacusai' },
+    });
+    const log: FallbackTransitionLike[] = [
+      { from: 'abacusai:route-llm', to: 'openai-subscriber:gpt-5.6-sol', reason: 'HTTP 429', ts: NOW - 200 },
+    ];
+    const chip = buildRoutingChip(c, log, NOW);
+    expect(chip).toBe(`${ROUTING_CHIP_PREFIX} model changed: abacusai:route-llm → openai-subscriber:gpt-5.6-sol (failover: HTTP 429)`);
+    expect(chip).not.toContain('reason unknown');
   });
 
   test('emits when a fallback-log entry exists but is stale (not this change)', () => {

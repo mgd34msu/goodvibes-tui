@@ -23,6 +23,7 @@ platform-packages/*/README.md.bak
 !.goodvibes/skills/
 !.goodvibes/agents/
 !.goodvibes/GOODVIBES.md
+!.goodvibes/.npmignore
 !.goodvibes/eval/
 .goodvibes/eval/*
 !.goodvibes/eval/baseline.json

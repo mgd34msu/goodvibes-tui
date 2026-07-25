@@ -14,6 +14,53 @@
  * written and where.
  */
 
+/** The provider-registry surface the `@model:` directive needs. */
+export interface AtModelRegistry {
+  setCurrentModel(reference: string): void;
+  getCurrentModel(): { id: string; provider: string; registryKey: string; displayName: string };
+}
+
+export interface AtModelDeps {
+  readonly providerRegistry: AtModelRegistry;
+  /** Session runtime whose model/provider labels follow an explicit switch. */
+  readonly runtime: { model: string; provider: string };
+  readonly configManager: { set(key: string, value: unknown): void };
+  /** Surfaces the switch confirmation / unknown-model message. */
+  readonly notify: (message: string) => void;
+}
+
+const AT_MODEL_PATTERN = /@model:([^\s]+)/g;
+
+/**
+ * Apply every `@model:<id>` directive in a composer submission and return the
+ * text with the directives stripped.
+ *
+ * The switch is a real, persisted selection (config `provider.model`), not a
+ * per-turn override, so the runtime labels are updated alongside it and each
+ * one is announced. An unknown id is reported as unknown rather than silently
+ * dropped — the user asked for a specific backend and did not get it.
+ */
+export function applyAtModelDirective(input: string, deps: AtModelDeps): string {
+  let text = input;
+  let match: RegExpExecArray | null;
+  const pattern = new RegExp(AT_MODEL_PATTERN.source, 'g');
+  while ((match = pattern.exec(input)) !== null) {
+    const modelId = match[1]!;
+    try {
+      deps.providerRegistry.setCurrentModel(modelId);
+      const def = deps.providerRegistry.getCurrentModel();
+      deps.runtime.model = def.id;
+      deps.runtime.provider = def.provider;
+      deps.configManager.set('provider.model', def.registryKey);
+      deps.notify(`[Model] Switched to ${def.displayName} (${def.provider}) via @model:`);
+    } catch {
+      deps.notify(`[Model] Unknown model: ${modelId}`);
+    }
+    text = text.replace(match[0], '').trim();
+  }
+  return text;
+}
+
 export interface ComposerCaptureDeps {
   readonly sessionMemoryStore: { add(text: string): string };
   /** Surfaces the confirmation / usage message (a system message the shell renders). */

@@ -4714,10 +4714,14 @@
                       "reasoningEffort": {
                         "type": "string",
                         "enum": [
+                          "none",
                           "instant",
+                          "minimal",
                           "low",
                           "medium",
-                          "high"
+                          "high",
+                          "xhigh",
+                          "max"
                         ]
                       },
                       "thinking": {
@@ -6344,10 +6348,14 @@
                 "reasoningEffort": {
                   "type": "string",
                   "enum": [
+                    "none",
                     "instant",
+                    "minimal",
                     "low",
                     "medium",
-                    "high"
+                    "high",
+                    "xhigh",
+                    "max"
                   ]
                 },
                 "thinking": {
@@ -7332,10 +7340,14 @@
                       "reasoningEffort": {
                         "type": "string",
                         "enum": [
+                          "none",
                           "instant",
+                          "minimal",
                           "low",
                           "medium",
-                          "high"
+                          "high",
+                          "xhigh",
+                          "max"
                         ]
                       },
                       "thinking": {
@@ -8712,10 +8724,14 @@
                 "reasoningEffort": {
                   "type": "string",
                   "enum": [
+                    "none",
                     "instant",
+                    "minimal",
                     "low",
                     "medium",
-                    "high"
+                    "high",
+                    "xhigh",
+                    "max"
                   ]
                 },
                 "thinking": {
@@ -9637,10 +9653,14 @@
                     "reasoningEffort": {
                       "type": "string",
                       "enum": [
+                        "none",
                         "instant",
+                        "minimal",
                         "low",
                         "medium",
-                        "high"
+                        "high",
+                        "xhigh",
+                        "max"
                       ]
                     },
                     "thinking": {
@@ -10648,10 +10668,14 @@
                     "reasoningEffort": {
                       "type": "string",
                       "enum": [
+                        "none",
                         "instant",
+                        "minimal",
                         "low",
                         "medium",
-                        "high"
+                        "high",
+                        "xhigh",
+                        "max"
                       ]
                     },
                     "thinking": {
@@ -11763,10 +11787,14 @@
                       "reasoningEffort": {
                         "type": "string",
                         "enum": [
+                          "none",
                           "instant",
+                          "minimal",
                           "low",
                           "medium",
-                          "high"
+                          "high",
+                          "xhigh",
+                          "max"
                         ]
                       },
                       "thinking": {
@@ -12775,10 +12803,14 @@
                     "reasoningEffort": {
                       "type": "string",
                       "enum": [
+                        "none",
                         "instant",
+                        "minimal",
                         "low",
                         "medium",
-                        "high"
+                        "high",
+                        "xhigh",
+                        "max"
                       ]
                     },
                     "thinking": {
@@ -14036,10 +14068,14 @@
                 "reasoningEffort": {
                   "type": "string",
                   "enum": [
+                    "none",
                     "instant",
+                    "minimal",
                     "low",
                     "medium",
-                    "high"
+                    "high",
+                    "xhigh",
+                    "max"
                   ]
                 },
                 "thinking": {
@@ -15005,10 +15041,14 @@
                       "reasoningEffort": {
                         "type": "string",
                         "enum": [
+                          "none",
                           "instant",
+                          "minimal",
                           "low",
                           "medium",
-                          "high"
+                          "high",
+                          "xhigh",
+                          "max"
                         ]
                       },
                       "thinking": {
@@ -15898,10 +15938,14 @@
                       "reasoningEffort": {
                         "type": "string",
                         "enum": [
+                          "none",
                           "instant",
+                          "minimal",
                           "low",
                           "medium",
-                          "high"
+                          "high",
+                          "xhigh",
+                          "max"
                         ]
                       },
                       "thinking": {
@@ -80001,10 +80045,14 @@
                 "reasoningEffort": {
                   "type": "string",
                   "enum": [
+                    "none",
                     "instant",
+                    "minimal",
                     "low",
                     "medium",
-                    "high"
+                    "high",
+                    "xhigh",
+                    "max"
                   ]
                 }
               },
@@ -80449,10 +80497,14 @@
                     "reasoningEffort": {
                       "type": "string",
                       "enum": [
+                        "none",
                         "instant",
+                        "minimal",
                         "low",
                         "medium",
-                        "high"
+                        "high",
+                        "xhigh",
+                        "max"
                       ]
                     }
                   },
@@ -81015,10 +81067,14 @@
                     "reasoningEffort": {
                       "type": "string",
                       "enum": [
+                        "none",
                         "instant",
+                        "minimal",
                         "low",
                         "medium",
-                        "high"
+                        "high",
+                        "xhigh",
+                        "max"
                       ]
                     }
                   },
@@ -81281,10 +81337,14 @@
                     "reasoningEffort": {
                       "type": "string",
                       "enum": [
+                        "none",
                         "instant",
+                        "minimal",
                         "low",
                         "medium",
-                        "high"
+                        "high",
+                        "xhigh",
+                        "max"
                       ]
                     }
                   },
@@ -81699,10 +81759,14 @@
                       "reasoningEffort": {
                         "type": "string",
                         "enum": [
+                          "none",
                           "instant",
+                          "minimal",
                           "low",
                           "medium",
-                          "high"
+                          "high",
+                          "xhigh",
+                          "max"
                         ]
                       }
                     },
@@ -82147,10 +82211,14 @@
                 "reasoningEffort": {
                   "type": "string",
                   "enum": [
+                    "none",
                     "instant",
+                    "minimal",
                     "low",
                     "medium",
-                    "high"
+                    "high",
+                    "xhigh",
+                    "max"
                   ]
                 }
               },
@@ -82617,10 +82685,14 @@
                         "reasoningEffort": {
                           "type": "string",
                           "enum": [
+                            "none",
                             "instant",
+                            "minimal",
                             "low",
                             "medium",
-                            "high"
+                            "high",
+                            "xhigh",
+                            "max"
                           ]
                         }
                       },
@@ -84091,10 +84163,14 @@
                 "reasoningEffort": {
                   "type": "string",
                   "enum": [
+                    "none",
                     "instant",
+                    "minimal",
                     "low",
                     "medium",
-                    "high"
+                    "high",
+                    "xhigh",
+                    "max"
                   ]
                 }
               },
@@ -84542,10 +84618,14 @@
                     "reasoningEffort": {
                       "type": "string",
                       "enum": [
+                        "none",
                         "instant",
+                        "minimal",
                         "low",
                         "medium",
-                        "high"
+                        "high",
+                        "xhigh",
+                        "max"
                       ]
                     }
                   },
@@ -85977,10 +86057,14 @@
                 "reasoningEffort": {
                   "type": "string",
                   "enum": [
+                    "none",
                     "instant",
+                    "minimal",
                     "low",
                     "medium",
-                    "high"
+                    "high",
+                    "xhigh",
+                    "max"
                   ]
                 }
               },

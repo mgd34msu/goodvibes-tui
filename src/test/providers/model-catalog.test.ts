@@ -211,7 +211,15 @@ describe('getCatalogModelDefinitionsFrom', () => {
     const defs = getCatalogModelDefinitionsFrom(fixture);
     const reasoningModel = defs.find((def) => def.id === 'claude-sonnet-4-6');
     expect(reasoningModel?.capabilities.reasoning).toBe(true);
-    expect(reasoningModel?.reasoningEffort).toEqual(['instant', 'low', 'medium', 'high']);
+    // Effort is a structured ReasoningEffortSpec now, not a bare level list:
+    // this model's levels come from the sdk's curated family table (Claude
+    // 4.6 publishes named effort levels plus a documented default), which is
+    // why the set differs from the old fixed four.
+    const spec = reasoningModel?.reasoningEffort;
+    expect(spec?.kind).toBe('effort');
+    expect(spec?.source).toBe('family');
+    expect(spec?.values).toEqual(['low', 'medium', 'high', 'max']);
+    expect(spec?.defaultValue).toBe('high');
   });
 
   it('uses free and premium tier mapping from pricing', () => {

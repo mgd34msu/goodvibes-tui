@@ -16,6 +16,7 @@ import { PermissionPromptUI, buildPendingPermissionExtras } from './permissions/
 import { handleBrokerApprovalChange, buildFixSessionAffordance, buildFixSessionErrorNotice, handleFixSessionAttachKey, refreshFixSessionsFromApprovals } from './permissions/broker-approval-card.ts';
 import { CommandRegistry } from './input/command-registry.ts';
 import type { CommandContext } from './input/command-registry.ts';
+import { requestedEffortLevel } from './providers/reasoning-effort-surface.ts';
 import { renderProcessIndicator } from './renderer/process-indicator.ts';
 import { registerBuiltinCommands } from './input/commands.ts';
 import { ScheduleManager } from '@pellux/goodvibes-sdk/platform/tools';
@@ -67,7 +68,7 @@ import { wireTurnEventHandlers } from './core/turn-event-wiring.ts';
 import { resolveContextStatusHint } from './renderer/context-status-hint.ts';
 import { isEffectiveDangerMode } from './config/index.ts';
 import { createScriptableStatusline } from './core/scriptable-statusline.ts';
-import { applyComposerCapture } from './input/composer-capture.ts';
+import { applyComposerCapture, applyAtModelDirective } from './input/composer-capture.ts';
 import { createSessionAutoTitler } from './core/session-auto-titler.ts';
 import { makeComposerEditorOpener } from './input/composer-editor.ts';
 import { evaluateSessionMaintenance } from '@/runtime/index.ts';
@@ -274,23 +275,10 @@ async function main() {
   const submitInput = (text: string, content?: ContentPart[], options: { readonly spokenOutput?: boolean } = {}) => {
     input.clearModalStack();
     scrollLocked = true; // Re-lock on any user input
-    const AT_MODEL_RE = /@model:([^\s]+)/g;
-    let processedText = text;
-    let atModelMatch: RegExpExecArray | null;
-    while ((atModelMatch = AT_MODEL_RE.exec(text)) !== null) {
-      const modelId = atModelMatch[1];
-      try {
-        providerRegistry.setCurrentModel(modelId);
-        const def = providerRegistry.getCurrentModel();
-        runtime.model = def.id;
-        runtime.provider = def.provider;
-        configManager.set('provider.model', def.registryKey);
-        systemMessageRouter.high(`[Model] Switched to ${def.displayName} (${def.provider}) via @model:`);
-      } catch {
-        systemMessageRouter.high(`[Model] Unknown model: ${modelId}`);
-      }
-      processedText = processedText.replace(atModelMatch[0], '').trim();
-    }
+    conversation.dismissSplash(); // owner rule: any submission retires the splash for the run
+    let processedText = applyAtModelDirective(text, {
+      providerRegistry, runtime, configManager, notify: (m) => systemMessageRouter.high(m),
+    });
     // Composer capture markers: `!#` pins + sends; `#` saves a note without sending.
     processedText = applyComposerCapture(processedText, {
       sessionMemoryStore: ctx.services.sessionMemoryStore,
@@ -550,6 +538,7 @@ async function main() {
     // Flush pending renders after updating the width provider and splash posture
     // so the transcript and splash rebuild against the current shell layout.
     conversation.getDisplayBlocks();
+    if (conversation.consumeSplashTransition()) compositor.requestFullRepaint(); // splash → transcript: repaint the whole viewport once
 
     // Calculate how many rows are consumed by overlays (thinking, permissions, queue, file picker)
     let overlayRows = 0;
@@ -705,8 +694,8 @@ async function main() {
   // Time-bounded: onExpire repaints once the 60s disarm timer fires, so a stray keypress hours
   // later can never trigger a real retry — see retry-affordance.ts.
   const retryAffordance = createRetryAffordanceState({ onExpire: render });
-  const retryTurn = (notice?: string): void => {
-    if (!retryCtx) return;
+  const retryTurn = (notice?: string): boolean => {
+    if (!retryCtx) return false; // nothing to roll back to; the caller narrates instead
     const { count, text, content: rContent, opts: rOpts } = retryCtx;
     // Roll back to pre-submission count, then re-submit. SDK gap — no retry-in-place (see handoff).
     // The rollback erases the failed turn's transcript — the failover notice included, which is how
@@ -715,12 +704,15 @@ async function main() {
     conversation.removeMessagesAfter(count);
     if (notice) systemMessageRouter.userReceipt(notice);
     void refreshMemoryRecallSnapshot(ctx.services).then(() => orchestrator.handleUserInput(text, rContent, rOpts)).catch((e: unknown) => logger.debug('retryTurn', { error: summarizeError(e) }));
+    return true;
   };
   const streamResult: WireStreamEventMetricsResult = wireStreamEventMetrics({
     events: uiServices.events, orchestrator, providerRegistry,
     systemMessageRouter, render, metrics: streamMetrics,
     providerOptimizer: ctx.services.providerOptimizer, costLookup: providerRegistry, retryTurn,
     failoverState, getConfiguredRegistryKey: () => configManager.get('provider.model') as string | undefined,
+    // The REQUESTED level, through the one helper every remap site reads from.
+    getConfiguredReasoningEffort: () => requestedEffortLevel(configManager),
     isApprovalPending: () => pendingPermission !== null,
   });
   unsubs.push(...streamResult.unsubs);

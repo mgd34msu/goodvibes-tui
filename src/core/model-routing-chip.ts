@@ -9,18 +9,22 @@
  * narration of their own.
  *
  * Division of labour with the failover path: the optimizer-gated failover in
- * stream-event-wiring.ts already renders a richer `[Failover] from → to
- * (reason)(+cost)` line AND records the transition into the optimizer's
- * fallback log. So when a MODEL_CHANGED correlates to a just-recorded fallback
- * transition, this chip stays silent (buildRoutingChip returns null) — the
- * [Failover] line already narrated that exact change with its real reason.
- * Every other change is surfaced here.
+ * stream-event-wiring.ts renders a richer `[Failover] from → to
+ * (reason)(+cost)` line for the switches it makes itself, and tells this
+ * listener so directly (see the self-narrated guard there) rather than relying
+ * on this module to infer it. Those changes never reach buildRoutingChip.
  *
- * Reason honesty: for the paths this chip surfaces the routing layer exposes no
- * machine-readable reason (a deliberate user switch has none; an SDK-internal
- * downgrade does not thread one to the TUI), so the notice states "reason
- * unknown" rather than omitting the change — per the honesty rule that a change
- * with no explanation is still reported, just marked unknown.
+ * Reason honesty, in three tiers:
+ *   1. a change the failover path already narrated → not offered here at all;
+ *   2. a change that correlates to a transition in the optimizer's fallback
+ *      log → the log's own reason is quoted, because the reason IS known. The
+ *      log is shared: the TUI's failover records provider ids ("abacusai"),
+ *      the SDK's agent-orchestrator fallback records registry keys
+ *      ("abacusai:route-llm"), and a match on either form counts. Reading only
+ *      one form is what made a real, explained failover print
+ *      "(reason unknown)";
+ *   3. no correlation → "(reason unknown)", because a change with no
+ *      explanation is still reported, just honestly marked as unexplained.
  */
 
 /** The subset of a FallbackTransition this module reads (structural, SDK-agnostic). */
@@ -45,8 +49,21 @@ export const FALLBACK_CORRELATION_WINDOW_MS = 4_000;
 export const ROUTING_CHIP_PREFIX = '[Routing]';
 
 /**
+ * The provider id of a fallback-log endpoint, which may be written either as a
+ * bare provider id or as a `provider:model` registry key depending on which
+ * writer recorded it. Everything before the first ':' is the provider in both
+ * forms, so one rule reads both.
+ */
+function providerOf(endpoint: string): string {
+  const separator = endpoint.indexOf(':');
+  return separator === -1 ? endpoint : endpoint.slice(0, separator);
+}
+
+/**
  * Most recent fallback-log reason for a from→to provider transition within the
  * correlation window, or null. Scans newest-first so the freshest transition wins.
+ * Endpoints are compared by provider id, so entries recorded as registry keys
+ * correlate exactly like entries recorded as bare provider ids.
  */
 export function findRecentFallbackReason(
   fallbackLog: readonly FallbackTransitionLike[],
@@ -57,17 +74,20 @@ export function findRecentFallbackReason(
 ): string | null {
   for (let i = fallbackLog.length - 1; i >= 0; i--) {
     const t = fallbackLog[i]!;
-    if (t.from === fromProvider && t.to === toProvider && now - t.ts <= windowMs) return t.reason;
+    if (providerOf(t.from) === providerOf(fromProvider)
+      && providerOf(t.to) === providerOf(toProvider)
+      && now - t.ts <= windowMs) return t.reason;
   }
   return null;
 }
 
 /**
  * The routing-chip line to emit for a MODEL_CHANGED event, or null to stay
- * silent. Null only when there is no real change (no/same previous model) or
- * when the change was a failover already narrated by its own [Failover] line
- * (correlated via the fallback log). Otherwise returns the honest
- * `[Routing] model changed: old → new (reason unknown)` notice.
+ * silent. Null only when there is no real change (no/same previous model) —
+ * changes the failover path narrates itself never reach this function.
+ *
+ * A change that correlates to a logged fallback transition is reported WITH
+ * that transition's reason; anything else is reported as "reason unknown".
  */
 export function buildRoutingChip(
   change: ModelChangedLike,
@@ -77,6 +97,6 @@ export function buildRoutingChip(
   const prev = change.previous;
   if (!prev || prev.registryKey === change.registryKey) return null;
   const failoverReason = findRecentFallbackReason(fallbackLog, prev.provider, change.provider, now);
-  if (failoverReason !== null) return null; // [Failover] already narrated this transition
-  return `${ROUTING_CHIP_PREFIX} model changed: ${prev.registryKey} → ${change.registryKey} (reason unknown)`;
+  const reason = failoverReason === null ? 'reason unknown' : `failover: ${failoverReason}`;
+  return `${ROUTING_CHIP_PREFIX} model changed: ${prev.registryKey} → ${change.registryKey} (${reason})`;
 }

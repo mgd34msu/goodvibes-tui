@@ -86,6 +86,10 @@ export function handleCommandModeToken(state: CommandModeRouteState, token: Inpu
     const raw = selectedCmd ? `/${selectedCmd.name}` : state.prompt.trim();
     if (raw.startsWith('/') && state.commandRegistry && state.commandContext) {
       closeCommandMode();
+      // Submitting a command is a submission: the splash yields to command
+      // input exactly as it does to text input (owner rule), whether or not
+      // the command puts anything in the transcript.
+      state.conversationManager?.dismissSplash();
       const parts = raw.slice(1).trim().split(/\s+/);
       const name = parts[0];
       const args = parts.slice(1);

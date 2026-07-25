@@ -170,6 +170,7 @@ function makeRestoringOptions(
       ? (notice?: string) => {
         if (notice) { messages.push(notice); receipts.push(notice); }
         overrides.retryTurn!(notice);
+        return true; // as in main.ts: a pre-submission snapshot existed, the turn was re-submitted
       }
       : undefined,
   };
@@ -198,7 +199,7 @@ function makeOptions(
     // by the wiring beforehand. Wrapping AFTER the spread keeps each test's own
     // retryTurn mock — and its call-count assertions — intact.
     retryTurn: overrides.retryTurn
-      ? (notice?: string) => { if (notice) messages.push(notice); overrides.retryTurn!(notice); }
+      ? (notice?: string) => { if (notice) messages.push(notice); overrides.retryTurn!(notice); return true; }
       : undefined,
   };
 }
@@ -1068,5 +1069,192 @@ describe('wireStreamEventMetrics — stall metrics', () => {
 
     turns.emit('STREAM_START');
     expect(() => turns.emitRaw('STREAM_STALL', {})).not.toThrow();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Tests: the failover narrates its own switches — the generic routing chip
+// never speaks for them, and never claims their reason is unknown.
+//
+// The defect these pin: a live session showed
+//   "[Routing] model changed: abacusai:route-llm → openai-subscriber:gpt-5.6-sol (reason unknown)"
+// for the failover switch itself, with no [Failover] line at all.
+// ---------------------------------------------------------------------------
+
+/**
+ * A providers feed plus a registry that emits MODEL_CHANGED.
+ *
+ * `delivery: 'async'` models the real runtime event feed, which hands the
+ * event to listeners AFTER the emitting call has returned. The suppression of
+ * our own switches must not depend on the listener running inside
+ * setCurrentModel — a live session showed both failover halves getting a
+ * duplicate "(reason unknown)" chip when it did.
+ */
+function makeProvidersFeedRegistry(startKey = 'anthropic:claude-3-5-sonnet', delivery: 'sync' | 'async' = 'sync') {
+  let currentKey = startKey;
+  const listeners: Array<(change: { registryKey: string; provider: string; previous?: { registryKey: string; provider: string } }) => void> = [];
+  const providers = {
+    on(_event: 'MODEL_CHANGED', handler: (change: { registryKey: string; provider: string; previous?: { registryKey: string; provider: string } }) => void) {
+      listeners.push(handler);
+      return () => {};
+    },
+  };
+  const providerRegistry = {
+    getCurrentModel: () => ({ provider: currentKey.split(':')[0]!, registryKey: currentKey }),
+    setCurrentModel(key: string) {
+      const previous = { registryKey: currentKey, provider: currentKey.split(':')[0]! };
+      currentKey = key;
+      const payload = { registryKey: key, provider: key.split(':')[0]!, previous };
+      const deliver = () => { for (const h of listeners.slice()) h(payload); };
+      if (delivery === 'async') queueMicrotask(deliver); else deliver();
+    },
+    get currentKey() { return currentKey; },
+  };
+  return { providers, providerRegistry };
+}
+
+function wireWithProvidersFeed(overrides: Partial<WireStreamEventMetricsOptions> = {}, delivery: 'sync' | 'async' = 'sync') {
+  const turns = makeTurnBus();
+  const tools = makeToolBus();
+  const messages: string[] = [];
+  const { providers, providerRegistry } = makeProvidersFeedRegistry('anthropic:claude-3-5-sonnet', delivery);
+  const failoverState = createFailoverTurnState();
+  const options = {
+    events: { turns, tools, providers } as unknown as WireStreamEventMetricsOptions['events'],
+    orchestrator: { streamingOutputTokens: 0 },
+    providerRegistry,
+    systemMessageRouter: {
+      high: (m: string) => messages.push(m),
+      low: () => {},
+      userReceipt: (m: string) => messages.push(m),
+    },
+    render: () => {},
+    metrics: makeMetrics(),
+    failoverState,
+    getConfiguredRegistryKey: () => 'anthropic:claude-3-5-sonnet',
+    ...overrides,
+  } as WireStreamEventMetricsOptions;
+  wireStreamEventMetrics(options);
+  return { turns, messages, providerRegistry, failoverState };
+}
+
+describe('wireStreamEventMetrics — failover switches are self-narrated, never chipped', () => {
+  const chain = [{ position: 1, providerId: 'openai', modelId: 'gpt-5', capable: true }];
+
+  test('the failover switch emits one [Failover] notice and no [Routing] chip', async () => {
+    const optimizer = makeOptimizer({ enabled: true, chain });
+    const { turns, messages } = wireWithProvidersFeed({
+      providerOptimizer: optimizer,
+      retryTurn: (notice?: string) => { if (notice) messages.push(notice); return true; },
+    });
+
+    turns.emitTurnError('HTTP 429 rate limited');
+    await Promise.resolve(); // let the chip's deferred microtask run
+
+    const failoverLines = messages.filter((m) => m.startsWith('[Failover]'));
+    expect(failoverLines).toHaveLength(1);
+    expect(failoverLines[0]).toContain('anthropic -> openai');
+    expect(messages.some((m) => m.startsWith('[Routing]'))).toBe(false);
+    expect(messages.some((m) => m.includes('reason unknown'))).toBe(false);
+  });
+
+  test('the turn-end restore emits one [Failover] Restored line and no [Routing] chip', async () => {
+    const optimizer = makeOptimizer({ enabled: true, chain });
+    const { turns, messages, providerRegistry } = wireWithProvidersFeed({
+      providerOptimizer: optimizer,
+      retryTurn: (notice?: string) => { if (notice) messages.push(notice); return true; },
+    });
+
+    turns.emitTurnError('HTTP 429 rate limited');
+    await Promise.resolve();
+    turns.emit('TURN_COMPLETED');
+    await Promise.resolve();
+
+    expect(providerRegistry.currentKey).toBe('anthropic:claude-3-5-sonnet');
+    expect(messages.filter((m) => m.startsWith('[Failover] Restored'))).toHaveLength(1);
+    expect(messages.some((m) => m.startsWith('[Routing]'))).toBe(false);
+  });
+
+  test('a model change from somewhere else still gets a chip — suppression is scoped to our own switches', async () => {
+    const optimizer = makeOptimizer({ enabled: true, chain });
+    const { messages, providerRegistry } = wireWithProvidersFeed({
+      providerOptimizer: optimizer,
+      retryTurn: () => true,
+    });
+
+    providerRegistry.setCurrentModel('google:gemini-3');
+    await Promise.resolve();
+
+    expect(messages.some((m) => m.startsWith('[Routing] model changed: anthropic:claude-3-5-sonnet → google:gemini-3'))).toBe(true);
+  });
+
+  test('when the turn cannot be re-submitted the switch is still narrated and the error surfaces', async () => {
+    const optimizer = makeOptimizer({ enabled: true, chain });
+    const { turns, messages, providerRegistry } = wireWithProvidersFeed({
+      providerOptimizer: optimizer,
+      retryTurn: () => false, // no pre-submission snapshot (turn did not come from the composer)
+    });
+
+    turns.emitTurnError('HTTP 429 rate limited');
+    await Promise.resolve();
+
+    expect(messages.filter((m) => m.startsWith('[Failover] anthropic -> openai'))).toHaveLength(1);
+    expect(messages.some((m) => m.startsWith('[Error]'))).toBe(true);
+    expect(messages.some((m) => m.includes('reason unknown'))).toBe(false);
+    // Serving is put back on the user's selection rather than left pinned to
+    // the fallback with no turn running.
+    expect(providerRegistry.currentKey).toBe('anthropic:claude-3-5-sonnet');
+  });
+});
+
+describe('wireStreamEventMetrics — self-narration survives asynchronous MODEL_CHANGED delivery', () => {
+  // The real runtime event feed delivers after the emitting call returns. A
+  // live failover run showed BOTH halves narrated twice under that timing:
+  //   [Failover] inceptionlabs -> openrouter (…)
+  //   [Routing] model changed: inceptionlabs:mercury-2 → openrouter:… (…)
+  //   [Failover] Restored deadprimary:dead-model for the next turn.
+  //   [Routing] model changed: openrouter:… → deadprimary:dead-model (reason unknown)
+  const chain = [{ position: 1, providerId: 'openai', modelId: 'gpt-5', capable: true }];
+
+  test('switch and restore each produce exactly one line, with no chip, when events arrive late', async () => {
+    const optimizer = makeOptimizer({ enabled: true, chain });
+    const { turns, messages, providerRegistry } = wireWithProvidersFeed({
+      providerOptimizer: optimizer,
+      retryTurn: (notice?: string) => { if (notice) messages.push(notice); return true; },
+    }, 'async');
+
+    turns.emitTurnError('HTTP 429 rate limited');
+    await Promise.resolve();
+    await Promise.resolve();
+    turns.emit('TURN_COMPLETED');
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(providerRegistry.currentKey).toBe('anthropic:claude-3-5-sonnet');
+    expect(messages.filter((m) => m.startsWith('[Failover] anthropic -> openai'))).toHaveLength(1);
+    expect(messages.filter((m) => m.startsWith('[Failover] Restored'))).toHaveLength(1);
+    expect(messages.filter((m) => m.startsWith('[Routing]'))).toHaveLength(0);
+    expect(messages.some((m) => m.includes('reason unknown'))).toBe(false);
+  });
+
+  test('an unrelated later switch to the same model is still reported (suppression is one-shot)', async () => {
+    const optimizer = makeOptimizer({ enabled: true, chain });
+    const { turns, messages, providerRegistry } = wireWithProvidersFeed({
+      providerOptimizer: optimizer,
+      retryTurn: () => true,
+    }, 'async');
+
+    turns.emitTurnError('HTTP 429 rate limited');
+    await Promise.resolve();
+    await Promise.resolve();
+    // The failover's own switch to openai:gpt-5 was consumed above; a later
+    // deliberate switch to the same model is a different event and must speak.
+    providerRegistry.setCurrentModel('anthropic:claude-3-5-sonnet');
+    await Promise.resolve();
+    providerRegistry.setCurrentModel('openai:gpt-5');
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(messages.some((m) => m.startsWith('[Routing] model changed: anthropic:claude-3-5-sonnet → openai:gpt-5'))).toBe(true);
   });
 });

@@ -131,7 +131,9 @@ describe('wireStreamEventMetrics — onErrorSurfaced', () => {
   test('does NOT fire on successful automatic failover', () => {
     const turns = makeTurnBus();
     const tools = makeToolBus();
-    const retryTurn = mock(() => {});
+    // true = the turn really was re-submitted (main.ts's contract): a failover
+    // that cannot retry is not a successful one and DOES surface its error.
+    const retryTurn = mock(() => true);
     const optimizer = makeOptimizer({
       enabled: true,
       chain: [

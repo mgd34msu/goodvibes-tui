@@ -22,7 +22,7 @@ import { SecretsManager } from '../../config/secrets.ts';
 
 function makeCommandContext(overrides: Partial<CommandContext> = {}): CommandContext {
   const providerRegistry = {} as never;
-  const conversationManager = { log: () => {} } as never;
+  const conversationManager = { log: () => {}, dismissSplash: () => {} } as never;
   const configManager = {} as never;
   const base: CommandContext = {
     session: {
@@ -252,7 +252,7 @@ describe('command modal handoff', () => {
       }),
       panelFocused: false,
       panelManager: makePanelManager(),
-      conversationManager: { log: () => {} } as never,
+      conversationManager: { log: () => {}, dismissSplash: () => {} } as never,
       requestRender: () => {},
       handleEscape: () => {},
     };
@@ -265,6 +265,33 @@ describe('command modal handoff', () => {
     expect(state.prompt).toBe('');
     expect(state.cursorPos).toBe(0);
     expect(modalStack).toEqual(['modelPicker']);
+  });
+
+  test('submitting a slash command retires the splash for the run (owner rule: text OR command input)', async () => {
+    // The splash used to survive a slash command whose output was a modal (or
+    // nothing), then sit under the first chat reply. A submission is a
+    // submission: command mode's Enter dispatch takes it down.
+    const dismissals: number[] = [];
+    const registry = new CommandRegistry();
+    const state = {
+      commandMode: true,
+      prompt: '/help',
+      cursorPos: '/help'.length,
+      autocomplete: null,
+      modalStack: ['command'],
+      commandRegistry: registry,
+      commandContext: makeCommandContext({ executeCommand: async () => true }),
+      panelFocused: false,
+      panelManager: makePanelManager(),
+      conversationManager: { log: () => {}, dismissSplash: () => { dismissals.push(1); } } as never,
+      requestRender: () => {},
+      handleEscape: () => {},
+    };
+
+    handleCommandModeToken(state, key('enter'));
+    await Promise.resolve();
+
+    expect(dismissals).toHaveLength(1);
   });
 
   test('removes command from the stack when no nested modal opens', async () => {
@@ -282,7 +309,7 @@ describe('command modal handoff', () => {
       }),
       panelFocused: false,
       panelManager: makePanelManager(),
-      conversationManager: { log: () => {} } as never,
+      conversationManager: { log: () => {}, dismissSplash: () => {} } as never,
       requestRender: () => {},
       handleEscape: () => {},
     };
@@ -324,7 +351,7 @@ describe('command modal handoff', () => {
       }),
       panelFocused: false,
       panelManager: makePanelManager(),
-      conversationManager: { log: () => {} } as never,
+      conversationManager: { log: () => {}, dismissSplash: () => {} } as never,
       requestRender: () => {},
       handleEscape: () => {},
       pasteRegistry: new Map<string, string>(),
@@ -382,7 +409,7 @@ describe('command modal handoff', () => {
       }),
       panelFocused: false,
       panelManager: makePanelManager(),
-      conversationManager: { log: () => {} } as never,
+      conversationManager: { log: () => {}, dismissSplash: () => {} } as never,
       requestRender: () => {},
       handleEscape: () => {},
     };
@@ -418,7 +445,7 @@ describe('command modal handoff', () => {
       commandContext: makeCommandContext({ showPanel: () => {} }),
       panelFocused: false,
       panelManager: makePanelManager(),
-      conversationManager: { log: () => {} } as never,
+      conversationManager: { log: () => {}, dismissSplash: () => {} } as never,
       requestRender: () => {},
       handleEscape: () => {},
     };
@@ -702,7 +729,7 @@ describe('command modal handoff', () => {
       commandContext: makeCommandContext(),
       panelFocused: false,
       panelManager: makePanelManager(),
-      conversationManager: { log: (text: string, opts?: unknown) => { logged.push({ text, opts }); } } as never,
+      conversationManager: { log: (text: string, opts?: unknown) => { logged.push({ text, opts }); }, dismissSplash: () => {} } as never,
       requestRender: () => {},
       handleEscape: () => {},
     };

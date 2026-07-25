@@ -291,9 +291,9 @@ describe('SearchManager', () => {
     expect(sm.wrapAround).toBe(false);
   });
 
-  // --- collapsed-content search (auto-expand) ---
+  // --- collapsed-content search: honest counts, no expansion on keystroke ---
 
-  describe('search() with a conversationManager auto-expands a matching collapsed block', () => {
+  describe('search() with a conversationManager counts matches inside collapsed content without expanding it', () => {
     function buildLongToolResult(): { cm: ConversationManager; needle: string } {
       const cm = new ConversationManager(() => 80);
       const needle = 'zzzFindableMarkerZzz';
@@ -310,11 +310,11 @@ describe('SearchManager', () => {
     test('a query matching only the raw (collapsed) content finds nothing without a conversationManager', () => {
       const { cm, needle } = buildLongToolResult();
       sm.open();
-      sm.search(needle, cm.history); // no conversationManager passed — old behavior
+      sm.search(needle, cm.history); // no conversationManager passed — pre-existing behavior
       expect(sm.matches).toHaveLength(0);
     });
 
-    test('the same query finds a real, navigable match once conversationManager is passed', () => {
+    test('the same query counts a match once a conversationManager is passed, but leaves the block collapsed', () => {
       const { cm, needle } = buildLongToolResult();
       const block = cm.getBlockRegistry().find((b) => b.type === 'tool');
       expect(block).toBeDefined();
@@ -323,27 +323,86 @@ describe('SearchManager', () => {
       sm.open();
       sm.search(needle, cm.history, cm);
 
+      // Honest count: the hit is real even though nothing expanded.
       expect(sm.matches.length).toBeGreaterThan(0);
-      // The block auto-expanded — collapsed no longer holds true.
+      // A single keystroke must never expand a block it merely matched.
+      expect(cm.isCollapsed(block!.blockIndex)).toBe(true);
+      // getCurrentMatchLine() reports -1 for a still-hidden match — there is
+      // no real line to scroll to until the user navigates there.
+      expect(sm.getCurrentMatchLine()).toBe(-1);
+    });
+
+    test('repeated keystrokes never expand the block either', () => {
+      const { cm, needle } = buildLongToolResult();
+      const block = cm.getBlockRegistry().find((b) => b.type === 'tool');
+      sm.open();
+      sm.search(needle.slice(0, 3), cm.history, cm);
+      sm.search(needle.slice(0, 6), cm.history, cm);
+      sm.search(needle, cm.history, cm);
+      expect(cm.isCollapsed(block!.blockIndex)).toBe(true);
+      expect(sm.matches.length).toBeGreaterThan(0);
+    });
+
+    test('revealCurrentMatch() expands exactly that block and lands on a real, navigable line', () => {
+      const { cm, needle } = buildLongToolResult();
+      const block = cm.getBlockRegistry().find((b) => b.type === 'tool');
+      sm.open();
+      sm.search(needle, cm.history, cm);
+      expect(cm.isCollapsed(block!.blockIndex)).toBe(true);
+
+      sm.lock();
+      sm.revealCurrentMatch(cm.history, cm);
+
       expect(cm.isCollapsed(block!.blockIndex)).toBe(false);
-      // The match count is honest: it's derived from a rescan of the now-
-      // expanded buffer, not a claim about content that isn't actually shown.
       const matchLine = sm.getCurrentMatchLine();
       expect(matchLine).toBeGreaterThanOrEqual(0);
       const renderedLineText = cm.history.getAllLines()[matchLine].map((c) => c.char).join('');
       expect(renderedLineText).toContain(needle);
     });
 
-    test('never re-collapses a block that was already expanded by an earlier keystroke', () => {
+    test('search close (with no user interaction) re-collapses the block search revealed', () => {
       const { cm, needle } = buildLongToolResult();
       const block = cm.getBlockRegistry().find((b) => b.type === 'tool');
       sm.open();
       sm.search(needle, cm.history, cm);
+      sm.lock();
+      sm.revealCurrentMatch(cm.history, cm);
       expect(cm.isCollapsed(block!.blockIndex)).toBe(false);
-      // A subsequent search for something that no longer matches must not
-      // fold the block back up — only ever expands, never hides content
-      // the user already revealed.
-      sm.search('nonexistent_query_xyz', cm.history, cm);
+
+      sm.close(cm);
+      expect(cm.isCollapsed(block!.blockIndex)).toBe(true);
+    });
+
+    test('a block the user explicitly toggled while search had it open stays expanded after close', () => {
+      const { cm, needle } = buildLongToolResult();
+      const block = cm.getBlockRegistry().find((b) => b.type === 'tool');
+      sm.open();
+      sm.search(needle, cm.history, cm);
+      sm.lock();
+      sm.revealCurrentMatch(cm.history, cm);
+      expect(cm.isCollapsed(block!.blockIndex)).toBe(false);
+
+      // The user explicitly acts on the block (e.g. Ctrl+Y copy, Ctrl+B
+      // bookmark, or re-toggling it) while it sits auto-expanded.
+      cm.searchExpansion.noteUserTouch(block!.collapseKey);
+
+      sm.close(cm);
+      expect(cm.isCollapsed(block!.blockIndex)).toBe(false);
+    });
+
+    test("closing search never disturbs a block the user had already expanded before search opened", () => {
+      const { cm, needle } = buildLongToolResult();
+      const block = cm.getBlockRegistry().find((b) => b.type === 'tool');
+      // User expands it themselves, before search ever runs.
+      cm.toggleCollapseAtLine(block!.startLine);
+      expect(cm.isCollapsed(block!.blockIndex)).toBe(false);
+
+      sm.open();
+      sm.search(needle, cm.history, cm);
+      sm.lock();
+      sm.revealCurrentMatch(cm.history, cm); // no-op: already visible, not hidden
+      sm.close(cm);
+
       expect(cm.isCollapsed(block!.blockIndex)).toBe(false);
     });
   });
@@ -396,27 +455,72 @@ describe('SearchManager', () => {
       expect(sm.matches).toHaveLength(0);
     });
 
-    test('the same needle expands the group AND the hit member, and lands on the needle line', () => {
-      const { cm, hitMemberIdx } = buildFoldedToolGroup();
+    test('a keystroke counts the member-only hit honestly but expands nothing', () => {
+      const { cm } = buildFoldedToolGroup();
+      const group = cm.getBlockRegistry().find((b) => b.type === 'tool_group');
       sm.open();
       sm.search(NEEDLE, cm.history, cm);
 
       expect(sm.matches.length).toBeGreaterThan(0);
+      expect(cm.isCollapsed(group!.blockIndex)).toBe(true);
+      expect(cm.getBlockRegistry().some((b) => b.collapseKey.startsWith('msg_'))).toBe(false);
+    });
+
+    test('revealCurrentMatch() expands the group AND the hit member (and only that member), landing on the needle line', () => {
+      const { cm, hitMemberIdx } = buildFoldedToolGroup();
+      const group = cm.getBlockRegistry().find((b) => b.type === 'tool_group');
+      const otherMemberIdx = group!.groupMemberIndexes!.find((idx) => idx !== hitMemberIdx)!;
+
+      sm.open();
+      sm.search(NEEDLE, cm.history, cm);
+      sm.lock();
+      sm.revealCurrentMatch(cm.history, cm);
+
+      expect(sm.matches.length).toBeGreaterThan(0);
 
       const registry = cm.getBlockRegistry();
-      const group = registry.find((b) => b.type === 'tool_group');
-      expect(cm.isCollapsed(group!.blockIndex)).toBe(false);
+      const groupAfter = registry.find((b) => b.type === 'tool_group');
+      expect(cm.isCollapsed(groupAfter!.blockIndex)).toBe(false);
       // The hit member now has a block of its own, and it is expanded — the
       // header alone would have left its content invisible.
       const member = registry.find((b) => b.collapseKey === `msg_${hitMemberIdx}`);
       expect(member).toBeDefined();
       expect(cm.isCollapsed(member!.blockIndex)).toBe(false);
-      // The landed line is the real one: the match count comes from a rescan
-      // of the now-expanded buffer, so navigation reaches actual text.
+      // Its sibling member (no hit inside it) is left exactly as it was —
+      // "exactly that block" expands, not every member indiscriminately. It
+      // still has its own (collapsed-by-default) BlockMeta now that the
+      // group itself has unfolded.
+      const otherMember = registry.find((b) => b.collapseKey === `msg_${otherMemberIdx}`);
+      expect(otherMember).toBeDefined();
+      expect(cm.isCollapsed(otherMember!.blockIndex)).toBe(true);
+      // The landed line is the real one.
       const matchLine = sm.getCurrentMatchLine();
       expect(matchLine).toBeGreaterThanOrEqual(0);
       const renderedLineText = cm.history.getAllLines()[matchLine].map((c) => c.char).join('');
       expect(renderedLineText).toContain(NEEDLE);
+    });
+
+    test('search close re-folds the group and the member together (group members fold with their group)', () => {
+      const { cm, hitMemberIdx } = buildFoldedToolGroup();
+      sm.open();
+      sm.search(NEEDLE, cm.history, cm);
+      sm.lock();
+      sm.revealCurrentMatch(cm.history, cm);
+
+      let registry = cm.getBlockRegistry();
+      expect(cm.isCollapsed(registry.find((b) => b.type === 'tool_group')!.blockIndex)).toBe(false);
+      expect(cm.isCollapsed(registry.find((b) => b.collapseKey === `msg_${hitMemberIdx}`)!.blockIndex)).toBe(false);
+
+      sm.close(cm);
+      cm.getDisplayBlocks();
+
+      registry = cm.getBlockRegistry();
+      const groupAfter = registry.find((b) => b.type === 'tool_group');
+      expect(groupAfter).toBeDefined();
+      expect(cm.isCollapsed(groupAfter!.blockIndex)).toBe(true);
+      // The member no longer materializes its own BlockMeta — folded again
+      // right along with its group, exactly as it was before search opened.
+      expect(registry.some((b) => b.collapseKey === `msg_${hitMemberIdx}`)).toBe(false);
     });
 
     test('a needle present nowhere finds nothing and expands nothing', () => {
@@ -433,7 +537,7 @@ describe('SearchManager', () => {
       expect(registry.some((b) => b.collapseKey.startsWith('msg_'))).toBe(false);
     });
 
-    test('a group whose members are already expanded still matches, and stays expanded', () => {
+    test('a group whose members are already expanded still matches, and search never touches its collapse state', () => {
       const { cm, hitMemberIdx } = buildFoldedToolGroup();
       const group = cm.getBlockRegistry().find((b) => b.type === 'tool_group');
       cm.setCollapsed(group!.collapseKey, false);
@@ -444,6 +548,8 @@ describe('SearchManager', () => {
 
       sm.open();
       sm.search(NEEDLE, cm.history, cm);
+      sm.lock();
+      sm.revealCurrentMatch(cm.history, cm); // no-op: already visible
 
       expect(sm.matches.length).toBeGreaterThan(0);
       const registry = cm.getBlockRegistry();

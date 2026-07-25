@@ -280,14 +280,49 @@ function renderModelRows(picker: ModelPickerModal, lines: Line[], rows: number, 
   if (end < models.length && lines[rows - 1]) writeText(lines[rows - 1]!, startX + 1, width - 2, `${GLYPHS.navigation.moreBelow} ${models.length - end} more model(s) below`, { fg: PALETTE.dim, bg: PALETTE.bodyBg, dim: true });
 }
 
+/**
+ * The effort step of the model picker.
+ *
+ * The list is exactly the levels the chosen model resolved to — not a fixed
+ * four — and it is introduced by a headline naming what this model does with
+ * the setting (named levels, a thinking-token budget, an on/off toggle, or
+ * nothing at all). A best-guess spec prints its caveat under the list rather
+ * than presenting unverified levels as if the provider had confirmed them.
+ */
 function renderEffortRows(picker: ModelPickerModal, lines: Line[], rows: number, startX: number, width: number): void {
-  for (let row = 0; row < Math.min(rows, picker.effortLevels.length); row += 1) {
-    const effort = picker.effortLevels[row]!;
-    const selected = row === picker.selectedIndex;
+  const presentation = picker.effortPresentation;
+  let row = 0;
+
+  if (presentation && rows > 0) {
+    fillRange(lines[row]!, startX, startX + width - 1, PALETTE.bodyBg);
+    writeText(lines[row]!, startX + 1, width - 2, presentation.headline, { fg: PALETTE.subtitle, bg: PALETTE.bodyBg });
+    row += 1;
+  }
+
+  // A model with nothing to configure gets a statement, not an empty list.
+  if (presentation && !presentation.configurable) {
+    if (row < rows) {
+      fillRange(lines[row]!, startX, startX + width - 1, PALETTE.bodyBg);
+      writeText(lines[row]!, startX + 1, width - 2, 'Esc returns to the model list.', { fg: PALETTE.dim, bg: PALETTE.bodyBg, dim: true });
+    }
+    return;
+  }
+
+  const firstLevelRow = row;
+  for (let i = 0; i < picker.effortLevels.length && row < rows; i += 1, row += 1) {
+    const effort = picker.effortLevels[i]!;
+    const selected = i === picker.selectedIndex;
     const bg = selected ? PALETTE.selectedBg : PALETTE.bodyBg;
     fillRange(lines[row]!, startX, startX + width - 1, bg);
     const marker = selected ? GLYPHS.navigation.selected : ' ';
-    writeText(lines[row]!, startX + 1, width - 2, `${marker} ${effort}`, { fg: selected ? PALETTE.text : PALETTE.muted, bg, bold: selected });
+    const detail = presentation?.choices[i]?.description ?? '';
+    const text = detail ? `${marker} ${effort.padEnd(8)}${detail}` : `${marker} ${effort}`;
+    writeText(lines[row]!, startX + 1, width - 2, text, { fg: selected ? PALETTE.text : PALETTE.muted, bg, bold: selected });
+  }
+
+  if (presentation?.caveat && row < rows && row > firstLevelRow) {
+    fillRange(lines[row]!, startX, startX + width - 1, PALETTE.bodyBg);
+    writeText(lines[row]!, startX + 1, width - 2, presentation.caveat, { fg: PALETTE.dim, bg: PALETTE.bodyBg, dim: true });
   }
 }
 
@@ -489,7 +524,15 @@ function getRenderCacheKey(picker: ModelPickerModal, width: number, viewportHeig
     const filteredProviders = picker.getFilteredProviders();
     base.push(objectId(picker.providers), objectId(filteredProviders), filteredProviders.length);
   } else if (picker.mode === 'effort') {
-    base.push(objectId(picker.effortLevels), picker.effortLevels.join('\u001f'), picker.pendingModel?.registryKey ?? picker.pendingModel?.id ?? '');
+    base.push(
+      objectId(picker.effortLevels),
+      picker.effortLevels.join('\u001f'),
+      picker.pendingModel?.registryKey ?? picker.pendingModel?.id ?? '',
+      // The headline and caveat are rendered content too: two models with the
+      // same level list but different spec kinds must not share a cache entry.
+      picker.effortPresentation?.headline ?? '',
+      picker.effortPresentation?.caveat ?? '',
+    );
   } else if (picker.mode === 'contextCap') {
     base.push(picker.contextCapQuery, picker.contextCapPendingModel?.registryKey ?? picker.contextCapPendingModel?.id ?? '');
   } else if (picker.mode === 'embeddingProvider') {
