@@ -14,7 +14,7 @@ Fixed: markdown tables no longer silently drop trailing columns — including he
 Fixed: config file changes are no longer silently lost when the write lands while the settings watcher is still starting up.
 Fixed: saved state now gets real housekeeping when it is recovered — stale entries are reaped, growth is bounded, contents are checked rather than assumed from the file merely existing, and anything removed is disclosed instead of vanishing. An interrupted migration no longer strands your older sessions out of reach.
 Fixed: published packages no longer silently omit the bundled agent and skill content. A packaging rule change dropped those files from the tarball on newer npm versions; installs now get the complete set again.
-Updated: bundled platform runtime to 1.13.0, which adds Telegram inbound messaging and the per-model reasoning effort model behind these changes.
+Updated: bundled platform runtime to 1.13.1, which adds Telegram inbound messaging and the per-model reasoning effort model behind these changes.
 
 ## [1.20.1] - 2026-07-25
 
@@ -488,7 +488,7 @@ Updated: @pellux/goodvibes-sdk and @pellux/goodvibes-terminal-shell to 1.11.3 (q
 ### Changes
 - 9dbd88e4 fix(daemon): attach handlers for every ws-only gateway verb — fleet.*, checkpoints.*, sessions.search, push.* were 501 on every vendored daemon build
 
-## [1.13.0] — 2026-07-09
+## [1.13.1] — 2026-07-09
 
 ### Changes
 - c3a54b1b fix: clean terminal restore on exit; feat: /resume session picker

@@ -80,6 +80,12 @@ export interface DurabilityServicesInput {
 
 export interface DurabilityServices {
   readonly storeSnapshotScheduler: StoreSnapshotScheduler;
+  /**
+   * Re-sweeps every registered append-only store on a cadence. The start-time
+   * sweep alone never prunes again in a process that stays up, which is the
+   * window in which those stores grow. Unref'd timers; teardown stop()s it.
+   */
+  readonly appendOnlyRetentionScheduler: InstanceType<typeof operations.AppendOnlyRetentionScheduler>;
   readonly userPermissionRuleStore: UserPermissionRuleStore;
   /**
    * Stops the repeating crash-residue sweep. The timer is unref'd, so a host
@@ -107,16 +113,24 @@ export function createDurabilityServices(input: DurabilityServicesInput): Durabi
   // activity-log, telemetry-ledger, and recovery-snapshot stores are all swept.
   // Best-effort — a retention failure never takes startup down (the sweep
   // swallows its own errors).
-  operations.runStartupAppendOnlySweep(
-    {
-      workingDirectory: input.surface.workingDirectory,
-      surfaceRoot: input.surface.surfaceRoot,
-      homeDirectory: input.surface.homeDirectory,
-      logDir: input.shellPaths.resolveUserPath('logs'),
-      telemetryDir: input.shellPaths.resolveUserPath('telemetry'),
-    },
-    (k: string) => configManager.get(k as never),
-  );
+  const appendOnlyRetentionRoots = {
+    workingDirectory: input.surface.workingDirectory,
+    surfaceRoot: input.surface.surfaceRoot,
+    homeDirectory: input.surface.homeDirectory,
+    logDir: input.shellPaths.resolveUserPath('logs'),
+    telemetryDir: input.shellPaths.resolveUserPath('telemetry'),
+  };
+  const appendOnlyRetentionConfigGet = (k: string): unknown => configManager.get(k as never);
+  operations.runStartupAppendOnlySweep(appendOnlyRetentionRoots, appendOnlyRetentionConfigGet);
+  // ...and again on a cadence for as long as this process lives. A start-time
+  // sweep alone never prunes a long-lived session again after boot, which is
+  // exactly the window in which these stores grow. Unref'd timers; the disposer
+  // below stops it, same posture as storeSnapshotScheduler.
+  const appendOnlyRetentionScheduler = new operations.AppendOnlyRetentionScheduler({
+    roots: appendOnlyRetentionRoots,
+    configGet: appendOnlyRetentionConfigGet,
+  });
+  appendOnlyRetentionScheduler.start();
   // Crash-residue reclaim the sweep above does not cover (liveness markers,
   // orphaned transcript journals, .unrecognized quarantine files, anchor
   // sidecars whose session file is gone). Runs once now and every few hours
@@ -133,5 +147,5 @@ export function createDurabilityServices(input: DurabilityServicesInput): Durabi
   const userPermissionRuleStore = new UserPermissionRuleStore(join(configManager.getControlPlaneConfigDir(), 'permission-rules.json'));
   void userPermissionRuleStore.init().catch((error) => logger.warn('user permission rule store init failed; asks will prompt', { error: summarizeError(error) }));
 
-  return { storeSnapshotScheduler, userPermissionRuleStore, stopDurabilityHousekeeping };
+  return { storeSnapshotScheduler, appendOnlyRetentionScheduler, userPermissionRuleStore, stopDurabilityHousekeeping };
 }
