@@ -1,3 +1,15 @@
+/**
+ * provider-classification.ts — how a provider is paid for: a raw API key, a
+ * cloud account, a stored subscription/OAuth session, a local runtime, or
+ * honestly unknown.
+ *
+ * Lives in the foundation `providers` layer (it imports nothing) because both
+ * the CLI management surfaces and the in-session failover notice need it: when
+ * automatic failover moves a turn onto a different backend, the notice names
+ * the billing class it moved from and to, so a switch from a metered API key
+ * onto the user's own subscription is something the user can see and object to
+ * rather than discover on an invoice.
+ */
 export type ProviderSetupClass =
   | 'api-key'
   | 'cloud-account'

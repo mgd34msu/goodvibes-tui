@@ -3,6 +3,7 @@ import { LAYOUT } from './layout.ts';
 import { VERSION } from '../version.ts';
 import { fitDisplay, getDisplayWidth, truncateDisplay, wrapText, interpolateColor, joinPrioritizedSegments, type PrioritizedSegment } from '../utils/terminal-width.ts';
 import type { GitHeaderInfo } from './git-status.ts';
+import { renderHeaderLine } from './header-line.ts';
 import { renderConversationFragment, renderConversationStatusLine, type ConversationStatusSegment } from './conversation-surface.ts';
 import { GLYPHS } from './ui-primitives.ts';
 import { activeUiTones } from './theme.ts';
@@ -42,22 +43,6 @@ export interface ThinkingStallInfo {
   readonly reconnect?: { readonly attempt: number; readonly maxAttempts: number };
 }
 
-/** Build the git segment string and its display width. Single source of truth for header layout. */
-function buildGitSegment(gitInfo: GitHeaderInfo): { text: string; width: number } {
-  const branch = ` git:${gitInfo.branch}`;
-  if (gitInfo.dirty) {
-    const text = `${branch} * `;
-    return { text, width: getDisplayWidth(text) };
-  }
-  if (gitInfo.ahead > 0 || gitInfo.behind > 0) {
-    const arrows = (gitInfo.ahead > 0 ? ` +${gitInfo.ahead}` : '') + (gitInfo.behind > 0 ? ` -${gitInfo.behind}` : '');
-    const text = `${branch}${arrows} `;
-    return { text, width: getDisplayWidth(text) };
-  }
-  const text = `${branch} `;
-  return { text, width: getDisplayWidth(text) };
-}
-
 /** Format a number: up to 999, then 1.0k, 1.0M, 1.0B, 1.0T */
 function fmtNum(n: number): string {
   return abbreviateCount(n, { bSuffix: true });
@@ -75,68 +60,19 @@ function fmtCost(usd: number): string {
  * UIFactory - Generates standard UI fragments without needing Ink/React overhead.
  */
 export class UIFactory {
-  // `version` defaults to the live build VERSION; tests pass a pinned fixture so
-  // golden snapshots don't break on every release bump (version-decoupled goldens,
-  // mirroring the splash fixture-version pattern).
-  public static createHeader(width: number, model: string, provider: string, title?: string, gitInfo?: GitHeaderInfo, version: string = VERSION): Line[] {
-    const lines: Line[] = [];
-    // Header/footer/thinking paint on the transparent terminal background, so
-    // they read chrome.* (light-terminal-aware) — NOT fg.*/state.*, which stay
-    // tuned for the opaque dark modal/panel boxes. Read live per render so a
-    // mode flip re-resolves without any module reload (see theme.ts).
-    const t = activeUiTones();
-    const CYAN = t.accent.brand;
-    const GREY = t.chrome.faint;
-    const TITLE_COLOR = t.chrome.label;
-    const brand = ` GoodVibes `;
-    const ver = `v${version} `;
-    const stats = ` ${model} `;
-    const prov = `(${provider}) `;
-    const line = createEmptyLine(width);
-    let curX = 0;
-    for (const char of brand) { line[curX++] = { char, fg: CYAN, bg: '', bold: true, dim: false, underline: false, italic: false, strikethrough: false }; }
-    for (const char of ver) { line[curX++] = { char, fg: GREY, bg: '', bold: false, dim: true, underline: false, italic: false, strikethrough: false }; }
-    // Optional conversation title — shown after brand/ver, truncated to fit
-    if (title) {
-      const titleStr = `│ ${title} `;
-      // Reserve space for git info (if present) + model/provider on the right
-      const gitReserved = gitInfo ? buildGitSegment(gitInfo).width : 0;
-      const rightReserved = getDisplayWidth(stats + prov) + gitReserved;
-      const maxTitleW = width - curX - rightReserved - 1;
-      let displayTitle: string;
-      if (getDisplayWidth(titleStr) <= maxTitleW) {
-        displayTitle = titleStr;
-      } else {
-        let truncated = '';
-        let w = 0;
-        for (const ch of titleStr) {
-          const cw = getDisplayWidth(ch);
-          if (w + cw > maxTitleW - 3) { truncated += '...'; break; }
-          truncated += ch;
-          w += cw;
-        }
-        displayTitle = truncated;
-      }
-      for (const char of displayTitle) { if (curX < width) line[curX++] = { char, fg: TITLE_COLOR, bg: '', bold: false, dim: true, underline: false, italic: false, strikethrough: false }; }
-    }
-    // Build git info segment
-    let gitStr = '';
-    let gitFg: string = t.chrome.faint;
-    if (gitInfo) {
-      gitStr = buildGitSegment(gitInfo).text;
-      if (gitInfo.dirty || gitInfo.ahead > 0 || gitInfo.behind > 0) {
-        gitFg = t.chrome.warn; // yellow when dirty or out-of-sync
-      }
-    }
-    const rightSideText = stats + prov;
-    const rightSideW = getDisplayWidth(rightSideText) + getDisplayWidth(gitStr);
-    let rightX = width - rightSideW;
-    for (const char of gitStr) { if (rightX >= 0 && rightX < width) line[rightX++] = { char, fg: gitFg, bg: '', bold: false, dim: !gitInfo?.dirty && !(gitInfo?.ahead || gitInfo?.behind), underline: false, italic: false, strikethrough: false }; }
-    for (const char of stats) { if (rightX < width) line[rightX++] = { char, fg: CYAN, bg: '', bold: true, dim: false, underline: false, italic: false, strikethrough: false }; }
-    for (const char of prov) { if (rightX < width) line[rightX++] = { char, fg: GREY, bg: '', bold: false, dim: true, underline: false, italic: false, strikethrough: false }; }
-    lines.push(line);
-    lines.push(this.stringToLine('━'.repeat(width), width, { fg: t.chrome.faint }));
-    return lines;
+  /**
+   * The header row. Delegates to renderHeaderLine (header-line.ts) — extracted
+   * when the header gained the failover divergence marker and this file was
+   * already on the 800-line source gate.
+   *
+   * `model`/`provider` are the SERVING backend and `note` the divergence
+   * marker, both resolved by core/active-model-identity.ts so the header and
+   * the footer answer "who is serving?" from one place. `version` defaults to
+   * the live build VERSION; tests pass a pinned fixture so golden snapshots
+   * don't break on every release bump.
+   */
+  public static createHeader(width: number, model: string, provider: string, title?: string, gitInfo?: GitHeaderInfo, version: string = VERSION, note: string = ''): Line[] {
+    return renderHeaderLine(width, model, provider, title, gitInfo, version, note);
   }
 
   /**
@@ -221,6 +157,11 @@ export class UIFactory {
     // "sleep disabled" chip in the posture block (the danger-mode idiom: a
     // persistent, colored surface indicator, the safety mechanism itself).
     powerKeepAwake?: boolean,
+    // Divergence marker for the model segment (core/active-model-identity.ts):
+    // set only while the serving backend is not the user's configured
+    // selection, e.g. "failover from abacusai:route-llm". Empty/undefined
+    // renders the context-info line exactly as it did before the marker existed.
+    modelNote?: string,
   ): Line[] {
     const lines: Line[] = [];
     const promptLines = prompt.split('\n');
@@ -499,6 +440,12 @@ export class UIFactory {
       if (model) {
         ctxParts.push({ text: model + (provider ? ` (${provider})` : ''), priority: 0 });
       }
+      // Divergence marker — its own segment so a narrow line drops it WHOLE
+      // (joinPrioritizedSegments breaks priority ties toward the later
+      // segment) rather than truncating it into a half-word. Priority 0: it
+      // outranks every decorative segment, and what survives without it is
+      // still the SERVING backend, never a claim about the configured one.
+      if (modelNote) ctxParts.push({ text: modelNote, priority: 0 });
       // Cross-surface spine posture — plain words, no blame. Adopted mode only.
       if (sessionSpineStatus) ctxParts.push({ text: `spine:${sessionSpineStatus}`, priority: 1 });
       // Web surface reachability — plain, persistent; dropped first under width pressure.

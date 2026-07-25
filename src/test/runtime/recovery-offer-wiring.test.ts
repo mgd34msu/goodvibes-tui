@@ -20,7 +20,7 @@ import { buildRecoveryOfferWiring } from '../../runtime/recovery-offer-wiring.ts
 import { offerRecoverySnapshot, type SelectionOpener,  resetAnsweredRecoveryOffersForTest } from '../../runtime/recovery-prompt.ts';
 import { bindWriteLastSessionPointerToSurface } from '../../runtime/session-pointer-surface.ts';
 import { makeProjectTempDir } from '../helpers/project-temp.ts';
-import { makeTestSurface } from '../helpers/session-surface.ts';
+import { ageRecoverySnapshot, makeTestSurface } from '../helpers/session-surface.ts';
 
 let tmpDir: string;
 let surface: SessionSurface;
@@ -48,6 +48,8 @@ function setup(sessionId: string, messages: Array<Record<string, unknown>>) {
     'Crashed mid-refactor',
     { surface },
   );
+  // An abandoned crash, not a file some other process is still rewriting.
+  ageRecoverySnapshot(surface.recoveryFile(sessionId));
   const conversation = new ConversationManager(() => 80);
   const runtime = { sessionId: 'fresh-boot-session', model: 'test-model', provider: 'test-provider' };
   const receipts: string[] = [];

@@ -24,7 +24,8 @@ import { getTierPromptSupplement, getTierForContextWindow } from '@pellux/goodvi
 import { GitStatusProvider } from './renderer/git-status.ts';
 import type { GitHeaderInfo } from './renderer/git-status.ts';
 import { createShellLayout } from './renderer/layout-engine.ts';
-import { buildShellFooter, estimateShellFooterHeight } from './renderer/shell-surface.ts';
+import { buildShellFooter, estimateShellFooterHeight, promptCursorOffset } from './renderer/shell-surface.ts';
+import { createFailoverTurnState, resolveActiveModelDisplay } from './core/active-model-identity.ts';
 import { computePromptContentWidth } from './renderer/prompt-content-width.ts';
 import { buildConversationViewport } from './renderer/conversation-layout.ts';
 import { applyConversationOverlays } from './renderer/conversation-overlays.ts';
@@ -178,6 +179,8 @@ async function main() {
   let lastMaxScroll: number | null = null;
   // Stream and tool-timer state; mutated by wireStreamEventMetrics handlers, read during render.
   const streamMetrics: StreamMetrics = createStreamMetrics();
+  // Live failover record — written by the failover path, read every frame so the header and footer agree.
+  const failoverState = createFailoverTurnState();
 
   const getPromptContentWidth = () => computePromptContentWidth(stdout.columns);
 
@@ -454,10 +457,9 @@ async function main() {
     const sessionSnapshot = uiServices.readModels.session.getSnapshot();
     const agentSnapshot = uiServices.readModels.agents.getSnapshot();
 
-    const headerLines = UIFactory.createHeader(width, currentModel.id, currentModel.provider, conversation.title || undefined, lastGitInfoRef.value);
-    const managerAgents = agentManager.list().filter(
-      (a) => a.status === 'running' || a.status === 'pending',
-    );
+    const activeModel = resolveActiveModelDisplay({ serving: currentModel, configuredRegistryKey: configManager.get('provider.model') as string, configuredLabel: runtime.model, configuredProvider: runtime.provider, failover: failoverState.current() });
+    const headerLines = UIFactory.createHeader(width, activeModel.headerModel, activeModel.headerProvider, conversation.title || undefined, lastGitInfoRef.value, undefined, activeModel.divergenceNote);
+    const managerAgents = agentManager.list().filter((a) => a.status === 'running' || a.status === 'pending');
     const runtimeAgents = agentSnapshot.active;
     const runningAgentSummary = summarizeRunningAgents(managerAgents, runtimeAgents, ctx.services.wrfcController.listChains());
     const runningAgentCount = runningAgentSummary.count;
@@ -470,30 +472,24 @@ async function main() {
       commandMode: input.commandMode,
       panelFocused: input.panelFocused,
       pendingApproval: pendingPermission !== null,
-      hasAttachments: input.getImageAttachments().size > 0,
-      turnState: sessionSnapshot.turnState,
+      hasAttachments: input.getImageAttachments().size > 0, turnState: sessionSnapshot.turnState,
     });
     const contextStatusHint = resolveContextStatusHint({
       evaluate: (args) => evaluateSessionMaintenance({ configManager, ...args, sessionMemoryCount: ctx.services.sessionMemoryStore.list().length }),
-      currentTokens: orchestrator.lastInputTokens,
-      contextWindow,
+      currentTokens: orchestrator.lastInputTokens, contextWindow,
     });
     const footerLines = buildShellFooter({
       width,
       promptText: promptInfo.visibleLines.join('\n'),
       promptLineCount: promptInfo.visibleLines.length,
-      promptCursorPos: promptInfo.visibleCursorLine >= 0
-        ? promptInfo.visibleLines
-          .slice(0, promptInfo.visibleCursorLine)
-          .reduce((sum: number, line: string) => sum + line.length + 1, 0) + promptInfo.visibleCursorCol
-        : undefined,
+      promptCursorPos: promptCursorOffset(promptInfo),
       usage: { up: orchestrator.usage.input, down: orchestrator.usage.output, fleetCostUsd: footerFleetCost(() => ctx.services.processRegistry.query().nodes, runningAgentCount > 0) },
       showExitNotice: input.showExitNotice,
       lastCopyTime: input.lastCopyTime,
-      model: runtime.model,
+      model: activeModel.footerModel, modelNote: activeModel.divergenceNote,
       toolCount: toolRegistry.list().length,
       workingDir,
-      provider: runtime.provider,
+      provider: activeModel.footerProvider,
       contextWindow,
       contextStatusHint,
       retryHint: retryAffordanceHint(retryAffordance),
@@ -709,17 +705,22 @@ async function main() {
   // Time-bounded: onExpire repaints once the 60s disarm timer fires, so a stray keypress hours
   // later can never trigger a real retry — see retry-affordance.ts.
   const retryAffordance = createRetryAffordanceState({ onExpire: render });
-  const retryTurn = (): void => {
+  const retryTurn = (notice?: string): void => {
     if (!retryCtx) return;
     const { count, text, content: rContent, opts: rOpts } = retryCtx;
     // Roll back to pre-submission count, then re-submit. SDK gap — no retry-in-place (see handoff).
+    // The rollback erases the failed turn's transcript — the failover notice included, which is how
+    // that notice used to vanish before anyone could read it. The caller hands it over instead, and
+    // it is posted here: after the rollback, above the prompt it explains.
     conversation.removeMessagesAfter(count);
+    if (notice) systemMessageRouter.userReceipt(notice);
     void refreshMemoryRecallSnapshot(ctx.services).then(() => orchestrator.handleUserInput(text, rContent, rOpts)).catch((e: unknown) => logger.debug('retryTurn', { error: summarizeError(e) }));
   };
   const streamResult: WireStreamEventMetricsResult = wireStreamEventMetrics({
     events: uiServices.events, orchestrator, providerRegistry,
     systemMessageRouter, render, metrics: streamMetrics,
     providerOptimizer: ctx.services.providerOptimizer, costLookup: providerRegistry, retryTurn,
+    failoverState, getConfiguredRegistryKey: () => configManager.get('provider.model') as string | undefined,
     isApprovalPending: () => pendingPermission !== null,
   });
   unsubs.push(...streamResult.unsubs);
@@ -743,7 +744,7 @@ async function main() {
   const themeProbe = installBackgroundThemeProbe({ configManager, isTTY: Boolean(stdout.isTTY), env: process.env, writeQuery: (b) => allowTerminalWrite(() => stdout.write(b)), requestRepaint: () => { compositor.resetDiff(); render(); } });
 
   // continueRecovery lets --continue/bare --resume check the target session for a live crash snapshot newer than its store before resuming (see tui-startup.ts).
-  applyInitialTuiCliState({ cli, input, commandRegistry, commandContext, shellPaths: ctx.services.shellPaths, surface: ctx.services.surface, render, continueRecovery: { sessionManager: ctx.services.sessionManager, runtime, conversation, writeLastSessionPointer, receipt: (line) => systemMessageRouter.high(line) } });
+  applyInitialTuiCliState({ cli, input, commandRegistry, commandContext, shellPaths: ctx.services.shellPaths, surface: ctx.services.surface, render, continueRecovery: { sessionManager: ctx.services.sessionManager, runtime, conversation, writeLastSessionPointer, receipt: (line) => systemMessageRouter.userReceipt(line) } });
 
   stdin.on('data', (raw: string) => {
     const data = themeProbe.filterInput(raw); if (data.length === 0) return;
@@ -788,7 +789,7 @@ async function main() {
   // frame so the question is drawn rather than posed at a blank terminal.
   scheduleRecoveryOffer(buildRecoveryOfferWiring({
     surface: ctx.services.surface, sessionManager: ctx.services.sessionManager, runtime, conversation, commandContext,
-    writeLastSessionPointer, receipt: (line) => systemMessageRouter.high(line), render,
+    writeLastSessionPointer, receipt: (line) => systemMessageRouter.userReceipt(line), render,
   }));
 
   // Auto-save to recovery file every 60s + multi-instance liveness-marker

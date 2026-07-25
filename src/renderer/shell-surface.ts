@@ -19,6 +19,13 @@ export interface ShellFooterBuildOptions {
   readonly showExitNotice: boolean;
   readonly lastCopyTime: number;
   readonly model?: string;
+  /**
+   * Divergence marker appended to the model segment while the serving backend
+   * is not the user's configured selection (core/active-model-identity.ts),
+   * e.g. "failover from abacusai:route-llm". Absent/empty in the normal case,
+   * where the context-info line renders exactly as it always has.
+   */
+  readonly modelNote?: string;
   readonly toolCount?: number;
   readonly workingDir?: string;
   readonly provider?: string;
@@ -112,6 +119,34 @@ const DIM_STATUS_FG = '#64748b';
  */
 let lastRenderedFooterHeight: { compact: boolean; height: number } | null = null;
 
+/**
+ * The wrapped-prompt shape the composer reports each frame — the subset
+ * promptCursorOffset needs (see InputHandler.getWrappedPromptInfo).
+ */
+export interface WrappedPromptCursorInfo {
+  readonly visibleLines: readonly string[];
+  readonly visibleCursorLine: number;
+  readonly visibleCursorCol: number;
+}
+
+/**
+ * Flatten a wrapped-prompt cursor position (line + column) into the single
+ * character offset createFooter's `cursorPos` expects, counting one separator
+ * per wrapped line. Returns undefined when the cursor is not on a visible line
+ * (scrolled out of the composer's window), which suppresses the cursor overlay
+ * rather than drawing it in the wrong place.
+ *
+ * Lives here rather than inline at the render site so main.ts (a composition
+ * root already at the source-line gate) stays a wiring file.
+ */
+export function promptCursorOffset(info: WrappedPromptCursorInfo): number | undefined {
+  if (info.visibleCursorLine < 0) return undefined;
+  const precedingChars = info.visibleLines
+    .slice(0, info.visibleCursorLine)
+    .reduce((sum: number, line: string) => sum + line.length + 1, 0);
+  return precedingChars + info.visibleCursorCol;
+}
+
 export function estimateShellFooterHeight(
   promptLineCount: number,
   contextWindow?: number,
@@ -158,6 +193,7 @@ export function buildShellFooter(
     options.permissionMode,
     options.webSurfaceUrl,
     options.powerKeepAwake,
+    options.modelNote,
   );
   // Compact posture drops the process indicator and context hint entirely so
   // the footer fits within ~5 rows on short terminals.

@@ -39,10 +39,18 @@
  *     without reading keeps the snapshot.
  *   - Keep (or a dismissal) stays quiet for the rest of the run. The snapshot
  *     is offered again on the next launch, not again in this one.
+ *   - Remove is permanent, not just for this file. The decision is written to
+ *     the durable ledger in recovery-decisions.ts, so a snapshot that comes
+ *     back byte-for-byte — because a session still running on an older build
+ *     is rewriting it every minute — is deleted on sight instead of asked
+ *     about again. Deleting the file used to be the entire memory of the
+ *     answer, which is how the same question survived being answered three
+ *     times.
  */
 import { statSync } from 'node:fs';
 import { checkRecoveryFile, checkRecoveryForSession, consumeRecovery, removeRecoveryPoint } from '@/runtime/index.ts';
 import type { RecoveryFileInfo, SessionSurface } from '@/runtime/index.ts';
+import { isRecoveryRemovalRecorded, recordRecoveryRemoval } from './recovery-decisions.ts';
 import { checkSessionLiveness } from './session-liveness-marker.ts';
 import type { SelectionItem, SelectionResult } from '../input/selection-modal.ts';
 
@@ -213,9 +221,48 @@ function defaultSnapshotBytes(surface: SessionSurface, sessionId: string): numbe
  */
 const answeredThisRun = new Set<string>();
 
-/** Test seam: a fresh process has no answered offers. */
+/**
+ * Test seam: a fresh process has no answered offers. Only clears the
+ * in-process Keep memory — removal decisions are durable on purpose and live
+ * in the surface's own directory, so a test gets a clean ledger by using a
+ * fresh temp surface, the same way a real user gets one by using a different
+ * machine.
+ */
 export function resetAnsweredRecoveryOffersForTest(): void {
   answeredThisRun.clear();
+}
+
+/**
+ * How many times one offer pass will delete a recorded-removed snapshot and
+ * look again. A bound rather than a `while (true)`: the same session can have
+ * a snapshot in both the canonical and the legacy shared directory, so one
+ * removal can legitimately need a second pass, but nothing here should be able
+ * to spin if a delete ever fails to take.
+ */
+const MAX_RECORDED_REMOVAL_PASSES = 8;
+
+/**
+ * The snapshot to actually ask about, after honouring decisions already made.
+ *
+ * A snapshot whose session is in the removal ledger is deleted here and NOT
+ * offered: the user answered that question already, and re-asking because the
+ * file came back is the defect. Deleting rather than merely skipping matters —
+ * skipping would leave the file to mask an older, genuinely-orphaned snapshot
+ * underneath it forever.
+ */
+function findOfferableSnapshot(deps: RecoveryPromptDeps): RecoveryFileInfo | null {
+  for (let pass = 0; pass < MAX_RECORDED_REMOVAL_PASSES; pass += 1) {
+    const info = deps.targetSessionId !== undefined
+      ? checkRecoveryForSession(deps.surface, deps.targetSessionId)
+      : checkRecoveryFile({ surface: deps.surface });
+    if (!info) return null;
+    if (!isRecoveryRemovalRecorded(deps.surface, info.sessionId)) return info;
+    // Silently, because the user already said remove. A receipt here would be
+    // a notification about a decision they made and do not need re-confirmed.
+    const { removed } = removeRecoveryPoint(deps.surface, info.sessionId);
+    if (!removed) return null;
+  }
+  return null;
 }
 
 /**
@@ -225,9 +272,7 @@ export function resetAnsweredRecoveryOffersForTest(): void {
  */
 export async function offerRecoverySnapshot(deps: RecoveryPromptDeps): Promise<RecoveryPromptOutcome> {
   try {
-    const info = deps.targetSessionId !== undefined
-      ? checkRecoveryForSession(deps.surface, deps.targetSessionId)
-      : checkRecoveryFile({ surface: deps.surface });
+    const info = findOfferableSnapshot(deps);
     if (!info) return 'none';
     // Already answered about this snapshot earlier in this same run (the
     // targeted --continue offer and the general startup offer can both find
@@ -270,9 +315,14 @@ export async function offerRecoverySnapshot(deps: RecoveryPromptDeps): Promise<R
     const retire = await ask(open, RECOVERY_RETIRE_TITLE, buildRecoveryRetireItems(facts));
     if (retire === 'remove') {
       const { removed } = removeRecoveryPoint(deps.surface, info.sessionId);
+      // Recorded whether or not a file was there to delete: the answer is
+      // about this snapshot, and a snapshot that vanished between the question
+      // and the answer can still be rewritten a minute later by whatever wrote
+      // it in the first place.
+      recordRecoveryRemoval(deps.surface, info.sessionId);
       deps.receipt(removed
-        ? `Recovery point removed (session ${info.sessionId}).`
-        : `No recovery point was found to remove (session ${info.sessionId}).`);
+        ? `Recovery point removed (session ${info.sessionId}) — it will not be offered again, even if the file reappears.`
+        : `No recovery point was found to remove (session ${info.sessionId}) — if one reappears for that session it will be discarded, not offered.`);
       deps.render();
       return 'removed';
     }

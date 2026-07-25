@@ -24,6 +24,7 @@ import { beforeEach, describe, expect, test } from 'bun:test';
 import { IntegrationHelperService, writeLastSessionPointer, writeRecoveryFile } from '@/runtime/index.ts';
 import { createUiReadModels } from '../../runtime/ui-read-models.ts';
 import { getTestRuntimeServices, resetTestRuntimeServices } from '../helpers/runtime-services.ts';
+import { ageRecoverySnapshot } from '../helpers/session-surface.ts';
 
 beforeEach(() => {
   resetTestRuntimeServices();
@@ -41,6 +42,9 @@ describe('IntegrationHelperService continuity reads through the surface it was c
       'Continuity fix check',
       { surface: services.surface },
     );
+    // recoveryFilePresent reports whether a snapshot would be OFFERED, so the
+    // file has to be old enough that no live writer is implied.
+    ageRecoverySnapshot(services.surface.recoveryFile(sessionId));
 
     // The exact call health-runtime.ts's `/health continuity` branch makes:
     // readModels.continuity.getSnapshot().

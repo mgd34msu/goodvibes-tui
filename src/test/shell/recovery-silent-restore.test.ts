@@ -32,7 +32,7 @@ import { checkRecoveryFile, deleteRecoveryFile, writeRecoveryFile } from '@/runt
 import type { SessionSurface } from '@/runtime/index.ts';
 import { journalPathFor, openTranscriptJournal } from '../../core/transcript-journal.ts';
 import { makeProjectTempDir } from '../helpers/project-temp.ts';
-import { makeTestSurface } from '../helpers/session-surface.ts';
+import { ageRecoverySnapshot, makeTestSurface } from '../helpers/session-surface.ts';
 
 let tmpDir: string;
 let surface: SessionSurface;
@@ -49,6 +49,9 @@ function writeCrash(sessionId: string, messages: Array<{ role: string; content: 
     title,
     { surface },
   );
+  // Aged out of the live-refresh window so the boot path sees an offerable
+  // crash — the thing this file proves a bare launch does NOT restore.
+  ageRecoverySnapshot(surface.recoveryFile(sessionId));
 }
 
 /** Write one post-snapshot journal record for `sessionId`, mirroring what a live session would leave behind mid-turn. Returns the journal's path. */

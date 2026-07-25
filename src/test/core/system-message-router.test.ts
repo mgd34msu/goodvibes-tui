@@ -292,3 +292,35 @@ describe('router noise gate', () => {
     expect(conv.addTypedSystemMessage).not.toHaveBeenCalled();
   });
 });
+
+describe('userReceipt', () => {
+  // Regression coverage for the boot defect: the recovery modal's
+  // Resume/Keep/Remove receipt landed in the transcript while the splash
+  // still owned the screen, because it went through the same path as ambient
+  // system chatter. userReceipt() is the fix's entry point — it must reach
+  // the conversation unconditionally (no noise gate, no routing-target
+  // detour) and mark the message so ConversationManager treats it as real
+  // visible content instead of quiet boot chatter.
+  test('reaches the conversation directly, marked isUserReceipt, bypassing the noise gate and routing target', () => {
+    const conv = makeConversation();
+    const router = createSystemMessageRouter(conv as unknown as ConversationManager, makeTargetResolver({ system: 'panel' }));
+    router.userReceipt('Recovery point removed (session sess-abc123) — it will not be offered again, even if the file reappears.');
+    expect(conv.addTypedSystemMessage).toHaveBeenCalledTimes(1);
+    expect(conv.addTypedSystemMessage).toHaveBeenCalledWith(
+      'Recovery point removed (session sess-abc123) — it will not be offered again, even if the file reappears.',
+      'system',
+      { isUserReceipt: true },
+    );
+  });
+
+  test('a provider-replay-shaped line still reaches the conversation as a receipt — the noise gate never runs', () => {
+    // Same text shape the noise gate would otherwise fold/drop (see the
+    // 'router noise gate' describe block above) — userReceipt() must not
+    // route through classifyNoise at all, because a receipt for an explicit
+    // user action is never noise.
+    const conv = makeConversation();
+    const router = createSystemMessageRouter(conv as unknown as ConversationManager, makeTargetResolver());
+    router.userReceipt('[Local] ollama at localhost:11434 (2 models) — from last session');
+    expect(conv._messages).toEqual(['[Local] ollama at localhost:11434 (2 models) — from last session']);
+  });
+});

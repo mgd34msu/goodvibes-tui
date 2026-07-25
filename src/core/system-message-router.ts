@@ -224,6 +224,28 @@ export class SystemMessageRouter {
   wrfc(message: string, priority: SystemMessagePriority = 'high'): void {
     this.routeTypedSystemMessage(message, priority, 'wrfc');
   }
+
+  /**
+   * Route a message that must reach the conversation unconditionally. Skips
+   * the noise gate and the configured routing target, and marks the message
+   * `isUserReceipt` so the splash check in
+   * ConversationManager.rebuildHistory() treats it as real visible content —
+   * otherwise it would be invisible while the splash still owns the screen.
+   *
+   * Two callers qualify today:
+   *   - a receipt for an explicit user action at this shell (answering the
+   *     startup recovery modal's Resume/Keep/Remove choice): the answer to a
+   *     question the user was just asked, never ambient chatter;
+   *   - an automatic provider failover switch (stream-event-wiring.ts):
+   *     which backend serves a turn decides who bills for it, so it must not
+   *     be filterable by a routing preference. `[Failover]` is also in
+   *     FORCE_CONVERSATION_PREFIXES, but that list is a per-prefix opt-in
+   *     applied AFTER the noise gate; this channel is the structural
+   *     guarantee rather than a second string match.
+   */
+  userReceipt(message: string): void {
+    this.conversation.addTypedSystemMessage(message, classifySystemMessageKind(message), { isUserReceipt: true });
+  }
 }
 
 // ---------------------------------------------------------------------------
