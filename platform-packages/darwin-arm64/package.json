@@ -1,6 +1,6 @@
 {
   "name": "@pellux/goodvibes-tui-darwin-arm64",
-  "version": "1.20.0",
+  "version": "1.20.1",
   "description": "Prebuilt goodvibes and goodvibes-daemon binaries for darwin-arm64. Installed automatically as an optional dependency of @pellux/goodvibes-tui; do not install directly.",
   "license": "MIT",
   "os": [
