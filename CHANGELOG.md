@@ -4,6 +4,13 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [1.20.1] - 2026-07-25
+
+### Changes
+
+- fd3b3037 fix: recovery offers and removals behave; active-model surfaces agree; failover is visible and temporary
+- 08237438 docs: replace README screenshots with true terminal captures
+
 ## [1.20.0] - 2026-07-24
 
 ### Changes
