@@ -15,7 +15,14 @@ import { RemoteRunnerRegistry } from '@/runtime/index.ts';
 describe('tool breadth additions', () => {
   const originalCwd = process.cwd();
   let root = '';
-  let taskTool = createTaskTool(new CrossSessionTaskRegistry(mkdtempSync(join(tmpdir(), 'gv-tool-breadth-init-'))));
+  // Task-ref ownership is the HOST's session identity, resolved per call — not
+  // the model-supplied `sessionId` argument, which now only selects which
+  // session's refs a list/show reads. Standing in as the host, this suite owns
+  // 'sess-a', so its writes and its reads agree.
+  let taskTool = createTaskTool(
+    new CrossSessionTaskRegistry(mkdtempSync(join(tmpdir(), 'gv-tool-breadth-init-'))),
+    { resolveSessionId: () => 'sess-a' },
+  );
   const teamTool = createTeamTool({ surfaceRoot: 'tui' });
   const worklistTool = createWorklistTool({ surfaceRoot: 'tui' });
 
@@ -26,7 +33,7 @@ describe('tool breadth additions', () => {
   beforeEach(() => {
     root = mkdtempSync(join(tmpdir(), 'gv-tool-breadth-'));
     process.chdir(root);
-    taskTool = createTaskTool(new CrossSessionTaskRegistry(taskGraphPath(root)));
+    taskTool = createTaskTool(new CrossSessionTaskRegistry(taskGraphPath(root)), { resolveSessionId: () => 'sess-a' });
   });
 
   afterEach(() => {

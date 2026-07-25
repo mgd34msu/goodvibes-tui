@@ -22,6 +22,7 @@ import { AgentMessageBus, AgentOrchestrator, ArchetypeLoader, WrfcController } f
 import { AgentManager, ContextAccountingHolder, OverflowHandler, ProcessManager, createWorkflowServices, type WorkflowServices } from '@pellux/goodvibes-sdk/platform/tools';
 import { FileStateCache, FileUndoManager, MemoryConsolidationScheduler, MemoryEmbeddingProviderRegistry, MemoryRegistry, MemoryStore, ModeManager, ProjectIndex, resolveCanonicalMemoryDbPath, type CodeIndexStore, type CodeIndexReindexScheduler } from '@pellux/goodvibes-sdk/platform/state';
 import type { StoreSnapshotScheduler } from '@pellux/goodvibes-sdk/platform/state/store-snapshots';
+import type { operations as runtimeOperations } from '@pellux/goodvibes-sdk/platform/runtime';
 import type { UserPermissionRuleStore } from '@pellux/goodvibes-sdk/platform/permissions';
 import { buildExecPromptAnswerHandler } from '@pellux/goodvibes-sdk/platform/runtime/permissions/exec-prompt-wiring';
 import { buildLocalhostFetchApproval } from '@pellux/goodvibes-sdk/platform/runtime/permissions/localhost-fetch-approval';
@@ -209,6 +210,8 @@ export interface RuntimeServices {
   readonly codeIndexReindexScheduler: CodeIndexReindexScheduler; // tool-site reindex
   /** Daily snapshots of every SQLite store this runtime writes, with bounded retention; unref'd timers (mirrors the SDK composition — hosts that tear down a runtime stop() it themselves). */
   readonly storeSnapshotScheduler: StoreSnapshotScheduler;
+  /** Periodic re-sweep of every registered append-only store (the start-time sweep alone never prunes a long-lived process again); unref'd timers, stop() on teardown. */
+  readonly appendOnlyRetentionScheduler: InstanceType<typeof runtimeOperations.AppendOnlyRetentionScheduler>;
   /** Stops the recurring crash-residue sweep; idempotent, unref'd timer (hosts that tear a runtime down call it). */
   readonly stopDurabilityHousekeeping: () => void;
   readonly memoryConsolidationScheduler: MemoryConsolidationScheduler;
@@ -572,7 +575,7 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
   const { codeIndexStore, codeIndexReindexScheduler } = createCodeIndexServices({ workingDirectory, configManager, memoryEmbeddingRegistry, isReindexPaused: () => pauseController.isPaused('code-index-reindex'), admitExpensiveWork });
   // Store snapshots + durable remembered-approval rules + the live credential
   // chain, mirroring the SDK composition — see durability-services.ts.
-  const { storeSnapshotScheduler, userPermissionRuleStore, stopDurabilityHousekeeping } = createDurabilityServices({
+  const { storeSnapshotScheduler, appendOnlyRetentionScheduler, userPermissionRuleStore, stopDurabilityHousekeeping } = createDurabilityServices({
     configManager, secretsManager, providerRegistry, memoryDbPath, codeIndexDbPath: codeIndexDbPath(workingDirectory), surface, shellPaths, // + retention-sweep roots & live config watch (mirrors the SDK)
     ...(options.currentSessionId ? { currentSessionId: options.currentSessionId } : {}), // exempts the running session from crash-residue reaping
   });
@@ -783,7 +786,7 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
     workstreamCommands,
     codeIndexStore,
     codeIndexReindexScheduler,
-    storeSnapshotScheduler, stopDurabilityHousekeeping,
+    storeSnapshotScheduler, appendOnlyRetentionScheduler, stopDurabilityHousekeeping,
     memoryConsolidationScheduler,
     powerManager,
     memoryGovernor,

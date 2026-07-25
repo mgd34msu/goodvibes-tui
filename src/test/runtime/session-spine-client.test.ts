@@ -316,7 +316,28 @@ describe('foldLegacySpineStore', () => {
     expect((JSON.parse(readFileSync(markerPath, 'utf-8')) as { count: number }).count).toBe(2);
   });
 
-  test('skips when the marker already exists (idempotent, marked migrated)', () => {
+  test('skips when the marker asserts a completed fold (idempotent, marked migrated)', () => {
+    const storePath = join(root, 'sessions.json');
+    const markerPath = join(root, 'sessions.json.spine-migrated');
+    writeFileSync(storePath, JSON.stringify({ sessions: { 'sess-1': { id: 'sess-1', status: 'active' } } }));
+    writeFileSync(markerPath, JSON.stringify({ schemaVersion: 1, completed: true, migratedAt: 1, count: 1 }));
+
+    let called = 0;
+    const result = foldLegacySpineStore(
+      { foldLegacyRecords: () => { called += 1; } },
+      { storePath, markerPath, project: '/p', log: { debug: () => {}, info: () => {} } },
+    );
+    expect(result.skipped).toBe(true);
+    expect(called).toBe(0);
+  });
+
+  test('re-folds once when the marker cannot prove the fold completed', () => {
+    // A marker's mere existence is no longer trusted: an interrupted write used
+    // to strand the legacy store forever. Only a marker that asserts its own
+    // completion short-circuits, so the pre-completion-flag shape below folds
+    // again — a one-time, idempotent re-register (the legacy file never changes
+    // again, and register is an upsert) that then writes a marker which does
+    // assert completion.
     const storePath = join(root, 'sessions.json');
     const markerPath = join(root, 'sessions.json.spine-migrated');
     writeFileSync(storePath, JSON.stringify({ sessions: { 'sess-1': { id: 'sess-1', status: 'active' } } }));
@@ -327,8 +348,9 @@ describe('foldLegacySpineStore', () => {
       { foldLegacyRecords: () => { called += 1; } },
       { storePath, markerPath, project: '/p', log: { debug: () => {}, info: () => {} } },
     );
-    expect(result.skipped).toBe(true);
-    expect(called).toBe(0);
+    expect(result.skipped).toBe(false);
+    expect(called).toBe(1);
+    expect(readFileSync(markerPath, 'utf-8')).toContain('"completed": true');
   });
 
   test('a missing store folds nothing and writes no marker', () => {
