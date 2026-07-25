@@ -6,7 +6,7 @@ import { join } from 'node:path';
 // The prebuild script updates the fallback value before compilation.
 // Uses import.meta.dir (Bun) to locate package.json relative to this file,
 // which is correct regardless of the process working directory.
-let _version = '1.20.1';
+let _version = '1.21.0';
 try {
   const pkg = JSON.parse(readFileSync(join(import.meta.dir, '..', 'package.json'), 'utf-8'));
   // Only trust a version read from OUR OWN package.json. A Bun single-file

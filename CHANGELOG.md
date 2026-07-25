@@ -4,6 +4,18 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [1.21.0] - 2026-07-25
+
+### Changes
+
+Fixed: the reasoning effort level you choose is no longer lowered permanently by one model. Your configured level is kept as you set it, the runtime uses whatever the current model can actually deliver, and switching back to a capable model restores your level. The display shows both values and says when a model is the reason your level is capped.
+Fixed: the notice explaining that a failover snapped your reasoning level down was being deleted from the transcript by the retry path on every failover, so nobody ever saw it. The notice now stays.
+Fixed: markdown tables no longer silently drop trailing columns — including headers — when the terminal is too narrow for the column count. A table that cannot fit is now stacked as "Header: value" records so every column is still readable.
+Fixed: config file changes are no longer silently lost when the write lands while the settings watcher is still starting up.
+Fixed: saved state now gets real housekeeping when it is recovered — stale entries are reaped, growth is bounded, contents are checked rather than assumed from the file merely existing, and anything removed is disclosed instead of vanishing. An interrupted migration no longer strands your older sessions out of reach.
+Fixed: published packages no longer silently omit the bundled agent and skill content. A packaging rule change dropped those files from the tarball on newer npm versions; installs now get the complete set again.
+Updated: bundled platform runtime to 1.13.0, which adds Telegram inbound messaging and the per-model reasoning effort model behind these changes.
+
 ## [1.20.1] - 2026-07-25
 
 ### Changes
