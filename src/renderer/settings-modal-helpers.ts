@@ -4,7 +4,7 @@
  * architecture cap. No layout logic lives here.
  */
 
-import type { SettingEntry, McpEntry, SubscriptionEntry } from '../input/settings-modal-types.ts';
+import type { SettingEntry, McpEntry, SubscriptionEntry, SettingsCategory } from '../input/settings-modal-types.ts';
 import { SETTINGS_CATEGORIES } from '../input/settings-modal-types.ts';
 import { isSecretConfigKey, isSecretReferenceValue } from '../config/secret-config.ts';
 import { UI_TONES } from './ui-primitives.ts';
@@ -61,6 +61,57 @@ export function inferSubscriptionRouteReason(entry: SubscriptionEntry): string |
   return undefined;
 }
 
+export const CATEGORY_INFO: Record<SettingsCategory, string> = {
+  display: 'Presentation settings for the terminal transcript: streaming, line numbers, thinking visibility, reasoning summaries, token speed, and tool previews.',
+  ui: 'Controls where operational messages render and whether voice surfaces are enabled. These settings change visibility, not provider behavior.',
+  provider: 'Default model routing for normal chat turns, embeddings, reasoning effort, and persistent system prompt file.',
+  pricing: 'Manual model prices (USD per 1M tokens, keyed provider:model). Your price wins over provider-served and catalog prices in every cost display, immediately.',
+  update: 'Self-update posture: whether the daemon checks hourly and updates at an idle moment, the release source it checks, and the check cadence. Clients update at launch; every swap keeps the previous binary for one-command rollback.',
+  subscriptions: 'Provider subscription login state and routing posture. Active sessions can be reviewed or signed out here; API keys remain managed through secrets.',
+  behavior: 'Day-to-day shell behavior: approval posture, compaction, history, guidance, notifications, stale-context warnings, return context, and Human-in-the-Loop mode.',
+  storage: 'Local storage posture, including secret storage policy and maximum artifact size for knowledge/home graph/document ingestion.',
+  atRest: 'Data-at-rest policy for the on-disk transcript journal and execution ledger: whether secret/credential patterns are redacted at write time, and the age/size caps that trigger pruning.',
+  permissions: 'Permission mode and tool-class policy. These settings decide whether the shell prompts before read/write/exec/network/agent actions.',
+  orchestration: 'Agent orchestration limits and recursion controls.',
+  planner: 'How /workstream decomposes a goal into work items: agent-driven decomposition (with heuristic fallback) or the forced heuristic path, plus the planning agent\'s turn, token, and wall-clock bounds.',
+  wrfc: 'Work-review-fix-cycle thresholds, retry limits, and automatic commit behavior.',
+  helper: 'Helper model defaults used by helper subsystems when they do not use the main chat route.',
+  tts: 'Text-to-speech provider, voice, and optional spoken-turn LLM overrides.',
+  voice: 'Free, offline local voice engines (voice.local.*): the STT and TTS engine, binary, and model-path for whisper.cpp/faster-whisper and Piper/Kokoro. All empty by default — configurable-not-configured, nothing auto-downloads, and an unconfigured machine reports honestly (never an error). Once set, "Local engines" appears in the TTS provider picker beside elevenlabs, with no billing dimension.',
+  service: 'Background service posture: enabled state, autostart, restart behavior, service name, platform, and logs.',
+  daemon: 'Local session daemon. It hosts the shared session broker and companion chat so a session started here is visible and steerable from other surfaces. On by default, bound to loopback (127.0.0.1) only.',
+  controlPlane: 'Daemon control-plane settings for local admin/API access.',
+  httpListener: 'HTTP listener settings for webhook and integration ingress.',
+  web: 'Browser surface settings for the local or network web UI.',
+  batch: 'Batch execution settings, including local vs Cloudflare queue behavior.',
+  automation: 'Scheduled and automated run settings, concurrency, timeout, catch-up, cooldown, and retention behavior.',
+  checkin: 'Proactive check-in: on a cadence, a briefing is judged and you are contacted only when something warrants it. Off by default; every run — scheduled or manual — leaves a receipt (see /checkin) recording whether it stayed quiet, delivered a message, or was skipped.',
+  watchers: 'File/process watcher heartbeat, polling, and recovery-window behavior.',
+  runtime: 'Runtime guardrails such as companion chat limiter and event bus listener caps.',
+  telemetry: 'Telemetry payload policy.',
+  cache: 'Provider and model cache behavior, TTL, and hit-rate monitoring.',
+  diagnostics: 'Post-edit diagnostics: whether the shell runs language diagnostics on a file after the model edits or writes it, surfacing new problems inline.',
+  mcp: 'MCP server trust and scope review. Trust changes can expose local files, tools, databases, browsers, or remote automation depending on the server.',
+  sandbox: 'Isolation strategy for REPL, MCP, Windows, and QEMU-backed execution. Use these settings to separate risky tools from the host shell.',
+  surfaces: 'External app surfaces such as Slack, Discord, ntfy, Home Assistant, Telegram, webhooks, chat bridges, and messaging providers.',
+  conversationGate: 'What a message arriving from one of those channels does. By default it gets a conversational answer, and work is proposed and waits for your agreement rather than starting on its own; you can instead confirm every run, or restore the old behavior where a message starts work immediately. Also how long a pending proposal stays answerable and how many can wait at once. This governs messages from channels only — what you type here always runs, and schedules and triggers were authorized when created.',
+  cloudflare: 'Optional Cloudflare control plane, batch queue, Worker, Tunnel, Access, DNS, KV, Durable Objects, Secrets Store, and R2 settings.',
+  release: 'Release-channel preference.',
+  power: 'Host sleep ownership. Keep-awake holds the host awake (the always-visible "sleep disabled" chip is the safety mechanism — no timer, no AC-only option); automatic inhibition keeps the host awake while real work runs, with an honest hard cap on that work hold.',
+  memory: 'Memory provenance surfacing. Whether turns that drew on your standing memories show a small "used N memories" chip with a drill-in listing them. Off by default — when off, nothing is rendered and no context is added.',
+  danger: 'High-impact switches for daemon and HTTP listener behavior. These are operational overrides, not normal preferences.',
+  tools: 'Tool LLM and helper model routing. Empty provider/model values inherit the active chat route unless a specific helper/tool route is set.',
+  network: 'Combined network view for daemon control-plane, HTTP listener, browser web surface, and general outbound network settings.',
+  fetch: 'Fetch response sanitization and host trust tiers for the fetch tool: sanitize mode plus default trusted/blocked host lists. Gated by the Fetch Response Sanitization feature.',
+  agents: 'Sub-agent context-window awareness and per-turn passive knowledge/code injection: token budget, relevance floor, code-chunk limit, and the compaction threshold. Gated by the agent context/injection features.',
+  security: 'API token scope and rotation auditing: rotation cadence, warning lead time, and whether overdue/over-scoped tokens are blocked or only reported. Gated by the Token Scope and Rotation Audit feature.',
+  integrations: 'Integration delivery reliability (Slack/Discord/webhook): retry counts, backoff bounds, dead-letter queue size, and SLO enforcement. Gated by the Integration Delivery SLO feature.',
+  policy: 'Policy-as-code bundle loading: where the startup policy bundle is loaded from and its file path. Gated by the Policy-as-Code feature.',
+  notifications: 'Notification router burst-suppression tuning: burst window, threshold, and cooldown. Gated by the Adaptive Notification Suppression feature.',
+  relay: 'Outbound zero-knowledge relay reachability, for reaching this daemon from outside the LAN without opening an inbound port. Off by default — relay.enabled is the switch. The relay operator sees only ciphertext and connection metadata — self-host your own relay for full control.',
+  learning: 'Idle-time memory consolidation: merging duplicate standing memory records and decaying/archiving stale ones. Off by default — nothing runs until enabled.',
+};
+
 export const CATEGORY_LABELS: Record<(typeof SETTINGS_CATEGORIES)[number], string> = {
   display: 'Display',
   ui: 'UI',
@@ -94,6 +145,7 @@ export const CATEGORY_LABELS: Record<(typeof SETTINGS_CATEGORIES)[number], strin
   mcp: 'MCP',
   sandbox: 'Sandbox',
   surfaces: 'Surfaces',
+  conversationGate: 'Channel Message Handling',
   cloudflare: 'Cloudflare',
   release: 'Release',
   power: 'Power',

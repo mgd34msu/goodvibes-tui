@@ -4,6 +4,15 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [1.21.1] - 2026-07-25
+
+### Changes
+
+Fixed: append-only saved state now gets its periodic housekeeping sweep instead of only being tidied at startup, so a long-running session no longer lets that state grow unchecked between restarts.
+Fixed: a session started on behalf of a task is now recorded against the task that actually owns it, so session ownership reads correctly rather than being attributed to whatever ran last.
+Added: a "Channel Message Handling" settings category. It controls what a message arriving from a connected channel does — get a conversational answer with work proposed for your agreement (the default), confirm every run, or start work immediately as before — plus how long a pending proposal stays answerable and how many can wait at once.
+Updated: bundled GoodVibes platform runtime to 1.14.0. What you type in the terminal is unaffected by that update — the conversation-first gate it carries applies to messages arriving from connected channels, and schedules and triggers were authorized when they were created.
+
 ## [1.21.0] - 2026-07-25
 
 ### Changes
