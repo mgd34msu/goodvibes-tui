@@ -160,7 +160,20 @@ export function registerInboxMethods(
     ...(routing ? { resolveRouteId: routeResolverFromRouting(routing) } : {}),
   };
   const adapters = buildAdapters(adapterContext);
-  const store = new InboxCursorStore(ctx.workingDirectory, options.storeFileName);
+  // Retention runs inside the store (age TTL + count cap, at init and then on a
+  // timer). Both hooks carry COUNTS ONLY — no sender ids, subjects or bodies.
+  const store = new InboxCursorStore(ctx.workingDirectory, options.storeFileName, {
+    onSweep: (summary) => {
+      ctx.logger.info('inbox retention sweep reclaimed items', {
+        expired: summary.expired,
+        capped: summary.capped,
+        remaining: summary.remaining,
+      });
+    },
+    onSweepError: (message) => {
+      ctx.logger.warn('inbox retention sweep failed', { error: message });
+    },
+  });
   const poller = new InboundPoller({ adapters, store, logger: ctx.logger });
 
   // Async bootstrap: init store, seed one poll, start loops. Failures are

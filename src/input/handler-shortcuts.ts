@@ -256,7 +256,7 @@ export function handleGlobalShortcutToken(
       return true;
 
     case 'search':
-      if (state.searchManager.active) state.searchManager.close();
+      if (state.searchManager.active) state.searchManager.close(state.conversationManager);
       else state.searchManager.open();
       state.requestRender();
       return true;

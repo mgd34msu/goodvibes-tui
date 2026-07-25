@@ -62,11 +62,14 @@ import {
   mkdirSync,
   openSync,
   readFileSync,
+  readdirSync,
   renameSync,
+  statSync,
   unlinkSync,
 } from 'node:fs';
 import { dirname, join } from 'node:path';
 import type { ConversationMessageSnapshot } from '@pellux/goodvibes-sdk/platform/core';
+import { UNRECOGNIZED_SUFFIX } from '@/config/read-versioned.ts';
 import type { SessionSurface } from '@/runtime/index.ts';
 
 // ─── Constants ──────────────────────────────────────────────────────────────
@@ -320,7 +323,7 @@ class TranscriptJournalImpl implements TranscriptJournal {
   }
 
   private _ensureInitialised(): void {
-    if (this._initialised && existsSync(this.path)) return;
+    if (this._initialised && journalHasContent(this.path)) return;
 
     mkdirSync(dirname(this.path), { recursive: true });
     const header: JournalHeader = {
@@ -328,11 +331,20 @@ class TranscriptJournalImpl implements TranscriptJournal {
       sessionId: this._sessionId,
       createdAt: Date.now(),
     };
-    // Append the header as the first line. If the file already exists (e.g.
-    // process restarted mid-session), we start appending records after
-    // whatever is already there — the replay function handles seq ordering.
-    // However, to keep things clean, if the file doesn't exist we write fresh.
-    if (!existsSync(this.path)) {
+    // Append the header as the first line. If the file already exists with
+    // content (e.g. process restarted mid-session), we start appending records
+    // after whatever is already there — the replay function handles seq
+    // ordering.
+    //
+    // The guard is `journalHasContent`, not `existsSync`: a crash between
+    // creating the file and writing the header leaves a zero-byte journal, and
+    // an existence-only check would then skip the header forever. Every record
+    // appended after that would sit in a header-less file, so the next replay
+    // would read record 0 where the header belongs, fail the version gate, and
+    // quarantine the entire journal — losing exactly the turns this module
+    // exists to preserve. Deciding on content instead means a zero-byte
+    // journal is re-headered and stays replayable.
+    if (!journalHasContent(this.path)) {
       appendFileSync(this.path, JSON.stringify(header) + '\n', { mode: 0o600 });
     }
     this._initialised = true;
@@ -358,8 +370,134 @@ function isValidRecord(value: unknown): value is JournalRecord {
 
 function quarantineJournal(journalPath: string): void {
   try {
-    renameSync(journalPath, `${journalPath}.unrecognized`);
+    renameSync(journalPath, `${journalPath}${UNRECOGNIZED_SUFFIX}`);
   } catch {
     // Best-effort — if rename fails, proceed silently.
+  }
+}
+
+/** True when the journal file exists AND holds at least one byte. */
+function journalHasContent(journalPath: string): boolean {
+  try {
+    return statSync(journalPath).size > 0;
+  } catch {
+    return false;
+  }
+}
+
+// ─── Reaping orphaned journals ──────────────────────────────────────────────
+//
+// `rotate()` deletes a journal once its records have been folded into a
+// snapshot or replayed. A session that crashes and is never resumed never
+// reaches either, so its journal stays on disk forever — one file per
+// abandoned session. The SDK's registered append-only retention sweep does not
+// cover this home-scoped path, so the reclaim happens here.
+
+const JOURNAL_PREFIX = 'transcript-';
+const JOURNAL_SUFFIX = '.journal';
+
+/** How long an untouched journal for a non-live session is kept: 7 days. */
+export const JOURNAL_ORPHAN_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+
+/**
+ * Hard ceiling on reapable journals kept after the age rule, newest kept.
+ * A burst of crashes inside the age window is still bounded.
+ */
+export const JOURNAL_ORPHAN_MAX_FILES = 50;
+
+export interface JournalReapResult {
+  /** Journal files examined this sweep. */
+  readonly scanned: number;
+  /** Journal files deleted this sweep. */
+  readonly reaped: number;
+}
+
+export interface JournalReapOptions {
+  /**
+   * Is this session open in a still-running process? Injected rather than
+   * imported so this module keeps no dependency on the liveness marker — the
+   * composition point (runtime/durability-housekeeping.ts) supplies the real
+   * check, and tests supply their own.
+   */
+  readonly isSessionLive: (sessionId: string) => boolean;
+  /** The session this process is writing right now; never reaped. */
+  readonly currentSessionId?: string | null;
+  readonly now?: () => number;
+  /** Override the age window (tests). */
+  readonly maxAgeMs?: number;
+  /** Override the count cap (tests). */
+  readonly maxFiles?: number;
+}
+
+/**
+ * Delete transcript journals belonging to sessions that crashed and were never
+ * resumed.
+ *
+ * A journal is reapable only when it is neither the current session's nor
+ * apparently open in another running process. Of those, one is deleted when it
+ * is empty (a zero-byte file holds no records, so nothing can be lost) or
+ * untouched for longer than the age window; whatever survives both rules is
+ * then capped by count, newest kept.
+ *
+ * The rules are deliberately mtime- and liveness-based, never parse-based: an
+ * unparseable TAIL is the normal, expected shape of a journal killed
+ * mid-append and is exactly the data replay is there to salvage, so a parse
+ * failure must never make a journal reapable.
+ *
+ * Idempotent and concurrency-safe: a journal another sweeper unlinked between
+ * the listing and this unlink (ENOENT) counts as reaped, not as an error.
+ */
+export function reapOrphanedJournals(surface: SessionSurface, options: JournalReapOptions): JournalReapResult {
+  const dir = join(surface.homeDirectory, '.goodvibes', surface.surfaceRoot);
+  let names: string[];
+  try {
+    names = readdirSync(dir).filter((n) => n.startsWith(JOURNAL_PREFIX) && n.endsWith(JOURNAL_SUFFIX));
+  } catch {
+    return { scanned: 0, reaped: 0 };
+  }
+
+  const now = options.now?.() ?? Date.now();
+  const maxAgeMs = options.maxAgeMs ?? JOURNAL_ORPHAN_MAX_AGE_MS;
+  const maxFiles = options.maxFiles ?? JOURNAL_ORPHAN_MAX_FILES;
+
+  let reaped = 0;
+  const survivors: { readonly path: string; readonly mtimeMs: number }[] = [];
+
+  for (const name of names) {
+    const sessionId = name.slice(JOURNAL_PREFIX.length, name.length - JOURNAL_SUFFIX.length);
+    if (sessionId.length === 0) continue;
+    if (options.currentSessionId && sessionId === options.currentSessionId) continue;
+    if (options.isSessionLive(sessionId)) continue;
+
+    const path = join(dir, name);
+    let stats: { size: number; mtimeMs: number };
+    try {
+      stats = statSync(path);
+    } catch {
+      continue; // vanished under us
+    }
+    if (stats.size === 0 || now - stats.mtimeMs > maxAgeMs) {
+      if (unlinkJournalIfPresent(path)) reaped++;
+      continue;
+    }
+    survivors.push({ path, mtimeMs: stats.mtimeMs });
+  }
+
+  if (survivors.length > maxFiles) {
+    survivors.sort((a, b) => a.mtimeMs - b.mtimeMs); // oldest first
+    for (const victim of survivors.slice(0, survivors.length - maxFiles)) {
+      if (unlinkJournalIfPresent(victim.path)) reaped++;
+    }
+  }
+
+  return { scanned: names.length, reaped };
+}
+
+function unlinkJournalIfPresent(path: string): boolean {
+  try {
+    unlinkSync(path);
+    return true;
+  } catch (err) {
+    return (err as NodeJS.ErrnoException | undefined)?.code === 'ENOENT';
   }
 }

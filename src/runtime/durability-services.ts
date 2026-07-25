@@ -18,6 +18,12 @@
  *    EVERY root the composition knows (working dir, surface root, home,
  *    logDir, telemetryDir) — omitting logDir/telemetryDir/home would silently
  *    skip the activity-log, telemetry-ledger, and recovery-snapshot stores.
+ *  - Durability housekeeping: the crash-residue reclaim the retention janitor
+ *    above does NOT cover — stale liveness markers, orphaned transcript
+ *    journals, `.unrecognized` quarantine files, and anchor sidecars whose
+ *    session is gone (see durability-housekeeping.ts). It runs at startup AND
+ *    on a repeating unref'd timer, because a long-lived process that only
+ *    sweeps at boot never sweeps; the returned disposer stops that timer.
  *  - Live config-file watch: external edits to the settings file apply through
  *    the same subscribe() pipeline an in-process set() uses — no restart. The
  *    underlying watchers are unref'd, so this never pins the event loop.
@@ -28,6 +34,7 @@ import { resolveMemoryVectorDbPath } from '@pellux/goodvibes-sdk/platform/state'
 import { StoreSnapshotScheduler } from '@pellux/goodvibes-sdk/platform/state/store-snapshots';
 import { UserPermissionRuleStore } from '@pellux/goodvibes-sdk/platform/permissions';
 import { logger, summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
+import { startDurabilityHousekeeping } from './durability-housekeeping.ts';
 import type { SessionSurface } from '@/runtime/index.ts';
 
 export interface DurabilityServicesInput {
@@ -48,11 +55,38 @@ export interface DurabilityServicesInput {
    */
   readonly surface: SessionSurface;
   readonly shellPaths: { resolveUserPath(...segments: string[]): string };
+  /**
+   * The session id this process is currently using, read at each sweep. When
+   * omitted the crash-residue reap still protects live artefacts through its
+   * age and liveness rules — this is the explicit belt-and-braces guard.
+   */
+  /**
+   * Resolves the live session id, read fresh on every crash-residue sweep so
+   * the running session's own transcript journal and liveness marker are
+   * exempt from reaping.
+   *
+   * A getter, not a value: the id is reassigned in place when a recovery
+   * snapshot is accepted, and this sweep repeats for the life of the process.
+   *
+   * Omitting it is not merely untidy. The journal reaper's other guard is the
+   * liveness marker, and that marker goes stale after 150 seconds — so a host
+   * that passes nothing here is trusting a heartbeat that a single long
+   * blocking turn can outrun, and an in-process sweep landing in that window
+   * would delete the journal of the session currently writing it. Passing this
+   * makes the exemption unconditional instead of timing-dependent.
+   */
+  readonly currentSessionId?: () => string | null;
 }
 
 export interface DurabilityServices {
   readonly storeSnapshotScheduler: StoreSnapshotScheduler;
   readonly userPermissionRuleStore: UserPermissionRuleStore;
+  /**
+   * Stops the repeating crash-residue sweep. The timer is unref'd, so a host
+   * that never calls this is not held open by it; teardown calls it to stop
+   * the work rather than to release the loop.
+   */
+  readonly stopDurabilityHousekeeping: () => void;
 }
 
 export function createDurabilityServices(input: DurabilityServicesInput): DurabilityServices {
@@ -83,6 +117,15 @@ export function createDurabilityServices(input: DurabilityServicesInput): Durabi
     },
     (k: string) => configManager.get(k as never),
   );
+  // Crash-residue reclaim the sweep above does not cover (liveness markers,
+  // orphaned transcript journals, .unrecognized quarantine files, anchor
+  // sidecars whose session file is gone). Runs once now and every few hours
+  // after that; the timer is unref'd and the disposer stops it.
+  const stopDurabilityHousekeeping = startDurabilityHousekeeping({
+    surface: input.surface,
+    currentSessionId: input.currentSessionId,
+    extraQuarantineDirs: [configManager.getControlPlaneConfigDir()],
+  });
   // External config edits apply LIVE through the same subscribe() pipeline an
   // in-process set() uses; the underlying watchers are unref'd.
   configManager.watchConfigFiles();
@@ -90,5 +133,5 @@ export function createDurabilityServices(input: DurabilityServicesInput): Durabi
   const userPermissionRuleStore = new UserPermissionRuleStore(join(configManager.getControlPlaneConfigDir(), 'permission-rules.json'));
   void userPermissionRuleStore.init().catch((error) => logger.warn('user permission rule store init failed; asks will prompt', { error: summarizeError(error) }));
 
-  return { storeSnapshotScheduler, userPermissionRuleStore };
+  return { storeSnapshotScheduler, userPermissionRuleStore, stopDurabilityHousekeeping };
 }

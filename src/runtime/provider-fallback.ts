@@ -6,7 +6,12 @@
  * compaction denominator agree with the post-catalog window.
  */
 import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
-import { inferFallbackContextWindow, type ModelDefinition, type ProviderRegistry } from '@pellux/goodvibes-sdk/platform/providers';
+import {
+  inferFallbackContextWindow,
+  resolveReasoningEffortSpec,
+  type ModelDefinition,
+  type ProviderRegistry,
+} from '@pellux/goodvibes-sdk/platform/providers';
 import { logger } from '@pellux/goodvibes-sdk/platform/utils';
 
 function buildFallbackModelDefinition(provider: string, modelId: string): ModelDefinition {
@@ -32,7 +37,16 @@ function buildFallbackModelDefinition(provider: string, modelId: string): ModelD
     contextWindowProvenance: 'fallback',
     selectable: true,
     tier: 'standard',
-    ...(isReasoningProvider ? { reasoningEffort: ['instant', 'low', 'medium', 'high'] } : {}),
+    // Which levels this model accepts is a property of the model, not of the
+    // provider it sits behind: the hardcoded four ('instant', 'low', 'medium',
+    // 'high') offered 'instant' to models that reject it and hid 'xhigh',
+    // 'max' and 'none' from models that accept them. The SDK resolver answers
+    // from the curated family table when the catalog has not loaded yet, and
+    // otherwise returns its own labelled best guess, which the adapters treat
+    // as "send nothing" rather than as verified levels.
+    ...(isReasoningProvider
+      ? { reasoningEffort: resolveReasoningEffortSpec({ modelId }) }
+      : {}),
   };
 }
 

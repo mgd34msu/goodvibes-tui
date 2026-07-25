@@ -56,7 +56,12 @@ function toggleBlocks(typeFilter: string, collapsed: boolean, ctx: CommandContex
       // every member regardless of its own key.
       if (!collapsed && block.type === 'tool_group' && block.groupMemberIndexes) {
         for (const memberIdx of block.groupMemberIndexes) {
-          ctx.session.conversationManager.setCollapsed(`msg_${memberIdx}`, false);
+          const memberKey = `msg_${memberIdx}`;
+          ctx.session.conversationManager.setCollapsed(memberKey, false);
+          // An explicit /expand is a deliberate user action on this key, same
+          // as Tab/Ctrl+Y/Ctrl+B — exempts it from search's close-time
+          // auto-re-collapse (see ConversationManager.noteUserTouch).
+          ctx.session.conversationManager.searchExpansion.noteUserTouch(memberKey);
         }
       }
       count++;

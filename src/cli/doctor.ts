@@ -3,6 +3,7 @@ import { PermissionManager, createPermissionConfigReader } from '@pellux/goodvib
 import type { PermissionCategory, PermissionCheckResult } from '@pellux/goodvibes-sdk/platform/permissions';
 import { PolicyRuntimeState, createFeatureFlagManager, deriveFeatureStates } from '@/runtime/index.ts';
 import { getProviderIdFromModel } from '../config/provider-model.ts';
+import { describeConfiguredEffort } from '../providers/reasoning-effort-surface.ts';
 import type { CliCommandOutput } from './types.ts';
 import type { GoodVibesCliOutputFormat } from './types.ts';
 import { buildHooksValidation } from './hooks-report.ts';
@@ -263,7 +264,12 @@ function buildRoutingRoles(config: ConfigManager): RoutingRole[] {
       provider: mainProvider,
       model: mainModel || '(unset)',
       keys: ['provider.model', 'provider.reasoningEffort'],
-      note: `reasoningEffort=${String(config.get('provider.reasoningEffort') ?? '')}`,
+      // Both halves: the level that is configured, and what that level
+      // actually becomes on this model. They differ whenever the model does
+      // not offer the configured level, and a doctor report that printed only
+      // the first would hide exactly the mismatch it exists to find.
+      note: `reasoningEffort=${String(config.get('provider.reasoningEffort') ?? '')}`
+        + ` -> ${describeConfiguredEffort(mainModel, String(config.get('provider.reasoningEffort') ?? ''))}`,
     },
     {
       role: 'Embeddings',

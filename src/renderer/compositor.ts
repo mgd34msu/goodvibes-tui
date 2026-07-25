@@ -1,6 +1,6 @@
 import { TerminalBuffer } from './buffer.ts';
 import { DiffEngine } from './diff.ts';
-import { type Line, createEmptyCell, createStyledCell } from '../types/grid.ts';
+import { type Line, createEmptyCell, createEmptyLine, createStyledCell } from '../types/grid.ts';
 import { getDisplayWidth } from '../utils/terminal-width.ts';
 import type { SearchManager } from '../input/search.ts';
 import { allowTerminalWrite } from '../runtime/terminal-output-guard.ts';
@@ -70,6 +70,22 @@ export class Compositor {
   private backBuffer: TerminalBuffer | null = null;
   private readonly caps: TermColorCaps;
   private diffEngine: DiffEngine;
+  /**
+   * When true the next composite() repaints the WHOLE screen instead of
+   * diffing against the last frame: erase display, then emit every cell.
+   *
+   * The incremental path is correct only while the front buffer still
+   * describes what is physically on screen. Two things break that assumption:
+   * a buffer reallocation (resize) makes the compositor forget the old frame,
+   * and anything that writes to the terminal outside composite() moves content
+   * the compositor never wrote. After either, a row the model believes is
+   * already blank is never re-emitted, so whatever the terminal is showing
+   * there — splash art, a stale rule line — survives every later frame. The
+   * erase is what clears cells the diff structurally skips (wide-glyph
+   * continuation cells, see DiffEngine.diff), which a diff against a null
+   * front buffer alone cannot do.
+   */
+  private fullRepaintPending = false;
 
   constructor(private stdout: NodeJS.WriteStream) {
     // Probe terminal capabilities once at construction time.
@@ -91,15 +107,40 @@ export class Compositor {
     this.diffEngine.reset();
     this.frontBuffer = null;
     this.backBuffer = null;
+    this.fullRepaintPending = true;
+  }
+
+  /**
+   * Force the next frame to repaint the entire screen exactly once.
+   *
+   * Called at a state transition that replaces one full-screen composition
+   * with another (the splash giving way to the transcript), where any cell the
+   * incremental path leaves behind reads as corruption rather than as a stale
+   * pixel. Unlike resetDiff() this keeps the buffers, so the frame after the
+   * repaint resumes normal differential rendering.
+   */
+  public requestFullRepaint(): void {
+    this.fullRepaintPending = true;
   }
 
   public composite(params: CompositeRequest): void {
     const { width, height, header, viewport, footer, selection, search, panel, panelWidth } = params;
-    // Reuse back-buffer instead of allocating each frame
+    // A size change reallocates the buffer, which drops every record of what
+    // the terminal is currently showing — repaint in full rather than diff
+    // against a model that no longer describes the screen.
+    const resized = this.frontBuffer !== null
+      && (this.frontBuffer.width !== width || this.frontBuffer.height !== height);
+    const fullRepaint = this.fullRepaintPending || resized;
+    this.fullRepaintPending = false;
+    // Reuse back-buffer instead of allocating each frame. A freshly allocated
+    // back buffer is seeded from the front buffer for the same reason reset()
+    // is: rows this frame does not write must keep describing what is on
+    // screen, or the diff will skip them forever.
     if (!this.backBuffer) {
       this.backBuffer = new TerminalBuffer(width, height);
+      if (!fullRepaint) this.backBuffer.reset(width, height, this.frontBuffer);
     } else {
-      this.backBuffer.reset(width, height, this.frontBuffer);
+      this.backBuffer.reset(width, height, fullRepaint ? null : this.frontBuffer);
     }
     const newBuffer = this.backBuffer;
 
@@ -145,9 +186,20 @@ export class Compositor {
       return panel!.bottomFocused ? PANEL_FOCUS_ACCENT : PANEL_BORDER_DIM;
     };
 
-    viewport.forEach((line, i) => {
+    // Every body row is written every frame, including rows the caller did not
+    // supply a line for. A viewport array shorter than the body (a docked
+    // overlay reserves a bottom inset, an overlay-row reservation overshoots
+    // what actually rendered) used to leave those rows untouched: the buffer
+    // then described them as blank while the terminal still showed the
+    // previous composition there, and since a blank-over-blank blit is a no-op
+    // no later frame ever repainted them. Supplying a blank line keeps the
+    // model and the screen in agreement.
+    const blankRow = createEmptyLine(width);
+    const bodyRows = Math.max(viewport.length, vHeight);
+    for (let i = 0; i < bodyRows; i++) {
+      const line = viewport[i] ?? blankRow;
       const screenY = viewportStartY + i;
-      if (screenY >= height) return;
+      if (screenY >= height) break;
 
       if (!hasPanel) {
         // No panel: existing fast path
@@ -264,16 +316,9 @@ export class Compositor {
           }
         }
       }
-    });
-
-    // Draw separator on remaining viewport rows past content (when panel is active)
-    if (hasPanel && panel!.separator) {
-      for (let i = viewport.length; i < vHeight; i++) {
-        const screenY = viewportStartY + i;
-        if (screenY >= height) break;
-        newBuffer.setCell(sepX, screenY, createStyledCell('│', { fg: borderFgForRow(i) }));
-      }
     }
+    // (rows past the supplied viewport lines are covered by the loop above,
+    // separator column included, so they can no longer keep a stale frame.)
 
     // 3. Draw Footer (Pinned to Bottom) — always full width
     const footerStart = height - footer.length;
@@ -284,10 +329,15 @@ export class Compositor {
     });
 
     // 4. Diff and Render
-    // Diff against front-buffer (last-rendered), then swap front/back — no clone() needed
-    const diff = this.diffEngine.diff(this.frontBuffer, newBuffer);
-    if (diff) {
-      allowTerminalWrite(() => this.stdout.write(diff));
+    // Diff against front-buffer (last-rendered), then swap front/back — no clone() needed.
+    // On a full repaint the SGR run-state is reset (the erase below leaves the
+    // terminal's attributes unknown) and the diff runs against no previous
+    // frame, so every cell of the grid is emitted.
+    if (fullRepaint) this.diffEngine.reset();
+    const diff = this.diffEngine.diff(fullRepaint ? null : this.frontBuffer, newBuffer);
+    const payload = fullRepaint ? `\x1b[H\x1b[2J${diff}` : diff;
+    if (payload) {
+      allowTerminalWrite(() => this.stdout.write(payload));
     }
 
     // Swap: back (just written) becomes the new front reference; old front becomes the next back

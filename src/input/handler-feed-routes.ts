@@ -468,6 +468,7 @@ export function handlePromptKeyToken(state: KeyRouteState, token: InputToken): {
         prompt = '';
         cursorPos = 0;
         if (name) {
+          state.conversationManager?.dismissSplash(); // command input retires the splash, same as text input
           const executeCommand = state.commandContext.executeCommand;
           void executeCommand(name, args).then((handled) => {
             if (!handled) {

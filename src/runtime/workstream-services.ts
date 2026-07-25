@@ -56,7 +56,8 @@ import type { AgentManager } from '@pellux/goodvibes-sdk/platform/tools';
 import type { RuntimeEventBus } from '@/runtime/index.ts';
 import { calcSessionCost, isModelPriced } from '../export/cost-utils.ts';
 import { editItemBrief, moveItemInSpec, removeItemFromSpec } from './workstream-draft-edits.ts';
-import { createWorkstreamDraftStore } from './workstream-draft-store.ts';
+import { createWorkstreamDraftStore, formatWorkstreamDraftReclaim } from './workstream-draft-store.ts';
+import { logger } from '@pellux/goodvibes-sdk/platform/utils';
 
 export interface WorkstreamServicesDeps {
   readonly agentManager: Pick<AgentManager, 'spawn' | 'getStatus' | 'cancel' | 'registerCancellationSignal' | 'releaseCancellationSignal'>;
@@ -184,7 +185,21 @@ function createWorkstreamCommandService(
   // proposal at construction so a create/reshape/approve done before a restart
   // is still here to launch afterward — the plan-review gate survives restart,
   // exactly as the live-workstream snapshots do via resumeAllFromDisk().
-  const store = createWorkstreamDraftStore(projectRoot);
+  // Reclaiming an abandoned draft deletes a plan the user once wrote, so it is
+  // never done silently: the store reaps at load and on a throttled save, and
+  // every reap that actually removed something reports a content-free count
+  // here. Without this hook the store recorded the reclaim on itself and
+  // nothing ever read it, which is deletion the user has no way to notice.
+  const store = createWorkstreamDraftStore(projectRoot, {
+    onReclaim: (summary) => {
+      logger.info(formatWorkstreamDraftReclaim(summary), {
+        projectRoot,
+        expired: summary.expired,
+        overCap: summary.overCap,
+        unreadable: summary.unreadable,
+      });
+    },
+  });
   for (const persisted of store.loadAll()) drafts.set(persisted.id, persisted);
 
   /**

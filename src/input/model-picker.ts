@@ -1,4 +1,9 @@
 import type { ModelDefinition } from '@pellux/goodvibes-sdk/platform/providers';
+import {
+  effortPresentationForModel,
+  toEffortModel,
+  type EffortPresentation,
+} from '../providers/reasoning-effort-surface.ts';
 import type { FavoritesStore } from '@pellux/goodvibes-sdk/platform/providers';
 import type { BenchmarkStore } from '@pellux/goodvibes-sdk/platform/providers';
 import type { ProviderRegistry } from '@pellux/goodvibes-sdk/platform/providers';
@@ -87,7 +92,14 @@ export class ModelPickerModal {
   public scrollOffset = 0;
   public models: ModelDefinition[] = [];
   public providers: string[] = [];
+  /** Levels the model chosen in model-mode actually offers (see showEffortPicker). */
   public effortLevels: string[] = [];
+  /**
+   * How to present those levels honestly: the spec kind decides the headline
+   * (named levels vs a token budget vs an on/off toggle), and a best-guess
+   * spec carries a caveat. Null outside effort mode.
+   */
+  public effortPresentation: EffortPresentation | null = null;
   /** Entries for PickerMode 'embeddingProvider' — the 'embeddings' target's own tiny item list. */
   public embeddingProviders: EmbeddingProviderPickerEntry[] = [];
   /** Mode to restore when navigating the targets rail away from 'embeddings'. */
@@ -356,7 +368,11 @@ export class ModelPickerModal {
     this.previousMode = 'model';
     this.pendingModel = model;
     this.searchFocused = false;
-    this.effortLevels = model.reasoningEffort ?? [];
+    // Only this model's real levels: the picker used to read a raw list off
+    // the definition, which was the same four values for every model.
+    const presentation = effortPresentationForModel(toEffortModel(model));
+    this.effortPresentation = presentation;
+    this.effortLevels = presentation.choices.map((choice) => choice.level);
     this.mode = 'effort';
     const idx = this.effortLevels.indexOf(currentEffort);
     this.selectedIndex = idx >= 0 ? idx : 0;
@@ -376,6 +392,7 @@ export class ModelPickerModal {
     this.embeddingProviders = [];
     this.nonEmbeddingMode = 'model';
     this.pendingModel = null;
+    this.effortPresentation = null;
     this.contextCapPendingModel = null;
     this.contextCapQuery = '';
     this.contextCapError = null;
@@ -548,7 +565,7 @@ export class ModelPickerModal {
       }));
     }
     // effort mode
-    return buildEffortItems(this.effortLevels);
+    return buildEffortItems(this.effortLevels, this.effortPresentation?.choices);
   }
 
   /** Get count of selectable (non-header) items in current mode. */

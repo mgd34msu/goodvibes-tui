@@ -1,10 +1,15 @@
 import type { UiRuntimeEvents } from '@/runtime/index.ts';
 import { createStreamStallWatchdog } from './stream-stall-watchdog.ts';
-import { buildRoutingChip } from './model-routing-chip.ts';
+import { buildRoutingChip, FALLBACK_CORRELATION_WINDOW_MS } from './model-routing-chip.ts';
 import { formatUserFacingErrorLine } from './format-user-error.ts';
 import { classifyProviderSetup } from '../providers/provider-classification.ts';
 import type { FailoverTurnState } from './active-model-identity.ts';
 import { logger } from '@pellux/goodvibes-sdk/platform/utils';
+import type { ReasoningEffortSpec } from '@pellux/goodvibes-sdk/platform/providers';
+import {
+  publishActiveEffortOptions,
+  remapEffortForServingModel,
+} from '../providers/reasoning-effort-surface.ts';
 
 /**
  * Live stream and tool-execution metrics maintained by wireStreamEventMetrics.
@@ -75,7 +80,20 @@ interface StreamOrchestrator {
 
 /** Minimal provider surface required for the stream stall watchdog and failover switching. */
 interface StreamProviderRegistry {
-  getCurrentModel(): { readonly provider: string; readonly registryKey?: string };
+  getCurrentModel(): {
+    readonly provider: string;
+    readonly registryKey?: string;
+    /**
+     * Model id, display name and reasoning-effort spec, all optional so a test
+     * double carrying only provider/registryKey still satisfies this surface.
+     * When the id is present the failover path can re-resolve the configured
+     * reasoning level against the model that is about to serve; when it is
+     * absent that step is skipped rather than guessed at.
+     */
+    readonly id?: string;
+    readonly displayName?: string;
+    readonly reasoningEffort?: ReasoningEffortSpec | undefined;
+  };
   setCurrentModel(registryKey: string): void;
 }
 
@@ -183,8 +201,14 @@ export interface WireStreamEventMetricsOptions {
    * rather than emitted before: the caller re-posts it after its rollback, and
    * it survives to be read. Implementations that do not roll back may ignore
    * the argument, but must then post the notice themselves.
+   *
+   * Returns whether the turn was actually re-submitted. False means there was
+   * nothing to retry (no pre-submission snapshot — the failed turn did not
+   * come from the composer) and the notice was NOT posted, so the caller must
+   * narrate the switch and surface the error itself rather than let a turn end
+   * in silence on a backend the user did not choose.
    */
-  readonly retryTurn?: (notice?: string) => void;
+  readonly retryTurn?: (notice?: string) => boolean;
   /**
    * Optional cost catalog for attaching per-1M-token cost information to
    * the failover notice.  When provided and both models have non-zero pricing,
@@ -222,6 +246,15 @@ export interface WireStreamEventMetricsOptions {
    * divergence marker is possible, so both are skipped rather than guessed at.
    */
   readonly getConfiguredRegistryKey?: () => string | undefined;
+  /**
+   * The user's configured reasoning level (config `provider.reasoningEffort`).
+   * Read at the moment of a failover switch so the level can be re-resolved
+   * against the model that is about to serve: a level the configured model
+   * offers may not exist on the fallback, and sending it unchanged is how a
+   * failover turns into a provider-side 400 the user cannot explain. Omitted
+   * means the re-resolution is skipped entirely, never guessed.
+   */
+  readonly getConfiguredReasoningEffort?: () => string | undefined;
 }
 
 /** Result of wireStreamEventMetrics. */
@@ -336,6 +369,7 @@ export function wireStreamEventMetrics(
     events, metrics, orchestrator, providerRegistry,
     systemMessageRouter, render, providerOptimizer, retryTurn, costLookup,
     isApprovalPending, stallThresholdMs, failoverState, getConfiguredRegistryKey,
+    getConfiguredReasoningEffort,
   } = options;
 
   const unsubs: Array<() => void> = [];
@@ -370,13 +404,85 @@ export function wireStreamEventMetrics(
    * claiming a revert that did not happen.
    */
   /**
-   * The registry key the restore below is switching back to, held only across
-   * that one setCurrentModel call. The MODEL_CHANGED listener reads it to keep
-   * the routing chip quiet for this change: the chip's copy is "reason
-   * unknown", which would be false here — the reason is known and the
-   * `[Failover] Restored …` line states it.
+   * Registry keys THIS module switched to and narrated itself, with the time
+   * of the switch. The MODEL_CHANGED listener consumes an entry instead of
+   * emitting the generic routing chip, so neither half of a failover is
+   * narrated twice: the switch out is announced by `[Failover] from -> to
+   * (reason)` and the switch back by `[Failover] Restored …`, and a second
+   * line reading "(reason unknown)" for the same event would be both a
+   * duplicate and a lie — the reason is known in both cases.
+   *
+   * A timestamped map rather than a flag cleared around the setCurrentModel
+   * call, because MODEL_CHANGED does NOT arrive synchronously: the TUI reads
+   * it through the runtime event feed, which delivers after the emitting call
+   * has returned (observed live — a flag cleared in a finally block was always
+   * already null by the time the listener ran, and both failover halves got a
+   * duplicate chip). Entries expire on the same window the fallback-log
+   * correlation uses, so a switch whose event never arrives cannot silence an
+   * unrelated later change to the same model.
    */
-  let pendingRestoreKey: string | null = null;
+  const selfNarratedSwitches = new Map<string, number>();
+
+  /**
+   * Run a registry switch this module narrates itself, with the chip suppressed
+   * for it. Returns the effort-remap sentence when the switch changed the level
+   * that goes on the wire, for the CALLER to place — see
+   * reconcileEffortWithServingModel for why it is not announced here.
+   */
+  const switchNarrated = (registryKey: string): string | undefined => {
+    selfNarratedSwitches.set(registryKey, Date.now());
+    try {
+      providerRegistry.setCurrentModel(registryKey);
+    } catch (err) {
+      selfNarratedSwitches.delete(registryKey); // no switch happened, nothing to suppress
+      throw err;
+    }
+    return reconcileEffortWithServingModel();
+  };
+
+  /**
+   * Re-resolve the REQUESTED reasoning level against whichever model is now
+   * serving, and hand back the sentence that says so when it had to change.
+   *
+   * Both halves of a failover come through switchNarrated, so this covers the
+   * switch out and the switch back. The requested level is left untouched in
+   * config — the fallback is temporary and the user's choice must survive it —
+   * but the level actually sent is the resolved one, and the SDK's own sentence
+   * explaining the remap is surfaced verbatim rather than reworded.
+   *
+   * The sentence is RETURNED rather than announced. On the failover-out path
+   * this function runs before retryTurn, and retryTurn rolls the conversation
+   * back to its pre-submission message count — which deleted this notice every
+   * time, exactly as it used to delete the failover notice itself. The caller
+   * folds it into the notice it hands to retryTurn so it survives the rollback;
+   * the restore path, which has no rollback after it, announces it directly.
+   */
+  const reconcileEffortWithServingModel = (): string | undefined => {
+    const serving = providerRegistry.getCurrentModel();
+    if (!serving.id) return undefined; // no model id on this surface: nothing to resolve against
+    const model = {
+      id: serving.id,
+      provider: serving.provider,
+      ...(serving.displayName ? { displayName: serving.displayName } : {}),
+      ...(serving.reasoningEffort ? { reasoningEffort: serving.reasoningEffort } : {}),
+    };
+    publishActiveEffortOptions(model);
+    // getConfiguredReasoningEffort reads config `provider.reasoningEffort` —
+    // the REQUESTED level. It must never be re-seeded from a previously snapped
+    // effective value, or a single failover onto a capped model would ratchet
+    // the level down for the rest of the session.
+    const requested = getConfiguredReasoningEffort?.();
+    if (requested === undefined || requested === '') return undefined;
+    return remapEffortForServingModel(requested, model).note;
+  };
+
+  /** True when this MODEL_CHANGED is one of our own narrated switches (consumes the record). */
+  const wasSelfNarrated = (registryKey: string): boolean => {
+    const narratedAt = selfNarratedSwitches.get(registryKey);
+    if (narratedAt === undefined) return false;
+    selfNarratedSwitches.delete(registryKey);
+    return Date.now() - narratedAt <= FALLBACK_CORRELATION_WINDOW_MS;
+  };
 
   const restoreConfiguredSelection = (): void => {
     const record = failoverState?.current();
@@ -386,12 +492,15 @@ export function wireStreamEventMetrics(
       return;
     }
     try {
-      pendingRestoreKey = record.configuredRegistryKey;
-      providerRegistry.setCurrentModel(record.configuredRegistryKey);
+      const effortNote = switchNarrated(record.configuredRegistryKey);
       failoverState.clear();
-      announce(`[Failover] Restored ${record.configuredRegistryKey} for the next turn.`);
+      // Nothing rolls the transcript back after this point, so the restore line
+      // and any effort remap that came with it are announced directly.
+      announce(
+        `[Failover] Restored ${record.configuredRegistryKey} for the next turn.`
+        + (effortNote ? `\n[Failover] ${effortNote}` : ''),
+      );
     } catch (restoreErr) {
-      pendingRestoreKey = null;
       logger.debug('failover restore failed', {
         configuredRegistryKey: record.configuredRegistryKey, error: String(restoreErr),
       });
@@ -466,11 +575,7 @@ export function wireStreamEventMetrics(
   // Degrade gracefully when a bare test double omits the providers feed.
   if (events.providers) {
     unsubs.push(events.providers.on('MODEL_CHANGED', (change) => {
-      // Listeners run synchronously inside setCurrentModel, so this reads the
-      // restore flag before anything else can touch it.
-      const wasRestore = pendingRestoreKey !== null && change.registryKey === pendingRestoreKey;
-      pendingRestoreKey = null;
-      if (wasRestore) return;
+      if (wasSelfNarrated(change.registryKey)) return; // a [Failover] line already said this, with its reason
       queueMicrotask(() => {
         const chip = buildRoutingChip(change, providerOptimizer?.fallbackLog ?? [], Date.now());
         if (chip === null) return;
@@ -511,8 +616,12 @@ export function wireStreamEventMetrics(
         const errorClass = formatUserFacingErrorLine(errVal);
         // Capture FROM registry key before switching — needed for cost comparison.
         const fromRegistryKey = providerRegistry.getCurrentModel().registryKey;
+        // The effort remap that comes with the switch is carried, not announced:
+        // retryTurn's rollback below would delete it (see
+        // reconcileEffortWithServingModel).
+        let effortNote: string | undefined;
         try {
-          providerRegistry.setCurrentModel(toRegistryKey);
+          effortNote = switchNarrated(toRegistryKey);
         } catch (switchErr) {
           // Switch failed — fall through to honest error display. This ends the
           // turn, so an EARLIER hop's switch (if this is a second failover
@@ -540,7 +649,19 @@ export function wireStreamEventMetrics(
         // Re-submit the last user turn on the new provider, handing the notice
         // to retryTurn so it outlives that call's transcript rollback (see the
         // retryTurn option doc). Emitting it here instead would delete it.
-        retryTurn(`[Failover] ${fromProvider} -> ${next.providerId} (${errorClass})${billingSuffix}${costSuffix}`);
+        const failoverNotice = `[Failover] ${fromProvider} -> ${next.providerId} (${errorClass})${billingSuffix}${costSuffix}`
+          + (effortNote ? `\n[Failover] ${effortNote}` : '');
+        if (!retryTurn(failoverNotice)) {
+          // No turn to re-submit (the failed turn did not come from the
+          // composer, so there is no pre-submission snapshot to roll back to).
+          // The registry has still MOVED, so the switch gets narrated here and
+          // the original error surfaces — silence would leave the user on a
+          // different backend with no turn running and nothing said about it.
+          announce(failoverNotice);
+          systemMessageRouter.high(`[Error] ${errorClass}`);
+          restoreConfiguredSelection();
+          notifyErrorSurfaced(false);
+        }
         render();
         return;
       }

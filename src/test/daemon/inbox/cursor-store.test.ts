@@ -6,7 +6,10 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { InboxCursorStore } from '../../../daemon/handlers/inbox/cursor-store.ts';
+import {
+  InboxCursorStore,
+  type InboxSweepSummary,
+} from '../../../daemon/handlers/inbox/cursor-store.ts';
 import type { InboundChannelItem } from '../../../daemon/handlers/inbox/provider-adapter.ts';
 
 function item(over: Partial<InboundChannelItem> & { id: string }): InboundChannelItem {
@@ -150,17 +153,140 @@ describe('InboxCursorStore', () => {
   });
 
   test('survives a flush + reopen round trip', async () => {
-    store.upsertItems([item({ id: 'persist', receivedAt: 7 })]);
-    store.advanceCursor('slack', 7);
+    // A recent receivedAt: reopening runs the retention sweep, and a 1970-era
+    // timestamp would (correctly) be reclaimed by the age TTL.
+    const recent = Date.now() - 1_000;
+    store.upsertItems([item({ id: 'persist', receivedAt: recent })]);
+    store.advanceCursor('slack', recent);
     await store.flush();
     await store.close();
     const reopened = new InboxCursorStore(dir);
     await reopened.init();
     try {
       expect(reopened.countItems()).toBe(1);
-      expect(reopened.getCursor('slack')).toBe(7);
+      expect(reopened.getCursor('slack')).toBe(recent);
     } finally {
       await reopened.close();
+    }
+  });
+});
+
+describe('InboxCursorStore retention', () => {
+  const DAY_MS = 24 * 60 * 60 * 1000;
+
+  test('the age TTL sweep runs at init and reclaims stale rows', async () => {
+    const now = Date.now();
+    store.upsertItems([
+      item({ id: 'stale', receivedAt: now - 40 * DAY_MS }),
+      item({ id: 'recent', receivedAt: now - 1 * DAY_MS }),
+    ]);
+    store.advanceCursor('slack', now);
+    await store.flush();
+    await store.close();
+
+    const sweeps: InboxSweepSummary[] = [];
+    const reopened = new InboxCursorStore(dir, undefined, {
+      onSweep: (summary) => sweeps.push(summary),
+    });
+    await reopened.init();
+    try {
+      expect(reopened.listItems({ limit: 10 }).map((i) => i.id)).toEqual(['recent']);
+      // Disclosure carries the right counts.
+      expect(sweeps).toHaveLength(1);
+      expect(sweeps[0]).toMatchObject({ expired: 1, capped: 0, remaining: 1 });
+      // Cursors are monotonic watermarks and are never reaped.
+      expect(reopened.getCursor('slack')).toBe(now);
+    } finally {
+      await reopened.close();
+    }
+  });
+
+  test('the count cap keeps the newest rows and drops the rest', async () => {
+    const now = Date.now();
+    const capped = new InboxCursorStore(dir, 'cap.sqlite', { itemCap: 3 });
+    await capped.init();
+    try {
+      capped.upsertItems([
+        item({ id: 'i0', receivedAt: now - 5_000 }),
+        item({ id: 'i1', receivedAt: now - 4_000 }),
+        item({ id: 'i2', receivedAt: now - 3_000 }),
+        item({ id: 'i3', receivedAt: now - 2_000 }),
+        item({ id: 'i4', receivedAt: now - 1_000 }),
+      ]);
+      const summary = capped.sweepRetention();
+      expect(summary).toMatchObject({ expired: 0, capped: 2, remaining: 3 });
+      expect(capped.listItems({ limit: 10 }).map((i) => i.id)).toEqual(['i4', 'i3', 'i2']);
+    } finally {
+      await capped.close();
+    }
+  });
+
+  test('sweeping twice reclaims nothing the second time', async () => {
+    const now = Date.now();
+    const swept = new InboxCursorStore(dir, 'idempotent.sqlite', { itemCap: 2 });
+    await swept.init();
+    try {
+      swept.upsertItems([
+        item({ id: 'a', receivedAt: now - 40 * DAY_MS }),
+        item({ id: 'b', receivedAt: now - 3_000 }),
+        item({ id: 'c', receivedAt: now - 2_000 }),
+        item({ id: 'd', receivedAt: now - 1_000 }),
+      ]);
+      const first = swept.sweepRetention();
+      expect(first).toMatchObject({ expired: 1, capped: 1, remaining: 2 });
+      const second = swept.sweepRetention();
+      expect(second).toMatchObject({ expired: 0, capped: 0, remaining: 2 });
+      expect(swept.listItems({ limit: 10 }).map((i) => i.id)).toEqual(['d', 'c']);
+    } finally {
+      await swept.close();
+    }
+  });
+
+  test('the sweep keeps running on a timer, not only at startup', async () => {
+    const now = Date.now();
+    let tick: (() => void) | null = null;
+    const sweeps: InboxSweepSummary[] = [];
+    const timed = new InboxCursorStore(dir, 'timed.sqlite', {
+      itemCap: 1,
+      sweepIntervalMs: 1_000,
+      onSweep: (summary) => sweeps.push(summary),
+      setIntervalImpl: ((fn: () => void) => {
+        tick = fn;
+        return 0 as unknown as ReturnType<typeof setInterval>;
+      }) as unknown as typeof setInterval,
+      clearIntervalImpl: (() => undefined) as unknown as typeof clearInterval,
+    });
+    await timed.init();
+    try {
+      // Nothing to reclaim at init, so the timer is what must catch this.
+      expect(sweeps).toHaveLength(0);
+      timed.upsertItems([
+        item({ id: 'x', receivedAt: now - 2_000 }),
+        item({ id: 'y', receivedAt: now - 1_000 }),
+      ]);
+      expect(tick).not.toBeNull();
+      tick!();
+      // The timer callback is async (it flushes); let it settle.
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      expect(timed.countItems()).toBe(1);
+      expect(sweeps).toHaveLength(1);
+      expect(sweeps[0]).toMatchObject({ capped: 1, remaining: 1 });
+    } finally {
+      await timed.close();
+    }
+  });
+
+  test('a sweep over an empty table discloses nothing', async () => {
+    const sweeps: InboxSweepSummary[] = [];
+    const quiet = new InboxCursorStore(dir, 'quiet.sqlite', {
+      onSweep: (summary) => sweeps.push(summary),
+    });
+    await quiet.init();
+    try {
+      expect(sweeps).toHaveLength(0);
+      expect(quiet.sweepRetention()).toMatchObject({ expired: 0, capped: 0, remaining: 0 });
+    } finally {
+      await quiet.close();
     }
   });
 });

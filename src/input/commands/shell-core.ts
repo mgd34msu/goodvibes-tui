@@ -1,7 +1,16 @@
 import type { CommandRegistry } from '../command-registry.ts';
 import type { SelectionItem } from '../selection-modal.ts';
-import { EFFORT_DESCRIPTIONS } from '@pellux/goodvibes-sdk/platform/providers';
-import { REASONING_BUDGET_MAP } from '@pellux/goodvibes-sdk/platform/providers';
+import {
+  describeEffortForModel,
+  describeServingEffort,
+  effortPresentationForModel,
+  publishActiveEffortOptions,
+  requestedEffortLevel,
+  resolveEffortForModelSurface,
+  resolveRequestedEffortForServingModel,
+  servingEffortForLevel,
+  toEffortModel,
+} from '../../providers/reasoning-effort-surface.ts';
 import { executeWriteQuit } from './quit-shared.ts';
 import { compactConversation, requireKeybindingsManager, requireProviderApi, requireSessionMemoryStore } from './runtime-services.ts';
 import { buildCompactionPreview, buildCompactionAfterNotice, buildPinUsageText, buildPinSuccessText } from '../../renderer/compaction-preview.ts';
@@ -40,6 +49,22 @@ export function registerShellCoreCommands(registry: CommandRegistry): void {
             ctx.session.runtime.provider = selected.providerId;
             ctx.platform.configManager.set('provider.model', selected.registryKey);
             ctx.print(`Switched to model: ${selected.displayName} (${selected.providerId})`);
+            // The REQUESTED level may not exist on the model just selected.
+            // Re-resolve it here, exactly as the picker's commit path does, so
+            // `/model x` and picking x from the picker cannot disagree about
+            // what is actually being sent.
+            //
+            // The resolution reads config (the requested preference) and writes
+            // only the session's effective level. Writing the snapped value back
+            // over the preference is what used to make the downgrade permanent.
+            const switchedTo = toEffortModel(ctx.provider.providerRegistry.getCurrentModel());
+            publishActiveEffortOptions(switchedTo);
+            const serving = resolveRequestedEffortForServingModel(ctx.platform.configManager, switchedTo);
+            ctx.session.runtime.reasoningEffort = serving.effective ?? '';
+            if (serving.requested !== '') {
+              ctx.print(`Reasoning effort: ${describeServingEffort(serving, switchedTo)}`);
+              if (serving.note) ctx.print(serving.note);
+            }
             void providerApi.recordModelUsage(selected.registryKey).catch((err) => { logger.debug('model usage record failed', { err }); });
           });
         } catch (e) {
@@ -343,61 +368,85 @@ export function registerShellCoreCommands(registry: CommandRegistry): void {
     aliases: ['e'],
     description: 'Show or set reasoning effort level',
     usage: '[level]',
-    argsHint: '[instant|low|medium|high]',
+    // No fixed list here. The accepted levels belong to the serving model, so
+    // the old '[instant|low|medium|high]' hint was wrong for every model that
+    // offers 'none', 'minimal', 'xhigh' or 'max' — and for every model that
+    // rejects 'instant'. Running `/effort` with no argument prints the real
+    // ones for the model currently in use.
+    argsHint: '[level]',
     async handler(args, ctx) {
-      const currentModel = await requireProviderApi(ctx).getCurrentModel();
-      const validLevels = currentModel.reasoningEffort ?? [];
+      // The ModelDefinition (not the provider-api record) is what carries the
+      // structured ReasoningEffortSpec the honest wording is generated from.
+      const definition = ctx.provider.providerRegistry.getCurrentModel();
+      const model = toEffortModel(definition);
+      const presentation = effortPresentationForModel(model);
+      // Validation of provider.reasoningEffort now happens against these real
+      // levels rather than a fixed four-value list.
+      publishActiveEffortOptions(model);
 
-      if (validLevels.length === 0) {
-        ctx.print(`Current model (${currentModel.displayName}) does not support configurable reasoning effort.`);
+      if (!presentation.configurable) {
+        ctx.print(presentation.headline);
+        if (presentation.caveat) ctx.print(presentation.caveat);
         return;
       }
 
+      // The user's REQUESTED level, not the session's effective one: this
+      // command is where the preference is read back and re-chosen, so it must
+      // show what was asked for even while a capped model is serving.
+      const current = requestedEffortLevel(ctx.platform.configManager);
+      // What the list should open on, though, is the level in EFFECT — the
+      // requested level snapped to this model. The requested level may not be
+      // in the list at all when the model caps lower, and preselecting a
+      // missing id lands the cursor on the lowest level instead of on what is
+      // actually running.
+      const inEffect = servingEffortForLevel(current, model).effective ?? current;
+
+      const applyLevel = (level: string): void => {
+        // An explicit user choice — the one kind of write that is allowed to
+        // change the stored preference.
+        ctx.platform.configManager.set('provider.reasoningEffort', level);
+        const serving = servingEffortForLevel(level, model);
+        ctx.session.runtime.reasoningEffort = serving.effective ?? '';
+        ctx.print(`Reasoning effort set to: ${describeServingEffort(serving, model)}`);
+        if (serving.note) ctx.print(serving.note);
+      };
+
       if (args.length === 0) {
-        const current = (ctx.session.runtime.reasoningEffort || ctx.platform.configManager.get('provider.reasoningEffort') || 'medium') as string;
         if (ctx.openSelection) {
-          const descriptions: Record<string, string> = {
-            ...EFFORT_DESCRIPTIONS,
-            medium: 'Balanced speed and quality (default)',
-          };
-          const items: SelectionItem[] = validLevels.map((level) => ({
-            id: level,
-            label: level,
-            detail: level === current ? `◉ ${descriptions[level] ?? level}` : (descriptions[level] ?? level),
+          const items: SelectionItem[] = presentation.choices.map((choice) => ({
+            id: choice.level,
+            label: choice.level,
+            detail: choice.level === inEffect ? `\u25c9 ${choice.description}` : choice.description,
           }));
-          ctx.openSelection('Reasoning Effort', items, { preSelectId: current, allowSearch: false }, (result) => {
+          const options = { preSelectId: inEffect, allowSearch: false };
+          ctx.openSelection('Reasoning Effort', items, options, (result) => {
             if (!result) return;
-            const level = result.item.id as 'instant' | 'low' | 'medium' | 'high';
-            ctx.session.runtime.reasoningEffort = level;
-            ctx.platform.configManager.set('provider.reasoningEffort', level);
-            ctx.print(`Reasoning effort set to: ${level}`);
+            applyLevel(result.item.id);
             ctx.renderRequest();
           });
           return;
         }
-        const budget = REASONING_BUDGET_MAP[current];
+        ctx.print(describeEffortForModel(model, current || undefined).join('\n'));
+        return;
+      }
+
+      const requested = args[0]!;
+      if (!presentation.choices.some((choice) => choice.level === requested)) {
+        const offered = presentation.choices.map((choice) => choice.level).join(', ');
+        // Name the model: "invalid" alone reads as a typo when the real reason
+        // is that this particular model does not offer the level.
         const lines = [
-          `Reasoning effort: ${current}`,
-          `  Mercury-2:  reasoning_effort = '${current}'`,
-          `  Claude:     thinking.budget_tokens = ${budget}`,
-          `  Gemini:     thinking_config.thinking_budget = ${budget}`,
-          `  GPT-5:      (no-op)`,
-          '',
-          `Levels: ${validLevels.join(', ')}`,
+          `${definition.displayName} does not offer reasoning effort '${requested}'.`,
+          `Levels it offers: ${offered}`,
         ];
+        const resolved = resolveEffortForModelSurface(requested, model);
+        if (resolved.note) lines.push(resolved.note);
+        if (presentation.caveat) lines.push(presentation.caveat);
         ctx.print(lines.join('\n'));
         return;
       }
 
-      const level = args[0] as 'instant' | 'low' | 'medium' | 'high';
-      if (!validLevels.includes(level)) {
-        ctx.print(`Invalid effort level: ${level}\nValid levels: ${validLevels.join(', ')}`);
-        return;
-      }
-
-      ctx.session.runtime.reasoningEffort = level;
-      ctx.platform.configManager.set('provider.reasoningEffort', level);
-      ctx.print(`Reasoning effort set to: ${level}`);
+      applyLevel(requested);
     },
   });
 

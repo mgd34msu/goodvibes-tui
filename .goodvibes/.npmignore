@@ -1,0 +1,16 @@
+# This file exists so npm packaging of `.goodvibes/` is decided only by the
+# "files" allowlist in package.json (.goodvibes/GOODVIBES.md, .goodvibes/agents,
+# .goodvibes/skills) and never by whatever scratch-state ignore file happens to
+# sit in this directory on a developer's machine.
+#
+# Background: running the TUI writes transient state here (logs, cache, overflow
+# buffers, exec output, sessions), and tooling commonly drops a local
+# `.goodvibes/.gitignore` containing `*`. npm reads ignore files per directory;
+# npm 11 let an explicit package.json "files" entry win over that rule, npm 12
+# does not, so on a machine with that local file npm 12 silently packed a
+# tarball with no .goodvibes/GOODVIBES.md, .goodvibes/agents or
+# .goodvibes/skills. `.npmignore` takes precedence over `.gitignore` in the same
+# directory, so this (deliberately empty of rules) file restores identical,
+# machine-independent packing on npm 11 and npm 12 alike.
+#
+# Do not add rules here, and do not delete this file.

@@ -8,6 +8,7 @@ import type { GoodVibesCliOutputFormat } from './types.ts';
 import type { CliServicePosture } from './service-posture.ts';
 import type { InstallSelfCheckFinding } from '../runtime/install-self-check.ts';
 import { getProviderIdFromModel } from '../config/provider-model.ts';
+import { describeConfiguredEffort } from '../providers/reasoning-effort-surface.ts';
 
 export interface CliStatusOptions {
   readonly configManager: Pick<ConfigManager, 'get'>;
@@ -96,6 +97,13 @@ export interface CliStatusSnapshot {
     readonly provider: string;
     readonly model: string;
     readonly reasoning: string;
+    /**
+     * What the configured reasoning level actually becomes on the configured
+     * model. The level alone is not the whole truth: a model that does not
+     * offer it gets the next level down, and a model with no configurable
+     * reasoning gets nothing sent at all.
+     */
+    readonly reasoningResolved: string;
   };
   readonly auth: {
     readonly permissionMode: unknown;
@@ -551,6 +559,10 @@ export function buildCliStatusSnapshot(options: CliStatusOptions): CliStatusSnap
       provider: getProviderIdFromModel(config.get('provider.model')),
       model: String(config.get('provider.model')),
       reasoning: String(config.get('provider.reasoningEffort')),
+      reasoningResolved: describeConfiguredEffort(
+        String(config.get('provider.model') ?? ''),
+        String(config.get('provider.reasoningEffort') ?? ''),
+      ),
     },
     auth: {
       permissionMode: config.get('permissions.mode'),
@@ -609,6 +621,10 @@ export function renderCliStatus(options: CliStatusOptions): string {
     `  provider: ${getProviderIdFromModel(config.get('provider.model'))}`,
     `  model: ${String(config.get('provider.model'))}`,
     `  reasoning: ${String(config.get('provider.reasoningEffort'))}`,
+    `  reasoning (on this model): ${describeConfiguredEffort(
+      String(config.get('provider.model') ?? ''),
+      String(config.get('provider.reasoningEffort') ?? ''),
+    )}`,
     '',
     'Auth:',
     `  permissions: ${permissionModeLabel(config.get('permissions.mode'))} (${String(config.get('permissions.mode'))})`,

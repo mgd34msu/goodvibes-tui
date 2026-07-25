@@ -370,3 +370,80 @@ describe('Compositor — degenerate panelWidth >= width', () => {
     expect(cell?.bg).toBe('4');
   });
 });
+
+// ---------------------------------------------------------------------------
+// Stale-frame invariants
+//
+// The compositor's incremental path is only correct while its front buffer
+// still describes what the terminal is showing. These pin the two ways that
+// used to break, both of which left splash art on screen underneath the
+// transcript: rows the caller stopped supplying, and a size change that
+// reallocates the buffer.
+// ---------------------------------------------------------------------------
+
+describe('no row keeps a previous frame', () => {
+  test('rows past a shortened viewport are repainted, not left showing the old frame', () => {
+    const { compositor, stream } = makeCompositor();
+    const header = [makeLine(WIDTH, 'H')];
+    const footer = [makeLine(WIDTH, 'F')];
+    // body rows = 10 - 1 - 1 = 8 → screen rows 1..8
+    compositor.composite({
+      width: WIDTH, height: HEIGHT, header, footer,
+      viewport: Array.from({ length: 8 }, () => makeLine(WIDTH, 'S')),
+    });
+    expect(cellAt(compositor, 0, 8)?.char).toBe('S');
+
+    // A docked overlay's bottom inset (or an overlay-row reservation that
+    // overshoots) leaves the caller supplying fewer lines than the body has.
+    stream.writes.length = 0;
+    compositor.composite({
+      width: WIDTH, height: HEIGHT, header, footer,
+      viewport: Array.from({ length: 6 }, () => makeLine(WIDTH, 'T')),
+    });
+
+    expect(cellAt(compositor, 0, 7)?.char).toBe(' ');
+    expect(cellAt(compositor, 0, 8)?.char).toBe(' ');
+    // …and the erase actually went to the terminal: rows 8 and 9 (1-based) are
+    // addressed in this frame's output.
+    const output = stream.writes.join('');
+    expect(output).toContain('\x1b[8;1H');
+    expect(output).toContain('\x1b[9;1H');
+  });
+
+  test('requestFullRepaint() erases the screen and re-emits every cell once', () => {
+    const { compositor, stream } = makeCompositor();
+    const request = makeBaseRequest();
+    compositor.composite(request);
+
+    // An identical frame normally writes nothing at all.
+    stream.writes.length = 0;
+    compositor.composite(makeBaseRequest());
+    expect(stream.writes.join('')).toBe('');
+
+    stream.writes.length = 0;
+    compositor.requestFullRepaint();
+    compositor.composite(makeBaseRequest());
+    const output = stream.writes.join('');
+    expect(output).toContain('\x1b[2J');        // erase display
+    expect(output).toContain('\x1b[1;1H');      // repaint starts at the top-left
+    expect(output).toContain('\x1b[10;1H');     // …and reaches the last row
+    // One-shot: the frame after the repaint is differential again.
+    stream.writes.length = 0;
+    compositor.composite(makeBaseRequest());
+    expect(stream.writes.join('')).toBe('');
+  });
+
+  test('a size change repaints in full rather than diffing against a forgotten frame', () => {
+    const { compositor, stream } = makeCompositor();
+    compositor.composite(makeBaseRequest());
+
+    stream.writes.length = 0;
+    compositor.composite({
+      width: WIDTH, height: HEIGHT + 4,
+      header: [makeLine(WIDTH, 'H'), makeLine(WIDTH, 'H')],
+      viewport: Array.from({ length: 10 }, () => makeLine(WIDTH, '.')),
+      footer: [makeLine(WIDTH, 'F'), makeLine(WIDTH, 'F')],
+    });
+    expect(stream.writes.join('')).toContain('\x1b[2J');
+  });
+});

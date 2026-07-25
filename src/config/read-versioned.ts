@@ -1,4 +1,12 @@
-import { existsSync, readFileSync, renameSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, renameSync, statSync, unlinkSync } from 'node:fs';
+import { join } from 'node:path';
+
+/**
+ * The suffix every quarantined file in this codebase gets. Exported so the
+ * other producer of these files (the transcript journal's corrupt-tail
+ * quarantine) and the reclaim sweep below all agree on one spelling.
+ */
+export const UNRECOGNIZED_SUFFIX = '.unrecognized';
 
 /**
  * A migration function that transforms data from version N to N+1.
@@ -108,8 +116,113 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
 
 function quarantine(path: string): void {
   try {
-    renameSync(path, `${path}.unrecognized`);
+    renameSync(path, `${path}${UNRECOGNIZED_SUFFIX}`);
   } catch {
     // Best-effort — if rename fails (e.g. race), proceed silently.
+  }
+}
+
+// ─── Quarantine reclaim ───────────────────────────────────────────────────────
+//
+// Quarantining renames a bad file out of the way so a human can inspect it,
+// and until now nothing ever removed the result — every corrupt config file
+// and every torn journal tail left a `.unrecognized` file behind permanently.
+// Forensic value is real, so the retention window below is deliberately long,
+// but "keep forever" is a leak.
+
+/**
+ * How long a quarantined file is kept before it is reclaimed: 30 days
+ * (2_592_000_000 ms). These files exist so a person can look at what went
+ * wrong, so the window is a month rather than the hours-to-days retention the
+ * live durability artefacts get — long enough to survive a holiday, short
+ * enough that a recurring corruption cannot fill a disk.
+ */
+export const QUARANTINE_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
+
+/**
+ * Hard ceiling on quarantined files kept per swept directory, newest kept.
+ * The age rule alone cannot bound a fast repeating corruption (a boot loop
+ * quarantining the same file every restart), so a count cap runs alongside it.
+ */
+export const QUARANTINE_MAX_FILES_PER_DIR = 50;
+
+export interface QuarantineReapResult {
+  /** Quarantined files examined across every directory. */
+  readonly scanned: number;
+  /** Quarantined files deleted. */
+  readonly reaped: number;
+}
+
+export interface QuarantineReapOptions {
+  readonly now?: () => number;
+  /** Override the age window (tests). */
+  readonly maxAgeMs?: number;
+  /** Override the per-directory count cap (tests). */
+  readonly maxFilesPerDir?: number;
+}
+
+/**
+ * Delete `.unrecognized` quarantine files that are past the retention window,
+ * plus any beyond the per-directory count cap (newest kept).
+ *
+ * Each directory is scanned non-recursively; a missing or unreadable directory
+ * contributes nothing and is not an error. Idempotent, and safe to run
+ * concurrently from several processes — a file another sweeper already
+ * unlinked (ENOENT) counts as reclaimed rather than failing the sweep.
+ */
+export function reapQuarantinedFiles(
+  directories: readonly string[],
+  options: QuarantineReapOptions = {},
+): QuarantineReapResult {
+  const now = options.now?.() ?? Date.now();
+  const maxAgeMs = options.maxAgeMs ?? QUARANTINE_RETENTION_MS;
+  const maxFilesPerDir = options.maxFilesPerDir ?? QUARANTINE_MAX_FILES_PER_DIR;
+
+  let scanned = 0;
+  let reaped = 0;
+
+  for (const dir of new Set(directories)) {
+    let names: string[];
+    try {
+      names = readdirSync(dir).filter((name) => name.endsWith(UNRECOGNIZED_SUFFIX));
+    } catch {
+      continue;
+    }
+    scanned += names.length;
+
+    const survivors: { readonly path: string; readonly mtimeMs: number }[] = [];
+    for (const name of names) {
+      const path = join(dir, name);
+      let mtimeMs: number;
+      try {
+        mtimeMs = statSync(path).mtimeMs;
+      } catch {
+        // Vanished under us (another sweeper) — nothing left to reclaim.
+        continue;
+      }
+      if (now - mtimeMs > maxAgeMs) {
+        if (unlinkQuarantined(path)) reaped++;
+        continue;
+      }
+      survivors.push({ path, mtimeMs });
+    }
+
+    if (survivors.length > maxFilesPerDir) {
+      survivors.sort((a, b) => a.mtimeMs - b.mtimeMs); // oldest first
+      for (const victim of survivors.slice(0, survivors.length - maxFilesPerDir)) {
+        if (unlinkQuarantined(victim.path)) reaped++;
+      }
+    }
+  }
+
+  return { scanned, reaped };
+}
+
+function unlinkQuarantined(path: string): boolean {
+  try {
+    unlinkSync(path);
+    return true;
+  } catch (err) {
+    return (err as NodeJS.ErrnoException | undefined)?.code === 'ENOENT';
   }
 }

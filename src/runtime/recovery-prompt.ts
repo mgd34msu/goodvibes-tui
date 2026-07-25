@@ -46,11 +46,14 @@
  *     about again. Deleting the file used to be the entire memory of the
  *     answer, which is how the same question survived being answered three
  *     times.
+ *   - The offer is also where that ledger gets swept. Every run prunes it to
+ *     its age and count bounds and logs what it dropped, so the record of past
+ *     decisions cannot quietly grow forever and nothing is deleted in silence.
  */
 import { statSync } from 'node:fs';
 import { checkRecoveryFile, checkRecoveryForSession, consumeRecovery, removeRecoveryPoint } from '@/runtime/index.ts';
 import type { RecoveryFileInfo, SessionSurface } from '@/runtime/index.ts';
-import { isRecoveryRemovalRecorded, recordRecoveryRemoval } from './recovery-decisions.ts';
+import { isRecoveryRemovalRecorded, pruneRecoveryDecisions, recordRecoveryRemoval } from './recovery-decisions.ts';
 import { checkSessionLiveness } from './session-liveness-marker.ts';
 import type { SelectionItem, SelectionResult } from '../input/selection-modal.ts';
 
@@ -272,6 +275,13 @@ function findOfferableSnapshot(deps: RecoveryPromptDeps): RecoveryFileInfo | nul
  */
 export async function offerRecoverySnapshot(deps: RecoveryPromptDeps): Promise<RecoveryPromptOutcome> {
   try {
+    // Housekeeping first: recovery time is when the removal ledger gets its
+    // bounds actually applied to disk and says what it discarded. Without this
+    // the expired records were filtered on read but never removed, so on a
+    // machine where the user never answers "Remove" again the file only ever
+    // grew. Idempotent, so the second call in a run (targeted --continue offer
+    // plus the general startup offer) drops nothing and writes nothing.
+    pruneRecoveryDecisions(deps.surface, deps.now?.() ?? Date.now());
     const info = findOfferableSnapshot(deps);
     if (!info) return 'none';
     // Already answered about this snapshot earlier in this same run (the

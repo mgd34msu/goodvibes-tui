@@ -51,7 +51,10 @@ const REASONING_MODEL = makeModel({
   tier: 'premium',
   provider: 'provC',
   capabilities: { toolCalling: true, codeEditing: true, reasoning: true, multimodal: false },
-  reasoningEffort: ['low', 'medium', 'high'],
+  // A structured spec, not a bare level list: `ModelDefinition.reasoningEffort`
+  // is a ReasoningEffortSpec now, and 'catalog' is the source that outranks the
+  // sdk's curated family table, so these are exactly the levels the picker offers.
+  reasoningEffort: { kind: 'effort' as const, values: ['low', 'medium', 'high'], source: 'catalog' as const },
 });
 
 const ALL_MODELS = [FREE_MODEL, FREE_MODEL_2, PREMIUM_MODEL, REASONING_MODEL];

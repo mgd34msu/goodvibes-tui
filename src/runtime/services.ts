@@ -96,6 +96,8 @@ export interface RuntimeServicesOptions {
   /** Host power seam opt-in. Fork mirrors the SDK: non-spawning unavailable-seam
    * default (idle-power-services.ts); daemon + embedded runtime pass createHostPowerSeam(). */
   readonly powerSeam?: Parameters<typeof wireIdlePowerAndLiveTurn>[0]['powerSeam'];
+  /** Live session id, read per crash-residue sweep so the running session is exempt — see durability-services.ts. */
+  readonly currentSessionId?: (() => string | null) | undefined;
 }
 
 export interface RuntimeServices {
@@ -207,6 +209,8 @@ export interface RuntimeServices {
   readonly codeIndexReindexScheduler: CodeIndexReindexScheduler; // tool-site reindex
   /** Daily snapshots of every SQLite store this runtime writes, with bounded retention; unref'd timers (mirrors the SDK composition — hosts that tear down a runtime stop() it themselves). */
   readonly storeSnapshotScheduler: StoreSnapshotScheduler;
+  /** Stops the recurring crash-residue sweep; idempotent, unref'd timer (hosts that tear a runtime down call it). */
+  readonly stopDurabilityHousekeeping: () => void;
   readonly memoryConsolidationScheduler: MemoryConsolidationScheduler;
   readonly powerManager: PowerManager;
   /** The daemon's memory governor (default ON). Backs ops.memory.get and defends the daemon's footprint by tier. */
@@ -568,8 +572,9 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
   const { codeIndexStore, codeIndexReindexScheduler } = createCodeIndexServices({ workingDirectory, configManager, memoryEmbeddingRegistry, isReindexPaused: () => pauseController.isPaused('code-index-reindex'), admitExpensiveWork });
   // Store snapshots + durable remembered-approval rules + the live credential
   // chain, mirroring the SDK composition — see durability-services.ts.
-  const { storeSnapshotScheduler, userPermissionRuleStore } = createDurabilityServices({
+  const { storeSnapshotScheduler, userPermissionRuleStore, stopDurabilityHousekeeping } = createDurabilityServices({
     configManager, secretsManager, providerRegistry, memoryDbPath, codeIndexDbPath: codeIndexDbPath(workingDirectory), surface, shellPaths, // + retention-sweep roots & live config watch (mirrors the SDK)
+    ...(options.currentSessionId ? { currentSessionId: options.currentSessionId } : {}), // exempts the running session from crash-residue reaping
   });
   const codeInjectionOrchestratorDeps = { codeIndex: codeIndexStore, isCodeInjectionSettingEnabled: () => isCodeInjectionSettingEnabled(configManager), codeIndexReindexScheduler }; // Code-injection seam (agent here; main via orchestrator-core-services.ts)
   const { processRegistry } = createFleetServices({ // Shared archive-aware fleet registry (+ daemon observed rows) — see fleet-services.ts
@@ -778,7 +783,7 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
     workstreamCommands,
     codeIndexStore,
     codeIndexReindexScheduler,
-    storeSnapshotScheduler,
+    storeSnapshotScheduler, stopDurabilityHousekeeping,
     memoryConsolidationScheduler,
     powerManager,
     memoryGovernor,

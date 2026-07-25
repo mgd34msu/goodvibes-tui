@@ -373,7 +373,7 @@ export function wireShellUiOpeners(options: WireShellUiOpenersOptions): void {
   // 'search' case) — the transcript search overlay isn't tracked on the
   // modal stack, so this doesn't call modalOpened either.
   commandContext.openTranscriptSearch = () => {
-    if (input.searchManager.active) input.searchManager.close();
+    if (input.searchManager.active) input.searchManager.close(input.conversationManager);
     else input.searchManager.open();
     render();
   };

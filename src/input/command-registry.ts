@@ -121,6 +121,14 @@ export interface CommandUiActions {
     contextCap?: number | null;
     /** Which config target to write the selected model to. Defaults to 'main'. */
     target?: import('./model-picker.ts').ModelPickerTarget;
+    /**
+     * True only when `effort` came from the picker's effort STEP — an explicit
+     * user choice, which is the only thing allowed to update the stored
+     * preference `provider.reasoningEffort`. The model-only and context-cap
+     * commit routes pass a level merely carried over from the previous model;
+     * storing that is how a one-time snap down used to become permanent.
+     */
+    effortChosenByUser?: boolean;
   }) => void;
   /**
    * Commit an embedding-provider selection from the model picker's

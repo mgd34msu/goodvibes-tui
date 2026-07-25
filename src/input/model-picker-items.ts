@@ -203,6 +203,21 @@ export function buildProviderItems(
 // buildEffortItems — effort levels -> PickerItem[]
 // ---------------------------------------------------------------------------
 
-export function buildEffortItems(effortLevels: readonly string[]): PickerItem[] {
-  return effortLevels.map(e => ({ id: e, label: e, detail: EFFORT_DESCRIPTIONS[e] ?? '' }));
+/**
+ * Effort levels as picker items.
+ *
+ * `choices` carries the per-spec descriptions (a budget-typed model shows the
+ * thinking-token budget each level sends, a toggle says on/off), so it is used
+ * when the caller has a resolved presentation. The bare level table is only the
+ * fallback for a caller that has levels but no spec.
+ */
+export function buildEffortItems(
+  effortLevels: readonly string[],
+  choices?: readonly { readonly level: string; readonly description: string }[],
+): PickerItem[] {
+  return effortLevels.map((e) => ({
+    id: e,
+    label: e,
+    detail: choices?.find((choice) => choice.level === e)?.description ?? EFFORT_DESCRIPTIONS[e] ?? '',
+  }));
 }
