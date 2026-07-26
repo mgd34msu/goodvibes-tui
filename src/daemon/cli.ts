@@ -35,6 +35,7 @@ import {
 } from '@pellux/goodvibes-sdk/platform/discovery';
 import { createSafeHostServeFactory } from './safe-serve.ts';
 import { isDaemonServiceSubcommand, resolveInstalledDaemonBinary, runDaemonServiceCli } from './service-commands.ts';
+import { runClusterCommand } from '../cluster/commands.ts';
 import { resolveConfiguredServiceName } from '../runtime/legacy-daemon-migration.ts';
 import { runDaemonConfigMigration } from '../config/run-daemon-config-migration.ts';
 import { reconcileRedundantLegacyUnit } from '../runtime/legacy-daemon-reconcile.ts';
@@ -103,6 +104,39 @@ function readDaemonCliTokens(env: NodeJS.ProcessEnv): DaemonCliTokens {
 }
 
 async function main(): Promise<void> {
+  // `cluster …` is intercepted before the daemon's own flag parser runs, and
+  // before any runtime is composed.
+  //
+  // Before the parser, because the subcommand has its own flag vocabulary
+  // (--group, --key, --host, --port, --token) that the daemon parser would
+  // reject as unknown. Before the runtime, because this command talks to a
+  // daemon that is ALREADY RUNNING — composing a second runtime here would
+  // build a competing set of state on a machine that already has one.
+  //
+  // See remote-daemon-target.ts for the --host/--port/--token convention that
+  // every later remote-capable subcommand should follow.
+  const rawArgs = process.argv.slice(2);
+  if (rawArgs[0] === 'cluster') {
+    const ownership = resolveDaemonCliOwnership();
+    const clusterConfig = new ConfigManager({
+      workingDir: ownership.workingDirectory,
+      homeDir: ownership.homeDirectory,
+      surfaceRoot: 'tui',
+    });
+    const result = await runClusterCommand({
+      argv: rawArgs.slice(1),
+      configManager: clusterConfig,
+      daemonHomeDir: ownership.daemonHomeDirectory,
+    });
+    if (result.rawOutput) process.stdout.write(`\u001b${result.rawOutput}`);
+    for (const line of result.lines) {
+      // eslint-disable-next-line no-console
+      if (result.exitCode === 0) console.log(line);
+      else console.error(line);
+    }
+    process.exit(result.exitCode);
+  }
+
   // Parse CLI flags first so --daemon-home and --working-dir env vars are set
   // before resolveDaemonCliOwnership() reads them.
   const cli = parseGoodVibesCli(process.argv.slice(2), 'goodvibes-daemon');
@@ -332,6 +366,10 @@ async function main(): Promise<void> {
     // compose its own: two coordinators in one process are two nodes in the
     // election, and whichever lost would silence consumers the other owns.
     clusterCoordinator: runtimeServices.clusterCoordinator,
+    // The `cluster` verbs, served on /api/cluster/*. The CLI subcommands, the
+    // TUI's /cluster command and any web UI all call these, so a command run
+    // against a REMOTE daemon behaves exactly like one run on that machine.
+    clusterGroupVerbs: runtimeServices.clusterGroup.verbs,
   });
   const listener = new HttpListener({
     hookDispatcher: runtimeServices.hookDispatcher,
@@ -361,6 +399,11 @@ async function main(): Promise<void> {
 
   daemon.enable({ daemon: true }, effectiveDaemonToken);
   listener.enable({ httpListener: true }, effectiveHttpToken);
+
+  // Before the daemon: the group layer owns the socket the leader election
+  // coordinates over, and it announces this machine's return to the group so a
+  // box that has been off for months re-keys itself with no operator action.
+  await runtimeServices.startCluster();
 
   await Promise.all([
     daemon.start(),

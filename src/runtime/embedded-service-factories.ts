@@ -11,7 +11,7 @@
  * at all. See daemon/lifecycle.ts.
  */
 import { DaemonServer, HttpListener } from '@pellux/goodvibes-sdk/platform/daemon';
-import type { ClusterCoordinator } from '@pellux/goodvibes-sdk/platform/cluster';
+import type { ClusterCoordinator, ClusterGroupVerbSurface } from '@pellux/goodvibes-sdk/platform/cluster';
 import { createSafeHostServeFactory } from '../daemon/safe-serve.ts';
 import type { startExternalServices } from '@/runtime/index.ts';
 
@@ -26,6 +26,7 @@ export type ExternalServiceFactories = NonNullable<Parameters<typeof startExtern
 export function createEmbeddedServiceFactories(
   sharedDaemonToken: string,
   clusterCoordinator: ClusterCoordinator,
+  clusterGroupVerbs: ClusterGroupVerbSurface,
 ): ExternalServiceFactories {
   return {
     sharedDaemonToken,
@@ -41,6 +42,9 @@ export function createEmbeddedServiceFactories(
         // facade compose its own would put two election nodes in one process,
         // and whichever lost would silence consumers the other owns.
         clusterCoordinator,
+        // The `cluster` verbs (/api/cluster/*), so the CLI and the TUI command
+        // reach one implementation whether the daemon is embedded or standalone.
+        clusterGroupVerbs,
       });
       return daemonServer;
     },
