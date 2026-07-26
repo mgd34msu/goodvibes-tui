@@ -34,7 +34,7 @@ import {
   type InboundChannelItem,
   type ProviderPollResult,
 } from '../../daemon/handlers/inbox/provider-adapter.ts';
-import { inboxSurface } from '@pellux/goodvibes-sdk/platform/cluster';
+import { inboxSurface, surfaceIdFor } from '@pellux/goodvibes-sdk/platform/cluster';
 import { createClusterComposition, inboxPollerGate } from '../../runtime/cluster-composition.ts';
 
 const logger = { info() {}, warn() {}, error() {} };
@@ -49,29 +49,38 @@ function fakeCredentials(): DaemonCredentialStore {
 }
 
 let pollCount = 0;
+/** Per-provider fetch counts, so one account's polling can be told from another's. */
+let pollsByProvider: Record<string, number> = {};
 
-/** A provider that counts how many times it was actually asked to fetch. */
-function installCountingProvider(): void {
-  clearAdapterRegistry();
-  pollCount = 0;
-  registerAdapterFactory('fake', () => ({
-    id: 'fake',
+function registerCountingProvider(id: string): void {
+  pollsByProvider[id] = 0;
+  registerAdapterFactory(id, () => ({
+    id,
     pollIntervalMs: 30_000,
     async poll(): Promise<ProviderPollResult> {
       pollCount += 1;
+      pollsByProvider[id] = (pollsByProvider[id] ?? 0) + 1;
       const item: InboundChannelItem = {
-        provider: 'fake',
+        provider: id,
         kind: 'dm',
         fromDigest: 'cafebabedeadbeef',
         subjectPreview: 'Direct message',
         bodyPreview: 'hello world',
         receivedAt: 1_000 + pollCount,
         unread: true,
-        id: `item-${pollCount}`,
+        id: `${id}-item-${pollCount}`,
       };
       return { state: 'ready', items: [item] };
     },
   }));
+}
+
+/** A provider that counts how many times it was actually asked to fetch. */
+function installCountingProvider(...ids: string[]): void {
+  clearAdapterRegistry();
+  pollCount = 0;
+  pollsByProvider = {};
+  for (const id of ids.length > 0 ? ids : ['fake']) registerCountingProvider(id);
 }
 
 let dir: string;
@@ -115,7 +124,7 @@ describe('inbox polling under leadership', () => {
     let control: InboxPollingControl | null = null;
     const unregister = registerInboxMethods(ctx, undefined, {
       registerBuiltins: false,
-      gatePolling: (received) => { control = received; },
+      gatePolling: (_providerId, received) => { control = received; },
     });
 
     expect(control).not.toBeNull();
@@ -152,16 +161,61 @@ describe('inbox polling under leadership', () => {
     let control: InboxPollingControl | null = null;
     const unregister = registerInboxMethods(ctx, undefined, {
       registerBuiltins: false,
-      gatePolling: (received) => { control = received; },
+      gatePolling: (_providerId, received) => { control = received; },
     });
-    const gate = inboxPollerGate(control!);
-    expect(gate.id).toBe('inbox-poller');
+    const gate = inboxPollerGate('fake', control!);
+    expect(gate.id).toBe('inbox-poller:fake');
+    expect(gate.surface).toEqual({ kind: 'inbox', discriminator: 'fake' });
 
     expect(pollCount).toBe(0);
     await gate.start({ replayFromMs: null, reason: 'test' });
     expect(pollCount).toBeGreaterThan(0);
     await gate.stop('test');
     unregister();
+  });
+
+  test('each inbox account is gated on its own, and stopping one leaves the other reading', async () => {
+    installCountingProvider('work-slack', 'mailbox');
+    const controls = new Map<string, InboxPollingControl>();
+    const unregister = registerInboxMethods(ctx, undefined, {
+      registerBuiltins: false,
+      gatePolling: (providerId, received) => { controls.set(providerId, received); },
+    });
+
+    // One gate per account, not one for the poller — this is what lets two
+    // machines split the accounts between them.
+    expect([...controls.keys()].sort()).toEqual(['mailbox', 'work-slack']);
+
+    await controls.get('work-slack')!.start();
+    await controls.get('mailbox')!.start();
+    expect(pollsByProvider['work-slack']).toBeGreaterThan(0);
+    expect(pollsByProvider['mailbox']).toBeGreaterThan(0);
+
+    // Hand the mailbox to another machine. The work account must keep reading:
+    // a blanket stop here would take an account offline that nothing asked to
+    // move, which is the coupling the per-surface split removes.
+    await controls.get('mailbox')!.stop();
+    const mailboxAtStop = pollsByProvider['mailbox'];
+    await controls.get('work-slack')!.start();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(pollsByProvider['mailbox']).toBe(mailboxAtStop);
+
+    unregister();
+  });
+
+  test('an account name is hashed into its surface, never sent as itself', () => {
+    const gate = inboxPollerGate('accounts@example.com', {
+      start: async () => {},
+      stop: async () => {},
+    });
+    const digest = surfaceIdFor(gate.surface);
+    // The digest is what travels; the address stays on this machine. Two nodes
+    // reading the same account still meet in one election because they compute
+    // the identical digest from the identical id.
+    expect(digest).toMatch(/^[0-9a-f]{32}$/);
+    expect(digest).not.toContain('example');
+    expect(surfaceIdFor(inboxSurface('accounts@example.com'))).toBe(digest);
+    expect(surfaceIdFor(inboxSurface('someone-else@example.com'))).not.toBe(digest);
   });
 });
 
@@ -196,7 +250,7 @@ describe('cluster composition', () => {
     let started = 0;
     coordinator.register({
       id: 'probe',
-      surface: inboxSurface('probe'),
+      surface: inboxSurface('probe-account'),
       start: async () => { started += 1; },
       stop: async () => {},
     });
