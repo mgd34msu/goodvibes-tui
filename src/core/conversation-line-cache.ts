@@ -54,8 +54,9 @@ import {
   renderConversationToolCallNode,
   renderConversationToolMessage,
   renderConversationUserMessage,
-  collectCompletedToolCallIds,
+  collectToolCallOutcomes,
   isTurnCollapsed,
+  type ToolCallOutcome,
 } from './conversation-rendering.ts';
 import {
   buildRenderPlan,
@@ -149,10 +150,12 @@ interface KeyMeta {
  * invalidate the entry, rather than waiting for every call in the message to
  * complete before any of them re-renders as done.
  */
-function pendingToolKeyOf(m: Message, completed: ReadonlySet<string>): string | undefined {
+function pendingToolKeyOf(m: Message, outcomes: ReadonlyMap<string, ToolCallOutcome>): string | undefined {
   if (m.role !== 'assistant' || !m.toolCalls || m.toolCalls.length === 0) return undefined;
+  // The OUTCOME, not merely ran/not-ran: a call whose result turns out to be a
+  // failure must repaint its glyph from ◌ to ✗, which a boolean would miss.
   return m.toolCalls
-    .map((tc) => `${tc.id ?? ''}:${tc.id !== undefined && completed.has(tc.id) ? 1 : 0}`)
+    .map((tc) => `${tc.id ?? ''}:${(tc.id !== undefined && outcomes.get(tc.id)) || 'pending'}`)
     .join('|');
 }
 
@@ -338,7 +341,8 @@ export class MessageLineCache {
 
     // Tool calls with no matching tool-result message are still pending; the
     // render context and the cache key both depend on this. (item 2c.)
-    const completedToolCallIds = collectCompletedToolCallIds(messages);
+    const toolCallOutcomes = collectToolCallOutcomes(messages);
+    const completedToolCallIds = new Set(toolCallOutcomes.keys());
     const assistantTurns = computeAssistantTurns(messages, msgIndexOffset);
     // Structural plan: a permutation of the slice (results lifted under their
     // calls, spawned agents spliced under the call that spawned them), rebuilt
@@ -346,7 +350,7 @@ export class MessageLineCache {
     const plan = buildRenderPlan(messages, msgIndexOffset, {
       resolveAgentSnapshot: context.resolveAgentSnapshot,
     });
-    const renderContext: ConversationRenderContext = { ...context, completedToolCallIds, assistantTurns };
+    const renderContext: ConversationRenderContext = { ...context, completedToolCallIds, toolCallOutcomes, assistantTurns };
 
     const touched = new Set<string>();
     const turnHeaderLines = new Map<string, number>();
@@ -373,7 +377,7 @@ export class MessageLineCache {
       const trailingBlank = !next || next.depth === 0;
       const uncacheable = isRoot && node.kind === 'message' && node.absIdx === streamingPlaceholderAbsIdx;
       const kind = isRoot ? context.messageKindRegistry.get(node.absIdx) : undefined;
-      const pendingToolKey = pendingToolKeyOf(node.message, completedToolCallIds);
+      const pendingToolKey = pendingToolKeyOf(node.message, toolCallOutcomes);
 
       if (!uncacheable) {
         const existing = this.entries.get(node.id);
@@ -482,6 +486,7 @@ export class MessageLineCache {
       configManager: context.configManager,
       splashOptions: context.splashOptions,
       completedToolCallIds: context.completedToolCallIds,
+      toolCallOutcomes: context.toolCallOutcomes,
       assistantTurns: context.assistantTurns,
       resolveAgentSnapshot: context.resolveAgentSnapshot,
     };
