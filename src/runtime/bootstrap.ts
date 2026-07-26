@@ -484,7 +484,7 @@ export async function bootstrapRuntime(
   // Embedded DaemonServer/HttpListener factories (incl. the facade auto-update
   // suppression) — see embedded-service-factories.ts.
   const createExternalServiceFactories = (token: string): ExternalServiceFactories =>
-    createEmbeddedServiceFactories(token, services.clusterCoordinator);
+    createEmbeddedServiceFactories(token, services.clusterCoordinator, services.clusterGroup.verbs);
 
   let externalServices: ExternalServicesHandle = {
     daemonServer: null, httpListener: null,
@@ -599,7 +599,7 @@ export async function bootstrapRuntime(
       // Join the coordination group even with no embedded daemon: the inbox
       // poller is gated on leadership and nothing else would start it when
       // daemon.enabled is false. Idempotent with the DaemonServer's own call.
-      await services.clusterCoordinator.start();
+      await services.startCluster();
       controlPlaneRecentEventsRef.value = (limit) => externalServices.listRecentControlPlaneEvents(limit);
       syncSessionSpineToHostStatus(externalServices.daemonStatus, companionTokenRecord.token);
       await renderDaemonAttachNotices(companionTokenRecord.token);

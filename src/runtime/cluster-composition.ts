@@ -29,6 +29,7 @@ import {
   inboxSurface,
   readClusterSettings,
   type ClusterConsumerGate,
+  type ClusterTransport,
 } from '@pellux/goodvibes-sdk/platform/cluster';
 import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import type { ShellPathService } from '@/runtime/index.ts';
@@ -59,12 +60,25 @@ export function createClusterComposition(options: {
   /**
    * Narrowed to what is actually read, which is exactly what
    * `readClusterSettings` asks for. The daemon passes a whole ConfigManager;
-   * the handler context carries only this slice, and demanding the full
-   * fifty-odd members would force that caller through a cast that hides a real
-   * shape mismatch rather than documenting one.
+   * the handler context carries only this slice, and a test standing in a
+   * minimal config object should not have to fabricate the full fifty-odd
+   * members to compose a coordinator — a cast there would hide a real shape
+   * mismatch rather than document one.
    */
   readonly configManager: Pick<ConfigManager, 'getCategory'>;
   readonly shellPaths: ShellPathService;
+  /**
+   * The datagram transport to coordinate over.
+   *
+   * Supplied by the group layer (cluster-group-composition.ts), which owns the
+   * socket and wraps every election datagram in the group envelope, signed with
+   * the current group key. That is what stops a daemon belonging to somebody
+   * else on the same network from taking part in this election at all.
+   *
+   * Absent — the plain default — means the coordinator opens its own socket and
+   * coordinates with anything that answers on the configured port.
+   */
+  readonly transport?: ClusterTransport | undefined;
 }): ClusterCoordinator {
   return new ClusterCoordinator({
     settings: readClusterSettings(options.configManager),
@@ -73,6 +87,7 @@ export function createClusterComposition(options: {
     // identity is per-surface and must not leak across surface roots.
     stateDirectory: options.shellPaths.resolveProjectPath(GOODVIBES_TUI_SURFACE_ROOT, 'cluster'),
     logger,
+    ...(options.transport ? { transport: options.transport } : {}),
   });
 }
 

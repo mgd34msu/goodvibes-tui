@@ -206,9 +206,47 @@ const ENABLEMENT_KEYS_BEHAVIOR_VERIFIED = new Set(
 ).size;
 
 /** Settings with real local behavior verification: the authored baseline plus the persistence-tested feature-knob, device/trigger, and enablement keys. */
+/**
+ * Config keys added by the LAN group-key layer: the automatic group-key
+ * rotation interval, the dual-generation acceptance window around a rotation,
+ * the discovery beacon interval, and the roster gossip interval.
+ *
+ * THIS CONSTANT IS NOT A DIAL, for the same reason as the two above. Each key
+ * is counted because a test that exercises it was actually written:
+ * `src/test/verification/cluster-group-settings-persistence.test.ts` runs the
+ * same four-part persistence contract — schema default exposure, `set()`
+ * through the key's own validator to disk, reload into a fresh ConfigManager
+ * with read-back equality, and reset-to-default that survives reload.
+ *
+ * PER-KEY EVIDENCE. All four have a LIVE consumer in this build, which is more
+ * than several of the keys counted above can claim:
+ *   cluster.keyRotationHours        — read by resolveClusterGroupSettings and
+ *                                     compared against the current key's age in
+ *                                     the group runtime's rotation check.
+ *   cluster.keyRotationGraceMinutes — sets how long the previous generation
+ *                                     stays accepted after a scheduled
+ *                                     rotation; drives the keyring's accepted
+ *                                     generation set.
+ *   cluster.beaconSeconds           — the discovery beacon timer interval, and
+ *                                     the basis of the "recently heard from"
+ *                                     window that decides which member mints a
+ *                                     rotation.
+ *   cluster.rosterGossipSeconds     — how often the member list is shared.
+ *
+ * `cluster.enabled` is NOT here: it is a feature enablement key and the ledger
+ * counts those in its own set.
+ */
+export const CLUSTER_GROUP_LOCAL_SETTINGS = [
+  'cluster.keyRotationHours',
+  'cluster.keyRotationGraceMinutes',
+  'cluster.beaconSeconds',
+  'cluster.rosterGossipSeconds',
+] as const;
+
 const SETTINGS_BEHAVIOR_VERIFIED = SETTINGS_BEHAVIOR_BASELINE
   + FEATURE_KNOB_LOCAL_SETTINGS.length
   + DEVICE_AND_TRIGGER_LOCAL_SETTINGS.length
+  + CLUSTER_GROUP_LOCAL_SETTINGS.length
   + ENABLEMENT_KEYS_BEHAVIOR_VERIFIED;
 
 const EXTERNAL_SLASH_COMMANDS = new Set([
