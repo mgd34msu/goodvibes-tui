@@ -6,7 +6,7 @@
 |│   ▸ Display (9)        │ stream                                                                  │|
 |│     UI (4)             │ Key: display.stream                                                     │|
 |│     Behavior (23)      │ Current: true                                                           │|
-|│     Notifications (10  │ Default: true                                                           │|
+|│     Notifications (14  │ Default: true                                                           │|
 |│     Permissions (23)   │ Type: boolean                                                           │|
 |│     Policy-as-Code (4  │ Source: default                                                         │|
 |│     Token Security (4  │                                                                         │|

@@ -124,6 +124,14 @@ export function buildSettingGroups(
     }
     // fleet.maxSize (was orchestration.maxActiveAgents) surfaces under orchestration.
     if (rawCat === 'fleet' && groups.has('orchestration')) groups.get('orchestration')!.push(entry);
+    // push.* configures the delivery side of the very notifications the
+    // notifications.* keys already shape (pushApproval, pushNeedsInput,
+    // pushCompletion), so the contact address and the subscription
+    // housekeeping bounds belong in that same category rather than in one of
+    // their own. Without this they match no category at all and would be
+    // dropped from the workspace entirely — reachable only by editing the
+    // config file by hand.
+    if (rawCat === 'push' && groups.has('notifications')) groups.get('notifications')!.push(entry);
   }
 
   // Synthetic display.themeMode enum (auto|dark|light) — TUI-local, see theme-mode-config.ts.
