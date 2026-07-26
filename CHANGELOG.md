@@ -4,6 +4,17 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [1.22.0] - 2026-07-26
+
+### Changes
+
+- Changed: an assistant turn now reads as one thing instead of a scatter of separate blocks. The turn gets a single header, the tool calls it issued hang under it as branches, and each call's result sits under the call that produced it rather than wherever it happened to arrive. Calls that run at the same time settle under their own call no matter which finishes first, work still in flight stays visible while it runs instead of appearing only once it is done, and expanding and collapsing works exactly as before.
+- Added: a Devices settings surface for a paired phone. It covers which capabilities a phone may serve, whether "always allow" is offered at all, how precise a shared location is, whether the clipboard may be read, and how long captures are kept before they are deleted. Standing permissions are listed where you manage the phone and can be revoked there, and a revoked permission stops applying immediately.
+- Added: a Triggers settings surface. Triggers watch something and start work when it changes — a long-running command finishing, a matching line appearing in a running command's output, or a scheduled check whose answer actually changed. The surface covers supervision, how output is batched, how much history is kept, and how a repeatedly failing trigger is backed off and eventually stopped. Triggers ship off and nothing watches anything until you turn them on.
+- Changed: settings the daemon acts on are now stored where the daemon can actually read them, and say so. A value like a channel token was previously written into this client's own settings file even though only the daemon ever reads it, so a save could report success and change nothing. Those settings now go to the daemon's own configuration, existing values are moved there once, and the setting's own description names the file it lives in and says it applies to every client rather than just this one.
+- Added: the push notification settings the platform runtime gained are reachable under Notifications — the contact address a push service uses to reach you about a delivery problem, and the bounds on how registered devices are kept tidy. They sit with the settings that already decide which events get pushed.
+- Updated: bundled GoodVibes platform runtime to 1.15.0, which carries the triggers, paired-phone capability, wake-word platform, reply-routing and background-output changes behind these notes.
+
 ## [1.21.1] - 2026-07-25
 
 ### Changes
