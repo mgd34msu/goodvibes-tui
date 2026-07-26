@@ -69,8 +69,7 @@ import { codeIndexDbPath, createCodeIndexServices, createStoreRerooter, isCodeIn
 import type { WorkPlanStore } from '../work-plans/work-plan-store.ts';
 import type { DaemonHandlerSurfaces } from '../daemon/handlers/index.ts';
 import { createDaemonHandlerComposition } from './daemon-handler-composition.ts';
-import { createClusterComposition } from './cluster-composition.ts';
-import { createClusterGroupComposition, startClusterServices, type ClusterGroupComposition } from './cluster-group-composition.ts';
+import { createClusterServices, startClusterServices, type ClusterGroupComposition } from './cluster-group-composition.ts';
 import type { ClusterCoordinator } from '@pellux/goodvibes-sdk/platform/cluster';
 import { WorkspaceTrustManager } from './trust/workspace-trust.ts';
 import { ensureConfiguredModelIsRoutable } from './provider-fallback.ts';
@@ -502,13 +501,11 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
   // Which machines are "us" on this network, and the socket they coordinate
   // over. Inert until started — no socket, no key material read. See
   // cluster-group-composition.ts.
-  const clusterGroup = createClusterGroupComposition({ configManager, shellPaths, secretsManager });
-  // Which of those machines reads the shared inbox. It coordinates over the
-  // group's transport, so a daemon outside the group is never in the election.
-  const clusterCoordinator = createClusterComposition({
-    configManager,
-    shellPaths,
-    transport: clusterGroup.electionTransport,
+  // Which machines on this network are "us", and which of them reads the
+  // shared inbox. Both inert until startCluster(); see
+  // cluster-group-composition.ts for why they are built together.
+  const { clusterGroup, clusterCoordinator } = createClusterServices({
+    configManager, shellPaths, secretsManager,
   });
   // Daemon handler surfaces (see daemon-handler-composition.ts); the inbox
   // poller registers itself with the coordinator rather than starting eagerly.

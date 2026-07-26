@@ -23,6 +23,7 @@ export const CLUSTER_SUBCOMMAND_ARG_HINTS: Record<string, string> = {
   key: '',
   nodes: '',
   forget: '<machine>',
+  rotate: '[--now]',
   leave: '',
   rename: '"<new name>"',
   groups: '',

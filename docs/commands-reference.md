@@ -133,7 +133,7 @@ GoodVibes ships **151** built-in slash commands across **72** categories. Every 
 
 | Command | Aliases | Usage | Description |
 | --- | --- | --- | --- |
-| `/cluster` | — | `[status\|create\|join\|key\|nodes\|forget\|leave\|rename\|groups] — status is the default; add --host/--port/--token to reach a daemon on another machine` | Share inbound channel work with your other goodvibes machines on this network |
+| `/cluster` | — | `[status\|create\|join\|key\|nodes\|forget\|rotate\|leave\|rename\|groups] — status is the default; add --host/--port/--token to reach a daemon on another machine` | Share inbound channel work with your other goodvibes machines on this network |
 
 ## Codebase
 

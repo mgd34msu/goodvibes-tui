@@ -8,6 +8,7 @@
  */
 import { generateQrMatrix, renderQrToString } from '@pellux/goodvibes-sdk/platform/pairing';
 import type {
+  RotateKeyResult,
   CreateGroupResult,
   DiscoveredGroup,
   ForgetNodeResult,
@@ -77,6 +78,26 @@ export function renderStatus(report: GroupStatusReport, now: number): string[] {
   if (report.removedNodeCount > 0) {
     lines.push(`removed machines on record: ${report.removedNodeCount}`);
   }
+  if (report.replication) {
+    const replication = report.replication;
+    lines.push(
+      '',
+      `shared settings: ${replication.entries} setting${replication.entries === 1 ? '' : 's'} and `
+        + `${replication.secrets} credential${replication.secrets === 1 ? '' : 's'} at revision ${replication.revision}`,
+    );
+    if (replication.tombstones > 0) {
+      lines.push(`                 ${replication.tombstones} deleted setting(s) still on record`);
+    }
+    if (replication.lastAppliedFrom) {
+      lines.push(
+        `                 last change from ${replication.lastAppliedFrom}`
+          + (replication.lastAppliedAt ? ` ${describeAge(replication.lastAppliedAt, now)}` : ''),
+      );
+    }
+    if (replication.pendingProposals > 0) {
+      lines.push(`                 ${replication.pendingProposals} change(s) waiting for the responsible machine`);
+    }
+  }
   if (report.wire) {
     lines.push(
       `traffic:   ${report.wire.sent} sent, ${report.wire.received} received; dropped `
@@ -89,9 +110,9 @@ export function renderStatus(report: GroupStatusReport, now: number): string[] {
   }
   if (report.advice) lines.push('', report.advice);
   // Deliberately absent, and it should stay absent: the join key, the group
-  // key, any generation of it, and this machine's private keys. `cluster key`
-  // is the only path to the join key and nothing shows the rest at all.
-  void now;
+  // key, any generation of it, this machine's private keys, and the VALUE of
+  // any replicated credential. `cluster key` is the only path to the join key
+  // and nothing shows the rest at all.
   return lines;
 }
 
@@ -211,6 +232,22 @@ export function renderJoinKey(result: JoinKeyResult, isTerminal: boolean): JoinK
     ],
     clipboardSequence: isTerminal ? clipboardEscapeSequence(result.joinKey) : null,
   };
+}
+
+/** `cluster rotate`. */
+export function renderRotated(result: RotateKeyResult): string[] {
+  return [
+    `the group key is now generation ${result.keyGeneration}`,
+    result.immediate
+      ? 'the previous key stopped being accepted immediately, and the key the group signs with'
+      : 'the previous key stays accepted for a few minutes so nothing is interrupted while',
+    result.immediate
+      ? 'was replaced too. A machine that is asleep right now will ask to come back when it wakes.'
+      : `the other ${Math.max(0, result.memberCount - 1)} machine(s) pick the new one up.`,
+    '',
+    `accepting generation${result.acceptedGenerations.length === 1 ? '' : 's'} `
+      + `${result.acceptedGenerations.join(' and ')}`,
+  ];
 }
 
 /**

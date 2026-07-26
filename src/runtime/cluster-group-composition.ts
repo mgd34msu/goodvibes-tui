@@ -33,6 +33,8 @@ import type { ConfigManager, SecretsManager } from '@pellux/goodvibes-sdk/platfo
 import type { ClusterTransport } from '@pellux/goodvibes-sdk/platform/cluster';
 import { logger } from '@pellux/goodvibes-sdk/platform/utils';
 import type { ShellPathService } from '@/runtime/index.ts';
+import { createClusterComposition } from './cluster-composition.ts';
+import type { ClusterCoordinator } from '@pellux/goodvibes-sdk/platform/cluster';
 import { GOODVIBES_TUI_SURFACE_ROOT } from '../config/surface.ts';
 import { VERSION } from '../version.ts';
 
@@ -70,6 +72,17 @@ export function createClusterGroupComposition(options: {
   readonly configManager: ConfigManager;
   readonly shellPaths: ShellPathService;
   readonly secretsManager: SecretsManager;
+  /**
+   * The leader election's own answer to "am I the master".
+   *
+   * Config replication needs exactly one machine issuing revisions, and it must
+   * be the SAME machine leadership already picked — two notions of master in
+   * one process would disagree the moment one of them changed.
+   *
+   * Late-bound because the coordinator is built from this composition's
+   * transport: it does not exist yet when this function runs.
+   */
+  readonly isMaster?: (() => boolean) | undefined;
 }): ClusterGroupComposition {
   const settings = readClusterSettings(options.configManager);
   const groupSettings = resolveClusterGroupSettings(
@@ -101,6 +114,17 @@ export function createClusterGroupComposition(options: {
     version: VERSION,
     clock: createSystemClusterClock(),
     logger,
+    ...(options.isMaster ? { isMaster: options.isMaster } : {}),
+    // Only daemon-owned, group-scoped keys ever reach this; the SDK's
+    // replication policy decides which, and refuses anything machine-specific.
+    config: {
+      get: (path) => (options.configManager as unknown as {
+        get(key: string): unknown;
+      }).get(path),
+      set: (path, value) => (options.configManager as unknown as {
+        set(key: string, value: unknown): void;
+      }).set(path, value),
+    },
   });
 
   const context: GroupOperationsContext = {
@@ -133,6 +157,37 @@ export function createClusterGroupComposition(options: {
       await runtime.stop();
     },
   };
+}
+
+/**
+ * Build both halves of the LAN cluster, wired to each other.
+ *
+ * They are mutually dependent and the dependency runs both ways, which is why
+ * this exists rather than two calls at the composition root: the election
+ * coordinates over the GROUP's transport, and the group's config replication
+ * needs the ELECTION's answer to "am I the master". The master signal is read
+ * through a closure because the coordinator does not exist yet when the group
+ * layer is constructed.
+ *
+ * Constructing either is inert — no socket, no key material read — until
+ * `startCluster` runs.
+ */
+export function createClusterServices(options: {
+  readonly configManager: ConfigManager;
+  readonly shellPaths: ShellPathService;
+  readonly secretsManager: SecretsManager;
+}): { readonly clusterGroup: ClusterGroupComposition; readonly clusterCoordinator: ClusterCoordinator } {
+  let coordinator: ClusterCoordinator | null = null;
+  const clusterGroup = createClusterGroupComposition({
+    ...options,
+    isMaster: () => coordinator?.isMaster ?? false,
+  });
+  coordinator = createClusterComposition({
+    configManager: options.configManager,
+    shellPaths: options.shellPaths,
+    transport: clusterGroup.electionTransport,
+  });
+  return { clusterGroup, clusterCoordinator: coordinator };
 }
 
 /**
