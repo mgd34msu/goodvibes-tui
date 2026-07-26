@@ -69,7 +69,8 @@ export function createDaemonHandlerComposition(
         // Hands polling to leadership. The `channels.inbox.list` read stays
         // available on every node — a standby still SERVES the persisted feed,
         // it just does not FETCH into it.
-        gatePolling: (control) => options.clusterCoordinator.register(inboxPollerGate(control)),
+        gatePolling: (providerId, control) =>
+          options.clusterCoordinator.register(inboxPollerGate(providerId, control)),
       })).unregister,
     registerDrafts: (ctx) => registerDraftMethods(ctx),
     registerCalendar,
