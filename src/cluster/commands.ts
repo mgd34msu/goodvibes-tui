@@ -15,6 +15,7 @@
 import { createInterface } from 'node:readline/promises';
 import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import type {
+  RotateKeyResult,
   CreateGroupResult,
   DiscoveredGroup,
   ForgetNodeResult,
@@ -38,11 +39,12 @@ import {
   renderJoinKeyQr,
   renderJoined,
   renderNodes,
+  renderRotated,
   renderStatus,
 } from './render.ts';
 
 export const CLUSTER_SUBCOMMANDS = [
-  'status', 'create', 'join', 'key', 'nodes', 'forget', 'leave', 'rename', 'groups',
+  'status', 'create', 'join', 'key', 'nodes', 'forget', 'rotate', 'leave', 'rename', 'groups',
 ] as const;
 export type ClusterSubcommand = (typeof CLUSTER_SUBCOMMANDS)[number];
 
@@ -65,6 +67,8 @@ export interface ParsedClusterCommand {
   readonly yes: boolean;
   /** `key` only: also render the join key as a QR code. */
   readonly qr: boolean;
+  /** `rotate` only: stop accepting the outgoing key at once. */
+  readonly now: boolean;
   readonly errors: readonly string[];
 }
 
@@ -85,12 +89,14 @@ export function parseClusterCommand(argv: readonly string[]): ParsedClusterComma
   let json = false;
   let yes = false;
   let qr = false;
+  let now = false;
 
   for (let index = 0; index < argv.length; index += 1) {
     const token = argv[index] ?? '';
     if (token === '--json') { json = true; continue; }
     if (token === '-y' || token === '--yes') { yes = true; continue; }
     if (token === '--qr') { qr = true; continue; }
+    if (token === '--now') { now = true; continue; }
     if (VALUE_FLAGS.has(token)) {
       const value = argv[index + 1];
       if (value === undefined || value.startsWith('--')) {
@@ -155,6 +161,7 @@ export function parseClusterCommand(argv: readonly string[]): ParsedClusterComma
     json,
     yes,
     qr,
+    now,
     errors,
   };
 }
@@ -272,6 +279,12 @@ export async function runClusterCommand(input: RunClusterCommandInput): Promise<
       });
       return result.ok
         ? success(result.data, renderCreated(result.data), parsed.json)
+        : failure(result.error, result.fix, parsed.json);
+    }
+    case 'rotate': {
+      const result = await call<RotateKeyResult>('/api/cluster/rotate', 'POST', { immediate: parsed.now });
+      return result.ok
+        ? success(result.data, renderRotated(result.data), parsed.json)
         : failure(result.error, result.fix, parsed.json);
     }
     case 'leave': {

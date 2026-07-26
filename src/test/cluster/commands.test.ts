@@ -179,7 +179,7 @@ describe('running a subcommand', () => {
           membership: 'no-group', groupId: null, groupName: null, nodeId: 'n1', nodeName: 'machine n1',
           version: '1.0.0', memberCount: 0, surfaces: null, keyGeneration: null, keyGenerationsHeld: 0,
           keyGenerationCap: 16, acceptedGenerations: [], removedNodeCount: 0, rotationHours: 24,
-          wire: null, advice: 'run `cluster create` here, or `cluster join`',
+          wire: null, replication: null, advice: 'run `cluster create` here, or `cluster join`',
         },
       }),
     });
@@ -319,6 +319,52 @@ describe('showing the join key', () => {
   });
 });
 
+describe('rotate', () => {
+  const base = {
+    configManager: CONFIG,
+    daemonHomeDir: '/nowhere',
+    readToken: () => TOKEN_FILE,
+    isTerminal: false,
+  };
+
+  test('asks for the routine rotation by default, and says nothing was interrupted', async () => {
+    let sent: unknown;
+    const result = await runClusterCommand({
+      ...base,
+      argv: ['rotate'],
+      fetchImpl: async (_url, init) => {
+        sent = JSON.parse(String(init?.body ?? '{}'));
+        return jsonResponse({
+          ok: true,
+          data: { groupId: 'gABC', keyGeneration: 4, memberCount: 3, immediate: false, acceptedGenerations: [4, 3] },
+        });
+      },
+    });
+    expect(sent).toEqual({ immediate: false });
+    expect(result.exitCode).toBe(0);
+    expect(result.lines.join('\n')).toContain('generation 4');
+    expect(result.lines.join('\n')).toContain('nothing is interrupted');
+  });
+
+  test('--now asks for the immediate one, and says what that costs', async () => {
+    let sent: unknown;
+    const result = await runClusterCommand({
+      ...base,
+      argv: ['rotate', '--now'],
+      fetchImpl: async (_url, init) => {
+        sent = JSON.parse(String(init?.body ?? '{}'));
+        return jsonResponse({
+          ok: true,
+          data: { groupId: 'gABC', keyGeneration: 5, memberCount: 3, immediate: true, acceptedGenerations: [5] },
+        });
+      },
+    });
+    expect(sent).toEqual({ immediate: true });
+    expect(result.lines.join('\n')).toContain('stopped being accepted immediately');
+    expect(result.lines.join('\n')).toContain('asleep');
+  });
+});
+
 describe('rendering', () => {
   test('status never contains key material of any kind', () => {
     const lines = renderStatus({
@@ -328,12 +374,19 @@ describe('rendering', () => {
       removedNodeCount: 1, rotationHours: 24,
       wire: { sent: 1, received: 2, droppedOtherGroup: 3, droppedBadSignature: 0, droppedMalformed: 0,
         droppedOldGeneration: 0, droppedNoGroup: 0 },
+      replication: {
+        revision: 12, entries: 4, secrets: 1, tombstones: 0,
+        lastAppliedFrom: 'node-a', lastAppliedAt: 999_000, pendingProposals: 0,
+      },
       advice: null,
     }, 1_000_000).join('\n');
     expect(lines).toContain('generation 3');
     expect(lines).toContain('accepting 3 and 2');
     expect(lines).not.toMatch(/join key/i);
     expect(lines).not.toMatch(/gvj1-/);
+    // Replication is reported as counts and provenance, never as a value.
+    expect(lines).toContain('4 settings and 1 credential at revision 12');
+    expect(lines).toContain('last change from node-a');
   });
 
   test('ages read as ages', () => {
