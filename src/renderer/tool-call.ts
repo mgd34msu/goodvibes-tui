@@ -6,7 +6,7 @@ import { stripDangerousAnsi } from './ansi-sanitize.ts';
 import { formatElapsed } from '../utils/format-elapsed.ts';
 import { GLYPHS } from './ui-primitives.ts';
 import { activeUiTones } from './theme.ts';
-import { treeBranchCol, treeContentCol, writeTreeStatusGutter } from './conversation-tree.ts';
+import { treeContentCol, treeTextCol, writeTreeStatusMarker } from './conversation-tree.ts';
 
 const TOOL_NAME_MIN_WIDTH = 8;
 const TOOL_NAME_MAX_WIDTH = 20;
@@ -188,10 +188,11 @@ export function renderToolCallBlock(
   const line = createEmptyLine(width);
   const t = activeUiTones();
   const indent = Math.max(0, tree?.indentCols ?? 0);
-  // In tree mode the status icon moves to the branch's content column, so the
-  // ✓ lines up with the content of every other row at the same depth and the
-  // branch glyph sits where the parent's content began.
-  const margin = indent > 0 ? treeContentCol(indent) : LAYOUT.LEFT_MARGIN;
+  const inTree = indent > 0;
+  // In tree mode the row's columns come from the shared grid: the branch glyph
+  // where the parent's content began, the status marker in the bullet column,
+  // and the row's text at this depth's text column.
+  const margin = inTree ? treeContentCol(indent) : LAYOUT.LEFT_MARGIN;
   const rightMargin = LAYOUT.RIGHT_MARGIN;
   const contentEnd = width - rightMargin;
 
@@ -226,18 +227,18 @@ export function renderToolCallBlock(
   const rightStart = rightText
     ? Math.max(margin + 2, contentEnd - rightWidth)
     : contentEnd;
-  const leftStart = margin;
+  const leftStart = inTree ? treeTextCol(indent) : margin;
   const leftEndExclusive = rightText
     ? Math.max(leftStart, rightStart - 1)
     : contentEnd;
   let col: number = leftStart;
 
-  // In tree mode the status glyph goes in the fixed left gutter (column 0),
-  // before the indent, so every marker in the transcript aligns in one column
-  // no matter how deep its row sits. The row's own content then starts at the
-  // branch's content column with no inline icon slot.
-  if (indent > 0) {
-    writeTreeStatusGutter(line, icon, iconColor, width);
+  // In tree mode the status glyph goes in the bullet column — the same column
+  // as the `●` of the `● assistant` header this row hangs under — so a turn's
+  // markers read as that bullet's column continuing down the turn. The row's
+  // own text then starts at its depth's text column with no inline icon slot.
+  if (inTree) {
+    writeTreeStatusMarker(line, icon, iconColor, width);
   } else {
     if (col < leftEndExclusive) {
       line[col] = createStyledCell(icon, { fg: iconColor, bold: status === 'done' || status === 'error' || status === 'cancelled' });

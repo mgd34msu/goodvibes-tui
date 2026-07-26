@@ -15,8 +15,13 @@ import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import { renderConversationCollapsedFragment, renderConversationEventLine } from '../renderer/conversation-surface.ts';
 import { GLYPHS } from '../renderer/ui-primitives.ts';
 import type { BlockMeta } from './conversation-types.ts';
+import {
+  collectToolCallOutcomes,
+  isTurnCollapsed,
+  type ConversationRenderContext,
+} from './conversation-render-context.ts';
 import { renderCompactionContinuationMessage } from './conversation-compaction-render.ts';
-import { drawBranchConnector, treeIndentCols, writeTreeStatusGutter } from '../renderer/conversation-tree.ts';
+import { drawTreeRails, treeIndentCols, treeTextCol } from '../renderer/conversation-tree.ts';
 import {
   MAX_NEST_DEPTH,
   buildRenderPlan,
@@ -52,74 +57,20 @@ const NAVIGABLE_KINDS: ReadonlySet<SystemMessageKind> = new Set(['system', 'wrfc
 
 type Message = ConversationMessageSnapshot;
 
-/**
- * Collect the ids of tool calls that have a matching tool-result message in the
- * given slice — i.e. the tools that actually ran. Used to decide whether an
- * assistant tool call still shows as pending (awaiting approval) or done.
- * (item 2c.)
- */
-export function collectCompletedToolCallIds(messages: readonly Message[]): Set<string> {
-  const ids = new Set<string>();
-  for (const message of messages) {
-    if (message.role === 'tool' && message.callId) ids.add(message.callId);
-  }
-  return ids;
-}
+// The render context and its pure derivations live in a type-only leaf module
+// (conversation-render-context.ts) so per-row render modules can depend on the
+// SHAPE of a render without depending on this drawing module. Re-exported here
+// because this file remains the transcript renderer's entry point.
+export {
+  collectCompletedToolCallIds,
+  collectToolCallOutcomes,
+  isTurnCollapsed,
+  type ConversationRenderContext,
+  type ToolCallOutcome,
+} from './conversation-render-context.ts';
 
 function summarizeCallId(callId: string, maxLength = 24): string {
   return callId.length <= maxLength ? callId : `${callId.slice(0, maxLength - 1)}…`;
-}
-
-export interface ConversationRenderContext {
-  readonly history: {
-    addLine: (line: Line) => void;
-    addLines: (lines: Line[]) => void;
-    getLineCount: () => number;
-  };
-  readonly blockRegistry: BlockMeta[];
-  readonly collapseState: Map<string, boolean>;
-  readonly errorLineRegistry: number[];
-  /** Maps message index → SystemMessageKind for typed system messages. */
-  readonly messageKindRegistry: ReadonlyMap<number, SystemMessageKind>;
-  readonly configManager: ConfigManager | null;
-  readonly splashOptions: SplashOptions;
-  /**
-   * Tool-call ids that have a corresponding tool-result message (i.e. the tool
-   * actually ran). An assistant tool call whose id is NOT in this set is still
-   * awaiting a decision (e.g. an approval prompt) and renders with a pending
-   * glyph instead of the completed ✓. When undefined (single-message callers
-   * without sibling context), every tool call renders as done — the prior
-   * behaviour. (item 2c.)
-   */
-  readonly completedToolCallIds?: ReadonlySet<string>;
-  /**
-   * Which assistant messages share one `● assistant` header, and what that
-   * header must say (see conversation-turn-structure.ts). Keyed by absolute
-   * index for every assistant message in a run AND every tool-result message
-   * the run's calls produced, so a collapsed turn can hide its results too.
-   * A message absent from this map (or an undefined map) renders standalone,
-   * exactly as it did before turn merging.
-   */
-  readonly assistantTurns?: ReadonlyMap<number, AssistantTurnMembership>;
-  /**
-   * Live snapshot reader for a spawned agent's own conversation, used to
-   * splice that agent's rows in beneath the call that spawned it (see
-   * conversation-turn-structure.ts). Undefined disables nesting entirely and
-   * the transcript renders exactly as it would without subagents.
-   */
-  readonly resolveAgentSnapshot?: (agentId: string) => readonly Message[] | null;
-}
-
-/**
- * Whether a turn's branches are hidden. Turns default to EXPANDED (unlike
- * every other collapsible block here, which defaults to collapsed): a turn
- * collapsed by default would hide the activity the transcript exists to show.
- */
-export function isTurnCollapsed(
-  turn: AssistantTurnMembership | undefined,
-  collapseState: ReadonlyMap<string, boolean>,
-): boolean {
-  return turn !== undefined && (collapseState.get(turn.turnKey) ?? false);
 }
 
 export function renderConversationUserMessage(
@@ -424,12 +375,23 @@ export function renderConversationToolCallNode(
   const turn = context.assistantTurns?.get(node.absIdx);
   if (isTurnCollapsed(turn, context.collapseState)) return;
 
+  // The call row carries the call's OUTCOME, not merely whether it finished:
+  // the result row below it no longer repeats a marker, so this glyph is the
+  // only place a failed or cancelled tool says so in the status column.
+  const outcome = call.id !== undefined ? context.toolCallOutcomes?.get(call.id) : undefined;
   const ran = context.completedToolCallIds === undefined
     || (call.id !== undefined && context.completedToolCallIds.has(call.id));
+  const status: 'done' | 'error' | 'cancelled' | 'pending' = outcome === 'error'
+    ? 'error'
+    : outcome === 'cancelled'
+      ? 'cancelled'
+      : outcome === 'ok'
+        ? 'done'
+        : ran ? 'done' : 'pending';
   const indent = treeIndentCols(node.depth, width);
   const lines = renderToolCallBlock(
     call,
-    ran ? 'done' : 'pending',
+    status,
     undefined,
     width,
     undefined,
@@ -438,15 +400,12 @@ export function renderConversationToolCallNode(
     undefined,
     { indentCols: indent, omitToolName: turn?.sharedToolLabel !== undefined },
   );
-  const line = lines[0];
-  if (line) drawBranchConnector(line, node.depth, node.connector, node.openAncestorDepths, width, T.toolAccent);
-  context.history.addLines(lines);
 
   // Recursion stopped here — say so rather than silently showing a subtree as
   // if it were a leaf.
   if (node.truncated) {
     const noteIndent = treeIndentCols(node.depth + 1, width);
-    context.history.addLine(renderConversationEventLine(width, {
+    lines.push(renderConversationEventLine(width, {
       marker: GLYPHS.navigation.collapsed,
       markerFg: '244',
       label: '',
@@ -460,6 +419,28 @@ export function renderConversationToolCallNode(
       dim: true,
     }], noteIndent));
   }
+
+  // Rails last, over every line the row emitted, so the vertical run down to
+  // the next sibling has no gap in it.
+  drawTreeRails(lines, node.depth, node.connector, node.openAncestorDepths, width, T.toolAccent);
+  context.history.addLines(lines);
+}
+
+/**
+ * Move an already-rendered line `cols` columns to the right on a fresh
+ * full-width line. Used to place a tree row's expanded body under its own
+ * indent without re-rendering it at a different width (which would change the
+ * line count the row's badge already committed to).
+ */
+function shiftLineRight(line: Line, cols: number, width: number): Line {
+  if (cols <= 0) return line;
+  const shifted = createEmptyLine(width);
+  for (let i = 0; i < line.length; i++) {
+    const target = i + cols;
+    if (target >= width) break;
+    shifted[target] = line[i]!;
+  }
+  return shifted;
 }
 
 export function renderConversationToolMessage(
@@ -485,12 +466,25 @@ export function renderConversationToolMessage(
   // Parsed once, ahead of the collapse check, so it's available for the
   // block-registry meta merge below regardless of collapsed/expanded state.
   const diffParse = isDiff ? parseDiffForApply(message.content) : undefined;
+  const inTree = depth > 0 && indent > 0;
   // The EXPANDED render, computed unconditionally (even while collapsed) so
   // the header's "N lines" badge always names what Tab would actually reveal
   // — a raw JSON blob that pretty-prints to 50 lines must say 50, not 1, even
   // while it's still folded. Reused below as the actual body when expanded,
   // so this is never rendered twice.
-  const expandedLines = renderExpandedToolResultLines(message.content, width);
+  //
+  // In the tree it is rendered at the width it will actually OCCUPY (the row's
+  // width less its indent) and then shifted into place, so the badge still
+  // counts exactly the lines expansion produces. Rendering it full-width and
+  // displaying it indented would desynchronise the two — the
+  // markdown-table-drops-columns bug class — and rendering it full-width and
+  // displaying it flush punches the row's rails out for the whole body.
+  // The body is a continuation of its row, so it starts at the row's own text
+  // column; the shift is that column expressed relative to the flush left
+  // margin the body renders with internally.
+  const bodyShift = inTree ? Math.max(0, treeTextCol(indent) - LAYOUT.LEFT_MARGIN) : 0;
+  const bodyWidth = Math.max(LAYOUT.LEFT_MARGIN + LAYOUT.RIGHT_MARGIN + 8, width - bodyShift);
+  const expandedLines = renderExpandedToolResultLines(message.content, bodyWidth);
   const lineCount = expandedLines.length;
 
   // Human one-line summary for tool results (write/read/exec/edit): shown as the
@@ -528,7 +522,6 @@ export function renderConversationToolMessage(
   // parent call row already shows — is exactly the boilerplate this layout
   // removes. The row leads with its size badge instead. `diff` and `cancelled`
   // keep their labels: those carry information the parent row does not.
-  const inTree = depth > 0 && indent > 0;
   const label = isCancelled ? 'cancelled' : (blockType === 'diff' ? 'diff' : (inTree ? '' : 'tool result'));
   const nameSegments = inTree
     ? []
@@ -546,19 +539,12 @@ export function renderConversationToolMessage(
     ...nameSegments,
     { text: ` ${isCollapsed ? GLYPHS.navigation.collapsed : GLYPHS.navigation.expanded} ${lineCount} line${lineCount === 1 ? '' : 's'} `, fg: '244', dim: true },
   ], indent);
-  if (node && inTree) {
-    drawBranchConnector(headerLine, node.depth, node.connector, node.openAncestorDepths, width, T.toolAccent);
-    // A settled result means its call finished: ✓ in the shared gutter, or the
-    // blocked glyph when the user cancelled it. Distinguished by GLYPH, not by
-    // colour alone.
-    writeTreeStatusGutter(
-      headerLine,
-      isCancelled ? GLYPHS.status.blocked : TOOL_STATUS.SUCCESS_ICON,
-      isCancelled ? warnTone : activeUiTones().chrome.good,
-      width,
-    );
-  }
-  context.history.addLine(headerLine);
+  // Every line this row emits, gathered before anything is committed, so the
+  // rails can be drawn across all of them in one pass (see drawTreeRails). The
+  // result row deliberately carries NO status marker of its own: the call row
+  // directly above it already states the outcome in the shared bullet column,
+  // and a second marker one row down only doubles it.
+  const rows: Line[] = [headerLine];
 
   if (isCollapsed) {
     const collapseSuffixReserve = 30;
@@ -584,7 +570,7 @@ export function renderConversationToolMessage(
       dim: true,
       indentCols: indent,
     });
-    context.history.addLines(rendered);
+    for (const line of rendered) rows.push(line);
   } else {
     // Diff or plain result — either way this is exactly `expandedLines`,
     // already computed above (and already what the header's line count is
@@ -595,8 +581,16 @@ export function renderConversationToolMessage(
     // reduced width would desynchronise that count from what expansion
     // actually reveals — the markdown-table-drops-columns bug class. The body
     // is already visually bound to its row by the header directly above it.
-    context.history.addLines(expandedLines);
+    // In the tree it was rendered at `bodyWidth` above and is shifted into the
+    // row's indent here, which is what leaves the rail columns to its left free
+    // for the rails to run through.
+    for (const line of expandedLines) rows.push(shiftLineRight(line, bodyShift, width));
   }
+
+  if (node && inTree) {
+    drawTreeRails(rows, node.depth, node.connector, node.openAncestorDepths, width, T.toolAccent);
+  }
+  context.history.addLines(rows);
 
   const renderedLineCount = context.history.getLineCount() - startLine;
   let meta: BlockMeta = {
@@ -635,7 +629,10 @@ export function appendConversationMessages(
   // unless the caller already supplied the set. (item 2c.)
   const renderContext: ConversationRenderContext = context.completedToolCallIds !== undefined
     ? context
-    : { ...context, completedToolCallIds: collectCompletedToolCallIds(messages) };
+    : (() => {
+      const toolCallOutcomes = collectToolCallOutcomes(messages);
+      return { ...context, toolCallOutcomes, completedToolCallIds: new Set(toolCallOutcomes.keys()) };
+    })();
   const assistantTurns = renderContext.assistantTurns
     ?? computeAssistantTurns(messages, msgIndexOffset);
   const turnContext: ConversationRenderContext = renderContext.assistantTurns !== undefined
