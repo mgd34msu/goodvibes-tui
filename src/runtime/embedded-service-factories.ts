@@ -11,12 +11,22 @@
  * at all. See daemon/lifecycle.ts.
  */
 import { DaemonServer, HttpListener } from '@pellux/goodvibes-sdk/platform/daemon';
+import type { ClusterCoordinator } from '@pellux/goodvibes-sdk/platform/cluster';
 import { createSafeHostServeFactory } from '../daemon/safe-serve.ts';
 import type { startExternalServices } from '@/runtime/index.ts';
 
 export type ExternalServiceFactories = NonNullable<Parameters<typeof startExternalServices>[4]>;
 
-export function createEmbeddedServiceFactories(sharedDaemonToken: string): ExternalServiceFactories {
+/**
+ * `clusterCoordinator` is threaded through explicitly rather than read off the
+ * runtimeServices the SDK hands the factory: that object is typed by the SDK,
+ * which has no field for a coordinator this product composed. Passing it here
+ * keeps the ONE-coordinator-per-process rule enforceable by the type checker.
+ */
+export function createEmbeddedServiceFactories(
+  sharedDaemonToken: string,
+  clusterCoordinator: ClusterCoordinator,
+): ExternalServiceFactories {
   return {
     sharedDaemonToken,
     createDaemonServer: (bus, userAuth, runtimeServices) => {
@@ -27,6 +37,10 @@ export function createEmbeddedServiceFactories(sharedDaemonToken: string): Exter
         userAuth,
         runtimeServices,
         serveFactory: createSafeHostServeFactory('Embedded daemon'),
+        // The SAME coordinator the inbox poller registered with. Letting the
+        // facade compose its own would put two election nodes in one process,
+        // and whichever lost would silence consumers the other owns.
+        clusterCoordinator,
       });
       return daemonServer;
     },
