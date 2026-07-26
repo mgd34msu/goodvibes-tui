@@ -6,7 +6,7 @@
 
 # Command Reference
 
-GoodVibes ships **150** built-in slash commands across **71** categories. Every command below is generated directly from the command registry, so this list is always complete and current. Type a command in the composer prefixed with `/`, or press `Ctrl+K` (or run `/palette`) to search them all in the command palette.
+GoodVibes ships **151** built-in slash commands across **72** categories. Every command below is generated directly from the command registry, so this list is always complete and current. Type a command in the composer prefixed with `/`, or press `Ctrl+K` (or run `/palette`) to search them all in the command palette.
 
 ## Categories
 
@@ -17,6 +17,7 @@ GoodVibes ships **150** built-in slash commands across **71** categories. Every 
 - [Checkpoints](#checkpoints) — 3
 - [CI](#ci) — 1
 - [Cloudflare](#cloudflare) — 1
+- [Cluster](#cluster) — 1
 - [Codebase](#codebase) — 1
 - [Configuration](#configuration) — 1
 - [Control Room](#control-room) — 5
@@ -127,6 +128,12 @@ GoodVibes ships **150** built-in slash commands across **71** categories. Every 
 | Command | Aliases | Usage | Description |
 | --- | --- | --- | --- |
 | `/cloudflare` | `/cf` | `[status\|setup\|requirements\|create-token\|discover\|validate\|provision\|verify\|disable] [flags]` | Inspect and manage optional Cloudflare batch/control-plane integration through daemon SDK routes |
+
+## Cluster
+
+| Command | Aliases | Usage | Description |
+| --- | --- | --- | --- |
+| `/cluster` | — | `[status\|create\|join\|key\|nodes\|forget\|leave\|rename\|groups] — status is the default; add --host/--port/--token to reach a daemon on another machine` | Share inbound channel work with your other goodvibes machines on this network |
 
 ## Codebase
 

@@ -28,6 +28,7 @@ import {
   ClusterCoordinator,
   readClusterSettings,
   type ClusterConsumerGate,
+  type ClusterTransport,
 } from '@pellux/goodvibes-sdk/platform/cluster';
 import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import type { ShellPathService } from '@/runtime/index.ts';
@@ -55,8 +56,23 @@ export interface GatedPollerControl {
  * role through an update.
  */
 export function createClusterComposition(options: {
-  readonly configManager: ConfigManager;
+  // Only the category read is used, so this asks for only that: a test that
+  // stands in a minimal config object should not have to fabricate a whole
+  // ConfigManager to compose a coordinator.
+  readonly configManager: Pick<ConfigManager, 'getCategory'>;
   readonly shellPaths: ShellPathService;
+  /**
+   * The datagram transport to coordinate over.
+   *
+   * Supplied by the group layer (cluster-group-composition.ts), which owns the
+   * socket and wraps every election datagram in the group envelope, signed with
+   * the current group key. That is what stops a daemon belonging to somebody
+   * else on the same network from taking part in this election at all.
+   *
+   * Absent — the plain default — means the coordinator opens its own socket and
+   * coordinates with anything that answers on the configured port.
+   */
+  readonly transport?: ClusterTransport | undefined;
 }): ClusterCoordinator {
   return new ClusterCoordinator({
     settings: readClusterSettings(options.configManager),
@@ -65,6 +81,7 @@ export function createClusterComposition(options: {
     // identity is per-surface and must not leak across surface roots.
     stateDirectory: options.shellPaths.resolveProjectPath(GOODVIBES_TUI_SURFACE_ROOT, 'cluster'),
     logger,
+    ...(options.transport ? { transport: options.transport } : {}),
   });
 }
 

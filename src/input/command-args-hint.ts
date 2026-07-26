@@ -1,5 +1,6 @@
 import type { CommandRegistry } from './command-registry.ts';
 import { SESSION_SUBCOMMAND_ARG_HINTS } from './commands/session.ts';
+import { CLUSTER_SUBCOMMAND_ARG_HINTS } from './commands/cluster-runtime.ts';
 
 /**
  * Per-command subcommand → argument-hint maps. `session`'s entries come
@@ -12,6 +13,7 @@ import { SESSION_SUBCOMMAND_ARG_HINTS } from './commands/session.ts';
  */
 const SUBCOMMAND_HINTS: Record<string, Record<string, string>> = {
   session: SESSION_SUBCOMMAND_ARG_HINTS,
+  cluster: CLUSTER_SUBCOMMAND_ARG_HINTS,
   template: { save: '<name>', use: '<name> [args]', edit: '<name>', delete: '<name>' },
   secrets: { set: '<KEY> <value>', get: '<KEY>', delete: '<KEY>' },
   permissions: { tool: '<name> allow|prompt|deny' },

@@ -70,6 +70,7 @@ import type { WorkPlanStore } from '../work-plans/work-plan-store.ts';
 import type { DaemonHandlerSurfaces } from '../daemon/handlers/index.ts';
 import { createDaemonHandlerComposition } from './daemon-handler-composition.ts';
 import { createClusterComposition } from './cluster-composition.ts';
+import { createClusterGroupComposition, startClusterServices, type ClusterGroupComposition } from './cluster-group-composition.ts';
 import type { ClusterCoordinator } from '@pellux/goodvibes-sdk/platform/cluster';
 import { WorkspaceTrustManager } from './trust/workspace-trust.ts';
 import { ensureConfiguredModelIsRoutable } from './provider-fallback.ts';
@@ -180,6 +181,10 @@ export interface RuntimeServices {
   readonly daemonHandlers: DaemonHandlerSurfaces;
   /** Elects the one node on this network that consumes inbound messages; hand it to the DaemonServer so its consumers share this leadership instead of holding a second election. */
   readonly clusterCoordinator: ClusterCoordinator;
+  /** LAN group membership: identity, keys, roster, and the `cluster` verbs. */
+  readonly clusterGroup: ClusterGroupComposition;
+  /** Start the group layer and then the election, in that order. Idempotent. */
+  readonly startCluster: () => Promise<void>;
   readonly remoteRunnerRegistry: RemoteRunnerRegistry;
   readonly remoteSupervisor: RemoteSupervisor;
   readonly sessionMemoryStore: SessionMemoryStore;
@@ -494,9 +499,17 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
     automationBridge: automationManager,
   });
 
-  // Which node on this network reads the shared inbox. Inert until started —
-  // no socket, no state written. See cluster-composition.ts.
-  const clusterCoordinator = createClusterComposition({ configManager, shellPaths });
+  // Which machines are "us" on this network, and the socket they coordinate
+  // over. Inert until started — no socket, no key material read. See
+  // cluster-group-composition.ts.
+  const clusterGroup = createClusterGroupComposition({ configManager, shellPaths, secretsManager });
+  // Which of those machines reads the shared inbox. It coordinates over the
+  // group's transport, so a daemon outside the group is never in the election.
+  const clusterCoordinator = createClusterComposition({
+    configManager,
+    shellPaths,
+    transport: clusterGroup.electionTransport,
+  });
   // Daemon handler surfaces (see daemon-handler-composition.ts); the inbox
   // poller registers itself with the coordinator rather than starting eagerly.
   const daemonHandlers = createDaemonHandlerComposition({
@@ -746,6 +759,8 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
     distributedRuntime,
     daemonHandlers,
     clusterCoordinator,
+    clusterGroup,
+    startCluster: () => startClusterServices({ clusterGroup, clusterCoordinator }),
     remoteRunnerRegistry,
     remoteSupervisor,
     sessionMemoryStore,
