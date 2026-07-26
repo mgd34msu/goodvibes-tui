@@ -327,6 +327,11 @@ async function main(): Promise<void> {
     // undefined for a non-binary install, so a dev run stays host-managed and
     // never swaps the interpreter. See lifecycle.ts.
     updateArtifact: resolveDaemonUpdateArtifact({ version: VERSION }),
+    // The SAME coordinator this repository's inbox poller registered with (see
+    // runtime/cluster-composition.ts). The facade must reuse it rather than
+    // compose its own: two coordinators in one process are two nodes in the
+    // election, and whichever lost would silence consumers the other owns.
+    clusterCoordinator: runtimeServices.clusterCoordinator,
   });
   const listener = new HttpListener({
     hookDispatcher: runtimeServices.hookDispatcher,
@@ -375,7 +380,15 @@ async function main(): Promise<void> {
     const timeout = new Promise<'timeout'>((resolve) =>
       setTimeout(() => resolve('timeout'), SHUTDOWN_DEADLINE_MS)
     );
-    const stop = Promise.allSettled([listener.stop(), daemon.stop()]).then(() => 'done' as const);
+    // daemon.stop() drives the ordered inbound teardown: it stops every gated
+    // consumer and only then broadcasts the resignation, so another node on
+    // this network takes over in about a second instead of waiting out the
+    // crash timeout. Handler surfaces (inbox store, catalog handlers) are
+    // released afterwards — before this, a SIGTERM left the inbox cursor store
+    // open and relied on process exit to clear the poll timers.
+    const stop = Promise.allSettled([listener.stop(), daemon.stop()])
+      .then(() => runtimeServices.daemonHandlers.unregister())
+      .then(() => 'done' as const);
     const result = await Promise.race([stop, timeout]);
     if (result === 'timeout') {
       logger.warn('shutdown deadline exceeded — forcing exit');
