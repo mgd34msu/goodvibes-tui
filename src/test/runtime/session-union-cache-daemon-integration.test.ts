@@ -76,7 +76,7 @@ describe('SessionUnionCache against a real bootDaemon (adopted-mode union)', () 
 
     // The local broker only knows THIS surface's own session.
     const local: LocalSessionReader = {
-      listSessions: () => [{ id: 'tui-local-1', kind: 'tui', project: harness!.workingDir, title: 'tui-local-1', status: 'active', createdAt: 1, updatedAt: 1, participants: [] } as SharedSessionRecord],
+      listSessions: () => [{ id: 'tui-local-1', kind: 'tui', project: harness!.workingDir, title: 'tui-local-1', status: 'active', createdAt: 1, updatedAt: 1, lastActivityAt: 1, messageCount: 0, pendingInputCount: 0, routeIds: [], surfaceKinds: ['tui'], participants: [], metadata: {} } as SharedSessionRecord],
       getSession: (id) => (id === 'tui-local-1' ? ({ id: 'tui-local-1' } as SharedSessionRecord) : null),
     };
 
@@ -102,7 +102,7 @@ describe('SessionUnionCache against a real bootDaemon (adopted-mode union)', () 
     await harness.registerWireSession('tui-wire-mirror-3');
 
     const local: LocalSessionReader = {
-      listSessions: () => [{ id: 'tui-local-3', kind: 'tui', project: harness!.workingDir, title: 'tui-local-3', status: 'active', createdAt: 1, updatedAt: 1, participants: [] } as SharedSessionRecord],
+      listSessions: () => [{ id: 'tui-local-3', kind: 'tui', project: harness!.workingDir, title: 'tui-local-3', status: 'active', createdAt: 1, updatedAt: 1, lastActivityAt: 1, messageCount: 0, pendingInputCount: 0, routeIds: [], surfaceKinds: ['tui'], participants: [], metadata: {} } as SharedSessionRecord],
       getSession: (id) => (id === 'tui-local-3' ? ({ id: 'tui-local-3' } as SharedSessionRecord) : null),
     };
     // Same wiring shape as bootstrap-core.ts: the spine client's mirrored ids
@@ -131,7 +131,7 @@ describe('SessionUnionCache against a real bootDaemon (adopted-mode union)', () 
     await harness.registerWireSession('companion-session-2');
 
     const local: LocalSessionReader = {
-      listSessions: () => [{ id: 'tui-local-2', kind: 'tui', project: harness!.workingDir, title: 'tui-local-2', status: 'active', createdAt: 1, updatedAt: 1, participants: [] } as SharedSessionRecord],
+      listSessions: () => [{ id: 'tui-local-2', kind: 'tui', project: harness!.workingDir, title: 'tui-local-2', status: 'active', createdAt: 1, updatedAt: 1, lastActivityAt: 1, messageCount: 0, pendingInputCount: 0, routeIds: [], surfaceKinds: ['tui'], participants: [], metadata: {} } as SharedSessionRecord],
       getSession: (id) => (id === 'tui-local-2' ? ({ id: 'tui-local-2' } as SharedSessionRecord) : null),
     };
     const cache = new SessionUnionCache({ local, scheduler: noopScheduler, log: silent });

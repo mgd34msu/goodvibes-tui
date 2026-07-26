@@ -46,11 +46,22 @@ export interface OperatorRpcAvailable {
 export type OperatorRpc = OperatorRpcUnavailable | OperatorRpcAvailable;
 
 function resolveControlPlaneBaseUrl(configManager: ConfigManager): string | null {
-  const explicit = String(configManager.get('controlPlane.baseUrl') ?? '').trim();
-  if (explicit) return explicit;
+  // An explicitly declared external address wins; otherwise the URL is DERIVED
+  // from hostMode/host/port/tls.mode. This used to prefer a stored
+  // `controlPlane.baseUrl`, which had no writers and so drifted from the bind
+  // on port, scheme, and host at once.
+  // The cast drops once a published SDK carries this key in ConfigKey; the
+  // installed 1.14.0 predates it (same idiom cloudflare-control-plane.ts uses).
+  const explicit = String(configManager.get('controlPlane.publicBaseUrl' as never) ?? '').trim();
+  if (explicit) return explicit.replace(/\/+$/, '');
   const host = String(configManager.get('controlPlane.host') ?? '').trim();
   const port = configManager.get('controlPlane.port');
-  if (host && typeof port === 'number' && port > 0) return `http://${host}:${port}`;
+  if (host && typeof port === 'number' && port > 0) {
+    const scheme = String(configManager.get('controlPlane.tls.mode') ?? 'off') !== 'off' ? 'https' : 'http';
+    // A wildcard bind is not a dial target; loopback is the interface it answers on.
+    const dialHost = host === '0.0.0.0' || host === '::' ? '127.0.0.1' : host;
+    return `${scheme}://${dialHost.includes(':') && !dialHost.startsWith('[') ? `[${dialHost}]` : dialHost}:${port}`;
+  }
   return null;
 }
 
@@ -70,7 +81,7 @@ export function resolveOperatorRpc(deps: { readonly configManager: ConfigManager
   }
   const baseUrl = resolveControlPlaneBaseUrl(configManager);
   if (!baseUrl) {
-    return { available: false, reason: 'no control-plane base URL is configured (controlPlane.baseUrl / controlPlane.host+port) — cannot reach the operator surface.' };
+    return { available: false, reason: 'no control-plane base URL is configured (controlPlane.publicBaseUrl / controlPlane.host+port) — cannot reach the operator surface.' };
   }
   // Resolve the home directory only AFTER the static refusals — a caller whose
   // shell paths are not wired (a disabled-daemon path) must still get the honest

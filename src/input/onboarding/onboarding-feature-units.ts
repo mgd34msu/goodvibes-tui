@@ -282,6 +282,13 @@ export const FEATURE_ONBOARDING_SECTIONS: readonly FeatureSection[] = [
         impliedConfig: [{ key: 'watchers.enabled' as ConfigKey, value: true }],
       },
       {
+        flagId: 'watcher-triggers',
+        label: 'Trigger family',
+        hint: 'Three unattended watcher kinds over one supervision spine: stream watchers that regex-filter and batch a long-lived command\'s output, model-free condition checks running a probe/extract/rule pipeline with no LLM in the loop, and one-shot on-exit triggers that fire exactly one payload when a launched command terminates. A firing trigger runs an agent turn or a pre-registered digest-pinned action grant — never a command composed at fire time. Off by default because a trigger supervises real processes with nobody watching; with it on and no triggers defined the supervisor idles and consumes nothing.',
+        note: 'Backoff ladder, strike breaker, retention bounds, batching and process caps are tuned through watchers.triggers.* in /settings.',
+        impliedConfig: [{ key: 'watchers.triggers.enabled' as ConfigKey, value: true }],
+      },
+      {
         flagId: 'integration-delivery-slo',
         label: 'Integration delivery SLO',
         hint: 'Retry with backoff and a dead-letter queue for Slack/Discord/webhook delivery, with dead-letter events surfaced in diagnostics. On by default; exposes /notify dlq and /notify replay. Retry bounds are tuned in /settings.',
@@ -312,6 +319,37 @@ export const FEATURE_ONBOARDING_SECTIONS: readonly FeatureSection[] = [
             placeholder: 'wss://relay.example.com',
           },
         ],
+      },
+    ],
+  },
+  {
+    stepId: 'features-devices',
+    title: 'Paired devices and voice input',
+    shortLabel: 'Devices',
+    description: 'What a paired phone may be asked to do on your behalf, and whether GoodVibes listens for a spoken wake phrase. Every phone capability asks the person holding the phone before it runs; the wake word is off and states plainly that it is not wired up in this build.',
+    units: [
+      {
+        flagId: 'paired-device-capabilities',
+        label: 'Paired phone capabilities',
+        hint: 'Turning this on grants access to nothing by itself — it lets the agent ASK to use a paired phone as a tool: either camera, its screen, its location, its clipboard, and a small set of device effects (notification, link, buzz). It rides the existing peer transport as a native contract, never an MCP server. Every capture and every effect asks the person holding the phone first, and answering one request grants nothing beyond it; choosing "always allow" is a separate, explicit choice you make later on that prompt, and it writes one durable, revocable grant for that one capability on that one phone, with an age limit and a count cap so nothing is granted forever.',
+        note: 'Captures are kept 24 hours by default and then deleted, and every housekeeping sweep records exactly what it removed and why. Retention, grant limits, clipboard and location posture are tuned through device.* in /settings.',
+        subOptions: [
+          {
+            key: 'mode',
+            configKey: 'device.capabilities.mode' as ConfigKey,
+            label: 'Consent posture',
+            hint: 'honor-grants (stock) asks the first time and every time after unless you chose "always allow" for that capability on that phone; ask-every-time prompts on every single request and never consults a durable grant — use it when someone else is holding the phone; off stops any capability request reaching any paired device.',
+            valueType: 'enum',
+            options: ['off', 'ask-every-time', 'honor-grants'],
+            defaultValue: 'honor-grants',
+          },
+        ],
+      },
+      {
+        flagId: 'wake-word-detection',
+        label: 'Wake-word detection',
+        hint: 'Listen continuously on a capture device for the pinned "hey goodvibes" phrase and hand the utterance that follows to speech-to-text. Off by default because holding a microphone open must be an explicit act.',
+        note: 'NOT AVAILABLE IN THIS BUILD — turning this on does nothing yet. The detector is complete, but no surface captures microphone audio or supplies it an inference runtime, so nothing is listening. Your choice is remembered and takes effect in the release that adds capture.',
       },
     ],
   },

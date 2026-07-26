@@ -21,8 +21,6 @@ import type { CompactionContext } from '@pellux/goodvibes-sdk/platform/core';
 
 function makeAgentRecord(overrides: Partial<AgentRecord> & { id: string; task: string }): AgentRecord {
   return {
-    id: overrides.id,
-    task: overrides.task,
     template: overrides.template ?? 'engineer',
     tools: [],
     status: 'completed',

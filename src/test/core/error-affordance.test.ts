@@ -69,7 +69,7 @@ function makeMetrics(): StreamMetrics {
   return {
     startTime: 0, deltaCount: 0, tokenSpeed: 0,
     ttftMs: undefined, ttftRecorded: false,
-    activeToolStartedAtMs: undefined, activeToolName: undefined,
+    activeToolStartedAtMs: undefined, activeToolName: undefined, activeToolCallId: undefined,
     lastDeltaAtMs: undefined, stallEpisode: 0,
     reconnectAttempt: undefined, reconnectMaxAttempts: undefined,
   };
@@ -82,6 +82,7 @@ function makeOptimizer(options: { enabled: boolean; chain?: FailoverChainNode[] 
     get enabled() { return options.enabled; },
     testFallback: (_profile?: Record<string, unknown>) => ({ chain: options.chain ?? [] }),
     recordFallbackTransition(_from: string, _to: string, _reason: string) {},
+    fallbackLog: [] as readonly { readonly from: string; readonly to: string; readonly reason: string; readonly ts: number }[],
   };
 }
 
@@ -100,7 +101,11 @@ function wireBasic(
 ): WireStreamEventMetricsResult & { messages: string[] } {
   const messages: string[] = [];
   const result = wireStreamEventMetrics({
-    events: { turns: turnBus, tools: toolBus } as WireStreamEventMetricsOptions['events'],
+    // events is consumed structurally here (only .turns/.tools/.providers are ever
+    // read — see stream-event-wiring.ts's own LooseTurnEventFeed comment for the
+    // same rationale); this mirrors the existing convention in
+    // failover-wiring.test.ts for the identical WireStreamEventMetricsOptions field.
+    events: { turns: turnBus, tools: toolBus } as unknown as WireStreamEventMetricsOptions['events'],
     orchestrator: { streamingOutputTokens: 0 },
     providerRegistry: makeProviderRegistry(),
     systemMessageRouter: { high: (m: string) => messages.push(m), low: (m: string) => messages.push(m) },
@@ -155,7 +160,7 @@ describe('wireStreamEventMetrics — onErrorSurfaced', () => {
   test('fires after chain exhaustion', () => {
     const turns = makeTurnBus();
     const tools = makeToolBus();
-    const retryTurn = mock(() => {});
+    const retryTurn = mock(() => true);
     const optimizer = makeOptimizer({
       enabled: true,
       chain: [

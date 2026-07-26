@@ -130,7 +130,7 @@ describe('handleClipboardPaste', () => {
 
     const result = handleClipboardPaste(state, process.cwd(), {
       pasteImageFromClipboard: () => ({ mediaType: 'image/png', data: 'iVBORw0KGgo' + 'A'.repeat(200) }),
-      pasteFromClipboard: () => null,
+      pasteFromClipboard: () => '',
     });
 
     expect(result.pasted).toBe(true);
@@ -184,7 +184,7 @@ describe('handleClipboardPaste', () => {
 
     const result = handleClipboardPaste(state, process.cwd(), {
       pasteImageFromClipboard: () => null,
-      pasteFromClipboard: () => null,
+      pasteFromClipboard: () => '',
     });
 
     expect(result.pasted).toBe(false);

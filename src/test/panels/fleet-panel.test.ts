@@ -30,7 +30,7 @@ function makeNode(overrides: Partial<ProcessNode> & { id: string }): ProcessNode
     state: 'executing-tool',
     elapsedMs: 1_000,
     costState: 'unpriced',
-    capabilities: { interruptible: true, killable: true, pausable: false, steerable: false },
+    capabilities: { interruptible: true, killable: true, pausable: false, resumable: false, steerable: false },
     ...overrides,
   };
 }
@@ -94,7 +94,7 @@ function attachSteerableTab(actions = makeActions()) {
   const node = makeNode({
     id: 'agent-1',
     state: 'streaming',
-    capabilities: { interruptible: true, killable: true, pausable: false, steerable: true },
+    capabilities: { interruptible: true, killable: true, pausable: false, resumable: false, steerable: true },
   });
   const readModel = createStaticFleetReadModel(buildFleetSnapshot([node], NOW));
   const panel = new FleetPanel(readModel, actions);
@@ -205,7 +205,7 @@ describe('FleetPanel — Enter attaches a session tab', () => {
     const node = makeNode({
       id: 'watch-1',
       kind: 'watcher',
-      capabilities: { interruptible: false, killable: false, pausable: false, steerable: false },
+      capabilities: { interruptible: false, killable: false, pausable: false, resumable: false, steerable: false },
     });
     const readModel = createStaticFleetReadModel(buildFleetSnapshot([node], NOW));
     const panel = new FleetPanel(readModel);
@@ -476,7 +476,7 @@ describe('FleetPanel — i interrupts the selected node', () => {
       id: 'chain-1',
       kind: 'wrfc-chain',
       state: 'executing-tool',
-      capabilities: { interruptible: false, killable: true, pausable: false, steerable: false },
+      capabilities: { interruptible: false, killable: true, pausable: false, resumable: false, steerable: false },
     });
     const readModel = createStaticFleetReadModel(buildFleetSnapshot([node], NOW));
     const actions = makeActions();
@@ -584,7 +584,7 @@ describe('FleetPanel — K arms a kill confirm', () => {
       id: 'watch-1',
       kind: 'watcher',
       state: 'idle',
-      capabilities: { interruptible: false, killable: false, pausable: false, steerable: false },
+      capabilities: { interruptible: false, killable: false, pausable: false, resumable: false, steerable: false },
     });
     const readModel = createStaticFleetReadModel(buildFleetSnapshot([node], NOW));
     const actions = makeActions();
@@ -604,16 +604,16 @@ describe('FleetPanel — K arms a kill confirm', () => {
   // exact finding. It must now report the FULL count that will actually die,
   // plus how many of those are individually killable.
   test('K arms a confirm phrased "(+N descendants, M active)" counting the FULL non-terminal subtree, not just individually-killable nodes', () => {
-    const root = makeNode({ id: 'root-1', state: 'executing-tool', capabilities: { interruptible: true, killable: true, pausable: false, steerable: false } });
-    const childA = makeNode({ id: 'child-a', parentId: 'root-1', state: 'streaming', capabilities: { interruptible: true, killable: true, pausable: false, steerable: false } });
-    const childB = makeNode({ id: 'child-b', parentId: 'root-1', state: 'streaming', capabilities: { interruptible: true, killable: true, pausable: false, steerable: false } });
-    const childC = makeNode({ id: 'child-c', parentId: 'root-1', kind: 'watcher', state: 'idle', capabilities: { interruptible: false, killable: false, pausable: false, steerable: false } });
-    const childD = makeNode({ id: 'child-d', parentId: 'root-1', state: 'executing-tool', capabilities: { interruptible: false, killable: false, pausable: false, steerable: false } });
-    const grandchild1 = makeNode({ id: 'grandchild-1', parentId: 'child-a', state: 'streaming', capabilities: { interruptible: false, killable: false, pausable: false, steerable: false } });
-    const grandchild2 = makeNode({ id: 'grandchild-2', parentId: 'child-c', state: 'streaming', capabilities: { interruptible: false, killable: false, pausable: false, steerable: false } });
+    const root = makeNode({ id: 'root-1', state: 'executing-tool', capabilities: { interruptible: true, killable: true, pausable: false, resumable: false, steerable: false } });
+    const childA = makeNode({ id: 'child-a', parentId: 'root-1', state: 'streaming', capabilities: { interruptible: true, killable: true, pausable: false, resumable: false, steerable: false } });
+    const childB = makeNode({ id: 'child-b', parentId: 'root-1', state: 'streaming', capabilities: { interruptible: true, killable: true, pausable: false, resumable: false, steerable: false } });
+    const childC = makeNode({ id: 'child-c', parentId: 'root-1', kind: 'watcher', state: 'idle', capabilities: { interruptible: false, killable: false, pausable: false, resumable: false, steerable: false } });
+    const childD = makeNode({ id: 'child-d', parentId: 'root-1', state: 'executing-tool', capabilities: { interruptible: false, killable: false, pausable: false, resumable: false, steerable: false } });
+    const grandchild1 = makeNode({ id: 'grandchild-1', parentId: 'child-a', state: 'streaming', capabilities: { interruptible: false, killable: false, pausable: false, resumable: false, steerable: false } });
+    const grandchild2 = makeNode({ id: 'grandchild-2', parentId: 'child-c', state: 'streaming', capabilities: { interruptible: false, killable: false, pausable: false, resumable: false, steerable: false } });
     // An already-terminal descendant does NOT count — it is already dead, a
     // cascade kill has nothing to do to it.
-    const terminalChild = makeNode({ id: 'terminal-child', parentId: 'root-1', state: 'failed', capabilities: { interruptible: false, killable: true, pausable: false, steerable: false } });
+    const terminalChild = makeNode({ id: 'terminal-child', parentId: 'root-1', state: 'failed', capabilities: { interruptible: false, killable: true, pausable: false, resumable: false, steerable: false } });
 
     const readModel = createStaticFleetReadModel(buildFleetSnapshot(
       [root, childA, childB, childC, childD, grandchild1, grandchild2, terminalChild], NOW,
@@ -630,8 +630,8 @@ describe('FleetPanel — K arms a kill confirm', () => {
   });
 
   test('K on a node with exactly one non-terminal descendant uses the singular "descendant" (no "active" pluralization issue either)', () => {
-    const root = makeNode({ id: 'root-1', state: 'executing-tool', capabilities: { interruptible: true, killable: true, pausable: false, steerable: false } });
-    const onlyChild = makeNode({ id: 'only-child', parentId: 'root-1', state: 'streaming', capabilities: { interruptible: true, killable: true, pausable: false, steerable: false } });
+    const root = makeNode({ id: 'root-1', state: 'executing-tool', capabilities: { interruptible: true, killable: true, pausable: false, resumable: false, steerable: false } });
+    const onlyChild = makeNode({ id: 'only-child', parentId: 'root-1', state: 'streaming', capabilities: { interruptible: true, killable: true, pausable: false, resumable: false, steerable: false } });
     const readModel = createStaticFleetReadModel(buildFleetSnapshot([root, onlyChild], NOW));
     const actions = makeActions();
     const panel = new FleetPanel(readModel, actions);
@@ -656,7 +656,7 @@ describe('FleetPanel — p pauses a pausable node', () => {
       id: 'trigger-1',
       kind: 'trigger',
       state: 'idle',
-      capabilities: { interruptible: false, killable: true, pausable: true, steerable: false },
+      capabilities: { interruptible: false, killable: true, pausable: true, resumable: false, steerable: false },
     });
     const readModel = createStaticFleetReadModel(buildFleetSnapshot([node], NOW));
     const actions = makeActions();
@@ -678,7 +678,7 @@ describe('FleetPanel — p pauses a pausable node', () => {
       id: 'trigger-done',
       kind: 'trigger',
       state: 'killed',
-      capabilities: { interruptible: false, killable: true, pausable: true, steerable: false },
+      capabilities: { interruptible: false, killable: true, pausable: true, resumable: false, steerable: false },
     });
     const readModel = createStaticFleetReadModel(buildFleetSnapshot([node], NOW));
     const actions = makeActions();
@@ -688,7 +688,7 @@ describe('FleetPanel — p pauses a pausable node', () => {
   });
 
   test('p on a non-pausable node is consumed, shows a status message, and does not call interrupt', () => {
-    const node = makeNode({ id: 'agent-1', state: 'streaming', capabilities: { interruptible: true, killable: true, pausable: false, steerable: false } });
+    const node = makeNode({ id: 'agent-1', state: 'streaming', capabilities: { interruptible: true, killable: true, pausable: false, resumable: false, steerable: false } });
     const readModel = createStaticFleetReadModel(buildFleetSnapshot([node], NOW));
     const actions = makeActions();
     const panel = new FleetPanel(readModel, actions);
@@ -703,9 +703,9 @@ describe('FleetPanel — p pauses a pausable node', () => {
       id: 'schedule-1',
       kind: 'schedule',
       state: 'idle',
-      capabilities: { interruptible: false, killable: true, pausable: true, steerable: false },
+      capabilities: { interruptible: false, killable: true, pausable: true, resumable: false, steerable: false },
     });
-    const notPausable = makeNode({ id: 'agent-1', state: 'streaming', capabilities: { interruptible: true, killable: true, pausable: false, steerable: false } });
+    const notPausable = makeNode({ id: 'agent-1', state: 'streaming', capabilities: { interruptible: true, killable: true, pausable: false, resumable: false, steerable: false } });
     expect(linesText(new FleetPanel(createStaticFleetReadModel(buildFleetSnapshot([pausable], NOW))).render(100, 24))).toContain('p pause');
     expect(linesText(new FleetPanel(createStaticFleetReadModel(buildFleetSnapshot([notPausable], NOW))).render(100, 24))).not.toContain('p pause');
   });
@@ -751,7 +751,7 @@ describe('FleetPanel — s opens the steer composer on an active, steerable tab'
     // Before that fix, this asserted 's' was hidden/dead on the tree; steering required
     // an undiscoverable Enter-attach first. Now the tree hints advertise it
     // and 's' attaches-and-steers in one press (see the "steer from the tree" describe block below).
-    const node = makeNode({ id: 'agent-1', state: 'streaming', capabilities: { interruptible: true, killable: true, pausable: false, steerable: true } });
+    const node = makeNode({ id: 'agent-1', state: 'streaming', capabilities: { interruptible: true, killable: true, pausable: false, resumable: false, steerable: true } });
     const readModel = createStaticFleetReadModel(buildFleetSnapshot([node], NOW));
     const panel = new FleetPanel(readModel);
     const text = linesText(panel.render(100, 24));
@@ -762,7 +762,7 @@ describe('FleetPanel — s opens the steer composer on an active, steerable tab'
     const node = makeNode({
       id: 'agent-1',
       state: 'streaming',
-      capabilities: { interruptible: true, killable: true, pausable: false, steerable: false },
+      capabilities: { interruptible: true, killable: true, pausable: false, resumable: false, steerable: false },
     });
     const readModel = createStaticFleetReadModel(buildFleetSnapshot([node], NOW));
     const panel = new FleetPanel(readModel);
@@ -777,7 +777,7 @@ describe('FleetPanel — s opens the steer composer on an active, steerable tab'
     const node = makeNode({
       id: 'agent-1',
       state: 'done',
-      capabilities: { interruptible: false, killable: false, pausable: false, steerable: true },
+      capabilities: { interruptible: false, killable: false, pausable: false, resumable: false, steerable: true },
     });
     const readModel = createStaticFleetReadModel(buildFleetSnapshot([node], NOW));
     const panel = new FleetPanel(readModel);
@@ -853,8 +853,8 @@ describe('FleetPanel — s opens the steer composer on an active, steerable tab'
   test('refusal PRESERVES the draft, states why, and suggests live steerable siblings (WO item 4)', () => {
     // Target refuses; a second agent IS steerable, so the error should keep the
     // typed text and point at the sibling instead of silently discarding the draft.
-    const target = makeNode({ id: 'agent-1', label: 'Builder', state: 'streaming', capabilities: { interruptible: true, killable: true, pausable: false, steerable: true } });
-    const sibling = makeNode({ id: 'agent-2', label: 'Reviewer', state: 'streaming', capabilities: { interruptible: true, killable: true, pausable: false, steerable: true } });
+    const target = makeNode({ id: 'agent-1', label: 'Builder', state: 'streaming', capabilities: { interruptible: true, killable: true, pausable: false, resumable: false, steerable: true } });
+    const sibling = makeNode({ id: 'agent-2', label: 'Reviewer', state: 'streaming', capabilities: { interruptible: true, killable: true, pausable: false, resumable: false, steerable: true } });
     const actions = makeActions({ steer: () => ({ queued: false, reason: 'agent is not active and cannot be steered' }) });
     const readModel = createStaticFleetReadModel(buildFleetSnapshot([target, sibling], NOW));
     const panel = new FleetPanel(readModel, actions);
@@ -970,7 +970,7 @@ describe('FleetPanel — steer badge lifecycle', () => {
     const node = makeNode({
       id: 'agent-1',
       state: 'streaming',
-      capabilities: { interruptible: true, killable: true, pausable: false, steerable: true },
+      capabilities: { interruptible: true, killable: true, pausable: false, resumable: false, steerable: true },
     });
     const { model, fireConsumed } = makeMutableReadModel(buildFleetSnapshot([node], NOW));
     const actions = makeActions();
@@ -990,7 +990,7 @@ describe('FleetPanel — steer badge lifecycle', () => {
     const node = makeNode({
       id: 'agent-1',
       state: 'streaming',
-      capabilities: { interruptible: true, killable: true, pausable: false, steerable: true },
+      capabilities: { interruptible: true, killable: true, pausable: false, resumable: false, steerable: true },
     });
     const { model, fireConsumed } = makeMutableReadModel(buildFleetSnapshot([node], NOW));
     const actions = makeActions();
@@ -1009,7 +1009,7 @@ describe('FleetPanel — steer badge lifecycle', () => {
     const running = makeNode({
       id: 'agent-1',
       state: 'streaming',
-      capabilities: { interruptible: true, killable: true, pausable: false, steerable: true },
+      capabilities: { interruptible: true, killable: true, pausable: false, resumable: false, steerable: true },
     });
     const { model, setSnapshot, fireDirty } = makeMutableReadModel(buildFleetSnapshot([running], NOW));
     const actions = makeActions();
@@ -1023,7 +1023,7 @@ describe('FleetPanel — steer badge lifecycle', () => {
     const doneNode = makeNode({
       id: 'agent-1',
       state: 'done',
-      capabilities: { interruptible: false, killable: false, pausable: false, steerable: false },
+      capabilities: { interruptible: false, killable: false, pausable: false, resumable: false, steerable: false },
     });
     setSnapshot(buildFleetSnapshot([doneNode], NOW));
     fireDirty(); // simulates the registry's coalesced tick notifying the read-model
@@ -1039,7 +1039,7 @@ describe('FleetPanel — steer badge lifecycle', () => {
     const running = makeNode({
       id: 'agent-1',
       state: 'streaming',
-      capabilities: { interruptible: true, killable: true, pausable: false, steerable: true },
+      capabilities: { interruptible: true, killable: true, pausable: false, resumable: false, steerable: true },
     });
     const { model, setSnapshot, fireDirty } = makeMutableReadModel(buildFleetSnapshot([running], NOW));
     const actions = makeActions();
@@ -1059,7 +1059,7 @@ describe('FleetPanel — steer badge lifecycle', () => {
     const running = makeNode({
       id: 'agent-1',
       state: 'streaming',
-      capabilities: { interruptible: true, killable: true, pausable: false, steerable: true },
+      capabilities: { interruptible: true, killable: true, pausable: false, resumable: false, steerable: true },
     });
     const { model, setSnapshot, fireDirty, fireConsumed } = makeMutableReadModel(buildFleetSnapshot([running], NOW));
     const actions = makeActions();
@@ -1076,7 +1076,7 @@ describe('FleetPanel — steer badge lifecycle', () => {
     const doneNode = makeNode({
       id: 'agent-1',
       state: 'done',
-      capabilities: { interruptible: false, killable: false, pausable: false, steerable: false },
+      capabilities: { interruptible: false, killable: false, pausable: false, resumable: false, steerable: false },
     });
     setSnapshot(buildFleetSnapshot([doneNode], NOW));
     fireDirty();
@@ -1092,7 +1092,7 @@ describe('FleetPanel — steer badge lifecycle', () => {
     const node = makeNode({
       id: 'agent-1',
       state: 'streaming',
-      capabilities: { interruptible: true, killable: true, pausable: false, steerable: true },
+      capabilities: { interruptible: true, killable: true, pausable: false, resumable: false, steerable: true },
     });
     const { model, fireConsumed } = makeMutableReadModel(buildFleetSnapshot([node], NOW));
     const actions = makeActions();
@@ -1119,7 +1119,7 @@ describe('FleetPanel — steer badge lifecycle', () => {
 
 describe('FleetPanel — i/K footer hints are gated on capabilities', () => {
   test('both hints show for a node that supports interrupt and kill', () => {
-    const node = makeNode({ id: 'agent-1', state: 'streaming', capabilities: { interruptible: true, killable: true, pausable: false, steerable: false } });
+    const node = makeNode({ id: 'agent-1', state: 'streaming', capabilities: { interruptible: true, killable: true, pausable: false, resumable: false, steerable: false } });
     const readModel = createStaticFleetReadModel(buildFleetSnapshot([node], NOW));
     const panel = new FleetPanel(readModel);
     const text = linesText(panel.render(100, 24));
@@ -1128,7 +1128,7 @@ describe('FleetPanel — i/K footer hints are gated on capabilities', () => {
   });
 
   test('the i hint is omitted when the selected node cannot be interrupted', () => {
-    const node = makeNode({ id: 'chain-1', kind: 'wrfc-chain', state: 'executing-tool', capabilities: { interruptible: false, killable: true, pausable: false, steerable: false } });
+    const node = makeNode({ id: 'chain-1', kind: 'wrfc-chain', state: 'executing-tool', capabilities: { interruptible: false, killable: true, pausable: false, resumable: false, steerable: false } });
     const readModel = createStaticFleetReadModel(buildFleetSnapshot([node], NOW));
     const panel = new FleetPanel(readModel);
     const text = linesText(panel.render(100, 24));
@@ -1137,7 +1137,7 @@ describe('FleetPanel — i/K footer hints are gated on capabilities', () => {
   });
 
   test('the K hint is omitted when the selected node cannot be killed', () => {
-    const node = makeNode({ id: 'agent-1', state: 'streaming', capabilities: { interruptible: true, killable: false, pausable: false, steerable: false } });
+    const node = makeNode({ id: 'agent-1', state: 'streaming', capabilities: { interruptible: true, killable: false, pausable: false, resumable: false, steerable: false } });
     const readModel = createStaticFleetReadModel(buildFleetSnapshot([node], NOW));
     const panel = new FleetPanel(readModel);
     const text = linesText(panel.render(100, 24));
@@ -1146,7 +1146,7 @@ describe('FleetPanel — i/K footer hints are gated on capabilities', () => {
   });
 
   test('both hints are omitted for a terminal node (neither affordance applies)', () => {
-    const node = makeNode({ id: 'done-1', state: 'done', capabilities: { interruptible: false, killable: false, pausable: false, steerable: false } });
+    const node = makeNode({ id: 'done-1', state: 'done', capabilities: { interruptible: false, killable: false, pausable: false, resumable: false, steerable: false } });
     const readModel = createStaticFleetReadModel(buildFleetSnapshot([node], NOW));
     const panel = new FleetPanel(readModel);
     const text = linesText(panel.render(100, 24));
@@ -1508,7 +1508,7 @@ describe('FleetPanel — steer from the tree', () => {
   test("'s' on a non-steerable node refuses honestly", () => {
     const node = makeNode({
       id: 'sched-1', kind: 'schedule',
-      capabilities: { interruptible: false, killable: true, pausable: true, steerable: false },
+      capabilities: { interruptible: false, killable: true, pausable: true, resumable: false, steerable: false },
     });
     const readModel = createStaticFleetReadModel(buildFleetSnapshot([node], NOW));
     const panel = new FleetPanel(readModel, makeActions());

@@ -21,10 +21,10 @@ function observedNode(steerKind: 'tmux' | 'none'): ObservedNode {
     id: 'observed:4242',
     kind: 'observed-external',
     label: 'claude (foreign)',
-    state: 'running',
+    state: 'streaming',
     elapsedMs: 1000,
     costState: 'unpriced',
-    capabilities: { interruptible: false, killable: false, pausable: false, steerable: true },
+    capabilities: { interruptible: false, killable: false, pausable: false, resumable: false, steerable: true },
     observed: {
       externalKind: 'claude-code',
       pid: 4242,
@@ -35,7 +35,7 @@ function observedNode(steerKind: 'tmux' | 'none'): ObservedNode {
         : { kind: 'none', reason: 'no controlling tty; not inside tmux' },
       steerDrillInOnly: true,
     },
-  } as ObservedNode;
+  } as unknown as ObservedNode;
 }
 
 function stubDiffSurface(): FleetDiffSurface {

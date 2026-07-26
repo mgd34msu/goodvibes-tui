@@ -112,6 +112,7 @@ function nextPort(): number {
   const probe = Bun.serve({ port: 0, fetch: () => new Response('') });
   const port = probe.port;
   probe.stop(true);
+  if (port === undefined) throw new Error('Bun.serve did not assign a port for the free-port probe');
   return port;
 }
 

@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import { renderGoodVibesVersion, renderDaemonStartupBanner } from '../../cli/help.ts';
 import { resolveRuntimeEndpointBinding } from '../../cli/endpoints.ts';
 import { VERSION } from '../../version.ts';
+import type { ConfigManager } from '../../config/index.ts';
 
 describe('CLI help/version', () => {
   test('does not report the consuming project npm_package_version', () => {
@@ -69,8 +70,16 @@ describe('daemon startup banner', () => {
  * banner would display matches what the daemon actually binds.
  */
 describe('daemon startup banner — binding honesty (mirrors the SDK bind path)', () => {
-  function fakeConfig(values: Record<string, unknown>): { get(key: string): unknown } {
-    return { get: (key: string) => values[key] };
+  function fakeConfig(values: Record<string, unknown>): Pick<ConfigManager, 'get'> {
+    // Cast through unknown: the SDK's ConfigValue mapped type has grown into a
+    // very large discriminated union, and asking the compiler to structurally
+    // compare a generic `<K extends ConfigKey>(key: K) => ConfigValue<K>`
+    // signature against ConfigManager['get'] here hits TS's "excessive stack
+    // depth" recursion limit (TS2321) — a compiler limitation, not a real type
+    // mismatch (this is the exact same generic signature ConfigManager.get
+    // itself declares).
+    const get = (key: string): unknown => values[key];
+    return { get } as unknown as Pick<ConfigManager, 'get'>;
   }
 
   test("hostMode 'network' with host at its default 127.0.0.1 → banner says 0.0.0.0 (what the daemon binds), not 127.0.0.1", () => {

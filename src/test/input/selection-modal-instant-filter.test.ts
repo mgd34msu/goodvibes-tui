@@ -68,7 +68,10 @@ describe('SelectionModal instant filter (item 3a)', () => {
     });
 
     handleSelectionModalToken(state, { type: 'text', value: 'd' });
-    expect(dispatched).toBe('delete');
+    // TS narrows dispatched to its initializer (null) and doesn't widen back
+    // across the closure reassignment inside selectionCallback — the cast
+    // reflects the variable's real declared type.
+    expect(dispatched as string | null).toBe('delete');
     expect(modal.searchFocused).toBe(false); // search was never armed
   });
 

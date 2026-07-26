@@ -230,6 +230,18 @@ export const isPluginTerminal = operations.isPluginTerminal;
 export const resolveCapabilityManifest = operations.resolveCapabilityManifest;
 export const validateManifestV2 = operations.validateManifestV2;
 export const validatePluginSignature = operations.validatePluginSignature;
+// Instance-type companions for the operations class aliases (see note above the
+// security block): the `export const` form re-exports the value only.
+export type AcpTaskAdapter = InstanceType<typeof operations.AcpTaskAdapter>;
+export type OpsIllegalActionError = InstanceType<typeof operations.OpsIllegalActionError>;
+export type OpsTargetNotFoundError = InstanceType<typeof operations.OpsTargetNotFoundError>;
+export type ToolContractVerifier = InstanceType<typeof operations.ToolContractVerifier>;
+export type McpLifecycleManager = InstanceType<typeof operations.McpLifecycleManager>;
+export type McpPermissionManager = InstanceType<typeof operations.McpPermissionManager>;
+export type McpSchemaFreshnessTracker = InstanceType<typeof operations.McpSchemaFreshnessTracker>;
+export type PluginLifecycleManager = InstanceType<typeof operations.PluginLifecycleManager>;
+export type PluginQuarantineEngine = InstanceType<typeof operations.PluginQuarantineEngine>;
+export type PluginTrustStore = InstanceType<typeof operations.PluginTrustStore>;
 export const LOW_QUALITY_THRESHOLD = operations.LOW_QUALITY_THRESHOLD;
 export const computeQualityScore = operations.computeQualityScore;
 export const createCompactionManager = operations.createCompactionManager;
@@ -487,6 +499,15 @@ export const verifyBundle = security.verifyBundle;
 export const MAX_INPUT_LENGTH = security.MAX_INPUT_LENGTH;
 export const MAX_TOKEN_COUNT = security.MAX_TOKEN_COUNT;
 
+// Instance-type companions for the class aliases above. `export const X = ns.X`
+// re-exports only the value, so `X` is unusable in type position (TS2749/TS2694).
+// These declaration-merge the instance type back onto the same name.
+export type DivergenceDashboard = InstanceType<typeof security.DivergenceDashboard>;
+export type DivergenceGateError = InstanceType<typeof security.DivergenceGateError>;
+export type LayeredPolicyEvaluator = InstanceType<typeof security.LayeredPolicyEvaluator>;
+export type PermissionSimulator = InstanceType<typeof security.PermissionSimulator>;
+export type PolicySignatureError = InstanceType<typeof security.PolicySignatureError>;
+
 export type AuthInspectionSnapshot = Security.AuthInspectionSnapshot;
 export type ProviderAuthInspection = Security.ProviderAuthInspection;
 export type DivergenceDashboardSnapshot = Security.DivergenceDashboardSnapshot;
@@ -513,7 +534,7 @@ export type BundleProvenance = Security.BundleProvenance;
 export type DecisionReason = Security.DecisionReason;
 export type DivergenceReport = Security.DivergenceReport;
 export type EnforceGateResult = Security.EnforceGateResult;
-export type SignedPolicyBundle = Security.SignedPolicyBundle;
+export type SignedPolicyBundle<T = unknown> = Security.SignedPolicyBundle<T>;
 
 export interface InspectableDomain {
   readonly name: string;

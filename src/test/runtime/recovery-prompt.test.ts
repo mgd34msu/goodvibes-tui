@@ -46,7 +46,7 @@ afterEach(() => { if (existsSync(tmpDir)) rmSync(tmpDir, { recursive: true, forc
 function writeCrash(sessionId: string, title = 'Interrupted work', messageCount = 2, ageMsBefore = 0): void {
   const messages = Array.from({ length: messageCount }, (_, i) => ({ role: i % 2 === 0 ? 'user' : 'assistant', content: `m${i}` }));
   writeRecoveryFile(
-    { messages: messages as never, title, titleSource: 'auto', timestamp: Date.now() - 120_000 },
+    { messages: messages as never, title, titleSource: 'system', timestamp: Date.now() - 120_000 },
     sessionId,
     title,
     { surface },

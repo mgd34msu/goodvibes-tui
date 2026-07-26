@@ -1,16 +1,26 @@
 import { describe, test, expect } from 'bun:test';
 import { resolvePairingWebOrigin, ensurePublicBaseUrl, isHttpOnLan } from '../../core/pairing-origin.ts';
 import type { StableHostInputs } from '../../core/stable-host.ts';
+import type { ConfigKey, ConfigManager } from '../../config/index.ts';
 
-/** Minimal config double: a map of keys to values, plus a setDynamic recorder. */
+/**
+ * Minimal config double: a map of keys to values, plus a setDynamic recorder.
+ *
+ * `get` is cast through `unknown` straight to ConfigManager's own method type
+ * (rather than reconstructed as an independent generic signature): the SDK's
+ * ConfigValue mapped type is a very large discriminated union, and asking the
+ * compiler to structurally verify a freshly-written `get<K extends
+ * ConfigKey>` against it here hits TS's "excessive stack depth" recursion
+ * limit (TS2321) — a compiler limitation, not a real type mismatch.
+ */
 function fakeConfig(initial: Record<string, unknown>) {
   const store = { ...initial };
   const writes: Array<[string, unknown]> = [];
   return {
     store,
     writes,
-    get: (key: string) => store[key],
-    setDynamic: (key: string, value: unknown) => {
+    get: ((key: string) => store[key]) as unknown as ConfigManager['get'],
+    setDynamic: (key: ConfigKey, value: unknown) => {
       store[key] = value;
       writes.push([key, value]);
     },

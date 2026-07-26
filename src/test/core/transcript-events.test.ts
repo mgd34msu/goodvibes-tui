@@ -80,7 +80,7 @@ describe('transcript event index', () => {
     expect(prevLine).toBe(nextLine);
   });
 
-  test('folded tool-result group members resolve navigation to the group header, not past it to the next message', () => {
+  test('rows hidden by a collapsed assistant turn resolve navigation to the turn header, not past it to the next message', () => {
     // Regression: a folded (non-owning) group member renders zero lines while
     // its group stays collapsed, so its messageLineRegistry entry used to be
     // left at whatever position the buffer happened to be at afterward — the
@@ -104,16 +104,17 @@ describe('transcript event index', () => {
     conversation.addUserMessage('thanks, that is all');       // absolute index 4
 
     conversation.flushHistory();
+    // Turns default EXPANDED; collapse it to create the hidden-row condition.
+    conversation.setCollapsed('turn_1', true);
+    conversation.flushHistory();
 
-    const groupBlock = conversation.getBlockRegistry().find((b) => b.type === 'tool_group');
+    const groupBlock = conversation.getBlockRegistry().find((b) => b.type === 'assistant_turn');
     expect(groupBlock).toBeDefined();
     const trailingUserLine = conversation.getMessageLine(4);
     expect(trailingUserLine).not.toBe(groupBlock!.startLine);
 
-    // Both tool-result events (call-1 owns the header, call-2 is folded
-    // under it) resolve to the SAME group header line while the group is
-    // collapsed by default — neither one skips ahead to the trailing user
-    // message.
+    // Both tool-result events resolve to the SAME turn header line while the
+    // turn is collapsed — neither skips ahead to the trailing user message.
     const first = conversation.nextTranscriptEventLine(-1, 'tool_result');
     expect(first).toBe(groupBlock!.startLine);
     const second = conversation.nextTranscriptEventLine(first, 'tool_result');

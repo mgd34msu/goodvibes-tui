@@ -43,7 +43,7 @@ function makeDoneAgentNode(id: string): ProcessNode {
     state: 'done',
     elapsedMs: 100_000,
     costState: 'unpriced',
-    capabilities: { interruptible: false, killable: false, pausable: false, steerable: false },
+    capabilities: { interruptible: false, killable: false, pausable: false, resumable: false, steerable: false },
   };
 }
 

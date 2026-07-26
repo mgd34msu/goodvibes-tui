@@ -135,11 +135,15 @@ describe('registerRemoteSurface', () => {
     expect(typeof result.workId).toBe('string');
     expect(result.workId).toBe('work-1');
     expect(result.completed).toBe(false);
+    // Narrow to a definite string now that the assertions above have proven
+    // it's present — the comparisons below need a `string`, not `string | undefined`.
+    expect(result.workId).toBeDefined();
+    const workId = result.workId as string;
 
     // A work item is now visible in the manager work queue (remote.work.list).
     const work = (recordingManager.listWork() as Array<{ id: string; peerId: string; command: string; queuedBy: string }>);
     expect(work).toHaveLength(1);
-    expect(work[0]?.id).toBe(result.workId);
+    expect(work[0]?.id).toBe(workId);
     expect(work[0]?.peerId).toBe('self');
     expect(work[0]?.command).toBe('long-running build');
     expect(work[0]?.queuedBy).toBe('agent-7');

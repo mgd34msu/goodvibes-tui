@@ -743,7 +743,7 @@ describe('templates mode', () => {
   test('templates returns all built-in templates', async () => {
     const result = await runAgent({ mode: 'templates' });
     const templates = result.templates as Array<{ name: string }>;
-    expect(templates.map((t) => t.name)).toEqual(EXPECTED_AGENT_TEMPLATES);
+    expect(templates.map((t) => t.name)).toEqual([...EXPECTED_AGENT_TEMPLATES]);
   });
 
   test('templates includes all role templates', async () => {

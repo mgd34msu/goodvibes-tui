@@ -567,6 +567,7 @@ describe('registration self-records at startup (no modal, ever)', () => {
       commandRegistry: new CommandRegistry(),
       commandContext,
       shellPaths,
+      surface: makeTestSurface(shellPaths.workingDirectory, shellPaths.homeDirectory),
       render: () => {},
     });
     // Fire-and-forget — give the microtask queue a turn to run it.
@@ -588,6 +589,7 @@ describe('registration self-records at startup (no modal, ever)', () => {
       commandRegistry: new CommandRegistry(),
       commandContext,
       shellPaths,
+      surface: makeTestSurface(shellPaths.workingDirectory, shellPaths.homeDirectory),
       render: () => {},
     });
     await Promise.resolve();
@@ -608,6 +610,7 @@ describe('registration self-records at startup (no modal, ever)', () => {
       commandRegistry: new CommandRegistry(),
       commandContext,
       shellPaths,
+      surface: makeTestSurface(shellPaths.workingDirectory, shellPaths.homeDirectory),
       render: () => {},
     });
     await Promise.resolve();
@@ -630,6 +633,7 @@ describe('registration self-records at startup (no modal, ever)', () => {
       commandRegistry: new CommandRegistry(),
       commandContext,
       shellPaths,
+      surface: makeTestSurface(shellPaths.workingDirectory, shellPaths.homeDirectory),
       render: () => {},
     });
     await Promise.resolve();

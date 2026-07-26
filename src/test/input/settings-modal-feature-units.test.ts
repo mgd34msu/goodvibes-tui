@@ -90,7 +90,9 @@ describe('settings modal — feature units', () => {
     for (const feature of FEATURE_SETTINGS) {
       const placed = headers.get(feature.id)!;
       expect(placed.category).toBe(feature.domain as SettingsCategory);
-      expect(placed.category).toBe(getFeatureUnitHostCategory(feature.id));
+      const hostCategory = getFeatureUnitHostCategory(feature.id);
+      expect(hostCategory).not.toBeNull();
+      expect(placed.category).toBe(hostCategory!);
     }
   });
 

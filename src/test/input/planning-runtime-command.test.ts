@@ -170,10 +170,12 @@ describe('submitInput plan-keyword regression (coordinator removed)', () => {
       autocomplete: null,
       blockActionsMenu: { open: () => {} },
       getBlockAnchorLine: () => 0,
+      openFleetPanel: () => {},
       processModal: { open: () => {} },
       modalOpened: () => {},
       saveUndoState: () => {},
       saveUndoStateForText: () => {},
+      breakUndoCoalesce: () => {},
       ensureInputCursorVisible: () => {},
       getWrappedPromptInfo: () => ({
         wrappedLines: [afterText.prompt],

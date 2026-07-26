@@ -135,7 +135,7 @@ describe('renderFleetChainSummary', () => {
       state,
       elapsedMs: 1_000,
       costState: 'unpriced',
-      capabilities: { interruptible: true, killable: true, pausable: false, steerable: false },
+      capabilities: { interruptible: true, killable: true, pausable: false, resumable: false, steerable: false },
     };
     return { node, depth: 1, treePrefix: '', isLastChild: true, hasChildren: false };
   }

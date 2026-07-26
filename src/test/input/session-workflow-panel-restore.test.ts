@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import type { SessionReturnContextSummary } from '@pellux/goodvibes-sdk/platform/sessions';
+import type { SessionReturnContextSummary } from '@/runtime/index.ts';
 import type { CommandContext } from '../../input/command-registry.ts';
 import { reopenPanelsFromReturnContext } from '../../input/commands/session-workflow.ts';
 import { PanelManager } from '../../panels/panel-manager.ts';

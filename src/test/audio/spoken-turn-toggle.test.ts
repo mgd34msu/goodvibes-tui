@@ -150,6 +150,7 @@ describe('SpokenTurnController — always-speak via ui.voiceEnabled', () => {
       available: false,
       async play() {},
       stop() {},
+      async waitForDrain() {},
     };
     const controller = new SpokenTurnController({
       voiceService,

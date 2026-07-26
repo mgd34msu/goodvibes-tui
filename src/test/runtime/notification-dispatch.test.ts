@@ -7,8 +7,11 @@ import {
   levelForEventType,
 } from '../../runtime/notification-dispatch.ts';
 import { PanelNotificationFeed } from '../../panels/notifications-feed.ts';
+import { configGetStub } from '../helpers/config-manager-stub.ts';
 
-const fakeConfig = { get: () => undefined };
+// Nothing persisted: every key reads back undefined, so the dispatcher falls
+// through to its own defaults.
+const fakeConfig = { get: configGetStub() };
 
 describe('notification dispatch — the panel_only producer', () => {
   test('a panel_only decision lands in the feed as a live item', () => {

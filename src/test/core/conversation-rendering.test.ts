@@ -13,8 +13,8 @@
 // ---------------------------------------------------------------------------
 
 import { describe, test, expect } from 'bun:test';
-import { ConversationManager } from '../../core/conversation';
 import { renderExpandedToolResultLines } from '../../renderer/tool-result-expanded-lines.ts';
+import { ConversationManager } from '../../core/conversation';
 
 function textOf(cm: ConversationManager): string {
   return cm.history.getAllLines().map((line) => line.map((c) => c.char).join('')).join('\n');
@@ -88,7 +88,7 @@ describe('tool-result "N lines" badge honesty', () => {
 
     // The claimed count must match what expansion ACTUALLY renders — the
     // same invariant tool-result-expanded-lines.ts is the shared source of
-    // truth for (both the badge and conversation-tool-groups.ts's group
+    // truth for (both the badge and conversation-turn-structure.ts's group
     // totals compute from it).
     expect(claimedLines).toBe(renderExpandedToolResultLines(jsonContent, 80).length);
 
@@ -98,7 +98,7 @@ describe('tool-result "N lines" badge honesty', () => {
     expect(expandedText).toContain('files_written');
   });
 
-  test('a folded tool-result group total matches the sum of each member\'s expanded line count', () => {
+  test("each result's own badge matches its own expanded line count", () => {
     const cm = new ConversationManager(() => 80);
     const jsonA = JSON.stringify({ a: 1, b: 2, c: 3, d: 4 });
     cm.addAssistantMessage('', {
@@ -113,11 +113,21 @@ describe('tool-result "N lines" badge honesty', () => {
     ]);
     cm.getDisplayBlocks();
 
-    const groupBlock = cm.getBlockRegistry().find((b) => b.type === 'tool_group');
-    expect(groupBlock).toBeDefined();
-    const headerText = textOf(cm);
-    expect(headerText).toContain('read×2');
-    const match = /(\d+) lines? total|(\d+) lines?(?!\stotal)/.exec(headerText);
-    expect(match).not.toBeNull();
+    // There is no longer a synthetic group total to be honest about: each
+    // result hangs under its own call and carries its own badge. The honesty
+    // guarantee that survives — and is what the badge is FOR — is that each
+    // badge names the post-render line count expanding it actually reveals,
+    // not the raw content's line count.
+    const turnBlock = cm.getBlockRegistry().find((b) => b.type === 'assistant_turn');
+    expect(turnBlock).toBeDefined();
+
+    const expectedA = renderExpandedToolResultLines(jsonA, 80).length;
+    const expectedB = renderExpandedToolResultLines('plain short result', 80).length;
+    const text = textOf(cm);
+    expect(text).toContain(`${expectedA} lines`);
+    expect(text).toMatch(new RegExp(`${expectedB} lines?`));
+    // A one-line raw JSON blob pretty-prints to many lines — the badge must
+    // report the revealed count, so these must differ.
+    expect(expectedA).toBeGreaterThan(1);
   });
 });

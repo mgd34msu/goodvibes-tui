@@ -54,7 +54,7 @@ function makePending(
 ): PendingPermissionState {
   return {
     ...request,
-    ...buildPendingPermissionExtras(request, (decision) => onDecision(decision as Record<string, unknown>), null, now),
+    ...buildPendingPermissionExtras(request, (decision) => onDecision({ ...decision }), null, now),
   } as PendingPermissionState;
 }
 

@@ -174,7 +174,7 @@ describe('session-command-routing (TASK-032)', () => {
   test('list subcommand routes to lifecycle handler', async () => {
     const cmd = registry.get('session')!;
     const ctx = makeCtx({
-      sessionManager: { ...stubSessionManager, list: () => [] } as typeof stubSessionManager,
+      sessionManager: { ...stubSessionManager, list: () => [] } as unknown as typeof stubSessionManager,
     });
     await cmd.handler(['list'], ctx as unknown as CommandContext);
     const output = ctx.printed.join('\n');
@@ -401,7 +401,7 @@ describe('session-command-routing (TASK-032)', () => {
             },
           },
         ]),
-      } as typeof stubSessionManager,
+      } as unknown as typeof stubSessionManager,
     });
 
     await cmd.handler(['list'], ctx as unknown as CommandContext);
@@ -426,7 +426,7 @@ describe('session-command-routing (TASK-032)', () => {
             },
           },
         ]),
-      } as typeof stubSessionManager,
+      } as unknown as typeof stubSessionManager,
     });
 
     await cmd.handler(['list'], ctx as unknown as CommandContext);

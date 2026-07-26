@@ -9,6 +9,21 @@ import { mkdtempSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
 import { ConfigManager } from '../../config/index.ts';
+import type { ConfigKey } from '../../config/index.ts';
+
+// NOTE: 'provider.provider' is not a real schema leaf — GoodVibesConfig's
+// 'provider' section only has model/reasoningEffort/embeddingProvider/etc
+// (getConfiguredProviderId derives the provider by parsing the
+// "provider:model" prefix out of provider.model instead; see
+// src/config/index.ts + provider-model.ts). ConfigManager's get/set are
+// permissive about unknown dot-paths at runtime (no schema entry ⇒ no
+// validation, plain property read/write on the section object), so this
+// still round-trips — it's legacy/orphaned coverage for a key nothing else
+// in the app reads or writes. Left in place per policy (no test deletions);
+// the key is cast through ConfigKey the same way
+// src/input/sandbox-exec-config.ts already does for its own synthetic,
+// not-in-the-real-union keys.
+const PROVIDER_PROVIDER_KEY = 'provider.provider' as ConfigKey;
 
 // ---------------------------------------------------------------------------
 // ConfigManager set/get roundtrip
@@ -124,8 +139,8 @@ describe('Config persistence — provider fields', () => {
   });
 
   test('provider.provider can be set and retrieved', () => {
-    configManager.set('provider.provider', 'openai');
-    expect(configManager.get('provider.provider')).toBe('openai');
+    configManager.set(PROVIDER_PROVIDER_KEY, 'openai');
+    expect(configManager.get(PROVIDER_PROVIDER_KEY)).toBe('openai');
   });
 
   test('provider.model can be set and retrieved', () => {
@@ -134,9 +149,9 @@ describe('Config persistence — provider fields', () => {
   });
 
   test('provider.provider + provider.model can be set together', () => {
-    configManager.set('provider.provider', 'anthropic');
+    configManager.set(PROVIDER_PROVIDER_KEY, 'anthropic');
     configManager.set('provider.model', 'anthropic:claude-3-5-sonnet');
-    expect(configManager.get('provider.provider')).toBe('anthropic');
+    expect(configManager.get(PROVIDER_PROVIDER_KEY)).toBe('anthropic');
     expect(configManager.get('provider.model')).toBe('anthropic:claude-3-5-sonnet');
   });
 });

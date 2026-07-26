@@ -7,6 +7,7 @@ import {
   type BrokerApprovalCardBroker,
 } from '../../permissions/broker-approval-card.ts';
 import type { PendingPermissionState } from '../../shell/blocking-input.ts';
+import type { RememberTier } from '@pellux/goodvibes-sdk/platform/permissions';
 
 function makeRequest(callId: string, tool = 'ci-fix') {
   return { callId, tool, reason: 'Fix the failing CI run?', args: {} } as never;
@@ -20,7 +21,15 @@ function makeBroker(records: Record<string, { status: string; request: unknown }
     resolved,
     listApprovals: () => [],
     getApproval: (id: string) => (records[id] as never) ?? null,
-    resolveApproval: async (id: string, input) => { resolved.push({ id, approved: input.approved }); return null; },
+    resolveApproval: async (id: string, input: {
+      readonly approved: boolean;
+      readonly remember?: boolean;
+      readonly rememberTier?: RememberTier;
+      readonly reason?: string;
+      readonly modifiedArgs?: Record<string, unknown>;
+      readonly actor: string;
+      readonly actorSurface?: string;
+    }) => { resolved.push({ id, approved: input.approved }); return null; },
   } as never;
 }
 

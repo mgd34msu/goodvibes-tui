@@ -29,15 +29,16 @@ import type { InputToken } from '@pellux/goodvibes-sdk/platform/core';
 
 function keyToken(
   logicalName: string,
-  opts: { shift?: boolean; ctrl?: boolean; alt?: boolean } = {},
+  opts: { shift?: boolean; ctrl?: boolean; meta?: boolean } = {},
 ): InputToken {
   return {
     type: 'key',
+    name: logicalName,
     logicalName,
     shift: opts.shift ?? false,
     ctrl: opts.ctrl ?? false,
-    alt: opts.alt ?? false,
-  } as InputToken;
+    meta: opts.meta ?? false,
+  };
 }
 
 function textToken(value: string): InputToken {

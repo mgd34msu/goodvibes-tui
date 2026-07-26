@@ -43,7 +43,9 @@ function answerWith(...ids: Array<string | null>): SelectionOpener {
 
 function setup(sessionId: string, messages: Array<Record<string, unknown>>) {
   writeRecoveryFile(
-    { messages: messages as never, title: 'Crashed mid-refactor', titleSource: 'auto', timestamp: Date.now() - 60_000 },
+    // ConversationTitleSource is 'system' | 'user' — 'system' is the
+    // not-user-set value this snapshot represents (there never was an 'auto').
+    { messages: messages as never, title: 'Crashed mid-refactor', titleSource: 'system', timestamp: Date.now() - 60_000 },
     sessionId,
     'Crashed mid-refactor',
     { surface },

@@ -44,7 +44,7 @@ afterEach(() => { if (existsSync(tmpDir)) rmSync(tmpDir, { recursive: true, forc
 
 function writeCrash(sessionId: string, messages: Array<{ role: string; content: string }>, title: string): void {
   writeRecoveryFile(
-    { messages: messages as never, title, titleSource: 'auto', timestamp: Date.now() - 5000 },
+    { messages: messages as never, title, titleSource: 'system', timestamp: Date.now() - 5000 },
     sessionId,
     title,
     { surface },

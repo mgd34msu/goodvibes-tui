@@ -98,7 +98,17 @@ beforeEach(async () => {
   ctx = {
     catalog,
     credentials: fakeCredentials(),
-    configManager: { get: () => undefined, getCategory: () => ({}) } as HandlerContext['configManager'],
+    // get/getCategory are cast through unknown straight to ConfigManager's own
+    // method types (rather than reconstructed as independent generic
+    // signatures): the SDK's ConfigValue mapped type is a very large
+    // discriminated union, and asking the compiler to structurally verify a
+    // freshly-written generic signature against it here hits TS's "excessive
+    // stack depth" recursion limit (TS2321) — a compiler limitation, not a
+    // real type mismatch.
+    configManager: {
+      get: ((_key: string) => undefined) as unknown as HandlerContext['configManager']['get'],
+      getCategory: ((_category: string) => ({})) as unknown as HandlerContext['configManager']['getCategory'],
+    },
     workingDirectory: dir,
     homeDirectory: dir,
     logger,

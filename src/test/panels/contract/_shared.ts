@@ -144,6 +144,13 @@ export const EMPTY_KNOWLEDGE_API = {
   jobs: { schedules: { list: (_limit?: number) => [] } },
 } as unknown as import('@pellux/goodvibes-sdk/platform/knowledge').KnowledgeApi;
 
+// The standalone hooks panel was retired in favor of the hooks modal (see
+// panels/modals/hooks-modal.ts); HooksPanelWorkbenchView no longer exists.
+// This fixture has no consumer left in the current codebase (nothing in
+// src/panels imports it), so it's pointed at the modal's equivalent
+// workbench type to keep it type-correct rather than deleting live test
+// scaffolding — flagged for the coordinator in case a hooks-modal contract
+// test wants to pick it up.
 export const EMPTY_HOOKS_WORKBENCH = {
   listManagedHooks: () => [],
   listManagedChains: () => [],
@@ -154,7 +161,7 @@ export const EMPTY_HOOKS_WORKBENCH = {
   toggleManagedHook: (_name: string, _enabled: boolean) => false,
   removeManagedEntry: (_name: string) => false,
   simulate: (_eventPath: string) => ({ eventPath: _eventPath, matchedHooks: [], matchedChains: [], capturedAt: Date.now() }),
-} as unknown as import('../../../panels/hooks-panel.ts').HooksPanelWorkbenchView;
+} as unknown as import('../../../panels/modals/hooks-modal.ts').HooksModalWorkbench;
 
 export const EMPTY_TASKS_READ_MODEL = makeReadModelMock({
   tasks: [],

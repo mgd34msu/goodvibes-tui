@@ -167,8 +167,10 @@ describe('maybeNotifyLongTask — content privacy pin', () => {
 
   test('MaybeNotifyLongTaskOptions compile-time privacy: no message or conversation fields accepted', () => {
     // Compile-time pin: MaybeNotifyLongTaskOptions must not accept
-    // message or conversation fields. If this test file compiles with
-    // @ts-expect-error on these lines, the type is correctly locked.
+    // message or conversation fields. If this test file compiles with the
+    // ts-expect-error suppressions below still doing real work, the type is
+    // correctly locked (an unused-directive error here would mean the type
+    // stopped rejecting one of these fields).
     const notifier = makeFakeNotifier(['https://ntfy.sh/topic']);
     // @ts-expect-error — MaybeNotifyLongTaskOptions must not accept a 'message' field
     maybeNotifyLongTask({ elapsedMs: 60_000, status: 'ok', kind: 'turn', sessionId: 's', thresholdSeconds: 60, webhookNotifier: null, message: 'should not compile' });

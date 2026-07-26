@@ -73,6 +73,13 @@ export function featuresForEnablementKey(key: string): readonly FeatureSetting[]
  */
 export function isFeatureValueEnabled(feature: FeatureSetting, value: unknown): boolean {
   const { key, kind, enabledValues } = feature.enablement;
+  // A capability declared not operable in this build never reads as on, whatever
+  // its settings key says. deriveFeatureState already enforces this for the
+  // boolean and enum kinds; stating it once here covers the constant kind too,
+  // so no surface can show "on" for something that is doing nothing. The user's
+  // value is untouched — it is kept for the release that wires the capability up
+  // — and `feature.inoperableDetail` is the written reason a surface renders.
+  if (feature.operable === false) return false;
   if (kind === 'constant') {
     const schema = getConfigSchemaSetting(key);
     if (schema?.type === 'boolean') return value === true;

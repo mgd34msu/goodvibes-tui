@@ -53,9 +53,23 @@ function makeBus() {
         if (idx !== -1) bucket.splice(idx, 1);
       };
     },
+    // Real RuntimeEventFeed shape also exposes onEnvelope (raw envelope
+    // subscription); wireStreamEventMetrics never uses it, so this is an
+    // honest no-op rather than a modeled behavior.
+    onEnvelope(_event: string, _handler: Listener) {
+      return () => {};
+    },
     emit(event: string, payload?: unknown) {
       for (const h of (listeners[event] ?? []).slice()) h(payload);
     },
+  };
+}
+
+/** An inert RuntimeEventFeed for domains wireStreamEventMetrics never subscribes to (sessions, providers, agents, workflows, planner, ops). */
+function makeInertFeed() {
+  return {
+    on: () => () => {},
+    onEnvelope: () => () => {},
   };
 }
 
@@ -63,7 +77,7 @@ function makeMetrics(): StreamMetrics {
   return {
     startTime: 0, deltaCount: 0, tokenSpeed: 0,
     ttftMs: undefined, ttftRecorded: false,
-    activeToolStartedAtMs: undefined, activeToolName: undefined,
+    activeToolStartedAtMs: undefined, activeToolName: undefined, activeToolCallId: undefined,
     lastDeltaAtMs: undefined, stallEpisode: 0,
     reconnectAttempt: undefined, reconnectMaxAttempts: undefined,
   };
@@ -71,7 +85,16 @@ function makeMetrics(): StreamMetrics {
 
 function makeOptions(turns: ReturnType<typeof makeBus>, tools: ReturnType<typeof makeBus>, metrics: StreamMetrics): WireStreamEventMetricsOptions {
   return {
-    events: { turns, tools } as WireStreamEventMetricsOptions['events'],
+    events: {
+      sessions: makeInertFeed(),
+      turns,
+      tools,
+      providers: makeInertFeed(),
+      agents: makeInertFeed(),
+      workflows: makeInertFeed(),
+      planner: makeInertFeed(),
+      ops: makeInertFeed(),
+    } as WireStreamEventMetricsOptions['events'],
     orchestrator: { streamingOutputTokens: 0 },
     providerRegistry: {
       getCurrentModel: () => ({ provider: 'anthropic', registryKey: 'anthropic:claude-3-5-sonnet' }),

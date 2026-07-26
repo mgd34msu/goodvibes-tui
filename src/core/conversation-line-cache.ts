@@ -51,12 +51,18 @@ import type { ConversationRenderContext } from './conversation-rendering.ts';
 import {
   renderConversationAssistantMessage,
   renderConversationSystemMessage,
+  renderConversationToolCallNode,
   renderConversationToolMessage,
   renderConversationUserMessage,
   collectCompletedToolCallIds,
-  isFoldedGroupMember,
+  isTurnCollapsed,
 } from './conversation-rendering.ts';
-import { computeToolGroupMembership, type ToolGroupMembership } from './conversation-tool-groups.ts';
+import {
+  buildRenderPlan,
+  computeAssistantTurns,
+  type AssistantTurnMembership,
+  type RenderNode,
+} from './conversation-turn-structure.ts';
 import type { ConversationMessageSnapshot } from '@pellux/goodvibes-sdk/platform/core';
 // SystemMessageKind imported from runtime directly to avoid a cycle, mirroring
 // conversation-rendering.ts's own import.
@@ -112,17 +118,27 @@ interface KeyMeta {
    */
   readonly pendingToolKey: string | undefined;
   /**
-   * Tool-group membership fields (see conversation-tool-groups.ts), flattened
-   * so a change invalidates the cache like any other structural input — e.g.
-   * a group growing from 2 to 3 members as tool results stream in changes
-   * groupToolCount/groupTotalLines for every existing member, and must
-   * re-render all of them with the updated header counts. `groupKey` is
-   * undefined when the message isn't part of a folded group.
+   * Turn membership and tree-structure fields, flattened so a change
+   * invalidates the entry like any other structural input.
+   *
+   * This is what makes connector glyphs safe to recompute rather than cache:
+   * when a sibling arrives, the previously-last row's `connector` flips
+   * `└`→`├`, that value differs from the cached one, and exactly that row
+   * re-renders. Nothing else in the row changes, so the compositor repaints a
+   * single connector cell.
    */
-  readonly groupKey: string | undefined;
-  readonly groupIsFirst: boolean;
-  readonly groupToolCount: number;
-  readonly groupTotalLines: number;
+  readonly turnKey: string | undefined;
+  readonly turnIsHead: boolean;
+  readonly turnToolCount: number;
+  readonly turnSharedLabel: string | undefined;
+  readonly turnHasReasoning: boolean;
+  /** Row depth and connector — both change when structure around a row changes. */
+  readonly depth: number;
+  readonly connector: string | undefined;
+  /** Ancestor gutter pattern, flattened; a change repaints the row's gutters. */
+  readonly openAncestors: string;
+  /** Whether this row is followed by the blank separator. */
+  readonly trailingBlank: boolean;
 }
 
 /**
@@ -246,22 +262,26 @@ function makeRecordingCollapseState(
   });
 }
 
-/** Dispatch a single message to its render function. */
+/** Dispatch a single planned row to its render function. */
 function renderOne(
   ctx: ConversationRenderContext,
-  message: Message,
+  node: RenderNode,
   width: number,
-  absoluteIdx: number,
   cfg: RenderConfig,
 ): void {
+  if (node.kind === 'toolcall') {
+    renderConversationToolCallNode(ctx, node, width);
+    return;
+  }
+  const message = node.message;
   if (message.role === 'user') {
-    renderConversationUserMessage(ctx, message, width, absoluteIdx);
+    renderConversationUserMessage(ctx, message, width, node.absIdx);
   } else if (message.role === 'assistant') {
-    renderConversationAssistantMessage(ctx, message, width, cfg.lineNumberMode, cfg.collapseThreshold, absoluteIdx);
+    renderConversationAssistantMessage(ctx, message, width, cfg.lineNumberMode, cfg.collapseThreshold, node.absIdx);
   } else if (message.role === 'system') {
-    renderConversationSystemMessage(ctx, message, width, absoluteIdx);
+    renderConversationSystemMessage(ctx, message, width, node.absIdx);
   } else if (message.role === 'tool') {
-    renderConversationToolMessage(ctx, message, width, absoluteIdx);
+    renderConversationToolMessage(ctx, message, width, node.absIdx, node);
   }
 }
 
@@ -274,7 +294,7 @@ function renderOne(
  * own beyond speed and reduced allocation churn.
  */
 export class MessageLineCache {
-  private entries: Map<number, CacheEntry> = new Map();
+  private entries: Map<string, CacheEntry> = new Map();
 
   /** Drop all cached entries (wholesale message replacement / reset). */
   public clear(): void {
@@ -319,61 +339,62 @@ export class MessageLineCache {
     // Tool calls with no matching tool-result message are still pending; the
     // render context and the cache key both depend on this. (item 2c.)
     const completedToolCallIds = collectCompletedToolCallIds(messages);
-    // Fold runs of >=2 consecutive tool-result messages sharing one assistant
-    // turn under a single collapsible header (see conversation-tool-groups.ts).
-    // Computed once per pass, over the same slice+offset appendConversationMessages
-    // would see, so both entry points fold identically.
-    const toolGroupMembership = computeToolGroupMembership(messages, msgIndexOffset, width);
-    const renderContext: ConversationRenderContext = { ...context, completedToolCallIds, toolGroupMembership };
+    const assistantTurns = computeAssistantTurns(messages, msgIndexOffset);
+    // Structural plan: a permutation of the slice (results lifted under their
+    // calls, spawned agents spliced under the call that spawned them), rebuilt
+    // every pass so connectors and nesting always reflect live structure.
+    const plan = buildRenderPlan(messages, msgIndexOffset, {
+      resolveAgentSnapshot: context.resolveAgentSnapshot,
+    });
+    const renderContext: ConversationRenderContext = { ...context, completedToolCallIds, assistantTurns };
 
-    const touched = new Set<number>();
-    // Header line of each currently-open tool-group, keyed by groupKey — the
-    // first member's own registered line, recorded as that member is reached
-    // below so later (non-first) members of the SAME group can resolve to it.
-    const groupHeaderLines = new Map<string, number>();
+    const touched = new Set<string>();
+    const turnHeaderLines = new Map<string, number>();
 
-    for (let i = 0; i < messages.length; i++) {
-      const message = messages[i]!;
-      const absoluteIdx = msgIndexOffset + i;
+    for (let i = 0; i < plan.length; i++) {
+      const node = plan[i]!;
       const base = context.history.getLineCount();
       const blockBase = context.blockRegistry.length;
+      const isRoot = node.scope === '';
+      const turn = assistantTurns.get(node.absIdx);
 
-      const uncacheable = absoluteIdx === streamingPlaceholderAbsIdx;
-      const kind = context.messageKindRegistry.get(absoluteIdx);
-      const pendingToolKey = pendingToolKeyOf(message, completedToolCallIds);
-      const groupMembership = toolGroupMembership.get(absoluteIdx);
+      if (node.kind === 'message') {
+        if (turn?.isHead) turnHeaderLines.set(turn.turnKey, base);
+        // Nested rows index into their own agent's snapshot and must not write
+        // the root transcript's registry.
+        if (isRoot) {
+          messageLineRegistry[node.absIdx] = turn && isTurnCollapsed(turn, context.collapseState)
+            ? (turnHeaderLines.get(turn.turnKey) ?? base)
+            : base;
+        }
+      }
 
-      if (groupMembership?.isFirst) groupHeaderLines.set(groupMembership.groupKey, base);
-      // A folded (non-first, currently collapsed) group member renders zero
-      // lines of its own — `base` here is just wherever the buffer happens to
-      // sit after the last member that DID render, which is the position the
-      // NEXT real content starts at, not this message's own position. Anchor
-      // it at the group's header line instead, so transcript-event
-      // navigation lands on the group rather than skipping past it.
-      messageLineRegistry[absoluteIdx] = isFoldedGroupMember(groupMembership, context.collapseState)
-        ? (groupHeaderLines.get(groupMembership!.groupKey) ?? base)
-        : base;
+      const next = plan[i + 1];
+      const trailingBlank = !next || next.depth === 0;
+      const uncacheable = isRoot && node.kind === 'message' && node.absIdx === streamingPlaceholderAbsIdx;
+      const kind = isRoot ? context.messageKindRegistry.get(node.absIdx) : undefined;
+      const pendingToolKey = pendingToolKeyOf(node.message, completedToolCallIds);
 
       if (!uncacheable) {
-        const existing = this.entries.get(absoluteIdx);
-        if (existing && this.isValid(existing, message, width, cfg, blockBase, kind, pendingToolKey, groupMembership, context.collapseState)) {
+        const existing = this.entries.get(node.id);
+        if (existing && this.isValid(existing, node, width, cfg, blockBase, kind, pendingToolKey, turn, trailingBlank, context.collapseState)) {
           this.applyEntry(context, existing, base);
-          touched.add(absoluteIdx);
+          touched.add(node.id);
           continue;
         }
       }
 
-      const entry = this.renderScratch(renderContext, message, width, absoluteIdx, cfg, blockBase, kind, pendingToolKey, groupMembership);
+      const entry = this.renderScratch(renderContext, node, width, cfg, blockBase, kind, pendingToolKey, turn, trailingBlank);
       this.applyEntry(context, entry, base);
       if (!uncacheable) {
-        this.entries.set(absoluteIdx, entry);
-        touched.add(absoluteIdx);
+        this.entries.set(node.id, entry);
+        touched.add(node.id);
       }
     }
 
-    // Mark-and-sweep: a full rebuild renders every currently-visible message, so
-    // any entry not touched this pass is off-screen (or evicted by a shrink) and
-    // is dropped to bound memory to the visible set.
+    // Mark-and-sweep: a full rebuild plans every currently-visible row, so any
+    // entry not touched this pass is gone (off-screen, or a row whose structure
+    // no longer exists) and is dropped to bound memory to the visible set.
     if (this.entries.size > touched.size) {
       for (const key of this.entries.keys()) {
         if (!touched.has(key)) this.entries.delete(key);
@@ -381,21 +402,22 @@ export class MessageLineCache {
     }
   }
 
-  /** Validate a cached entry against the message's current complete inputs. */
+  /** Validate a cached entry against the row's current complete inputs. */
   private isValid(
     entry: CacheEntry,
-    message: Message,
+    node: RenderNode,
     width: number,
     cfg: RenderConfig,
     blockBase: number,
     kind: SystemMessageKind | undefined,
     pendingToolKey: string | undefined,
-    groupMembership: ToolGroupMembership | undefined,
+    turn: AssistantTurnMembership | undefined,
+    trailingBlank: boolean,
     collapseState: Map<string, boolean>,
   ): boolean {
     const k = entry.keyMeta;
     if (
-      k.role !== message.role ||
+      k.role !== node.message.role ||
       k.width !== width ||
       k.lineNumberMode !== cfg.lineNumberMode ||
       k.collapseThreshold !== cfg.collapseThreshold ||
@@ -404,14 +426,19 @@ export class MessageLineCache {
       k.blockBase !== blockBase ||
       k.kind !== kind ||
       k.pendingToolKey !== pendingToolKey ||
-      k.groupKey !== groupMembership?.groupKey ||
-      k.groupIsFirst !== (groupMembership?.isFirst ?? false) ||
-      k.groupToolCount !== (groupMembership?.toolCount ?? 0) ||
-      k.groupTotalLines !== (groupMembership?.totalLines ?? 0)
+      k.turnKey !== turn?.turnKey ||
+      k.turnIsHead !== (turn?.isHead ?? false) ||
+      k.turnToolCount !== (turn?.toolCallCount ?? 0) ||
+      k.turnSharedLabel !== turn?.sharedToolLabel ||
+      k.turnHasReasoning !== (turn?.hasReasoning ?? false) ||
+      k.depth !== node.depth ||
+      k.connector !== node.connector ||
+      k.openAncestors !== node.openAncestorDepths.join(',') ||
+      k.trailingBlank !== trailingBlank
     ) {
       return false;
     }
-    if (!contentUnchanged(entry.contentSig, message)) return false;
+    if (!contentUnchanged(entry.contentSig, node.message)) return false;
     for (const [key, value] of entry.collapseDeps) {
       if (collapseState.get(key) !== value) return false;
     }
@@ -419,21 +446,21 @@ export class MessageLineCache {
   }
 
   /**
-   * Render a single message into an isolated scratch context, capturing its
-   * lines, block metas (message-relative), error-line offsets (message-relative),
-   * and the collapse-state reads it depends on. Collapse-default WRITES pass
+   * Render a single planned row into an isolated scratch context, capturing its
+   * lines, block metas (row-relative), error-line offsets (row-relative), and
+   * the collapse-state reads it depends on. Collapse-default WRITES pass
    * through to the real collapseState so persistent defaults match a cold render.
    */
   private renderScratch(
     context: ConversationRenderContext,
-    message: Message,
+    node: RenderNode,
     width: number,
-    absoluteIdx: number,
     cfg: RenderConfig,
     blockBase: number,
     kind: SystemMessageKind | undefined,
     pendingToolKey: string | undefined,
-    groupMembership: ToolGroupMembership | undefined,
+    turn: AssistantTurnMembership | undefined,
+    trailingBlank: boolean,
   ): CacheEntry {
     const scratchLines: Line[] = [];
     const scratchHistory = {
@@ -441,9 +468,6 @@ export class MessageLineCache {
       addLines: (lines: Line[]): void => { for (const line of lines) scratchLines.push(line); },
       getLineCount: (): number => scratchLines.length,
     };
-    // Pre-size to blockBase so blockRegistry.length (the global block index the
-    // collapseKey embeds) matches the live registry; slice(blockBase) recovers
-    // only this message's blocks afterwards.
     const scratchBlocks: BlockMeta[] = new Array(blockBase);
     const scratchErrors: number[] = [];
     const readKeys = new Set<string>();
@@ -458,16 +482,15 @@ export class MessageLineCache {
       configManager: context.configManager,
       splashOptions: context.splashOptions,
       completedToolCallIds: context.completedToolCallIds,
-      toolGroupMembership: context.toolGroupMembership,
+      assistantTurns: context.assistantTurns,
+      resolveAgentSnapshot: context.resolveAgentSnapshot,
     };
 
-    renderOne(scratchCtx, message, width, absoluteIdx, cfg);
-    // Trailing blank line, exactly as appendConversationMessages appends per
-    // message — except a non-owning member of a currently-collapsed
-    // tool-result group (see conversation-tool-groups.ts) rendered nothing
-    // above and gets no filler line either; every other message keeps the
-    // unconditional separator.
-    if (!isFoldedGroupMember(groupMembership, context.collapseState)) {
+    renderOne(scratchCtx, node, width, cfg);
+    // A row that rendered nothing (hidden by a collapsed turn) gets no
+    // separator either; otherwise the blank lands only after the last row of a
+    // top-level unit, so a turn's subtree reads as one block.
+    if (scratchLines.length > 0 && trailingBlank) {
       scratchLines.push(createEmptyLine(width));
     }
 
@@ -476,7 +499,7 @@ export class MessageLineCache {
 
     return {
       keyMeta: {
-        role: message.role,
+        role: node.message.role,
         width,
         lineNumberMode: cfg.lineNumberMode,
         collapseThreshold: cfg.collapseThreshold,
@@ -485,12 +508,17 @@ export class MessageLineCache {
         blockBase,
         kind,
         pendingToolKey,
-        groupKey: groupMembership?.groupKey,
-        groupIsFirst: groupMembership?.isFirst ?? false,
-        groupToolCount: groupMembership?.toolCount ?? 0,
-        groupTotalLines: groupMembership?.totalLines ?? 0,
+        turnKey: turn?.turnKey,
+        turnIsHead: turn?.isHead ?? false,
+        turnToolCount: turn?.toolCallCount ?? 0,
+        turnSharedLabel: turn?.sharedToolLabel,
+        turnHasReasoning: turn?.hasReasoning ?? false,
+        depth: node.depth,
+        connector: node.connector,
+        openAncestors: node.openAncestorDepths.join(','),
+        trailingBlank,
       },
-      contentSig: contentSigOf(message),
+      contentSig: contentSigOf(node.message),
       lines: scratchLines,
       blocks: scratchBlocks.slice(blockBase),
       errorRelLines: scratchErrors,

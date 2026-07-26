@@ -56,10 +56,10 @@ describe('runtime knowledge store isolation', () => {
       title: 'Isolation Home',
       capturedAt: Date.now(),
       pageAutomation: { enabled: false },
-      areas: [{ id: 'area-lab', name: 'Lab', kind: 'area' }],
-      devices: [{ id: 'device-light', name: 'Isolation Light', kind: 'device', areaId: 'area-lab' }],
-      entities: [{ id: 'light.isolation_light', name: 'Isolation Light', kind: 'entity', deviceId: 'device-light', areaId: 'area-lab' }],
-      integrations: [{ id: 'integration-light', name: 'Light Integration', kind: 'integration', domain: 'light' }],
+      areas: [{ id: 'area-lab', name: 'Lab' }],
+      devices: [{ id: 'device-light', name: 'Isolation Light', areaId: 'area-lab' }],
+      entities: [{ id: 'light.isolation_light', name: 'Isolation Light', deviceId: 'device-light', areaId: 'area-lab' }],
+      integrations: [{ id: 'integration-light', name: 'Light Integration' }],
     });
     const homeGraphStatus = await services.homeGraphService.status({ installationId: 'isolation' });
     const ask = await services.homeGraphService.ask({

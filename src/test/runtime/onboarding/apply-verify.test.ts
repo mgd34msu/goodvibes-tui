@@ -658,6 +658,7 @@ describe('onboarding apply and verify helpers', () => {
           },
           hasPrimaryCredential: true,
           hasPasswordCredential: false,
+          hasAuthTokenCredential: false,
           hasWebhookUrl: false,
           hasSigningSecret: false,
           hasPublicKey: false,

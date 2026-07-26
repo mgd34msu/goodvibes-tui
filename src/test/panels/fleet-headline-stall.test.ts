@@ -27,7 +27,7 @@ function makeNode(node: Partial<ProcessNode> & { id: string }): ProcessNode {
     state: 'executing-tool',
     elapsedMs: 65_000,
     costState: 'unpriced',
-    capabilities: { interruptible: true, killable: true, pausable: false, steerable: false },
+    capabilities: { interruptible: true, killable: true, pausable: false, resumable: false, steerable: false },
     ...node,
   };
 }

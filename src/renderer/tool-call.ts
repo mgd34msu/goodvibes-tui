@@ -6,9 +6,19 @@ import { stripDangerousAnsi } from './ansi-sanitize.ts';
 import { formatElapsed } from '../utils/format-elapsed.ts';
 import { GLYPHS } from './ui-primitives.ts';
 import { activeUiTones } from './theme.ts';
+import { treeBranchCol, treeContentCol, writeTreeStatusGutter } from './conversation-tree.ts';
 
 const TOOL_NAME_MIN_WIDTH = 8;
 const TOOL_NAME_MAX_WIDTH = 20;
+
+/** Tree placement for a tool-call row rendered as a branch of its turn. */
+export interface ToolCallTreeOptions {
+  /** Effective indent in columns, already clamped by treeIndentCols(). */
+  readonly indentCols?: number;
+  readonly branchFg?: string;
+  /** Suppress the tool label because the turn header already carries it. */
+  readonly omitToolName?: boolean;
+}
 
 function writeStyledText(
   line: Line,
@@ -44,8 +54,17 @@ function buildLeftSegments(
   keyArg: string,
   suffixText: string,
   leftBudget: number,
+  omitToolName = false,
 ): Array<{ text: string; fg: string; bold?: boolean; dim?: boolean }> {
   if (leftBudget <= 0) return [];
+
+  // When every call in the turn shares one label, the label rides on the turn
+  // header and each row leads with the argument that actually distinguishes it
+  // (`config.get`, `services.restart`). Falls back to showing the name when
+  // there is no key argument, so a row can never render empty.
+  if (omitToolName && keyArg) {
+    return buildLeftSegments(keyArg, '', suffixText, leftBudget, false);
+  }
 
   const t = activeUiTones();
   const segments: Array<{ text: string; fg: string; bold?: boolean; dim?: boolean }> = [];
@@ -164,12 +183,18 @@ export function renderToolCallBlock(
   errorMsg?: string,
   frameIndex?: number,
   startedAtMs?: number,
+  tree?: ToolCallTreeOptions,
 ): Line[] {
   const line = createEmptyLine(width);
   const t = activeUiTones();
-  const margin = LAYOUT.LEFT_MARGIN;
+  const indent = Math.max(0, tree?.indentCols ?? 0);
+  // In tree mode the status icon moves to the branch's content column, so the
+  // ✓ lines up with the content of every other row at the same depth and the
+  // branch glyph sits where the parent's content began.
+  const margin = indent > 0 ? treeContentCol(indent) : LAYOUT.LEFT_MARGIN;
   const rightMargin = LAYOUT.RIGHT_MARGIN;
   const contentEnd = width - rightMargin;
+
 
   // Status icon. 'pending' means the tool is still awaiting a decision
   // (e.g. an approval prompt) and has NOT run yet — it uses the hollow idle
@@ -207,10 +232,18 @@ export function renderToolCallBlock(
     : contentEnd;
   let col: number = leftStart;
 
-  if (col < leftEndExclusive) {
-    line[col] = createStyledCell(icon, { fg: iconColor, bold: status === 'done' || status === 'error' || status === 'cancelled' });
+  // In tree mode the status glyph goes in the fixed left gutter (column 0),
+  // before the indent, so every marker in the transcript aligns in one column
+  // no matter how deep its row sits. The row's own content then starts at the
+  // branch's content column with no inline icon slot.
+  if (indent > 0) {
+    writeTreeStatusGutter(line, icon, iconColor, width);
+  } else {
+    if (col < leftEndExclusive) {
+      line[col] = createStyledCell(icon, { fg: iconColor, bold: status === 'done' || status === 'error' || status === 'cancelled' });
+    }
+    col += 2; // icon + space
   }
-  col += 2; // icon + space
 
   // Tool name — extract short name for long MCP tool names, but keep a readable dynamic width.
   const rawName = toolCall.name.includes('__')
@@ -225,7 +258,7 @@ export function renderToolCallBlock(
         ? `(${stripDangerousAnsi(resultSummary)})`
         : '';
   const leftBudget = Math.max(0, leftEndExclusive - col);
-  const leftSegments = buildLeftSegments(rawName, keyArg, suffixText, leftBudget);
+  const leftSegments = buildLeftSegments(rawName, keyArg, suffixText, leftBudget, tree?.omitToolName ?? false);
   for (const segment of leftSegments) {
     col = writeStyledText(line, col, leftEndExclusive, segment.text, {
       fg: segment.fg,

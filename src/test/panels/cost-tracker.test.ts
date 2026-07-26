@@ -60,51 +60,59 @@ describe('getCostFromPricingCatalog', () => {
   describe('catalog model returns correct pricing', () => {
     test('paid model returns its pricing', () => {
       const result = getCostFromPricingCatalog('test-paid-model', TEST_CATALOG);
-      expect(result.input).toBe(5.00);
-      expect(result.output).toBe(15.00);
+      expect(result).not.toBeNull();
+      expect(result!.input).toBe(5.00);
+      expect(result!.output).toBe(15.00);
     });
 
     test('subscription model returns its pricing', () => {
       const result = getCostFromPricingCatalog('test-subscription-model', TEST_CATALOG);
-      expect(result.input).toBe(10.00);
-      expect(result.output).toBe(30.00);
+      expect(result).not.toBeNull();
+      expect(result!.input).toBe(10.00);
+      expect(result!.output).toBe(30.00);
     });
 
     test('known model with versioned suffix matches via prefix', () => {
       const result = getCostFromPricingCatalog('claude-sonnet-4-6-20250101', TEST_CATALOG);
-      expect(result.input).toBe(3.00);
-      expect(result.output).toBe(15.00);
+      expect(result).not.toBeNull();
+      expect(result!.input).toBe(3.00);
+      expect(result!.output).toBe(15.00);
     });
 
     test('result is a plain object with input and output fields', () => {
       const result = getCostFromPricingCatalog('test-paid-model', TEST_CATALOG);
-      expect(typeof result.input).toBe('number');
-      expect(typeof result.output).toBe('number');
+      expect(result).not.toBeNull();
+      expect(typeof result!.input).toBe('number');
+      expect(typeof result!.output).toBe('number');
     });
   });
 
   describe('free model returns { 0, 0 }', () => {
     test('catalog free-tier model returns {0,0}', () => {
       const result = getCostFromPricingCatalog('test-free-model', TEST_CATALOG);
-      expect(result.input).toBe(0);
-      expect(result.output).toBe(0);
+      expect(result).not.toBeNull();
+      expect(result!.input).toBe(0);
+      expect(result!.output).toBe(0);
     });
 
     test(':free suffix returns {0,0} regardless of catalog', () => {
       const result = getCostFromPricingCatalog('any-model:free', TEST_CATALOG);
-      expect(result.input).toBe(0);
-      expect(result.output).toBe(0);
+      expect(result).not.toBeNull();
+      expect(result!.input).toBe(0);
+      expect(result!.output).toBe(0);
     });
 
     test(':free suffix on known paid model still returns {0,0}', () => {
       const result = getCostFromPricingCatalog('test-paid-model:free', TEST_CATALOG);
-      expect(result.input).toBe(0);
-      expect(result.output).toBe(0);
+      expect(result).not.toBeNull();
+      expect(result!.input).toBe(0);
+      expect(result!.output).toBe(0);
     });
 
     test('free model shows $0.00 when formatted', () => {
       const result = getCostFromPricingCatalog('test-free-model', TEST_CATALOG);
-      const usd = (1000 * result.input + 1000 * result.output) / 1_000_000;
+      expect(result).not.toBeNull();
+      const usd = (1000 * result!.input + 1000 * result!.output) / 1_000_000;
       expect(usd).toBe(0);
       const formatted = usd === 0 ? '$0.00' : `$${usd.toFixed(3)}`;
       expect(formatted).toBe('$0.00');
@@ -132,19 +140,22 @@ describe('getCostFromPricingCatalog', () => {
   describe('cost calculation with catalog pricing', () => {
     test('calculates cost correctly with catalog pricing (per 1M tokens)', () => {
       const pricing = getCostFromPricingCatalog('test-paid-model', TEST_CATALOG);
-      const cost = (1_000_000 * pricing.input + 0 * pricing.output) / 1_000_000;
+      expect(pricing).not.toBeNull();
+      const cost = (1_000_000 * pricing!.input + 0 * pricing!.output) / 1_000_000;
       expect(cost).toBe(5.00);
     });
 
     test('calculates cost for mixed input/output tokens', () => {
       const pricing = getCostFromPricingCatalog('test-paid-model', TEST_CATALOG);
-      const cost = (500_000 * pricing.input + 100_000 * pricing.output) / 1_000_000;
+      expect(pricing).not.toBeNull();
+      const cost = (500_000 * pricing!.input + 100_000 * pricing!.output) / 1_000_000;
       expect(cost).toBeCloseTo(2.50 + 1.50, 6);
     });
 
     test('zero cost for free model regardless of token count', () => {
       const pricing = getCostFromPricingCatalog('test-free-model', TEST_CATALOG);
-      const cost = (1_000_000 * pricing.input + 1_000_000 * pricing.output) / 1_000_000;
+      expect(pricing).not.toBeNull();
+      const cost = (1_000_000 * pricing!.input + 1_000_000 * pricing!.output) / 1_000_000;
       expect(cost).toBe(0);
     });
 
@@ -155,9 +166,11 @@ describe('getCostFromPricingCatalog', () => {
 
     test('catalog returns immutable copy (mutations do not affect catalog)', () => {
       const pricing = getCostFromPricingCatalog('test-paid-model', TEST_CATALOG);
-      pricing.input = 9999;
+      expect(pricing).not.toBeNull();
+      pricing!.input = 9999;
       const pricing2 = getCostFromPricingCatalog('test-paid-model', TEST_CATALOG);
-      expect(pricing2.input).toBe(5.00);
+      expect(pricing2).not.toBeNull();
+      expect(pricing2!.input).toBe(5.00);
     });
   });
 });
@@ -169,14 +182,16 @@ describe('getCostFromPricingCatalog', () => {
 describe('getCostFromPricingCatalog with explicit catalog shapes', () => {
   test('returns catalog pricing from an explicit model array', () => {
     const result = getCostFromPricingCatalog('test-paid-model', TEST_CATALOG);
-    expect(result.input).toBe(5.00);
-    expect(result.output).toBe(15.00);
+    expect(result).not.toBeNull();
+    expect(result!.input).toBe(5.00);
+    expect(result!.output).toBe(15.00);
   });
 
   test('returns zero for free-tier models from an explicit catalog', () => {
     const result = getCostFromPricingCatalog('test-free-model', TEST_CATALOG);
-    expect(result.input).toBe(0);
-    expect(result.output).toBe(0);
+    expect(result).not.toBeNull();
+    expect(result!.input).toBe(0);
+    expect(result!.output).toBe(0);
   });
 
   test('returns null for empty explicit catalogs (honest unknown)', () => {

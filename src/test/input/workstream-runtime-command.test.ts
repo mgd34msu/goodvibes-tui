@@ -17,6 +17,7 @@ import type {
   Phase,
   PhaseResult,
   PhaseSpec,
+  WorkItem,
   Workstream,
 } from '@pellux/goodvibes-sdk/platform/orchestration';
 import { CURRENT_WORKSTREAM_SCHEMA_VERSION } from '@pellux/goodvibes-sdk/platform/orchestration';
@@ -32,6 +33,19 @@ function makePhase(overrides: Partial<Phase> & { id: string; ordinal: number }):
     capacity: 1,
     kind: 'engineer',
     gate: { scope: 'scoped', gates: [] },
+    ...overrides,
+  };
+}
+
+function makeItem(overrides: Partial<WorkItem> & { id: string; title: string; task: string; currentPhaseId: string | null; state: WorkItem['state'] }): WorkItem {
+  return {
+    dependsOn: [],
+    allAgentIds: [],
+    visits: new Map<string, number>(),
+    touchedPaths: [],
+    usage: { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, llmCallCount: 0, turnCount: 0, toolCallCount: 0, costUsd: null, costState: 'unpriced' as const },
+    transportRetryCount: 0,
+    createdAt: Date.now(),
     ...overrides,
   };
 }
@@ -64,18 +78,12 @@ function makeFakeEngine(seed: Workstream[] = []): OrchestrationEngine & { create
       createdInputs.push(input);
       const id = input.id ?? `ws-${++counter}`;
       const phases: Phase[] = input.phases.map((spec: PhaseSpec, i) => makePhase({ id: spec.id ?? `phase-${i}`, ordinal: i, role: spec.role, capacity: spec.capacity, kind: spec.kind, gate: spec.gate }));
-      const items = input.items.map((spec) => ({
+      const items = input.items.map((spec) => makeItem({
         id: spec.id ?? `item-${crypto.randomUUID().slice(0, 6)}`,
         title: spec.title,
         task: spec.task,
         currentPhaseId: phases[0]?.id ?? null,
         state: 'pending' as const,
-        allAgentIds: [],
-        visits: new Map<string, number>(),
-        touchedPaths: [],
-        usage: { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, llmCallCount: 0, turnCount: 0, toolCallCount: 0, costUsd: null, costState: 'unpriced' as const },
-        transportRetryCount: 0,
-        createdAt: Date.now(),
       }));
       const ws = makeWorkstream({ id, title: input.title, phases, items });
       workstreams.set(id, ws);
@@ -106,6 +114,16 @@ function makeFakeEngine(seed: Workstream[] = []): OrchestrationEngine & { create
       return false;
     },
     getPhaseResults: (): readonly PhaseResult[] => [],
+    updateBudget: () => false,
+    retryItem: () => false,
+    listHeldMergeGroups: async () => [],
+    pickAttemptWinner: async () => { throw new Error('makeFakeEngine: pickAttemptWinner is not exercised by these command tests'); },
+    proposeAttemptWinner: async () => { throw new Error('makeFakeEngine: proposeAttemptWinner is not exercised by these command tests'); },
+    stampConflictSession: () => false,
+    retryItemIntegration: async () => 'not-conflicted' as const,
+    addDependency: () => null,
+    requeueItem: () => false,
+    getGraphSnapshot: () => null,
     serializeWorkstream: () => null,
     importWorkstream: () => false,
     resumeWorkstream: () => false,
@@ -237,7 +255,7 @@ function makeCtx(service?: WorkstreamCommandService) {
     provider: {},
     platform: {
       // Minimal enough for getOperatorRpc (checkFanoutQuotaWarning) to
-      // resolve honestly to "unavailable" — no controlPlane.baseUrl means no
+      // resolve honestly to "unavailable" — daemon.enabled:false means no
       // live quota check, so /workstream launch's own behavior is what these
       // tests exercise, not a real network round-trip.
       configManager: {
@@ -569,7 +587,7 @@ describe('workstream-runtime — list / status / insert-phase / cancel', () => {
       id: 'ws-live',
       title: 'live one',
       phases: [makePhase({ id: 'p1', ordinal: 0 })],
-      items: [{ id: 'i1', title: 't', task: 't', currentPhaseId: 'p1', state: 'in-phase', allAgentIds: [], visits: new Map(), touchedPaths: [], usage: { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, llmCallCount: 0, turnCount: 0, toolCallCount: 0, costUsd: null, costState: 'unpriced' }, transportRetryCount: 0, createdAt: Date.now() }],
+      items: [makeItem({ id: 'i1', title: 't', task: 't', currentPhaseId: 'p1', state: 'in-phase' })],
     });
     const service = makeFakeService([live]);
     const { ctx, printed } = makeCtx(service);
@@ -590,7 +608,7 @@ describe('workstream-runtime — list / status / insert-phase / cancel', () => {
       id: 'ws-status',
       title: 'status target',
       phases: [makePhase({ id: 'p1', ordinal: 0, role: 'engineer' })],
-      items: [{ id: 'item-1', title: 'do the work', task: 'do the work', currentPhaseId: 'p1', state: 'in-phase', allAgentIds: [], visits: new Map(), touchedPaths: [], usage: { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, llmCallCount: 0, turnCount: 0, toolCallCount: 0, costUsd: null, costState: 'unpriced' }, transportRetryCount: 0, createdAt: Date.now() }],
+      items: [makeItem({ id: 'item-1', title: 'do the work', task: 'do the work', currentPhaseId: 'p1', state: 'in-phase' })],
     });
     const { ctx, printed } = makeCtx(makeFakeService([live]));
 
@@ -612,16 +630,14 @@ describe('workstream-runtime — list / status / insert-phase / cancel', () => {
       isolation: 'worktree',
       phases: [makePhase({ id: 'p1', ordinal: 0, role: 'engineer' })],
       items: [
-        {
+        makeItem({
           id: 'item-merged', title: 'merged one', task: 't', currentPhaseId: null, state: 'passed',
-          allAgentIds: [], visits: new Map(), touchedPaths: [], usage, transportRetryCount: 0, createdAt: Date.now(),
-          mergeState: 'merged', mergeHash: 'abcdef1234567890',
-        },
-        {
+          usage, mergeState: 'merged', mergeHash: 'abcdef1234567890',
+        }),
+        makeItem({
           id: 'item-conflict', title: 'conflicted one', task: 't', currentPhaseId: null, state: 'passed',
-          allAgentIds: [], visits: new Map(), touchedPaths: [], usage, transportRetryCount: 0, createdAt: Date.now(),
-          mergeState: 'conflict', worktreeKept: true, blockedReason: 'merge-conflict: shared.txt',
-        },
+          usage, mergeState: 'conflict', worktreeKept: true, blockedReason: 'merge-conflict: shared.txt',
+        }),
       ],
     });
     const { ctx, printed } = makeCtx(makeFakeService([live]));
@@ -643,7 +659,7 @@ describe('workstream-runtime — list / status / insert-phase / cancel', () => {
       id: 'ws-shared-status',
       title: 'shared run',
       phases: [makePhase({ id: 'p1', ordinal: 0, role: 'engineer' })],
-      items: [{ id: 'item-1', title: 'do the work', task: 'do the work', currentPhaseId: null, state: 'passed', allAgentIds: [], visits: new Map(), touchedPaths: [], usage: { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, llmCallCount: 0, turnCount: 0, toolCallCount: 0, costUsd: null, costState: 'unpriced' }, transportRetryCount: 0, createdAt: Date.now() }],
+      items: [makeItem({ id: 'item-1', title: 'do the work', task: 'do the work', currentPhaseId: null, state: 'passed' })],
     });
     const { ctx, printed } = makeCtx(makeFakeService([live]));
 
@@ -664,12 +680,11 @@ describe('workstream-runtime — list / status / insert-phase / cancel', () => {
       title: 'dependency chain',
       phases: [makePhase({ id: 'p1', ordinal: 0, role: 'engineer' })],
       items: [
-        { id: 'item-a', title: 'set up schema', task: 't', currentPhaseId: 'p1', state: 'in-phase', allAgentIds: [], visits: new Map(), touchedPaths: [], usage, transportRetryCount: 0, createdAt: Date.now() },
-        {
+        makeItem({ id: 'item-a', title: 'set up schema', task: 't', currentPhaseId: 'p1', state: 'in-phase', usage }),
+        makeItem({
           id: 'item-b', title: 'build API', task: 't', currentPhaseId: null, state: 'blocked-dependency',
-          allAgentIds: [], visits: new Map(), touchedPaths: [], usage, transportRetryCount: 0, createdAt: Date.now(),
-          dependsOn: ['item-a'], blockedReason: 'waiting on: set up schema',
-        },
+          usage, dependsOn: ['item-a'], blockedReason: 'waiting on: set up schema',
+        }),
       ],
     });
     const { ctx, printed } = makeCtx(makeFakeService([live]));
@@ -745,8 +760,8 @@ describe('workstream-runtime — list / status / insert-phase / cancel', () => {
       title: 'cancel target',
       phases: [makePhase({ id: 'p1', ordinal: 0 })],
       items: [
-        { id: 'item-a', title: 'a', task: 'a', currentPhaseId: 'p1', state: 'in-phase', allAgentIds: [], visits: new Map(), touchedPaths: [], usage: { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, llmCallCount: 0, turnCount: 0, toolCallCount: 0, costUsd: null, costState: 'unpriced' }, transportRetryCount: 0, createdAt: Date.now() },
-        { id: 'item-b', title: 'b', task: 'b', currentPhaseId: null, state: 'passed', allAgentIds: [], visits: new Map(), touchedPaths: [], usage: { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, llmCallCount: 0, turnCount: 0, toolCallCount: 0, costUsd: null, costState: 'unpriced' }, transportRetryCount: 0, createdAt: Date.now() },
+        makeItem({ id: 'item-a', title: 'a', task: 'a', currentPhaseId: 'p1', state: 'in-phase' }),
+        makeItem({ id: 'item-b', title: 'b', task: 'b', currentPhaseId: null, state: 'passed' }),
       ],
     });
     const service = makeFakeService([live]);
@@ -766,7 +781,7 @@ describe('workstream-runtime — list / status / insert-phase / cancel', () => {
       title: 'blocked target',
       phases: [makePhase({ id: 'p1', ordinal: 0 })],
       items: [
-        { id: 'item-blocked', title: 'stuck on budget', task: 'stuck on budget', currentPhaseId: 'p1', state: 'blocked-budget', allAgentIds: [], visits: new Map(), touchedPaths: [], usage: { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, llmCallCount: 0, turnCount: 0, toolCallCount: 0, costUsd: null, costState: 'unpriced' }, transportRetryCount: 0, createdAt: Date.now() },
+        makeItem({ id: 'item-blocked', title: 'stuck on budget', task: 'stuck on budget', currentPhaseId: 'p1', state: 'blocked-budget' }),
       ],
     });
     const service = makeFakeService([live]);

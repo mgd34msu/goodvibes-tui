@@ -13,6 +13,7 @@
  */
 
 import { describe, expect, test } from 'bun:test';
+import type { CanonicalModel } from '@pellux/goodvibes-sdk/platform/providers';
 import { buildSyntheticChainEntries } from '../../cli/management.ts';
 
 // Alias for test readability — same function, real implementation.
@@ -37,7 +38,7 @@ function buildChainTextLines(
 
 const CHAIN_BEST_BALANCED: CanonicalModel = {
   id: 'best-balanced',
-  tier: 'performance',
+  tier: 'paid',
   backendCount: 3,
   keyedBackendCount: 2,
   backends: [
@@ -69,7 +70,7 @@ describe('synthetic chain CLI output — data shape', () => {
     expect(value).toHaveLength(1);
     const entry = value[0]!;
     expect(entry.id).toBe('best-balanced');
-    expect(entry.tier).toBe('performance');
+    expect(entry.tier).toBe('paid');
     expect(entry.backendCount).toBe(3);
     expect(entry.keyedBackendCount).toBe(2);
     expect(entry.backends).toHaveLength(3);
@@ -152,7 +153,7 @@ describe('synthetic chain CLI output — text format', () => {
     const text = buildChainTextLines(value);
 
     expect(text).toContain('best-balanced');
-    expect(text).toContain('[performance]');
+    expect(text).toContain('[paid]');
     expect(text).toContain('2/3 backends configured');
   });
 

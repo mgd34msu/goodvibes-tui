@@ -23,9 +23,11 @@ import { createFailoverTurnState } from '../../core/active-model-identity.ts';
 type TurnEvent = 'STREAM_START' | 'STREAM_DELTA' | 'STREAM_END' | 'TURN_COMPLETED' | 'TURN_ERROR' | 'TURN_CANCEL';
 type ToolEvent = 'TOOL_EXECUTING' | 'TOOL_SUCCEEDED' | 'TOOL_FAILED' | 'TOOL_CANCELLED';
 
+type TurnBusHandler = ((ev: { error: string }) => void) | ((...args: unknown[]) => void);
+
 type TurnHandlerMap = {
   TURN_ERROR: Array<(ev: { error: string }) => void>;
-  [K: string]: Array<(...args: unknown[]) => void>;
+  [K: string]: Array<TurnBusHandler>;
 };
 
 function makeTurnBus() {
@@ -94,7 +96,7 @@ function makeMetrics(): StreamMetrics {
   return {
     startTime: 0, deltaCount: 0, tokenSpeed: 0,
     ttftMs: undefined, ttftRecorded: false,
-    activeToolStartedAtMs: undefined, activeToolName: undefined,
+    activeToolStartedAtMs: undefined, activeToolName: undefined, activeToolCallId: undefined,
     lastDeltaAtMs: undefined, stallEpisode: 0,
     reconnectAttempt: undefined, reconnectMaxAttempts: undefined,
   };
@@ -106,15 +108,32 @@ function makeOptimizer(options: {
   enabled: boolean;
   chain?: FailoverChainNode[];
 }) {
-  const transitions: Array<{ from: string; to: string; reason: string }> = [];
+  // `transitions` doubles as the real FailoverOptimizer's `fallbackLog` (the
+  // routing chip reads that to skip double-narrating a failover) — same
+  // array, timestamped, exposed under both names.
+  const transitions: Array<{ from: string; to: string; reason: string; ts: number }> = [];
   return {
     get enabled() { return options.enabled; },
     testFallback: (_profile?: Record<string, unknown>) => ({ chain: options.chain ?? [] }),
     recordFallbackTransition(from: string, to: string, reason: string) {
-      transitions.push({ from, to, reason });
+      transitions.push({ from, to, reason, ts: Date.now() });
     },
     transitions,
+    get fallbackLog() { return transitions; },
   };
+}
+
+/**
+ * A typed retryTurn mock matching the real `(notice?: string) => boolean`
+ * signature. Most tests only care that it was called; `onCall` covers the
+ * few that also react to the call (e.g. simulating the retried turn failing
+ * too by re-emitting TURN_ERROR from inside it).
+ */
+function makeRetryTurnMock(onCall?: () => void) {
+  return mock((_notice?: string) => {
+    onCall?.();
+    return true;
+  });
 }
 
 function makeProviderRegistry(currentProvider = 'anthropic') {
@@ -151,7 +170,7 @@ function makeRestoringOptions(
   const failoverState = createFailoverTurnState();
   const configuredRegistryKey = 'anthropic:claude-3-5-sonnet';
   const options: WireStreamEventMetricsOptions = {
-    events: { turns: turnBus, tools: toolBus } as WireStreamEventMetricsOptions['events'],
+    events: { turns: turnBus, tools: toolBus } as unknown as WireStreamEventMetricsOptions['events'],
     orchestrator: { streamingOutputTokens: 0 },
     providerRegistry,
     systemMessageRouter: {
@@ -186,7 +205,7 @@ function makeOptions(
   const systemMessageRouter = { high: (m: string) => messages.push(m), low: () => {} };
   const providerRegistry = makeProviderRegistry();
   return {
-    events: { turns: turnBus, tools: toolBus } as WireStreamEventMetricsOptions['events'],
+    events: { turns: turnBus, tools: toolBus } as unknown as WireStreamEventMetricsOptions['events'],
     orchestrator: { streamingOutputTokens: 0 },
     providerRegistry,
     systemMessageRouter,
@@ -223,7 +242,7 @@ describe('wireStreamEventMetrics — optimizer disabled', () => {
   test('retryTurn is never called when optimizer is absent', () => {
     const turns = makeTurnBus();
     const tools = makeToolBus();
-    const retryTurn = mock(() => {});
+    const retryTurn = makeRetryTurnMock();
     const opts = makeOptions(turns, tools, { retryTurn });
     wireStreamEventMetrics(opts);
 
@@ -235,7 +254,7 @@ describe('wireStreamEventMetrics — optimizer disabled', () => {
   test('TURN_ERROR surfaces immediately when optimizer.enabled is false', () => {
     const turns = makeTurnBus();
     const tools = makeToolBus();
-    const retryTurn = mock(() => {});
+    const retryTurn = makeRetryTurnMock();
     const optimizer = makeOptimizer({
       enabled: false,
       chain: [{ position: 0, providerId: 'openai', modelId: 'gpt-5', capable: true }],
@@ -258,7 +277,7 @@ describe('wireStreamEventMetrics — optimizer enabled, failover fires', () => {
   test('retryTurn is called when a capable alternative exists', () => {
     const turns = makeTurnBus();
     const tools = makeToolBus();
-    const retryTurn = mock(() => {});
+    const retryTurn = makeRetryTurnMock();
     const optimizer = makeOptimizer({
       enabled: true,
       chain: [
@@ -277,7 +296,7 @@ describe('wireStreamEventMetrics — optimizer enabled, failover fires', () => {
   test('failover notice includes from->to and error class', () => {
     const turns = makeTurnBus();
     const tools = makeToolBus();
-    const retryTurn = mock(() => {});
+    const retryTurn = makeRetryTurnMock();
     const optimizer = makeOptimizer({
       enabled: true,
       chain: [
@@ -299,7 +318,7 @@ describe('wireStreamEventMetrics — optimizer enabled, failover fires', () => {
   test('recordFallbackTransition is called with correct from/to', () => {
     const turns = makeTurnBus();
     const tools = makeToolBus();
-    const retryTurn = mock(() => {});
+    const retryTurn = makeRetryTurnMock();
     const optimizer = makeOptimizer({
       enabled: true,
       chain: [
@@ -320,7 +339,7 @@ describe('wireStreamEventMetrics — optimizer enabled, failover fires', () => {
   test('original error is NOT emitted as [Error] on successful failover', () => {
     const turns = makeTurnBus();
     const tools = makeToolBus();
-    const retryTurn = mock(() => {});
+    const retryTurn = makeRetryTurnMock();
     const optimizer = makeOptimizer({
       enabled: true,
       chain: [
@@ -346,7 +365,7 @@ describe('wireStreamEventMetrics — optimizer enabled, chain exhausted', () => 
   test('retryTurn not called when no capable alternative exists', () => {
     const turns = makeTurnBus();
     const tools = makeToolBus();
-    const retryTurn = mock(() => {});
+    const retryTurn = makeRetryTurnMock();
     const optimizer = makeOptimizer({
       enabled: true,
       chain: [
@@ -366,7 +385,7 @@ describe('wireStreamEventMetrics — optimizer enabled, chain exhausted', () => 
   test('exhaustion notice is emitted when chain yields no viable alternative', () => {
     const turns = makeTurnBus();
     const tools = makeToolBus();
-    const retryTurn = mock(() => {});
+    const retryTurn = makeRetryTurnMock();
     const optimizer = makeOptimizer({
       enabled: true,
       chain: [
@@ -386,7 +405,7 @@ describe('wireStreamEventMetrics — optimizer enabled, chain exhausted', () => 
   test('empty chain causes exhaustion notice', () => {
     const turns = makeTurnBus();
     const tools = makeToolBus();
-    const retryTurn = mock(() => {});
+    const retryTurn = makeRetryTurnMock();
     const optimizer = makeOptimizer({ enabled: true, chain: [] });
     const opts = makeOptions(turns, tools, { providerOptimizer: optimizer, retryTurn });
     wireStreamEventMetrics(opts);
@@ -406,7 +425,7 @@ describe('wireStreamEventMetrics — setCurrentModel fails', () => {
   test('switch failure: [Error] emitted, retryTurn not called', () => {
     const turns = makeTurnBus();
     const tools = makeToolBus();
-    const retryTurn = mock(() => {});
+    const retryTurn = makeRetryTurnMock();
     const optimizer = makeOptimizer({
       enabled: true,
       chain: [
@@ -420,7 +439,7 @@ describe('wireStreamEventMetrics — setCurrentModel fails', () => {
     };
     const messages: string[] = [];
     const opts: WireStreamEventMetricsOptions = {
-      events: { turns, tools } as WireStreamEventMetricsOptions['events'],
+      events: { turns, tools } as unknown as WireStreamEventMetricsOptions['events'],
       orchestrator: { streamingOutputTokens: 0 },
       providerRegistry: brokenRegistry,
       systemMessageRouter: { high: (m: string) => messages.push(m), low: () => {} },
@@ -451,7 +470,7 @@ describe('wireStreamEventMetrics — visited-set prevents ping-pong', () => {
     const turns = makeTurnBus();
     const tools = makeToolBus();
     let retryCallCount = 0;
-    const retryTurn = mock(() => {
+    const retryTurn = makeRetryTurnMock(() => {
       retryCallCount++;
       // Simulate provider B failing immediately after switch.
       // This fires TURN_ERROR again from within retryTurn.
@@ -481,7 +500,7 @@ describe('wireStreamEventMetrics — visited-set prevents ping-pong', () => {
   test('visited set is cleared on TURN_COMPLETED so next turn can use all providers', () => {
     const turns = makeTurnBus();
     const tools = makeToolBus();
-    const retryTurn = mock(() => {});
+    const retryTurn = makeRetryTurnMock();
     const optimizer = makeOptimizer({
       enabled: true,
       chain: [
@@ -513,7 +532,7 @@ describe('wireStreamEventMetrics — synthetic node skipped in failover', () => 
   test('synthetic provider is not selected as failover candidate', () => {
     const turns = makeTurnBus();
     const tools = makeToolBus();
-    const retryTurn = mock(() => {});
+    const retryTurn = makeRetryTurnMock();
     const optimizer = makeOptimizer({
       enabled: true,
       chain: [
@@ -536,7 +555,7 @@ describe('wireStreamEventMetrics — synthetic node skipped in failover', () => 
   test('real provider after synthetic in chain is selected, synthetic skipped', () => {
     const turns = makeTurnBus();
     const tools = makeToolBus();
-    const retryTurn = mock(() => {});
+    const retryTurn = makeRetryTurnMock();
     const optimizer = makeOptimizer({
       enabled: true,
       chain: [
@@ -566,7 +585,7 @@ describe('wireStreamEventMetrics — clearFailoverVisited on new submission', ()
   test('clearFailoverVisited resets visited set so a new turn can failover normally', () => {
     const turns = makeTurnBus();
     const tools = makeToolBus();
-    const retryTurn = mock(() => {});
+    const retryTurn = makeRetryTurnMock();
     const optimizer = makeOptimizer({
       enabled: true,
       chain: [
@@ -597,7 +616,7 @@ describe('wireStreamEventMetrics — failover cost delta notice', () => {
   test('cost delta suffix is appended to failover notice when catalog provides pricing', () => {
     const turns = makeTurnBus();
     const tools = makeToolBus();
-    const retryTurn = mock(() => {});
+    const retryTurn = makeRetryTurnMock();
     const optimizer = makeOptimizer({
       enabled: true,
       chain: [
@@ -630,7 +649,7 @@ describe('wireStreamEventMetrics — failover cost delta notice', () => {
   test('failover notice has no cost suffix when costLookup is absent', () => {
     const turns = makeTurnBus();
     const tools = makeToolBus();
-    const retryTurn = mock(() => {});
+    const retryTurn = makeRetryTurnMock();
     const optimizer = makeOptimizer({
       enabled: true,
       chain: [
@@ -654,7 +673,7 @@ describe('wireStreamEventMetrics — failover cost delta notice', () => {
   test('cost data unavailable message when catalog returns zeros for either model', () => {
     const turns = makeTurnBus();
     const tools = makeToolBus();
-    const retryTurn = mock(() => {});
+    const retryTurn = makeRetryTurnMock();
     const optimizer = makeOptimizer({
       enabled: true,
       chain: [
@@ -703,7 +722,7 @@ describe('wireStreamEventMetrics — configured selection is restored at turn en
     const tools = makeToolBus();
     const optimizer = makeOptimizer({ enabled: true, chain: twoProviderChain() });
     const { options, providerRegistry, failoverState, configuredRegistryKey } =
-      makeRestoringOptions(turns, tools, { providerOptimizer: optimizer, retryTurn: () => {} });
+      makeRestoringOptions(turns, tools, { providerOptimizer: optimizer, retryTurn: () => true });
     wireStreamEventMetrics(options);
 
     turns.emitTurnError('rate limit exceeded');
@@ -724,7 +743,7 @@ describe('wireStreamEventMetrics — configured selection is restored at turn en
     const tools = makeToolBus();
     const optimizer = makeOptimizer({ enabled: true, chain: twoProviderChain() });
     const { options, messages } =
-      makeRestoringOptions(turns, tools, { providerOptimizer: optimizer, retryTurn: () => {} });
+      makeRestoringOptions(turns, tools, { providerOptimizer: optimizer, retryTurn: () => true });
     wireStreamEventMetrics(options);
 
     turns.emitTurnError('turn 1 failed');
@@ -742,7 +761,7 @@ describe('wireStreamEventMetrics — configured selection is restored at turn en
     const tools = makeToolBus();
     const optimizer = makeOptimizer({ enabled: true, chain: twoProviderChain() });
     const { options, providerRegistry, configuredRegistryKey } =
-      makeRestoringOptions(turns, tools, { providerOptimizer: optimizer, retryTurn: () => {} });
+      makeRestoringOptions(turns, tools, { providerOptimizer: optimizer, retryTurn: () => true });
     wireStreamEventMetrics(options);
 
     turns.emitTurnError('provider error');
@@ -758,7 +777,7 @@ describe('wireStreamEventMetrics — configured selection is restored at turn en
     const tools = makeToolBus();
     // anthropic fails, openai is taken, then openai fails too → exhausted.
     const optimizer = makeOptimizer({ enabled: true, chain: twoProviderChain() });
-    const retryTurn = mock(() => { turns.emitTurnError('openai also failed'); });
+    const retryTurn = makeRetryTurnMock(() => turns.emitTurnError('openai also failed'));
     const { options, providerRegistry, configuredRegistryKey, messages } =
       makeRestoringOptions(turns, tools, { providerOptimizer: optimizer, retryTurn });
     wireStreamEventMetrics(options);
@@ -774,7 +793,7 @@ describe('wireStreamEventMetrics — configured selection is restored at turn en
     const tools = makeToolBus();
     const optimizer = makeOptimizer({ enabled: true, chain: twoProviderChain() });
     const { options, providerRegistry, configuredRegistryKey } =
-      makeRestoringOptions(turns, tools, { providerOptimizer: optimizer, retryTurn: () => {} });
+      makeRestoringOptions(turns, tools, { providerOptimizer: optimizer, retryTurn: () => true });
     const { clearFailoverVisited } = wireStreamEventMetrics(options);
 
     turns.emitTurnError('provider error');
@@ -796,7 +815,7 @@ describe('wireStreamEventMetrics — configured selection is restored at turn en
       ],
     });
     let hops = 0;
-    const retryTurn = mock(() => { if (++hops === 1) turns.emitTurnError('openai failed too'); });
+    const retryTurn = makeRetryTurnMock(() => { if (++hops === 1) turns.emitTurnError('openai failed too'); });
     const { options, providerRegistry, failoverState, configuredRegistryKey } =
       makeRestoringOptions(turns, tools, { providerOptimizer: optimizer, retryTurn });
     wireStreamEventMetrics(options);
@@ -826,7 +845,7 @@ describe('wireStreamEventMetrics — configured selection is restored at turn en
       },
     };
     const { options, failoverState, messages } = makeRestoringOptions(turns, tools, {
-      providerOptimizer: optimizer, retryTurn: () => {}, providerRegistry: stubbornRegistry,
+      providerOptimizer: optimizer, retryTurn: () => true, providerRegistry: stubbornRegistry,
     });
     wireStreamEventMetrics(options);
 
@@ -843,7 +862,7 @@ describe('wireStreamEventMetrics — configured selection is restored at turn en
     const tools = makeToolBus();
     const optimizer = makeOptimizer({ enabled: true, chain: twoProviderChain() });
     const { options, providerRegistry, failoverState } = makeRestoringOptions(turns, tools, {
-      providerOptimizer: optimizer, retryTurn: () => {}, getConfiguredRegistryKey: () => undefined,
+      providerOptimizer: optimizer, retryTurn: () => true, getConfiguredRegistryKey: () => undefined,
     });
     wireStreamEventMetrics(options);
 
@@ -867,7 +886,7 @@ describe('wireStreamEventMetrics — failover notice reaches the conversation un
     const tools = makeToolBus();
     const optimizer = makeOptimizer({ enabled: true, chain: twoProviderChain() });
     const { options, receipts } =
-      makeRestoringOptions(turns, tools, { providerOptimizer: optimizer, retryTurn: () => {} });
+      makeRestoringOptions(turns, tools, { providerOptimizer: optimizer, retryTurn: () => true });
     wireStreamEventMetrics(options);
 
     turns.emitTurnError('rate limit exceeded');
@@ -894,7 +913,7 @@ describe('wireStreamEventMetrics — failover notice reaches the conversation un
     const { options } = makeRestoringOptions(turns, tools, {
       providerOptimizer: optimizer,
       systemMessageRouter: router,
-      retryTurn: (notice?: string) => { seen.push(notice); },
+      retryTurn: (notice?: string) => { seen.push(notice); return true; },
     });
     wireStreamEventMetrics(options);
 
@@ -910,7 +929,7 @@ describe('wireStreamEventMetrics — failover notice reaches the conversation un
     const tools = makeToolBus();
     const optimizer = makeOptimizer({ enabled: true, chain: twoProviderChain() });
     const { options, receipts } =
-      makeRestoringOptions(turns, tools, { providerOptimizer: optimizer, retryTurn: () => {} });
+      makeRestoringOptions(turns, tools, { providerOptimizer: optimizer, retryTurn: () => true });
     wireStreamEventMetrics(options);
 
     turns.emitTurnError('rate limit exceeded');
@@ -926,7 +945,7 @@ describe('wireStreamEventMetrics — failover notice reaches the conversation un
     const turns = makeTurnBus();
     const tools = makeToolBus();
     const optimizer = makeOptimizer({ enabled: true, chain: twoProviderChain() });
-    const opts = makeOptions(turns, tools, { providerOptimizer: optimizer, retryTurn: () => {} });
+    const opts = makeOptions(turns, tools, { providerOptimizer: optimizer, retryTurn: () => true });
     wireStreamEventMetrics(opts);
 
     turns.emitTurnError('rate limit exceeded');
@@ -948,7 +967,7 @@ describe('wireStreamEventMetrics — failover notice reaches the conversation un
       ],
     });
     const { options, messages } =
-      makeRestoringOptions(turns, tools, { providerOptimizer: optimizer, retryTurn: () => {} });
+      makeRestoringOptions(turns, tools, { providerOptimizer: optimizer, retryTurn: () => true });
     wireStreamEventMetrics(options);
 
     turns.emitTurnError('rate limit exceeded');
@@ -970,7 +989,7 @@ describe('wireStreamEventMetrics — failover notice reaches the conversation un
       ],
     });
     const { options, messages } =
-      makeRestoringOptions(turns, tools, { providerOptimizer: optimizer, retryTurn: () => {} });
+      makeRestoringOptions(turns, tools, { providerOptimizer: optimizer, retryTurn: () => true });
     wireStreamEventMetrics(options);
 
     turns.emitTurnError('rate limit exceeded');

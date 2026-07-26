@@ -19,7 +19,16 @@
 import { describe, expect, test } from 'bun:test';
 import { createContextAccountingSource } from '../../runtime/context-accounting-source.ts';
 import { ContextAccountingHolder, createContextAccountingTool } from '@pellux/goodvibes-sdk/platform/tools';
-import type { TurnInjectionRecord } from '@pellux/goodvibes-sdk/platform/agents';
+import type { ModelDefinition } from '@pellux/goodvibes-sdk/platform/providers';
+import type { Orchestrator } from '../../core/orchestrator.ts';
+
+/**
+ * TurnInjectionRecord is not exported from the SDK's public entry points;
+ * the orchestrator's real getTurnInjections() return type is the source of
+ * truth here, so tests borrow it structurally through Orchestrator instead
+ * of importing a type the package barrel doesn't expose.
+ */
+type TurnInjectionRecord = ReturnType<Orchestrator['getTurnInjections']>[number];
 
 function makeFakeOrchestrator(overrides: Partial<{
   injections: readonly TurnInjectionRecord[];
@@ -34,9 +43,23 @@ function makeFakeOrchestrator(overrides: Partial<{
   };
 }
 
-function makeFakeProviderRegistry(contextWindow: number) {
+function makeFakeModelDefinition(contextWindow: number): ModelDefinition {
   return {
-    getCurrentModel: () => ({ contextWindow, id: 'fake-model' }),
+    id: 'fake-model',
+    provider: 'fake-provider',
+    registryKey: 'fake-provider:fake-model',
+    displayName: 'Fake Model',
+    description: 'Test double model definition',
+    capabilities: { toolCalling: true, codeEditing: true, reasoning: false, multimodal: false },
+    contextWindow,
+    selectable: true,
+  };
+}
+
+function makeFakeProviderRegistry(contextWindow: number) {
+  const model = makeFakeModelDefinition(contextWindow);
+  return {
+    getCurrentModel: () => model,
     getContextWindowForModel: () => contextWindow,
   };
 }

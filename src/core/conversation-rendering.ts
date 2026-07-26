@@ -10,12 +10,21 @@ import { renderSystemMessage } from '../renderer/system-message.ts';
 import { createEmptyLine, type Line, type Cell } from '../types/grid.ts';
 import { getSplashLines, type SplashOptions } from '../utils/splash-lines.ts';
 import { interpolateColor, getDisplayWidth, wrapText } from '../utils/terminal-width.ts';
-import { LAYOUT } from '../renderer/layout.ts';
+import { LAYOUT, TOOL_STATUS } from '../renderer/layout.ts';
 import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import { renderConversationCollapsedFragment, renderConversationEventLine } from '../renderer/conversation-surface.ts';
 import { GLYPHS } from '../renderer/ui-primitives.ts';
 import type { BlockMeta } from './conversation-types.ts';
-import { computeToolGroupMembership, type ToolGroupMembership } from './conversation-tool-groups.ts';
+import { renderCompactionContinuationMessage } from './conversation-compaction-render.ts';
+import { drawBranchConnector, treeIndentCols, writeTreeStatusGutter } from '../renderer/conversation-tree.ts';
+import {
+  MAX_NEST_DEPTH,
+  buildRenderPlan,
+  collapseKeyForNode,
+  computeAssistantTurns,
+  type AssistantTurnMembership,
+  type RenderNode,
+} from './conversation-turn-structure.ts';
 import type { ConversationMessageSnapshot } from '@pellux/goodvibes-sdk/platform/core';
 import { parseDiffForApply } from '@pellux/goodvibes-sdk/platform/core';
 import { extractUserDisplayText, COMPACTION_HANDOFF_HEADER } from '@pellux/goodvibes-sdk/platform/core';
@@ -84,12 +93,33 @@ export interface ConversationRenderContext {
    */
   readonly completedToolCallIds?: ReadonlySet<string>;
   /**
-   * Per-tool-message group membership for the currently rendered slice (see
-   * conversation-tool-groups.ts). A message index absent from this map (or an
-   * undefined map itself) isn't part of a folded run of tool results and
-   * renders exactly as it always has.
+   * Which assistant messages share one `● assistant` header, and what that
+   * header must say (see conversation-turn-structure.ts). Keyed by absolute
+   * index for every assistant message in a run AND every tool-result message
+   * the run's calls produced, so a collapsed turn can hide its results too.
+   * A message absent from this map (or an undefined map) renders standalone,
+   * exactly as it did before turn merging.
    */
-  readonly toolGroupMembership?: ReadonlyMap<number, ToolGroupMembership>;
+  readonly assistantTurns?: ReadonlyMap<number, AssistantTurnMembership>;
+  /**
+   * Live snapshot reader for a spawned agent's own conversation, used to
+   * splice that agent's rows in beneath the call that spawned it (see
+   * conversation-turn-structure.ts). Undefined disables nesting entirely and
+   * the transcript renders exactly as it would without subagents.
+   */
+  readonly resolveAgentSnapshot?: (agentId: string) => readonly Message[] | null;
+}
+
+/**
+ * Whether a turn's branches are hidden. Turns default to EXPANDED (unlike
+ * every other collapsible block here, which defaults to collapsed): a turn
+ * collapsed by default would hide the activity the transcript exists to show.
+ */
+export function isTurnCollapsed(
+  turn: AssistantTurnMembership | undefined,
+  collapseState: ReadonlyMap<string, boolean>,
+): boolean {
+  return turn !== undefined && (collapseState.get(turn.turnKey) ?? false);
 }
 
 export function renderConversationUserMessage(
@@ -116,62 +146,6 @@ export function renderConversationUserMessage(
   context.history.addLines(UIFactory.createMessageBar(width, displayText));
 }
 
-/** Fold a compaction-continuation user message to one header + preview line. */
-function renderCompactionContinuationMessage(
-  context: ConversationRenderContext,
-  content: string,
-  width: number,
-  msgIdx: number,
-): void {
-  const T = activeTheme();
-  const collapseKey = `msg_${msgIdx}`;
-  const blockIdx = context.blockRegistry.length;
-  const startLine = context.history.getLineCount();
-  const lineCount = content.split('\n').length;
-  const isCollapsed = context.collapseState.has(collapseKey)
-    ? context.collapseState.get(collapseKey)!
-    : true;
-  if (!context.collapseState.has(collapseKey)) {
-    context.collapseState.set(collapseKey, true);
-  }
-
-  context.history.addLine(renderConversationEventLine(width, {
-    marker: GLYPHS.status.active,
-    markerFg: T.toolAccent,
-    label: 'compaction handoff',
-    labelFg: T.toolAccent,
-    detailFg: '244',
-  }, [
-    { text: ` ${isCollapsed ? GLYPHS.navigation.collapsed : GLYPHS.navigation.expanded} ${lineCount} line${lineCount === 1 ? '' : 's'} `, fg: '244', dim: true },
-  ]));
-
-  if (isCollapsed) {
-    const rendered = renderConversationCollapsedFragment(
-      'compacted-context handoff (re-injected instructions + session summary)',
-      width,
-      {
-        prefix: ` ${GLYPHS.navigation.collapsed} `,
-        prefixFg: T.toolAccent,
-        text: '244',
-        bodyBg: T.collapsedBodyBg,
-        dim: true,
-      },
-    );
-    context.history.addLines(rendered);
-  } else {
-    context.history.addLines(renderMarkdownTracked(content, width).lines);
-  }
-
-  context.blockRegistry.push({
-    blockIndex: blockIdx,
-    collapseKey,
-    type: 'tool',
-    startLine,
-    lineCount: context.history.getLineCount() - startLine,
-    rawContent: content,
-  });
-}
-
 export function renderConversationAssistantMessage(
   context: ConversationRenderContext,
   message: Extract<Message, { role: 'assistant' }>,
@@ -181,24 +155,90 @@ export function renderConversationAssistantMessage(
   msgIdx: number,
 ): void {
   const T = activeTheme();
-  const assistantHeaderDetails = [];
-  if (message.model) {
-    assistantHeaderDetails.push({ text: ` ${message.model}${message.provider ? ` (${message.provider})` : ''} `, fg: T.modelNameDim, dim: true });
+  const turn = context.assistantTurns?.get(msgIdx);
+  // No membership (a standalone render, e.g. a golden-frame harness) behaves
+  // exactly as it always did: the message owns its own header.
+  const isHead = turn?.isHead ?? true;
+  const turnCollapsed = isTurnCollapsed(turn, context.collapseState);
+
+  if (isHead) {
+    const assistantHeaderDetails = [];
+    if (message.model) {
+      assistantHeaderDetails.push({ text: ` ${message.model}${message.provider ? ` (${message.provider})` : ''} `, fg: T.modelNameDim, dim: true });
+    }
+    // The count spans the whole run, not just this message — that is the point
+    // of merging. `tools:1` repeated over five headers becomes one `5 tools`.
+    const toolCount = turn?.toolCallCount ?? message.toolCalls?.length ?? 0;
+    if (toolCount > 0) {
+      assistantHeaderDetails.push({ text: ` ${GLYPHS.status.pending} ${toolCount} tool${toolCount === 1 ? '' : 's'} `, fg: T.toolAccent });
+    }
+    // A label every call in the run shares belongs here, once, instead of on
+    // every branch — the branches then lead with what distinguishes them.
+    //
+    // Hoisted ONLY when it fits whole. A label chopped mid-word ("Calling the
+    // assistant serv") is worse than no label: it costs a third of the header
+    // and tells you less than the rows below it already do, since each row
+    // leads with its own distinguishing token. So it either fits or it goes —
+    // never a truncated stub. Dropping it loses nothing reachable: the rows
+    // still name every call, and omitToolName is unaffected either way.
+    if (turn?.sharedToolLabel) {
+      const usedCols = assistantHeaderDetails.reduce((sum, seg) => sum + getDisplayWidth(seg.text), 0);
+      const availCols = width - LAYOUT.RIGHT_MARGIN - (LAYOUT.LEFT_MARGIN + 1)
+        - getDisplayWidth(' assistant ') - usedCols;
+      const labelText = ` ${turn.sharedToolLabel} `;
+      if (getDisplayWidth(labelText) <= availCols) {
+        assistantHeaderDetails.push({ text: labelText, fg: T.toolNameFg });
+      }
+    }
+    // Aggregated across the run so suppressing a non-head's header never loses
+    // the signal that reasoning happened.
+    const hasReasoning = turn?.hasReasoning ?? Boolean(message.reasoningContent || message.reasoningSummary);
+    if (hasReasoning) {
+      assistantHeaderDetails.push({ text: ` ${GLYPHS.status.active} reasoning `, fg: T.reasoningAccent, dim: true });
+    }
+    if (turnCollapsed && toolCount > 0) {
+      assistantHeaderDetails.push({ text: ` ${GLYPHS.navigation.collapsed} hidden `, fg: '244', dim: true });
+    }
+    // An empty run — no model, no tools, no reasoning — emits no header rather
+    // than a bare `● assistant` with nothing under it.
+    if (assistantHeaderDetails.length > 0) {
+      const headerStartLine = context.history.getLineCount();
+      const headerBlockIdx = context.blockRegistry.length;
+      context.history.addLine(renderConversationEventLine(width, {
+        marker: GLYPHS.status.active,
+        markerFg: T.assistantHeader,
+        label: 'assistant',
+        labelFg: T.assistantHeader,
+        detailFg: '244',
+      }, assistantHeaderDetails));
+
+      // Turns are collapsible as a unit and default to EXPANDED — a turn
+      // collapsed by default would hide the activity the transcript exists to
+      // show. Registered only when there is machinery to hide.
+      if (turn && toolCount > 0) {
+        if (!context.collapseState.has(turn.turnKey)) {
+          context.collapseState.set(turn.turnKey, false);
+        }
+        context.blockRegistry.push({
+          blockIndex: headerBlockIdx,
+          collapseKey: turn.turnKey,
+          type: 'assistant_turn',
+          startLine: headerStartLine,
+          lineCount: 1,
+          rawContent: `assistant turn — ${toolCount} tool call${toolCount === 1 ? '' : 's'}${turn.sharedToolLabel ? ` (${turn.sharedToolLabel})` : ''}`,
+          groupMemberIndexes: turn.resultIndexes,
+          toolName: turn.sharedToolLabel,
+        });
+      }
+    }
   }
-  if (message.toolCalls && message.toolCalls.length > 0) {
-    assistantHeaderDetails.push({ text: ` ${GLYPHS.status.pending} tools:${message.toolCalls.length} `, fg: T.toolAccent });
-  }
-  if (message.reasoningContent || message.reasoningSummary) {
-    assistantHeaderDetails.push({ text: ` ${GLYPHS.status.active} reasoning `, fg: T.reasoningAccent, dim: true });
-  }
-  if (assistantHeaderDetails.length > 0) {
-    context.history.addLine(renderConversationEventLine(width, {
-      marker: GLYPHS.status.active,
-      markerFg: T.assistantHeader,
-      label: 'assistant',
-      labelFg: T.assistantHeader,
-      detailFg: '244',
-    }, assistantHeaderDetails));
+
+  // A collapsed turn hides its machinery (tool rows, reasoning) but never its
+  // prose: the prose IS the answer, and hiding it would make collapse
+  // destructive rather than tidying.
+  if (turnCollapsed) {
+    if (message.content) renderAssistantProse(context, message, width, lineNumberMode, collapseThreshold, msgIdx);
+    return;
   }
 
   const showThinking = context.configManager?.get('display.showThinking') ?? false;
@@ -252,7 +292,27 @@ export function renderConversationAssistantMessage(
     context.history.addLine(createEmptyLine(width));
   }
 
-  if (message.content) {
+  if (message.content) renderAssistantProse(context, message, width, lineNumberMode, collapseThreshold, msgIdx);
+}
+
+/**
+ * Assistant prose — the model's actual answer — at full prominence and full
+ * width.
+ *
+ * Prose is never drawn as a tree branch. It is what closes a group (see
+ * startsNewTurn) and the content the tree exists to surround, not a child of
+ * it; indenting it would also re-wrap markdown at a reduced width, which is
+ * the table-drops-columns hazard.
+ */
+function renderAssistantProse(
+  context: ConversationRenderContext,
+  message: Extract<Message, { role: 'assistant' }>,
+  width: number,
+  lineNumberMode: 'all' | 'code' | 'off',
+  collapseThreshold: number,
+  msgIdx: number,
+): void {
+  {
     const showAllLineNumbers = lineNumberMode === 'all';
     const showCodeBlockLineNumbers = lineNumberMode === 'all' ? false : lineNumberMode === 'code';
     // First pass: measure totalLines for gutter sizing (only when line-numbers='all').
@@ -322,15 +382,6 @@ export function renderConversationAssistantMessage(
     }
   }
 
-  if (message.toolCalls && message.toolCalls.length > 0) {
-    for (const tc of message.toolCalls) {
-      // A tool call with no result message yet is still awaiting a decision
-      // (e.g. approval) — show a pending glyph, not the completed ✓.
-      const ran = context.completedToolCallIds === undefined
-        || (tc.id !== undefined && context.completedToolCallIds.has(tc.id));
-      context.history.addLines(renderToolCallBlock(tc, ran ? 'done' : 'pending', undefined, width));
-    }
-  }
 }
 
 export function renderConversationSystemMessage(
@@ -351,92 +402,64 @@ export function renderConversationSystemMessage(
 }
 
 /**
- * True when `message` is a non-owning member of a folded tool-result group
- * (see conversation-tool-groups.ts) that is currently collapsed — it rendered
- * nothing (renderConversationToolMessage returns right after the header-owning
- * member's header line), so the per-message trailing blank-line separator is
- * skipped for it too. The header-owning ("first") member always gets its
- * separator since it always renders at least the header line; any member of
- * an EXPANDED group renders in full and keeps its separator as well.
+ * Render one tool-call row as a branch of its turn.
+ *
+ * The call row is its own plan node rather than part of the assistant
+ * message's render, which is what lets a result be interleaved BETWEEN two
+ * calls of the same message — the ordering guarantee that makes a
+ * late-finishing call's result land inside its own subtree instead of after a
+ * call issued later.
  */
-export function isFoldedGroupMember(
-  membership: ToolGroupMembership | undefined,
-  collapseState: ReadonlyMap<string, boolean>,
-): boolean {
-  return membership !== undefined && !membership.isFirst && (collapseState.get(membership.groupKey) ?? true);
-}
-
-/**
- * Dedupe a group's per-member tool names into a compact, honest summary —
- * "read×3 exec write" rather than either a bare count or a full repeated
- * list. Truncates with an honest "…+N more" tail rather than silently
- * dropping names once the list gets long.
- */
-function summarizeToolNames(names: readonly string[]): string {
-  const counts = new Map<string, number>();
-  const order: string[] = [];
-  for (const name of names) {
-    if (!counts.has(name)) {
-      counts.set(name, 0);
-      order.push(name);
-    }
-    counts.set(name, counts.get(name)! + 1);
-  }
-  const MAX_SHOWN = 4;
-  const parts = order.map((name) => (counts.get(name)! > 1 ? `${name}×${counts.get(name)}` : name));
-  if (parts.length > MAX_SHOWN) {
-    return `${parts.slice(0, MAX_SHOWN).join(' ')} …+${parts.length - MAX_SHOWN} more`;
-  }
-  return parts.join(' ');
-}
-
-/**
- * Render the synthetic header line for a folded run of >=2 tool-result
- * messages: one line + one BlockMeta (type 'tool_group'), shared by every
- * member under `membership.groupKey`. Returns whether the group is currently
- * collapsed, establishing the collapsed-by-default state on first render —
- * mirrors the has/set default-establishment idiom used by every other
- * collapsible block in this file.
- */
-function renderToolGroupHeader(
+export function renderConversationToolCallNode(
   context: ConversationRenderContext,
+  node: RenderNode,
   width: number,
-  membership: ToolGroupMembership,
-): boolean {
+): void {
   const T = activeTheme();
-  const isCollapsed = context.collapseState.has(membership.groupKey)
-    ? context.collapseState.get(membership.groupKey)!
-    : true;
-  if (!context.collapseState.has(membership.groupKey)) {
-    context.collapseState.set(membership.groupKey, true);
+  const message = node.message;
+  if (message.role !== 'assistant') return;
+  const call = message.toolCalls?.[node.callIndex ?? 0];
+  if (!call) return;
+
+  const turn = context.assistantTurns?.get(node.absIdx);
+  if (isTurnCollapsed(turn, context.collapseState)) return;
+
+  const ran = context.completedToolCallIds === undefined
+    || (call.id !== undefined && context.completedToolCallIds.has(call.id));
+  const indent = treeIndentCols(node.depth, width);
+  const lines = renderToolCallBlock(
+    call,
+    ran ? 'done' : 'pending',
+    undefined,
+    width,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    { indentCols: indent, omitToolName: turn?.sharedToolLabel !== undefined },
+  );
+  const line = lines[0];
+  if (line) drawBranchConnector(line, node.depth, node.connector, node.openAncestorDepths, width, T.toolAccent);
+  context.history.addLines(lines);
+
+  // Recursion stopped here — say so rather than silently showing a subtree as
+  // if it were a leaf.
+  if (node.truncated) {
+    const noteIndent = treeIndentCols(node.depth + 1, width);
+    context.history.addLine(renderConversationEventLine(width, {
+      marker: GLYPHS.navigation.collapsed,
+      markerFg: '244',
+      label: '',
+      labelFg: '244',
+      detailFg: '244',
+    }, [{
+      text: node.truncated === 'depth'
+        ? ` nested activity continues below depth ${MAX_NEST_DEPTH} `
+        : ' nested activity repeats an agent already shown above ',
+      fg: '244',
+      dim: true,
+    }], noteIndent));
   }
-
-  const blockIdx = context.blockRegistry.length;
-  const startLine = context.history.getLineCount();
-  const toolNamesSummary = summarizeToolNames(membership.toolNames);
-  context.history.addLine(renderConversationEventLine(width, {
-    marker: GLYPHS.surface.altCursor,
-    markerFg: T.toolAccent,
-    label: 'tool results',
-    labelFg: T.toolAccent,
-    detailFg: '244',
-  }, [
-    { text: ` ${membership.toolCount} tool${membership.toolCount === 1 ? '' : 's'} `, fg: T.toolAccent },
-    ...(toolNamesSummary ? [{ text: ` ${toolNamesSummary} `, fg: T.toolNameFg }] : []),
-    { text: ` ${isCollapsed ? GLYPHS.navigation.collapsed : GLYPHS.navigation.expanded} ${membership.totalLines} line${membership.totalLines === 1 ? '' : 's'} `, fg: '244', dim: true },
-  ]));
-
-  context.blockRegistry.push({
-    blockIndex: blockIdx,
-    collapseKey: membership.groupKey,
-    type: 'tool_group',
-    startLine,
-    lineCount: 1,
-    rawContent: `${membership.toolCount} tool result${membership.toolCount === 1 ? '' : 's'} folded (${toolNamesSummary}, ${membership.totalLines} line${membership.totalLines === 1 ? '' : 's'} total)`,
-    groupMemberIndexes: membership.memberIndexes,
-  });
-
-  return isCollapsed;
 }
 
 export function renderConversationToolMessage(
@@ -444,20 +467,16 @@ export function renderConversationToolMessage(
   message: Extract<Message, { role: 'tool' }>,
   width: number,
   msgIdx: number,
+  node?: RenderNode,
 ): void {
   const T = activeTheme();
-  const groupMembership = context.toolGroupMembership?.get(msgIdx);
-  if (groupMembership) {
-    const collapsed = groupMembership.isFirst
-      ? renderToolGroupHeader(context, width, groupMembership)
-      : (context.collapseState.get(groupMembership.groupKey) ?? true);
-    // Folded: the header (rendered above, once, by the first member) is the
-    // group's entire visible representation while collapsed — no member,
-    // first or not, renders its own header/body/BlockMeta.
-    if (collapsed) return;
-  }
+  const depth = node?.depth ?? 0;
+  const indent = treeIndentCols(depth, width);
+  const turn = context.assistantTurns?.get(msgIdx);
+  // A collapsed turn hides its machinery; the head's prose stays visible.
+  if (isTurnCollapsed(turn, context.collapseState)) return;
 
-  const collapseKey = `msg_${msgIdx}`;
+  const collapseKey = node ? collapseKeyForNode(node) : `msg_${msgIdx}`;
   const blockIdx = context.blockRegistry.length;
   const startLine = context.history.getLineCount();
   const contentLines = message.content.split('\n');
@@ -504,22 +523,46 @@ export function renderConversationToolMessage(
   const isCancelled = blockType === 'tool' && /^Error: cancelled by user\b/.test(contentLines[0] ?? '');
   const warnTone = activeUiTones().chrome.warn;
 
-  context.history.addLine(renderConversationEventLine(width, {
+  // In the tree a result hangs under the call that produced it, so repeating
+  // the generic label ("tool result") and the tool's own name — which the
+  // parent call row already shows — is exactly the boilerplate this layout
+  // removes. The row leads with its size badge instead. `diff` and `cancelled`
+  // keep their labels: those carry information the parent row does not.
+  const inTree = depth > 0 && indent > 0;
+  const label = isCancelled ? 'cancelled' : (blockType === 'diff' ? 'diff' : (inTree ? '' : 'tool result'));
+  const nameSegments = inTree
+    ? []
+    : (message.toolName
+      ? [{ text: ` ${message.toolName} `, fg: T.toolNameFg }]
+      : [{ text: ` ${summarizeCallId(message.callId || 'standalone')} `, fg: '244' as const, dim: true }]);
+
+  const headerLine = renderConversationEventLine(width, {
     marker: isCancelled ? GLYPHS.status.blocked : (blockType === 'diff' ? GLYPHS.status.dualPane : GLYPHS.status.active),
     markerFg: isCancelled ? warnTone : (blockType === 'diff' ? T.diffAccent : T.toolAccent),
-    label: isCancelled ? 'cancelled' : (blockType === 'diff' ? 'diff' : 'tool result'),
+    label,
     labelFg: isCancelled ? warnTone : (blockType === 'diff' ? T.diffAccent : T.toolAccent),
     detailFg: '244',
   }, [
-    ...(message.toolName
-      ? [{ text: ` ${message.toolName} `, fg: T.toolNameFg }]
-      : [{ text: ` ${summarizeCallId(message.callId || 'standalone')} `, fg: '244' as const, dim: true }]),
+    ...nameSegments,
     { text: ` ${isCollapsed ? GLYPHS.navigation.collapsed : GLYPHS.navigation.expanded} ${lineCount} line${lineCount === 1 ? '' : 's'} `, fg: '244', dim: true },
-  ]));
+  ], indent);
+  if (node && inTree) {
+    drawBranchConnector(headerLine, node.depth, node.connector, node.openAncestorDepths, width, T.toolAccent);
+    // A settled result means its call finished: ✓ in the shared gutter, or the
+    // blocked glyph when the user cancelled it. Distinguished by GLYPH, not by
+    // colour alone.
+    writeTreeStatusGutter(
+      headerLine,
+      isCancelled ? GLYPHS.status.blocked : TOOL_STATUS.SUCCESS_ICON,
+      isCancelled ? warnTone : activeUiTones().chrome.good,
+      width,
+    );
+  }
+  context.history.addLine(headerLine);
 
   if (isCollapsed) {
     const collapseSuffixReserve = 30;
-    const avail = Math.max(0, width - LAYOUT.LEFT_MARGIN - LAYOUT.RIGHT_MARGIN - collapseSuffixReserve);
+    const avail = Math.max(0, width - LAYOUT.LEFT_MARGIN - LAYOUT.RIGHT_MARGIN - indent - collapseSuffixReserve);
     const hiddenCount = lineCount - 1;
     let collapsedText: string;
     if (resultSummary !== null) {
@@ -539,12 +582,19 @@ export function renderConversationToolMessage(
       text: '244',
       bodyBg: T.collapsedBodyBg,
       dim: true,
+      indentCols: indent,
     });
     context.history.addLines(rendered);
   } else {
     // Diff or plain result — either way this is exactly `expandedLines`,
     // already computed above (and already what the header's line count is
     // honest about), so there is nothing left to render here.
+    //
+    // Deliberately NOT indented. renderExpandedToolResultLines is the single
+    // source of truth for the "N lines" badge above; re-wrapping it at a
+    // reduced width would desynchronise that count from what expansion
+    // actually reveals — the markdown-table-drops-columns bug class. The body
+    // is already visually bound to its row by the header directly above it.
     context.history.addLines(expandedLines);
   }
 
@@ -586,52 +636,59 @@ export function appendConversationMessages(
   const renderContext: ConversationRenderContext = context.completedToolCallIds !== undefined
     ? context
     : { ...context, completedToolCallIds: collectCompletedToolCallIds(messages) };
-  // Fold runs of >=2 consecutive tool-result messages sharing one assistant
-  // turn under a single collapsible header (see conversation-tool-groups.ts),
-  // unless the caller already supplied membership (the line-cache path
-  // computes it once per renderInto call and threads it through).
-  const toolGroupMembership = renderContext.toolGroupMembership
-    ?? computeToolGroupMembership(messages, msgIndexOffset, width);
-  const groupedContext: ConversationRenderContext = renderContext.toolGroupMembership !== undefined
+  const assistantTurns = renderContext.assistantTurns
+    ?? computeAssistantTurns(messages, msgIndexOffset);
+  const turnContext: ConversationRenderContext = renderContext.assistantTurns !== undefined
     ? renderContext
-    : { ...renderContext, toolGroupMembership };
+    : { ...renderContext, assistantTurns };
 
-  // Header line of each currently-open tool-group, keyed by groupKey — the
-  // first member's own registered line, recorded as that member is reached
-  // below so later (non-first) members of the SAME group can resolve to it
-  // instead of whatever position the buffer happens to be at when a folded
-  // (zero-line) member is processed. See isFoldedGroupMember's doc.
-  const groupHeaderLines = new Map<string, number>();
+  const plan = buildRenderPlan(messages, msgIndexOffset, {
+    resolveAgentSnapshot: context.resolveAgentSnapshot,
+  });
 
-  for (let msgIdx = 0; msgIdx < messages.length; msgIdx++) {
-    const message = messages[msgIdx];
-    // absoluteIdx aligns the slice-relative loop counter with the absolute
-    // message index used as the key in messageKindRegistry and messageLineRegistry.
-    const absoluteIdx = msgIndexOffset + msgIdx;
-    const membership = toolGroupMembership.get(absoluteIdx);
-    const currentLine = groupedContext.history.getLineCount();
-    if (membership?.isFirst) groupHeaderLines.set(membership.groupKey, currentLine);
-    // A folded (non-first, currently collapsed) group member renders zero
-    // lines of its own — `currentLine` here is just wherever the buffer
-    // happens to sit after the last member that DID render, which is the
-    // position the NEXT real content starts at, not this message's own
-    // position. Anchor it at the group's header line instead, so
-    // transcript-event navigation lands on the group rather than skipping
-    // past it to the following message.
-    messageLineRegistry[absoluteIdx] = isFoldedGroupMember(membership, groupedContext.collapseState)
-      ? (groupHeaderLines.get(membership!.groupKey) ?? currentLine)
-      : currentLine;
-    if (message.role === 'user') {
-      renderConversationUserMessage(groupedContext, message, width, absoluteIdx);
-    } else if (message.role === 'assistant') {
-      renderConversationAssistantMessage(groupedContext, message, width, lineNumberMode, collapseThreshold, absoluteIdx);
-    } else if (message.role === 'system') {
-      renderConversationSystemMessage(groupedContext, message, width, absoluteIdx);
-    } else if (message.role === 'tool') {
-      renderConversationToolMessage(groupedContext, message, width, absoluteIdx);
+  // Header line of each turn, so a row that renders nothing (hidden by a
+  // collapsed turn) still anchors transcript navigation at its turn rather
+  // than at whatever position the buffer happens to sit at.
+  const turnHeaderLines = new Map<string, number>();
+
+  for (let i = 0; i < plan.length; i++) {
+    const node = plan[i]!;
+    const before = turnContext.history.getLineCount();
+
+    if (node.kind === 'toolcall') {
+      renderConversationToolCallNode(turnContext, node, width);
+    } else {
+      const message = node.message;
+      // Nested rows index into their own agent's snapshot, so they must not
+      // write the root transcript's line registry.
+      const isRoot = node.scope === '';
+      const turn = turnContext.assistantTurns?.get(node.absIdx);
+      if (turn?.isHead) turnHeaderLines.set(turn.turnKey, before);
+      if (isRoot) {
+        messageLineRegistry[node.absIdx] = turn && isTurnCollapsed(turn, turnContext.collapseState)
+          ? (turnHeaderLines.get(turn.turnKey) ?? before)
+          : before;
+      }
+
+      if (message.role === 'user') {
+        renderConversationUserMessage(turnContext, message, width, node.absIdx);
+      } else if (message.role === 'assistant') {
+        renderConversationAssistantMessage(turnContext, message, width, lineNumberMode, collapseThreshold, node.absIdx);
+      } else if (message.role === 'system') {
+        renderConversationSystemMessage(turnContext, message, width, node.absIdx);
+      } else if (message.role === 'tool') {
+        renderConversationToolMessage(turnContext, message, width, node.absIdx, node);
+      }
     }
-    if (!isFoldedGroupMember(membership, groupedContext.collapseState)) {
-      groupedContext.history.addLine(createEmptyLine(width));
+
+    const rendered = turnContext.history.getLineCount() > before;
+    if (!rendered) continue;
+    // Branch rows sit tight under their parent; the blank separator lands only
+    // after the last row of a top-level unit, which is what keeps a turn's
+    // whole subtree reading as one block instead of a run of spaced-out rows.
+    const next = plan[i + 1];
+    if (!next || next.depth === 0) {
+      turnContext.history.addLine(createEmptyLine(width));
     }
   }
 }

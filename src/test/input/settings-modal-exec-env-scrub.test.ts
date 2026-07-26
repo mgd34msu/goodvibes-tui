@@ -8,7 +8,7 @@ import { mkdirSync, rmSync, existsSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
 import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
-import type { ConfigManager as ConfigManagerType } from '@pellux/goodvibes-sdk/platform/config';
+import type { ConfigKey, ConfigManager as ConfigManagerType, ConfigValue } from '@pellux/goodvibes-sdk/platform/config';
 import { buildSettingGroups } from '../../input/settings-modal-data.ts';
 import { applySettingValue } from '../../input/settings-modal-mutations.ts';
 import {
@@ -48,7 +48,19 @@ describe('permissions.execEnvScrubAllowlist synthetic setting', () => {
   });
 
   test('degrades a malformed (non-array) value to empty, never throws', () => {
-    const stub: Pick<ConfigManagerType, 'get'> = { get: () => 'not-an-array' };
+    // permissions.execEnvScrubAllowlist is TUI-local, not in the SDK's
+    // ConfigValue<K> mapping, so it resolves to `never` there; the stub's
+    // `get` has to stay generic over K to satisfy ConfigManager's real
+    // `get<K extends ConfigKey>(key: K): ConfigValue<K>` signature.
+    // The reader is handed a `get` that returns a string where a string[] is
+    // expected. Writing this as a generic `<K extends ConfigKey>(key: K) =>
+    // ConfigValue<K>` makes tsc compare two deferred `ConfigValue<K>`
+    // conditionals against each other and give up with "excessive stack depth"
+    // (TS2321), so the stub returns `unknown` and is asserted onto the real
+    // member type once — a shallow comparison tsc can actually complete.
+    const stub = {
+      get: (_key: ConfigKey): unknown => 'not-an-array',
+    } as Pick<ConfigManagerType, 'get'>;
     expect(readExecEnvScrubAllowlist(stub)).toEqual([]);
   });
 
@@ -73,7 +85,13 @@ describe('permissions.execEnvScrubAllowlist synthetic setting', () => {
     });
     expect(result.changed).toBe(true);
     expect(result.effectMessage ?? '').not.toContain('Save failed');
-    expect(cm.get(EXEC_ENV_SCRUB_ALLOWLIST_CONFIG_KEY)).toEqual(['CI_SIGNING_KEY']);
+    // EXEC_ENV_SCRUB_ALLOWLIST_CONFIG_KEY is declared as plain `ConfigKey`
+    // (the whole schema union) in exec-env-scrub-config.ts, not narrowed to
+    // its own literal, so cm.get(...) here statically resolves to the union
+    // of every schema value type — which never includes string[] since this
+    // key genuinely isn't schema-registered. It really does round-trip as a
+    // string[] at runtime; go through `unknown` to say so, as TS suggests.
+    expect(cm.get(EXEC_ENV_SCRUB_ALLOWLIST_CONFIG_KEY) as unknown as string[]).toEqual(['CI_SIGNING_KEY']);
   });
 
   test('buildSettingGroups injects the entry into the permissions category exactly once', () => {

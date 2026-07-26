@@ -30,6 +30,7 @@ export type OnboardingWizardStepId =
   | 'features-context'
   | 'features-telemetry'
   | 'features-automation'
+  | 'features-devices'
   | 'features-provider'
   | 'features-advanced'
   | 'review';

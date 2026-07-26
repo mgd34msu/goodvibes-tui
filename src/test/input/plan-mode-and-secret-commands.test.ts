@@ -84,7 +84,10 @@ describe('/secret concealed capture', () => {
     // Simulate the user typing and submitting the secret.
     delete process.env.MY_TOKEN;
     concealed.begun[0].onSubmit('s3cr3t-value');
-    expect(process.env.MY_TOKEN).toBe('s3cr3t-value');
+    // onSubmit mutates process.env.MY_TOKEN through a call TS's narrowing
+    // can't see into, so it still treats the property as the `undefined`
+    // the preceding `delete` left it as. Reassert its real declared type.
+    expect(process.env.MY_TOKEN as string | undefined).toBe('s3cr3t-value');
     // The confirmation is redacted — it must never echo the plaintext.
     const confirmation = out.join('\n');
     expect(confirmation).not.toContain('s3cr3t-value');

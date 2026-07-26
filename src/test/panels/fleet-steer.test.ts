@@ -18,7 +18,6 @@ const NOW = 1_700_000_000_000;
 
 function makeTab(overrides: Partial<FleetTab> & { nodeId: string }): FleetTab {
   return {
-    nodeId: overrides.nodeId,
     kind: 'agent',
     agentId: overrides.nodeId,
     label: overrides.nodeId,
@@ -38,7 +37,7 @@ function makeNode(overrides: Partial<ProcessNode> & { id: string }): ProcessNode
     state: 'executing-tool',
     elapsedMs: 0,
     costState: 'unpriced',
-    capabilities: { interruptible: true, killable: true, pausable: false, steerable: true },
+    capabilities: { interruptible: true, killable: true, pausable: false, resumable: false, steerable: true },
     ...overrides,
   };
 }

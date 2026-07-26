@@ -135,7 +135,10 @@ describe('consumeExternalDaemonAttachNotices', () => {
   });
 
   test('a transport failure yields no notices, never throws', async () => {
-    const fetchImpl = (async () => { throw new Error('connection refused'); }) as typeof fetch;
+    const fetchImpl: typeof fetch = Object.assign(
+      async () => { throw new Error('connection refused'); },
+      { preconnect: () => {} },
+    );
     const notices = await consumeExternalDaemonAttachNotices({
       baseUrl: 'http://127.0.0.1:3421',
       authToken: 'shared-bearer',

@@ -20,7 +20,6 @@ import {
 import { signBundle } from '@/runtime/index.ts';
 import { createPermissionEvaluator } from '@/runtime/index.ts';
 import type { PolicyBundlePayload, BundleProvenance } from '@/runtime/index.ts';
-import type { SignedPolicyBundle } from '@/runtime/index.ts';
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
 
@@ -29,7 +28,13 @@ const WRONG_KEY = 'b'.repeat(64);
 
 const EMPTY_PAYLOAD: PolicyBundlePayload = { version: 1, rules: [] };
 
-function makeSignedBundle(id: string, key = TEST_KEY): SignedPolicyBundle<PolicyBundlePayload> {
+// Return type intentionally inferred (not annotated as SignedPolicyBundle<...>):
+// the TUI's `@/runtime/index.ts` re-export of SignedPolicyBundle dropped the
+// SDK's generic payload parameter (see policy-signer.test.ts for the same
+// issue), so annotating this with the real generic argument doesn't type-check
+// against that flattened alias. Letting TS infer from signBundle()'s own
+// (still-generic) return type is both accurate and avoids the mismatch.
+function makeSignedBundle(id: string, key = TEST_KEY) {
   return signBundle(id, EMPTY_PAYLOAD, key);
 }
 

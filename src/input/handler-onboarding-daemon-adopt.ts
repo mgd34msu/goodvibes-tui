@@ -7,6 +7,7 @@
 import { join } from 'node:path';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 import { resolveDaemonCompanionToken } from '../runtime/operator-token-cleanup.ts';
+import { isLoopbackAddress } from './onboarding/onboarding-wizard-helpers.ts';
 import {
   buildManagedDaemonServiceManager,
   detectLegacyUnit,
@@ -60,6 +61,15 @@ export async function handleConnectExistingDaemonForHandler(handler: InputHandle
   try {
     const daemonHomeDir = join(handler.uiServices.environment.homeDirectory, '.goodvibes', 'daemon');
     resolveDaemonCompanionToken(daemonHomeDir, token);
+    // hostMode has to move with the host. The control-plane URL is DERIVED from
+    // hostMode/host/port, and 'local' pins the dial target to 127.0.0.1 no
+    // matter what host is stored — so adopting a daemon on another machine
+    // while leaving hostMode alone would derive a loopback URL for a remote
+    // daemon. Adopting a loopback address stays 'local'.
+    handler.uiServices.platform.configManager.setDynamic(
+      'controlPlane.hostMode',
+      isLoopbackAddress(host) ? 'local' : 'custom',
+    );
     handler.uiServices.platform.configManager.setDynamic('controlPlane.host', host);
     handler.uiServices.platform.configManager.setDynamic('controlPlane.port', port);
 

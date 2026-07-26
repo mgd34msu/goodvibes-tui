@@ -33,7 +33,7 @@ function makeNode(overrides: Partial<ProcessNode> & { id: string }): ProcessNode
     state: 'executing-tool',
     elapsedMs: 0,
     costState: 'unpriced',
-    capabilities: { interruptible: true, killable: true, pausable: false, steerable: false },
+    capabilities: { interruptible: true, killable: true, pausable: false, steerable: false, resumable: false },
     ...overrides,
   };
 }
@@ -430,7 +430,7 @@ describe("buildFleetSnapshot — 'code-index' leaf node", () => {
       costState: 'unpriced',
       costUsd: null,
       usage: undefined,
-      capabilities: { interruptible: false, killable: false, pausable: false, steerable: false },
+      capabilities: { interruptible: false, killable: false, pausable: false, steerable: false, resumable: false },
     });
     const snapshot = buildFleetSnapshot([node]);
     expect(snapshot.runningCount).toBe(1);

@@ -68,7 +68,9 @@ function createFakeLocalAccess(): { access: MemoryAccess; records: Map<string, M
       recallFiltered: false,
       excludedFlaggedCount: 0,
       excludedBelowFloorCount: 0,
+      excludedOutOfWindowCount: 0,
       totalBeforeRecallFilter: records.size,
+      recallFloor: 60,
     }),
     get: async (id) => records.get(id) ?? null,
     updateReview: async (id, patch) => {
@@ -79,7 +81,7 @@ function createFakeLocalAccess(): { access: MemoryAccess; records: Map<string, M
     },
     delete: async (id) => records.delete(id),
     list: async () => [...records.values()],
-    searchSemantic: async () => [...records.values()].map((record) => ({ record, similarity: 1, score: 1 })),
+    searchSemantic: async () => [...records.values()].map((record) => ({ record, distance: 0, similarity: 1, score: 1 })),
     update: async (id, patch) => {
       const record = records.get(id);
       if (!record) return null;
@@ -88,7 +90,7 @@ function createFakeLocalAccess(): { access: MemoryAccess; records: Map<string, M
     },
     link: async (fromId, toId, relation) => {
       if (!records.has(fromId) || !records.has(toId)) return null;
-      const link: MemoryLink = { fromId, toId, relation };
+      const link: MemoryLink = { fromId, toId, relation, createdAt: Date.now() };
       links.push(link);
       return link;
     },
@@ -292,7 +294,9 @@ describe('memory-spine recall honesty passthrough', () => {
         recallFiltered: false,
         excludedFlaggedCount: 0,
         excludedBelowFloorCount: 0,
+        excludedOutOfWindowCount: 0,
         totalBeforeRecallFilter: 0,
+        recallFloor: 60,
       }),
       get: async () => null,
       updateReview: async () => null,

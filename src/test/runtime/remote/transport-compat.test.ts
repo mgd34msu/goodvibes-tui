@@ -5,12 +5,17 @@ import {
   TRANSPORT_COMPATIBILITY_MATRIX,
   VersionMismatchError,
 } from '@/runtime/index.ts';
-import type {
-  ProtocolVersion,
-  VersionNegotiationResult,
-  NegotiatedProtocol,
-} from '@/runtime/index.ts';
 import { TransportPanel } from '@/runtime/index.ts';
+// ProtocolVersion / VersionNegotiationResult / NegotiatedProtocol are not
+// re-exported from @/runtime/index.ts (only the negotiateProtocolVersion
+// value + a handful of other operations symbols are). They live in the SDK's
+// runtime/remote transport seam, reached the same way index.ts itself reaches
+// other `operations`-namespaced types (see its `Operations.<Type>` aliases).
+import type { operations as Operations } from '@pellux/goodvibes-sdk/platform/runtime';
+
+type ProtocolVersion = Operations.ProtocolVersion;
+type VersionNegotiationResult = Operations.VersionNegotiationResult;
+type NegotiatedProtocol = Operations.NegotiatedProtocol;
 
 // ---------------------------------------------------------------------------
 // Helpers

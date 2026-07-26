@@ -90,14 +90,16 @@ describe('planning modal surface', () => {
     const surface = await warm(service);
     const cap = captureCommands();
     const order: string[] = [];
-    let submitted: string | null = null;
+    // Captured on an object (not a bare `let`) so TS tracks the string | null
+    // union across the callback boundary instead of narrowing to the initializer.
+    const submission: { text: string | null } = { text: null };
     surface.onAction?.('submit', actionCtx({ id: 'scope-focused-first-pass', label: '' }, {
       ...cap.extra,
       close: () => order.push('close'),
-      submitInput: (t) => { order.push('submit'); submitted = t; },
+      submitInput: (t) => { order.push('submit'); submission.text = t; },
     }));
     expect(cap.calls).toEqual([]); // no /plan command — this is a real chat turn
-    expect(submitted).toBe('Use a focused first-pass scope for this goal.');
+    expect(submission.text).toBe('Use a focused first-pass scope for this goal.');
     expect(order).toEqual(['close', 'submit']); // close BEFORE the turn starts
   });
 

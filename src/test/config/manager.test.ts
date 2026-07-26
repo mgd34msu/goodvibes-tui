@@ -67,7 +67,7 @@ describe('ConfigManager', () => {
 
   test('reset all keys restores defaults', () => {
     const cm = new ConfigManager({ surfaceRoot: 'tui',  configDir: tempDir, workingDir: tempDir });
-    cm.set('provider.provider', 'anthropic');
+    cm.set('provider.model', 'anthropic:claude-sonnet-4-6');
     cm.set('behavior.autoApprove', true);
     cm.reset();
     const all = cm.getAll();
@@ -77,7 +77,7 @@ describe('ConfigManager', () => {
   test('set does not mutate DEFAULT_CONFIG nested objects', () => {
     const cm = new ConfigManager({ surfaceRoot: 'tui',  configDir: tempDir, workingDir: tempDir });
     const before = structuredClone(DEFAULT_CONFIG);
-    cm.set('provider.provider', 'anthropic');
+    cm.set('provider.model', 'anthropic:claude-sonnet-4-6');
     cm.set('behavior.autoApprove', true);
     cm.set('display.lineNumbers', 'all');
     expect(DEFAULT_CONFIG).toEqual(before);

@@ -10,7 +10,6 @@ import { RouteBindingManager } from '@pellux/goodvibes-sdk/platform/channels';
 import { SharedSessionBroker } from '@pellux/goodvibes-sdk/platform/control-plane';
 import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import { PersistentStore } from '@pellux/goodvibes-sdk/platform/state';
-import type { LegacySchedulerSnapshot } from '@pellux/goodvibes-sdk/platform/automation';
 import { AgentManager } from '@pellux/goodvibes-sdk/platform/tools';
 
 const testAgentExecutor = {
@@ -61,7 +60,6 @@ describe('AutomationManager target semantics', () => {
       defaultSurfaceKind: 'tui',
       jobStore: new AutomationJobStore(join(root, 'automation-jobs.json')),
       runStore: new AutomationRunStore(join(root, 'automation-runs.json')),
-      legacyStore: new PersistentStore<LegacySchedulerSnapshot>(join(root, 'legacy.json')),
       routeBindings,
       sessionBroker,
       spawnTask: ({ prompt }) => {

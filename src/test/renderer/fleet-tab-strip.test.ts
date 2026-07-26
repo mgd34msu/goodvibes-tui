@@ -19,6 +19,8 @@ function makeTab(nodeId: string, label: string): FleetTab {
     lineCache: new MessageLineCache(),
     ledgerEntries: null,
     ledgerLoadStarted: false,
+    steerDraft: null,
+    steerBadge: null,
   };
 }
 

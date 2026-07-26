@@ -15,6 +15,7 @@ type ImageModelRegistry = Pick<ProviderRegistry, 'describeRuntime' | 'getCurrent
 
 const TEST_RUNTIME_METADATA_DEPS: ProviderRuntimeMetadataDeps = {
   secretsManager: {
+    get: async () => null,
     listDetailed: async () => [],
   },
   serviceRegistry: {

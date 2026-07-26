@@ -77,7 +77,7 @@ async function startDaemon(
   let boundPort = 0;
   const capturingServe = ((options) => {
     const server = Bun.serve(options);
-    boundPort = server.port;
+    if (server.port !== undefined) boundPort = server.port;
     return server;
   }) as typeof Bun.serve;
   const daemon = new DaemonServer({

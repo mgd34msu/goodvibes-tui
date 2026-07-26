@@ -4,6 +4,23 @@ import { join } from 'path';
 import { tmpdir } from 'os';
 import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import { DEFAULT_CONFIG } from '@pellux/goodvibes-sdk/platform/config';
+import type { DeepReadonly, GoodVibesConfig } from '@pellux/goodvibes-sdk/platform/config';
+
+/**
+ * `fleet.maxSize` is a real, live ConfigKey (present in the SDK's ConfigKey /
+ * ConfigValue union) but the `fleet` category on GoodVibesConfig itself is
+ * added via a `declare module` merge inside the SDK's internal
+ * schema-domain-fleet.ts. That file has no public subpath export (only
+ * `@pellux/goodvibes-sdk/platform/config` is exported, which re-exports
+ * schema-types.js/schema.js but never imports schema-domain-fleet.js), so the
+ * merge never reaches this file's type-check even though DEFAULT_CONFIG.fleet
+ * and ConfigManager.getAll().fleet genuinely exist at runtime (proven by the
+ * passing `mgr.get('fleet.maxSize')` calls elsewhere in this file, which DO
+ * type-check because ConfigKey/ConfigValue list 'fleet.maxSize' directly in
+ * schema-types.ts, not through the augmentation). This local type augments
+ * the gap without touching the SDK package.
+ */
+type ConfigWithFleet = GoodVibesConfig & { fleet: { maxSize: number } };
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -90,7 +107,7 @@ describe('Config schema extensions: orchestration, storage, sandbox, danger, and
 
     test('DEFAULT_CONFIG.orchestration has correct default values', () => {
       expect(DEFAULT_CONFIG.orchestration.recursionEnabled).toBe(false);
-      expect(DEFAULT_CONFIG.fleet.maxSize).toBe(8);
+      expect((DEFAULT_CONFIG as ConfigWithFleet).fleet.maxSize).toBe(8);
       expect(DEFAULT_CONFIG.orchestration.maxDepth).toBe(0);
     });
 
@@ -413,7 +430,7 @@ describe('Config schema extensions: orchestration, storage, sandbox, danger, and
   describe('getAll includes new categories', () => {
     test('getAll returns orchestration and danger categories with correct field types', () => {
       const mgr = createConfigManager(tmpDir);
-      const all = mgr.getAll();
+      const all = mgr.getAll() as DeepReadonly<ConfigWithFleet>;
       expect(typeof all.orchestration.recursionEnabled).toBe('boolean');
       expect(typeof all.fleet.maxSize).toBe('number');
       expect(typeof all.orchestration.maxDepth).toBe('number');
@@ -434,7 +451,7 @@ describe('Config schema extensions: orchestration, storage, sandbox, danger, and
     test('getAll snapshot does not reflect subsequent mutations (deep clone)', () => {
       const mgr = createConfigManager(tmpDir);
       const valueBefore = mgr.get('fleet.maxSize');
-      const snapshot = mgr.getAll();
+      const snapshot = mgr.getAll() as DeepReadonly<ConfigWithFleet>;
       // Set to a value that differs from whatever was loaded (pick 1 if current is > 1, else pick 2)
       const newValue = valueBefore !== 1 ? 1 : 2;
       mgr.set('fleet.maxSize', newValue);
@@ -452,7 +469,7 @@ describe('Config schema extensions: orchestration, storage, sandbox, danger, and
     test('DEFAULT_CONFIG.orchestration, daemon, and danger have all required keys', () => {
       expect(DEFAULT_CONFIG.orchestration).toBeDefined();
       expect(typeof DEFAULT_CONFIG.orchestration.recursionEnabled).toBe('boolean');
-      expect(typeof DEFAULT_CONFIG.fleet.maxSize).toBe('number');
+      expect(typeof (DEFAULT_CONFIG as ConfigWithFleet).fleet.maxSize).toBe('number');
       expect(typeof DEFAULT_CONFIG.orchestration.maxDepth).toBe('number');
       // daemon.enabled is the honest key (default true). The deprecated
       // danger.daemon alias was removed from the schema.

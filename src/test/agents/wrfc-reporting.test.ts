@@ -2,7 +2,9 @@ import { describe, expect, test } from 'bun:test';
 import { buildReviewTask, parseReviewerCompletionReport } from '@pellux/goodvibes-sdk/platform/agents';
 import type { EngineerReport } from '@pellux/goodvibes-sdk/platform/agents';
 
-function makeEngineerReport(overrides?: Partial<EngineerReport>): EngineerReport {
+function makeEngineerReport(
+  overrides?: Partial<EngineerReport> & { reviewableOutput?: string },
+): EngineerReport & { reviewableOutput?: string } {
   return {
     version: 1,
     archetype: 'engineer',
@@ -101,8 +103,10 @@ describe('wrfc-reporting buildReviewTask', () => {
       ],
     }), 9.5);
 
-    expect(report.constraintFindings).toHaveLength(2);
-    expect(report.constraintFindings[0]?.evidence).toContain('Reviewed the full non-file deliverable');
-    expect(report.constraintFindings[1]?.evidence).toContain('focused tests pass');
+    expect(report.constraintFindings).toBeDefined();
+    const constraintFindings = report.constraintFindings!;
+    expect(constraintFindings).toHaveLength(2);
+    expect(constraintFindings[0]?.evidence).toContain('Reviewed the full non-file deliverable');
+    expect(constraintFindings[1]?.evidence).toContain('focused tests pass');
   });
 });

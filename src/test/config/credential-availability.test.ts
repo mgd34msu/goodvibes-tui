@@ -78,8 +78,8 @@ describe('deriveCredentialAvailability — honest degrade', () => {
     expect(second).toEqual({ key: 'SLACK_BOT_TOKEN', configured: true, usable: false, source: 'secrets.enc', secure: true });
     // No secret value survives the fold on any path.
     expect(JSON.stringify(out)).not.toContain(IMPOSSIBLE_SECRET_VALUE);
-    expect(Object.keys(first as Record<string, unknown>)).not.toContain('value');
-    expect(Object.keys(first as Record<string, unknown>)).not.toContain('token');
+    expect(Object.keys(first)).not.toContain('value');
+    expect(Object.keys(first)).not.toContain('token');
   });
 
   test('usable defaults false and secure stays undefined when absent (no confident fabrication)', () => {

@@ -91,7 +91,7 @@ function makeContext(
     panelManager,
     loadSystemPrompt: () => '',
     activatePlan: () => {},
-    requestPermission: async () => ({ granted: false }),
+    requestPermission: async () => ({ approved: false }),
     localUserAuthManager: auth,
   });
 
@@ -112,10 +112,10 @@ function makeContext(
     platform: { config: {} as never, configManager: {} as never, localUserAuthManager: auth },
     ops: {},
     extensions: { toolRegistry: {} as never, mcpRegistry: {} as never },
+    ...actions,
     renderRequest: () => {},
     print: (text: string) => { printed.push(text); },
     exit: () => {},
-    ...actions,
   };
 
   return { context, printed };
@@ -207,6 +207,11 @@ describe('local-auth masked-entry command routing — bootstrap wiring', () => {
       requestRender: () => {},
       handlePathCompletion: () => false,
       cyclePanelTab: () => {},
+      isPasteToken: false,
+      now: Date.now(),
+      burstGuard: { timestamps: [], suspended: false, hintShown: false },
+      isTurnActive: () => false,
+      cancelGeneration: () => {},
     };
 
     // Feed text tokens through the real router (handler-feed-routes.ts:117-125).

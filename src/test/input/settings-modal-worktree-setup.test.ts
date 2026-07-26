@@ -59,14 +59,23 @@ describe('worktree.setup.* synthetic settings', () => {
     // registers the `worktree` section in DEFAULT_CONFIG, so a real
     // ConfigManager reads/writes these keys without throwing — covered by the
     // two "real ConfigManager" tests below.)
-    const stub: Pick<ConfigManagerType, 'get'> = { get: () => ['bun install', 'bun run codegen'] };
+    // worktree.setup.* keys are not in the SDK's ConfigKey union (see
+    // worktree-setup-config.ts's header comment) — the real ConfigManager
+    // itself reads them "via a cast" per the SDK's own documented convention,
+    // so this stub mirrors that same cast rather than fabricating a scalar
+    // ConfigValue branch that doesn't exist for these array-shaped keys.
+    const stub: Pick<ConfigManagerType, 'get'> = {
+      get: ((_key: string) => ['bun install', 'bun run codegen']) as unknown as ConfigManagerType['get'],
+    };
     const entry = buildWorktreeSetupCommandsSyntheticEntry(stub);
     expect(entry.currentValue).toEqual(['bun install', 'bun run codegen']);
     expect(entry.isDefault).toBe(false);
   });
 
   test('degrades a malformed (non-array) value to empty, never throws', () => {
-    const stub: Pick<ConfigManagerType, 'get'> = { get: () => 'not-an-array' };
+    const stub: Pick<ConfigManagerType, 'get'> = {
+      get: ((_key: string) => 'not-an-array') as unknown as ConfigManagerType['get'],
+    };
     expect(readWorktreeSetupList(stub, WORKTREE_SETUP_CARRY_OVER_GLOBS_CONFIG_KEY)).toEqual([]);
   });
 
@@ -76,7 +85,12 @@ describe('worktree.setup.* synthetic settings', () => {
     // configManager.get no longer throws for these keys on a fresh store — it
     // returns the registered empty default. The synthetic-entry builder (and
     // its defensive try/catch, now belt-and-suspenders) reflects that default.
-    expect(cm.get(WORKTREE_SETUP_COMMANDS_CONFIG_KEY)).toEqual([]);
+    // worktree.setup.commands has no branch in the SDK's ConfigValue mapped
+    // type (it's an array-shaped key read "via a cast", not a scalar
+    // ConfigKey — see worktree-setup-config.ts). Widen through `unknown`
+    // before comparing, same as the production readWorktreeSetupList() does.
+    const storedCommands: unknown = cm.get(WORKTREE_SETUP_COMMANDS_CONFIG_KEY);
+    expect(storedCommands).toEqual([]);
     const entry = buildWorktreeSetupCommandsSyntheticEntry(cm);
     expect(entry.currentValue).toEqual([]);
     expect(entry.isDefault).toBe(true);
@@ -97,7 +111,8 @@ describe('worktree.setup.* synthetic settings', () => {
     });
     expect(result.changed).toBe(true);
     expect(result.effectMessage ?? '').not.toContain('Save failed');
-    expect(cm.get(WORKTREE_SETUP_COMMANDS_CONFIG_KEY)).toEqual(['bun install']);
+    const writtenCommands: unknown = cm.get(WORKTREE_SETUP_COMMANDS_CONFIG_KEY);
+    expect(writtenCommands).toEqual(['bun install']);
   });
 
   test('buildSettingGroups injects both entries into the orchestration category exactly once', () => {

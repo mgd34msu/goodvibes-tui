@@ -260,7 +260,11 @@ describe('SkillsPanel', () => {
     skillsPanel.onActivate();
     await skillsPanel.awaitReady();
     expect(skillsPanel.handleInput('enter')).toBe(true);
-    expect(skillsPanel.handlePanelIntegrationAction).toBeUndefined();
+    // handlePanelIntegrationAction was removed from SkillsPanel entirely (see
+    // comment above) — probe through a narrow structural type to assert its
+    // genuine absence rather than reading a property the class type no longer
+    // declares.
+    expect((skillsPanel as unknown as { handlePanelIntegrationAction?: unknown }).handlePanelIntegrationAction).toBeUndefined();
   });
 
   test('tags marketplace-installed skills with provenance from the install receipt', async () => {

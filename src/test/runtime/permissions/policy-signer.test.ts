@@ -121,7 +121,7 @@ describe('verifyBundle', () => {
   it('returns ok=false with status=invalid when payload is tampered', () => {
     const bundle = signBundle('v3', TEST_PAYLOAD, TEST_KEY);
     // Tamper with the payload after signing
-    const tampered: SignedPolicyBundle<typeof TEST_PAYLOAD> = {
+    const tampered: SignedPolicyBundle = {
       ...bundle,
       payload: { ...TEST_PAYLOAD, description: 'tampered!' },
     };
@@ -131,7 +131,7 @@ describe('verifyBundle', () => {
   });
 
   it('returns ok=false with status=missing when signature is absent', () => {
-    const unsigned: SignedPolicyBundle<typeof TEST_PAYLOAD> = {
+    const unsigned: SignedPolicyBundle = {
       bundleId: 'v4',
       issuedAt: new Date().toISOString(),
       payload: TEST_PAYLOAD,
@@ -143,7 +143,7 @@ describe('verifyBundle', () => {
   });
 
   it('returns ok=false with status=missing when signature is empty string', () => {
-    const bundle: SignedPolicyBundle<typeof TEST_PAYLOAD> = {
+    const bundle: SignedPolicyBundle = {
       bundleId: 'v5',
       issuedAt: new Date().toISOString(),
       payload: TEST_PAYLOAD,
@@ -155,7 +155,7 @@ describe('verifyBundle', () => {
   });
 
   it('returns ok=false with status=invalid for non-hex signature', () => {
-    const bundle: SignedPolicyBundle<typeof TEST_PAYLOAD> = {
+    const bundle: SignedPolicyBundle = {
       bundleId: 'v6',
       issuedAt: new Date().toISOString(),
       payload: TEST_PAYLOAD,
@@ -184,7 +184,7 @@ describe('verifyBundle', () => {
   it('returns ok=false with status=invalid when bundleId is swapped (metadata covers HMAC)', () => {
     const bundle = signBundle('v9', TEST_PAYLOAD, TEST_KEY);
     // Attacker swaps bundleId without re-signing
-    const tampered: SignedPolicyBundle<typeof TEST_PAYLOAD> = {
+    const tampered: SignedPolicyBundle = {
       ...bundle,
       bundleId: 'attacker-bundle-id',
     };
@@ -196,7 +196,7 @@ describe('verifyBundle', () => {
   it('returns ok=false with status=invalid when issuedAt is swapped (metadata covers HMAC)', () => {
     const bundle = signBundle('v10', TEST_PAYLOAD, TEST_KEY);
     // Attacker swaps timestamp without re-signing
-    const tampered: SignedPolicyBundle<typeof TEST_PAYLOAD> = {
+    const tampered: SignedPolicyBundle = {
       ...bundle,
       issuedAt: '1970-01-01T00:00:00.000Z',
     };

@@ -282,7 +282,10 @@ function hostForUrl(host: string): string {
 }
 
 export function resolveCloudflareDaemonBaseUrl(configManager: Pick<ConfigManager, 'get'>): string {
-  const configuredBaseUrl = String(configManager.get('controlPlane.baseUrl' as never) ?? '').trim();
+  // An explicitly DECLARED external address (tunnel / proxy) wins; otherwise the
+  // URL is built from the bind below. The old `controlPlane.baseUrl` this read
+  // was a stored mirror of the bind with no writers, so it drifted from it.
+  const configuredBaseUrl = String(configManager.get('controlPlane.publicBaseUrl' as never) ?? '').trim();
   if (configuredBaseUrl) return configuredBaseUrl.replace(/\/+$/, '');
   const host = hostForUrl(connectHostForBindHost(String(configManager.get('controlPlane.host' as never) ?? '127.0.0.1')));
   const portValue = Number(configManager.get('controlPlane.port' as never) ?? 3421);

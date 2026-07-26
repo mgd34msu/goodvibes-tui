@@ -102,10 +102,14 @@ export function renderConversationFragment(
   content: string,
   width: number,
   palette: ConversationFragmentPalette,
+  indentCols = 0,
 ): Line[] {
-  const margin = LAYOUT.USER_BOX_MARGIN;
+  const margin = LAYOUT.USER_BOX_MARGIN + Math.max(0, indentCols);
   const prefixWidth = getDisplayWidth(palette.prefix);
-  const maxContentWidth = Math.max(1, width - (margin * 2) - prefixWidth - 2);
+  // The indent is charged to the content budget rather than allowed to push the
+  // fragment past the right edge — a narrow terminal shrinks the preview text
+  // instead of silently truncating its tail.
+  const maxContentWidth = Math.max(1, width - margin - LAYOUT.USER_BOX_MARGIN - prefixWidth - 2);
   const wrapped = wrapText(content, maxContentWidth);
   const contentWidth = wrapped.length > 0 ? Math.max(...wrapped.map((line) => getDisplayWidth(line))) : 0;
   const fragmentWidth = Math.max(prefixWidth + 2, prefixWidth + contentWidth + 2);
@@ -173,6 +177,8 @@ export function renderConversationCollapsedFragment(
     readonly bodyBg?: string;
     readonly dim?: boolean;
     readonly italic?: boolean;
+    /** Tree-branch indent, in columns (see conversation-tree.ts). */
+    readonly indentCols?: number;
   } = {},
 ): Line[] {
   return renderConversationFragment(content, width, {
@@ -182,7 +188,7 @@ export function renderConversationCollapsedFragment(
     bodyBg: options.bodyBg ?? '#1a1a1a',
     dim: options.dim ?? true,
     italic: options.italic ?? false,
-  });
+  }, options.indentCols ?? 0);
 }
 
 export function renderConversationStatusLine(
@@ -193,17 +199,28 @@ export function renderConversationStatusLine(
     readonly markerFg?: string;
     readonly markerBg?: string;
     readonly bodyBg?: string;
+    /**
+     * Tree-branch indent in columns (see conversation-tree.ts). Shifts the
+     * marker and content columns together, so a branch row keeps the same
+     * marker→content relationship a flush row has. Callers pass an indent
+     * already clamped by treeIndentCols(), so this never eats the content
+     * budget below the guaranteed minimum.
+     */
+    readonly indentCols?: number;
   } = {},
 ): Line {
   const line = createEmptyLine(width);
-  const markerCol = LAYOUT.LEFT_MARGIN - 1;
-  const startCol = LAYOUT.LEFT_MARGIN + 1;
+  const indent = Math.max(0, options.indentCols ?? 0);
+  const markerCol = LAYOUT.LEFT_MARGIN - 1 + indent;
+  const startCol = LAYOUT.LEFT_MARGIN + 1 + indent;
   const endCol = Math.max(startCol, width - LAYOUT.RIGHT_MARGIN);
-  line[markerCol] = createStyledCell(options.marker ?? '▌', {
-    fg: options.markerFg ?? '#64748b',
-    bg: options.markerBg ?? options.bodyBg ?? '',
-    bold: true,
-  });
+  if (markerCol >= 0 && markerCol < width) {
+    line[markerCol] = createStyledCell(options.marker ?? '▌', {
+      fg: options.markerFg ?? '#64748b',
+      bg: options.markerBg ?? options.bodyBg ?? '',
+      bold: true,
+    });
+  }
   let col = startCol;
   for (const segment of segments) {
     if (col >= endCol) break;
@@ -222,11 +239,19 @@ export function renderConversationEventLine(
   width: number,
   tone: ConversationEventTone,
   details: readonly ConversationStatusSegment[] = [],
+  indentCols = 0,
 ): Line {
+  // An empty label is legitimate on a branch row: the tree already says what
+  // the row is (a result hanging under its call), so repeating "tool result"
+  // on every one of them is exactly the boilerplate this layout removes. The
+  // row then leads with its own first informative detail segment.
+  const labelSegments = tone.label
+    ? [{ text: ` ${tone.label} `, fg: tone.labelFg, bold: true }]
+    : [];
   return renderConversationStatusLine(
     width,
     [
-      { text: ` ${tone.label} `, fg: tone.labelFg, bold: true },
+      ...labelSegments,
       ...details.map((segment) => ({
         ...segment,
         fg: segment.fg || tone.detailFg || tone.labelFg,
@@ -235,6 +260,7 @@ export function renderConversationEventLine(
     {
       marker: tone.marker,
       markerFg: tone.markerFg,
+      indentCols,
     },
   );
 }

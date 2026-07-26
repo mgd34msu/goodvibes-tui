@@ -17,6 +17,7 @@
  */
 import { describe, test, expect, mock, beforeEach } from 'bun:test';
 import { handlePanelFocusToken, type PanelFocusRouteState } from '../../input/handler-feed-routes.ts';
+import type { PanelBurstGuardState } from '../../input/panel-paste-flood-guard.ts';
 import type { Panel } from '../../panels/types.ts';
 
 // ---------------------------------------------------------------------------
@@ -71,6 +72,8 @@ function buildFocusedState(
     cyclePanelTab: mock(() => {}),
     onPanelInputConsumed: undefined,
     isPasteToken: false,
+    now: Date.now(),
+    burstGuard: { timestamps: [], suspended: false, hintShown: false } as PanelBurstGuardState,
     isTurnActive: () => false,
     cancelGeneration: mock(() => {}),
     ...overrides,
