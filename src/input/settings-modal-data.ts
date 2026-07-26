@@ -132,6 +132,12 @@ export function buildSettingGroups(
     // dropped from the workspace entirely — reachable only by editing the
     // config file by hand.
     if (rawCat === 'push' && groups.has('notifications')) groups.get('notifications')!.push(entry);
+    // cluster.* decides which node on this network reads the inbox, and it is
+    // configured in the same terms the network category already speaks: a
+    // group address, a port, a shared phrase, a peer list. Given no category of
+    // its own it would match nothing and drop out of the workspace entirely —
+    // reachable only by hand-editing a settings file.
+    if (rawCat === 'cluster' && groups.has('network')) groups.get('network')!.push(entry);
   }
 
   // Synthetic display.themeMode enum (auto|dark|light) — TUI-local, see theme-mode-config.ts.

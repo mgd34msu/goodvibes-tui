@@ -75,6 +75,14 @@ export interface InboxListOutput {
   cursor?: string;
 }
 
+/** Start/stop control over the poll loops, handed to a leadership gate. */
+export interface InboxPollingControl {
+  /** Seed one poll and arm the loops. Resolves once polling has begun. */
+  start(): Promise<void>;
+  /** Disarm the loops. Resolves once no further poll can run. */
+  stop(): Promise<void>;
+}
+
 export interface RegisterInboxOptions {
   /** Override the cursor-store filename (tests). */
   storeFileName?: string;
@@ -82,6 +90,20 @@ export interface RegisterInboxOptions {
   skipInitialPoll?: boolean;
   /** Register the built-in slack/discord/email adapters (default true). */
   registerBuiltins?: boolean;
+  /**
+   * Hand polling to a leadership gate instead of starting it here.
+   *
+   * When supplied, register() prepares the store and the handler but does NOT
+   * poll: the callback receives start/stop control and something else decides
+   * when this node is the one that should be fetching. When absent the loops
+   * start immediately, which is the behaviour every existing caller and test
+   * relies on.
+   *
+   * The READ path is never gated. `channels.inbox.list` serves the persisted
+   * feed on every node — a node that is not fetching still answers questions
+   * about what has already arrived.
+   */
+  gatePolling?: (control: InboxPollingControl) => void;
 }
 
 function registerBuiltinAdapters(): void {
@@ -176,11 +198,14 @@ export function registerInboxMethods(
   });
   const poller = new InboundPoller({ adapters, store, logger: ctx.logger });
 
-  // Async bootstrap: init store, seed one poll, start loops. Failures are
-  // logged but never thrown out of register() — the handler still serves the
-  // (possibly empty) persisted feed.
+  const gated = options.gatePolling !== undefined;
+
+  // Async bootstrap: init store, and (ungated) seed one poll and start loops.
+  // Failures are logged but never thrown out of register() — the handler still
+  // serves the (possibly empty) persisted feed.
   const ready: Promise<void> = (async () => {
     await store.init();
+    if (gated) return;
     if (!options.skipInitialPoll) {
       await poller.pollOnce();
     }
@@ -190,6 +215,27 @@ export function registerInboxMethods(
       error: summarizeError(error),
     });
   });
+
+  if (options.gatePolling) {
+    options.gatePolling({
+      start: async () => {
+        // The store must be ready before the first fetch, or the seed poll
+        // would write cursors into an uninitialised store.
+        await ready;
+        if (!options.skipInitialPoll) {
+          await poller.pollOnce();
+        }
+        poller.start();
+      },
+      // Synchronous underneath: stop() clears the interval timers, so once it
+      // returns no further poll can be scheduled. Declared async because the
+      // gate contract promises "resolves when consumption has ceased", and a
+      // future adapter with an in-flight request would need to await it.
+      stop: async () => {
+        poller.stop();
+      },
+    });
+  }
 
   const unregisterMethod = registerCatalogHandler<InboxListInput, InboxListOutput>(
     ctx.catalog,
