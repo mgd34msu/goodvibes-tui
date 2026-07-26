@@ -67,16 +67,10 @@ import { createWorkstreamServices, type OrchestrationEngine, type WorkstreamComm
 import { wireFleetNeedsInputPush } from './fleet-needs-input-push.ts';
 import { codeIndexDbPath, createCodeIndexServices, createStoreRerooter, isCodeInjectionSettingEnabled } from './code-index-services.ts';
 import type { WorkPlanStore } from '../work-plans/work-plan-store.ts';
-import { registerDaemonHandlers, type DaemonHandlerSurfaces } from '../daemon/handlers/index.ts';
-import type { HandlerContext, HandlerLogger } from '../daemon/handlers/context.ts';
-import { createDaemonCredentialStore } from '../daemon/handlers/credentials.ts';
-import { registerRouting } from '../daemon/handlers/routing/index.ts';
-import { registerInboxMethods } from '../daemon/handlers/inbox/index.ts';
-import { registerTriagedInbox } from '../daemon/handlers/triage/index.ts';
-import { registerDraftMethods } from '../daemon/handlers/drafts/index.ts';
-import { registerCalendar } from '../daemon/handlers/calendar/index.ts';
-import { registerEmailMethods } from '../daemon/handlers/email/index.ts';
-import { registerRemoteSurface } from '../daemon/handlers/remote/index.ts';
+import type { DaemonHandlerSurfaces } from '../daemon/handlers/index.ts';
+import { createDaemonHandlerComposition } from './daemon-handler-composition.ts';
+import { createClusterComposition } from './cluster-composition.ts';
+import type { ClusterCoordinator } from '@pellux/goodvibes-sdk/platform/cluster';
 import { WorkspaceTrustManager } from './trust/workspace-trust.ts';
 import { ensureConfiguredModelIsRoutable } from './provider-fallback.ts';
 
@@ -184,6 +178,8 @@ export interface RuntimeServices {
   readonly toolLLM: ToolLLM;
   readonly distributedRuntime: DistributedRuntimeManager;
   readonly daemonHandlers: DaemonHandlerSurfaces;
+  /** Elects the one node on this network that consumes inbound messages; hand it to the DaemonServer so its consumers share this leadership instead of holding a second election. */
+  readonly clusterCoordinator: ClusterCoordinator;
   readonly remoteRunnerRegistry: RemoteRunnerRegistry;
   readonly remoteSupervisor: RemoteSupervisor;
   readonly sessionMemoryStore: SessionMemoryStore;
@@ -504,32 +500,19 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
     automationBridge: automationManager,
   });
 
-  // Daemon handler surfaces: attach HOST handlers to the SDK-auto-registered builtin
-  // gateway descriptors (channels.* / email.* / calendar.*) via catalog.register(descriptor,
-  // handler, { replace: true }) — the SDK owns every id/descriptor/schema. The remote
-  // surface reuses the SAME DistributedRuntimeManager the SDK facade injects.
-  const handlerLogger: HandlerLogger = {
-    info: (message, meta) => console.info(message, meta ?? ''),
-    warn: (message, meta) => console.warn(message, meta ?? ''),
-    error: (message, meta) => console.error(message, meta ?? ''),
-  };
-  const handlerContext: HandlerContext = {
-    catalog: gatewayMethods,
-    credentials: createDaemonCredentialStore(secretsManager),
+  // Which node on this network reads the shared inbox. Inert until started —
+  // no socket, no state written. See cluster-composition.ts.
+  const clusterCoordinator = createClusterComposition({ configManager, shellPaths });
+  // Daemon handler surfaces (see daemon-handler-composition.ts); the inbox
+  // poller registers itself with the coordinator rather than starting eagerly.
+  const daemonHandlers = createDaemonHandlerComposition({
+    gatewayMethods,
+    secretsManager,
     configManager,
     workingDirectory,
     homeDirectory,
-    logger: handlerLogger,
-  };
-  const daemonHandlers = registerDaemonHandlers(handlerContext, {
-    registerRouting,
-    registerInbox: (ctx, routing) =>
-      registerTriagedInbox(ctx, (inboxCtx) => registerInboxMethods(inboxCtx, routing))
-        .unregister,
-    registerDrafts: (ctx) => registerDraftMethods(ctx),
-    registerCalendar,
-    registerEmail: (ctx) => registerEmailMethods(ctx),
-    registerRemote: (ctx) => registerRemoteSurface(ctx, { manager: distributedRuntime }),
+    distributedRuntime,
+    clusterCoordinator,
   });
 
   const remoteRunnerRegistry = new RemoteRunnerRegistry(agentManager);
@@ -768,6 +751,7 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
     toolLLM,
     distributedRuntime,
     daemonHandlers,
+    clusterCoordinator,
     remoteRunnerRegistry,
     remoteSupervisor,
     sessionMemoryStore,
