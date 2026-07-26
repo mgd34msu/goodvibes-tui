@@ -68,14 +68,53 @@ export class InboundPoller {
   start(): void {
     if (this.started) return;
     this.started = true;
-    for (const [id, adapter] of this.adapters) {
-      const handle = this.setIntervalImpl(() => {
-        void this.pollProvider(id, adapter);
-      }, adapter.pollIntervalMs);
-      // Do not keep the event loop alive solely for polling (Bun/Node unref).
-      (handle as unknown as { unref?: () => void }).unref?.();
-      this.timers.set(id, handle);
-    }
+    for (const id of this.adapters.keys()) this.startProvider(id);
+  }
+
+  /**
+   * Begin ONE provider's interval loop. Idempotent.
+   *
+   * Each inbox account is its own surface in the LAN election, so the machine
+   * that reads the work Slack account may not be the machine that reads the
+   * mailbox. A blanket start/stop cannot express that: it would take every
+   * account down to hand one of them over. Everything below is therefore
+   * addressable per provider, and the blanket calls are fan-outs over it.
+   */
+  startProvider(id: string): void {
+    if (this.timers.has(id)) return;
+    const adapter = this.adapters.get(id);
+    if (!adapter) return;
+    const handle = this.setIntervalImpl(() => {
+      void this.pollProvider(id, adapter);
+    }, adapter.pollIntervalMs);
+    // Do not keep the event loop alive solely for polling (Bun/Node unref).
+    (handle as unknown as { unref?: () => void }).unref?.();
+    this.timers.set(id, handle);
+  }
+
+  /**
+   * Stop ONE provider's interval loop. Idempotent.
+   *
+   * Synchronous underneath — clearing the interval means no further tick can
+   * be scheduled — which is what lets the RESIGN that follows a handoff be an
+   * honest claim that this node has stopped reading that account.
+   */
+  stopProvider(id: string): void {
+    const handle = this.timers.get(id);
+    if (handle === undefined) return;
+    this.clearIntervalImpl(handle);
+    this.timers.delete(id);
+    if (this.timers.size === 0) this.started = false;
+  }
+
+  /** True when this node is polling the given provider right now. */
+  isProviderRunning(id: string): boolean {
+    return this.timers.has(id);
+  }
+
+  /** Every provider this node has an adapter for. */
+  providerIds(): string[] {
+    return [...this.adapters.keys()];
   }
 
   /** Run a single poll across all providers now (used on register + tests). */
@@ -83,6 +122,13 @@ export class InboundPoller {
     await Promise.all(
       [...this.adapters.entries()].map(([id, adapter]) => this.pollProvider(id, adapter)),
     );
+  }
+
+  /** Run a single poll for ONE provider now. Never throws. */
+  async pollProviderOnce(id: string): Promise<void> {
+    const adapter = this.adapters.get(id);
+    if (!adapter) return;
+    await this.pollProvider(id, adapter);
   }
 
   /** Poll a single provider, dedup + persist, update status. Never throws. */

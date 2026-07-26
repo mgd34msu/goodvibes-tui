@@ -57,11 +57,11 @@ export interface GatedPollerControl {
  */
 export function createClusterComposition(options: {
   /**
-   * Only `getCategory` is read, which is exactly what `readClusterSettings`
-   * asks for. Naming the full ConfigManager here would demand fifty-odd members
-   * this function never touches, and force every caller holding a narrower
-   * handle — the daemon handler context, for one — through a cast that hides a
-   * real shape mismatch rather than documenting one.
+   * Narrowed to what is actually read, which is exactly what
+   * `readClusterSettings` asks for. The daemon passes a whole ConfigManager;
+   * the handler context carries only this slice, and demanding the full
+   * fifty-odd members would force that caller through a cast that hides a real
+   * shape mismatch rather than documenting one.
    */
   readonly configManager: Pick<ConfigManager, 'getCategory'>;
   readonly shellPaths: ShellPathService;
@@ -77,23 +77,28 @@ export function createClusterComposition(options: {
 }
 
 /**
- * The inbox poller as a leadership gate.
+ * ONE inbox provider as a leadership gate.
+ *
+ * One gate per account, not one for the poller. Each inbox account is its own
+ * surface in the election, so this laptop can hold the work Slack account
+ * while the desktop holds the mailbox — and losing one machine moves only the
+ * accounts it was reading. A single gate covering the whole poller could not
+ * express that: it would hand every account over together, and a node with a
+ * credential for only one of them could never take part at all.
+ *
+ * The provider id is the surface's local discriminator and is hashed before it
+ * reaches the network, so what travels is a digest and not an account name.
  *
  * No replay cursor is threaded in, and that is deliberate rather than an
  * omission: the inbox keeps a persisted per-provider cursor of its own
- * (InboxCursorStore), so a node taking the role over resumes from where the
+ * (InboxCursorStore), so a node taking an account over resumes from where the
  * previous one committed. ntfy needs an explicit `since=` because it has no
  * server-side per-subscriber cursor; this poller does not.
- *
- * The whole poller is one surface here. That is the coarse answer, and the
- * per-account split lands next: every gate now names the surface it consumes,
- * because a node stands down from the surface it lost rather than from
- * everything it was doing.
  */
-export function inboxPollerGate(control: GatedPollerControl): ClusterConsumerGate {
+export function inboxPollerGate(providerId: string, control: GatedPollerControl): ClusterConsumerGate {
   return {
-    id: 'inbox-poller',
-    surface: inboxSurface('all'),
+    id: `inbox-poller:${providerId}`,
+    surface: inboxSurface(providerId),
     start: async () => {
       await control.start();
     },
