@@ -419,6 +419,12 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
   const memorySpine = new MemorySpineClient({ local: createLocalMemoryAccess(memoryRegistry) });
   const deliveryManager = new AutomationDeliveryManager({
     configManager,
+    // This manager builds the delivery router the daemon actually replies
+    // through (bootstrap.ts hands it to the daemon facade). Without the
+    // secrets manager it cannot resolve a goodvibes://secrets/... credential,
+    // so Telegram accepted every inbound message and dropped every reply with
+    // "Missing Telegram bot token" while ntfy — which needs no secret — worked.
+    secretsManager,
     serviceRegistry,
     runtimeBus: options.runtimeBus,
     runtimeStore: options.runtimeStore,
