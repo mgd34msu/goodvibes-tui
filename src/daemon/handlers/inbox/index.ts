@@ -102,8 +102,14 @@ export interface RegisterInboxOptions {
    * The READ path is never gated. `channels.inbox.list` serves the persisted
    * feed on every node — a node that is not fetching still answers questions
    * about what has already arrived.
+   *
+   * Called once PER PROVIDER, with that provider's id and a control that
+   * starts and stops only its loop. Each inbox account is its own surface in
+   * the LAN election, so the machine reading the work Slack account need not
+   * be the machine reading the mailbox — and handing one account over must not
+   * take the others down with it.
    */
-  gatePolling?: (control: InboxPollingControl) => void;
+  gatePolling?: (providerId: string, control: InboxPollingControl) => void;
 }
 
 function registerBuiltinAdapters(): void {
@@ -216,25 +222,33 @@ export function registerInboxMethods(
     });
   });
 
-  if (options.gatePolling) {
-    options.gatePolling({
-      start: async () => {
-        // The store must be ready before the first fetch, or the seed poll
-        // would write cursors into an uninitialised store.
-        await ready;
-        if (!options.skipInitialPoll) {
-          await poller.pollOnce();
-        }
-        poller.start();
-      },
-      // Synchronous underneath: stop() clears the interval timers, so once it
-      // returns no further poll can be scheduled. Declared async because the
-      // gate contract promises "resolves when consumption has ceased", and a
-      // future adapter with an in-flight request would need to await it.
-      stop: async () => {
-        poller.stop();
-      },
-    });
+  const gate = options.gatePolling;
+  if (gate) {
+    // One gate per provider, not one for the poller. Leadership is decided per
+    // inbox account, so each account's loop has to be startable and stoppable
+    // on its own — otherwise handing one account to another machine would stop
+    // fetching for every account this node reads.
+    for (const providerId of poller.providerIds()) {
+      gate(providerId, {
+        start: async () => {
+          // The store must be ready before the first fetch, or the seed poll
+          // would write cursors into an uninitialised store.
+          await ready;
+          if (!options.skipInitialPoll) {
+            await poller.pollProviderOnce(providerId);
+          }
+          poller.startProvider(providerId);
+        },
+        // Synchronous underneath: it clears that provider's interval, so once
+        // it returns no further poll of that account can be scheduled.
+        // Declared async because the gate contract promises "resolves when
+        // consumption has ceased", and a future adapter with an in-flight
+        // request would need to await it.
+        stop: async () => {
+          poller.stopProvider(providerId);
+        },
+      });
+    }
   }
 
   const unregisterMethod = registerCatalogHandler<InboxListInput, InboxListOutput>(

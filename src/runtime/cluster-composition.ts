@@ -26,6 +26,7 @@
  */
 import {
   ClusterCoordinator,
+  inboxSurface,
   readClusterSettings,
   type ClusterConsumerGate,
 } from '@pellux/goodvibes-sdk/platform/cluster';
@@ -55,7 +56,12 @@ export interface GatedPollerControl {
  * role through an update.
  */
 export function createClusterComposition(options: {
-  readonly configManager: ConfigManager;
+  /**
+   * Narrowed to what is actually read. The daemon passes a whole
+   * ConfigManager; the handler context carries only this slice, and there is
+   * no reason to demand more than the one category this reads.
+   */
+  readonly configManager: Pick<ConfigManager, 'getCategory'>;
   readonly shellPaths: ShellPathService;
 }): ClusterCoordinator {
   return new ClusterCoordinator({
@@ -69,17 +75,28 @@ export function createClusterComposition(options: {
 }
 
 /**
- * The inbox poller as a leadership gate.
+ * ONE inbox provider as a leadership gate.
+ *
+ * One gate per account, not one for the poller. Each inbox account is its own
+ * surface in the election, so this laptop can hold the work Slack account
+ * while the desktop holds the mailbox — and losing one machine moves only the
+ * accounts it was reading. A single gate covering the whole poller could not
+ * express that: it would hand every account over together, and a node with a
+ * credential for only one of them could never take part at all.
+ *
+ * The provider id is the surface's local discriminator and is hashed before it
+ * reaches the network, so what travels is a digest and not an account name.
  *
  * No replay cursor is threaded in, and that is deliberate rather than an
  * omission: the inbox keeps a persisted per-provider cursor of its own
- * (InboxCursorStore), so a node taking the role over resumes from where the
+ * (InboxCursorStore), so a node taking an account over resumes from where the
  * previous one committed. ntfy needs an explicit `since=` because it has no
  * server-side per-subscriber cursor; this poller does not.
  */
-export function inboxPollerGate(control: GatedPollerControl): ClusterConsumerGate {
+export function inboxPollerGate(providerId: string, control: GatedPollerControl): ClusterConsumerGate {
   return {
-    id: 'inbox-poller',
+    id: `inbox-poller:${providerId}`,
+    surface: inboxSurface(providerId),
     start: async () => {
       await control.start();
     },
