@@ -149,11 +149,11 @@ describe('rendered turn: status markers align with the assistant bullet', () => 
       .filter((row) => row[callRailCol] === '├' || row[callRailCol] === '└');
     // process succeeded, find failed, exec has not run.
     expect(rows[0]).toContain('✓');
-    expect(rows[0]).toContain('process');
+    expect(rows[0]).toContain('poll');
     expect(rows[1]).toContain('✕');
-    expect(rows[1]).toContain('find');
+    expect(rows[1]).toContain('needle');
     expect(rows[2]).toContain('◌');
-    expect(rows[2]).toContain('exec');
+    expect(rows[2]).toContain('bun test');
   });
 
   test('a per-call cancellation reads ⊘ in the bullet column, not ✓', () => {
@@ -165,7 +165,7 @@ describe('rendered turn: status markers align with the assistant bullet', () => 
       } as Message,
       { role: 'tool', callId: 'c1', toolName: 'read', content: 'Error: cancelled by user' },
     ]);
-    const callRow = rows.find((row) => row.includes('read'))!;
+    const callRow = rows.find((row) => row.includes('/tmp/a'))!;
     expect(colOf(callRow, '⊘')).toBe(STATUS_COL);
     expect(callRow).not.toContain('✓');
   });
@@ -219,7 +219,7 @@ describe('rails are continuous through a subtree', () => {
         content: '',
         toolCalls: [
           { id: 'c1', name: 'find', arguments: { pattern: 'needle' } },
-          { id: 'c2', name: 'exec', arguments: { command: 'true' } },
+          { id: 'c2', name: 'exec', arguments: { command: 'second-command' } },
         ],
       } as Message,
       { role: 'tool', callId: 'c1', toolName: 'find', content: JSON.stringify(padded) },
@@ -229,8 +229,8 @@ describe('rails are continuous through a subtree', () => {
     const railCol = treeBranchCol(treeIndentCols(1, WIDTH));
     // The fragment box is the run of rows between the two call rows; every one
     // of them (top border, preview, bottom border) must carry the rail.
-    const firstCall = rows.findIndex((row) => row.includes('find'));
-    const secondCall = rows.findIndex((row) => row.includes('exec'));
+    const firstCall = rows.findIndex((row) => row.includes('needle'));
+    const secondCall = rows.findIndex((row) => row.includes('second-command'));
     expect(secondCall - firstCall).toBeGreaterThan(3);
     for (let i = firstCall + 1; i < secondCall; i++) {
       expect(rows[i]![railCol], `row ${i}: ${JSON.stringify(rows[i])}`).toBe('│');
@@ -293,9 +293,9 @@ describe('the tree still builds live', () => {
       { role: 'assistant', content: '', toolCalls: [{ id: 'c4', name: 'write', arguments: { path: '/tmp/b' } }] } as Message,
     ];
     const after = renderRows(grown).filter((row) => row.length > 0);
-    const execRow = after.findIndex((row) => row.includes('exec'));
+    const execRow = after.findIndex((row) => row.includes('bun test'));
     expect(after[execRow]![railCol]).toBe('├');
-    expect(after.at(-1)!).toContain('write');
+    expect(after.at(-1)!).toContain('/tmp/b');
     expect(after.at(-1)![railCol]).toBe('└');
   });
 
@@ -314,9 +314,9 @@ describe('the tree still builds live', () => {
       { role: 'tool', callId: 'c1', toolName: 'slow', content: 'slow done' },
     ]).filter((row) => row.length > 0);
 
-    const slowCall = rows.findIndex((row) => row.includes('slow') && row.includes('├'));
+    const slowCall = rows.findIndex((row) => row.includes('/tmp/slow'));
     const slowResult = rows.findIndex((row) => row.includes('slow done'));
-    const fastCall = rows.findIndex((row) => row.includes('fast') && row.includes('└'));
+    const fastCall = rows.findIndex((row) => row.includes('/tmp/fast'));
     expect(slowCall).toBeLessThan(slowResult);
     expect(slowResult).toBeLessThan(fastCall);
   });
@@ -357,7 +357,7 @@ describe('the tree still builds live', () => {
         content: '',
         toolCalls: [
           { id: 'c1', name: 'find', arguments: { pattern: 'needle' } },
-          { id: 'c2', name: 'exec', arguments: { command: 'true' } },
+          { id: 'c2', name: 'exec', arguments: { command: 'second-command' } },
         ],
       } as Message,
       { role: 'tool', callId: 'c1', toolName: 'find', content: JSON.stringify(padded) },
@@ -369,8 +369,8 @@ describe('the tree still builds live', () => {
     const rows = renderRows(messages, { collapseState }).filter((row) => row.length > 0);
 
     const railCol = treeBranchCol(treeIndentCols(1, WIDTH));
-    const firstCall = rows.findIndex((row) => row.includes('find'));
-    const secondCall = rows.findIndex((row) => row.includes('exec'));
+    const firstCall = rows.findIndex((row) => row.includes('needle'));
+    const secondCall = rows.findIndex((row) => row.includes('second-command'));
     expect(secondCall - firstCall).toBeGreaterThan(5);
     for (let i = firstCall + 1; i < secondCall; i++) {
       expect(rows[i]![railCol], `row ${i}: ${JSON.stringify(rows[i])}`).toBe('│');
