@@ -382,6 +382,7 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
     routeBindings,
     agentStatusProvider: agentManager,
     messageSender: agentMessageBus,
+    conversationGateConfig: configManager, // without this the gate runs on DEFAULTS: an inbound message landing in a live session takes the handover and starts work whatever conversationGate.mode/gatedSurfaces say
   });
   sessionBroker.setContinuationRunner(async ({ task, input }) => {
     const record = agentManager.spawn({
@@ -544,8 +545,7 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
   bindProviderOptimizerFeatureFlag(featureFlags, providerOptimizer);
   applyProviderOptimizerConfigMode(configManager, providerOptimizer);
   const sessionMemoryStore = new SessionMemoryStore();
-  const sessionLineageTracker = new SessionLineageTracker();
-  const sessionChangeTracker = new SessionChangeTracker();
+  const sessionLineageTracker = new SessionLineageTracker(); const sessionChangeTracker = new SessionChangeTracker();
   const planManager = new ExecutionPlanManager(workingDirectory);
   const adaptivePlanner = new AdaptivePlanner();
   const idempotencyStore = new IdempotencyStore();
