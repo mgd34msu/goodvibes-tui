@@ -4,6 +4,16 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [1.23.0] - 2026-07-26
+
+### Changes
+
+- Fixed: a work request sent over Telegram (or Google Chat, Signal, WhatsApp, telephony, iMessage, Microsoft Teams, BlueBubbles, Mattermost, Matrix, or Home Assistant) produced a proposal that could never be shown. The daemon asked for your agreement on a channel it had no way to send on, so you saw nothing and the work waited on an answer to a question that was never posed. Proposals now go out on every surface the gate covers.
+- Fixed: the daemon discarded every log line it produced. Its activity log had no destination, so a rejected bot token, a surface that could not start, and a reply with nowhere to go all left no trace anywhere. The log now has a home before anything else starts, which is why the failures above were invisible until now.
+- Fixed: an inbound message that landed in an already-running session started work immediately no matter how the conversation gate was configured. The gate's settings now reach the daemon, which is the process that receives the message.
+- Fixed: a channel surface that was switched on but could not start said nothing. It now reports which surface, why it cannot start, and what would fix it.
+- Fixed: conversation-gate settings edited from the TUI or the agent were written to that client's own settings file, which the daemon never reads, so they changed nothing. They now live with the daemon and existing values are moved there on first start, with a record of exactly what moved.
+
 ## [1.22.0] - 2026-07-26
 
 ### Changes
