@@ -1,5 +1,6 @@
 import { describe, expect, mock, test } from 'bun:test';
 import { handleGlobalShortcutToken, type GlobalShortcutRouteState } from '../../input/handler-shortcuts.ts';
+import { KillRing } from '../../input/kill-ring.ts';
 
 function buildState(overrides: Partial<GlobalShortcutRouteState> = {}): GlobalShortcutRouteState {
   return {
@@ -44,6 +45,7 @@ function buildState(overrides: Partial<GlobalShortcutRouteState> = {}): GlobalSh
     handlePaste: mock(() => {}),
     handleEscape: mock(() => {}),
     cyclePanelTab: mock(() => {}),
+    killRing: new KillRing(),
     ...overrides,
   };
 }

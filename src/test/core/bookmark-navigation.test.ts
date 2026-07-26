@@ -2,7 +2,7 @@
 // bookmark-navigation.test.ts — fallback resolution for a bookmark whose
 // direct BlockMeta lookup misses because it targets a folded (non-owning)
 // member of a currently-collapsed tool-result group (see
-// conversation-tool-groups.ts). A folded member pushes no BlockMeta of its
+// conversation-turn-structure.ts). A folded member pushes no BlockMeta of its
 // own, so `getBlockRegistry().find(b => b.collapseKey === key)` — the direct
 // lookup jumpToBookmark (src/main.ts) tries first — reports nothing even
 // though the message is still present, just folded under its group header.
@@ -26,9 +26,13 @@ describe('resolveFoldedBookmarkLine', () => {
       { callId: 'call-1', success: true, output: 'contents of foo.ts' },
       { callId: 'call-2', success: true, output: 'wrote bar.ts' },
     ]);
-    cm.getDisplayBlocks(); // warm; the group defaults collapsed
+    cm.getDisplayBlocks(); // warm
+    // Turns default EXPANDED (collapsing must never hide prose), so the
+    // hidden-member condition this test is about is created explicitly.
+    cm.setCollapsed('turn_1', true);
+    cm.getDisplayBlocks();
 
-    const groupBlock = cm.getBlockRegistry().find((b) => b.type === 'tool_group');
+    const groupBlock = cm.getBlockRegistry().find((b) => b.type === 'assistant_turn');
     expect(groupBlock).toBeDefined();
 
     // A bookmark stored on the SECOND tool message's own collapseKey
@@ -54,8 +58,10 @@ describe('resolveFoldedBookmarkLine', () => {
       { callId: 'call-2', success: true, output: 'wrote bar.ts' },
     ]);
     cm.getDisplayBlocks();
+    cm.setCollapsed('turn_1', true);
+    cm.getDisplayBlocks();
 
-    const groupBlock = cm.getBlockRegistry().find((b) => b.type === 'tool_group');
+    const groupBlock = cm.getBlockRegistry().find((b) => b.type === 'assistant_turn');
     expect(resolveFoldedBookmarkLine(cm, 'msg_2')).toBe(groupBlock!.startLine);
   });
 

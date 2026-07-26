@@ -52,6 +52,7 @@ import {
   type SubscriptionEntry,
 } from './settings-modal-types.ts';
 import { enrichRelaySettingDescriptions } from './relay-settings-descriptions.ts';
+import { enrichDaemonOwnedSettingDescriptions } from './daemon-owned-settings-descriptions.ts';
 import { applyFeatureUnitLayout } from './feature-unit-layout.ts';
 import { FEATURE_SETTINGS_BY_ID } from '../runtime/feature-settings.ts';
 
@@ -237,6 +238,10 @@ export function buildSettingGroups(
   // relay.* is a real SDK CONFIG_SCHEMA domain; append the threat-model note
   // the SDK's own descriptions don't carry (see relay-settings-descriptions.ts).
   enrichRelaySettingDescriptions(groups);
+
+  // Daemon-owned keys (e.g. surfaces.telegram.*) live only in the daemon's
+  // own config store — say so in the detail text (daemon-owned-settings-descriptions.ts).
+  enrichDaemonOwnedSettingDescriptions(groups, configManager);
 
   // Feature-unit presentation: each capability becomes ONE unit (its real
   // enablement row + the settings keys it tunes) in its settings domain,

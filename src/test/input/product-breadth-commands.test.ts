@@ -12,7 +12,7 @@ import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import { createFeatureFlagManager } from '@/runtime/index.ts';
 import { createRuntimeServices, type RuntimeServices } from '../../runtime/services.ts';
 import { ForensicsRegistry } from '@/runtime/index.ts';
-import type { MemoryAddOptions } from '@pellux/goodvibes-sdk/platform/state';
+import type { MemoryAddOptions, MemoryRecord, MemoryScope, MemoryVectorStats } from '@pellux/goodvibes-sdk/platform/state';
 import { MemorySpineClient, type MemoryAccess } from '@pellux/goodvibes-sdk/platform/runtime/memory-spine';
 import { UserAuthManager } from '@pellux/goodvibes-sdk/platform/security';
 import { RemoteRunnerRegistry } from '@/runtime/index.ts';
@@ -277,6 +277,17 @@ describe('product breadth commands', () => {
     } as never;
     const mcpApi = createRuntimeMcpApi({
       serverNames: ['workspace-docs'],
+      getEffectiveConfig: () => ({ servers: [], locations: [] }),
+      reload: async () => ({ added: 0, changed: 0, removed: 0, unchanged: 0, servers: [] }),
+      upsertServerConfig: async () => ({
+        path: '/tmp/fake-mcp-config.json',
+        reload: { added: 0, changed: 0, removed: 0, unchanged: 0, servers: [] },
+      }),
+      removeServerConfig: async () => ({
+        path: '/tmp/fake-mcp-config.json',
+        removed: false,
+        reload: { added: 0, changed: 0, removed: 0, unchanged: 0, servers: [] },
+      }),
       listServers: () => [{ name: 'workspace-docs', connected: false }],
       listServerSecurity: () => [{
         name: 'workspace-docs',
@@ -300,22 +311,45 @@ describe('product breadth commands', () => {
     const knowledgeService = {
       listIssues: () => [],
     } as never;
-    const memoryRegistry = {
+    function fakeMemoryVectorStats(): MemoryVectorStats {
+      return {
+        backend: 'sqlite-vec',
+        enabled: false,
+        available: false,
+        path: '',
+        dimensions: 0,
+        indexedRecords: 0,
+        embeddingProviderId: 'hashed',
+        embeddingProviderLabel: 'Hashed (offline)',
+      };
+    }
+    const memoryRegistry: Parameters<typeof createMemoryApi>[0] = {
       add: async (opts: MemoryAddOptions) => {
-        const record = {
+        const simpleRecord = {
           id: `mem-${memoryRecords.length + 1}`,
           scope: opts.scope ?? 'project',
           cls: opts.cls,
           summary: opts.summary,
         };
-        memoryRecords.push(record);
-        return record as never;
+        memoryRecords.push(simpleRecord);
+        const record: MemoryRecord = {
+          ...simpleRecord,
+          tags: opts.tags ?? [],
+          provenance: opts.provenance ?? [],
+          reviewState: 'fresh',
+          confidence: opts.review?.confidence ?? 70,
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        };
+        return record;
       },
-      reviewQueue: (_limit: number) => [],
-      exportBundle: (filter?: { scope?: string }) => ({
+      search: () => [],
+      searchSemantic: () => [],
+      reviewQueue: (_limit?: number) => [],
+      exportBundle: (filter) => ({
         schemaVersion: 'v1',
         exportedAt: Date.now(),
-        scope: (filter?.scope as 'session' | 'project' | 'team' | 'all' | undefined) ?? 'all',
+        scope: (filter?.scope as MemoryScope | 'all' | undefined) ?? 'all',
         recordCount: memoryRecords.length,
         linkCount: 0,
         records: [],
@@ -326,7 +360,28 @@ describe('product breadth commands', () => {
         skippedRecords: 0,
         importedLinks: 0,
       }),
-    } as never;
+      get: () => null,
+      getAll: () => [],
+      link: async () => null,
+      linksFor: () => [],
+      rebuildVectors: () => fakeMemoryVectorStats(),
+      rebuildVectorsAsync: async () => fakeMemoryVectorStats(),
+      vectorStats: () => fakeMemoryVectorStats(),
+      doctor: async () => ({
+        vector: fakeMemoryVectorStats(),
+        embeddings: {
+          activeProviderId: 'hashed',
+          providers: [],
+          asyncProviders: [],
+          syncProviders: [],
+          warnings: [],
+        },
+        checkedAt: Date.now(),
+      }),
+      update: () => null,
+      review: () => null,
+      delete: () => false,
+    };
     const knowledgeApi = {
       ...createRuntimeKnowledgeApi(runtimeServices),
       memory: createMemoryApi(memoryRegistry),
@@ -347,7 +402,9 @@ describe('product breadth commands', () => {
         recallFiltered: false,
         excludedFlaggedCount: 0,
         excludedBelowFloorCount: 0,
+        excludedOutOfWindowCount: 0,
         totalBeforeRecallFilter: 0,
+        recallFloor: 0,
       }),
       get: async () => null,
       updateReview: async () => null,
@@ -449,7 +506,11 @@ describe('product breadth commands', () => {
         forensicsRegistry,
         policyRegistry: runtimeServices.policyRuntimeState.getRegistry(),
         policyRuntimeState: runtimeServices.policyRuntimeState,
-        memoryRegistry,
+        // extensions.memoryRegistry expects the SDK's real MemoryRegistry class
+        // (private fields, no structural fake possible). None of the commands
+        // exercised in this file read it directly — memory access here goes
+        // through knowledgeApi.memory and memorySpineLocal below, both backed
+        // by the memoryRegistry fake — so the optional field is left unset.
         integrationHelpers,
         knowledgeService,
         pluginManager: runtimeServices.pluginManager,
@@ -506,6 +567,9 @@ describe('product breadth commands', () => {
       mcpRegistry: runtimeServices.mcpRegistry,
       subscriptionManager: runtimeServices.subscriptionManager,
       serviceRegistry: runtimeServices.serviceRegistry,
+      memoryEmbeddingRegistry: runtimeServices.memoryEmbeddingRegistry,
+      workingDirectory: runtimeServices.workingDirectory,
+      homeDirectory: runtimeServices.homeDirectory,
       getConfiguredProviderIds: () => [],
       getPinned: async () => [],
       render: () => {},
@@ -1881,7 +1945,8 @@ describe('product breadth commands', () => {
       }),
       workingDir: root,
       homeDirectory: root,
-    }, runtimeServices.configManager);
+      configManager: runtimeServices.configManager,
+    });
     daemon.enable({ daemon: true });
     await daemon.start();
     try {

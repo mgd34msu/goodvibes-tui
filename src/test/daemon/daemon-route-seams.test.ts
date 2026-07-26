@@ -15,7 +15,6 @@ describe('daemon route seams', () => {
         doctor: async () => null,
         listRepairActions: async () => [],
         getLifecycleState: async () => null,
-        migrateLifecycle: async () => null,
         runAccountAction: async () => null,
         listCapabilities: async () => [],
         listTools: async () => [],
@@ -61,6 +60,19 @@ describe('daemon route seams', () => {
         doctor: async () => ({}),
         vectorStats: () => ({}),
         rebuildVectorsAsync: async () => ({}),
+        reviewQueue: () => [],
+        add: async () => ({}),
+        honestSearch: () => ({}),
+        get: () => null,
+        review: () => null,
+        delete: () => false,
+        search: () => [],
+        searchSemantic: () => [],
+        update: () => null,
+        link: async () => null,
+        linksFor: () => [],
+        exportBundle: () => ({}),
+        importBundle: async () => ({}),
       },
       parseJsonBody: async () => ({}),
       providerRuntime: {
@@ -76,7 +88,7 @@ describe('daemon route seams', () => {
         revokeSession: () => false,
         clearBootstrapCredentialFile: () => false,
       },
-    }, new Request('http://127.0.0.1/api/providers'));
+    });
 
     const response = await handlers.getProviders();
     expect(response.status).toBe(200);
@@ -95,6 +107,7 @@ describe('daemon route seams', () => {
         getAll: () => ({ 'ui.theme': 'light' }),
         setDynamic: () => undefined,
       },
+      credentialStatus: null,
       integrationHelpers: null,
       inspectInboundTls: (surface) => ({ surface, mode: 'off' }),
       inspectOutboundTls: () => ({ mode: 'system' }),
@@ -129,7 +142,7 @@ describe('daemon route seams', () => {
       },
       // SDK 0.21.20: swapManager added to DaemonSystemRouteContext
       swapManager: null,
-    }, new Request('http://127.0.0.1/api/system/status'));
+    });
 
     const response = await handlers.getServiceStatus();
     expect(response.status).toBe(200);
@@ -162,11 +175,11 @@ describe('daemon route seams', () => {
       resolveAuthenticatedPrincipal: () => null,
       knowledgeService: {
         getStatus: async () => ({ ok: true }),
-        listSources: () => [],
-        listNodes: () => [],
-        listIssues: () => [],
+        querySources: () => ({ total: 0, items: [] }),
+        queryNodes: () => ({ total: 0, items: [] }),
+        queryIssues: () => ({ total: 0, items: [] }),
         reviewIssue: async () => ({ ok: true, issue: {} }),
-        getItem: () => null,
+        getItemScoped: () => null,
         listConnectors: () => [],
         getConnector: () => null,
         doctorConnector: async () => null,
@@ -194,7 +207,6 @@ describe('daemon route seams', () => {
         importUrlsFromFile: async () => ({}),
         syncBrowserHistory: async () => ({}),
         ingestConnectorInput: async () => ({}),
-        search: () => [],
         ask: async () => ({
           ok: true,
           spaceId: 'default',
@@ -222,6 +234,7 @@ describe('daemon route seams', () => {
         setScheduleEnabled: async () => null,
         renderProjection: async () => ({}),
         materializeProjection: async () => ({}),
+        searchScoped: () => [],
       },
       knowledgeGraphqlService: {
         schemaText: 'type Query { status: String! }',

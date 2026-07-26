@@ -14,6 +14,14 @@ import type { ConfigSetting } from '@pellux/goodvibes-sdk/platform/config';
 // Helpers
 // ---------------------------------------------------------------------------
 
+// `ConfigSetting` carries no `label` field (labels are looked up separately
+// in production via `getSettingLabel`, keyed off the real, finite `ConfigKey`
+// union — see src/renderer/settings-modal-helpers.ts). These tests exercise
+// the generic scoring/search algorithms with synthetic keys that are not
+// part of that union, so the fixture's display label is tracked here instead
+// of on the (fake) ConfigSetting object.
+const labelByKey = new Map<string, string>();
+
 function makeEntry(
   key: string,
   label: string,
@@ -21,10 +29,10 @@ function makeEntry(
   defaultValue: unknown = '',
   currentValue: unknown = defaultValue,
 ): SettingEntry {
+  labelByKey.set(key, label);
   return {
     setting: {
       key,
-      label,
       description,
       type: 'string',
       default: defaultValue,
@@ -35,7 +43,7 @@ function makeEntry(
 }
 
 function identity(e: SettingEntry): string {
-  return e.setting.label ?? e.setting.key;
+  return labelByKey.get(e.setting.key) ?? e.setting.key;
 }
 
 // ---------------------------------------------------------------------------
@@ -247,7 +255,9 @@ describe('searchSettingEntries', () => {
       makeEntry('x.y', 'Zap Setting', 'none'),                    // label hit
     ]);
     const results = searchSettingEntries('zap', groups as never, identity);
-    const keys = results.map(e => e.setting.key);
+    // Widened to `string[]`: these are synthetic test keys, not members of
+    // the real (finite) `ConfigKey` union, so `.toBe()` needs the wider type.
+    const keys: string[] = results.map(e => e.setting.key);
     // key hit must come first
     expect(keys[0]).toBe('zap.enabled');
     // label hit before desc hit

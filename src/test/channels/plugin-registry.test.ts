@@ -203,13 +203,6 @@ describe('ChannelPluginRegistry', () => {
         migrations: [],
         metadata: {},
       }),
-      migrateLifecycle: () => ({
-        surface: 'telegram',
-        currentVersion: 1,
-        targetVersion: 1,
-        migrations: [],
-        metadata: {},
-      }),
       resolveAllowlist: () => ({
         surface: 'telegram',
         resolved: [{ kind: 'user', input: '@alice', id: 'alice', label: 'alice', metadata: {} }],

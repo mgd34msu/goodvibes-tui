@@ -361,8 +361,12 @@ export function createPlatformServiceManager(runtime: CliServiceRuntime): Platfo
     command: daemonExecutable.command,
     args: [],
     env: {
-      // The daemon CLI treats this as the GoodVibes home root, not the daemon state directory.
-      GOODVIBES_DAEMON_HOME: runtime.homeDirectory,
+      // Two separate directories, deliberately: GOODVIBES_HOME is the GoodVibes
+      // tree root, GOODVIBES_DAEMON_HOME is the daemon's own identity home under
+      // it. They used to be the same variable, which meant pointing the daemon's
+      // home somewhere else silently moved the whole tree with it.
+      GOODVIBES_HOME: runtime.homeDirectory,
+      GOODVIBES_DAEMON_HOME: daemonHomeDir,
       GOODVIBES_DAEMON_TOKEN: process.env.GOODVIBES_DAEMON_TOKEN ?? '',
       GOODVIBES_HTTP_TOKEN: process.env.GOODVIBES_HTTP_TOKEN ?? '',
       NODE_ENV: process.env.NODE_ENV ?? 'production',

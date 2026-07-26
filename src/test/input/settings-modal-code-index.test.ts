@@ -37,7 +37,9 @@ describe('storage.codeIndexEnabled synthetic setting', () => {
 
   test('defaults OFF — boolean, default false, currentValue false', () => {
     const entry = buildCodeIndexEnabledSyntheticEntry(cm);
-    expect(entry.setting.key).toBe(CODE_INDEX_ENABLED_CONFIG_KEY);
+    // storage.codeIndexEnabled is a TUI-local synthetic key, not yet part of the
+    // SDK's ConfigKey union — compare as plain strings (see settings-modal-data.ts).
+    expect(entry.setting.key as string).toBe(CODE_INDEX_ENABLED_CONFIG_KEY as string);
     expect(entry.setting.type).toBe('boolean');
     expect(entry.setting.default).toBe(false);
     expect(entry.currentValue).toBe(false);
@@ -53,8 +55,8 @@ describe('storage.codeIndexEnabled synthetic setting', () => {
 
   test('buildSettingGroups injects it into the storage category exactly once', () => {
     const groups = buildSettingGroups(cm);
-    const storageKeys = (groups.get('storage') ?? []).map((e) => e.setting.key);
-    expect(storageKeys.filter((k) => k === CODE_INDEX_ENABLED_CONFIG_KEY)).toHaveLength(1);
+    const storageKeys = (groups.get('storage') ?? []).map((e) => e.setting.key as string);
+    expect(storageKeys.filter((k) => k === (CODE_INDEX_ENABLED_CONFIG_KEY as string))).toHaveLength(1);
   });
 
   test('isCodeIndexAutoStartEnabled mirrors the same key/default the settings entry uses', () => {

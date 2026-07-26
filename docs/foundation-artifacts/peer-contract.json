@@ -11,7 +11,8 @@
     "status.request",
     "location.request",
     "session.message",
-    "automation.run"
+    "automation.run",
+    "device.capability"
   ],
   "scopes": [
     "remote:heartbeat",
@@ -823,7 +824,8 @@
                     "status.request",
                     "location.request",
                     "session.message",
-                    "automation.run"
+                    "automation.run",
+                    "device.capability"
                   ]
                 },
                 "command": {
@@ -1179,7 +1181,8 @@
                   "status.request",
                   "location.request",
                   "session.message",
-                  "automation.run"
+                  "automation.run",
+                  "device.capability"
                 ]
               },
               "command": {
@@ -2030,7 +2033,8 @@
                         "status.request",
                         "location.request",
                         "session.message",
-                        "automation.run"
+                        "automation.run",
+                        "device.capability"
                       ]
                     },
                     "command": {

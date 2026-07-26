@@ -178,6 +178,22 @@ describe('settings workspace — in-product feature documentation', () => {
     expect(frame).toContain('true ⟳');
   });
 
+  test('a capability declared not operable states that, in full, where the user meets it (80×24)', () => {
+    // The registry marks a capability whose platform half ships but whose
+    // surface half does not (today: wake-word detection — nothing captures
+    // audio). Such a row reads as disabled even with its settings key set to
+    // true, and the written reason for that MUST render, or the user sees a
+    // switch that flipped and a state that did not, with no explanation.
+    const inoperable = FEATURE_SETTINGS.filter((candidate) => candidate.operable === false);
+    for (const feature of inoperable) {
+      selectFeatureHeader(feature);
+      const text = fullDocText(80);
+      expect(squash(text)).toContain(squash('Not available in this build:'));
+      expect(squash(text)).toContain(squash(feature.inoperableDetail!));
+      expect(squash(text)).toContain(squash('State: disabled'));
+    }
+  });
+
   test('a settings sub-row names its owning feature in full (80×24)', () => {
     // sandbox.judgment is owned by sandbox-model-judgment... pick a plain
     // owned sub-row: the first non-header row owned by exec-sandbox.

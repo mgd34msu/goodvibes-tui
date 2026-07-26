@@ -30,18 +30,11 @@ describe('daemon control routes', () => {
           : null,
       },
       getOperatorContract: () => ({ version: 1, product: { id: 'goodvibes' } }),
-      inspectInboundTls: (surface) => ({ surface, mode: 'off' }),
-      inspectOutboundTls: () => ({ mode: 'system' }),
       invokeGatewayMethodCall: async () => ({ status: 200, ok: true, body: { invoked: true } }),
       parseOptionalJsonBody: async () => null,
       requireAdmin: () => null,
       requireAuthenticatedSession: () => ({ username: 'tester', roles: ['admin'] }),
-    }, new Request('http://127.0.0.1/api/control-plane/auth', {
-      headers: {
-        Authorization: 'Bearer token-123',
-        Cookie: 'goodvibes_session=session-123',
-      },
-    }));
+    });
 
     // getStatus now takes the Request so it can honor the explicit
     // receipts=consume flag; a plain status read is receipt-neutral.

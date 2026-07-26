@@ -39,14 +39,16 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { buildShellFooter } from '../../renderer/shell-surface.ts';
 import { UIFactory } from '../../renderer/ui-factory.ts';
+import type { GitHeaderInfo } from '../../renderer/git-status.ts';
 import { renderMarkdown } from '../../renderer/markdown.ts';
 import { renderCodeBlock } from '../../renderer/code-block.ts';
 import { renderThinkingBlock } from '../../renderer/thinking.ts';
 import {
   addConversationSplashScreen,
+  renderConversationAssistantMessage,
   renderConversationToolMessage,
 } from '../../core/conversation-rendering.ts';
-import type { ToolGroupMembership } from '../../core/conversation-tool-groups.ts';
+import type { AssistantTurnMembership } from '../../core/conversation-turn-structure.ts';
 import { KeybindingsManager } from '../../input/keybindings.ts';
 import { renderHelpOverlay, renderShortcutsOverlay } from '../../renderer/help-overlay.ts';
 import { renderSettingsModal } from '../../renderer/settings-modal.ts';
@@ -688,7 +690,7 @@ describe('golden-frames — splash (constraint 4)', () => {
  */
 function makeToolRenderContext(
   collapseState: Map<string, boolean> = new Map(),
-  toolGroupMembership?: ReadonlyMap<number, ToolGroupMembership>,
+  assistantTurns?: ReadonlyMap<number, AssistantTurnMembership>,
 ): {
   context: unknown;
   lines: Line[];
@@ -706,7 +708,7 @@ function makeToolRenderContext(
     messageKindRegistry: new Map(),
     configManager: null,
     splashOptions: {},
-    toolGroupMembership,
+    assistantTurns,
   };
   return { context, lines };
 }
@@ -805,9 +807,9 @@ describe('golden-frames — conversation: tool result (diff, expanded)', () => {
 
 // Folded tool-result group — a run of >=2 consecutive tool-result messages
 // sharing one assistant turn, consolidated under one collapsible header (see
-// conversation-tool-groups.ts). Both messages are rendered through the real
+// conversation-turn-structure.ts). Both messages are rendered through the real
 // renderConversationToolMessage, with a hand-built membership map standing in
-// for what computeToolGroupMembership would have produced for this pair.
+// for what computeAssistantTurnMembership would have produced for this pair.
 const GROUP_TOOL_RESULT_A = {
   role: 'tool' as const,
   callId: 'call-golden-group-01',
@@ -820,28 +822,64 @@ const GROUP_TOOL_RESULT_B = {
   toolName: 'write',
   content: 'Wrote 3 lines to output.ts',
 };
-const GROUP_MEMBERSHIP = new Map<number, ToolGroupMembership>([
-  [0, { groupKey: 'group_test', isFirst: true, toolCount: 2, totalLines: 3, toolNames: ['read', 'write'], memberIndexes: [0, 1] }],
-  [1, { groupKey: 'group_test', isFirst: false, toolCount: 2, totalLines: 3, toolNames: ['read', 'write'], memberIndexes: [0, 1] }],
+// Both results belong to one assistant turn. Unlike the retired folded-group
+// model, turns default to EXPANDED — collapsing must never hide prose — so the
+// collapsed surface below sets the turn key explicitly rather than relying on
+// a default.
+const TURN_MEMBER = {
+  turnKey: 'turn_0',
+  headIdx: 0,
+  isHead: false,
+  toolCallCount: 2,
+  sharedToolLabel: undefined,
+  hasReasoning: false,
+  memberIndexes: [0],
+  resultIndexes: [0, 1],
+} as const;
+const GROUP_MEMBERSHIP = new Map<number, AssistantTurnMembership>([
+  [0, { ...TURN_MEMBER }],
+  [1, { ...TURN_MEMBER }],
+]);
+
+/** The assistant message that owns the turn — it renders the header the
+ *  collapsed surface is actually about. */
+const TURN_HEAD_MESSAGE = {
+  role: 'assistant' as const,
+  content: '',
+  model: 'test-model',
+  provider: 'testprov',
+  toolCalls: [
+    { id: 'call-a', name: 'read', arguments: {} },
+    { id: 'call-b', name: 'write', arguments: {} },
+  ],
+};
+const TURN_HEAD_MEMBERSHIP = new Map<number, AssistantTurnMembership>([
+  [0, { ...TURN_MEMBER, isHead: true }],
 ]);
 
 function renderToolGroupCollapsedSurface(): Line[] {
-  // Fresh collapseState: the group defaults to collapsed on first render.
-  const { context, lines } = makeToolRenderContext(new Map(), GROUP_MEMBERSHIP);
-  renderConversationToolMessage(context as never, GROUP_TOOL_RESULT_A, NORMAL_W, 0);
-  renderConversationToolMessage(context as never, GROUP_TOOL_RESULT_B, NORMAL_W, 1);
+  // A collapsed turn is header-only: the header states what is hidden, and no
+  // result row renders. Rendering the head here (not just the results) is what
+  // makes this golden capture the surface a user actually sees.
+  const collapseState = new Map<string, boolean>([['turn_0', true]]);
+  const { context, lines } = makeToolRenderContext(collapseState, TURN_HEAD_MEMBERSHIP);
+  renderConversationAssistantMessage(context as never, TURN_HEAD_MESSAGE as never, NORMAL_W, 'off', 30, 0);
+  const withResults = makeToolRenderContext(collapseState, GROUP_MEMBERSHIP);
+  renderConversationToolMessage(withResults.context as never, GROUP_TOOL_RESULT_A, NORMAL_W, 0);
+  renderConversationToolMessage(withResults.context as never, GROUP_TOOL_RESULT_B, NORMAL_W, 1);
+  lines.push(...withResults.lines);
   return lines;
 }
 
 function renderToolGroupExpandedSurface(): Line[] {
-  const collapseState = new Map<string, boolean>([['group_test', false]]);
+  const collapseState = new Map<string, boolean>([['turn_0', false]]);
   const { context, lines } = makeToolRenderContext(collapseState, GROUP_MEMBERSHIP);
   renderConversationToolMessage(context as never, GROUP_TOOL_RESULT_A, NORMAL_W, 0);
   renderConversationToolMessage(context as never, GROUP_TOOL_RESULT_B, NORMAL_W, 1);
   return lines;
 }
 
-describe('golden-frames — conversation: tool group (collapsed)', () => {
+describe('golden-frames — conversation: assistant turn (collapsed)', () => {
   test('matches committed golden snapshot', () => {
     const lines = renderToolGroupCollapsedSurface();
     expect(lines.length).toBeGreaterThan(0);
@@ -852,16 +890,17 @@ describe('golden-frames — conversation: tool group (collapsed)', () => {
     const b = snapshotEncode('tool-group-collapsed', renderToolGroupCollapsedSurface());
     expect(a).toBe(b);
   });
-  test('collapsed group renders only the header line — the second member emits nothing', () => {
-    const { context, lines } = makeToolRenderContext(new Map(), GROUP_MEMBERSHIP);
+  test('a collapsed turn hides every result row it owns', () => {
+    const { context, lines } = makeToolRenderContext(new Map([['turn_0', true]]), GROUP_MEMBERSHIP);
     renderConversationToolMessage(context as never, GROUP_TOOL_RESULT_A, NORMAL_W, 0);
-    const afterFirst = lines.length;
     renderConversationToolMessage(context as never, GROUP_TOOL_RESULT_B, NORMAL_W, 1);
-    expect(lines.length).toBe(afterFirst);
+    // Neither result emits anything: the turn header (rendered by the
+    // assistant message, not here) is the whole visible representation.
+    expect(lines.length).toBe(0);
   });
 });
 
-describe('golden-frames — conversation: tool group (expanded)', () => {
+describe('golden-frames — conversation: assistant turn (expanded)', () => {
   test('matches committed golden snapshot', () => {
     const lines = renderToolGroupExpandedSurface();
     expect(lines.length).toBeGreaterThan(0);
@@ -1176,7 +1215,7 @@ function buildFleetGoldenNodes(): ProcessNode[] {
       costUsd: 0.87,
       costState: 'priced',
       currentActivity: { kind: 'tool', text: 'Read src/panels/fleet-panel.ts', toolName: 'Read', at: FIXED_FLEET_NOW - 1_000 },
-      capabilities: { interruptible: true, killable: true, pausable: false, steerable: false },
+      capabilities: { interruptible: true, killable: true, pausable: false, resumable: false, steerable: false },
     },
     {
       id: 'wrfc-engineer-01',
@@ -1193,7 +1232,7 @@ function buildFleetGoldenNodes(): ProcessNode[] {
       costUsd: 0.045,
       costState: 'priced',
       currentActivity: { kind: 'output-line', text: 'Writing fleet-panel.ts', at: FIXED_FLEET_NOW - 500 },
-      capabilities: { interruptible: true, killable: true, pausable: false, steerable: false },
+      capabilities: { interruptible: true, killable: true, pausable: false, resumable: false, steerable: false },
     },
     {
       id: 'wrfc-reviewer-01',
@@ -1209,7 +1248,7 @@ function buildFleetGoldenNodes(): ProcessNode[] {
       costUsd: null,
       costState: 'unpriced',
       currentActivity: { kind: 'phase', text: 'Awaiting operator approval', at: FIXED_FLEET_NOW - 2_000 },
-      capabilities: { interruptible: true, killable: true, pausable: true, steerable: false },
+      capabilities: { interruptible: true, killable: true, pausable: true, resumable: false, steerable: false },
     },
     {
       id: 'exec-golden-01',
@@ -1221,7 +1260,7 @@ function buildFleetGoldenNodes(): ProcessNode[] {
       costUsd: null,
       costState: 'unpriced',
       currentActivity: { kind: 'output-line', text: '42 pass 0 fail', at: FIXED_FLEET_NOW - 1_000 },
-      capabilities: { interruptible: false, killable: true, pausable: false, steerable: false },
+      capabilities: { interruptible: false, killable: true, pausable: false, resumable: false, steerable: false },
     },
     {
       id: 'agent-done-01',
@@ -1237,7 +1276,7 @@ function buildFleetGoldenNodes(): ProcessNode[] {
       provider: 'anthropic',
       costUsd: 0.012,
       costState: 'priced',
-      capabilities: { interruptible: false, killable: false, pausable: false, steerable: false },
+      capabilities: { interruptible: false, killable: false, pausable: false, resumable: false, steerable: false },
     },
     // 'interrupted' fixture row so the new
     // glyph/tone gets golden coverage (distinct from 'killed'/⊘ above).
@@ -1258,7 +1297,7 @@ function buildFleetGoldenNodes(): ProcessNode[] {
       provider: 'anthropic',
       costUsd: 0.004,
       costState: 'priced',
-      capabilities: { interruptible: false, killable: false, pausable: false, steerable: false },
+      capabilities: { interruptible: false, killable: false, pausable: false, resumable: false, steerable: false },
     },
   ];
 }
@@ -1317,7 +1356,7 @@ function fleetSteerGoldenNode(): ProcessNode {
     costUsd: 0.03,
     costState: 'priced',
     currentActivity: { kind: 'tool', text: 'Running build', toolName: 'Bash', at: FIXED_FLEET_NOW - 2_000 },
-    capabilities: { interruptible: true, killable: true, pausable: false, steerable: true },
+    capabilities: { interruptible: true, killable: true, pausable: false, resumable: false, steerable: true },
   };
 }
 

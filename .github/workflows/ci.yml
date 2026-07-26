@@ -27,6 +27,8 @@ jobs:
         uses: ./.github/actions/setup
       - name: Type check
         run: bun x tsc --noEmit --pretty false
+      - name: Type check (tests)
+        run: bun x tsc --noEmit -p tsconfig.test.json --pretty false
 
   test:
     runs-on: ubuntu-latest

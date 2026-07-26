@@ -116,10 +116,6 @@ describe('SettingsModal', () => {
   test('open() populates all categories', () => {
     modal.open(cm, ffm, subscriptionManager, serviceRegistry, mcpRegistry);
     for (const cat of SETTINGS_CATEGORIES) {
-      if (cat === 'flags') {
-        expect(Array.isArray(modal.flagEntries)).toBe(true);
-        continue;
-      }
       const items = modal.groups.get(cat);
       expect(items).toBeDefined();
       expect(Array.isArray(items)).toBe(true);

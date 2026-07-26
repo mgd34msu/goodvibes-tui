@@ -338,6 +338,8 @@ describe('modal space actions', () => {
         editingMode: false,
         currentCategory: 'display',
         focusPane: 'settings',
+        searchFocused: false,
+        searchQuery: '',
         commitEdit: () => {},
         toggleSelectedFlag: () => {},
         activateSelected: () => {},
@@ -350,6 +352,11 @@ describe('modal space actions', () => {
         nextCategory: () => {},
         editBackspace: () => {},
         editChar: () => {},
+        focusSearch: () => {},
+        blurSearch: () => {},
+        setSearchQuery: () => {},
+        clearSearch: () => {},
+        cancelEdit: () => {},
       },
       requestRender: () => {},
       handleEscape: () => {},
@@ -399,6 +406,8 @@ describe('modal space actions', () => {
       active: true,
       editingMode: false,
       currentCategory: 'voice',
+      searchFocused: false,
+      searchQuery: '',
       commitEdit: () => {},
       toggleSelectedFlag: () => {},
       activateSelected: () => {
@@ -412,6 +421,11 @@ describe('modal space actions', () => {
       nextCategory: () => {},
       editBackspace: () => {},
       editChar: () => {},
+      focusSearch: () => {},
+      blurSearch: () => {},
+      setSearchQuery: () => {},
+      clearSearch: () => {},
+      cancelEdit: () => {},
     };
 
     const handled = handleSettingsModalToken({

@@ -25,9 +25,9 @@ const review: ProcessReviewSummary = {
 
 function chainNode(withReview: boolean): ProcessNode {
   return {
-    id: 'wrfc-chain:abc', kind: 'wrfc-chain', label: 'implement the parser', state: 'running',
+    id: 'wrfc-chain:abc', kind: 'wrfc-chain', label: 'implement the parser', state: 'executing-tool',
     elapsedMs: 1000, costState: 'unpriced',
-    capabilities: { interruptible: true, killable: true, pausable: false, steerable: false },
+    capabilities: { interruptible: true, killable: true, pausable: false, resumable: false, steerable: false },
     ...(withReview ? { review } : {}),
   } as ProcessNode;
 }

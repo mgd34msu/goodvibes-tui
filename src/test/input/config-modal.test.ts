@@ -15,7 +15,7 @@ import { marketplaceModalGoldenSurface } from '../../panels/modals/marketplace-m
 // A mutable fake surface so tests can drive live-value and structural changes.
 function makeSurface(opts: {
   view: () => ConfigModalView;
-  actions?: ConfigModalAction[];
+  actions?: readonly ConfigModalAction[];
   onAction?: (id: string, ctx: ConfigModalActionContext) => void;
   onOpen?: (r: () => void) => void;
   onClose?: () => void;

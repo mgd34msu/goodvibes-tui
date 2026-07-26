@@ -254,8 +254,10 @@ export function describeBlockForReceipt(block: BlockMeta): string {
   switch (block.type) {
     case 'tool':
       return block.toolName ? `tool result: ${block.toolName} (${lineText})` : `tool result (${lineText})`;
-    case 'tool_group':
-      return `tool result group (${lineText})`;
+    case 'assistant_turn':
+      return block.toolName
+        ? `assistant turn: ${block.toolName} (${lineText})`
+        : `assistant turn (${lineText})`;
     case 'diff':
       return block.filePath ? `diff: ${block.filePath} (${lineText})` : `diff (${lineText})`;
     case 'code':

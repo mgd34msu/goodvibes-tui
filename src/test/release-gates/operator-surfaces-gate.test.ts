@@ -24,6 +24,7 @@ import { createPeerClient } from '@/runtime/index.ts';
 import type { CommandContext } from '../../input/command-registry.ts';
 import { ToolRegistry } from '@pellux/goodvibes-sdk/platform/tools';
 import { MemoryRegistry, MemoryStore } from '@pellux/goodvibes-sdk/platform/state';
+import { MemorySpineClient, createLocalMemoryAccess } from '@pellux/goodvibes-sdk/platform/runtime/memory-spine';
 import { createOrchestrationReadModel } from '../helpers/ui-read-models.ts';
 import { listHookPointContracts } from '@pellux/goodvibes-sdk/platform/hooks';
 
@@ -39,6 +40,15 @@ type CommandContextOverrides =
     extensions?: Partial<CommandContext['extensions']>;
   };
 import { MemoryEmbeddingProviderRegistry } from '@pellux/goodvibes-sdk/platform/state';
+
+/**
+ * registerBuiltinPanels wants a `MemoryAccess` client (the async facade), not
+ * the raw synchronous `MemoryRegistry` — mirrors the real wiring in
+ * runtime/services.ts (`new MemorySpineClient({ local: createLocalMemoryAccess(memoryRegistry) })`).
+ */
+function makeMemoryAccess(registry: MemoryRegistry): MemorySpineClient {
+  return new MemorySpineClient({ local: createLocalMemoryAccess(registry) });
+}
 
 describe('operator surfaces gate', () => {
   let configManager: ConfigManager;
@@ -174,9 +184,9 @@ describe('operator surfaces gate', () => {
       uiServices,
       forensicsRegistry: new ForensicsRegistry(),
       policyRuntimeState,
-      memoryRegistry: new MemoryRegistry(new MemoryStore(':memory:', {
+      memoryRegistry: makeMemoryAccess(new MemoryRegistry(new MemoryStore(':memory:', {
         embeddingRegistry: new MemoryEmbeddingProviderRegistry({ configManager }),
-      })),
+      }))),
       tokenAuditor: runtimeServices.tokenAuditor,
       componentHealthMonitor: runtimeServices.componentHealthMonitor,
       worktreeRegistry: runtimeServices.worktreeRegistry,
@@ -269,9 +279,9 @@ describe('operator surfaces gate', () => {
       uiServices,
       forensicsRegistry: new ForensicsRegistry(),
       policyRuntimeState,
-      memoryRegistry: new MemoryRegistry(new MemoryStore(':memory:', {
+      memoryRegistry: makeMemoryAccess(new MemoryRegistry(new MemoryStore(':memory:', {
         embeddingRegistry: new MemoryEmbeddingProviderRegistry({ configManager }),
-      })),
+      }))),
       tokenAuditor: runtimeServices.tokenAuditor,
       componentHealthMonitor: runtimeServices.componentHealthMonitor,
       worktreeRegistry: runtimeServices.worktreeRegistry,
@@ -421,7 +431,7 @@ describe('operator surfaces gate', () => {
       },
     }));
 
-    expect(openedModal).toBe('subscription-modal');
+    expect(openedModal as string | null).toBe('subscription-modal');
   });
 
   test('security command opens the security panel', async () => {
@@ -508,7 +518,7 @@ describe('operator surfaces gate', () => {
       },
     }));
 
-    expect(openedModal).toBe('remote-modal');
+    expect(openedModal as string | null).toBe('remote-modal');
   });
 
   test('cockpit command opens the cockpit panel', async () => {

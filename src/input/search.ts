@@ -140,7 +140,7 @@ export class SearchManager {
       for (const block of registry) {
         if (!conversationManager.isCollapsed(block.blockIndex)) continue;
 
-        if (block.type === 'tool_group' && block.groupMemberIndexes) {
+        if (block.type === 'assistant_turn' && block.groupMemberIndexes) {
           // The header's own synthetic summary rarely matches, but count it
           // honestly too — expanding the whole group is the only way to even
           // attempt to reveal a header-corpus hit, since there is no single

@@ -18,6 +18,7 @@ function makeItem(overrides: Partial<WorkItem> = {}): WorkItem {
     id: 'item-1',
     title: 'do the work',
     task: 'do the work',
+    dependsOn: [],
     currentPhaseId: null,
     state: 'passed',
     allAgentIds: [],

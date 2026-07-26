@@ -94,7 +94,7 @@ describe('DaemonServer', () => {
   let boundPort = 0;
   const capturingServe = ((options) => {
     const server = Bun.serve(options);
-    boundPort = server.port;
+    if (server.port !== undefined) boundPort = server.port;
     return server;
   }) as typeof Bun.serve;
   const makeConfig = () => new ConfigManager({ surfaceRoot: 'tui',  configDir, workingDir, homeDir });
@@ -3046,7 +3046,7 @@ describe('HttpListener', () => {
   let boundPort = 0;
   const capturingServe = ((options) => {
     const server = Bun.serve(options);
-    boundPort = server.port;
+    if (server.port !== undefined) boundPort = server.port;
     return server;
   }) as typeof Bun.serve;
   const createTestListener = (options: {

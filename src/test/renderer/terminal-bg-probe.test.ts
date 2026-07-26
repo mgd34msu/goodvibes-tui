@@ -23,6 +23,8 @@ import {
   wrapForTmuxPassthrough,
 } from '../../renderer/terminal-bg-probe.ts';
 import { activeTheme, resolveTheme, setActiveThemeMode } from '../../renderer/theme.ts';
+import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
+import { configGetStub } from '../helpers/config-manager-stub.ts';
 
 // The probe forcing tests mutate global active mode — always restore to dark so
 // this file's default-dark assumption (and any downstream test) stays honest.
@@ -229,8 +231,10 @@ describe('tmux passthrough + query', () => {
 // ---------------------------------------------------------------------------
 
 /** Minimal ConfigManager-shaped stub returning a fixed themeMode value. */
-function fakeConfig(themeMode: unknown): { get: (key: string) => unknown } {
-  return { get: (key: string) => (key === 'display.themeMode' ? themeMode : undefined) };
+function fakeConfig(themeMode: unknown): Pick<ConfigManager, 'get'> {
+  return {
+    get: configGetStub({ 'display.themeMode': themeMode }),
+  };
 }
 
 function isMode(mode: 'dark' | 'light'): boolean {

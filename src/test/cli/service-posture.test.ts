@@ -19,6 +19,7 @@ function makeExecutable(path: string): void {
 function createManagedStatus(overrides: Partial<ManagedServiceStatus> = {}): ManagedServiceStatus {
   return {
     platform: 'systemd',
+    serviceName: 'goodvibes',
     path: '/tmp/goodvibes.service',
     installed: true,
     autostart: true,
@@ -167,8 +168,12 @@ describe('CLI service posture', () => {
       const installed = manager.install();
 
       expect(installed.contents).toContain(`WorkingDirectory=${join(homeRoot, '.goodvibes', 'daemon')}`);
-      expect(installed.contents).toContain(`Environment=GOODVIBES_DAEMON_HOME=${homeRoot}`);
-      expect(installed.contents).not.toContain(`Environment=GOODVIBES_DAEMON_HOME=${join(homeRoot, '.goodvibes', 'daemon')}`);
+      // The tree root and the daemon's own home are separate variables now: the
+      // root stays the login home, and GOODVIBES_DAEMON_HOME names the daemon
+      // state directory it used to be wrongly pointed away from.
+      expect(installed.contents).toContain(`Environment=GOODVIBES_HOME=${homeRoot}`);
+      expect(installed.contents).toContain(`Environment=GOODVIBES_DAEMON_HOME=${join(homeRoot, '.goodvibes', 'daemon')}`);
+      expect(installed.contents).not.toContain(`Environment=GOODVIBES_DAEMON_HOME=${homeRoot}\n`);
     } finally {
       if (savedHome === undefined) {
         delete process.env.HOME;

@@ -38,13 +38,27 @@ function makeInput(uiServices = createDefaultUiRuntimeServices()): InputHandler 
   return input;
 }
 
+/**
+ * Test callers only care about `inspect`/`restart` (and occasionally
+ * `collectDaemonReceipts`); the live-relay accessors (`relayStatus`,
+ * `mintRelayPairing`) are a separate concern (relay-reachability-bridge.ts)
+ * that these onboarding tests don't exercise, so they get honest no-op
+ * defaults here instead of being repeated at every call site.
+ */
 function installExternalServices(
   uiServices: UiRuntimeServices,
-  controller: NonNullable<UiRuntimeServices['platform']['externalServices']>,
+  controller: Partial<NonNullable<UiRuntimeServices['platform']['externalServices']>> &
+    Pick<NonNullable<UiRuntimeServices['platform']['externalServices']>, 'inspect' | 'restart'>,
 ): void {
+  const full: NonNullable<UiRuntimeServices['platform']['externalServices']> = {
+    relayStatus: () => 'disabled',
+    mintRelayPairing: async () => null,
+    collectDaemonReceipts: () => [],
+    ...controller,
+  };
   (uiServices.platform as UiRuntimeServices['platform'] & {
     externalServices: NonNullable<UiRuntimeServices['platform']['externalServices']>;
-  }).externalServices = controller;
+  }).externalServices = full;
 }
 
 function ensureLocalAdminAuth(uiServices: UiRuntimeServices): void {
@@ -2037,7 +2051,7 @@ describe('daemon/auth security wizard hardening (TASK-035, TASK-036, TASK-037)',
     const networkStep = wizard.steps.find((s) => s.id === 'network');
     const tlsWarnField = networkStep?.fields.find((f) => f.id === 'network.tls-warn');
     expect(tlsWarnField).toBeDefined();
-    expect(tlsWarnField?.defaultValue).toBe('Warning');
+    expect(tlsWarnField?.kind === 'status' ? tlsWarnField.defaultValue : undefined).toBe('Warning');
   });
 
   test('network step does NOT show tls-warn when local-tui-only (no network-facing services)', () => {
@@ -2058,7 +2072,7 @@ describe('daemon/auth security wizard hardening (TASK-035, TASK-036, TASK-037)',
     const networkStep = wizard.steps.find((s) => s.id === 'network');
     const corsNoteField = networkStep?.fields.find((f) => f.id === 'network.cors-note');
     expect(corsNoteField).toBeDefined();
-    expect(corsNoteField?.defaultValue).toBe('Info');
+    expect(corsNoteField?.kind === 'status' ? corsNoteField.defaultValue : undefined).toBe('Info');
   });
 
   test('cors-note hint references the real controlPlane.cors keys, not the never-existent httpListener CORS keys', () => {

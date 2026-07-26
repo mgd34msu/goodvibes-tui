@@ -49,6 +49,7 @@ import { fileURLToPath } from 'node:url';
 import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import { PlatformServiceManager, type ManagedServiceStatus } from '@pellux/goodvibes-sdk/platform/daemon';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
+import { runDaemonConfigMigration } from '../config/run-daemon-config-migration.ts';
 
 /** Structurally derived from `PlatformServiceManager`'s own constructor — the
  * SDK's public `platform/daemon` entry point only re-exports the class and
@@ -113,6 +114,7 @@ export interface BuildManagedDaemonServiceManagerParams {
  */
 export function buildManagedDaemonServiceManager(params: BuildManagedDaemonServiceManagerParams): PlatformServiceManager {
   const workingDirectory = params.workingDirectory ?? params.homeDir;
+  if (!params.configManager) runDaemonConfigMigration(params.homeDir);
   const configManager = params.configManager ?? new ConfigManager({
     workingDir: workingDirectory,
     homeDir: params.homeDir,

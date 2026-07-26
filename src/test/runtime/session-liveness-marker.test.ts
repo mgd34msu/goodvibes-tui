@@ -77,7 +77,8 @@ describe('writeLivenessMarker / removeLivenessMarker', () => {
 
   test('writeLivenessMarker never throws even against an unwritable home dir', () => {
     // '/dev/null/impossible' cannot be mkdir'd (parent is a device file, not a dir).
-    expect(() => writeLivenessMarker('/dev/null/impossible', 'ses-x', 1)).not.toThrow();
+    const unwritableSurface = makeTestSurface('/dev/null/impossible');
+    expect(() => writeLivenessMarker(unwritableSurface, 'ses-x', 1)).not.toThrow();
   });
 });
 

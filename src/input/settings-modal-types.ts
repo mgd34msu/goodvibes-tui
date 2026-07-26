@@ -27,6 +27,7 @@ export type SettingsCategory =
   | 'network'
   | 'relay'
   | 'surfaces'
+  | 'device'
   | 'conversationGate'
   | 'cloudflare'
   | 'batch'
@@ -61,7 +62,7 @@ export const SETTINGS_CATEGORY_GROUPS: ReadonlyArray<{
   { label: 'Interface', categories: ['display', 'ui', 'behavior', 'notifications', 'permissions', 'policy', 'security'] },
   { label: 'AI Routing', categories: ['provider', 'pricing', 'subscriptions', 'helper', 'tools', 'tts', 'voice'] },
   { label: 'Service & Network', categories: ['service', 'daemon', 'network', 'controlPlane', 'httpListener', 'web', 'relay'] },
-  { label: 'Surfaces & Cloud', categories: ['surfaces', 'conversationGate', 'integrations', 'mcp', 'cloudflare'] },
+  { label: 'Surfaces & Cloud', categories: ['surfaces', 'device', 'conversationGate', 'integrations', 'mcp', 'cloudflare'] },
   { label: 'Automation', categories: ['batch', 'automation', 'checkin', 'watchers', 'orchestration', 'planner', 'wrfc'] },
   { label: 'Runtime & Data', categories: ['storage', 'atRest', 'sandbox', 'fetch', 'agents', 'runtime', 'power', 'memory', 'cache', 'telemetry', 'diagnostics', 'learning'] },
   { label: 'Advanced', categories: ['release', 'update', 'danger'] },

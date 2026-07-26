@@ -11,7 +11,7 @@
  * TTS_SPEED_SYNTHETIC_SETTING constant.
  */
 import { describe, expect, test } from 'bun:test';
-import type { ConfigKey } from '@pellux/goodvibes-sdk/platform/config';
+import type { ConfigKey, ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import {
   buildTtsSpeedSyntheticEntry,
   TTS_SPEED_DEFAULT,
@@ -25,13 +25,16 @@ import type { SettingEntry, SettingsCategory } from '../../input/settings-modal-
 // Minimal fake ConfigManager for functions that only need .get
 // ---------------------------------------------------------------------------
 
-type PartialCM = { get(key: ConfigKey): unknown };
+// Typed against ConfigManager['get'] directly (rather than re-declaring the
+// generic `<K extends ConfigKey>(key: K): ConfigValue<K>` signature by hand) —
+// re-deriving it structurally makes the compiler re-walk the large ConfigValue
+// conditional type and blows the instantiation stack ("Excessive stack depth
+// comparing types"). Referencing the real method's type sidesteps that.
+type PartialCM = { get: ConfigManager['get'] };
 
 function makePartialCM(overrides: Record<string, unknown> = {}): PartialCM {
   return {
-    get(key: ConfigKey): unknown {
-      return overrides[key as string] ?? undefined;
-    },
+    get: ((key: ConfigKey) => overrides[key as string] ?? undefined) as ConfigManager['get'],
   };
 }
 

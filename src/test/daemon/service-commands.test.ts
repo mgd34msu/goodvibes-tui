@@ -783,6 +783,7 @@ describe('buildInstallResultLines — "suggested follow-ups" gating (W3 Finding 
   function fakeStatus(overrides: Partial<Parameters<typeof buildInstallResultLines>[0]> = {}): Parameters<typeof buildInstallResultLines>[0] {
     return {
       platform: 'systemd',
+      serviceName: 'goodvibes',
       path: '/home/user/.config/systemd/user/goodvibes.service',
       installed: true,
       autostart: true,

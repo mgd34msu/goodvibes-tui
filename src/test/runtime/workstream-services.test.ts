@@ -25,6 +25,8 @@ import { AdaptivePlanner } from '@pellux/goodvibes-sdk/platform/core';
 import type { PhaseRunnerAgentManagerLike } from '@pellux/goodvibes-sdk/platform/orchestration';
 import type { AgentRecord } from '@pellux/goodvibes-sdk/platform/tools';
 import { RuntimeEventBus, createEventEnvelope } from '@/runtime/index.ts';
+import type { ConfigManager } from '../../config/index.ts';
+import { configGetStub, configGetCategoryStub } from '../helpers/config-manager-stub.ts';
 import { createWorkstreamServices } from '../../runtime/workstream-services.ts';
 
 /**
@@ -92,7 +94,7 @@ function reviewerReportOutput(score: number, passed: boolean): string {
 }
 
 /** Mirrors wrfc-config.ts's getWrfcCommitScope contract closely enough for fromChainSpec + phase-runner: commitScope 'off' so no commit/git repo is needed, empty gates so runWrfcGateChecks trivially passes. */
-function makeConfigManager(): { get: (key: string) => unknown; getCategory: (category: string) => unknown } {
+function makeConfigManager(decomposition: 'heuristic' | 'agent' = 'heuristic'): Pick<ConfigManager, 'get' | 'getCategory'> {
   const wrfcCategory = {
     scoreThreshold: 9.9,
     maxFixAttempts: 3,
@@ -102,16 +104,23 @@ function makeConfigManager(): { get: (key: string) => unknown; getCategory: (cat
     commitScope: 'off' as const,
     gates: [] as Array<{ name: string; command: string; enabled: boolean }>,
   };
+  // Values are looked up through an untyped map (like help.test.ts's fakeConfig)
+  // so the cast to the generic return type starts from `unknown`, not a
+  // concrete literal — avoids the compiler over-expanding ConfigValue<K>'s
+  // large conditional type when comparing it against a literal type.
+  const values: Record<string, unknown> = {
+    'wrfc.commitScope': 'off',
+    // Default the decomposition to the heuristic path for the plain engine
+    // wiring tests so they never spawn a real planning agent; the dedicated
+    // agent-path test below overrides this.
+    'planner.decomposition': decomposition,
+  };
+  const categories: Record<string, unknown> = {
+    wrfc: wrfcCategory,
+  };
   return {
-    get: (key: string) => {
-      if (key === 'wrfc.commitScope') return 'off';
-      // Default the decomposition to the heuristic path for the plain engine
-      // wiring tests so they never spawn a real planning agent; the dedicated
-      // agent-path test below overrides this.
-      if (key === 'planner.decomposition') return 'heuristic';
-      return undefined;
-    },
-    getCategory: (category: string) => (category === 'wrfc' ? wrfcCategory : undefined),
+    get: configGetStub(values),
+    getCategory: configGetCategoryStub(categories),
   };
 }
 
@@ -137,7 +146,7 @@ function makeAgentManagerHarness(bus: RuntimeEventBus): {
       const isPlanner = input.template === 'planner';
       const record: AgentRecord = {
         id,
-        task: input.task,
+        task: input.task ?? '',
         template: input.template ?? 'engineer',
         tools: [],
         // A planning agent auto-completes with a valid decomposition so the
@@ -345,12 +354,7 @@ describe('createWorkstreamServices — real engine wiring', () => {
     const bus = new RuntimeEventBus();
     const { agentManager, spawnedTemplates } = makeAgentManagerHarness(bus);
     // Force the agent path (the default config manager above uses 'heuristic').
-    const configManager = {
-      get: (key: string) => (key === 'wrfc.commitScope' ? 'off' : key === 'planner.decomposition' ? 'agent' : undefined),
-      getCategory: (category: string) => (category === 'wrfc'
-        ? { scoreThreshold: 9.9, maxFixAttempts: 3, autoCommit: false, transportRetryLimit: 0, transportRetryDelayMs: 0, commitScope: 'off' as const, gates: [] }
-        : undefined),
-    };
+    const configManager = makeConfigManager('agent');
     const { orchestrationEngine, workstreamCommands } = createWorkstreamServices({
       agentManager,
       configManager,
@@ -391,12 +395,7 @@ describe('createWorkstreamServices — real engine wiring', () => {
     const projectRoot = makeScratchProjectRoot();
     const bus = new RuntimeEventBus();
     const { agentManager } = makeAgentManagerHarness(bus);
-    const configManager = {
-      get: (key: string) => (key === 'wrfc.commitScope' ? 'off' : key === 'planner.decomposition' ? 'agent' : undefined),
-      getCategory: (category: string) => (category === 'wrfc'
-        ? { scoreThreshold: 9.9, maxFixAttempts: 3, autoCommit: false, transportRetryLimit: 0, transportRetryDelayMs: 0, commitScope: 'off' as const, gates: [] }
-        : undefined),
-    };
+    const configManager = makeConfigManager('agent');
     const { orchestrationEngine, workstreamCommands } = createWorkstreamServices({
       agentManager, configManager, adaptivePlanner: new AdaptivePlanner(), runtimeBus: bus, projectRoot,
     });

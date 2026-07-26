@@ -97,10 +97,32 @@ describe('feature enablement writes — domain-key persistence', () => {
         expect(feature.enablement.kind).toBe('constant');
         continue;
       }
+      if (feature.operable === false) continue; // covered below
       cm.setDynamic(on.key, on.value);
       expect(isFeatureConfigEnabled(cm, feature.id)).toBe(true);
       cm.setDynamic(off.key, off.value);
       expect(isFeatureConfigEnabled(cm, feature.id)).toBe(false);
+    }
+  });
+
+  test('a capability declared not operable keeps the written value but never reads as on', () => {
+    const inoperable = FEATURE_SETTINGS.filter((feature) => feature.operable === false);
+    // The registry currently declares wake-word detection inoperable (no surface
+    // captures audio yet). If that list ever empties, this test still holds; the
+    // assertions below are what stops the marker being dropped silently.
+    for (const feature of inoperable) {
+      expect(feature.inoperableDetail, `${feature.id} must state WHY it is unavailable`).toBeTruthy();
+
+      const on = featureEnablementWrite(feature.id, true);
+      if (on === null) continue;
+      cm.setDynamic(on.key, on.value);
+
+      // The user's intent is remembered on disk exactly as written...
+      const reloaded = newManager();
+      expect(reloaded.get(on.key)).toEqual(on.value as never);
+      // ...and the capability still reads as off everywhere, because nothing is
+      // running. A surface that showed "on" here would be lying.
+      expect(isFeatureConfigEnabled(reloaded, feature.id)).toBe(false);
     }
   });
 });

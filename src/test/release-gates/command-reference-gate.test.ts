@@ -48,7 +48,7 @@ describe('command reference gate', () => {
     const { registerBuiltinCommands } = require('@/input/commands.ts');
     const registry = new CommandRegistry();
     registerBuiltinCommands(registry);
-    const registered = new Set(registry.getAll().map((c: { name: string }) => c.name));
+    const registered = new Set<string>(registry.getAll().map((c: { name: string }) => c.name));
     const categorized = categorizeBuiltinCommands().map((e) => e.command.name);
     expect(new Set(categorized).size).toBe(categorized.length); // no duplicates
     expect(new Set(categorized)).toEqual(registered);

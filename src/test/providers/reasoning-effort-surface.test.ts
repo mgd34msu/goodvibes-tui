@@ -55,6 +55,7 @@ const BUDGET_SPEC: ReasoningEffortSpec = {
   source: 'catalog',
   minBudgetTokens: 1024,
   maxBudgetTokens: 32768,
+  canDisableReasoning: true,
 };
 
 const TOGGLE_SPEC: ReasoningEffortSpec = {

@@ -50,16 +50,23 @@ describe('concealed-input', () => {
 
   test('submit delivers plaintext once, clears concealed state before onSubmit runs', () => {
     const host = makeHost();
-    let delivered: string | null = null;
-    let stateWhenDelivered: unknown = 'unset';
+    // A plain local `let` narrows to its initializer's literal type across
+    // the `beginConcealedInputFor` call boundary (TS's control-flow analysis
+    // does not account for the callback below actually running during that
+    // call) — an object property does not get that stale narrowing, so the
+    // captured state lives on one.
+    const captured: { delivered: string | null; stateWhenDelivered: unknown } = {
+      delivered: null,
+      stateWhenDelivered: 'unset',
+    };
     beginConcealedInputFor(host, {
-      onSubmit: (v) => { delivered = v; stateWhenDelivered = host.concealedInput; },
+      onSubmit: (v) => { captured.delivered = v; captured.stateWhenDelivered = host.concealedInput; },
     });
     const consumed = submitConcealedInputFor(host, 'my-secret');
     expect(consumed).toBe(true);
-    expect(delivered).toBe('my-secret');
+    expect(captured.delivered).toBe('my-secret');
     // Cleared BEFORE the callback ran, so the secret does not linger.
-    expect(stateWhenDelivered).toBeNull();
+    expect(captured.stateWhenDelivered).toBeNull();
     expect(host.prompt).toBe('');
   });
 

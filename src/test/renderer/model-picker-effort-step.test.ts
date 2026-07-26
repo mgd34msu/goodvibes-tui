@@ -40,7 +40,7 @@ function renderEffortStep(spec: ReasoningEffortSpec | undefined, current = 'medi
   const picker = new ModelPickerModal(
     { getRecentModels: async () => [] },
     { getBenchmarks: () => undefined },
-    { getSyntheticModelInfoFromCatalog: () => null },
+    { getSyntheticModelInfoFromCatalog: () => null, getSyntheticCanonicalModels: () => [] },
   );
   picker.active = true;
   const model = makeModel(spec);
@@ -72,6 +72,7 @@ describe('the effort step renders the selected model’s own options', () => {
       source: 'catalog',
       minBudgetTokens: 1024,
       maxBudgetTokens: 32768,
+      canDisableReasoning: true,
     });
     expect(text).toContain('thinking-token budget');
     expect(text).toContain('8,192 thinking tokens');
@@ -103,7 +104,7 @@ describe('picker state matches what is rendered', () => {
     const picker = new ModelPickerModal(
       { getRecentModels: async () => [] },
       { getBenchmarks: () => undefined },
-      { getSyntheticModelInfoFromCatalog: () => null },
+      { getSyntheticModelInfoFromCatalog: () => null, getSyntheticCanonicalModels: () => [] },
     );
     const model = makeModel({ kind: 'effort', values: ['low', 'high', 'max'], source: 'catalog' });
     picker.showEffortPicker(model, 'high');
@@ -117,7 +118,7 @@ describe('picker state matches what is rendered', () => {
     const picker = new ModelPickerModal(
       { getRecentModels: async () => [] },
       { getBenchmarks: () => undefined },
-      { getSyntheticModelInfoFromCatalog: () => null },
+      { getSyntheticModelInfoFromCatalog: () => null, getSyntheticCanonicalModels: () => [] },
     );
     picker.showEffortPicker(makeModel({ kind: 'toggle', values: ['none', 'high'], source: 'catalog' }), 'high');
     expect(picker.effortPresentation).not.toBeNull();

@@ -70,7 +70,7 @@ function workstreamNode(id: string): ProcessNode {
   return {
     id: `workstream:${id}`, kind: 'workstream', label: 'stream', state: 'awaiting-approval',
     elapsedMs: 0, costState: 'unpriced',
-    capabilities: { interruptible: false, killable: true, pausable: false, steerable: false },
+    capabilities: { interruptible: false, killable: true, pausable: false, steerable: false, resumable: false },
     needsAttention: { reason: 'pick' },
   };
 }
@@ -80,7 +80,7 @@ function conflictNode(itemId: string, files: readonly string[]): ProcessNode {
   return {
     id: `work-item:${itemId}`, kind: 'work-item', label: 'item', state: 'stalled',
     elapsedMs: 0, costState: 'unpriced',
-    capabilities: { interruptible: false, killable: true, pausable: false, steerable: false },
+    capabilities: { interruptible: false, killable: true, pausable: false, steerable: false, resumable: false },
     needsAttention: { reason: 'conflict' },
     raw: { item, workstreamId: 'ws-1' },
   };
@@ -91,7 +91,7 @@ function worktreeNode(itemId: string, worktreePath: string): ProcessNode {
   return {
     id: `work-item:${itemId}`, kind: 'work-item', label: 'item', state: 'done',
     elapsedMs: 0, costState: 'unpriced',
-    capabilities: { interruptible: false, killable: false, pausable: false, steerable: false },
+    capabilities: { interruptible: false, killable: false, pausable: false, steerable: false, resumable: false },
     raw: { item, workstreamId: 'ws-1' },
   };
 }
@@ -129,6 +129,8 @@ function makeGateway(opts: {
       return opts.discard ? opts.discard() : { path, ok: true, branch: 'gv/it-a', preservedCommit: 'abc1234', discardedAt: Date.now(), detail: 'directory removed; branch kept' } as FleetWorktreeDiscardReceipt;
     },
     armFixSessionAttach(sessionId) { log.armed.push(sessionId); },
+    async getGraph() { throw new Error('makeGateway: getGraph is not exercised by these acts tests'); },
+    async steerObserved() { throw new Error('makeGateway: steerObserved is not exercised by these acts tests'); },
   };
   return { gateway, log };
 }

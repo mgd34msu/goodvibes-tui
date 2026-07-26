@@ -6,10 +6,11 @@
 import { describe, expect, test } from 'bun:test';
 import { getBuiltinSetupSchema } from '@pellux/goodvibes-sdk/platform/channels';
 import type { ChannelSetupFieldKind, ChannelSurface } from '@pellux/goodvibes-sdk/platform/channels';
+import type { ConfigKey } from '@pellux/goodvibes-sdk/platform/config';
 import { EXTERNAL_SURFACE_SPECS } from '../../input/onboarding/onboarding-wizard-external-surfaces.ts';
 
 /** configKeys the onboarding exposes that the SDK setup schema intentionally omits. */
-const TUI_ONLY_EXTRA_CONFIG_KEYS = new Set(['surfaces.ntfy.defaultPriority', 'surfaces.webhook.timeoutMs']);
+const TUI_ONLY_EXTRA_CONFIG_KEYS = new Set<ConfigKey>(['surfaces.ntfy.defaultPriority', 'surfaces.webhook.timeoutMs']);
 
 function sdkSurfaceOf(enabledFieldId: string): ChannelSurface {
   return enabledFieldId.replace(/^external-services\./, '') as ChannelSurface;
@@ -41,7 +42,10 @@ describe('onboarding surface specs are derived from the SDK setup schema', () =>
       for (const sdkField of schema.fields) {
         if (!sdkField.configKey) continue;
         if (sdkField.kind === 'boolean' || sdkField.configKey.endsWith('.enabled')) continue;
-        expect(onboardingKeys.has(sdkField.configKey), `${sdkField.configKey} missing from onboarding`).toBe(true);
+        // sdkField.configKey is the SDK's plain `string`; onboardingKeys is
+        // keyed by the TUI's narrower ConfigKey — this test's whole point is
+        // checking that every SDK key IS a real onboarding ConfigKey.
+        expect(onboardingKeys.has(sdkField.configKey as ConfigKey), `${sdkField.configKey} missing from onboarding`).toBe(true);
       }
     });
   }

@@ -76,8 +76,15 @@ describe('finding 3 — async onOpen loads paint before the first interaction', 
     let appended = false;
     (surface as { buildView: () => ConfigModalView }).buildView = () => {
       const v = base();
-      if (appended) v.tabs[0]!.rows.push({ id: 'r3', label: 'row three', selectable: true });
-      return v;
+      if (!appended) return v;
+      const [firstTab, ...restTabs] = v.tabs;
+      return {
+        ...v,
+        tabs: [
+          { ...firstTab!, rows: [...firstTab!.rows, { id: 'r3', label: 'row three', selectable: true }] },
+          ...restTabs,
+        ],
+      };
     };
     appended = true;
     expect(modal.getRenderModel().rows.map((r) => r.id)).toEqual(['r1', 'r2']);

@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import type { CommandContext } from '../../input/command-registry.ts';
 import { handlePromptKeyToken } from '../../input/handler-feed-routes.ts';
+import { KillRing } from '../../input/kill-ring.ts';
 
 function enterKey() {
   return { type: 'key' as const, name: 'enter', logicalName: 'enter', ctrl: false, shift: false, meta: false };
@@ -64,6 +65,9 @@ describe('vim-style quit shortcuts', () => {
     const result = handlePromptKeyToken({
       prompt: ':wq',
       cursorPos: 3,
+      inputScrollTop: 0,
+      maxInputRows: 10,
+      killRing: new KillRing(),
       commandMode: false,
       contentWidth: 80,
       inputHistory: null,
@@ -78,9 +82,10 @@ describe('vim-style quit shortcuts', () => {
       autocomplete: null,
       blockActionsMenu: { open: () => {} },
       getBlockAnchorLine: () => 0,
-      processModal: { open: () => {} },
+      openFleetPanel: () => {},
       modalOpened: () => {},
       saveUndoState: () => {},
+      breakUndoCoalesce: () => {},
       ensureInputCursorVisible: () => {},
       getWrappedPromptInfo: () => wrappedPromptInfo(),
       moveCursorVertical: () => false,
@@ -110,6 +115,9 @@ describe('vim-style quit shortcuts', () => {
     const result = handlePromptKeyToken({
       prompt: ':q',
       cursorPos: 2,
+      inputScrollTop: 0,
+      maxInputRows: 10,
+      killRing: new KillRing(),
       commandMode: false,
       contentWidth: 80,
       inputHistory: null,
@@ -119,9 +127,10 @@ describe('vim-style quit shortcuts', () => {
       autocomplete: null,
       blockActionsMenu: { open: () => {} },
       getBlockAnchorLine: () => 0,
-      processModal: { open: () => {} },
+      openFleetPanel: () => {},
       modalOpened: () => {},
       saveUndoState: () => {},
+      breakUndoCoalesce: () => {},
       ensureInputCursorVisible: () => {},
       getWrappedPromptInfo: () => wrappedPromptInfo(),
       moveCursorVertical: () => false,

@@ -8,6 +8,8 @@ function makeResult(overrides: Partial<CostAttributionResult> = {}): CostAttribu
     dimension: 'agent',
     totalCostUsd: 1.2345,
     costState: 'priced',
+    costSource: 'catalog',
+    pricingAsOf: null,
     pricedRecordCount: 3,
     unpricedRecordCount: 0,
     tokens: { inputTokens: 1000, outputTokens: 200, cacheReadTokens: 0, cacheWriteTokens: 0 },
@@ -31,7 +33,7 @@ describe('formatCostAttributionSection', () => {
 
   test('a priced row shows a real dollar amount', () => {
     const result = makeResult({
-      rows: [{ key: 'agent-1', costUsd: 0.5, costState: 'priced', pricedRecordCount: 1, unpricedRecordCount: 0, tokens: { inputTokens: 100, outputTokens: 20, cacheReadTokens: 0, cacheWriteTokens: 0 } }],
+      rows: [{ key: 'agent-1', costUsd: 0.5, costState: 'priced', costSource: 'catalog', pricingAsOf: null, pricedRecordCount: 1, unpricedRecordCount: 0, tokens: { inputTokens: 100, outputTokens: 20, cacheReadTokens: 0, cacheWriteTokens: 0 } }],
     });
     const text = formatCostAttributionSection(result, false)!.join('\n');
     expect(text).toContain('$0.5000');
@@ -43,7 +45,7 @@ describe('formatCostAttributionSection', () => {
   test('an estimated row is labeled estimated, never presented as a firm price', () => {
     const result = makeResult({
       costState: 'estimated',
-      rows: [{ key: 'agent-1', costUsd: 0.5, costState: 'estimated', pricedRecordCount: 0, unpricedRecordCount: 1, tokens: { inputTokens: 100, outputTokens: 20, cacheReadTokens: 0, cacheWriteTokens: 0 } }],
+      rows: [{ key: 'agent-1', costUsd: 0.5, costState: 'estimated', costSource: 'mixed', pricingAsOf: null, pricedRecordCount: 0, unpricedRecordCount: 1, tokens: { inputTokens: 100, outputTokens: 20, cacheReadTokens: 0, cacheWriteTokens: 0 } }],
     });
     const text = formatCostAttributionSection(result, false)!.join('\n');
     expect(text).toContain('$0.5000 (estimated)');
@@ -53,7 +55,7 @@ describe('formatCostAttributionSection', () => {
     const result = makeResult({
       totalCostUsd: null,
       costState: 'unpriced',
-      rows: [{ key: 'unknown-model', costUsd: null, costState: 'unpriced', pricedRecordCount: 0, unpricedRecordCount: 1, tokens: { inputTokens: 100, outputTokens: 20, cacheReadTokens: 0, cacheWriteTokens: 0 } }],
+      rows: [{ key: 'unknown-model', costUsd: null, costState: 'unpriced', costSource: null, pricingAsOf: null, pricedRecordCount: 0, unpricedRecordCount: 1, tokens: { inputTokens: 100, outputTokens: 20, cacheReadTokens: 0, cacheWriteTokens: 0 } }],
     });
     const text = formatCostAttributionSection(result, false)!.join('\n');
     expect(text).toContain('unpriced');

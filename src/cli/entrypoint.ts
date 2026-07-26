@@ -31,6 +31,8 @@ import type { CliWorkspaceStatus, CliSandboxStatus, CliRelayStatus } from './sta
 import { detectSandboxAvailability, probeSandboxHost } from '@pellux/goodvibes-sdk/platform/tools/exec/sandbox';
 import { createFeatureFlagManager, deriveFeatureStates } from '@/runtime/index.ts';
 import { ensureGoodvibesGitignore } from './ensure-goodvibes-gitignore.ts';
+import { runDaemonConfigMigration } from '../config/run-daemon-config-migration.ts';
+import { describeDaemonConfigMigration } from '@pellux/goodvibes-sdk/platform/config';
 
 type ShellEntrypointOwnership = {
   readonly workingDirectory: string;
@@ -108,6 +110,10 @@ export async function prepareShellCliRuntime(
   // launch) — see ensureGoodvibesGitignore's return-value doc.
   if (ensureGoodvibesGitignore(bootstrapWorkingDir)) {
     console.log("[goodvibes] added '.goodvibes/' to .gitignore — this directory holds transient TUI state (logs, session cache, exec output), not project source.");
+  }
+  const daemonConfigMigration = runDaemonConfigMigration(bootstrapHomeDirectory);
+  if (daemonConfigMigration?.migrated && (daemonConfigMigration.marker.moved.length + daemonConfigMigration.marker.discarded.length) > 0) {
+    console.log(`[goodvibes] ${describeDaemonConfigMigration(daemonConfigMigration.marker)}`);
   }
   const configManager = new ConfigManager({
     workingDir: bootstrapWorkingDir,

@@ -195,24 +195,24 @@ describe('cache-vs-cold equivalence', () => {
     assertCacheMatchesCold(cm);
   });
 
-  test('toggling a tool-result group invalidates exactly its members', () => {
-    // Two tool calls in one assistant turn fold under a single group header
-    // (see conversation-tool-groups.ts). A message entirely BEFORE the group
-    // keeps its cached Line[] instance across the toggle — proof the group's
+  test('toggling an assistant turn invalidates exactly its rows', () => {
+    // Two tool calls in one assistant turn hang under a single turn header
+    // (see conversation-turn-structure.ts). A message entirely BEFORE the turn
+    // keeps its cached Line[] instance across the toggle — proof the turn's
     // collapseState key is read (and invalidates) only the entries that
     // actually depend on it, not the whole conversation.
     //
-    // A message AFTER the group is a different story: collapsing/expanding
-    // this group changes how many BlockMeta entries the group's messages
-    // contribute (1 header block folded vs. 1 header + 2 member blocks
-    // unfolded), which shifts blockBase — the block-registry length embedded
+    // A message AFTER the turn is a different story: collapsing/expanding
+    // this turn changes how many BlockMeta entries its rows contribute
+    // (1 header collapsed vs. 1 header + 2 result blocks expanded), which
+    // shifts blockBase — the block-registry length embedded
     // in every later message's cache key — for everything that follows. That
     // cascade is the SAME existing mechanism that already invalidates
     // everything after a code block whose collapse changes its line count
     // (see this file's blockBase doc comment); it is correct, not something
     // this test claims is scoped away.
     const cm = new ConversationManager(() => 100);
-    cm.addUserMessage('an earlier message, unrelated to the tool group');
+    cm.addUserMessage('an earlier message, unrelated to the turn');
     cm.addAssistantMessage('reading and writing now', {
       toolCalls: [
         { id: 'call-1', name: 'Read', arguments: { path: 'foo.ts' } },
@@ -225,32 +225,35 @@ describe('cache-vs-cold equivalence', () => {
     ]);
     cm.addUserMessage('a later message, also unrelated');
 
-    const before = [...cm.getDisplayBlocks()]; // warm the cache; group defaults collapsed
+    // Warm the cache. Turns default EXPANDED, so both result blocks are
+    // present to begin with — the toggle sequence below runs the other way
+    // round from the retired folded-group model.
+    const before = [...cm.getDisplayBlocks()];
 
-    const groupBlock = cm.getBlockRegistry().find((b) => b.type === 'tool_group');
-    expect(groupBlock).toBeDefined();
+    const turnBlock = cm.getBlockRegistry().find((b) => b.type === 'assistant_turn');
+    expect(turnBlock).toBeDefined();
+    expect(cm.getBlockRegistry().filter((b) => b.type === 'tool').length).toBe(2);
 
-    // Toggle the group open.
-    cm.toggleCollapseAtLine(groupBlock!.startLine);
-    const afterExpand = cm.getDisplayBlocks();
+    // Collapse the turn — both result blocks leave the registry.
+    cm.toggleCollapseAtLine(turnBlock!.startLine);
+    const afterCollapse = cm.getDisplayBlocks();
 
-    // The leading, unrelated message keeps the SAME Line[] object instance.
-    expect(afterExpand[0]).toBe(before[0]);
+    // The leading, unrelated message keeps the SAME Line[] object instance —
+    // proof the turn's collapse key invalidates only the entries that read it.
+    expect(afterCollapse[0]).toBe(before[0]);
 
-    // Expanded: the header plus both individual tool-result blocks are visible.
-    const expandedRegistry = cm.getBlockRegistry();
-    expect(expandedRegistry.filter((b) => b.type === 'tool_group').length).toBe(1);
-    expect(expandedRegistry.filter((b) => b.type === 'tool').length).toBe(2);
-    assertCacheMatchesCold(cm);
-
-    // Toggle it collapsed again — the two member blocks disappear from the
-    // registry; only the header block remains.
-    const groupBlock2 = cm.getBlockRegistry().find((b) => b.type === 'tool_group');
-    cm.toggleCollapseAtLine(groupBlock2!.startLine);
-    assertCacheMatchesCold(cm);
     const collapsedRegistry = cm.getBlockRegistry();
-    expect(collapsedRegistry.filter((b) => b.type === 'tool_group').length).toBe(1);
+    expect(collapsedRegistry.filter((b) => b.type === 'assistant_turn').length).toBe(1);
     expect(collapsedRegistry.filter((b) => b.type === 'tool').length).toBe(0);
+    assertCacheMatchesCold(cm);
+
+    // Expand it again — both result blocks come back.
+    const turnBlock2 = cm.getBlockRegistry().find((b) => b.type === 'assistant_turn');
+    cm.toggleCollapseAtLine(turnBlock2!.startLine);
+    assertCacheMatchesCold(cm);
+    const expandedRegistry = cm.getBlockRegistry();
+    expect(expandedRegistry.filter((b) => b.type === 'assistant_turn').length).toBe(1);
+    expect(expandedRegistry.filter((b) => b.type === 'tool').length).toBe(2);
   });
 
   test('resize (width change) re-renders every message correctly', () => {
@@ -310,11 +313,18 @@ describe('cache-vs-cold equivalence', () => {
     });
     cm.getDisplayBlocks(); // warm — cached with all three calls pending
 
+    // Count CALL rows only. A settled result row also carries ✓ in the shared
+    // status gutter, so a whole-transcript glyph count would conflate the two.
+    // A call row is a tree branch (it has a connector) that names its target
+    // file; all three calls here share the tool label 'Read', so it is hoisted
+    // to the turn header once and each row leads with its own path instead.
     const countGlyphs = (): { done: number; pending: number } => {
-      const text = cm.getDisplayBlocks().map((l) => l.map((c) => c.char).join('')).join('\n');
+      const callRows = cm.getDisplayBlocks()
+        .map((l) => l.map((c) => c.char).join(''))
+        .filter((t) => /[├└]/.test(t) && /\.ts/.test(t));
       return {
-        done: (text.match(/✓/g) ?? []).length,
-        pending: (text.match(/◌/g) ?? []).length,
+        done: callRows.filter((t) => t.includes('✓')).length,
+        pending: callRows.filter((t) => t.includes('◌')).length,
       };
     };
 

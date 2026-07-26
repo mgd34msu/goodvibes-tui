@@ -28,7 +28,7 @@ function makePicker(): ModelPickerModal {
   const picker = new ModelPickerModal(
     { getRecentModels: async () => [] },
     { getBenchmarks: () => undefined },
-    { getSyntheticModelInfoFromCatalog: () => null },
+    { getSyntheticModelInfoFromCatalog: () => null, getSyntheticCanonicalModels: () => [] },
   );
   picker.active = true;
   picker.models = [

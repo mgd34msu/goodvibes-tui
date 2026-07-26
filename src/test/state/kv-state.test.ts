@@ -47,6 +47,9 @@ describe('KVState', () => {
 
   describe('session ID', () => {
     test('requires an explicit state directory or storage root', () => {
+      // @ts-expect-error — deliberately omitting the required `stateDir` option
+      // to assert the constructor throws at runtime when no state directory
+      // can be resolved.
       expect(() => new KVState()).toThrow();
     });
 

@@ -77,9 +77,15 @@ describe('Enter-on-empty-composer block-actions targeting', () => {
 
     handlePromptKeyToken(state, enterToken());
 
-    expect(requestedLine).toBe(240);
-    expect(requestedLine).not.toBe(0);
-    expect(openedBlock).toBe(bottomBlock);
+    // Widening casts back to the declared union: both `let`s are only ever
+    // reassigned inside a nested closure (findNearestBlock / blockActionsMenu.open),
+    // and TS's control-flow narrowing doesn't see across that function
+    // boundary — it keeps treating each variable as pinned to its literal
+    // `null` initializer here, so `expected: number`/`BlockMeta` no longer
+    // overlaps the (wrongly) narrowed `null` type without this.
+    expect(requestedLine as number | null).toBe(240);
+    expect(requestedLine as number | null).not.toBe(0);
+    expect(openedBlock as BlockMeta | null).toBe(bottomBlock);
   });
 
   test('does not open the menu when no block exists near the anchor', () => {

@@ -64,14 +64,8 @@ describe('shell/blocking-input', () => {
     const result = handleBlockingShellInput({
       data: 'y',
       pendingPermission,
-      recoveryPending: false,
       abortTurn: () => { aborted++; },
-      conversation: conversation as never,
-      systemMessageRouter: router as never,
       render: () => { rendered++; },
-      loadRecoveryConversation: () => null,
-      deleteRecoveryFile: () => {},
-      ...JOURNAL_STUBS,
     });
 
     expect(result.handled).toBe(true);
@@ -99,14 +93,8 @@ describe('shell/blocking-input', () => {
     const result = handleBlockingShellInput({
       data: '\x1b',
       pendingPermission,
-      recoveryPending: false,
       abortTurn: () => { aborted++; },
-      conversation: conversation as never,
-      systemMessageRouter: router as never,
       render: () => {},
-      loadRecoveryConversation: () => null,
-      deleteRecoveryFile: () => {},
-      ...JOURNAL_STUBS,
     });
 
     // Esc is not a card answer: it passes through to input (handled:false) so
@@ -134,14 +122,8 @@ describe('shell/blocking-input', () => {
       const result = handleBlockingShellInput({
         data,
         pendingPermission,
-        recoveryPending: false,
         abortTurn: () => { throw new Error('scroll/mouse must never abort'); },
-        conversation: conversation as never,
-        systemMessageRouter: router as never,
         render: () => {},
-        loadRecoveryConversation: () => null,
-        deleteRecoveryFile: () => {},
-        ...JOURNAL_STUBS,
       });
       // Not consumed: falls through to input.feed. The card is untouched.
       expect(result.handled).toBe(false);
@@ -163,14 +145,8 @@ describe('shell/blocking-input', () => {
     const approve = handleBlockingShellInput({
       data: 'y',
       pendingPermission,
-      recoveryPending: false,
       abortTurn: () => {},
-      conversation: conversation as never,
-      systemMessageRouter: router as never,
       render: () => {},
-      loadRecoveryConversation: () => null,
-      deleteRecoveryFile: () => {},
-      ...JOURNAL_STUBS,
     });
     expect(approve.handled).toBe(true);
     expect(approve.pendingPermission).toBeNull();
@@ -225,14 +201,8 @@ describe('shell/blocking-input', () => {
       const result = handleBlockingShellInput({
         data: 'j',
         pendingPermission,
-        recoveryPending: false,
         abortTurn: () => {},
-        conversation: conversation as never,
-        systemMessageRouter: router as never,
         render: () => { rendered++; },
-        loadRecoveryConversation: () => null,
-        deleteRecoveryFile: () => {},
-        ...JOURNAL_STUBS,
       });
 
       expect(result.handled).toBe(true);
@@ -250,14 +220,8 @@ describe('shell/blocking-input', () => {
       const result = handleBlockingShellInput({
         data: ' ',
         pendingPermission,
-        recoveryPending: false,
         abortTurn: () => {},
-        conversation: conversation as never,
-        systemMessageRouter: router as never,
         render: () => {},
-        loadRecoveryConversation: () => null,
-        deleteRecoveryFile: () => {},
-        ...JOURNAL_STUBS,
       });
 
       const hunkState = (result.pendingPermission as unknown as { hunkState: { selected: Set<number> } }).hunkState;
@@ -274,14 +238,8 @@ describe('shell/blocking-input', () => {
       const result = handleBlockingShellInput({
         data: '\r',
         pendingPermission,
-        recoveryPending: false,
         abortTurn: () => {},
-        conversation: conversation as never,
-        systemMessageRouter: router as never,
         render: () => { rendered++; },
-        loadRecoveryConversation: () => null,
-        deleteRecoveryFile: () => {},
-        ...JOURNAL_STUBS,
       });
 
       expect(result.handled).toBe(true);
@@ -308,14 +266,8 @@ describe('shell/blocking-input', () => {
       const result = handleBlockingShellInput({
         data: 'n',
         pendingPermission,
-        recoveryPending: false,
         abortTurn: () => { aborted++; },
-        conversation: conversation as never,
-        systemMessageRouter: router as never,
         render: () => {},
-        loadRecoveryConversation: () => null,
-        deleteRecoveryFile: () => {},
-        ...JOURNAL_STUBS,
       });
 
       expect(result.pendingPermission).toBeNull();
@@ -332,14 +284,8 @@ describe('shell/blocking-input', () => {
       const result = handleBlockingShellInput({
         data: '\x1b',
         pendingPermission,
-        recoveryPending: false,
         abortTurn: () => { aborted++; },
-        conversation: conversation as never,
-        systemMessageRouter: router as never,
         render: () => {},
-        loadRecoveryConversation: () => null,
-        deleteRecoveryFile: () => {},
-        ...JOURNAL_STUBS,
       });
 
       expect(result.pendingPermission).toBeNull();
@@ -355,14 +301,8 @@ describe('shell/blocking-input', () => {
       const result = handleBlockingShellInput({
         data: 'a',
         pendingPermission,
-        recoveryPending: false,
         abortTurn: () => {},
-        conversation: conversation as never,
-        systemMessageRouter: router as never,
         render: () => {},
-        loadRecoveryConversation: () => null,
-        deleteRecoveryFile: () => {},
-        ...JOURNAL_STUBS,
       });
 
       // Must NOT resolve (that would be the outer "remember" path) — hunk mode
@@ -386,15 +326,9 @@ describe('shell/blocking-input', () => {
       const result = handleBlockingShellInput({
         data,
         pendingPermission,
-        recoveryPending: false,
         abortTurn: () => { aborted++; },
-        conversation: makeConversation().conversation as never,
-        systemMessageRouter: makeRouter().router as never,
         render: () => {},
-        loadRecoveryConversation: () => null,
-        deleteRecoveryFile: () => {},
         now,
-        ...JOURNAL_STUBS,
       });
       return { result, resolved, aborted };
     }

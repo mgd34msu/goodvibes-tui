@@ -12,6 +12,7 @@ import {
 function createStatus(overrides: Partial<ManagedServiceStatus> = {}): ManagedServiceStatus {
   return {
     platform: 'systemd',
+    serviceName: 'goodvibes',
     path: '/tmp/goodvibes.service',
     installed: true,
     autostart: true,

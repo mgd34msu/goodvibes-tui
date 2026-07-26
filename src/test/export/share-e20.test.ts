@@ -9,6 +9,26 @@ import { exportToMarkdownExtended } from '@pellux/goodvibes-sdk/platform/export'
 import type { ExportMessage, ExportMetadata } from '@pellux/goodvibes-sdk/platform/export';
 
 // ---------------------------------------------------------------------------
+// Mock-fetch install helper
+//
+// bun:test's `Mock<T>` wraps a plain function with call-history bookkeeping,
+// so it never structurally overlaps with the overloaded `typeof fetch` type
+// (TS2352). This is the one narrow spot where a cast through `unknown` is
+// the correct, TS-suggested conversion — the mock genuinely stands in for
+// the global, and factoring it here keeps that cast in a single place
+// instead of repeating it at every call site.
+// ---------------------------------------------------------------------------
+type FetchImpl = (url: string | URL | Request, init?: RequestInit) => Promise<Response>;
+
+function installMockFetch(impl: FetchImpl): () => void {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = mock(impl) as unknown as typeof fetch;
+  return () => {
+    globalThis.fetch = originalFetch;
+  };
+}
+
+// ---------------------------------------------------------------------------
 // cost-utils
 // ---------------------------------------------------------------------------
 
@@ -131,15 +151,14 @@ describe('GistUploadTarget', () => {
       JSON.stringify({ html_url: MOCK_URL }),
       { status: 201, headers: { 'Content-Type': 'application/json' } },
     );
-    const originalFetch = globalThis.fetch;
-    globalThis.fetch = mock(() => Promise.resolve(mockResponse)) as typeof fetch;
+    const restoreFetch = installMockFetch(() => Promise.resolve(mockResponse));
     try {
       const uploader = new GistUploadTarget(MOCK_TOKEN);
       const result = await uploader.upload('# Hello\ncontent', 'session.md');
       expect(result.ok).toBe(true);
       if (result.ok) expect(result.url).toBe(MOCK_URL);
     } finally {
-      globalThis.fetch = originalFetch;
+      restoreFetch();
     }
   });
 
@@ -149,11 +168,10 @@ describe('GistUploadTarget', () => {
       JSON.stringify({ html_url: MOCK_URL }),
       { status: 201, headers: { 'Content-Type': 'application/json' } },
     );
-    const originalFetch = globalThis.fetch;
-    globalThis.fetch = mock((_url: string | URL | Request, init?: RequestInit) => {
+    const restoreFetch = installMockFetch((_url, init) => {
       capturedBody = JSON.parse(init?.body as string);
       return Promise.resolve(mockResponse);
-    }) as typeof fetch;
+    });
     try {
       const uploader = new GistUploadTarget(MOCK_TOKEN, 'test desc');
       await uploader.upload('content', 'export.html');
@@ -162,34 +180,32 @@ describe('GistUploadTarget', () => {
       expect(body['description']).toBe('test desc');
       expect((body['files'] as Record<string, unknown>)['export.html']).toBeDefined();
     } finally {
-      globalThis.fetch = originalFetch;
+      restoreFetch();
     }
   });
 
   test('returns ok:false on HTTP error response', async () => {
     const mockResponse = new Response('Unauthorized', { status: 401 });
-    const originalFetch = globalThis.fetch;
-    globalThis.fetch = mock(() => Promise.resolve(mockResponse)) as typeof fetch;
+    const restoreFetch = installMockFetch(() => Promise.resolve(mockResponse));
     try {
       const uploader = new GistUploadTarget(MOCK_TOKEN);
       const result = await uploader.upload('content', 'test.html');
       expect(result.ok).toBe(false);
       if (!result.ok) expect(result.error).toContain('401');
     } finally {
-      globalThis.fetch = originalFetch;
+      restoreFetch();
     }
   });
 
   test('returns ok:false on network error', async () => {
-    const originalFetch = globalThis.fetch;
-    globalThis.fetch = mock(() => Promise.reject(new Error('Network failure'))) as typeof fetch;
+    const restoreFetch = installMockFetch(() => Promise.reject(new Error('Network failure')));
     try {
       const uploader = new GistUploadTarget(MOCK_TOKEN);
       const result = await uploader.upload('content', 'test.html');
       expect(result.ok).toBe(false);
       if (!result.ok) expect(result.error).toContain('Network failure');
     } finally {
-      globalThis.fetch = originalFetch;
+      restoreFetch();
     }
   });
 
@@ -275,11 +291,10 @@ describe('redaction before upload: secret absent from uploaded body', () => {
       JSON.stringify({ html_url: MOCK_URL }),
       { status: 201, headers: { 'Content-Type': 'application/json' } },
     );
-    const originalFetch = globalThis.fetch;
-    globalThis.fetch = mock((_url: string | URL | Request, init?: RequestInit) => {
+    const restoreFetch = installMockFetch((_url, init) => {
       capturedBody = init?.body as string;
       return Promise.resolve(mockResponse);
-    }) as typeof fetch;
+    });
 
     try {
       const uploader = new GistUploadTarget(MOCK_TOKEN, 'redact test');
@@ -295,7 +310,7 @@ describe('redaction before upload: secret absent from uploaded body', () => {
       // The redacted content should contain a redaction placeholder token.
       expect(uploadedContent).toContain('[REDACTED_API_KEY]');
     } finally {
-      globalThis.fetch = originalFetch;
+      restoreFetch();
     }
   });
 
@@ -316,11 +331,10 @@ describe('redaction before upload: secret absent from uploaded body', () => {
       JSON.stringify({ html_url: MOCK_URL }),
       { status: 201, headers: { 'Content-Type': 'application/json' } },
     );
-    const originalFetch = globalThis.fetch;
-    globalThis.fetch = mock((_url: string | URL | Request, init?: RequestInit) => {
+    const restoreFetch = installMockFetch((_url, init) => {
       capturedBody = init?.body as string;
       return Promise.resolve(mockResponse);
-    }) as typeof fetch;
+    });
 
     try {
       const uploader = new GistUploadTarget(MOCK_TOKEN);
@@ -332,7 +346,7 @@ describe('redaction before upload: secret absent from uploaded body', () => {
       // Without redaction the raw content passes through unchanged.
       expect(uploadedContent).toContain(SECRET);
     } finally {
-      globalThis.fetch = originalFetch;
+      restoreFetch();
     }
   });
 });
@@ -349,6 +363,9 @@ describe('plugin-runtime: registerPluginRuntimeCommands is exported and integrat
 
   test('integration-runtime.ts module does not exist', async () => {
     await expect(
+      // @ts-expect-error — deliberately importing a module path that was removed
+      // (superseded by plugin-runtime.ts); this test asserts the dynamic import
+      // rejects at runtime because the file is genuinely gone.
       import('../../input/commands/integration-runtime.ts'),
     ).rejects.toThrow();
   });

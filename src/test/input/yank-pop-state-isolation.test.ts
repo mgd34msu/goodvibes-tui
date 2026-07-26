@@ -60,7 +60,15 @@ function makeKeyState(overrides: Partial<KeyRouteState> & { killRing: KillRing }
     saveUndoState: mock(() => {}),
     breakUndoCoalesce: mock(() => {}),
     ensureInputCursorVisible: mock(() => {}),
-    getWrappedPromptInfo: () => ({ wrappedLines: ['hello'], segments: [{ rawStart: 0, length: 5 }], cursorWrappedLine: 0 }),
+    getWrappedPromptInfo: () => ({
+      wrappedLines: ['hello'],
+      segments: [{ rawStart: 0, length: 5 }],
+      cursorWrappedLine: 0,
+      cursorCol: 5,
+      visibleLines: ['hello'],
+      visibleCursorLine: 0,
+      visibleCursorCol: 5,
+    }),
     moveCursorVertical: () => false,
     handlePathCompletion: () => false,
     handleBlockToggle: mock(() => {}),
@@ -70,6 +78,7 @@ function makeKeyState(overrides: Partial<KeyRouteState> & { killRing: KillRing }
     scroll: mock(() => {}),
     exitApp: mock(() => {}),
     requestRender: mock(() => {}),
+    openFleetPanel: mock(() => {}),
     ...overrides,
   };
 }
@@ -162,7 +171,7 @@ describe('yank-pop state isolation', () => {
     expect(ring.lastActionWasYank).toBe(true);
 
     const keyState = makeKeyState({ killRing: ring, prompt: 'hello', cursorPos: 5 });
-    handlePromptKeyToken(keyState, { type: 'key', name: '\x7f', logicalName: 'backspace', ctrl: false, shift: false, alt: false, meta: false });
+    handlePromptKeyToken(keyState, { type: 'key', name: '\x7f', logicalName: 'backspace', ctrl: false, shift: false, meta: false });
 
     expect(ring.lastActionWasYank).toBe(false);
   });
@@ -174,7 +183,7 @@ describe('yank-pop state isolation', () => {
     expect(ring.lastActionWasYank).toBe(true);
 
     const keyState = makeKeyState({ killRing: ring, prompt: 'hello', cursorPos: 2 });
-    handlePromptKeyToken(keyState, { type: 'key', name: '\x1b[3~', logicalName: 'delete', ctrl: false, shift: false, alt: false, meta: false });
+    handlePromptKeyToken(keyState, { type: 'key', name: '\x1b[3~', logicalName: 'delete', ctrl: false, shift: false, meta: false });
 
     expect(ring.lastActionWasYank).toBe(false);
   });
@@ -186,7 +195,7 @@ describe('yank-pop state isolation', () => {
     expect(ring.lastActionWasYank).toBe(true);
 
     const keyState = makeKeyState({ killRing: ring, prompt: 'hello', cursorPos: 5 });
-    handlePromptKeyToken(keyState, { type: 'key', name: '\x1b[D', logicalName: 'left', ctrl: false, shift: false, alt: false, meta: false });
+    handlePromptKeyToken(keyState, { type: 'key', name: '\x1b[D', logicalName: 'left', ctrl: false, shift: false, meta: false });
 
     expect(ring.lastActionWasYank).toBe(false);
   });
@@ -198,7 +207,7 @@ describe('yank-pop state isolation', () => {
     expect(ring.lastActionWasYank).toBe(true);
 
     const keyState = makeKeyState({ killRing: ring, prompt: 'hello', cursorPos: 0 });
-    handlePromptKeyToken(keyState, { type: 'key', name: '\x1b[C', logicalName: 'right', ctrl: false, shift: false, alt: false, meta: false });
+    handlePromptKeyToken(keyState, { type: 'key', name: '\x1b[C', logicalName: 'right', ctrl: false, shift: false, meta: false });
 
     expect(ring.lastActionWasYank).toBe(false);
   });
@@ -210,7 +219,7 @@ describe('yank-pop state isolation', () => {
     expect(ring.lastActionWasYank).toBe(true);
 
     const keyState = makeKeyState({ killRing: ring, prompt: 'hello', cursorPos: 5 });
-    handlePromptKeyToken(keyState, { type: 'key', name: '\x1b[H', logicalName: 'home', ctrl: false, shift: false, alt: false, meta: false });
+    handlePromptKeyToken(keyState, { type: 'key', name: '\x1b[H', logicalName: 'home', ctrl: false, shift: false, meta: false });
 
     expect(ring.lastActionWasYank).toBe(false);
   });
@@ -222,7 +231,7 @@ describe('yank-pop state isolation', () => {
     expect(ring.lastActionWasYank).toBe(true);
 
     const keyState = makeKeyState({ killRing: ring, prompt: 'hello', cursorPos: 0 });
-    handlePromptKeyToken(keyState, { type: 'key', name: '\x1b[F', logicalName: 'end', ctrl: false, shift: false, alt: false, meta: false });
+    handlePromptKeyToken(keyState, { type: 'key', name: '\x1b[F', logicalName: 'end', ctrl: false, shift: false, meta: false });
 
     expect(ring.lastActionWasYank).toBe(false);
   });

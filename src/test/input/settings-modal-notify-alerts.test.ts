@@ -11,13 +11,16 @@ import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import type { ConfigKey } from '@pellux/goodvibes-sdk/platform/config';
 import { buildNotifyAlertSyntheticEntries, buildSettingGroups } from '../../input/settings-modal-data.ts';
 
-const EXPECTED_KEYS = [
+// These are synthetic settings (buildNotifyAlertSyntheticEntries), not real
+// ConfigKey schema entries — the module itself stamps them `as ConfigKey`
+// (settings-modal-data.ts), so the test matches that same convention here.
+const EXPECTED_KEYS = ([
   'behavior.notifyOnBudgetBreach',
   'behavior.notifyOnAgentFailure',
   'behavior.notifyOnChainFailure',
   'behavior.notifyOnApprovalPending',
   'behavior.notifyOnlyWhenUnfocused',
-];
+] as string[]) as ConfigKey[];
 
 describe('buildNotifyAlertSyntheticEntries', () => {
   const originalCwd = process.cwd();
@@ -53,7 +56,7 @@ describe('buildNotifyAlertSyntheticEntries', () => {
   test('reflects a value written via configManager.set', () => {
     cm.set('behavior.notifyOnlyWhenUnfocused' as ConfigKey, false as never);
     const entries = buildNotifyAlertSyntheticEntries(cm);
-    const masterGate = entries.find((e) => e.setting.key === 'behavior.notifyOnlyWhenUnfocused');
+    const masterGate = entries.find((e) => e.setting.key === ('behavior.notifyOnlyWhenUnfocused' as ConfigKey));
     expect(masterGate?.currentValue).toBe(false);
     expect(masterGate?.isDefault).toBe(false);
   });

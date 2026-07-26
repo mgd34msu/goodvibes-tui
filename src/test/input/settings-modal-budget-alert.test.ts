@@ -42,7 +42,10 @@ describe('buildBudgetAlertUsdSyntheticEntry', () => {
 
   test('defaults to BUDGET_ALERT_USD_DEFAULT (0 = disabled) when never set', () => {
     const entry = buildBudgetAlertUsdSyntheticEntry(cm);
-    expect(entry.setting.key).toBe(BUDGET_ALERT_USD_CONFIG_KEY);
+    // BUDGET_ALERT_USD_CONFIG_KEY is TUI-local and not in the SDK's ConfigKey
+    // union (see settings-modal-data.ts doc comment); production code casts
+    // it the same way when building the synthetic setting descriptor.
+    expect(entry.setting.key).toBe(BUDGET_ALERT_USD_CONFIG_KEY as ConfigKey);
     expect(entry.setting.type).toBe('number');
     expect(entry.currentValue).toBe(BUDGET_ALERT_USD_DEFAULT);
     expect(entry.isDefault).toBe(true);
@@ -66,7 +69,9 @@ describe('buildBudgetAlertUsdSyntheticEntry', () => {
   test('buildSettingGroups injects it into the behavior category exactly once, alongside the notifyOnBudgetBreach gate', () => {
     const groups = buildSettingGroups(cm);
     const behaviorKeys = (groups.get('behavior') ?? []).map((e) => e.setting.key);
-    expect(behaviorKeys.filter((k) => k === BUDGET_ALERT_USD_CONFIG_KEY)).toHaveLength(1);
-    expect(behaviorKeys).toContain('behavior.notifyOnBudgetBreach');
+    // Both keys below are TUI-local synthetic settings, not members of the
+    // SDK's ConfigKey union — same `as ConfigKey` cast production code uses.
+    expect(behaviorKeys.filter((k) => k === (BUDGET_ALERT_USD_CONFIG_KEY as ConfigKey))).toHaveLength(1);
+    expect(behaviorKeys).toContain('behavior.notifyOnBudgetBreach' as ConfigKey);
   });
 });

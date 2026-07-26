@@ -45,7 +45,7 @@ describe('built-in archetypes', () => {
   test('listArchetypes returns all built-in archetypes when no agents dir', () => {
     const loader = new ArchetypeLoader('/nonexistent/path');
     const archetypes = loader.listArchetypes();
-    expect(archetypes.map((a) => a.name)).toEqual(EXPECTED_BUILTIN_ARCHETYPES);
+    expect(archetypes.map((a) => a.name)).toEqual([...EXPECTED_BUILTIN_ARCHETYPES]);
   });
 
   test('built-ins include all role archetypes', () => {
@@ -340,7 +340,7 @@ describe('error resilience', () => {
     const loader = new ArchetypeLoader(dir);
     const archetypes = loader.listArchetypes();
     // Only built-ins
-    expect(archetypes.map((a) => a.name)).toEqual(EXPECTED_BUILTIN_ARCHETYPES);
+    expect(archetypes.map((a) => a.name)).toEqual([...EXPECTED_BUILTIN_ARCHETYPES]);
     expect(archetypes.every((a) => !a.isCustom)).toBe(true);
   });
 

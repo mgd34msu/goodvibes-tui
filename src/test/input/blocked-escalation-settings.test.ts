@@ -3,6 +3,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
+import type { ConfigKey } from '@pellux/goodvibes-sdk/platform/config';
 import { buildSettingGroups } from '../../input/settings-modal-data.ts';
 import { getSettingLabel } from '../../renderer/settings-modal-helpers.ts';
 
@@ -15,7 +16,7 @@ function makeConfig(): ConfigManager {
   return new ConfigManager({ workingDir: dir, homeDir: dir, surfaceRoot: 'tui' });
 }
 
-const KEYS = [
+const KEYS: readonly ConfigKey[] = [
   'notifications.blockedEscalationGraceMs',
   'notifications.blockedEscalationFollowUpMs',
   'notifications.blockedEscalationMaxFollowUps',

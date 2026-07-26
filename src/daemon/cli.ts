@@ -1,6 +1,12 @@
 import { homedir } from 'node:os';
-import { join } from 'node:path';
-import { ConfigManager, resolveDaemonEnabled } from '@pellux/goodvibes-sdk/platform/config';
+import { isAbsolute, join, resolve } from 'node:path';
+import {
+  ConfigManager,
+  deriveControlPlaneBaseUrl,
+  readControlPlaneBinding,
+  resolveDaemonEnabled,
+} from '@pellux/goodvibes-sdk/platform/config';
+import type { ConfigKey } from '@pellux/goodvibes-sdk/platform/config';
 import { formatProviderModel, getModelIdFromProviderModel, getProviderIdFromModel } from '../config/provider-model.ts';
 import { RuntimeEventBus, GlobalNetworkTransportInstaller } from '@/runtime/index.ts';
 import { bindFeatureSettingsBridge, createFeatureFlagManager, deriveFeatureStates } from '@/runtime/index.ts';
@@ -30,6 +36,7 @@ import {
 import { createSafeHostServeFactory } from './safe-serve.ts';
 import { isDaemonServiceSubcommand, resolveInstalledDaemonBinary, runDaemonServiceCli } from './service-commands.ts';
 import { resolveConfiguredServiceName } from '../runtime/legacy-daemon-migration.ts';
+import { runDaemonConfigMigration } from '../config/run-daemon-config-migration.ts';
 import { reconcileRedundantLegacyUnit } from '../runtime/legacy-daemon-reconcile.ts';
 import { resolveRuntimeEndpointBinding } from '../cli/endpoints.ts';
 import { resolveDaemonUpdateArtifact } from './lifecycle.ts';
@@ -47,7 +54,10 @@ import {
 } from '../cli/index.ts';
 type DaemonCliOwnership = {
   readonly workingDirectory: string;
+  /** The GoodVibes tree root — settings, workspace, and discovery all hang off this. */
   readonly homeDirectory: string;
+  /** The daemon's OWN identity home (auth users, operator tokens, daemon settings). */
+  readonly daemonHomeDirectory: string;
 };
 
 // CLI flag parsing delegated to shared module — see src/cli-flags.ts
@@ -57,10 +67,30 @@ type DaemonCliTokens = {
   readonly httpToken: string | undefined;
 };
 
+/**
+ * Two different directories that used to be one.
+ *
+ * `GOODVIBES_DAEMON_HOME` names the DAEMON's home — the identity directory
+ * holding auth-users.json, operator-tokens.json, and daemon-settings.json. That
+ * is what the name says and what the SDK's `resolveDaemonHomeDir()` has always
+ * meant by it. This function used to read it as the GoodVibes tree ROOT, so
+ * setting it relocated settings, workspace, and every discovery root as well —
+ * far more than the daemon's own state.
+ *
+ * `GOODVIBES_HOME` is the variable for relocating the tree root. It is what a
+ * test harness or a service unit should set when it wants an isolated tree; the
+ * daemon home then falls under it unless separately overridden.
+ */
 function resolveDaemonCliOwnership(): DaemonCliOwnership {
+  const homeDirectory = process.env['GOODVIBES_HOME']?.trim() || homedir();
+  const daemonHomeOverride = process.env['GOODVIBES_DAEMON_HOME']?.trim();
+  const daemonHomeDirectory = daemonHomeOverride
+    ? (isAbsolute(daemonHomeOverride) ? daemonHomeOverride : resolve(process.cwd(), daemonHomeOverride))
+    : join(homeDirectory, '.goodvibes', 'daemon');
   return {
     workingDirectory: process.env['GOODVIBES_WORKING_DIR'] ?? process.cwd(),
-    homeDirectory: process.env['GOODVIBES_DAEMON_HOME'] ?? homedir(),
+    homeDirectory,
+    daemonHomeDirectory,
   };
 }
 
@@ -105,7 +135,8 @@ async function main(): Promise<void> {
     logger.info('daemon: --working-dir flag applied', { workingDir: cliFlags.workingDir });
   }
 
-  const { workingDirectory: workingDir, homeDirectory } = resolveDaemonCliOwnership();
+  const { workingDirectory: workingDir, homeDirectory, daemonHomeDirectory } = resolveDaemonCliOwnership();
+  runDaemonConfigMigration(homeDirectory);
   const config = new ConfigManager({ workingDir, homeDir: homeDirectory, surfaceRoot: 'tui' });
   new GlobalNetworkTransportInstaller().install(config);
 
@@ -200,6 +231,40 @@ async function main(): Promise<void> {
     );
   }
 
+  // Boot-time reconciliation. The banner above states the real bind; this
+  // compares it to the URL clients are actually handed. Those are produced by
+  // two different resolvers, and when they disagree the daemon is advertising an
+  // address it does not answer on — the state that produced two different click
+  // hosts from one daemon. Only reported when it is genuinely wrong: a wildcard
+  // bind against a loopback dial target is a deliberate substitution, and a
+  // declared controlPlane.publicBaseUrl is supposed to differ from the bind.
+  // The derivation itself is the SDK's (deriveControlPlaneBaseUrl); only the
+  // comparison is local. The SDK also carries describeDerivedBindMismatch,
+  // which does exactly this — swap to it once a release ships it, since the
+  // published 1.14.0 this build consumes predates it.
+  if (bannerBinding.recognized) {
+    const derived = new URL(
+      deriveControlPlaneBaseUrl(readControlPlaneBinding((key) => config.get(key as ConfigKey)), 'loopback'),
+    );
+    // A wildcard bind is REPORTED as 0.0.0.0 while the dial target is loopback;
+    // that substitution is deliberate, not drift.
+    const wildcardBind = bannerBinding.host === '0.0.0.0' || bannerBinding.host === '::';
+    const hostAgrees = derived.hostname === bannerBinding.host
+      || (wildcardBind && derived.hostname === '127.0.0.1');
+    if (!hostAgrees || Number(derived.port) !== bannerBinding.port) {
+      console.warn(
+        `[goodvibes-daemon] warning: control-plane clients are handed ${derived.origin}, but the daemon `
+        + `actually bound ${bannerBinding.host}:${bannerBinding.port}. One of these is wrong, and anything `
+        + 'given the first will dial a place this daemon does not answer.',
+      );
+      logger.warn('daemon: control-plane base URL disagrees with the real bind', {
+        handedToClients: derived.origin,
+        boundHost: bannerBinding.host,
+        boundPort: bannerBinding.port,
+      });
+    }
+  }
+
   const runtimeBus = new RuntimeEventBus();
   const runtimeStore = createRuntimeStore();
   // Gate states derive from the domain settings keys; the bridge keeps live
@@ -272,7 +337,7 @@ async function main(): Promise<void> {
   const { daemonToken, httpToken } = readDaemonCliTokens(process.env);
 
   // If no explicit daemon token is set, use the companion token so mobile apps can connect.
-  const daemonHomeDir = join(homeDirectory, '.goodvibes', 'daemon');
+  const daemonHomeDir = daemonHomeDirectory;
   const companionTokenRecord = getOrCreateCompanionToken('tui', { daemonHomeDir });
   // Fix (TUI 0.19.20): remove stale pre-0.21.28 workspace-scoped operator
   // token files so only the canonical <daemonHomeDir>/operator-tokens.json survives.
@@ -348,6 +413,7 @@ async function main(): Promise<void> {
   // settings.json with none of this process's runtime flag overrides — because
   // that is what clients resolve when they look for the daemon.
   try {
+    runDaemonConfigMigration(homeDirectory);
     const clientViewConfig = new ConfigManager({ workingDir, homeDir: homeDirectory, surfaceRoot: 'tui' });
     const clientEndpoint = resolveRuntimeEndpointBinding(clientViewConfig, 'controlPlane');
     const reconcile = await reconcileRedundantLegacyUnit({

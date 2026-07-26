@@ -236,6 +236,14 @@ function buildFlagContext(entry: SettingEntry | null): string[] {
     `Feature: ${feature.id} (${feature.domain} domain)`,
     `Setting: ${feature.enablement.key} = ${formatValue(entry)}`,
     `State: ${displayState}`,
+    // A capability the registry declares not operable reads as disabled no
+    // matter what its settings key says. Without this line the row shows a
+    // value of true beside a state of disabled and explains nothing — the
+    // written reason exists in the registry, so render it where the user meets
+    // the contradiction rather than leaving it to be discovered.
+    ...(feature.operable === false && feature.inoperableDetail
+      ? [`Not available in this build: ${feature.inoperableDetail}`]
+      : []),
     `Default: ${feature.defaultEnabled ? 'enabled' : 'disabled'}`,
     `Applies: ${feature.restartRequired ? 'on next launch (startup-gated)' : 'immediately'}`,
     ...(pendingRestart

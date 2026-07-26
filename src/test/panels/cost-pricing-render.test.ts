@@ -67,7 +67,7 @@ function makePanel(options: {
 }
 
 async function completeTurn(bus: RuntimeEventBus, flush: () => Promise<void>): Promise<void> {
-  bus.emit('turns', createEventEnvelope('TURN_COMPLETED', { type: 'TURN_COMPLETED' }, TEST_ENV_CTX));
+  bus.emit('turn', createEventEnvelope('TURN_COMPLETED', { type: 'TURN_COMPLETED', turnId: 'turn-1', response: '', stopReason: 'completed' }, TEST_ENV_CTX));
   await flush();
 }
 

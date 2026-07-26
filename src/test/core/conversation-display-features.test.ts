@@ -56,9 +56,15 @@ describe('tool result rendering', () => {
       .map((line) => line.map((cell) => cell.char).join(''))
       .join('\n');
 
-    expect(text).toContain('tool result');
+    // The human-readable name now lives once, on the CALL row that owns the
+    // result, instead of being repeated on the result row underneath it. The
+    // guarantee this test exists for is unchanged: the transcript names the
+    // tool in words and never falls back to the opaque call id.
     expect(text).toContain('web_search');
     expect(text).not.toContain(callId);
+    // The result still declares its own size, which is what makes it
+    // discoverable as expandable.
+    expect(text).toMatch(/\d+ lines?/);
   });
 });
 

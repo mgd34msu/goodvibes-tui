@@ -495,24 +495,26 @@ describe('handleLocalAuthCommand — add-user password safety', () => {
   });
 
   test('still executes add-user when password supplied as argv', () => {
-    let calledWith: { username: string; password: string } | null = null;
+    // Captured on an object (not a bare `let`) so TS tracks the union type
+    // across the callback boundary instead of narrowing to the initializer.
+    const state: { calledWith: { username: string; password: string } | null } = { calledWith: null };
     const { ctx } = makeAuthContext({
       addUser: (username, password) => {
-        calledWith = { username, password };
+        state.calledWith = { username, password };
         return { username, roles: ['admin'] };
       },
     });
     handleLocalAuthCommand(['add-user', 'alice', 's3cr3t'], ctx);
-    expect(calledWith).toEqual({ username: 'alice', password: 's3cr3t' });
+    expect(state.calledWith).toEqual({ username: 'alice', password: 's3cr3t' });
   });
 
   test('calls openLocalAuthMaskedEntry when no password supplied to add-user', () => {
-    let maskedEntryArgs: { kind: string; username: string } | null = null;
+    const state: { maskedEntryArgs: { kind: string; username: string } | null } = { maskedEntryArgs: null };
     const { ctx } = makeAuthContext({
-      openLocalAuthMaskedEntry: (kind, username) => { maskedEntryArgs = { kind, username }; },
+      openLocalAuthMaskedEntry: (kind, username) => { state.maskedEntryArgs = { kind, username }; },
     });
     handleLocalAuthCommand(['add-user', 'alice'], ctx);
-    expect(maskedEntryArgs).toEqual({ kind: 'add-user', username: 'alice' });
+    expect(state.maskedEntryArgs).toEqual({ kind: 'add-user', username: 'alice' });
   });
 
   test('prints fallback guidance when no password supplied and masked entry unavailable', () => {
@@ -532,21 +534,21 @@ describe('handleLocalAuthCommand — rotate-password safety', () => {
   });
 
   test('still executes rotate-password when password supplied as argv', () => {
-    let calledWith: { username: string; password: string } | null = null;
+    const state: { calledWith: { username: string; password: string } | null } = { calledWith: null };
     const { ctx } = makeAuthContext({
-      rotatePassword: (username, password) => { calledWith = { username, password }; },
+      rotatePassword: (username, password) => { state.calledWith = { username, password }; },
     });
     handleLocalAuthCommand(['rotate-password', 'alice', 'newpass'], ctx);
-    expect(calledWith).toEqual({ username: 'alice', password: 'newpass' });
+    expect(state.calledWith).toEqual({ username: 'alice', password: 'newpass' });
   });
 
   test('calls openLocalAuthMaskedEntry when no password supplied to rotate-password', () => {
-    let maskedEntryArgs: { kind: string; username: string } | null = null;
+    const state: { maskedEntryArgs: { kind: string; username: string } | null } = { maskedEntryArgs: null };
     const { ctx } = makeAuthContext({
-      openLocalAuthMaskedEntry: (kind, username) => { maskedEntryArgs = { kind, username }; },
+      openLocalAuthMaskedEntry: (kind, username) => { state.maskedEntryArgs = { kind, username }; },
     });
     handleLocalAuthCommand(['rotate-password', 'alice'], ctx);
-    expect(maskedEntryArgs).toEqual({ kind: 'rotate-password', username: 'alice' });
+    expect(state.maskedEntryArgs).toEqual({ kind: 'rotate-password', username: 'alice' });
   });
 
   test('prints fallback guidance when no password supplied to rotate-password and masked entry unavailable', () => {

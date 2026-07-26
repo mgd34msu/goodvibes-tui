@@ -13,10 +13,12 @@ import type {
   ProviderApiBenchmarkRecord,
   ProviderApiCatalogRefreshResult,
   ProviderApiFavoritesSnapshot,
+  ProviderApiLiveModelRefreshReport,
   ProviderApiModelRecord,
   ProviderApiRuntimeQuery,
   ProviderApiRuntimeQueryResult,
 } from '@pellux/goodvibes-sdk/platform/providers';
+import { UNKNOWN_MODEL_PRICING } from '@pellux/goodvibes-sdk/platform/providers';
 import { createShellPathService } from '@/runtime/index.ts';
 
 function failOnAccess(label: string): never {
@@ -73,6 +75,7 @@ function createProviderApiStub(overrides: Partial<ProviderApi> = {}): ProviderAp
       modelCount: 1,
       providerCount: 1,
     }),
+    refreshLiveModelDiscovery: async (): Promise<readonly ProviderApiLiveModelRefreshReport[]> => [],
     refreshBenchmarks: async () => 1,
     refreshModelLimits: async () => 1,
     getFavorites: async (): Promise<ProviderApiFavoritesSnapshot> => ({
@@ -99,16 +102,7 @@ function createProviderApiStub(overrides: Partial<ProviderApi> = {}): ProviderAp
     createHelperModel: (configManager) => new HelperModel({
       configManager,
       providerRegistry: {
-        get: () => ({
-          name: 'openai',
-          models: ['gpt-4o'],
-          chat: async () => ({
-            content: '',
-            toolCalls: [],
-            usage: { inputTokens: 0, outputTokens: 0 },
-            stopReason: 'completed',
-          }),
-        }),
+        resolveModelPricing: () => UNKNOWN_MODEL_PRICING,
         getCurrentModel: () => ({
           id: 'gpt-4o',
           provider: 'openai',

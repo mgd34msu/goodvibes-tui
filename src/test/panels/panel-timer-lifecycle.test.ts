@@ -20,7 +20,16 @@ const TEST_ROOT = '/tmp/goodvibes-test';
 // Spy on interval timers so we can count active ones across the panel lifecycle.
 const realSet = globalThis.setInterval;
 const realClear = globalThis.clearInterval;
-let active: Set<ReturnType<typeof setInterval>>;
+// Node's ambient globals (pulled in transitively wherever the project imports
+// 'node:*' modules) and Bun's ambient globals both declare `setInterval` /
+// `clearInterval`, and their overloads resolve to different, mutually
+// incompatible id types (`NodeJS.Timeout` vs Bun's `Timer`) depending on
+// which declaration a given expression binds to — even `realSet`'s own
+// return type and `realClear`'s own parameter type disagree. This spy only
+// needs to track SET MEMBERSHIP (identity), never touch timer-specific
+// members, so `unknown` is the honest type here — bridged back to whatever
+// concrete type `realClear` expects with a single assertion at its one call site.
+let active: Set<unknown>;
 
 function installTimerSpy(): void {
   active = new Set();
@@ -29,9 +38,9 @@ function installTimerSpy(): void {
     active.add(id);
     return id;
   }) as typeof setInterval;
-  globalThis.clearInterval = ((id?: ReturnType<typeof setInterval>) => {
+  globalThis.clearInterval = ((id?: unknown) => {
     if (id !== undefined) active.delete(id);
-    realClear(id);
+    realClear(id as Parameters<typeof realClear>[0]);
   }) as typeof clearInterval;
 }
 

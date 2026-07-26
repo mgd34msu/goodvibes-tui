@@ -16,7 +16,7 @@ function makeContext(options: {
   const config: Record<string, unknown> = {
     'controlPlane.host': '127.0.0.1',
     'controlPlane.port': 3421,
-    'controlPlane.baseUrl': '',
+    'controlPlane.publicBaseUrl': '',
     'batch.mode': 'off',
     'batch.queueBackend': 'local',
     ...options.config,

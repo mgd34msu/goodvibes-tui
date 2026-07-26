@@ -177,8 +177,8 @@ describe('PermissionPromptUI.getPromptHeight / createPromptLines parity', () => 
 describe('PermissionPromptUI — attribution + remember-scope preview (Item 3 b/c)', () => {
   const lineText = (line: { char: string }[]): string => line.map((c) => c.char).join('');
 
-  function req(tool: string, args: Record<string, unknown>, category: 'read' | 'write' | 'execute'): PermissionPromptRequest {
-    return { callId: 'c', tool, args, category, analysis: analyzePermissionRequest(tool, args, category) };
+  function req(tool: string, args: Record<string, unknown>, category: 'read' | 'write' | 'execute'): PermissionPromptRequest & { resolve: (approved: boolean) => void } {
+    return { callId: 'c', tool, args, category, analysis: analyzePermissionRequest(tool, args, category), resolve: () => {} };
   }
 
   test('rememberScopeKey mirrors the SDK getApprovalKey: path, then command, then tool-only', () => {

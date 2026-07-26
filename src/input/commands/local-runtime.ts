@@ -34,27 +34,27 @@ function toggleBlocks(typeFilter: string, collapsed: boolean, ctx: CommandContex
   let count = 0;
   for (let i = 0; i < blockRegistry.length; i++) {
     const block = blockRegistry[i];
-    // A folded tool-result group (type 'tool_group', see conversation-tool-groups.ts)
-    // is a run of tool results under one header, so '/expand tool'/'collapse tool'
-    // treats it the same as a plain 'tool' block — toggling the header's collapse
-    // key expands/collapses every member underneath it.
+    // A merged assistant turn (type 'assistant_turn', see
+    // conversation-turn-structure.ts) owns the whole tool subtree beneath its
+    // header, so '/expand tool'/'collapse tool' treats it the same as a plain
+    // 'tool' block — toggling the header's collapse key shows or hides every
+    // tool row underneath it.
     const matchesType = typeFilter === 'all'
-      || (typeFilter === 'tool' && (block.type === 'tool' || block.type === 'tool_group'))
+      || (typeFilter === 'tool' && (block.type === 'tool' || block.type === 'assistant_turn'))
       || (typeFilter === 'code' && block.type === 'code')
       || (typeFilter === 'thinking' && block.type === 'thinking');
     if (!matchesType) continue;
     const isCurrentlyCollapsed = ctx.session.conversationManager.isCollapsed(i);
     if (collapsed ? !isCurrentlyCollapsed : isCurrentlyCollapsed) {
       ctx.session.conversationManager.toggleCollapseAtLine(block.startLine);
-      // Expanding a folded tool-result group also expands every member's own
-      // collapse key in the same pass. A folded member pushes no BlockMeta of
-      // its own while the group is collapsed, so it never surfaces from this
-      // loop to be toggled individually — without this, '/expand tool' only
-      // opens the group header and each member still renders at whatever its
-      // own default collapse state is, needing a second '/expand tool' pass.
-      // '/collapse tool' needs no matching step: collapsing the group hides
-      // every member regardless of its own key.
-      if (!collapsed && block.type === 'tool_group' && block.groupMemberIndexes) {
+      // Expanding a turn also expands each result's own collapse key in the
+      // same pass. A result hidden by a collapsed turn pushes no BlockMeta of
+      // its own, so it never surfaces from this loop to be toggled
+      // individually — without this, '/expand tool' would only open the turn
+      // header and each result would still render at its own default collapse
+      // state, needing a second pass. '/collapse tool' needs no matching step:
+      // collapsing the turn hides every result regardless of its own key.
+      if (!collapsed && block.type === 'assistant_turn' && block.groupMemberIndexes) {
         for (const memberIdx of block.groupMemberIndexes) {
           const memberKey = `msg_${memberIdx}`;
           ctx.session.conversationManager.setCollapsed(memberKey, false);

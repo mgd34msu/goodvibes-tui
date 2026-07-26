@@ -80,6 +80,116 @@ export const FEATURE_KNOB_LOCAL_SETTINGS = [
 ] as const;
 
 /**
+ * Config keys added by the paired-device and trigger-family domains in SDK
+ * 1.14.0. Like FEATURE_KNOB_LOCAL_SETTINGS above, these arrived as new
+ * CONFIG_SCHEMA entries that raised the settings inventory `total` with no
+ * matching behavior coverage, dropping `localBehaviorPercent` below its floor.
+ *
+ * THIS CONSTANT IS NOT A DIAL. Each key below is counted because a test that
+ * exercises it was actually written:
+ * `src/test/verification/device-and-trigger-settings-persistence.test.ts` runs,
+ * for every key in this list, the same four-part persistence contract the
+ * feature-knob keys are counted for — schema default exposure, `set()` through
+ * the key's own validator to disk, reload into a fresh ConfigManager with
+ * read-back equality, and reset-to-default that also survives reload. That test
+ * additionally asserts this list is exactly the non-enablement key set of both
+ * domains and overlaps neither of the other counted sets, so nothing here is
+ * double-counted and nothing drifts in uncounted.
+ *
+ * PER-KEY EVIDENCE — what is verified, and how live the key is TODAY.
+ * "persistence" below means the four-part contract above; the second column
+ * records whether anything in this tree (TUI or the pinned SDK) reads the key,
+ * audited by tracing each key to its consumers.
+ *
+ *   watchers.triggers.backoffLadderMs        persistence · live (trigger supervisor retry ladder)
+ *   watchers.triggers.breakerStrikes         persistence · live (strike breaker)
+ *   watchers.triggers.defaultCheckIntervalMs persistence · live (condition-check scheduler)
+ *   watchers.triggers.probeTimeoutMs         persistence · live (probe execution)
+ *   watchers.triggers.maxConcurrentChecks    persistence · live (check concurrency cap)
+ *   watchers.triggers.observationRingSize    persistence · live (observation ring)
+ *   watchers.triggers.runHistoryLimit        persistence · live (run history retention)
+ *   watchers.triggers.runHistoryTtlHours     persistence · live (run history sweep)
+ *   watchers.triggers.eventLogLimit          persistence · live (event log retention)
+ *   watchers.triggers.eventLogTtlHours       persistence · live (event log sweep)
+ *   watchers.triggers.sweepIntervalMs        persistence · live (housekeeping cadence)
+ *   watchers.triggers.supervisionTickMs      persistence · live (supervision loop tick)
+ *   watchers.triggers.streamQueueLimit       persistence · live (stream watcher queue)
+ *   watchers.triggers.streamBatchLines       persistence · live (stream batching)
+ *   watchers.triggers.streamBatchIntervalMs  persistence · live (stream batching)
+ *   watchers.triggers.onExitMaxDurationMs    persistence · live (on-exit trigger duration cap)
+ *   watchers.triggers.onExitStdin            persistence · live (on-exit stdin posture)
+ *   watchers.triggers.outputTailBytes        persistence · live (captured output tail)
+ *   device.capabilities.allowAlwaysOffer     persistence · settings surface only in this build
+ *   device.capabilities.requestTimeoutSeconds persistence · settings surface only in this build
+ *   device.location.precision                persistence · settings surface only in this build
+ *   device.clipboard.readMode                persistence · settings surface only in this build
+ *   device.capture.retentionHours            persistence · settings surface only in this build
+ *   device.capture.maxArtifacts              persistence · settings surface only in this build
+ *   device.capture.sweepIntervalMinutes      persistence · settings surface only in this build
+ *   device.grants.expiryDays                 persistence · settings surface only in this build
+ *   device.grants.maxPerNode                 persistence · settings surface only in this build
+ *   device.grants.auditRetentionDays         persistence · settings surface only in this build
+ *   device.nodes.maxPaired                   persistence · live (enforced at the pairing path)
+ *
+ * On `device.nodes.maxPaired`: the SDK enforces it where a device pairs —
+ * PairingTokenManager.mint refuses a NEW node at the cap with
+ * PairingLimitReachedError (code DEVICE_NODES_MAX_PAIRED, carrying the setting
+ * name, the cap and the live count), mapped to HTTP 409 by the pairing and
+ * pairing-handoff routes. An already-paired node supersedes its own record
+ * instead of being refused, migration mints off the legacy shared token are
+ * deliberately exempt, lowering the cap unpairs nobody, and a non-positive or
+ * non-finite value reads as no cap so a broken setting cannot lock the owner
+ * out. The cap is read per mint, so a change applies without a restart. What is
+ * counted HERE is still only the persistence contract this repo's test
+ * exercises — the enforcement itself is SDK-side and SDK-tested, and is recorded
+ * in this column so the "how live is it" audit stays accurate, not to claim
+ * coverage this repo did not write.
+ *
+ * On the other ten `device.*` rows: DeviceCapabilityService carries its own
+ * policy struct whose defaults match those keys one for one, and names them in
+ * its field comments and refusal messages, but no code path in either tree maps
+ * configuration into that struct. Persistence is therefore the whole of what is
+ * verified for them, and the settings-workspace description for the `device`
+ * category says exactly that to the user rather than implying live knobs.
+ *
+ * DELIBERATELY NOT COUNTED: the 24 non-enablement `voice.wake.*` keys from the
+ * same release. `wake-word-detection` is declared `notOperable` — no surface
+ * captures audio — so its rows stay in `total` and out of the numerator. That is
+ * the honest reading, and it is why this list raises coverage by 29 and not 53.
+ */
+export const DEVICE_AND_TRIGGER_LOCAL_SETTINGS = [
+  'watchers.triggers.backoffLadderMs',
+  'watchers.triggers.breakerStrikes',
+  'watchers.triggers.defaultCheckIntervalMs',
+  'watchers.triggers.probeTimeoutMs',
+  'watchers.triggers.maxConcurrentChecks',
+  'watchers.triggers.observationRingSize',
+  'watchers.triggers.runHistoryLimit',
+  'watchers.triggers.runHistoryTtlHours',
+  'watchers.triggers.eventLogLimit',
+  'watchers.triggers.eventLogTtlHours',
+  'watchers.triggers.sweepIntervalMs',
+  'watchers.triggers.supervisionTickMs',
+  'watchers.triggers.streamQueueLimit',
+  'watchers.triggers.streamBatchLines',
+  'watchers.triggers.streamBatchIntervalMs',
+  'watchers.triggers.onExitMaxDurationMs',
+  'watchers.triggers.onExitStdin',
+  'watchers.triggers.outputTailBytes',
+  'device.capabilities.allowAlwaysOffer',
+  'device.capabilities.requestTimeoutSeconds',
+  'device.location.precision',
+  'device.clipboard.readMode',
+  'device.capture.retentionHours',
+  'device.capture.maxArtifacts',
+  'device.capture.sweepIntervalMinutes',
+  'device.grants.expiryDays',
+  'device.grants.maxPerNode',
+  'device.grants.auditRetentionDays',
+  'device.nodes.maxPaired',
+] as const;
+
+/**
  * Every feature's enablement settings key whose on/off writes round-trip
  * through a REAL on-disk ConfigManager in
  * `src/test/verification/../input/settings-modal-flag-persistence.test.ts`
@@ -95,8 +205,11 @@ const ENABLEMENT_KEYS_BEHAVIOR_VERIFIED = new Set(
     .filter((key) => !(FEATURE_KNOB_LOCAL_SETTINGS as readonly string[]).includes(key)),
 ).size;
 
-/** Settings with real local behavior verification: the authored baseline plus the persistence-tested feature-knob and enablement keys. */
-const SETTINGS_BEHAVIOR_VERIFIED = SETTINGS_BEHAVIOR_BASELINE + FEATURE_KNOB_LOCAL_SETTINGS.length + ENABLEMENT_KEYS_BEHAVIOR_VERIFIED;
+/** Settings with real local behavior verification: the authored baseline plus the persistence-tested feature-knob, device/trigger, and enablement keys. */
+const SETTINGS_BEHAVIOR_VERIFIED = SETTINGS_BEHAVIOR_BASELINE
+  + FEATURE_KNOB_LOCAL_SETTINGS.length
+  + DEVICE_AND_TRIGGER_LOCAL_SETTINGS.length
+  + ENABLEMENT_KEYS_BEHAVIOR_VERIFIED;
 
 const EXTERNAL_SLASH_COMMANDS = new Set([
   'auth',

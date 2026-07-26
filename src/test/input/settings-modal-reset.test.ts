@@ -115,7 +115,11 @@ describe('initiateResetCategory', () => {
       setResetCategoryConfirm: (v) => { catConfirm = v; },
       setResetAllConfirm: (v) => { allConfirm = v; },
     });
-    expect(catConfirm).toEqual({ subject: 'display' });
+    // TS narrows catConfirm to its initializer (null) and doesn't widen back
+    // across the closure reassignment inside initiateResetCategory's callback
+    // — the cast reflects the variable's real declared type, not a weaker
+    // assertion (the runtime value is genuinely reassigned by the callback).
+    expect(catConfirm as { readonly subject: string } | null).toEqual({ subject: 'display' });
     expect(allConfirm).toBeNull();
   });
 });
@@ -146,7 +150,8 @@ describe('initiateResetAll', () => {
       setResetAllConfirm: (v) => { allConfirm = v; },
     });
     expect(catConfirm).toBeNull();
-    expect(allConfirm).toEqual({ subject: 'all' });
+    // Same narrowing quirk as above, mirrored for allConfirm.
+    expect(allConfirm as { readonly subject: 'all' } | null).toEqual({ subject: 'all' });
   });
 });
 

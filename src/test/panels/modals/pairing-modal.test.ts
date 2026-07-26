@@ -84,7 +84,10 @@ describe('pairing modal surface', () => {
     open(surface);
     const printed: string[] = [];
     surface.onAction?.('copyLink', actionCtx(null, { print: (m) => printed.push(m) }));
-    expect(copied).toBe('http://workshop.local:3141/#pair=secret-token-abc123&offers=notifications~relay');
+    // Reassigned inside the copyToClipboard closure above — cast back to the
+    // declared type since TS freezes the narrowed type at the `let` initializer
+    // and doesn't see through the closure's later assignment.
+    expect(copied as string | null).toBe('http://workshop.local:3141/#pair=secret-token-abc123&offers=notifications~relay');
     expect(printed).toEqual(['Pairing link copied to clipboard.']);
   });
 

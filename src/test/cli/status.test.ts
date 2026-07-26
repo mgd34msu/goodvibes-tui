@@ -140,6 +140,7 @@ describe('CLI status and doctor output', () => {
         },
         managed: {
           platform: 'manual',
+          serviceName: 'goodvibes-tui',
           path: '/project/.goodvibes/tui/service/manual-service.txt',
           installed: true,
           autostart: true,

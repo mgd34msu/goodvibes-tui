@@ -346,13 +346,7 @@ describe('AutomationManager', () => {
   });
 
   test('preserves upstream-compatible execution metadata and forwards it to agent spawn', async () => {
-    let captured: {
-      prompt: string;
-      fallbackModels?: readonly string[];
-      routing?: SpawnAutomationTaskInput['routing'];
-      reasoningEffort?: 'instant' | 'low' | 'medium' | 'high';
-      context?: string;
-    } | undefined;
+    let captured: SpawnAutomationTaskInput | undefined;
     const manager = createManager({
       jobStore: new AutomationJobStore(join(root, 'automation-jobs.json')),
       runStore: new AutomationRunStore(join(root, 'automation-runs.json')),

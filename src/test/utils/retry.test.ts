@@ -110,7 +110,9 @@ describe('withRetry', () => {
     await withRetry(
       fn,
       { maxRetries: 3, initialDelayMs: 1, maxDelayMs: 5 },
-      (attempt, error) => onRetryArgs.push({ attempt, error }),
+      // onRetry's real signature is (attempt, maxAttempts, delayMs, error) —
+      // matches ChatRequest.onRetry's argument order (see retry.d.ts).
+      (attempt, _maxAttempts, _delayMs, error) => onRetryArgs.push({ attempt, error }),
     );
     expect(onRetryArgs).toHaveLength(2);
     expect(onRetryArgs[0].attempt).toBe(1);

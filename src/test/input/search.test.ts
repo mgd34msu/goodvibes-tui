@@ -409,14 +409,15 @@ describe('SearchManager', () => {
 
   // --- folded tool-result group members (search reaches inside the fold) ---
 
-  describe('search() reaches text that lives only inside a folded tool-group member', () => {
+  describe('search() reaches text hidden inside a collapsed assistant turn', () => {
     const NEEDLE = 'zzzGroupedMarkerZzz';
 
-    /** Two consecutive results for one assistant turn fold into a single
-     *  'tool_group' block (see conversation-tool-groups.ts): the header line is
-     *  the group's entire visible representation, and no member registers a
-     *  BlockMeta of its own while it stays folded. The needle lives ONLY in the
-     *  second member's content — never in the group's summary header. */
+    /** Two results for one assistant turn hang under a single 'assistant_turn'
+     *  header (see conversation-turn-structure.ts). Once that turn is
+     *  collapsed the header is its entire visible representation and no result
+     *  registers a BlockMeta of its own, so the needle — which lives ONLY in
+     *  the second result's content, never in the header's summary — is
+     *  reachable only through the turn's groupMemberIndexes. */
     function buildFoldedToolGroup(): { cm: ConversationManager; hitMemberIdx: number } {
       const cm = new ConversationManager(() => 80);
       // Long enough that each member is collapsed-by-default on its own too,
@@ -432,15 +433,19 @@ describe('SearchManager', () => {
         { callId: 'c2', success: true, output: padded(NEEDLE) },
       ]);
       cm.getDisplayBlocks();
-      const group = cm.getBlockRegistry().find((b) => b.type === 'tool_group');
+      // Turns default EXPANDED (collapsing must never hide prose), so the
+      // hidden-content condition this suite is about is created explicitly.
+      cm.setCollapsed('turn_1', true);
+      cm.getDisplayBlocks();
+      const group = cm.getBlockRegistry().find((b) => b.type === 'assistant_turn');
       expect(group).toBeDefined();
       expect(group!.groupMemberIndexes).toHaveLength(2);
       return { cm, hitMemberIdx: group!.groupMemberIndexes![1] };
     }
 
-    test('the group is folded and its own rawContent is only the summary line', () => {
+    test('the turn is collapsed and its own rawContent is only the summary line', () => {
       const { cm } = buildFoldedToolGroup();
-      const group = cm.getBlockRegistry().find((b) => b.type === 'tool_group');
+      const group = cm.getBlockRegistry().find((b) => b.type === 'assistant_turn');
       // The defect this covers: the needle is in no block's rawContent at all,
       // because the members contributed no BlockMeta.
       expect(cm.isCollapsed(group!.blockIndex)).toBe(true);
@@ -457,7 +462,7 @@ describe('SearchManager', () => {
 
     test('a keystroke counts the member-only hit honestly but expands nothing', () => {
       const { cm } = buildFoldedToolGroup();
-      const group = cm.getBlockRegistry().find((b) => b.type === 'tool_group');
+      const group = cm.getBlockRegistry().find((b) => b.type === 'assistant_turn');
       sm.open();
       sm.search(NEEDLE, cm.history, cm);
 
@@ -466,9 +471,9 @@ describe('SearchManager', () => {
       expect(cm.getBlockRegistry().some((b) => b.collapseKey.startsWith('msg_'))).toBe(false);
     });
 
-    test('revealCurrentMatch() expands the group AND the hit member (and only that member), landing on the needle line', () => {
+    test('revealCurrentMatch() expands the turn AND the hit result (and only that result), landing on the needle line', () => {
       const { cm, hitMemberIdx } = buildFoldedToolGroup();
-      const group = cm.getBlockRegistry().find((b) => b.type === 'tool_group');
+      const group = cm.getBlockRegistry().find((b) => b.type === 'assistant_turn');
       const otherMemberIdx = group!.groupMemberIndexes!.find((idx) => idx !== hitMemberIdx)!;
 
       sm.open();
@@ -479,7 +484,7 @@ describe('SearchManager', () => {
       expect(sm.matches.length).toBeGreaterThan(0);
 
       const registry = cm.getBlockRegistry();
-      const groupAfter = registry.find((b) => b.type === 'tool_group');
+      const groupAfter = registry.find((b) => b.type === 'assistant_turn');
       expect(cm.isCollapsed(groupAfter!.blockIndex)).toBe(false);
       // The hit member now has a block of its own, and it is expanded — the
       // header alone would have left its content invisible.
@@ -500,7 +505,7 @@ describe('SearchManager', () => {
       expect(renderedLineText).toContain(NEEDLE);
     });
 
-    test('search close re-folds the group and the member together (group members fold with their group)', () => {
+    test('search close re-collapses the turn and the result together', () => {
       const { cm, hitMemberIdx } = buildFoldedToolGroup();
       sm.open();
       sm.search(NEEDLE, cm.history, cm);
@@ -508,14 +513,14 @@ describe('SearchManager', () => {
       sm.revealCurrentMatch(cm.history, cm);
 
       let registry = cm.getBlockRegistry();
-      expect(cm.isCollapsed(registry.find((b) => b.type === 'tool_group')!.blockIndex)).toBe(false);
+      expect(cm.isCollapsed(registry.find((b) => b.type === 'assistant_turn')!.blockIndex)).toBe(false);
       expect(cm.isCollapsed(registry.find((b) => b.collapseKey === `msg_${hitMemberIdx}`)!.blockIndex)).toBe(false);
 
       sm.close(cm);
       cm.getDisplayBlocks();
 
       registry = cm.getBlockRegistry();
-      const groupAfter = registry.find((b) => b.type === 'tool_group');
+      const groupAfter = registry.find((b) => b.type === 'assistant_turn');
       expect(groupAfter).toBeDefined();
       expect(cm.isCollapsed(groupAfter!.blockIndex)).toBe(true);
       // The member no longer materializes its own BlockMeta — folded again
@@ -525,7 +530,7 @@ describe('SearchManager', () => {
 
     test('a needle present nowhere finds nothing and expands nothing', () => {
       const { cm } = buildFoldedToolGroup();
-      const group = cm.getBlockRegistry().find((b) => b.type === 'tool_group');
+      const group = cm.getBlockRegistry().find((b) => b.type === 'assistant_turn');
       sm.open();
       sm.search('nonexistent_needle_qqq', cm.history, cm);
 
@@ -537,9 +542,9 @@ describe('SearchManager', () => {
       expect(registry.some((b) => b.collapseKey.startsWith('msg_'))).toBe(false);
     });
 
-    test('a group whose members are already expanded still matches, and search never touches its collapse state', () => {
+    test('a turn whose results are already expanded still matches, and search never touches its collapse state', () => {
       const { cm, hitMemberIdx } = buildFoldedToolGroup();
-      const group = cm.getBlockRegistry().find((b) => b.type === 'tool_group');
+      const group = cm.getBlockRegistry().find((b) => b.type === 'assistant_turn');
       cm.setCollapsed(group!.collapseKey, false);
       for (const memberIdx of group!.groupMemberIndexes!) {
         cm.setCollapsed(`msg_${memberIdx}`, false);
@@ -553,18 +558,18 @@ describe('SearchManager', () => {
 
       expect(sm.matches.length).toBeGreaterThan(0);
       const registry = cm.getBlockRegistry();
-      expect(cm.isCollapsed(registry.find((b) => b.type === 'tool_group')!.blockIndex)).toBe(false);
+      expect(cm.isCollapsed(registry.find((b) => b.type === 'assistant_turn')!.blockIndex)).toBe(false);
       expect(cm.isCollapsed(registry.find((b) => b.collapseKey === `msg_${hitMemberIdx}`)!.blockIndex)).toBe(false);
     });
 
-    test('member indexes that outlived their messages are skipped, not thrown on', () => {
+    test('result indexes that outlived their messages are skipped, not thrown on', () => {
       // undo() splices the messages tail while the (unflushed) block registry
       // still names the group's member indexes — so the member lookup runs
       // against a snapshot shorter than those indexes.
       const { cm } = buildFoldedToolGroup();
       expect(cm.undo()).toBe(true);
       expect(cm.getMessageSnapshot().length).toBe(0);
-      expect(cm.getBlockRegistry().some((b) => b.type === 'tool_group')).toBe(true);
+      expect(cm.getBlockRegistry().some((b) => b.type === 'assistant_turn')).toBe(true);
 
       sm.open();
       expect(() => sm.search(NEEDLE, cm.history, cm)).not.toThrow();

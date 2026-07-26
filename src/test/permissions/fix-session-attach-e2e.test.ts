@@ -59,7 +59,12 @@ describe('CI fix-session attach — end-to-end against the linked SDK', () => {
       getPending: () => null, setPending: () => {}, broker: {} as never, render: () => {},
       onFixSessionStarted, defer: (cb) => cb(),
     });
-    expect(armed).toBe(session.id);
+    // `armed` is only ever reassigned inside the `arm` callback above, so TS's
+    // control-flow narrowing (which can't see into that closure from here)
+    // collapses it back to its initial `null` at this reference point even
+    // though the callback has already run synchronously by now (`defer: (cb) =>
+    // cb()`). Reassert its real declared type.
+    expect(armed as string | null).toBe(session.id);
     expect(notices[0]).not.toContain('/session resume'); // no retype instruction
 
     const attached: string[] = [];

@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { buildLocalhostFetchApproval } from '@pellux/goodvibes-sdk/platform/runtime/permissions/localhost-fetch-approval';
+import { configGetStub, configSetProjectValueStub } from '../helpers/config-manager-stub.ts';
 
 /**
  * Locks the loopback-fetch approval contract the TUI wires into registerAllTools
@@ -14,8 +15,9 @@ function fakeConfigManager(initial: Record<string, unknown> = {}) {
   const store: Record<string, unknown> = { ...initial };
   return {
     store,
-    get: (key: string) => store[key],
-    setProjectValue: (key: string, value: unknown) => { store[key] = value; },
+    // Both share the same `store` object, so a write is visible to the next read.
+    get: configGetStub(store),
+    setProjectValue: configSetProjectValueStub(store),
   };
 }
 

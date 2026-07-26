@@ -206,8 +206,12 @@ describe('seam-replay: seam 2 — in-TUI panel resume (createResumeSessionHandle
       } as never,
       onSessionIdChanged: () => {},
       sharedSessionBroker: {
-        reopenSession: () => Promise.resolve(),
+        reopenSession: () => Promise.resolve(null),
       },
+      sessionSpine: {
+        reopen: () => {},
+      },
+      project: 'test-project',
       writeLastSessionPointer: () => {},
       hookDispatcher: {
         fire: () => Promise.resolve({ fired: 0 }),
@@ -284,8 +288,12 @@ describe('seam-replay: seam 2 — in-TUI panel resume (createResumeSessionHandle
       } as never,
       onSessionIdChanged: () => {},
       sharedSessionBroker: {
-        reopenSession: () => Promise.resolve(),
+        reopenSession: () => Promise.resolve(null),
       },
+      sessionSpine: {
+        reopen: () => {},
+      },
+      project: 'test-project',
       writeLastSessionPointer: () => {},
       hookDispatcher: {
         fire: () => Promise.resolve({ fired: 0 }),
@@ -354,8 +362,12 @@ describe('seam-replay: seam 2 — in-TUI panel resume (createResumeSessionHandle
       } as never,
       onSessionIdChanged: () => {},
       sharedSessionBroker: {
-        reopenSession: () => Promise.resolve(),
+        reopenSession: () => Promise.resolve(null),
       },
+      sessionSpine: {
+        reopen: () => {},
+      },
+      project: 'test-project',
       writeLastSessionPointer: () => {},
       hookDispatcher: {
         fire: () => Promise.resolve({ fired: 0 }),

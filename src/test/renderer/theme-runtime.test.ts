@@ -27,6 +27,7 @@ import {
   resolveConfiguredThemeMode,
   THEME_MODE_DEFAULT,
 } from '../../renderer/theme-mode-config.ts';
+import type { ConfigManager } from '../../config/index.ts';
 
 // Always restore the shared default so later tests (and the golden suite in
 // sibling files) see dark.
@@ -186,9 +187,23 @@ describe('theme-mode config', () => {
   });
 
   test('resolveConfiguredThemeMode reads the key and defaults to auto', () => {
-    expect(resolveConfiguredThemeMode({ get: () => 'light' })).toBe('light');
-    expect(resolveConfiguredThemeMode({ get: () => undefined })).toBe('auto');
+    // display.themeMode is TUI-local (cast key, not in the SDK ConfigKey
+    // union — see theme-mode-config.ts). `get` is cast through `unknown`
+    // straight to ConfigManager's own method type (rather than reconstructed
+    // as an independent generic signature): the SDK's ConfigValue mapped type
+    // is a very large discriminated union, and asking the compiler to
+    // structurally verify a freshly-written generic signature against it here
+    // risks TS's "excessive stack depth" recursion limit (TS2321) — a
+    // compiler limitation, not a real type mismatch.
+    expect(resolveConfiguredThemeMode({
+      get: ((_key: string) => 'light') as unknown as ConfigManager['get'],
+    })).toBe('light');
+    expect(resolveConfiguredThemeMode({
+      get: ((_key: string) => undefined) as unknown as ConfigManager['get'],
+    })).toBe('auto');
     // A throwing get (absent section) degrades to the honest default.
-    expect(resolveConfiguredThemeMode({ get: () => { throw new Error('no section'); } })).toBe('auto');
+    expect(resolveConfiguredThemeMode({
+      get: ((_key: string) => { throw new Error('no section'); }) as unknown as ConfigManager['get'],
+    })).toBe('auto');
   });
 });

@@ -143,7 +143,9 @@ describe('memory settings domain (STEP 4)', () => {
     const { configManager } = createTestManagers();
     const groups = buildSettingGroups(configManager);
     const memory = groups.get('memory') ?? [];
-    const entry = memory.find((e) => e.setting.key === 'memory.showProvenance');
+    // memory.showProvenance is a TUI-local synthetic key, not yet part of the
+    // SDK's ConfigKey union — compare as plain strings (see memory-provenance.ts).
+    const entry = memory.find((e) => (e.setting.key as string) === 'memory.showProvenance');
     expect(entry).toBeDefined();
     expect(entry!.setting.type).toBe('boolean');
     expect(entry!.setting.default).toBe(false);

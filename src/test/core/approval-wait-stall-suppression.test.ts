@@ -25,6 +25,9 @@ function makeTurnBus() {
       (listeners[event] ??= []).push(handler);
       return () => {};
     },
+    // Never exercised by this test (wireStreamEventMetrics never calls it),
+    // but required to structurally satisfy the real RuntimeEventFeed shape.
+    onEnvelope() { return () => {}; },
     emit(event: TurnEvent) {
       for (const h of (listeners[event] ?? []).slice()) (h as () => void)();
     },
@@ -32,13 +35,21 @@ function makeTurnBus() {
 }
 
 function makeToolBus() {
-  return { on() { return () => {}; } };
+  return { on() { return () => {}; }, onEnvelope() { return () => {}; } };
+}
+
+// wireStreamEventMetrics only ever reads events.turns, events.tools, and
+// (optionally) events.providers — but its options type takes the full,
+// un-narrowed UiRuntimeEvents, so the other five feeds need a structurally
+// valid (never-called) stand-in to build a real UiRuntimeEvents value.
+function makeUnusedFeed() {
+  return { on: () => () => {}, onEnvelope: () => () => {} };
 }
 
 function makeMetrics(): StreamMetrics {
   return {
     startTime: 0, deltaCount: 0, tokenSpeed: 0, ttftMs: undefined, ttftRecorded: false,
-    activeToolStartedAtMs: undefined, activeToolName: undefined,
+    activeToolStartedAtMs: undefined, activeToolName: undefined, activeToolCallId: undefined,
     lastDeltaAtMs: undefined, stallEpisode: 0, reconnectAttempt: undefined, reconnectMaxAttempts: undefined,
   };
 }
@@ -49,7 +60,16 @@ function setup(isApprovalPending?: () => boolean) {
   const low: string[] = [];
   const turns = makeTurnBus();
   const opts = {
-    events: { turns, tools: makeToolBus() } as WireStreamEventMetricsOptions['events'],
+    events: {
+      turns,
+      tools: makeToolBus(),
+      sessions: makeUnusedFeed(),
+      providers: makeUnusedFeed(),
+      agents: makeUnusedFeed(),
+      workflows: makeUnusedFeed(),
+      planner: makeUnusedFeed(),
+      ops: makeUnusedFeed(),
+    } as WireStreamEventMetricsOptions['events'],
     orchestrator: { streamingOutputTokens: 0 } as WireStreamEventMetricsOptions['orchestrator'],
     providerRegistry: {
       getCurrentModel: () => ({ provider: 'openai-subscriber', registryKey: 'openai:x' }),

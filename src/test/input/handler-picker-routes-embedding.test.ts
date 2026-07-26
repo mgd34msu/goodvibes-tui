@@ -13,7 +13,7 @@ function makePicker(): ModelPickerModal {
   return new ModelPickerModal(
     { getRecentModels: async () => [] },
     { getBenchmarks: () => undefined },
-    { getSyntheticModelInfoFromCatalog: () => null },
+    { getSyntheticModelInfoFromCatalog: () => null, getSyntheticCanonicalModels: () => [] },
   );
 }
 

@@ -68,14 +68,14 @@ describe('UI roadmap gate', () => {
     const panelManager = {
       isVisible: () => visible,
       getAllOpen: () => ['docs'],
-      getFocusTarget: () => (focused ? 'panel' : 'prompt'),
+      getFocusTarget: () => (focused ? 'panel' : 'prompt') as 'panel' | 'prompt',
       open: () => {},
       show: () => { visible = true; },
       hide: () => { visible = false; focused = false; },
       focusPanels: () => { focused = true; },
       focusPrompt: () => { focused = false; },
       setOpenModalCallback: () => {},
-    } as never;
+    };
     const conversation = {
       setSplashSuppressed: () => {},
       rebuildHistory: () => {},
@@ -85,7 +85,7 @@ describe('UI roadmap gate', () => {
     wireShellUiOpeners({
       commandContext,
       input,
-      panelManager,
+      panelManager: panelManager as unknown as Parameters<typeof wireShellUiOpeners>[0]['panelManager'],
       conversation,
       configManager: testManagers.configManager,
       providerRegistry: { getSelectableModels: () => [], listModels: () => [] } as never,
@@ -94,6 +94,9 @@ describe('UI roadmap gate', () => {
       mcpRegistry: {} as never,
       subscriptionManager: testManagers.subscriptionManager,
       serviceRegistry: testManagers.serviceRegistry,
+      memoryEmbeddingRegistry: {} as never,
+      workingDirectory: process.cwd(),
+      homeDirectory: process.env.HOME ?? process.cwd(),
       getConfiguredProviderIds: () => [],
       getPinned: async () => [],
       render: () => {},

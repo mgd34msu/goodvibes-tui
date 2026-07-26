@@ -49,7 +49,7 @@ function createHarness() {
       contextWindow: 128_000,
       selectable: true,
       tier: 'premium',
-      reasoningEffort: ['low', 'medium', 'high'],
+      reasoningEffort: { kind: 'effort', values: ['low', 'medium', 'high'], source: 'declared' },
     },
     {
       id: 'claude-sonnet',
@@ -61,7 +61,7 @@ function createHarness() {
       contextWindow: 200_000,
       selectable: true,
       tier: 'premium',
-      reasoningEffort: ['instant', 'medium', 'high'],
+      reasoningEffort: { kind: 'effort', values: ['instant', 'medium', 'high'], source: 'declared' },
     },
     {
       id: 'best-coder',
@@ -73,7 +73,7 @@ function createHarness() {
       contextWindow: 256_000,
       selectable: true,
       tier: 'standard',
-      reasoningEffort: ['instant', 'low', 'medium', 'high'],
+      reasoningEffort: { kind: 'effort', values: ['instant', 'low', 'medium', 'high'], source: 'declared' },
     },
   ];
 
@@ -145,7 +145,7 @@ function createHarness() {
         contextWindow: model.contextWindow,
         selectable: model.selectable,
         tier: model.tier ?? 'standard',
-        ...(model.reasoningEffort ? { reasoningEffort: [...model.reasoningEffort] } : {}),
+        ...(model.reasoningEffort ? { reasoningEffort: model.reasoningEffort } : {}),
       })),
       get: (providerId: string) => {
         const provider = providers.get(providerId);
@@ -169,6 +169,7 @@ function createHarness() {
       getSelectableModels: () => models.filter((model) => model.selectable),
       registerDiscoveredProviders: (_servers: DiscoveredServer[]) => {},
       refreshCatalog: async () => {},
+      refreshLiveModelDiscovery: async () => [],
       refreshModelLimits: async () => 2,
       findAlternativeModel: (modelRef: string) => {
         if (modelRef === 'openai:gpt-4o' || modelRef === 'gpt-4o') return models[2] ?? null;
@@ -185,7 +186,7 @@ function createHarness() {
         : null,
       describeRuntime: async (providerId: string) => providers.get(providerId)?.describeRuntime
         ? await providers.get(providerId)!.describeRuntime!({
-            secretsManager: { listDetailed: async () => [] },
+            secretsManager: { get: async () => null, listDetailed: async () => [] },
             serviceRegistry: {
               getAll: () => ({}),
               inspect: async () => null,

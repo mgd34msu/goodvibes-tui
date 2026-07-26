@@ -100,7 +100,17 @@ describe('subscription modal surface', () => {
       list: () => [], listPending: () => [], get: () => null, getPending: () => null,
       logout: () => {}, getAccessToken: () => null,
     } as unknown as SubscriptionAccessQuery;
-    const serviceRegistry = { getAll: () => ({ svc: { name: 'claude', providerId: 'claude', authType: 'oauth', oauth: {} } }) };
+    const serviceRegistry = {
+      getAll: () => ({
+        svc: {
+          name: 'claude',
+          providerId: 'claude',
+          authType: 'oauth' as const,
+          tokenKey: 'claude-token',
+          oauth: { authUrl: 'https://example.test/authorize', tokenUrl: 'https://example.test/token', clientId: 'client-id', redirectUri: 'http://localhost/callback' },
+        },
+      }),
+    };
     const surface = createSubscriptionModalSurface(serviceRegistry, manager);
     surface.onOpen?.(() => {});
     surface.onAction?.('primary', ctx({ id: 'sub:claude', label: '' }, {

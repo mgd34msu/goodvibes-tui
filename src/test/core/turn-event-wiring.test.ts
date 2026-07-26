@@ -75,13 +75,18 @@ function makeFakeEvents() {
 
 function makeSpyNotifier(urls: string[] = ['https://ntfy.sh/test-topic']) {
   const sentMessages: string[] = [];
-  const notifier: WebhookNotifier = {
+  // WebhookNotifier is a real class with private fields, so a duck-typed
+  // fake can never satisfy it structurally — the same `as unknown as
+  // WebhookNotifier` cast already used by long-task-notifier.test.ts,
+  // approval-alert.test.ts, and budget-breach-notifier.test.ts for this
+  // exact class.
+  const notifier = {
     getUrls: () => [...urls],
     send: mock(async (text: string) => {
       sentMessages.push(text);
       return {};
-    }) as WebhookNotifier['send'],
-  };
+    }),
+  } as unknown as WebhookNotifier;
   return { notifier, sentMessages };
 }
 
@@ -104,8 +109,11 @@ function makeMinimalOptions(
       toJSON: () => { throw new Error('stub: no conversation'); },
       getTitleSource: () => 'stub',
       title: '',
-      // Satisfy ConversationManager duck-type — only toJSON/getTitleSource/title used in TURN_COMPLETED
-    } as WireTurnEventHandlersOptions['conversation'],
+      // Satisfy ConversationManager duck-type — only toJSON/getTitleSource/title used in TURN_COMPLETED.
+      // ConversationManager is a real class with private fields, so the fake
+      // can't satisfy it structurally — same `as unknown as` pattern already
+      // used for this class in format-user-error.test.ts / system-message-router.test.ts.
+    } as unknown as WireTurnEventHandlersOptions['conversation'],
     runtime: { sessionId: 'test-sess-id-001', model: 'test-model', provider: 'test-provider' },
     orchestrator: { lastInputTokens: 0, usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 } },
     configManager: {
@@ -122,7 +130,7 @@ function makeMinimalOptions(
       routeSystemMessage: () => {},
     },
     hookDispatcher: {
-      fire: mock(async () => ({})) as WireTurnEventHandlersOptions['hookDispatcher']['fire'],
+      fire: mock(async () => ({ ok: true })) as WireTurnEventHandlersOptions['hookDispatcher']['fire'],
     } as WireTurnEventHandlersOptions['hookDispatcher'],
     surface: makeTestSurface('/tmp/test-workdir', '/tmp/test-home'),
     gitStatusProvider: { refresh: async () => null },
@@ -229,7 +237,7 @@ describe('wireTurnEventHandlers — TURN_COMPLETED notification integration', ()
         toJSON: () => { throw new Error('persist-fail: simulated'); },
         getTitleSource: () => 'stub',
         title: '',
-      } as WireTurnEventHandlersOptions['conversation'],
+      } as unknown as WireTurnEventHandlersOptions['conversation'],
     });
 
     wireTurnEventHandlers(opts);
@@ -500,7 +508,7 @@ describe('wireTurnEventHandlers — transcript journal rebinds on session switch
         toJSON: () => ({ messages: [{ role: 'user', content: marker }] }),
         getTitleSource: () => 'stub',
         title: '',
-      } as WireTurnEventHandlersOptions['conversation'],
+      } as unknown as WireTurnEventHandlersOptions['conversation'],
       setMarker: (m: string) => { marker = m; },
     };
   }
