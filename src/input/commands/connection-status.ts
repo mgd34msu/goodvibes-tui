@@ -80,37 +80,42 @@ export const CONNECTION_PROBE_METHOD = {
  * `config-ownership`), so `/config set` on them lands in the daemon's own
  * store and keeps working with this client closed — which is the requirement.
  *
- * The PASSWORDS do not currently have that property, and these steps say so
- * rather than pretending otherwise. A credential is filed in the daemon's tier
- * only when a daemon-owned config path declares it; the two keys this
- * product's daemon actually reads — `surfaces.email.password` and
- * `surfaces.calendar.caldavPassword` — are declared in neither `CONFIG_SCHEMA`
- * nor the SDK's non-schema daemon-owned path list, so
- * `isDaemonOwnedSecretKey()` answers false for both and a `/secrets set` files
- * them in THIS client's store, where the daemon never looks. Telling someone
- * to run that command would be handing them a step that silently does nothing.
+ * The PASSWORDS now have it too, and these steps changed the round the platform
+ * gave it to them. A credential is filed in the daemon's tier only when a
+ * daemon-owned config path declares it, and the two keys this product's daemon
+ * reads — `surfaces.email.password` and `surfaces.calendar.caldavPassword` —
+ * were declared in neither `CONFIG_SCHEMA` nor the platform's non-schema
+ * daemon-owned path list. `isDaemonOwnedSecretKey()` answered false for both,
+ * so a `/secrets set` filed them in THIS client's store where the daemon never
+ * looks, and telling anyone to run it would have been handing them a step that
+ * silently did nothing. The instruction was the daemon's own environment
+ * instead, because that genuinely reached it.
  *
- * Until the owning round declares those paths, the honest instruction is the
- * one that genuinely reaches the daemon: its own environment, which the secret
- * resolver consults before any store. See the report accompanying this change.
+ * The platform release that began serving `email.*` and `calendar.*` declares
+ * the whole mail and CalDAV connection as daemon-owned, so both keys answer
+ * true now and a write carrying an explicit scope is RELOCATED to the daemon
+ * tier rather than filed where it was asked for. `/secrets set` is therefore the
+ * step that works, and it is the better one: it needs no restart and no shell
+ * access to the machine the daemon runs on. The environment still resolves
+ * first, so an operator who already set it there is not broken by this.
  */
-const ENV_CREDENTIAL_NOTE =
-  'The password must reach the DAEMON, which reads its environment first. '
-  + 'A /secrets set here files it in this client\'s own store, where the daemon does not read it.';
+const DAEMON_TIER_NOTE =
+  'The password reaches the DAEMON: a daemon-owned credential is filed in its tier '
+  + 'no matter which surface stores it, so this keeps working with this client closed.';
 
 const SETUP_STEPS: Readonly<Record<string, readonly string[]>> = {
   EMAIL_NOT_CONFIGURED: [
     '/config set surfaces.email.host imap.example.com',
     '/config set surfaces.email.user you@example.com',
-    `Set GOODVIBES_SURFACES_EMAIL_PASSWORD in the daemon's environment, then restart it. ${ENV_CREDENTIAL_NOTE}`,
+    `/secrets set GOODVIBES_SURFACES_EMAIL_PASSWORD <password>. ${DAEMON_TIER_NOTE}`,
   ],
   EMAIL_CREDENTIALS_MISSING: [
-    `Set GOODVIBES_SURFACES_EMAIL_PASSWORD in the daemon's environment, then restart it. ${ENV_CREDENTIAL_NOTE}`,
+    `/secrets set GOODVIBES_SURFACES_EMAIL_PASSWORD <password>. ${DAEMON_TIER_NOTE}`,
   ],
   CALENDAR_NOT_CONFIGURED: [
     '/config set surfaces.calendar.caldavUrl https://example.com/dav/',
     '/config set surfaces.calendar.caldavUser you@example.com',
-    `Set GOODVIBES_SURFACES_CALENDAR_CALDAV_PASSWORD in the daemon's environment, then restart it. ${ENV_CREDENTIAL_NOTE}`,
+    `/secrets set GOODVIBES_SURFACES_CALENDAR_CALDAV_PASSWORD <password>. ${DAEMON_TIER_NOTE}`,
   ],
 };
 
