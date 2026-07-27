@@ -204,6 +204,48 @@ describe('renderSettingsModal', () => {
     expect(texts).toContain('test\u2588');
   });
 
+  test('non-secret string setting still renders its typed value while editing (no regression)', () => {
+    while (modal.currentCategory !== 'surfaces') modal.nextCategory();
+    modal.focusPane = 'settings';
+    modal.selectedIndex = modal.currentItems.findIndex((entry) => entry.setting.key === 'surfaces.homeassistant.instanceUrl');
+    expect(modal.selectedIndex).toBeGreaterThanOrEqual(0);
+    modal.editingMode = true;
+    modal.editBuffer = 'http://homeassistant.local:8123';
+    const lines = renderSettingsModal(modal, W);
+    const texts = linesToText(lines).join('\n');
+    expect(texts).toContain('http://homeassistant.local:8123\u2588');
+  });
+
+  test('secret-backed setting masks the typed value while editing, everywhere it would render', () => {
+    while (modal.currentCategory !== 'surfaces') modal.nextCategory();
+    modal.focusPane = 'settings';
+    modal.selectedIndex = modal.currentItems.findIndex((entry) => entry.setting.key === 'surfaces.homeassistant.accessToken');
+    expect(modal.selectedIndex).toBeGreaterThanOrEqual(0);
+    modal.editingMode = true;
+    const typed = 'ha-super-secret-long-lived-token';
+    modal.editBuffer = typed;
+    const lines = renderSettingsModal(modal, W);
+    const texts = linesToText(lines).join('\n');
+    // The plaintext must not appear anywhere in the rendered frame: not in the
+    // settings table row, not in the "Current: ..." documentation line.
+    expect(texts).not.toContain(typed);
+    // Keystrokes must still register visibly: a bullet mask with the cursor.
+    expect(texts).toContain('\u2022'.repeat(typed.length) + '\u2588');
+  });
+
+  test('secret-backed setting search result also masks the typed value while editing', () => {
+    modal.setSearchQuery('homeassistant access token');
+    const result = modal.searchResults.find((entry) => entry.setting.key === 'surfaces.homeassistant.accessToken');
+    expect(result).toBeDefined();
+    modal.selectedIndex = modal.searchResults.indexOf(result!);
+    modal.editingMode = true;
+    const typed = 'another-secret-value';
+    modal.editBuffer = typed;
+    const lines = renderSettingsModal(modal, W);
+    const texts = linesToText(lines).join('\n');
+    expect(texts).not.toContain(typed);
+  });
+
   test('changing category shows different settings', () => {
     modal.nextCategory();
     const lines = renderSettingsModal(modal, W);
