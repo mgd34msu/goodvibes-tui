@@ -11,6 +11,7 @@ import { StepUpService } from '@pellux/goodvibes-sdk/daemon';
 import { PairingTokenManager } from '@pellux/goodvibes-sdk/platform/pairing';
 import { resolvePairingWebOrigin } from '../core/pairing-origin.ts';
 import { attachWsOnlyGatewayVerbHandlers } from '@pellux/goodvibes-terminal-shell';
+import { createDisposalScope, registerSurfaceRuntimePollers } from './disposal-wiring.ts';
 import { WatcherRegistry } from '@pellux/goodvibes-sdk/platform/watchers';
 import { ArtifactStore } from '@pellux/goodvibes-sdk/platform/artifacts';
 import { createWebKnowledgeGapRepairer } from '@pellux/goodvibes-sdk/platform/knowledge';
@@ -36,8 +37,7 @@ import type { DomainDispatch, RuntimeStore } from './store/index.ts';
 import {
   type RuntimeEventBus, DistributedRuntimeManager, RemoteRunnerRegistry, RemoteSupervisor, IntegrationHelperService,
   IdempotencyStore, ComponentHealthMonitor, WorktreeRegistry, SandboxSessionRegistry, createShellPathService,
-  type ShellPathService, type FeatureFlagManager, createFeatureFlagManager, PolicyRuntimeState,
-  type SessionSurface,
+  type ShellPathService, type FeatureFlagManager, createFeatureFlagManager, PolicyRuntimeState, type SessionSurface,
 } from '@/runtime/index.ts';
 import { createSessionStorageServices } from './session-storage-services.ts';
 import { VoiceProviderRegistry, VoiceService, ensureBuiltinVoiceProviders } from '@pellux/goodvibes-sdk/platform/voice';
@@ -232,10 +232,11 @@ export interface RuntimeServices {
   readonly integrationHelpers: IntegrationHelperService;
   /** Re-root path-bound stores (MemoryStore, ProjectIndex) to a new working directory, called by WorkspaceSwapManager after verification; stores needing a process restart just warn-log and keep serving the old path until the daemon restarts with the new --working-dir. */
   rerootStores(newWorkingDir: string): Promise<void>;
+  dispose(): void; // Stop every poller this graph started; best-effort, total, idempotent. This surface owns its graph — see disposal-wiring.ts.
 }
 
 export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeServices {
-  const workingDirectory = options.workingDir;
+  const disposalScope = createDisposalScope('RuntimeServices'); const workingDirectory = options.workingDir; // disposal seam: see ./disposal-wiring.ts
   const homeDirectory = options.homeDirectory;
   const shellPaths = createShellPathService({
     workingDirectory,
@@ -566,7 +567,7 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
   // code-index-services.ts's header doc.
   const { codeIndexStore, codeIndexReindexScheduler } = createCodeIndexServices({ workingDirectory, configManager, memoryEmbeddingRegistry, isReindexPaused: () => pauseController.isPaused('code-index-reindex'), admitExpensiveWork });
   // Store snapshots, the periodic append-only sweep, durable remembered-approval rules + the live credential chain — see durability-services.ts.
-  const { storeSnapshotScheduler, appendOnlyRetentionScheduler, userPermissionRuleStore, stopDurabilityHousekeeping } = createDurabilityServices({
+  const { storeSnapshotScheduler, appendOnlyRetentionScheduler, userPermissionRuleStore, stopDurabilityHousekeeping, stopConfigWatch } = createDurabilityServices({
     configManager, secretsManager, providerRegistry, memoryDbPath, codeIndexDbPath: codeIndexDbPath(workingDirectory), surface, shellPaths, // + retention-sweep roots & live config watch (mirrors the SDK)
     ...(options.currentSessionId ? { currentSessionId: options.currentSessionId } : {}), // exempts the running session from crash-residue reaping
   });
@@ -612,7 +613,7 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
   const { voiceSetup } = wireVoiceSetup({ configManager, shellPaths, voiceProviders, admitExpensiveWork });
 
   // Terminal-shell wrapper over the SDK registerGatewayVerbGroups (gateway-verbs.ts); checkin.*/fleet-needs-input/pairing.* register only when their deps are present. memoryGovernor lights up ops.memory.get; voiceSetup lights up voice.local.status/install.
-  attachWsOnlyGatewayVerbHandlers(gatewayMethods, { processRegistry, workspaceCheckpointManager, conversationRewindPort: createSessionConversationRewindPort(), sessionBroker, secretsManager, stepUpService, approvalBroker, requestApproval: (input) => approvalBroker.requestApproval(input), watcherRegistry, userPermissionRuleStore, shellPaths, configManager, runtimeStore: options.runtimeStore, channelDeliveryRouter, providerRegistry, automationManager, sessionLister: sessionBroker, sessionIntake: sessionBroker, workingDirectory, memoryRegistry, pairingTokens, sessionLiveTurnControls, powerManager, memoryGovernor, voiceSetup, relayAvailable: () => configManager.get('relay.enabled') === true, pairingWebOrigin: () => resolvePairingWebOrigin(configManager).origin, ...wireFleetNeedsInputPush({ registry: processRegistry, runtimeBus: options.runtimeBus, sessionBroker }) });
+  attachWsOnlyGatewayVerbHandlers(gatewayMethods, { processRegistry, workspaceCheckpointManager, conversationRewindPort: createSessionConversationRewindPort(), sessionBroker, secretsManager, stepUpService, approvalBroker, requestApproval: (input) => approvalBroker.requestApproval(input), watcherRegistry, userPermissionRuleStore, shellPaths, configManager, runtimeStore: options.runtimeStore, channelDeliveryRouter, providerRegistry, automationManager, sessionLister: sessionBroker, sessionIntake: sessionBroker, workingDirectory, memoryRegistry, pairingTokens, sessionLiveTurnControls, powerManager, memoryGovernor, voiceSetup, relayAvailable: () => configManager.get('relay.enabled') === true, pairingWebOrigin: () => resolvePairingWebOrigin(configManager).origin, disposal: disposalScope.registry, ...wireFleetNeedsInputPush({ registry: processRegistry, runtimeBus: options.runtimeBus, sessionBroker }) });
   const integrationHelpers = new IntegrationHelperService({
     surface, // surface-scoped: continuity's recovery-file check must read the SAME paths the app writes with, not the unscoped legacy pair.
     runtimeStore: options.runtimeStore,
@@ -678,7 +679,7 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
   // bridge (the high-churn 'ops' domain stays out of the wholesale allowlist).
   wireMemoryPressureNotice(options.runtimeBus, notificationDispatcher);
 
-  return {
+  const services: RuntimeServices = {
     workingDirectory,
     homeDirectory,
     surface,
@@ -793,5 +794,7 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
     workspaceCheckpointManager,
     integrationHelpers,
     rerootStores: createStoreRerooter({ codeIndexStore, projectIndex }),
+    dispose: (): void => disposalScope.dispose(),
   };
+  registerSurfaceRuntimePollers(disposalScope.registry, services, { stopConfigWatch }); return services;
 }
