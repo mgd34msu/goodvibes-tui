@@ -394,6 +394,13 @@ export function wireShellUiOpeners(options: WireShellUiOpenersOptions): void {
   commandContext.openSettingsModal = (target?: string) => {
     input.modalOpened('settings');
     input.settingsModal.open(configManager, featureFlags, subscriptionManager, serviceRegistry, mcpRegistry, secretsManager, {
+      // The Connections category asks the daemon handlers directly, through the
+      // same in-process catalog `/mail` and `/calendar` use, so the workspace
+      // reports the daemon's state rather than a local guess about it.
+      ...(commandContext.workspace?.gatewayMethods
+        ? { gatewayMethods: commandContext.workspace.gatewayMethods }
+        : {}),
+      requestRender: render,
       onSettingApplied: (change) => {
         // forced dark/light applies immediately (rebuild palettes + full
         // repaint); auto only re-probes at startup, so it takes effect next launch.
