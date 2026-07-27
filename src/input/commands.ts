@@ -79,6 +79,8 @@ import { registerReviewRuntimeCommands } from './commands/review-runtime.ts';
 import { registerPaletteRuntimeCommands } from './commands/palette-runtime.ts';
 import { registerCiRuntimeCommands } from './commands/ci-runtime.ts';
 import { registerCheckinRuntimeCommands } from './commands/checkin-runtime.ts';
+import { registerMailRuntimeCommands } from './commands/mail-runtime.ts';
+import { registerCalendarRuntimeCommands } from './commands/calendar-runtime.ts';
 import { registerPrincipalsRuntimeCommands } from './commands/principals-runtime.ts';
 
 /**
@@ -173,6 +175,8 @@ export const BUILTIN_COMMAND_GROUPS: readonly BuiltinCommandGroup[] = [
   { category: 'Diff & Review', register: registerReviewRuntimeCommands },
   { category: 'CI', register: registerCiRuntimeCommands },
   { category: 'Check-in', register: registerCheckinRuntimeCommands },
+  { category: 'Mail & Calendar', register: registerMailRuntimeCommands },
+  { category: 'Mail & Calendar', register: registerCalendarRuntimeCommands },
   { category: 'Principals', register: registerPrincipalsRuntimeCommands },
   { category: 'Policy', register: (registry) => registry.register(policyCommand) },
   { category: 'Providers', register: (registry) => registry.register(providerCommand) },

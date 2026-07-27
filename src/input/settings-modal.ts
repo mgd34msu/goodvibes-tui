@@ -28,6 +28,9 @@ import {
 } from './settings-modal-secrets.ts';
 import type { FeatureFlagManager } from '@/runtime/index.ts';
 import type { McpRegistry } from '@pellux/goodvibes-sdk/platform/mcp';
+import type { GatewayMethodCatalog } from '@pellux/goodvibes-sdk/platform/control-plane';
+import type { ConnectionStatus } from './commands/connection-status.ts';
+import { initialConnectionEntries, refreshConnectionEntries } from './settings-modal-connections.ts';
 import { isWorktreeSetupListConfigKey, parseWorktreeSetupListInput } from './worktree-setup-config.ts';
 import { isSandboxExecListConfigKey, parseSandboxExecListInput } from './sandbox-exec-config.ts';
 import { isExecEnvScrubAllowlistConfigKey, parseExecEnvScrubAllowlistInput } from './exec-env-scrub-config.ts';
@@ -86,6 +89,10 @@ export type SettingsModalChangeHandler = (change: SettingsModalChange) => Settin
 
 export interface SettingsModalOpenOptions {
   readonly onSettingApplied?: SettingsModalChangeHandler;
+  /** In-process catalog the Connections category probes; see that module. */
+  readonly gatewayMethods?: GatewayMethodCatalog;
+  /** Called when an async connection refresh has new rows to paint. */
+  readonly requestRender?: () => void;
 }
 
 export {
@@ -154,6 +161,11 @@ export class SettingsModal {
   public mcpEntries: McpEntry[] = [];
   /** Provider subscription entries (populated when subscriptions tab is active). */
   public subscriptionEntries: SubscriptionEntry[] = [];
+  /** Connections-tab state; all of it driven by settings-modal-connections.ts. */
+  public connectionEntries: ConnectionStatus[] = initialConnectionEntries();
+  public gatewayMethods: GatewayMethodCatalog | null = null;
+  public requestRender: (() => void) | null = null;
+  public connectionsRefreshing = false;
 
   /**
    * Whether the user has entered search mode (pressed / or a printable key
@@ -217,6 +229,9 @@ export class SettingsModal {
     this.groups = buildSettingGroups(configManager, featureFlagManager);
     this.mcpEntries = buildMcpEntries(this.mcpRegistry);
     this.subscriptionEntries = buildSubscriptionEntries(subscriptionManager, serviceRegistry);
+    this.gatewayMethods = options?.gatewayMethods ?? null;
+    this.requestRender = options?.requestRender ?? null;
+    this.connectionEntries = initialConnectionEntries();
     this.categoryIndex = 0;
     this.selectedIndex = 0;
     this.focusPane = 'categories';
@@ -256,6 +271,11 @@ export class SettingsModal {
     this.searchResults = [];
     this.searchFocused = false;
     this.contextScroll = 0;
+    // A probe still in flight checks `active` before writing, so a reopen
+    // starts from `checking` rather than from a finished session's answer.
+    this.gatewayMethods = null;
+    this.requestRender = null;
+    this.connectionEntries = initialConnectionEntries();
     this.serviceRegistry = null;
     this.secretsManager = null;
     this.onSettingApplied = null;
@@ -357,6 +377,8 @@ export class SettingsModal {
       } else if (this.currentCategory === 'subscriptions' && this.subscriptionEntries.length > 0) {
         this.selectedIndex = (this.selectedIndex - 1 + this.subscriptionEntries.length) % this.subscriptionEntries.length;
         this.subscriptionLogoutConfirmationTarget = null;
+      } else if (this.currentCategory === 'connections' && this.connectionEntries.length > 0) {
+        this.selectedIndex = (this.selectedIndex - 1 + this.connectionEntries.length) % this.connectionEntries.length;
       }
       return;
     }
@@ -380,6 +402,8 @@ export class SettingsModal {
       } else if (this.currentCategory === 'subscriptions' && this.subscriptionEntries.length > 0) {
         this.selectedIndex = (this.selectedIndex + 1) % this.subscriptionEntries.length;
         this.subscriptionLogoutConfirmationTarget = null;
+      } else if (this.currentCategory === 'connections' && this.connectionEntries.length > 0) {
+        this.selectedIndex = (this.selectedIndex + 1) % this.connectionEntries.length;
       }
       return;
     }
@@ -702,6 +726,8 @@ export class SettingsModal {
       this.mcpEntries = buildMcpEntries(this.mcpRegistry);
     } else if (this.currentCategory === 'subscriptions') {
       this.subscriptionEntries = buildSubscriptionEntries(this.subscriptionManager, this.serviceRegistry);
+    } else if (this.currentCategory === 'connections') {
+      void refreshConnectionEntries(this);
     }
   }
 
@@ -714,6 +740,7 @@ export class SettingsModal {
     if (
       this.currentCategory === 'mcp'
       || this.currentCategory === 'subscriptions'
+      || this.currentCategory === 'connections'
     ) return [];
     const items = this.groups.get(this.currentCategory) ?? [];
     if (this.currentCategory === 'network') {
