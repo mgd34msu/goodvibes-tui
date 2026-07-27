@@ -381,9 +381,15 @@ describe('CrossSessionTaskRegistry persistence', () => {
     registry.flush();
 
     const registry2 = new CrossSessionTaskRegistry(graphPath(tmpDir));
-    const loaded = registry2.getRef('s1', 't1');
-    expect(loaded).toBeDefined();
-    expect(loaded?.title).toBe('Persisted Task');
+    try {
+      const loaded = registry2.getRef('s1', 't1');
+      expect(loaded).toBeDefined();
+      expect(loaded?.title).toBe('Persisted Task');
+    } finally {
+      // A second instance starts its own sweep interval and installs its own
+      // process exit listener; the block's afterEach only disposes `registry`.
+      registry2.dispose();
+    }
   });
 
   test('linkTask with deps round-trips through persistence', () => {
@@ -394,9 +400,13 @@ describe('CrossSessionTaskRegistry persistence', () => {
     registry.flush();
 
     const registry2 = new CrossSessionTaskRegistry(graphPath(tmpDir));
-    const deps = registry2.getDependencies('s1', 'B');
-    expect(deps).toHaveLength(1);
-    expect(deps[0]!.taskId).toBe('A');
+    try {
+      const deps = registry2.getDependencies('s1', 'B');
+      expect(deps).toHaveLength(1);
+      expect(deps[0]!.taskId).toBe('A');
+    } finally {
+      registry2.dispose();
+    }
   });
 
   test('linkTask with cycle returns error', () => {
