@@ -51,6 +51,15 @@ export class InboundPoller {
   private readonly statuses = new Map<string, ProviderStatus>();
   private readonly inFlight = new Set<string>();
   private started = false;
+  /**
+   * Set by stop(), which the surface teardown calls and nothing else — unlike
+   * stopProvider(), which a leadership handover uses and which must stay
+   * resumable. Once the surface is released no interval may be armed again,
+   * including by work that was already in flight: registerInboxMethods() starts
+   * the store bootstrap without awaiting it, so a teardown during that window
+   * would otherwise be followed by a start() that nothing is left to undo.
+   */
+  private released = false;
 
   constructor(options: PollerOptions) {
     this.adapters = options.adapters;
@@ -66,7 +75,7 @@ export class InboundPoller {
 
   /** Begin per-provider interval loops. Idempotent. Does NOT poll immediately. */
   start(): void {
-    if (this.started) return;
+    if (this.released || this.started) return;
     this.started = true;
     for (const id of this.adapters.keys()) this.startProvider(id);
   }
@@ -81,7 +90,7 @@ export class InboundPoller {
    * addressable per provider, and the blanket calls are fan-outs over it.
    */
   startProvider(id: string): void {
-    if (this.timers.has(id)) return;
+    if (this.released || this.timers.has(id)) return;
     const adapter = this.adapters.get(id);
     if (!adapter) return;
     const handle = this.setIntervalImpl(() => {
@@ -187,8 +196,9 @@ export class InboundPoller {
     });
   }
 
-  /** Stop all interval loops. Idempotent. */
+  /** Release the poller for good: stop every interval loop, and refuse to arm another. Idempotent. */
   stop(): void {
+    this.released = true;
     for (const handle of this.timers.values()) {
       this.clearIntervalImpl(handle);
     }

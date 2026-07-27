@@ -88,7 +88,16 @@ export function registerDaemonHandlers(
   const remote = providers.registerRemote(ctx);
   teardowns.push(remote.unregister);
 
+  // Idempotent: teardown is reachable from more than one shutdown path now that
+  // the runtime disposal scope owns it, and the surfaces underneath are not all
+  // safe to unwind twice — the inbox surface closes a SQLite handle, which a
+  // second pass would close again inside a floating promise (an unhandled
+  // rejection, not a caught one). Running once is also simply the honest
+  // meaning of "release these surfaces".
+  let torn = false;
   const unregister: Unregister = () => {
+    if (torn) return;
+    torn = true;
     for (let i = teardowns.length - 1; i >= 0; i -= 1) {
       try {
         teardowns[i]!();

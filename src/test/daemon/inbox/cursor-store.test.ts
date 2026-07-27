@@ -301,4 +301,31 @@ describe('InboxCursorStore retention', () => {
       await quiet.close();
     }
   });
+
+  test('a store closed while init() is still in flight never arms the retention timer', async () => {
+    // registerInboxMethods() starts init() without awaiting it, so a daemon
+    // told to stop inside the first tick of its life closes the store while its
+    // bootstrap is mid-await. init() then reached startSweepTimer() AFTER the
+    // only call that could clear it had already run, and the sweep ticked for
+    // the life of the process with no owner left to stop it.
+    const armed: number[] = [];
+    const cleared: number[] = [];
+    const racing = new InboxCursorStore(dir, 'racing.sqlite', {
+      sweepIntervalMs: 1_000,
+      setIntervalImpl: ((_fn: () => void, ms: number) => {
+        armed.push(ms);
+        return armed.length as unknown as ReturnType<typeof setInterval>;
+      }) as unknown as typeof setInterval,
+      clearIntervalImpl: ((handle: number) => {
+        cleared.push(handle);
+      }) as unknown as typeof clearInterval,
+    });
+
+    const booting = racing.init();
+    await racing.close();
+    await booting;
+
+    expect(armed).toEqual([]);
+    expect(cleared).toEqual([]);
+  });
 });
