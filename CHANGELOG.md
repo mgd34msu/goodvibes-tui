@@ -4,6 +4,13 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [1.24.2] - 2026-07-27
+
+### Changes
+
+- Ship the browser driver with the agent binary.
+- install.sh now fetches, checksum-verifies and places the Playwright driver archive beside the agent binary, and the update swap path refreshes it in lockstep so an in-place update never leaves a stale or missing driver. Without this a binary install had nothing to resolve and browser control could not work at all.
+
 ## [1.24.1] - 2026-07-27
 
 ### Changes
