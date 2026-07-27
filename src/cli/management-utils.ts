@@ -242,6 +242,10 @@ export async function withRuntimeServices<T>(
     return await fn(services);
   } finally {
     services.providerRegistry.stopWatching();
+    // A one-shot command still composes the whole graph, and that graph starts
+    // pollers. Disposing lets the command finish instead of relying on process
+    // exit to reclaim them.
+    services.dispose();
   }
 }
 
