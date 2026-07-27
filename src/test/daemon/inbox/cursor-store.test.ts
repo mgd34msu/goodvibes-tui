@@ -266,8 +266,20 @@ describe('InboxCursorStore retention', () => {
       ]);
       expect(tick).not.toBeNull();
       tick!();
-      // The timer callback is async (it flushes); let it settle.
-      await new Promise((resolve) => setTimeout(resolve, 20));
+      // The timer callback is async (it flushes), so wait for the sweep it
+      // produces rather than sleeping a fixed 20 ms and hoping. 20 ms is a
+      // number only an idle machine can promise for a flush that touches the
+      // database; under a concurrent load this read `Expected length: 1 /
+      // Received length: 0` while the sweep was simply still in flight. The
+      // poll returns the moment the sweep is recorded, so a fast host pays
+      // nothing, and a sweep that never happens still fails.
+      const sweepDeadline = Date.now() + 30_000;
+      while (sweeps.length === 0) {
+        if (Date.now() > sweepDeadline) {
+          throw new Error('the retention timer never produced a sweep within 30000ms');
+        }
+        await new Promise((resolve) => setTimeout(resolve, 5));
+      }
       expect(timed.countItems()).toBe(1);
       expect(sweeps).toHaveLength(1);
       expect(sweeps[0]).toMatchObject({ capped: 1, remaining: 1 });
