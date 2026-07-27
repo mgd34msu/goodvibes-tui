@@ -314,6 +314,11 @@ async function main(): Promise<void> {
     getConversationTitle: () => 'goodvibes daemon',
     workingDir,
     homeDirectory,
+    // Honour --daemon-home / GOODVIBES_DAEMON_HOME on the CREDENTIAL store, not
+    // just the identity directory. Without this a daemon told to run out of a
+    // temp tree still read the real home's daemon secrets, so "isolating" a
+    // test daemon left it holding the owner's live credentials.
+    daemonHome: daemonHomeDirectory,
     // The standalone daemon observes externally-launched coding-agent sessions
     // on the host read-only (fleet visibility + steer; never counted, never
     // stopped). Daemon-side only — the interactive process reads this snapshot
@@ -361,6 +366,13 @@ async function main(): Promise<void> {
     // undefined for a non-binary install, so a dev run stays host-managed and
     // never swaps the interpreter. See lifecycle.ts.
     updateArtifact: resolveDaemonUpdateArtifact({ version: VERSION }),
+    // A daemon running out of an overridden home must never adopt the machine's
+    // service unit. One did: started from a scratchpad with --daemon-home, it
+    // found the unit not running, wrote its own scratchpad ExecStart into
+    // ~/.config/systemd/user/goodvibes.service and exited, and systemd then
+    // supervised the throwaway as the machine's daemon for five hours.
+    hasOverriddenHome: process.env['GOODVIBES_DAEMON_HOME'] !== undefined
+      || process.env['GOODVIBES_HOME'] !== undefined,
     // The SAME coordinator this repository's inbox poller registered with (see
     // runtime/cluster-composition.ts). The facade must reuse it rather than
     // compose its own: two coordinators in one process are two nodes in the
