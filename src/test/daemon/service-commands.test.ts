@@ -1238,7 +1238,11 @@ describe('reconcileRedundantLegacyUnit — auto-retire a redundant install-scrip
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
-  });
+    // The threshold above is 10 s and bun's default per-test budget is 5 s, so
+    // without this the test died of the timeout before `elapsedMs` could ever
+    // reach the number it is compared against — the bound was decorative. The
+    // budget now sits above the threshold so the assertion is what fails.
+  }, 60_000);
 
   test('one CUMULATIVE deadline covers the whole pass: once exceeded, remaining calls are skipped with a notice', async () => {
     // Pins the degraded-bus (slow-but-completing) shape: per-call timeouts

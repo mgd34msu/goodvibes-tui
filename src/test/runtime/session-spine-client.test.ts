@@ -10,6 +10,27 @@ const settle = async (): Promise<void> => {
   for (let i = 0; i < 5; i += 1) await new Promise<void>((r) => setTimeout(r, 0));
 };
 
+/**
+ * Poll until `predicate` holds, then return.
+ *
+ * Replaces "sleep a fixed 70 ms and then assert a keepalive beat has landed".
+ * The keepalive's own cadence is 15 ms here, so on an idle machine 70 ms is
+ * four beats of headroom — but the beat has to travel through the transport and
+ * be recorded, and how long that takes on a machine running dozens of other
+ * test processes is not something a fixed sleep can know. The poll returns on
+ * the first beat, so a fast host is no slower than before, and the ceiling is
+ * large enough that only a keepalive that never fires at all fails it.
+ */
+async function waitUntil(predicate: () => boolean, what: string, budgetMs = 30_000): Promise<void> {
+  const deadline = Date.now() + budgetMs;
+  while (!predicate()) {
+    if (Date.now() > deadline) {
+      throw new Error(`waitUntil: ${what} never became true — waited ${budgetMs}ms`);
+    }
+    await new Promise<void>((r) => setTimeout(r, 5));
+  }
+}
+
 interface CapturedCall {
   readonly kind: 'register' | 'close';
   readonly sessionId: string;
@@ -116,9 +137,14 @@ describe('SessionSpineClient fire-and-forget latency contract', () => {
     client.close('s3');
     const elapsedMs = Date.now() - start;
 
-    // All four calls must return well under a millisecond-scale budget —
-    // there is structurally no `await` on the call site (methods return void).
-    expect(elapsedMs).toBeLessThan(20);
+    // All four calls must return without waiting on the wire. The REAL proof is
+    // the fixture: `fake.mode = 'pending'` never resolves, so a call site that
+    // awaited would hang here and fail on the test budget, not merely be slow.
+    // This bound is the secondary sanity check, and 20 ms was a number only an
+    // idle machine can promise — four synchronous calls can straddle a
+    // descheduling on a busy host. Widened to a value that still separates
+    // "returned immediately" from any real wire round trip.
+    expect(elapsedMs).toBeLessThan(1_000);
     expect(client.status()).toBe('unknown'); // network has not settled — no premature 'online'
     client.dispose();
   });
@@ -379,7 +405,10 @@ describe('SessionSpineClient timer-driven keepalive (surface never goes stale mi
 
     // Without touching the client again (no renders, no activity), the keepalive
     // timer must produce further heartbeats.
-    await new Promise((r) => setTimeout(r, 70));
+    await waitUntil(
+      () => fake.calls.filter((c) => c.kind === 'register').length > afterRegister,
+      'the keepalive timer produces a further heartbeat with no activity',
+    );
     await settle();
     const afterIdle = fake.calls.filter((c) => c.kind === 'register').length;
     expect(afterIdle).toBeGreaterThan(afterRegister);
@@ -395,8 +424,16 @@ describe('SessionSpineClient timer-driven keepalive (surface never goes stale mi
     client.register({ sessionId: 'keepalive-2', project: '/p', title: 'T' });
     await settle();
     client.dispose();
+    // Settle first so a beat that was already in flight when dispose() ran is
+    // recorded BEFORE the baseline is taken — otherwise the assertion below
+    // could count a pre-dispose beat as a post-dispose one purely because the
+    // machine was busy. What is being proven is that no NEW beat is produced.
+    await settle();
     const afterDispose = fake.calls.length;
-    await new Promise((r) => setTimeout(r, 70));
+    // A genuine negative: there is no condition to poll for, so this waits out
+    // several keepalive periods (15 ms cadence) and asserts nothing arrived.
+    // Load only ever makes FEWER beats, so this direction is not load-fragile.
+    await new Promise((r) => setTimeout(r, 200));
     expect(fake.calls.length).toBe(afterDispose);
   });
 });
