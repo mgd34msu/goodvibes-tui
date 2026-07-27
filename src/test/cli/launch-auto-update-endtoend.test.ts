@@ -6,6 +6,18 @@ import { join } from 'node:path';
 import { resolveArtifactNames, CHECKSUM_MANIFEST_NAME } from '@/runtime/release-artifacts.ts';
 import { rollbackUpdate, PREVIOUS_FILE_SUFFIX } from '@/input/commands/update-runtime.ts';
 
+/**
+ * Per-test ceiling for this file.
+ *
+ * A ceiling, not a target. Every test here installs a real binary, runs it as a
+ * real process, serves a real release over a real HTTP listener, verifies it and
+ * respawns — the wall-clock cost is set by how busy the machine is, not by what
+ * the test asserts. 30 s was an idle machine's number: under a realistic
+ * concurrent load one of these died at 30003 ms mid-respawn
+ * ("this test timed out after 30000ms") while every step was progressing.
+ */
+const END_TO_END_BUDGET_MS = 180_000;
+
 // End-to-end proof of the launch auto-update loop with REAL processes, REAL
 // files, and a REAL local HTTP server standing in for GitHub releases:
 //
@@ -279,7 +291,7 @@ describe.if(artifacts !== null)('launch auto-update — end to end with real pro
     });
     expect(restored.exitCode).toBe(0);
     expect(restored.stdout).toContain(`RUNNING v${OLD_VERSION} argv=["--after-rollback"] outcome=continue:disabled`);
-  }, 30_000);
+  }, END_TO_END_BUDGET_MS);
 
   test('a corrupted checksum swaps NOTHING: the failure is stated and the current version starts', async () => {
     const install = installOldVersion('gv-e2e-corrupt');
@@ -296,7 +308,7 @@ describe.if(artifacts !== null)('launch auto-update — end to end with real pro
     expect(readFileSync(install.daemonPath).equals(install.oldDaemonBytes)).toBe(true);
     expect(() => readFileSync(`${install.appPath}${PREVIOUS_FILE_SUFFIX}`)).toThrow();
     expect(() => readFileSync(`${install.daemonPath}${PREVIOUS_FILE_SUFFIX}`)).toThrow();
-  }, 30_000);
+  }, END_TO_END_BUDGET_MS);
 
   test('a download that outlives the budget is cancelled for real: the deferral is printed, nothing is swapped, and the process exits clean', async () => {
     const install = installOldVersion('gv-e2e-deferred');
@@ -321,7 +333,7 @@ describe.if(artifacts !== null)('launch auto-update — end to end with real pro
     expect(readFileSync(install.appPath).equals(install.oldAppBytes)).toBe(true);
     expect(readFileSync(install.daemonPath).equals(install.oldDaemonBytes)).toBe(true);
     expect(() => readFileSync(`${install.appPath}${PREVIOUS_FILE_SUFFIX}`)).toThrow();
-  }, 30_000);
+  }, END_TO_END_BUDGET_MS);
 
   test('a dead release server yields exactly one offline line and the current version proceeds untouched', async () => {
     const install = installOldVersion('gv-e2e-offline');
@@ -338,5 +350,5 @@ describe.if(artifacts !== null)('launch auto-update — end to end with real pro
     expect(run.stdout).toContain(`RUNNING v${OLD_VERSION} argv=["--offline-work"] outcome=continue:check-skipped`);
     expect(readFileSync(install.appPath).equals(install.oldAppBytes)).toBe(true);
     expect(() => readFileSync(`${install.appPath}${PREVIOUS_FILE_SUFFIX}`)).toThrow();
-  }, 30_000);
+  }, END_TO_END_BUDGET_MS);
 });
