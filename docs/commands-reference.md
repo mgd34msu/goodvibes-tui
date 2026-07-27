@@ -6,7 +6,7 @@
 
 # Command Reference
 
-GoodVibes ships **151** built-in slash commands across **72** categories. Every command below is generated directly from the command registry, so this list is always complete and current. Type a command in the composer prefixed with `/`, or press `Ctrl+K` (or run `/palette`) to search them all in the command palette.
+GoodVibes ships **153** built-in slash commands across **73** categories. Every command below is generated directly from the command registry, so this list is always complete and current. Type a command in the composer prefixed with `/`, or press `Ctrl+K` (or run `/palette`) to search them all in the command palette.
 
 ## Categories
 
@@ -41,6 +41,7 @@ GoodVibes ships **151** built-in slash commands across **72** categories. Every 
 - [Local Providers](#local-providers) — 1
 - [Local Runtime](#local-runtime) — 10
 - [Local Setup](#local-setup) — 1
+- [Mail & Calendar](#mail-calendar) — 2
 - [Managed Runtime](#managed-runtime) — 1
 - [Marketplace](#marketplace) — 1
 - [MCP](#mcp) — 1
@@ -294,6 +295,13 @@ GoodVibes ships **151** built-in slash commands across **72** categories. Every 
 | Command | Aliases | Usage | Description |
 | --- | --- | --- | --- |
 | `/setup` | `/startup` | `[review\|doctor\|services\|hooks\|remote\|sandbox\|onboarding\|support-bundle <dir>\|export <path>\|transfer <export\|inspect\|import> <path>\|link <surface> [target]\|open-link <uri>]` | Launch the onboarding wizard and review startup readiness, service posture, and sandbox bring-up |
+
+## Mail & Calendar
+
+| Command | Aliases | Usage | Description |
+| --- | --- | --- | --- |
+| `/calendar` | `/cal` | `[status\|list\|get\|create] …` | Calendar over the daemon: connection status, agenda, event detail, create |
+| `/mail` | `/email` | `[status\|list\|read\|draft\|send] …` | Mail over the daemon: connection status, inbox, read, draft, send |
 
 ## Managed Runtime
 

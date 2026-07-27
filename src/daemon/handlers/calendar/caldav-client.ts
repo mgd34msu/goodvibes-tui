@@ -120,11 +120,26 @@ export type CalDavConfigContext = Pick<HandlerContext, 'configManager' | 'creden
 // Config resolution
 // ---------------------------------------------------------------------------
 
+/**
+ * Read a config value, treating an absent SECTION as an absent value.
+ *
+ * `surfaces.calendar.*` is not a CONFIG_SCHEMA section, so where nothing has
+ * ever been set there, `ConfigManager.get()` throws `Invalid config path:
+ * section 'surfaces.calendar' does not exist` rather than returning undefined.
+ * Unguarded, that turned "calendar has not been set up" into an opaque
+ * config-path error instead of the CALENDAR_NOT_CONFIGURED below. Same guard,
+ * same reason, as the email surface's readConfigValue.
+ */
 function readConfigString(
   ctx: Pick<HandlerContext, 'configManager'>,
   key: string,
 ): string | undefined {
-  const value = ctx.configManager.get(key as never);
+  let value: unknown;
+  try {
+    value = ctx.configManager.get(key as never);
+  } catch {
+    return undefined;
+  }
   if (value === undefined || value === null) return undefined;
   const text = String(value).trim();
   return text.length > 0 ? text : undefined;
