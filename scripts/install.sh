@@ -9,6 +9,9 @@
 # into ~/.local/bin (override with GOODVIBES_INSTALL_DIR), and runs the
 # doctor install self-check when possible.
 #
+# It also downloads and verifies the agent's browser driver archive and extracts
+# it to $INSTALL_DIR/playwright-core, which is what makes goodvibes-agent able to
+# drive a browser at all (a compiled binary carries no node_modules).
 # It also downloads and verifies the platform's sqlite-vec native addon and
 # places it at $INSTALL_DIR/lib/sqlite-vec-<os>-<arch>/vec0.<suffix> — the path
 # the SDK resolves next to the running binary — so semantic vector search works
@@ -46,6 +49,7 @@
 # Uninstall mode (GOODVIBES_UNINSTALL=1) takes precedence over everything else
 # (no downloads happen): it stops the running daemon/agent, removes only the
 # files this installer manages (the three binaries, the sqlite-vec addon dirs,
+# the browser driver dir,
 # the service unit/plist ONLY when it carries the installer-managed marker,
 # and the PATH line in the shell rc file if one was ever added), deliberately
 # preserves ~/.goodvibes user data, and prints a summary.
@@ -1578,6 +1582,67 @@ install_agent() {
   else
     fail "the installed goodvibes-agent binary failed to run ('goodvibes-agent --version')"
   fi
+
+  install_browser_driver "$agent_base_url" "$AGENT_VERSION"
+}
+
+# --- browser driver: makes goodvibes-agent able to drive a browser at all ---
+# The agent is a compiled binary and carries no node_modules, so
+# require('playwright-core') resolves nothing inside it and the driver cannot be
+# bundled either (it reads browsers.json and its own files by path at runtime).
+# It therefore ships as its own release asset and is extracted beside the binary,
+# at $INSTALL_DIR/playwright-core — the first location the agent's driver search
+# looks. Release 1.18.1 shipped no such asset and every installed binary reported
+# browser control as unavailable, which is what this exists to prevent.
+#
+# One archive serves every platform (the driver is plain JavaScript; the browser
+# binaries it drives are downloaded separately into the agent's managed cache).
+# Verified against the SAME agent SHA256SUMS.txt as the binary, on the same terms
+# as the sqlite-vec addon: a missing manifest entry means the release predates
+# the asset and is a note, not a failure; a present entry makes the download and
+# its checksum mandatory. Extraction goes to a scratch directory and is moved
+# into place only once complete, so an interrupted install never leaves a
+# half-extracted directory that resolves as a driver and fails on first use.
+install_browser_driver() {
+  _base_url="$1"
+  _version="$2"
+  driver_asset="browser-driver.tar.gz"
+
+  expected=$(awk -v name="$driver_asset" '$2 == name || $2 == "*"name {print $1}' "$WORKDIR/agent-SHA256SUMS.txt" | head -1)
+  if [ -z "$expected" ]; then
+    say ""
+    say "  note: agent release $_version does not ship $driver_asset — the agent will"
+    say "  install a browser driver for itself the first time it is asked to use a browser."
+    return 0
+  fi
+
+  say ""
+  say "  downloading $driver_asset ..."
+  fetch "$_base_url/$driver_asset" "$WORKDIR/$driver_asset"
+
+  actual=$(sha256_of "$WORKDIR/$driver_asset")
+  [ "$expected" = "$actual" ] || fail "checksum mismatch for $driver_asset (expected $expected, got $actual)"
+  say "  verified   $driver_asset"
+
+  driver_staging="$WORKDIR/browser-driver-staging"
+  rm -rf "$driver_staging"
+  mkdir -p "$driver_staging"
+  tar -xzf "$WORKDIR/$driver_asset" -C "$driver_staging" ||
+    fail "could not extract $driver_asset"
+
+  # cli.js is what the agent executes to install a browser; an archive without
+  # it is not a usable driver no matter what else extracted.
+  for required in package.json index.js cli.js; do
+    [ -f "$driver_staging/playwright-core/$required" ] ||
+      fail "$driver_asset is missing playwright-core/$required — refusing to install an unusable driver"
+  done
+
+  driver_target="$INSTALL_DIR/playwright-core"
+  rm -rf "$driver_target.incoming"
+  mv -f "$driver_staging/playwright-core" "$driver_target.incoming"
+  rm -rf "$driver_target"
+  mv -f "$driver_target.incoming" "$driver_target"
+  say "  installed  $driver_target"
 }
 
 # --- uninstall mode (GOODVIBES_UNINSTALL=1) ---
@@ -1745,6 +1810,17 @@ run_uninstall() {
   done
   # Drop the lib dir only if the installer left it empty.
   rmdir "$INSTALL_DIR/lib" 2>/dev/null || true
+
+  # The browser driver the installer extracts beside goodvibes-agent, plus the
+  # copy /update parks when it refreshes it. The agent's own self-installed
+  # driver lives under ~/.goodvibes and is user data, so it is preserved along
+  # with everything else there.
+  for driver_dir in "$INSTALL_DIR/playwright-core" "$INSTALL_DIR/playwright-core.previous"; do
+    [ -d "$driver_dir" ] || continue
+    rm -rf "$driver_dir"
+    say "  removed    $driver_dir"
+    record_removed "$driver_dir"
+  done
 
   # The installer-managed PATH line, if one was ever added.
   uninstall_shell_rc_path_line
