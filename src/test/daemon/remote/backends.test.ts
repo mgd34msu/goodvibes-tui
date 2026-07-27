@@ -75,8 +75,16 @@ describe('runProcess', () => {
     expect(result.timedOut).toBe(true);
     // The await resolves on child.exited (post-SIGKILL), so it returns promptly
     // rather than waiting the full sleep — no orphaned child is left running.
+    //
+    // The threshold used to be 5_000 with no per-test budget, which is bun's
+    // own default: the assertion could never fail, because the test died of the
+    // timeout at exactly the moment `elapsed` reached the number it was being
+    // compared against. A measurement that cannot fail its own assertion proves
+    // nothing. The budget now sits above the threshold, so the assertion is
+    // what fails — and the threshold is still two orders of magnitude below the
+    // 10 s sleep this guards against waiting out.
     expect(elapsed).toBeLessThan(5_000);
-  });
+  }, 30_000);
 
   it('pipes stdin to the child', async () => {
     const result = await runProcess({ args: ['cat'], stdin: 'piped-input', timeoutMs: 5_000 });
