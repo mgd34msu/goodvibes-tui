@@ -1,5 +1,6 @@
 import { mkdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
+import { afterAll } from 'bun:test';
 import { ArchetypeLoader } from '@pellux/goodvibes-sdk/platform/agents';
 import { AgentMessageBus } from '@pellux/goodvibes-sdk/platform/agents';
 import { AgentOrchestrator } from '@pellux/goodvibes-sdk/platform/agents';
@@ -137,12 +138,46 @@ function seedRuntimeProviderTestModels(services: RuntimeServices): void {
   });
 }
 
+/**
+ * Drop the shared test runtime graph, STOPPING it first.
+ *
+ * Dropping the reference alone is not enough. `createRuntimeServices()` starts
+ * pollers while it builds — the fleet registry tick, the knowledge scheduler,
+ * the push-subscription sweep, the cross-session orchestration sweep, the
+ * orchestration snapshot writer, the config-file watch, the snapshot /
+ * retention / consolidation schedulers — and every one of them keeps firing for
+ * the rest of the process when the graph is abandoned rather than disposed.
+ * This function is called from the `beforeEach`/`afterEach` of most tests that
+ * use the shared graph, so it is the single place that decides whether the
+ * suite accumulates one whole graph's worth of timers per test or none.
+ */
 export function resetTestRuntimeServices(): void {
+  const previous = runtimeServices;
   runtimeServices = null;
   wrfcController = null;
   toolLLM = null;
   toolLLMRuntimeServices = null;
   autoHealer = null;
+  previous?.dispose();
+}
+
+/**
+ * Stop the shared test runtime graph when the calling test file finishes.
+ *
+ * Call this at the TOP LEVEL of a test file, next to its imports. It has to be
+ * a function each file calls for itself: registering `afterAll` from this
+ * module's own scope would run at IMPORT time, and because modules are cached
+ * the hook would bind to whichever test file imported this helper first and
+ * never run for any of the others.
+ *
+ * `resetTestRuntimeServices()` in an `afterEach` already covers the graphs a
+ * file builds between tests; this covers the last one, which nothing else
+ * would ever stop.
+ */
+export function disposeTestRuntimeServicesAfterAll(): void {
+  afterAll(() => {
+    resetTestRuntimeServices();
+  });
 }
 
 export function getTestRuntimeServices(): RuntimeServices {

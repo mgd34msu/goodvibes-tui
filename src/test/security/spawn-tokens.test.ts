@@ -1,7 +1,11 @@
 import { describe, test, expect, beforeEach } from 'bun:test';
 import { SpawnTokenManager } from '@pellux/goodvibes-sdk/platform/security';
 import type { SpawnToken, OrchestrationPolicyConfig } from '@pellux/goodvibes-sdk/platform/security';
-import { getTestSpawnTokenManager, resetTestSpawnTokenManagers } from '../helpers/runtime-services.ts';
+import { getTestSpawnTokenManager, resetTestSpawnTokenManagers, disposeTestRuntimeServicesAfterAll } from '../helpers/runtime-services.ts';
+
+// Stop the shared test runtime graph when this file ends. Called here, not
+// registered inside the helper, for the reason its doc comment gives.
+disposeTestRuntimeServicesAfterAll();
 
 // ---------------------------------------------------------------------------
 // Setup: reset shared test helper state between tests

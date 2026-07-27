@@ -4,7 +4,11 @@ import { join } from 'path';
 import { mkdtempSync } from 'fs';
 import { tmpdir } from 'os';
 import { ProjectIndex } from '@pellux/goodvibes-sdk/platform/state';
-import { getTestProjectIndex, resetTestProjectIndexes } from '../helpers/runtime-services.ts';
+import { getTestProjectIndex, resetTestProjectIndexes, disposeTestRuntimeServicesAfterAll } from '../helpers/runtime-services.ts';
+
+// Stop the shared test runtime graph when this file ends. Called here, not
+// registered inside the helper, for the reason its doc comment gives.
+disposeTestRuntimeServicesAfterAll();
 
 // ---------------------------------------------------------------------------
 // Helpers

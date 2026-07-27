@@ -4,8 +4,12 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { RouteBindingManager } from '@pellux/goodvibes-sdk/platform/channels';
 import { SharedSessionBroker } from '@pellux/goodvibes-sdk/platform/control-plane';
+import { trackDisposables } from '../helpers/disposables.ts';
 import { AutomationRouteStore } from '@pellux/goodvibes-sdk/platform/automation';
 import { PersistentStore } from '@pellux/goodvibes-sdk/platform/state';
+
+// A broker starts a 60s GC sweep once started; stop() clears it.
+const disposables = trackDisposables();
 
 describe('SharedSessionBroker explicit intents', () => {
   let root = '';
@@ -19,7 +23,7 @@ describe('SharedSessionBroker explicit intents', () => {
     const routeBindings = new RouteBindingManager({
       store: new AutomationRouteStore(join(root, 'routes.json')),
     });
-    const broker = new SharedSessionBroker({
+    const broker = disposables.add(new SharedSessionBroker({
       store: new PersistentStore(join(root, 'sessions.json')),
       routeBindings,
       agentStatusProvider: {
@@ -33,7 +37,7 @@ describe('SharedSessionBroker explicit intents', () => {
           return liveAgents.has(toId);
         },
       },
-    });
+    }));
     return {
       broker,
       setLiveAgent(agentId: string, status: 'pending' | 'running' | 'completed' | 'failed' | 'cancelled' = 'running') {

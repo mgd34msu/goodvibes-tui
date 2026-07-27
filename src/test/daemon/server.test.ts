@@ -16,9 +16,14 @@ import { createRuntimeServices } from '../../runtime/services.ts';
 import { MultimodalService } from '@pellux/goodvibes-sdk/platform/multimodal';
 import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import { KnowledgeService, KnowledgeStore } from '@pellux/goodvibes-sdk/platform/knowledge';
-import { resetTestRuntimeServices } from '../helpers/runtime-services.ts';
+import { resetTestRuntimeServices, disposeTestRuntimeServicesAfterAll } from '../helpers/runtime-services.ts';
+import { trackDisposables } from '../helpers/disposables.ts';
 import { createAuthenticatedWebSocket } from '../helpers/authenticated-websocket.ts';
 import { buildOperatorContract } from '@pellux/goodvibes-sdk/platform/control-plane';
+
+// Stop the shared test runtime graph when this file ends. Called here, not
+// registered inside the helper, for the reason its doc comment gives.
+disposeTestRuntimeServicesAfterAll();
 
 const TEST_TOKEN = 'test-secret-token-abc123';
 
@@ -77,6 +82,14 @@ function waitForSocketFrame(
 // ---------------------------------------------------------------------------
 // DaemonServer
 // ---------------------------------------------------------------------------
+
+/**
+ * Every graph built below is INJECTED into DaemonServer, and the facade
+ * deliberately disposes only a graph it composed itself — an injected one may
+ * outlive the daemon, so stopping it is the caller's job. `daemon.stop()`
+ * therefore leaves this file's graphs running, one per test.
+ */
+const disposables = trackDisposables();
 
 describe('DaemonServer', () => {
   let daemon: DaemonServer;
@@ -140,7 +153,7 @@ describe('DaemonServer', () => {
     readonly host?: string;
   } = {}): DaemonServer => {
     const configManager = options.configManager ?? makeConfig();
-    const services = options.runtimeServices ?? createRuntimeServices({
+    const services = options.runtimeServices ?? disposables.add(createRuntimeServices({
       runtimeStore: createRuntimeStore(),
       runtimeBus: options.runtimeBus ?? new RuntimeEventBus(),
       configManager,
@@ -148,7 +161,7 @@ describe('DaemonServer', () => {
       homeDirectory: homeDir,
       featureFlags: makeFeatureFlags(),
       getConversationTitle: () => 'Daemon Test',
-    });
+    }));
     return new DaemonServer({
       port: options.port ?? 0,
       host: options.host ?? '127.0.0.1',
@@ -169,7 +182,7 @@ describe('DaemonServer', () => {
     mkdirSync(configDir, { recursive: true });
     // Use a high port to avoid conflicts with system services
     const userAuth = makeUserAuth();
-    runtimeServices = createRuntimeServices({
+    runtimeServices = disposables.add(createRuntimeServices({
       runtimeStore: createRuntimeStore(),
       runtimeBus: new RuntimeEventBus(),
       configManager: makeConfig(),
@@ -177,7 +190,7 @@ describe('DaemonServer', () => {
       homeDirectory: homeDir,
       featureFlags: makeFeatureFlags(),
       getConversationTitle: () => 'Daemon Test',
-    });
+    }));
     daemon = createTestDaemon({ userAuth, runtimeServices });
     runtimeServices.panelManager.registerType({
       id: 'test-helper-panel',

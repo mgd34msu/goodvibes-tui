@@ -6,7 +6,11 @@ import { tmpdir } from 'os';
 import { GitService } from '@pellux/goodvibes-sdk/platform/git';
 import { HookDispatcher } from '@pellux/goodvibes-sdk/platform/hooks';
 import type { HookEvent } from '@pellux/goodvibes-sdk/platform/hooks';
-import { getTestGitService, resetTestGitServices } from '../helpers/runtime-services.ts';
+import { getTestGitService, resetTestGitServices, disposeTestRuntimeServicesAfterAll } from '../helpers/runtime-services.ts';
+
+// Stop the shared test runtime graph when this file ends. Called here, not
+// registered inside the helper, for the reason its doc comment gives.
+disposeTestRuntimeServicesAfterAll();
 
 // ---------------------------------------------------------------------------
 // Helpers

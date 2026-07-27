@@ -18,7 +18,11 @@ import {
   compactSmallWindow,
 } from '@pellux/goodvibes-sdk/platform/core';
 import { isContextSizeExceededError } from '@pellux/goodvibes-sdk/platform/types';
-import { getTestAgentOrchestrator, getTestProviderRegistry, resetTestRuntimeServices } from '../helpers/runtime-services.ts';
+import { getTestAgentOrchestrator, getTestProviderRegistry, resetTestRuntimeServices, disposeTestRuntimeServicesAfterAll } from '../helpers/runtime-services.ts';
+
+// Stop the shared test runtime graph when this file ends. Called here, not
+// registered inside the helper, for the reason its doc comment gives.
+disposeTestRuntimeServicesAfterAll();
 
 // ---------------------------------------------------------------------------
 // Helpers

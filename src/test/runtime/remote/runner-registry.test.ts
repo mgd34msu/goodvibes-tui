@@ -3,12 +3,16 @@ import { mkdtempSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createRuntimeStore } from '../../../runtime/store/index.ts';
-import { getTestAgentManager, resetTestRuntimeServices } from '../../helpers/runtime-services.ts';
+import { getTestAgentManager, resetTestRuntimeServices, disposeTestRuntimeServicesAfterAll } from '../../helpers/runtime-services.ts';
 import { RemoteRunnerRegistry } from '@/runtime/index.ts';
 import {
   exportRemoteArtifactForAgent,
   importRemoteArtifact,
 } from '@/runtime/index.ts';
+
+// Stop the shared test runtime graph when this file ends. Called here, not
+// registered inside the helper, for the reason its doc comment gives.
+disposeTestRuntimeServicesAfterAll();
 
 describe('RemoteRunnerRegistry', () => {
   beforeEach(() => {

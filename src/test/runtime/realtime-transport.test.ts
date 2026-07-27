@@ -12,6 +12,7 @@ import { createRealtimeTransport } from '@/runtime/index.ts';
 import { createAuthenticatedWebSocket } from '../helpers/authenticated-websocket.ts';
 import { createRuntimeServices } from '../../runtime/services.ts';
 import { createRuntimeStore } from '../../runtime/store/index.ts';
+import { trackDisposables } from '../helpers/disposables.ts';
 import { UserAuthManager } from '@pellux/goodvibes-sdk/platform/security';
 
 const TEST_TOKEN = 'realtime-transport-token-abc123';
@@ -66,6 +67,16 @@ async function reservePort(): Promise<number> {
   });
 }
 
+/**
+ * A composed runtime graph starts a dozen pollers while it builds — the fleet
+ * registry tick, the config-file watch, the memory governor, the knowledge
+ * scheduler, the cross-session sweep, the orchestration snapshot writer, the
+ * push-subscription sweep and the snapshot / retention / consolidation
+ * schedulers. Nothing upstream stops a graph it did not compose itself, so the
+ * test that built it owns stopping it.
+ */
+const disposables = trackDisposables();
+
 describe('RealtimeTransport', () => {
   let daemon: DaemonServer;
   let tempRoot: string;
@@ -80,7 +91,7 @@ describe('RealtimeTransport', () => {
     port = await reservePort();
     mkdirSync(workingDir, { recursive: true });
     mkdirSync(homeDir, { recursive: true });
-    const runtimeServices = createRuntimeServices({
+    const runtimeServices = disposables.add(createRuntimeServices({
       runtimeStore: createRuntimeStore(),
       runtimeBus: new RuntimeEventBus(),
       configManager: new ConfigManager({ surfaceRoot: 'tui',
@@ -92,7 +103,7 @@ describe('RealtimeTransport', () => {
       homeDirectory: homeDir,
       featureFlags: createTransportFeatureFlags(),
       getConversationTitle: () => 'realtime-transport-test',
-    });
+    }));
     daemon = new DaemonServer({
       port,
       host: '127.0.0.1',

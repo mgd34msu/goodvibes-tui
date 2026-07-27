@@ -1,7 +1,11 @@
 import { describe, test, expect, beforeEach } from 'bun:test';
 import { ModeManager } from '@pellux/goodvibes-sdk/platform/state';
 import type { ModeDefinition } from '@pellux/goodvibes-sdk/platform/state';
-import { getTestModeManager, resetTestRuntimeServices } from '../helpers/runtime-services.ts';
+import { getTestModeManager, resetTestRuntimeServices, disposeTestRuntimeServicesAfterAll } from '../helpers/runtime-services.ts';
+
+// Stop the shared test runtime graph when this file ends. Called here, not
+// registered inside the helper, for the reason its doc comment gives.
+disposeTestRuntimeServicesAfterAll();
 
 // ---------------------------------------------------------------------------
 // Helpers

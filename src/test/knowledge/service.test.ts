@@ -8,6 +8,11 @@ import { KnowledgeService, KnowledgeStore } from '@pellux/goodvibes-sdk/platform
 import { RuntimeEventBus } from '@/runtime/index.ts';
 import { MemoryRegistry, MemoryStore } from '@pellux/goodvibes-sdk/platform/state';
 import { MemoryEmbeddingProviderRegistry } from '@pellux/goodvibes-sdk/platform/state';
+import { trackDisposables } from '../helpers/disposables.ts';
+
+// A KnowledgeService arms its bootstrap reconcile timers fire-and-forget in
+// the constructor, out to a 24h horizon; dispose() releases them.
+const disposables = trackDisposables();
 
 let server: ReturnType<typeof Bun.serve>;
 let baseUrl = '';
@@ -62,7 +67,7 @@ describe('KnowledgeService', () => {
     });
     memoryRegistry = new MemoryRegistry(memoryStore);
     await memoryStore.init();
-    service = new KnowledgeService(knowledgeStore, artifactStore, undefined, { memoryRegistry });
+    service = disposables.add(new KnowledgeService(knowledgeStore, artifactStore, undefined, { memoryRegistry }));
     await knowledgeStore.init();
   });
 
@@ -174,7 +179,7 @@ describe('KnowledgeService', () => {
     const runtimeBus = new RuntimeEventBus();
     const events: string[] = [];
     runtimeBus.onDomain('knowledge', ({ payload }) => events.push(payload.type));
-    service = new KnowledgeService(knowledgeStore, artifactStore, undefined, { runtimeBus, memoryRegistry });
+    service = disposables.add(new KnowledgeService(knowledgeStore, artifactStore, undefined, { runtimeBus, memoryRegistry }));
 
     const result = await service.ingestArtifact({
       path: csvPath,

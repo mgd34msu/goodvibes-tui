@@ -56,6 +56,7 @@ import { ApiTokenAuditor, UserAuthManager } from '@pellux/goodvibes-sdk/platform
 import { WebhookNotifier } from '@pellux/goodvibes-sdk/platform/integrations';
 import { McpRegistry } from '@pellux/goodvibes-sdk/platform/mcp';
 import { createRemoteExecutionServices } from './remote-execution-composition.ts';
+import { createAgentGraph } from './agent-graph-composition.ts';
 import { BenchmarkStore, CacheHitTracker, FavoritesStore, ModelLimitsService, ProviderCapabilityRegistry, ProviderOptimizer, ProviderRegistry } from '@pellux/goodvibes-sdk/platform/providers';
 import { KeybindingsManager } from '../input/keybindings.ts';
 import { AdaptivePlanner, DeterministicReplayEngine, ExecutionPlanManager, SessionLineageTracker, SessionMemoryStore } from '@pellux/goodvibes-sdk/platform/core';
@@ -351,34 +352,14 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
     runtimeStore: options.runtimeStore,
     runtimeBus: options.runtimeBus,
   });
-  const agentMessageBus = new AgentMessageBus();
-  agentMessageBus.setRuntimeBus(options.runtimeBus);
-  const archetypeLoader = new ArchetypeLoader(join(workingDirectory, '.goodvibes', 'agents'));
-  const agentOrchestrator = new AgentOrchestrator({
-    messageBus: agentMessageBus,
+  // The agent-execution graph, wired in both directions; see
+  // agent-graph-composition.ts for why the six are built as one.
+  const {
+    agentMessageBus, archetypeLoader, agentOrchestrator,
+    agentManager, contextAccountingHolder, wrfcController,
+  } = createAgentGraph({
+    runtimeBus: options.runtimeBus, workingDirectory, configManager, providerRegistry,
   });
-  agentOrchestrator.setRuntimeBus(options.runtimeBus);
-  const agentManager = new AgentManager({
-    archetypeLoader,
-    messageBus: agentMessageBus,
-    executor: agentOrchestrator,
-    configManager,
-    // The live registry lets a bare model id in a spawn() override resolve
-    // through the shared resolver instead of being rejected as unqualified.
-    providerRegistry,
-  });
-  const contextAccountingHolder = new ContextAccountingHolder();
-  agentOrchestrator.setConversationSink({ // Conversation-snapshot bridge (mirrors the SDK's own createRuntimeServices)
-    register: (agentId, source) => agentManager.registerConversationSource(agentId, source),
-    release: (agentId) => agentManager.releaseConversationSource(agentId),
-  });
-  agentManager.setRuntimeBus(options.runtimeBus);
-  const wrfcController = new WrfcController(options.runtimeBus, agentMessageBus, {
-    agentManager,
-    configManager,
-    projectRoot: workingDirectory,
-  });
-  agentManager.setWrfcController(wrfcController);
   const hookDispatcher = new HookDispatcher({ agentManager, toolLLM, projectRoot: workingDirectory }, hookActivityTracker);
   configManager.attachHookDispatcher(hookDispatcher);
   const hookWorkbench = createHookWorkbench({

@@ -5,7 +5,11 @@ import { registerLocalSetupCommands } from '../../input/commands/local-setup.ts'
 import { registerOnboardingRuntimeCommands } from '../../input/commands/onboarding-runtime.ts';
 import type { OpenOnboardingWizardOptions } from '../../input/handler-ui-state.ts';
 import { wireShellUiOpeners } from '../../shell/ui-openers.ts';
-import { getTestRuntimeServices, resetTestRuntimeServices } from '../helpers/runtime-services.ts';
+import { getTestRuntimeServices, resetTestRuntimeServices, disposeTestRuntimeServicesAfterAll } from '../helpers/runtime-services.ts';
+
+// Stop the shared test runtime graph when this file ends. Called here, not
+// registered inside the helper, for the reason its doc comment gives.
+disposeTestRuntimeServicesAfterAll();
 
 afterEach(() => {
   resetTestRuntimeServices();
