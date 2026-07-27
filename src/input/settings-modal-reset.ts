@@ -15,7 +15,7 @@
 
 import type { ConfigKey } from '@pellux/goodvibes-sdk/platform/config';
 import { logger, summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
-import { buildGoodVibesSecretKey, isSecretConfigKey } from '../config/secret-config.ts';
+import { buildGoodVibesSecretKey, defaultSecretBackedScope, isSecretConfigKey } from '../config/secret-config.ts';
 import type { SettingEntry, SettingsCategory } from './settings-modal-types.ts';
 import type { SettingsSecretsManager } from './settings-modal-secrets.ts';
 
@@ -41,7 +41,7 @@ export function resetSelected({
   const key = selected.setting.key as ConfigKey;
   setValue(key, selected.setting.default);
   if (isSecretConfigKey(key) && secretsManager) {
-    void secretsManager.delete(buildGoodVibesSecretKey(key), { scope: 'user' }).catch((error) => {
+    void secretsManager.delete(buildGoodVibesSecretKey(key), { scope: defaultSecretBackedScope(key) }).catch((error) => {
       logger.error('SettingsModal: failed to clear secret while resetting setting', { key, error: summarizeError(error) });
     });
   }

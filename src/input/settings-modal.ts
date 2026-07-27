@@ -22,8 +22,8 @@ import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import type { SubscriptionManager } from '@pellux/goodvibes-sdk/platform/config';
 import type { ServiceInspectionQuery } from '../runtime/ui-service-queries.ts';
 import type { SettingsSecretsManager } from './settings-modal-secrets.ts';
-import { CVV_PROMPT_TRADEOFF_WARNING, PAYMENTS_CVV_HANDLING_CONFIG_KEY, isPaymentsSyntheticConfigKey, refreshPaymentsSyntheticEntry } from './payments-config.ts';
-import type { PaymentsConfigStore } from './payments-store.ts';
+import { CVV_PROMPT_TRADEOFF_WARNING } from '@pellux/goodvibes-sdk/platform/payments';
+import { PAYMENTS_CVV_HANDLING_CONFIG_KEY } from './payments-config.ts';
 import type { FeatureFlagManager } from '@/runtime/index.ts';
 import type { McpRegistry } from '@pellux/goodvibes-sdk/platform/mcp';
 import type { GatewayMethodCatalog } from '@pellux/goodvibes-sdk/platform/control-plane';
@@ -89,13 +89,6 @@ export interface SettingsModalOpenOptions {
   readonly gatewayMethods?: GatewayMethodCatalog;
   /** Called when an async connection refresh has new rows to paint. */
   readonly requestRender?: () => void;
-  /**
-   * Backs the seven payments.* settings (see payments-config.ts /
-   * payments-store.ts). Omitted callers simply get an empty Payments
-   * category — the same graceful-degradation posture as an absent
-   * mcpRegistry or subscriptionManager.
-   */
-  readonly paymentsStore?: PaymentsConfigStore;
 }
 
 export {
@@ -202,7 +195,6 @@ export class SettingsModal {
   private configManager: ConfigManager | null = null;
   private secretsManager: SettingsSecretsManager | null = null;
   private featureFlagManager: FeatureFlagManager | null = null;
-  private paymentsStore: PaymentsConfigStore | null = null;
   private mcpRegistry: McpRegistry | null = null;
   private subscriptionManager: SubscriptionManager | null = null;
   private serviceRegistry: Pick<ServiceInspectionQuery, 'getAll'> | null = null;
@@ -230,8 +222,7 @@ export class SettingsModal {
     this.serviceRegistry = serviceRegistry;
     this.mcpRegistry = mcpRegistry ?? null;
     this.onSettingApplied = options?.onSettingApplied ?? null;
-    this.paymentsStore = options?.paymentsStore ?? null;
-    this.groups = buildSettingGroups(configManager, featureFlagManager, this.paymentsStore);
+    this.groups = buildSettingGroups(configManager, featureFlagManager);
     this.mcpEntries = buildMcpEntries(this.mcpRegistry);
     this.subscriptionEntries = buildSubscriptionEntries(subscriptionManager, serviceRegistry);
     this.gatewayMethods = options?.gatewayMethods ?? null;
@@ -671,34 +662,7 @@ export class SettingsModal {
     return items;
   }
 
-  /**
-   * payments.* keys (see payments-config.ts) are backed by PaymentsConfigStore,
-   * not the real ConfigManager — the SDK has no `payments` DEFAULT_CONFIG
-   * section to write into. Routed separately from the ordinary
-   * applySettingValue path below, which assumes a real ConfigManager key.
-   */
-  private _setPaymentsValue(key: ConfigKey, value: unknown): void {
-    if (!this.paymentsStore) return;
-    this.paymentsStore.setDynamic(key, value);
-    for (const entries of this.groups.values()) {
-      for (const entry of entries) {
-        if (entry.setting.key !== key) continue;
-        refreshPaymentsSyntheticEntry(entry, this.paymentsStore);
-      }
-    }
-    // Selecting 'prompt' for payments.cvvHandling states the tradeoff at the
-    // moment of selection, not just in the documentation pane — see
-    // payments-config.ts's CVV_PROMPT_TRADEOFF_WARNING.
-    if (key === PAYMENTS_CVV_HANDLING_CONFIG_KEY && value === 'prompt') {
-      this.lastSettingEffectMessage = CVV_PROMPT_TRADEOFF_WARNING;
-    }
-  }
-
   private _setValue(key: ConfigKey, value: unknown): void {
-    if (isPaymentsSyntheticConfigKey(key)) {
-      this._setPaymentsValue(key, value);
-      return;
-    }
     if (!this.configManager) return;
 
     const callback: SettingAppliedCallback | null = this.onSettingApplied
@@ -712,7 +676,7 @@ export class SettingsModal {
       groups: this.groups,
       onSettingApplied: callback,
       refreshGroups: () => {
-        if (this.configManager) refreshEntryValues(this.groups, this.configManager, this.paymentsStore);
+        if (this.configManager) refreshEntryValues(this.groups, this.configManager);
       },
     });
 
@@ -730,6 +694,13 @@ export class SettingsModal {
       this.lastSettingEffectMessage = result.effectMessage;
     }
     // No-op (result.changed === false, effectMessage === null): leave lastSettingEffectMessage untouched.
+
+    // Selecting 'prompt' for payments.cvvHandling states the tradeoff at the
+    // moment of selection, not just in the documentation pane — see the
+    // SDK's own CVV_PROMPT_TRADEOFF_WARNING (platform/payments).
+    if (key === PAYMENTS_CVV_HANDLING_CONFIG_KEY && value === 'prompt') {
+      this.lastSettingEffectMessage = CVV_PROMPT_TRADEOFF_WARNING;
+    }
   }
 
   /** Refresh live/persisted/pending state for every feature header bound to `key`. */

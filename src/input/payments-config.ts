@@ -1,86 +1,89 @@
 /**
  * payments-config.ts — TUI-local synthetic settings for the payment card
- * capability.
+ * capability's card MATERIAL fields.
  *
- * None of these keys are in the SDK's CONFIG_SCHEMA yet, so they follow the
- * same synthetic-entry pattern already used for tts.speed,
- * behavior.notifyAfterSeconds, storage.codeIndexEnabled, etc. in
- * settings-modal-data.ts: a cast ConfigKey, a ConfigSetting descriptor, and a
- * builder that reads the current value defensively (configManager.get
- * returns undefined for a key the SDK schema doesn't know about, rather than
- * throwing).
+ * The SDK's CONFIG_SCHEMA now has a full real `payments` section (28 keys:
+ * enabled, defaultCardId, currency, cvvHandling, the six budget keys,
+ * shipping.preferredTier, the fourteen billing/shipping address sub-fields
+ * (name, line1, line2, city, region, postalCode, country — each repeated for
+ * billingAddress and shippingAddress), the two window keys, and
+ * notifyChannels — see `@pellux/goodvibes-sdk/platform/config`). Every one of
+ * those keys reads and writes through the ordinary CONFIG_SCHEMA-driven path
+ * in settings-modal-data.ts's buildSettingGroups, exactly like `relay.*` or
+ * any other real SDK domain — no synthetic entry or dedicated store is needed
+ * for them, and this module builds none. (An earlier round of this module
+ * modeled billing/shipping address as two flat TUI-local strings; the SDK's
+ * own structured per-field keys superseded that the moment they shipped, so
+ * those two synthetic entries are gone from this file entirely.)
  *
- * Four fields are secret-tier (see config/secret-config.ts's
- * SECRET_CONFIG_KEYS): card number, expiry, CVV, and cardholder name. Primary
- * entry for those is the concealed-input flow in
- * commands/payment-card-intake.ts; they are also reachable as ordinary
- * secret-backed settings rows here, which is what makes them masked
- * mid-edit — see renderer/settings-modal.ts's currentSettingValue(). Billing
- * and shipping address are ordinary (non-secret) string settings.
+ * What this module still builds synthetic entries for is the four card
+ * MATERIAL fields: number, expiry, CVV, cardholder name. Per the SDK's own
+ * design (see its schema-domain-payments.ts header and `platform/payments`'s
+ * method catalog), card material is deliberately never a config path at all:
+ * it lives write-only in the daemon secret store, named by keys the daemon's
+ * own `payments.cards.create` control-plane method derives internally. The
+ * SDK does not yet expose an equivalent config-level path for a single
+ * implicit card the way this app's `/payments card` flow models it, so these
+ * four fields are synthetic sub-keys under the SDK's real `payments`
+ * section — the same established pattern this codebase already uses for
+ * `tts.speed`, `behavior.notifyAfterSeconds`, etc.: a key one level under an
+ * EXISTING section that CONFIG_SCHEMA hasn't grown a scalar entry for yet.
  *
- * cvvHandling selects whether the CVV is stored (the default, per the
- * 2026-07-27 payment-capability ruling) or requested at purchase time.
+ * That one-level-under-an-existing-section shape matters mechanically: the
+ * real ConfigManager's dotted-path resolver only throws "Invalid config path"
+ * when an INTERMEDIATE segment is missing (e.g. `payments.card.number`, where
+ * `card` is not itself a section) — it does not throw for a final leaf that
+ * the schema hasn't declared (`payments.cardNumber`), the same tolerance
+ * `tts.speed` already relies on under `tts`. So these four keys are named
+ * FLAT (`payments.cardNumber`, not `payments.card.number`) specifically so
+ * `ConfigManager.get/setDynamic` accepts them — verified against the real
+ * ConfigManager (not the fake store this module used before this round): a
+ * flat sub-key persists to the real daemon-owned settings file precisely
+ * because `payments.` is a `DAEMON_OWNED_CONFIG_PREFIXES` entry, which is
+ * exactly what makes the daemon (and every other surface) able to see it
+ * after this TUI closes — the thing the local JSON store this module used to
+ * use never gave them.
  *
- * Storage: `payments` has no entry anywhere in the SDK's DEFAULT_CONFIG (it
- * added a `worktree` section specifically so worktree-setup-config.ts's keys
- * could live there; there is no equivalent for payments in the installed
- * SDK, 1.18.0). ConfigManager.get/setDynamic walk the dotted path through
- * that object and throw "Invalid config path: section 'payments' does not
- * exist" for a section that was never populated — this is not a
- * defensive-read gap the way tts.speed's missing SUB-key is, it is a missing
- * top-level section, and there is no supported way to add one from outside
- * the SDK package. So these seven keys are NOT backed by the real
- * ConfigManager at all: they're backed by PaymentsConfigStore
- * (payments-store.ts), a small dedicated JSON file — the same shape this app
- * already uses for capabilities that don't fit the SDK's config schema
- * (WatcherRegistry, BookmarkManager, PairingTokenManager, ServiceRegistry,
- * SubscriptionManager). Every reader here takes a structural
- * `PaymentsConfigReader` rather than the SDK's ConfigManager type so it works
- * against either the store or (defensively) a real ConfigManager without
- * fighting TypeScript's generic `get<K>` overload.
+ * All four keys are secret-tier (see config/secret-config.ts's
+ * SECRET_CONFIG_KEYS). Primary entry for those is the concealed-input flow in
+ * commands/payment-card-intake.ts, itself gated on the SDK's
+ * `mayOfferCardEntryFlow` (card details may only be typed at a local
+ * terminal or the webui, never over a remote messaging surface — see that
+ * file's header); they are also reachable as ordinary secret-backed settings
+ * rows here, which is what makes them masked mid-edit — see
+ * renderer/settings-modal.ts's currentSettingValue().
+ *
+ * cvvHandling — real now, not built here — selects whether the CVV is stored
+ * (the default, per the 2026-07-27 payment-capability ruling) or requested at
+ * purchase time; see `CVV_PROMPT_TRADEOFF_WARNING`, imported directly from
+ * `@pellux/goodvibes-sdk/platform/payments` by every caller that needs it
+ * (renderer/settings-modal.ts, settings-modal.ts) — no local copy lives here
+ * or anywhere else in this app.
  */
 
-import type { ConfigSetting } from '@pellux/goodvibes-sdk/platform/config';
+import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import type { ConfigKey } from '../config/index.ts';
 import type { SettingEntry } from './settings-modal-types.ts';
 
-/** Anything that can answer `get(key)` for these seven keys — PaymentsConfigStore in production. */
-export interface PaymentsConfigReader {
-  readonly get: (key: ConfigKey) => unknown;
-}
+/** Real ConfigManager's read surface — these four keys are defensive reads (see header comment). */
+export type PaymentsConfigReader = Pick<ConfigManager, 'get'>;
 
-export const PAYMENTS_CARD_NUMBER_CONFIG_KEY = 'payments.card.number' as ConfigKey;
-export const PAYMENTS_CARD_EXPIRY_CONFIG_KEY = 'payments.card.expiry' as ConfigKey;
-export const PAYMENTS_CARD_CVV_CONFIG_KEY = 'payments.card.cvv' as ConfigKey;
-export const PAYMENTS_CARD_CARDHOLDER_NAME_CONFIG_KEY = 'payments.card.cardholderName' as ConfigKey;
-export const PAYMENTS_BILLING_ADDRESS_CONFIG_KEY = 'payments.billingAddress' as ConfigKey;
-export const PAYMENTS_SHIPPING_ADDRESS_CONFIG_KEY = 'payments.shippingAddress' as ConfigKey;
+export const PAYMENTS_CARD_NUMBER_CONFIG_KEY = 'payments.cardNumber' as ConfigKey;
+export const PAYMENTS_CARD_EXPIRY_CONFIG_KEY = 'payments.cardExpiry' as ConfigKey;
+export const PAYMENTS_CARD_CVV_CONFIG_KEY = 'payments.cardCvv' as ConfigKey;
+export const PAYMENTS_CARD_CARDHOLDER_NAME_CONFIG_KEY = 'payments.cardholderName' as ConfigKey;
+
+/** The real SDK schema key for the CVV-handling selector — no longer synthetic. */
 export const PAYMENTS_CVV_HANDLING_CONFIG_KEY = 'payments.cvvHandling' as ConfigKey;
 
-export const PAYMENTS_CVV_HANDLING_VALUES = ['stored', 'prompt'] as const;
-export type PaymentsCvvHandling = (typeof PAYMENTS_CVV_HANDLING_VALUES)[number];
-export const PAYMENTS_CVV_HANDLING_DEFAULT: PaymentsCvvHandling = 'stored';
-
-/**
- * TODO(sdk): switch to the SDK's own CVV_PROMPT_TRADEOFF_WARNING export once
- * @pellux/goodvibes-sdk ships one. As installed (1.18.0) there is no
- * `platform/payments` export at all — verified against the package's
- * `exports` map, and no occurrence of `CVV_PROMPT_TRADEOFF_WARNING` or
- * `cvvHandling` anywhere under node_modules/@pellux/goodvibes-sdk. This
- * wording is this session's own, written so the settings modal can state the
- * tradeoff the moment 'prompt' is selected rather than shipping with no
- * notice at all; replace it with the SDK's exact string once one exists.
- */
-export const CVV_PROMPT_TRADEOFF_WARNING =
-  'Prompting for the CVV at purchase time disables unattended purchasing: the daemon stops and waits for you to type it before any purchase can complete, so it cannot buy anything while you are away.';
-
 function readStringField(configManager: PaymentsConfigReader, key: ConfigKey): string {
-  // Defensive try/catch (belt-and-suspenders, same rationale as
-  // worktree-setup-config.ts's readWorktreeSetupList): PaymentsConfigStore
-  // never throws for these keys, but a caller that accidentally passes the
-  // real ConfigManager here would hit "Invalid config path: section
-  // 'payments' does not exist" — this degrades to empty rather than crashing
-  // the whole settings modal.
+  // Defensive try/catch, same rationale as worktree-setup-config.ts's
+  // readWorktreeSetupList and this codebase's other one-level-under-a-real-
+  // section synthetic reads (tts.speed, behavior.notifyAfterSeconds): the real
+  // ConfigManager never throws for these particular keys (verified — see
+  // header comment), but degrading to empty rather than crashing the whole
+  // settings modal is the same posture every synthetic setting here takes
+  // toward an unexpected value.
   try {
     const raw = configManager.get(key);
     return typeof raw === 'string' ? raw : '';
@@ -106,7 +109,7 @@ export function buildPaymentsCardNumberEntry(configManager: PaymentsConfigReader
   return buildStringFieldEntry(
     configManager,
     PAYMENTS_CARD_NUMBER_CONFIG_KEY,
-    'Payment card number. Stored through the secret manager; entering it here or via /payments card never shows the typed characters in plaintext.',
+    'Payment card number. Stored through the secret manager at daemon scope; entering it here or via /payments card never shows the typed characters in plaintext.',
   );
 }
 
@@ -114,7 +117,7 @@ export function buildPaymentsCardExpiryEntry(configManager: PaymentsConfigReader
   return buildStringFieldEntry(
     configManager,
     PAYMENTS_CARD_EXPIRY_CONFIG_KEY,
-    'Payment card expiry (MM/YY). Stored through the secret manager, same handling as the card number.',
+    'Payment card expiry (MM/YY). Stored through the secret manager at daemon scope, same handling as the card number.',
   );
 }
 
@@ -122,7 +125,7 @@ export function buildPaymentsCardCvvEntry(configManager: PaymentsConfigReader): 
   return buildStringFieldEntry(
     configManager,
     PAYMENTS_CARD_CVV_CONFIG_KEY,
-    'Payment card CVV. Stored through the secret manager: never logged, never rendered, never shown mid-edit, excluded from every export and diagnostic dump.',
+    'Payment card CVV. Stored through the secret manager at daemon scope: never logged, never rendered, never shown mid-edit, excluded from every export and diagnostic dump.',
   );
 }
 
@@ -130,70 +133,26 @@ export function buildPaymentsCardCardholderNameEntry(configManager: PaymentsConf
   return buildStringFieldEntry(
     configManager,
     PAYMENTS_CARD_CARDHOLDER_NAME_CONFIG_KEY,
-    'Name on the payment card. Stored through the secret manager, same handling as the card number.',
+    'Name on the payment card. Stored through the secret manager at daemon scope, same handling as the card number.',
   );
 }
 
-export function buildPaymentsBillingAddressEntry(configManager: PaymentsConfigReader): SettingEntry {
-  return buildStringFieldEntry(
-    configManager,
-    PAYMENTS_BILLING_ADDRESS_CONFIG_KEY,
-    'Billing address for the payment card. An ordinary config value — not secret-tier.',
-  );
-}
-
-export function buildPaymentsShippingAddressEntry(configManager: PaymentsConfigReader): SettingEntry {
-  return buildStringFieldEntry(
-    configManager,
-    PAYMENTS_SHIPPING_ADDRESS_CONFIG_KEY,
-    'Default shipping address for purchases. An ordinary config value — not secret-tier.',
-  );
-}
-
-export function buildPaymentsCvvHandlingEntry(configManager: PaymentsConfigReader): SettingEntry {
-  let raw: unknown;
-  try {
-    raw = configManager.get(PAYMENTS_CVV_HANDLING_CONFIG_KEY);
-  } catch {
-    raw = undefined;
-  }
-  const currentValue: PaymentsCvvHandling = raw === 'prompt' ? 'prompt' : PAYMENTS_CVV_HANDLING_DEFAULT;
-  const setting: ConfigSetting = {
-    key: PAYMENTS_CVV_HANDLING_CONFIG_KEY,
-    type: 'enum',
-    default: PAYMENTS_CVV_HANDLING_DEFAULT,
-    enumValues: [...PAYMENTS_CVV_HANDLING_VALUES],
-    description: 'Whether the payment card\'s CVV is stored (the daemon can complete a purchase unattended) or requested at purchase time (a human must be present to type it).',
-  };
-  return {
-    setting,
-    currentValue,
-    isDefault: currentValue === PAYMENTS_CVV_HANDLING_DEFAULT,
-  };
-}
-
-/** All payments synthetic entries, in the order they should render. */
+/** All payments synthetic entries (the four card-material fields), in the order they should render. */
 export function buildPaymentsSyntheticEntries(configManager: PaymentsConfigReader): SettingEntry[] {
   return [
-    buildPaymentsCvvHandlingEntry(configManager),
     buildPaymentsCardNumberEntry(configManager),
     buildPaymentsCardExpiryEntry(configManager),
     buildPaymentsCardCvvEntry(configManager),
     buildPaymentsCardCardholderNameEntry(configManager),
-    buildPaymentsBillingAddressEntry(configManager),
-    buildPaymentsShippingAddressEntry(configManager),
   ];
 }
 
-/** Every payments config key this module owns, for refresh-loop membership checks. */
+/** Every payments synthetic config key this module owns, for refresh-loop membership checks. */
 export const PAYMENTS_SYNTHETIC_CONFIG_KEYS: readonly ConfigKey[] = [
-  PAYMENTS_CVV_HANDLING_CONFIG_KEY,
   PAYMENTS_CARD_NUMBER_CONFIG_KEY,
   PAYMENTS_CARD_EXPIRY_CONFIG_KEY,
   PAYMENTS_CARD_CVV_CONFIG_KEY,
   PAYMENTS_CARD_CARDHOLDER_NAME_CONFIG_KEY,
-  PAYMENTS_BILLING_ADDRESS_CONFIG_KEY,
-  PAYMENTS_SHIPPING_ADDRESS_CONFIG_KEY,
 ];
 
 export function isPaymentsSyntheticConfigKey(key: string): key is ConfigKey {
@@ -202,12 +161,6 @@ export function isPaymentsSyntheticConfigKey(key: string): key is ConfigKey {
 
 /** Refresh one payments synthetic entry's currentValue/isDefault in place. */
 export function refreshPaymentsSyntheticEntry(entry: SettingEntry, configManager: PaymentsConfigReader): void {
-  if (entry.setting.key === PAYMENTS_CVV_HANDLING_CONFIG_KEY) {
-    const refreshed = buildPaymentsCvvHandlingEntry(configManager);
-    entry.currentValue = refreshed.currentValue;
-    entry.isDefault = refreshed.isDefault;
-    return;
-  }
   const currentValue = readStringField(configManager, entry.setting.key as ConfigKey);
   entry.currentValue = currentValue;
   entry.isDefault = currentValue === '';

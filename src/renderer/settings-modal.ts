@@ -14,7 +14,7 @@ import { CATEGORY_INFO, CATEGORY_LABELS, describeUiRouting, formatValue, getSett
 import { buildConnectionContext, renderConnectionRows } from './settings-modal-connections.ts';
 import { isSecretConfigKey } from '../config/secret-config.ts';
 import { maskConcealedText } from '../input/concealed-input.ts';
-import { CVV_PROMPT_TRADEOFF_WARNING } from '../input/payments-config.ts';
+import { CVV_PROMPT_TRADEOFF_WARNING } from '@pellux/goodvibes-sdk/platform/payments';
 import { GLYPHS } from './ui-primitives.ts';
 import { formatHints, joinHints } from './hint-grammar.ts';
 import {
