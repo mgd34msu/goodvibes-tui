@@ -59,6 +59,8 @@ type DaemonCliOwnership = {
   readonly homeDirectory: string;
   /** The daemon's OWN identity home (auth users, operator tokens, daemon settings). */
   readonly daemonHomeDirectory: string;
+  /** True when GOODVIBES_HOME or GOODVIBES_DAEMON_HOME named an override — see goodvibes-home.ts. */
+  readonly isOverridden: boolean;
 };
 
 // CLI flag parsing delegated to shared module — see src/cli-flags.ts
@@ -87,11 +89,12 @@ function resolveDaemonCliOwnership(): DaemonCliOwnership {
   // point also uses. They were resolved independently, and the client's copy
   // simply did not read GOODVIBES_HOME — so a redirected client wrote into the
   // real tree while the daemon honoured the redirect.
-  const { homeDirectory, daemonHomeDirectory } = resolveGoodVibesHomeOwnership();
+  const { homeDirectory, daemonHomeDirectory, isOverridden } = resolveGoodVibesHomeOwnership();
   return {
     workingDirectory: process.env['GOODVIBES_WORKING_DIR'] ?? process.cwd(),
     homeDirectory,
     daemonHomeDirectory,
+    isOverridden,
   };
 }
 
@@ -169,7 +172,7 @@ async function main(): Promise<void> {
     logger.info('daemon: --working-dir flag applied', { workingDir: cliFlags.workingDir });
   }
 
-  const { workingDirectory: workingDir, homeDirectory, daemonHomeDirectory } = resolveDaemonCliOwnership();
+  const { workingDirectory: workingDir, homeDirectory, daemonHomeDirectory, isOverridden: hasOverriddenHome } = resolveDaemonCliOwnership();
   runDaemonConfigMigration(homeDirectory);
   const config = new ConfigManager({ workingDir, homeDir: homeDirectory, surfaceRoot: 'tui' });
   new GlobalNetworkTransportInstaller().install(config);
@@ -371,8 +374,7 @@ async function main(): Promise<void> {
     // found the unit not running, wrote its own scratchpad ExecStart into
     // ~/.config/systemd/user/goodvibes.service and exited, and systemd then
     // supervised the throwaway as the machine's daemon for five hours.
-    hasOverriddenHome: process.env['GOODVIBES_DAEMON_HOME'] !== undefined
-      || process.env['GOODVIBES_HOME'] !== undefined,
+    hasOverriddenHome,
     // The SAME coordinator this repository's inbox poller registered with (see
     // runtime/cluster-composition.ts). The facade must reuse it rather than
     // compose its own: two coordinators in one process are two nodes in the
