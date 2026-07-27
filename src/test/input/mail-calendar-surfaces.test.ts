@@ -1,33 +1,29 @@
 /**
- * The mail/calendar terminal surfaces, exercised against the REAL daemon
- * handlers registered into a real GatewayMethodCatalog.
+ * The mail/calendar terminal surfaces, exercised against the REAL handlers the
+ * daemon serves, reached through this repo's own runtime composition.
  *
- * The point of going through the real handlers rather than a stub gateway is
- * that the whole reason these surfaces exist is a wiring claim: that
- * `GatewayMethodCatalog.invoke()` reaches an `email.*` / `calendar.*` handler
- * even though every one of those descriptors carries `invokable: false`. A test
- * against a fake gateway would pass while the product was dead. These tests
- * fail if that claim ever stops being true.
+ * The point of going through the real composition rather than a stub gateway is
+ * that the whole reason these surfaces exist is a wiring claim, and the claim
+ * has now changed shape. It used to be "`GatewayMethodCatalog.invoke()` reaches
+ * an `email.*` / `calendar.*` handler even though every one of those descriptors
+ * carries `invokable: false`", because this repo registered its own CalDAV and
+ * IMAP/SMTP handlers after the platform's gateway groups and was therefore the
+ * thing answering.
+ *
+ * Those copies are gone. The platform serves `email.*` and `calendar.*` itself,
+ * the descriptors are `invokable: true`, and what has to stay true is that this
+ * product's composition passes the deps that let the platform register — without
+ * `homeDirectory` the calendar composition returns null, without
+ * `emailServiceDeps` the mail one does, and either way the verbs stay
+ * cataloged-but-unhandled and every surface below reports "unreachable" on a
+ * daemon that is working perfectly. A test against a fake gateway would pass
+ * while the product was dead, which is exactly what happened the last time.
  */
 
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { mkdtemp, rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { GatewayMethodCatalog } from '@pellux/goodvibes-sdk/platform/control-plane';
+import { describe, expect, test } from 'bun:test';
 import { isDaemonOwnedConfigKey, isDaemonOwnedSecretKey } from '@pellux/goodvibes-sdk/platform/config';
-import type { HandlerContext } from '../../daemon/handlers/context.ts';
-import { registerEmailMethods } from '../../daemon/handlers/email/index.ts';
-import {
-  makeConfig,
-  makeCredentials,
-  makeImapFactory,
-  makeLogger,
-  makeSmtpFactory,
-  type FakeImapState,
-  type FakeSmtpState,
-  type LogEntry,
-} from '../daemon/email/fakes.ts';
+import { GatewayMethodCatalog } from '@pellux/goodvibes-sdk/platform/control-plane';
+import { getTestRuntimeServices, disposeTestRuntimeServicesAfterAll } from '../helpers/runtime-services.ts';
 import {
   daemonErrorCode,
   describeConnectionProbe,
@@ -44,107 +40,65 @@ import {
 } from '../../input/settings-modal-connections.ts';
 import { SETTINGS_CATEGORIES, SETTINGS_CATEGORY_GROUPS } from '../../input/settings-modal-types.ts';
 
-const CONFIGURED = {
-  'surfaces.email.host': 'mail.example.com',
-  'surfaces.email.user': 'agent@example.com',
-};
-const SECRETS = { 'surfaces.email.password': 'word-style-fake-pass' };
+// Stop the shared test runtime graph when this file ends. Called here, not
+// registered inside the helper, for the reason its doc comment gives.
+disposeTestRuntimeServicesAfterAll();
 
-let workdir: string;
-let logs: LogEntry[];
-let imapState: FakeImapState;
-let smtpState: FakeSmtpState;
+describe('the wiring claim: the platform serves these, and this composition hands it what it needs', () => {
+  const services = getTestRuntimeServices();
 
-function buildContext(
-  catalog: GatewayMethodCatalog,
-  config: Record<string, unknown>,
-  secrets: Record<string, string>,
-): HandlerContext {
-  return {
-    catalog,
-    credentials: makeCredentials({ ...secrets }),
-    configManager: makeConfig({ ...config }),
-    workingDirectory: workdir,
-    homeDirectory: workdir,
-    logger: makeLogger(logs),
-  };
-}
-
-beforeEach(async () => {
-  workdir = await mkdtemp(join(tmpdir(), 'gv-mailcal-'));
-  logs = [];
-  imapState = { listed: 0, read: 0, appended: [], closed: 0 };
-  smtpState = { sent: [], closed: 0 };
-});
-
-afterEach(async () => {
-  await rm(workdir, { recursive: true, force: true });
-});
-
-describe('the invokable:false wiring claim', () => {
-  test('a probe reaches the real email handler through the in-process catalog', async () => {
-    const catalog = new GatewayMethodCatalog();
-    // Sanity: the descriptor really does carry invokable:false, so this test is
-    // proving the bypass rather than passing because the flag went away.
-    expect(catalog.get('email.inbox.list')?.invokable).toBe(false);
-
-    const unregister = registerEmailMethods(buildContext(catalog, CONFIGURED, SECRETS), {
-      imapFactory: makeImapFactory(imapState, { summaries: [] }),
-      smtpFactory: makeSmtpFactory(smtpState),
-      workingDirectory: workdir,
+  // Sanity: the descriptors really are invokable now, so the tests below prove
+  // that a handler is attached rather than passing because the flag still says
+  // the verb is unreachable by design.
+  for (const methodId of ['email.inbox.list', 'email.inbox.read', 'email.draft.create', 'email.send'] as const) {
+    test(`${methodId} is advertised as invokable`, () => {
+      expect(services.gatewayMethods.get(methodId)?.invokable).toBe(true);
     });
-    try {
-      const status = await probeConnection(catalog, 'mail');
-      expect(status.state).toBe('ready');
-      expect(imapState.listed).toBe(1);
-      expect(status.nextActions).toEqual([]);
-    } finally {
-      unregister();
+  }
+
+  test('the mail verbs have real handlers attached by this repo\'s composition', () => {
+    // Descriptor-present-but-handler-absent is the 501 class that shipped in
+    // every daemon build for a release. Named individually so a failure says
+    // which verb went dark.
+    for (const methodId of ['email.inbox.list', 'email.inbox.read', 'email.draft.create', 'email.send']) {
+      expect(services.gatewayMethods.hasHandler(methodId), `${methodId} has no handler`).toBe(true);
+    }
+  });
+
+  test('the calendar verbs have real handlers attached by this repo\'s composition', () => {
+    for (const methodId of ['calendar.events.list', 'calendar.events.get', 'calendar.events.create']) {
+      expect(services.gatewayMethods.hasHandler(methodId), `${methodId} has no handler`).toBe(true);
     }
   });
 
   test('an unconfigured account reports needs-setup with the daemon\'s own next step', async () => {
-    const catalog = new GatewayMethodCatalog();
-    const unregister = registerEmailMethods(buildContext(catalog, {}, {}), {
-      imapFactory: makeImapFactory(imapState),
-      smtpFactory: makeSmtpFactory(smtpState),
-      workingDirectory: workdir,
-    });
-    try {
-      const status = await probeConnection(catalog, 'mail');
-      expect(status.state).toBe('needs-setup');
-      // The concrete keys the daemon actually reads — never a vague message.
-      expect(status.nextActions.join('\n')).toContain('surfaces.email.host');
-      expect(status.nextActions.join('\n')).toContain('surfaces.email.user');
-      expect(imapState.listed).toBe(0);
-    } finally {
-      unregister();
-    }
+    // The test runtime has no mailbox configured, which is the state of every
+    // machine that has never set one up — and the state this surface has to
+    // describe well. It must reach the handler and come back with the real
+    // not-configured answer, NOT with "unreachable", which would mean the
+    // composition failed to register.
+    const status = await probeConnection(services.gatewayMethods, 'mail');
+    expect(status.state).toBe('needs-setup');
+    // The concrete keys the daemon actually reads — never a vague message, and
+    // never an `Invalid config path` exception leaking through as a 500.
+    expect(status.detail).not.toContain('Invalid config path');
+    const actions = status.nextActions.join('\n');
+    expect(actions).toContain('surfaces.email.host');
+    expect(actions).toContain('surfaces.email.user');
   });
 
-  test('a configured account with no stored password reports the missing credential only', async () => {
-    const catalog = new GatewayMethodCatalog();
-    const unregister = registerEmailMethods(buildContext(catalog, CONFIGURED, {}), {
-      imapFactory: makeImapFactory(imapState),
-      smtpFactory: makeSmtpFactory(smtpState),
-      workingDirectory: workdir,
-    });
-    try {
-      const status = await probeConnection(catalog, 'mail');
-      expect(status.state).toBe('needs-setup');
-      const actions = status.nextActions.join('\n');
-      expect(actions).toContain('GOODVIBES_SURFACES_EMAIL_PASSWORD');
-      // Host/user are already set; re-listing them would be noise.
-      expect(actions).not.toContain('surfaces.email.host');
-    } finally {
-      unregister();
-    }
+  test('an unconfigured calendar reports needs-setup naming its own keys', async () => {
+    const status = await probeConnection(services.gatewayMethods, 'calendar');
+    expect(status.state).toBe('needs-setup');
+    expect(status.detail).not.toContain('Invalid config path');
+    expect(status.nextActions.join('\n')).toContain('surfaces.calendar.caldavUrl');
   });
 
-  test('an unregistered calendar handler is reported as unreachable, not as needs-setup', async () => {
-    // No calendar handlers registered: the catalog holds the descriptor with
-    // invokable:false and no handler, which is the honest "this build does not
-    // serve it" case.
+  test('a catalog with no handlers attached is reported as unreachable, not as needs-setup', async () => {
+    // The control for the two above: a bare catalog holds the descriptors and
+    // no handler, which is the honest "this build does not serve it" case. If
+    // this ever stopped differing from the results above, the surface would be
+    // reporting a broken daemon as an unconfigured one.
     const status = await probeConnection(new GatewayMethodCatalog(), 'calendar');
     expect(status.state).toBe('unreachable');
     expect(status.detail).toContain('calendar.events.list');
@@ -154,35 +108,43 @@ describe('the invokable:false wiring claim', () => {
 describe('daemon ownership of what setup writes', () => {
   test('the surfaces.* SETTINGS the daemon reads are daemon-owned, so /config set survives this client closing', () => {
     // The requirement: anything configured from a surface keeps working with
-    // that surface closed. For the non-secret settings that already holds,
+    // that surface closed. For the non-secret settings that already held,
     // because `surfaces.` is a daemon-owned prefix.
     expect(isDaemonOwnedConfigKey('surfaces.email.host' as never)).toBe(true);
     expect(isDaemonOwnedConfigKey('surfaces.email.user' as never)).toBe(true);
     expect(isDaemonOwnedConfigKey('surfaces.calendar.caldavUrl' as never)).toBe(true);
   });
 
-  test('the mail/calendar PASSWORDS are not daemon-owned — a known gap this surface refuses to paper over', () => {
+  test('the mail/calendar PASSWORDS are daemon-owned too, which is what closed the gap this surface refused to paper over', () => {
+    // This assertion is inverted from what it was, and the inversion is the
+    // point — the previous version said in as many words that it would fail
+    // when the owning round declared these paths, and that the setup guidance
+    // should change in the same commit. Both happened here.
+    //
     // A credential is filed in the daemon tier only when a daemon-owned config
     // path declares it. `surfaces.email.password` and
-    // `surfaces.calendar.caldavPassword` are read by this repo's daemon but
-    // declared in neither CONFIG_SCHEMA nor the SDK's non-schema daemon-owned
-    // path list, so they strand in whichever client silo wrote them.
-    //
-    // Slack's token is the control: it IS declared, and it routes correctly.
-    // When the owning round declares the two below, this test fails — and the
-    // setup guidance in connection-status.ts should switch to `/secrets set`
-    // at the same time.
+    // `surfaces.calendar.caldavPassword` were read by this repo's daemon and
+    // declared in neither CONFIG_SCHEMA nor the platform's non-schema
+    // daemon-owned path list, so they stranded in whichever client silo wrote
+    // them. The platform round that began serving email.* and calendar.*
+    // declares the whole mail and CalDAV connection, not just the passwords, on
+    // the stated ground that a password with no host and no user is not a usable
+    // credential either. Slack's token remains the control: always declared,
+    // always routed correctly.
     expect(isDaemonOwnedSecretKey('GOODVIBES_SURFACES_SLACK_BOT_TOKEN')).toBe(true);
-    expect(isDaemonOwnedSecretKey('GOODVIBES_SURFACES_EMAIL_PASSWORD')).toBe(false);
-    expect(isDaemonOwnedSecretKey('GOODVIBES_SURFACES_CALENDAR_CALDAV_PASSWORD')).toBe(false);
+    expect(isDaemonOwnedSecretKey('GOODVIBES_SURFACES_EMAIL_PASSWORD')).toBe(true);
+    expect(isDaemonOwnedSecretKey('GOODVIBES_SURFACES_CALENDAR_CALDAV_PASSWORD')).toBe(true);
   });
 
-  test('setup guidance never tells the operator to run a store write that would strand', () => {
+  test('setup guidance now names the store write that reaches the daemon', () => {
+    // The other half of the flip above: with the keys declared, a write
+    // carrying an explicit scope is RELOCATED to the daemon tier rather than
+    // filed where it was asked for, so `/secrets set` is the step that works —
+    // and it needs no restart and no shell on the daemon's machine.
     const status = describeConnectionProbe('mail', { code: 'EMAIL_CREDENTIALS_MISSING' });
     const actions = status.nextActions.join('\n');
-    expect(actions).toContain('GOODVIBES_SURFACES_EMAIL_PASSWORD');
-    expect(actions).toContain("daemon's environment");
-    expect(actions).not.toContain('/secrets set GOODVIBES_SURFACES_EMAIL_PASSWORD');
+    expect(actions).toContain('/secrets set GOODVIBES_SURFACES_EMAIL_PASSWORD');
+    expect(actions).toContain('daemon-owned credential');
   });
 });
 
@@ -218,6 +180,20 @@ describe('status derivation', () => {
     expect(text).toContain('Calendar: needs-setup');
     expect(text).toContain('Next:');
     expect(text).toContain('surfaces.calendar.caldavUrl');
+  });
+
+  test('an unknown failure still carries a next step rather than a bare message', () => {
+    // The platform's config readers treat an absent SECTION as an absent value,
+    // because `ConfigManager.get` throws for one and on a machine where nobody
+    // ran setup that is the normal state, not a fault. This surface is the last
+    // line if that ever regresses: an `Invalid config path` string is a
+    // developer message, and whatever state it lands in must still be
+    // actionable rather than a dead end.
+    const status = describeConnectionProbe('mail', {
+      message: "Invalid config path: section 'surfaces.email' does not exist",
+    });
+    expect(status.state).not.toBe('ready');
+    expect(status.nextActions.length).toBeGreaterThan(0);
   });
 });
 
@@ -266,6 +242,8 @@ describe('rendering', () => {
 });
 
 describe('the Connections category of the settings workspace', () => {
+  const services = getTestRuntimeServices();
+
   test('rows start as checking, never as a settled state the daemon has not confirmed', () => {
     const entries = initialConnectionEntries();
     expect(entries.map((e) => e.surface)).toEqual(['mail', 'calendar']);
@@ -277,29 +255,25 @@ describe('the Connections category of the settings workspace', () => {
   });
 
   test('a refresh replaces the placeholders with the daemon\'s real answer and repaints', async () => {
-    const catalog = new GatewayMethodCatalog();
-    const unregister = registerEmailMethods(buildContext(catalog, CONFIGURED, SECRETS), {
-      imapFactory: makeImapFactory(imapState, { summaries: [] }),
-      smtpFactory: makeSmtpFactory(smtpState),
-      workingDirectory: workdir,
-    });
     let painted = 0;
     const host = {
       active: true,
       selectedIndex: 0,
       connectionEntries: initialConnectionEntries(),
       connectionsRefreshing: false,
-      gatewayMethods: catalog,
+      gatewayMethods: services.gatewayMethods,
       requestRender: () => { painted += 1; },
     };
-    try {
-      await refreshConnectionEntries(host);
-      expect(painted).toBe(1);
-      expect(host.connectionEntries.find((e) => e.surface === 'mail')?.state).toBe('ready');
-      // Calendar has no handler in this catalog, so it must not claim ready.
-      expect(host.connectionEntries.find((e) => e.surface === 'calendar')?.state).toBe('unreachable');
-    } finally {
-      unregister();
+    await refreshConnectionEntries(host);
+    expect(painted).toBe(1);
+    // Both rows must leave 'checking' for a state the daemon actually
+    // established. On this runtime nothing is configured, so the honest answer
+    // is needs-setup for both — and critically NOT 'unreachable', which is what
+    // an unregistered handler would produce.
+    for (const surface of ['mail', 'calendar']) {
+      const entry = host.connectionEntries.find((e) => e.surface === surface);
+      expect(entry?.state, `${surface} row`).toBe('needs-setup');
+      expect(entry?.nextActions.length).toBeGreaterThan(0);
     }
   });
 
@@ -346,46 +320,5 @@ describe('the Connections category of the settings workspace', () => {
     };
     expect(selectedConnectionEntry(host)?.surface).toBe('calendar');
     expect(selectedConnectionEntry({ ...host, connectionEntries: [] })).toBeNull();
-  });
-});
-
-describe('an installation where the surfaces section was never created', () => {
-  /**
-   * The real ConfigManager does not return undefined for a key under a section
-   * that does not exist — it throws. `surfaces.email` is not a CONFIG_SCHEMA
-   * section, so that is the state of every machine that has never configured
-   * mail, which is exactly the state this status surface has to describe well.
-   */
-  function throwingConfig(): HandlerContext['configManager'] {
-    return {
-      get: ((key: string) => {
-        throw new Error(`Invalid config path: section '${key.split('.').slice(0, 2).join('.')}' does not exist`);
-      }) as HandlerContext['configManager']['get'],
-      getCategory: (() => ({})) as HandlerContext['configManager']['getCategory'],
-    };
-  }
-
-  test('reports needs-setup with real next steps, not an opaque config-path error', async () => {
-    const catalog = new GatewayMethodCatalog();
-    const unregister = registerEmailMethods({
-      catalog,
-      credentials: makeCredentials({}),
-      configManager: throwingConfig(),
-      workingDirectory: workdir,
-      homeDirectory: workdir,
-      logger: makeLogger(logs),
-    }, {
-      imapFactory: makeImapFactory(imapState),
-      smtpFactory: makeSmtpFactory(smtpState),
-      workingDirectory: workdir,
-    });
-    try {
-      const status = await probeConnection(catalog, 'mail');
-      expect(status.state).toBe('needs-setup');
-      expect(status.detail).not.toContain('Invalid config path');
-      expect(status.nextActions.join('\n')).toContain('surfaces.email.host');
-    } finally {
-      unregister();
-    }
   });
 });
