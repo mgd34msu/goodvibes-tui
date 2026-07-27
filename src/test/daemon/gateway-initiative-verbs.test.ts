@@ -24,8 +24,12 @@
  */
 import { describe, expect, test } from 'bun:test';
 import { assertEveryDescriptorHasHandler } from '@pellux/goodvibes-terminal-shell/conformance';
-import { getTestRuntimeServices } from '../helpers/runtime-services.ts';
+import { getTestRuntimeServices, disposeTestRuntimeServicesAfterAll } from '../helpers/runtime-services.ts';
 import { renderConfig } from '@/input/commands/checkin-runtime.ts';
+
+// Stop the shared test runtime graph when this file ends. Called here, not
+// registered inside the helper, for the reason its doc comment gives.
+disposeTestRuntimeServicesAfterAll();
 
 // Every method id the four initiative families advertise. Presence + handler
 // attachment is asserted for all of them; the read-only subset below is also

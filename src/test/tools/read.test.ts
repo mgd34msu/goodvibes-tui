@@ -11,7 +11,11 @@ import { ReadTool } from '@pellux/goodvibes-sdk/platform/tools';
 import { FileStateCache } from '@pellux/goodvibes-sdk/platform/state';
 import { ProjectIndex } from '@pellux/goodvibes-sdk/platform/state';
 import { CodeIntelligence } from '@pellux/goodvibes-sdk/platform/intelligence';
-import { getTestCodeIntelligence, getTestProjectIndex, resetTestProjectIndexes } from '../helpers/runtime-services.ts';
+import { getTestCodeIntelligence, getTestProjectIndex, resetTestProjectIndexes, disposeTestRuntimeServicesAfterAll } from '../helpers/runtime-services.ts';
+
+// Stop the shared test runtime graph when this file ends. Called here, not
+// registered inside the helper, for the reason its doc comment gives.
+disposeTestRuntimeServicesAfterAll();
 
 // ---------------------------------------------------------------------------
 // Test helpers

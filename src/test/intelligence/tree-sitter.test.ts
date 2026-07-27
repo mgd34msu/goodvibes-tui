@@ -18,7 +18,11 @@ import {
 } from '@pellux/goodvibes-sdk/platform/intelligence';
 import { existsSync } from 'fs';
 import { join } from 'path';
-import { getTestTreeSitterService } from '../helpers/runtime-services.ts';
+import { getTestTreeSitterService, disposeTestRuntimeServicesAfterAll } from '../helpers/runtime-services.ts';
+
+// Stop the shared test runtime graph when this file ends. Called here, not
+// registered inside the helper, for the reason its doc comment gives.
+disposeTestRuntimeServicesAfterAll();
 
 // ---------------------------------------------------------------------------
 // Environment probes

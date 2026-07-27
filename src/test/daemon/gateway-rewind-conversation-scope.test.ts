@@ -16,13 +16,17 @@
  * the truncation counts — proving the port is threaded, not a 501/absent facade.
  */
 import { describe, expect, test, afterAll } from 'bun:test';
-import { getTestRuntimeServices } from '../helpers/runtime-services.ts';
+import { getTestRuntimeServices, disposeTestRuntimeServicesAfterAll } from '../helpers/runtime-services.ts';
 import { recordTurnAnchor, clearTurnAnchors } from '../../core/rewind-turn-anchors.ts';
 import {
   registerSessionConversation,
   unregisterSessionConversation,
 } from '../../runtime/conversation-rewind-port.ts';
 import type { ConversationManager } from '../../core/conversation.ts';
+
+// Stop the shared test runtime graph when this file ends. Called here, not
+// registered inside the helper, for the reason its doc comment gives.
+disposeTestRuntimeServicesAfterAll();
 
 const SESSION = 's-daemon-rewind';
 

@@ -1,7 +1,11 @@
 import { describe, test, expect, beforeEach } from 'bun:test';
 import { AgentMessageBus } from '@pellux/goodvibes-sdk/platform/agents';
 import type { AgentMessage } from '@pellux/goodvibes-sdk/platform/agents';
-import { getTestAgentMessageBus, resetTestRuntimeServices } from '../helpers/runtime-services.ts';
+import { getTestAgentMessageBus, resetTestRuntimeServices, disposeTestRuntimeServicesAfterAll } from '../helpers/runtime-services.ts';
+
+// Stop the shared test runtime graph when this file ends. Called here, not
+// registered inside the helper, for the reason its doc comment gives.
+disposeTestRuntimeServicesAfterAll();
 
 beforeEach(() => {
   resetTestRuntimeServices();

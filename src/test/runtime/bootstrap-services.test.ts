@@ -2,7 +2,11 @@ import { beforeEach, describe, expect, mock, test } from 'bun:test';
 import { RuntimeEventBus } from '@/runtime/index.ts';
 import { HookDispatcher } from '@pellux/goodvibes-sdk/platform/hooks';
 import { startExternalServices } from '@/runtime/index.ts';
-import { getTestRuntimeServices } from '../helpers/runtime-services.ts';
+import { getTestRuntimeServices, disposeTestRuntimeServicesAfterAll } from '../helpers/runtime-services.ts';
+
+// Stop the shared test runtime graph when this file ends. Called here, not
+// registered inside the helper, for the reason its doc comment gives.
+disposeTestRuntimeServicesAfterAll();
 
 function createConfig(overrides: {
   daemon?: boolean;

@@ -1,6 +1,10 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { createPeerClient } from '@/runtime/index.ts';
-import { getTestAgentManager, getTestRuntimeServices, resetTestRuntimeServices } from '../helpers/runtime-services.ts';
+import { getTestAgentManager, getTestRuntimeServices, resetTestRuntimeServices, disposeTestRuntimeServicesAfterAll } from '../helpers/runtime-services.ts';
+
+// Stop the shared test runtime graph when this file ends. Called here, not
+// registered inside the helper, for the reason its doc comment gives.
+disposeTestRuntimeServicesAfterAll();
 
 describe('PeerClient', () => {
   beforeEach(() => {

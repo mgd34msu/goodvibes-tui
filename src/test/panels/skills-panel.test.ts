@@ -11,6 +11,17 @@ import { createRuntimeStore } from '../../runtime/store/index.ts';
 import type { Line } from '../../types/grid.ts';
 import type { ShellPathService } from '@/runtime/index.ts';
 import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
+import { trackDisposables } from '../helpers/disposables.ts';
+
+/**
+ * A composed runtime graph starts a dozen pollers while it builds — the fleet
+ * registry tick, the config-file watch, the memory governor, the knowledge
+ * scheduler, the cross-session sweep, the orchestration snapshot writer, the
+ * push-subscription sweep and the snapshot / retention / consolidation
+ * schedulers. Nothing upstream stops a graph it did not compose itself, so the
+ * test that built it owns stopping it.
+ */
+const disposables = trackDisposables();
 
 function linesText(lines: Line[]): string {
   return lines
@@ -61,7 +72,7 @@ describe('SkillsPanel', () => {
 
   test('is registered as a built-in panel', () => {
     const manager = new PanelManager();
-    const services = createRuntimeServices({
+    const services = disposables.add(createRuntimeServices({
       configManager: new ConfigManager({ surfaceRoot: 'tui',
         workingDir: cwd,
         homeDir,
@@ -71,7 +82,7 @@ describe('SkillsPanel', () => {
       runtimeStore: createRuntimeStore(),
       workingDir: cwd,
       homeDirectory: homeDir,
-    });
+    }));
     const uiServices = createUiRuntimeServices(services);
     registerBuiltinPanels(manager, {
       providerRegistry: services.providerRegistry,

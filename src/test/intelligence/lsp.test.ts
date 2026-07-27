@@ -3,7 +3,11 @@ import { LspClient } from '@pellux/goodvibes-sdk/platform/intelligence';
 import { LspService } from '@pellux/goodvibes-sdk/platform/intelligence';
 import { parseCapabilities, hasCapability } from '@pellux/goodvibes-sdk/platform/intelligence';
 import type { LspCapabilities } from '@pellux/goodvibes-sdk/platform/intelligence';
-import { getTestLspService, resetTestLspService } from '../helpers/runtime-services.ts';
+import { getTestLspService, resetTestLspService, disposeTestRuntimeServicesAfterAll } from '../helpers/runtime-services.ts';
+
+// Stop the shared test runtime graph when this file ends. Called here, not
+// registered inside the helper, for the reason its doc comment gives.
+disposeTestRuntimeServicesAfterAll();
 
 // ---------------------------------------------------------------------------
 // JSON-RPC framing helpers (tested via LspClient static methods)

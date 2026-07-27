@@ -18,12 +18,16 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { assertEveryDescriptorHasHandler } from '@pellux/goodvibes-terminal-shell/conformance';
-import { getTestRuntimeServices } from '../helpers/runtime-services.ts';
+import { getTestRuntimeServices, disposeTestRuntimeServicesAfterAll } from '../helpers/runtime-services.ts';
 import { CommandRegistry, type CommandContext } from '../../input/command-registry.ts';
 import { registerReviewRuntimeCommands } from '../../input/commands/review-runtime.ts';
 import { parseReviewDiff } from '../../panels/diff-review-model.ts';
 import { DiffReviewPanel } from '../../panels/diff-review-panel.ts';
 import { DiffPanel } from '../../panels/diff-panel.ts';
+
+// Stop the shared test runtime graph when this file ends. Called here, not
+// registered inside the helper, for the reason its doc comment gives.
+disposeTestRuntimeServicesAfterAll();
 
 const tempDirs: string[] = [];
 afterEach(() => { while (tempDirs.length > 0) rmSync(tempDirs.pop()!, { recursive: true, force: true }); });

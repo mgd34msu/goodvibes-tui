@@ -3,7 +3,11 @@ import { AgentManager } from '@pellux/goodvibes-sdk/platform/tools';
 import { AgentMessageBus } from '@pellux/goodvibes-sdk/platform/agents';
 import type { AgentRecord } from '@pellux/goodvibes-sdk/platform/tools';
 import type { StreamDelta } from '@pellux/goodvibes-sdk/platform/providers';
-import { getTestAgentManager, resetTestRuntimeServices } from '../helpers/runtime-services.ts';
+import { getTestAgentManager, resetTestRuntimeServices, disposeTestRuntimeServicesAfterAll } from '../helpers/runtime-services.ts';
+
+// Stop the shared test runtime graph when this file ends. Called here, not
+// registered inside the helper, for the reason its doc comment gives.
+disposeTestRuntimeServicesAfterAll();
 
 beforeEach(() => {
   resetTestRuntimeServices();

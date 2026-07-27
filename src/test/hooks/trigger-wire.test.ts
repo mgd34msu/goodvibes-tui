@@ -1,7 +1,11 @@
 import { describe, test, expect, beforeEach } from 'bun:test';
 import { HookDispatcher } from '@pellux/goodvibes-sdk/platform/hooks';
 import { TriggerManager } from '@pellux/goodvibes-sdk/platform/tools';
-import { getTestTriggerManager, resetTestRuntimeServices } from '../helpers/runtime-services.ts';
+import { getTestTriggerManager, resetTestRuntimeServices, disposeTestRuntimeServicesAfterAll } from '../helpers/runtime-services.ts';
+
+// Stop the shared test runtime graph when this file ends. Called here, not
+// registered inside the helper, for the reason its doc comment gives.
+disposeTestRuntimeServicesAfterAll();
 
 beforeEach(() => {
   resetTestRuntimeServices();

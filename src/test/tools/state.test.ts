@@ -12,7 +12,16 @@ import { ProjectIndex } from '@pellux/goodvibes-sdk/platform/state';
 import { ModeManager } from '@pellux/goodvibes-sdk/platform/state';
 import { HookDispatcher } from '@pellux/goodvibes-sdk/platform/hooks';
 import { createStateTool } from '@pellux/goodvibes-sdk/platform/tools';
-import { getTestProjectIndex, resetTestProjectIndexes } from '../helpers/runtime-services.ts';
+import { getTestProjectIndex, resetTestProjectIndexes, disposeTestRuntimeServicesAfterAll } from '../helpers/runtime-services.ts';
+import { trackDisposables } from '../helpers/disposables.ts';
+
+// Stop the shared test runtime graph when this file ends. Called here, not
+// registered inside the helper, for the reason its doc comment gives.
+disposeTestRuntimeServicesAfterAll();
+
+// KVState starts a housekeeping interval in its constructor; dispose() flushes
+// pending writes and clears it.
+const disposables = trackDisposables();
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -92,7 +101,7 @@ describe('StateTool', () => {
   beforeEach(() => {
     tmpDir = makeTmpDir();
     // Use tmpDir as the KVState base so session files land in isolation.
-    kvState = new KVState({ stateDir: stateDirFor(tmpDir) });
+    kvState = disposables.add(new KVState({ stateDir: stateDirFor(tmpDir) }));
     resetTestProjectIndexes();
     projectIndex = getTestProjectIndex(PROJECT_ROOT);
     tool = createStateTool(kvState, projectIndex, {

@@ -8,7 +8,11 @@
  * with a runtime assertion against the constructed services object.
  */
 import { describe, expect, test } from 'bun:test';
-import { getTestRuntimeServices } from '../helpers/runtime-services.ts';
+import { getTestRuntimeServices, disposeTestRuntimeServicesAfterAll } from '../helpers/runtime-services.ts';
+
+// Stop the shared test runtime graph when this file ends. Called here, not
+// registered inside the helper, for the reason its doc comment gives.
+disposeTestRuntimeServicesAfterAll();
 
 describe('memory governance is live on a TUI-composed runtime', () => {
   test('the governor is present and serves a real snapshot', () => {

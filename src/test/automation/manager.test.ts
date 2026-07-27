@@ -10,6 +10,7 @@ import { AutomationJobStore } from '@pellux/goodvibes-sdk/platform/automation';
 import { AutomationRunStore } from '@pellux/goodvibes-sdk/platform/automation';
 import { RouteBindingManager } from '@pellux/goodvibes-sdk/platform/channels';
 import { SharedSessionBroker } from '@pellux/goodvibes-sdk/platform/control-plane';
+import { trackDisposables } from '../helpers/disposables.ts';
 import {
   DEFAULT_TOP_OF_HOUR_STAGGER_MS,
   normalizeCronSchedule,
@@ -18,6 +19,11 @@ import {
 } from '@pellux/goodvibes-sdk/platform/automation';
 import type { SpawnAutomationTaskInput } from '@pellux/goodvibes-sdk/platform/automation';
 import { AgentManager } from '@pellux/goodvibes-sdk/platform/tools';
+
+// AutomationManager.start() arms a per-job schedule timer and a heartbeat
+// interval; stop() clears them. SharedSessionBroker starts a 60s GC sweep on
+// first use; stop() clears that. Both are built per test here.
+const disposables = trackDisposables();
 
 const testAgentExecutor = {
   async runAgent() {
@@ -44,12 +50,12 @@ describe('AutomationManager', () => {
       configDir: join(root, '.goodvibes', 'tui'),
     });
     let spawnCount = 0;
-    const sessionBroker = new SharedSessionBroker({
+    const sessionBroker = disposables.add(new SharedSessionBroker({
       store: new PersistentStore(join(root, `sessions-${Date.now()}-${Math.random().toString(16).slice(2)}.json`)) as never,
       routeBindings,
       agentStatusProvider: { getStatus: () => null },
       messageSender: { send: () => false },
-    });
+    }));
     const spawnTask = (input: SpawnAutomationTaskInput) => {
       const id = config.spawnTask
         ? config.spawnTask(input)
@@ -60,7 +66,7 @@ describe('AutomationManager', () => {
       config.cancelTask?.(agentId);
     };
     const agentStatusProvider = config.agentStatusProvider ?? { getStatus: () => null };
-    return new AutomationManager({
+    return disposables.add(new AutomationManager({
       configManager,
       jobStore: config.jobStore,
       runStore: config.runStore,
@@ -69,7 +75,7 @@ describe('AutomationManager', () => {
       spawnTask,
       cancelTask,
       agentStatusProvider,
-    });
+    }));
   }
 
   beforeEach(() => {

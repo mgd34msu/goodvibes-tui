@@ -5,7 +5,11 @@ import {
   buildFixSessionErrorNotice,
   handleFixSessionAttachKey,
 } from '../../permissions/broker-approval-card.ts';
-import { getTestRuntimeServices, resetTestRuntimeServices } from '../helpers/runtime-services.ts';
+import { getTestRuntimeServices, resetTestRuntimeServices, disposeTestRuntimeServicesAfterAll } from '../helpers/runtime-services.ts';
+
+// Stop the shared test runtime graph when this file ends. Called here, not
+// registered inside the helper, for the reason its doc comment gives.
+disposeTestRuntimeServicesAfterAll();
 
 /**
  * End-to-end proof against the linked SDK tarball (round 10): the CI fix-session

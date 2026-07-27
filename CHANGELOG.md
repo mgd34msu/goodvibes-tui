@@ -4,6 +4,14 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [1.24.1] - 2026-07-27
+
+### Changes
+
+- Fixed: stopping the daemon left work running. The inbox retention sweep and the per-account inbound pollers kept ticking after shutdown, and a daemon that never finished starting — a port already in use, a short-lived run — left everything its construction had started running with nothing to stop it.
+- Fixed: agent runs the daemon was hosting are now cancelled when it shuts down. One left running had nowhere to report to and nothing to write into: the registries and event bus it reports through are already gone by then. It also keeps an in-flight provider call alive, sleeping out a retry it no longer has any reason to finish.
+- Fixed: a close arriving while the inbox cursor store was still opening could race it.
+
 ## [1.24.0] - 2026-07-27
 
 ### Changes

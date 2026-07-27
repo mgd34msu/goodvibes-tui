@@ -6,6 +6,17 @@ import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import { RuntimeEventBus } from '@/runtime/index.ts';
 import { createRuntimeServices } from '../../runtime/services.ts';
 import { createRuntimeStore } from '../../runtime/store/index.ts';
+import { trackDisposables } from '../helpers/disposables.ts';
+
+/**
+ * A composed runtime graph starts a dozen pollers while it builds — the fleet
+ * registry tick, the config-file watch, the memory governor, the knowledge
+ * scheduler, the cross-session sweep, the orchestration snapshot writer, the
+ * push-subscription sweep and the snapshot / retention / consolidation
+ * schedulers. Nothing upstream stops a graph it did not compose itself, so the
+ * test that built it owns stopping it.
+ */
+const disposables = trackDisposables();
 
 const roots: string[] = [];
 
@@ -28,13 +39,13 @@ function makeRuntime() {
 
   return {
     configManager,
-    services: createRuntimeServices({
+    services: disposables.add(createRuntimeServices({
       configManager,
       runtimeBus: new RuntimeEventBus(),
       runtimeStore: createRuntimeStore(),
       workingDir,
       homeDirectory: homeDir,
-    }),
+    })),
   };
 }
 

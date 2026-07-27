@@ -9,10 +9,14 @@ import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import { createPermissionConfigReader, PermissionManager } from '@pellux/goodvibes-sdk/platform/permissions';
 import { PolicyRuntimeState } from '@/runtime/index.ts';
 import { createDefaultUiRuntimeServices } from '../helpers/ui-services.ts';
-import { getTestProviderRegistry } from '../helpers/runtime-services.ts';
+import { getTestProviderRegistry, disposeTestRuntimeServicesAfterAll } from '../helpers/runtime-services.ts';
 import type { ContentPart } from '@pellux/goodvibes-sdk/platform/providers';
 import { AgentManager } from '@pellux/goodvibes-sdk/platform/tools';
 import { handleClipboardPaste } from '../../input/handler-content-actions.ts';
+
+// Stop the shared test runtime graph when this file ends. Called here, not
+// registered inside the helper, for the reason its doc comment gives.
+disposeTestRuntimeServicesAfterAll();
 
 type InputHandlerImageTestAccess = {
   pasteRegistry: Map<string, string>;

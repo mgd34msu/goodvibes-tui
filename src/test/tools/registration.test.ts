@@ -6,6 +6,7 @@ import { ToolRegistry } from '@pellux/goodvibes-sdk/platform/tools';
 import { registerAllTools } from '@pellux/goodvibes-sdk/platform/tools';
 import { createTestManagers } from '../helpers/test-managers.ts';
 import { CrossSessionTaskRegistry } from '@pellux/goodvibes-sdk/platform/sessions';
+import { trackDisposables } from '../helpers/disposables.ts';
 import { SandboxSessionRegistry } from '@/runtime/index.ts';
 import { RemoteRunnerRegistry } from '@/runtime/index.ts';
 import { AgentMessageBus } from '@pellux/goodvibes-sdk/platform/agents';
@@ -16,6 +17,11 @@ import { ModeManager } from '@pellux/goodvibes-sdk/platform/state';
 import { ProcessManager } from '@pellux/goodvibes-sdk/platform/tools';
 import { createWorkflowServices } from '@pellux/goodvibes-sdk/platform/tools';
 
+// CrossSessionTaskRegistry starts an hourly sweep in its constructor and
+// registerAllTools' workflow services start their own ticks; dispose()/stop()
+// on each is what clears them.
+const disposables = trackDisposables();
+
 function registerTools(registry: ToolRegistry): void {
   const services = createTestManagers();
   const workingDirectory = mkdtempSync(join(tmpdir(), 'gv-tool-registry-'));
@@ -23,9 +29,9 @@ function registerTools(registry: ToolRegistry): void {
     messageBus: new AgentMessageBus(),
     configManager: services.configManager,
   });
-  const sessionOrchestration = new CrossSessionTaskRegistry(
+  const sessionOrchestration = disposables.add(new CrossSessionTaskRegistry(
     join(workingDirectory, '.goodvibes', 'tui', 'sessions', 'task-graph.json'),
-  );
+  ));
   const sandboxSessionRegistry = new SandboxSessionRegistry(workingDirectory);
   const remoteRunnerRegistry = new RemoteRunnerRegistry(agentManager);
   const agentMessageBus = new AgentMessageBus();

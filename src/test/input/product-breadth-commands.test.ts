@@ -31,7 +31,23 @@ import { createRuntimeProviderApi } from '@/runtime/index.ts';
 import { wireShellUiOpeners } from '../../shell/ui-openers.ts';
 import {
   resetTestRuntimeServices,
+  disposeTestRuntimeServicesAfterAll,
 } from '../helpers/runtime-services.ts';
+import { trackDisposables } from '../helpers/disposables.ts';
+
+// Stop the shared test runtime graph when this file ends. Called here, not
+// registered inside the helper, for the reason its doc comment gives.
+disposeTestRuntimeServicesAfterAll();
+
+/**
+ * A composed runtime graph starts a dozen pollers while it builds — the fleet
+ * registry tick, the config-file watch, the memory governor, the knowledge
+ * scheduler, the cross-session sweep, the orchestration snapshot writer, the
+ * push-subscription sweep and the snapshot / retention / consolidation
+ * schedulers. Nothing upstream stops a graph it did not compose itself, so the
+ * test that built it owns stopping it.
+ */
+const disposables = trackDisposables();
 
 let productRemoteRunnerRegistry: RemoteRunnerRegistry;
 let productRemoteSupervisor: RemoteSupervisor;
@@ -88,7 +104,7 @@ describe('product breadth commands', () => {
       bootstrapCredentialPath: join(root, '.goodvibes', 'tui', 'auth-bootstrap.txt'),
       users: [{ username: 'admin', passwordHash: UserAuthManager.hashPassword('admin-pass'), roles: ['admin'] }],
     });
-    runtimeServices = createRuntimeServices({
+    runtimeServices = disposables.add(createRuntimeServices({
       runtimeBus: new RuntimeEventBus(),
       runtimeStore: createRuntimeStore(),
       featureFlags: createProductFeatureFlags(),
@@ -101,7 +117,7 @@ describe('product breadth commands', () => {
       }),
       localUserAuthManager,
       getConversationTitle: () => 'test-runtime',
-    });
+    }));
     productRemoteRunnerRegistry = new RemoteRunnerRegistry({
       getStatus: () => null,
       list: () => [],
