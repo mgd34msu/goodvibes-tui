@@ -31,6 +31,15 @@ export interface BootstrapOptions {
   workingDir: string;
   /** App-owned home directory for this runtime instance. */
   homeDirectory: string;
+  /**
+   * The daemon's identity directory for this runtime instance.
+   *
+   * Named rather than derived so the client's daemon-TIER secret reads and
+   * writes follow a GOODVIBES_DAEMON_HOME set on its own. Absent, the secret
+   * store falls back to `<homeDirectory>/.goodvibes/daemon`, which is the same
+   * answer whenever that variable is unset.
+   */
+  daemonHomeDirectory?: string;
   /** Explicit app-owned config manager for this runtime instance. */
   configManager: import('@pellux/goodvibes-sdk/platform/config').ConfigManager;
   /**

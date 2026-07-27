@@ -248,7 +248,7 @@ export async function initializeBootstrapCore(
     runtimeBus,
     runtimeStore: store,
     getConversationTitle: () => getConversationTitle(),
-    workingDir, homeDirectory,
+    workingDir, homeDirectory, ...(options.daemonHomeDirectory === undefined ? {} : { daemonHomeDirectory: options.daemonHomeDirectory }),
     // Embedded topology: the in-process runtime IS the daemon and holds its own OS
     // inhibitor, so opt into the real host seam (fork default is non-spawning). See services.ts.
     powerSeam: createHostPowerSeam(),
