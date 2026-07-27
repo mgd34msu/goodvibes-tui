@@ -11,6 +11,12 @@ import { StepUpService } from '@pellux/goodvibes-sdk/daemon';
 import { PairingTokenManager } from '@pellux/goodvibes-sdk/platform/pairing';
 import { resolvePairingWebOrigin } from '../core/pairing-origin.ts';
 import { attachWsOnlyGatewayVerbHandlers } from '@pellux/goodvibes-terminal-shell';
+import {
+  withSurfaceEmailConfig,
+  describeSurfaceEmailConfigProblem,
+  describeSenderClaimNeutrally,
+} from '@pellux/goodvibes-sdk/platform/email';
+import { nodeEmailTransport } from '@pellux/goodvibes-sdk/platform/email/node';
 import { createDisposalScope, registerSurfaceRuntimePollers } from './disposal-wiring.ts';
 import { WatcherRegistry } from '@pellux/goodvibes-sdk/platform/watchers';
 import { ArtifactStore } from '@pellux/goodvibes-sdk/platform/artifacts';
@@ -85,7 +91,16 @@ export interface RuntimeServicesOptions {
   readonly getConversationTitle?: () => string | undefined;
   readonly workingDir: string;
   readonly homeDirectory: string;
-  /** Daemon identity directory; absent ⇒ `<homeDirectory>/.goodvibes/daemon`. */ readonly daemonHomeDirectory?: string | undefined;
+  /**
+   * The daemon's state root when the host was told one (`--daemon-home`,
+   * `GOODVIBES_DAEMON_HOME`); absent ⇒ `<homeDirectory>/.goodvibes/daemon`.
+   * Threaded into `SecretsManager` so the override MOVES the daemon-scoped
+   * credential store; without it a daemon told to run out of a temp tree still
+   * read the real home's daemon secrets, so an "isolated" test daemon held the
+   * owner's live credentials. One name for one thing — `resolveGoodVibesHomeOwnership`
+   * is the single reader that produces it.
+   */
+  readonly daemonHomeDirectory?: string | undefined;
   /** Opt-in (daemon-side only): fold host-observed external coding-agent sessions
    * into the fleet as 'observed-external' rows. Interactive leaves it off and reads
    * the daemon snapshot. Mirrors the SDK's own createRuntimeServices option. */
@@ -296,7 +311,8 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
   const secretsManager = new SecretsManager({
     projectRoot: workingDirectory,
     globalHome: homeDirectory,
-    // Threaded, not defaulted: otherwise an isolated client reads the real store.
+    // Threaded, not defaulted: otherwise an isolated client reads the real
+    // store, and the daemon-scoped credential store stays in the real home.
     ...(options.daemonHomeDirectory === undefined ? {} : { daemonHome: options.daemonHomeDirectory }),
     configManager,
   });
@@ -606,7 +622,26 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
   const { voiceSetup } = wireVoiceSetup({ configManager, shellPaths, voiceProviders, admitExpensiveWork });
 
   // Terminal-shell wrapper over the SDK registerGatewayVerbGroups (gateway-verbs.ts); checkin.*/fleet-needs-input/pairing.* register only when their deps are present. memoryGovernor lights up ops.memory.get; voiceSetup lights up voice.local.status/install.
-  attachWsOnlyGatewayVerbHandlers(gatewayMethods, { processRegistry, workspaceCheckpointManager, conversationRewindPort: createSessionConversationRewindPort(), sessionBroker, secretsManager, stepUpService, approvalBroker, requestApproval: (input) => approvalBroker.requestApproval(input), watcherRegistry, userPermissionRuleStore, shellPaths, configManager, runtimeStore: options.runtimeStore, channelDeliveryRouter, providerRegistry, automationManager, sessionLister: sessionBroker, sessionIntake: sessionBroker, workingDirectory, memoryRegistry, pairingTokens, sessionLiveTurnControls, powerManager, memoryGovernor, voiceSetup, relayAvailable: () => configManager.get('relay.enabled') === true, pairingWebOrigin: () => resolvePairingWebOrigin(configManager).origin, disposal: disposalScope.registry, ...wireFleetNeedsInputPush({ registry: processRegistry, runtimeBus: options.runtimeBus, sessionBroker }) });
+  // calendar.* and email.* are served by the SDK now, not by product-local
+  // handlers. These four deps are what let it register: without homeDirectory
+  // the calendar composition returns null, and without emailServiceDeps the
+  // mail one does, and the verbs stay cataloged-but-unhandled.
+  //
+  // The mail settings come from the daemon's own surfaces.email.* keys via
+  // withSurfaceEmailConfig, so the keys an operator already set — and that the
+  // settings modal now shows — keep working unchanged.
+  const emailServiceDeps = withSurfaceEmailConfig({
+    getConfig: (key: string) => configManager.get(key as never),
+    secretsManager,
+    transport: nodeEmailTransport,
+    // The daemon has no wording of its own for a sender line, so it takes the
+    // platform's rather than growing a second implementation of a rule that is
+    // security-relevant: a From: header is a claim, sender authentication
+    // raises display confidence only, and commandAuthority is the literal
+    // 'none'.
+    describeSenderClaim: describeSenderClaimNeutrally,
+  } as never);
+  attachWsOnlyGatewayVerbHandlers(gatewayMethods, { homeDirectory, emailServiceDeps, describeEmailConfigProblem: () => describeSurfaceEmailConfigProblem((key: string) => configManager.get(key as never), secretsManager), processRegistry, workspaceCheckpointManager, conversationRewindPort: createSessionConversationRewindPort(), sessionBroker, secretsManager, stepUpService, approvalBroker, requestApproval: (input) => approvalBroker.requestApproval(input), watcherRegistry, userPermissionRuleStore, shellPaths, configManager, runtimeStore: options.runtimeStore, channelDeliveryRouter, providerRegistry, automationManager, sessionLister: sessionBroker, sessionIntake: sessionBroker, workingDirectory, memoryRegistry, pairingTokens, sessionLiveTurnControls, powerManager, memoryGovernor, voiceSetup, relayAvailable: () => configManager.get('relay.enabled') === true, pairingWebOrigin: () => resolvePairingWebOrigin(configManager).origin, disposal: disposalScope.registry, ...wireFleetNeedsInputPush({ registry: processRegistry, runtimeBus: options.runtimeBus, sessionBroker }) });
   const integrationHelpers = new IntegrationHelperService({
     surface, // surface-scoped: continuity's recovery-file check must read the SAME paths the app writes with, not the unscoped legacy pair.
     runtimeStore: options.runtimeStore,

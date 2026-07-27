@@ -1,4 +1,28 @@
 #!/usr/bin/env bun
+//
+// ── READ THIS BEFORE DEV-TESTING DAEMON ROUTES THROUGH THIS SHIM ──────────
+//
+// This launcher prefers a PREBUILT binary over the source checkout. On a
+// machine with `vendor/goodvibes-daemon-<platform>` staged, `bun bin/goodvibes-daemon`
+// runs THAT binary — compiled against the PUBLISHED SDK — not the source in
+// this repo and not whatever `sdk-dev link` overlaid into node_modules.
+//
+// The consequence is quiet and expensive: a route you just added returns 404
+// and every explanation you reach for is wrong, because the process answering
+// never contained your code. It cost a round several hours.
+//
+// Two further traps in the same area:
+//   - Killing this shim does NOT kill the vendored child. `pkill -f` on the
+//     shim's command line leaves the daemon listening, so the "restart" you
+//     think you performed changed nothing.
+//   - `sdk-dev link` overlays node_modules only. A vendored binary ignores it
+//     completely.
+//
+// To exercise source (and a linked SDK), bypass this launcher:
+//     bun src/daemon/cli.ts --port <port> --hostname 127.0.0.1
+// and isolate it with GOODVIBES_HOME / GOODVIBES_DAEMON_HOME / GOODVIBES_WORKING_DIR
+// so it cannot read the machine's real credentials or claim its service unit.
+//
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
