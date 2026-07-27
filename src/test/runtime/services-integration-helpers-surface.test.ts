@@ -23,8 +23,12 @@
 import { beforeEach, describe, expect, test } from 'bun:test';
 import { IntegrationHelperService, writeLastSessionPointer, writeRecoveryFile } from '@/runtime/index.ts';
 import { createUiReadModels } from '../../runtime/ui-read-models.ts';
-import { getTestRuntimeServices, resetTestRuntimeServices } from '../helpers/runtime-services.ts';
+import { getTestRuntimeServices, resetTestRuntimeServices, disposeTestRuntimeServicesAfterAll } from '../helpers/runtime-services.ts';
 import { ageRecoverySnapshot } from '../helpers/session-surface.ts';
+
+// Stop the shared test runtime graph when this file ends. Called here, not
+// registered inside the helper, for the reason its doc comment gives.
+disposeTestRuntimeServicesAfterAll();
 
 beforeEach(() => {
   resetTestRuntimeServices();

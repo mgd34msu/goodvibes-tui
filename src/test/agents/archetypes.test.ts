@@ -4,7 +4,11 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { ArchetypeLoader } from '@pellux/goodvibes-sdk/platform/agents';
 import type { AgentArchetype } from '@pellux/goodvibes-sdk/platform/agents';
-import { getTestArchetypeLoader, resetTestRuntimeServices } from '../helpers/runtime-services.ts';
+import { getTestArchetypeLoader, resetTestRuntimeServices, disposeTestRuntimeServicesAfterAll } from '../helpers/runtime-services.ts';
+
+// Stop the shared test runtime graph when this file ends. Called here, not
+// registered inside the helper, for the reason its doc comment gives.
+disposeTestRuntimeServicesAfterAll();
 
 const EXPECTED_BUILTIN_ARCHETYPES = [
   'orchestrator',

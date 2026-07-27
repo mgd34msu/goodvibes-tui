@@ -10,8 +10,12 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { unlinkSync, existsSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs';
-import { resetTestRuntimeServices } from '../helpers/runtime-services.ts';
+import { resetTestRuntimeServices, disposeTestRuntimeServicesAfterAll } from '../helpers/runtime-services.ts';
 import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
+
+// Stop the shared test runtime graph when this file ends. Called here, not
+// registered inside the helper, for the reason its doc comment gives.
+disposeTestRuntimeServicesAfterAll();
 
 function tempDbPath(): string {
   return join(tmpdir(), `memory-test-${randomUUID()}.db`);

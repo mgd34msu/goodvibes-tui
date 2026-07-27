@@ -1,6 +1,10 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { ensureBuiltinVoiceProviders, VoiceProviderRegistry, VoiceService } from '@pellux/goodvibes-sdk/platform/voice';
-import { resetTestRuntimeServices } from '../helpers/runtime-services.ts';
+import { resetTestRuntimeServices, disposeTestRuntimeServicesAfterAll } from '../helpers/runtime-services.ts';
+
+// Stop the shared test runtime graph when this file ends. Called here, not
+// registered inside the helper, for the reason its doc comment gives.
+disposeTestRuntimeServicesAfterAll();
 
 const BUILTIN_VOICE_ENV_KEYS = [
   'OPENAI_API_KEY',

@@ -11,6 +11,7 @@ import { createFeatureFlagManager } from '@/runtime/index.ts';
 import { createHttpTransport } from '@/runtime/index.ts';
 import { createRuntimeServices } from '../../runtime/services.ts';
 import { createRuntimeStore } from '../../runtime/store/index.ts';
+import { trackDisposables } from '../helpers/disposables.ts';
 import { UserAuthManager } from '@pellux/goodvibes-sdk/platform/security';
 
 const TEST_TOKEN = 'http-transport-token-abc123';
@@ -65,6 +66,16 @@ async function reservePort(): Promise<number> {
   });
 }
 
+/**
+ * A composed runtime graph starts a dozen pollers while it builds — the fleet
+ * registry tick, the config-file watch, the memory governor, the knowledge
+ * scheduler, the cross-session sweep, the orchestration snapshot writer, the
+ * push-subscription sweep and the snapshot / retention / consolidation
+ * schedulers. Nothing upstream stops a graph it did not compose itself, so the
+ * test that built it owns stopping it.
+ */
+const disposables = trackDisposables();
+
 describe('HttpTransport', () => {
   let daemon: DaemonServer;
   let tempRoot: string;
@@ -79,7 +90,7 @@ describe('HttpTransport', () => {
     port = await reservePort();
     mkdirSync(workingDir, { recursive: true });
     mkdirSync(homeDir, { recursive: true });
-    const runtimeServices = createRuntimeServices({
+    const runtimeServices = disposables.add(createRuntimeServices({
       runtimeStore: createRuntimeStore(),
       runtimeBus: new RuntimeEventBus(),
       configManager: new ConfigManager({ surfaceRoot: 'tui',
@@ -91,7 +102,7 @@ describe('HttpTransport', () => {
       homeDirectory: homeDir,
       featureFlags: createTransportFeatureFlags(),
       getConversationTitle: () => 'http-transport-test',
-    });
+    }));
     daemon = new DaemonServer({
       port,
       host: '127.0.0.1',

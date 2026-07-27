@@ -18,12 +18,17 @@ import {
   getTestTreeSitterService,
   getTestIntelligenceShellPaths,
   resetTestLspService,
+  disposeTestRuntimeServicesAfterAll,
 } from '../helpers/runtime-services.ts';
 import {
   loadLanguageConfigs,
   getLanguageConfig,
   getDefaultConfigs,
 } from '@pellux/goodvibes-sdk/platform/intelligence';
+
+// Stop the shared test runtime graph when this file ends. Called here, not
+// registered inside the helper, for the reason its doc comment gives.
+disposeTestRuntimeServicesAfterAll();
 
 // ---------------------------------------------------------------------------
 // Helpers

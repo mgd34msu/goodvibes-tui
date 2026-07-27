@@ -4,6 +4,11 @@ import { join } from 'path';
 import { mkdtempSync } from 'fs';
 import { tmpdir } from 'os';
 import { KVState } from '@pellux/goodvibes-sdk/platform/state';
+import { trackDisposables } from '../helpers/disposables.ts';
+
+// Every KVState starts a housekeeping interval in its constructor; dispose()
+// flushes pending writes and clears it.
+const disposables = trackDisposables();
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -26,10 +31,10 @@ describe('KVState', () => {
   let kv: KVState;
 
   function createKVState(sessionId?: string): KVState {
-    return new KVState({
+    return disposables.add(new KVState({
       ...(sessionId ? { sessionId } : {}),
       stateDir: stateDirFor(tmpDir),
-    });
+    }));
   }
 
   beforeEach(() => {
@@ -317,7 +322,7 @@ describe('KVState.dispose', () => {
   });
 
   test('dispose flushes pending data to disk', async () => {
-    const kv = new KVState({ stateDir: stateDirFor(tmpDir) });
+    const kv = disposables.add(new KVState({ stateDir: stateDirFor(tmpDir) }));
     await kv.set({ disposeKey: 'disposeVal' });
     // Timer is pending — dispose should flush before it fires
     await kv.dispose();
@@ -329,7 +334,7 @@ describe('KVState.dispose', () => {
   });
 
   test('dispose is safe to call when no data has been loaded', async () => {
-    const kv = new KVState({ stateDir: stateDirFor(tmpDir) });
+    const kv = disposables.add(new KVState({ stateDir: stateDirFor(tmpDir) }));
     await expect(kv.dispose()).resolves.toBeUndefined();
   });
 });
@@ -350,7 +355,7 @@ describe('KVState ensureLoaded race condition', () => {
   });
 
   test('concurrent get() calls load data exactly once without corruption', async () => {
-    const kv = new KVState({ stateDir: stateDirFor(tmpDir) });
+    const kv = disposables.add(new KVState({ stateDir: stateDirFor(tmpDir) }));
     // Fire two get() calls simultaneously before any load has happened
     const [r1, r2] = await Promise.all([
       kv.get(['id']),
@@ -362,7 +367,7 @@ describe('KVState ensureLoaded race condition', () => {
   });
 
   test('concurrent set() calls do not lose data', async () => {
-    const kv = new KVState({ stateDir: stateDirFor(tmpDir) });
+    const kv = disposables.add(new KVState({ stateDir: stateDirFor(tmpDir) }));
     await Promise.all([
       kv.set({ alpha: 1 }),
       kv.set({ beta: 2 }),
@@ -379,7 +384,7 @@ describe('KVState ensureLoaded race condition', () => {
     const id = 'deadbeef';
     writeFileSync(join(stateDir, `session_${id}.json`), 'not valid json', 'utf-8');
 
-    const kv = new KVState({ sessionId: id, stateDir: stateDirFor(tmpDir) });
+    const kv = disposables.add(new KVState({ sessionId: id, stateDir: stateDirFor(tmpDir) }));
     await expect(kv.get(['anything'])).rejects.toThrow('JsonFileStore failed to load');
   });
 });

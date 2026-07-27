@@ -63,12 +63,16 @@ describe('retry affordance lifecycle', () => {
     const state = createRetryAffordanceState();
     armRetryAffordance(state, false);
     expect(retryAffordanceHint(state)).toBe('[Retry] r retry · m switch model');
+    // Arming with the REAL schedule starts a 60s disarm timer; the assertion is
+    // about the hint, so hand the timer back rather than leaving it pending.
+    disarmRetryAffordance(state);
   });
 
   test('arming with exhausted=true uses the same-provider wording', () => {
     const state = createRetryAffordanceState();
     armRetryAffordance(state, true);
     expect(retryAffordanceHint(state)).toBe('[Retry] r retry same provider · m switch model');
+    disarmRetryAffordance(state);
   });
 
   test('disarming removes the hint entirely — never lingers', () => {
@@ -167,6 +171,7 @@ describe('retry affordance lifecycle', () => {
     expect(state.armed).toBe(true);
     expect(state.exhausted).toBe(true);
     expect(renderCount).toBe(1);
+    disarmRetryAffordance(state);
   });
 });
 

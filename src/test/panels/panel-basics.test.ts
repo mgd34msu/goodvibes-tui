@@ -8,7 +8,7 @@
 //   3. GitPanel     — render in loading/error/data states
 // ---------------------------------------------------------------------------
 
-import { describe, test, expect, beforeEach } from 'bun:test';
+import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
 import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import type { Line } from '../../types/grid.ts';
 import type { Orchestrator } from '../../core/orchestrator';
@@ -272,6 +272,13 @@ describe('TokenBudgetPanel', () => {
     );
   });
 
+  // onActivate() starts the 2s context-bar refresh poll; onDeactivate() is what
+  // stops it. Tests below activate the panel to exercise render paths, so the
+  // matching deactivate belongs here rather than in each of them.
+  afterEach(() => {
+    panel.onDeactivate();
+  });
+
   describe('render() — unwired panel', () => {
     test('renders without throwing when not wired', () => {
       expect(() => panel.render(80, 20)).not.toThrow();
@@ -456,6 +463,12 @@ describe('GitPanel', () => {
 
   beforeEach(() => {
     panel = new GitPanel(TEST_ROOT);
+  });
+
+  // Same contract as TokenBudgetPanel above: onActivate() starts a periodic
+  // git-status refresh and onDeactivate() stops it.
+  afterEach(() => {
+    panel.onDeactivate();
   });
 
   describe('render() — initial loading state', () => {

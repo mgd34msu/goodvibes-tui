@@ -4,7 +4,11 @@ import { createOperatorClientServices } from '@/runtime/index.ts';
 import { createEventEnvelope, RuntimeEventBus } from '@/runtime/index.ts';
 import { createOperatorClient } from '@/runtime/index.ts';
 import { createInitialTasksState, type RuntimeTask } from '@/runtime/index.ts';
-import { getTestRuntimeServices, resetTestRuntimeServices } from '../helpers/runtime-services.ts';
+import { getTestRuntimeServices, resetTestRuntimeServices, disposeTestRuntimeServicesAfterAll } from '../helpers/runtime-services.ts';
+
+// Stop the shared test runtime graph when this file ends. Called here, not
+// registered inside the helper, for the reason its doc comment gives.
+disposeTestRuntimeServicesAfterAll();
 
 
 // Drain queued microtasks so bus.emit() listeners (OBS-14 async dispatch) run before assertions.

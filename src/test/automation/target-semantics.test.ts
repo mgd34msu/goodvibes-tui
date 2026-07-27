@@ -8,9 +8,15 @@ import { AutomationRouteStore } from '@pellux/goodvibes-sdk/platform/automation'
 import { AutomationRunStore } from '@pellux/goodvibes-sdk/platform/automation';
 import { RouteBindingManager } from '@pellux/goodvibes-sdk/platform/channels';
 import { SharedSessionBroker } from '@pellux/goodvibes-sdk/platform/control-plane';
+import { trackDisposables } from '../helpers/disposables.ts';
 import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import { PersistentStore } from '@pellux/goodvibes-sdk/platform/state';
 import { AgentManager } from '@pellux/goodvibes-sdk/platform/tools';
+
+// AutomationManager.start() arms a per-job schedule timer and a heartbeat
+// interval; stop() clears them. SharedSessionBroker starts a 60s GC sweep on
+// first use; stop() clears that. Both are built per test here.
+const disposables = trackDisposables();
 
 const testAgentExecutor = {
   async runAgent() {
@@ -40,7 +46,7 @@ describe('AutomationManager target semantics', () => {
     const routeBindings = new RouteBindingManager({
       store: new AutomationRouteStore(join(root, 'automation-routes.json')),
     });
-    const sessionBroker = new SharedSessionBroker({
+    const sessionBroker = disposables.add(new SharedSessionBroker({
       store: new PersistentStore(join(root, 'shared-sessions.json')),
       routeBindings,
       agentStatusProvider: {
@@ -54,8 +60,8 @@ describe('AutomationManager target semantics', () => {
           return liveAgents.has(toId);
         },
       },
-    });
-    const manager = new AutomationManager({
+    }));
+    const manager = disposables.add(new AutomationManager({
       configManager,
       defaultSurfaceKind: 'tui',
       jobStore: new AutomationJobStore(join(root, 'automation-jobs.json')),
@@ -67,7 +73,7 @@ describe('AutomationManager target semantics', () => {
       },
       cancelTask: () => undefined,
       agentStatusProvider: { getStatus: () => null },
-    });
+    }));
     return {
       manager,
       agentManager,

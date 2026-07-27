@@ -38,9 +38,13 @@
 import { afterAll, describe, expect, test } from 'bun:test';
 import { createDecipheriv, createECDH, createHmac, randomBytes } from 'node:crypto';
 import { createEventEnvelope } from '@pellux/goodvibes-transport-core';
-import { getTestRuntimeServices } from '../helpers/runtime-services.ts';
+import { getTestRuntimeServices, disposeTestRuntimeServicesAfterAll } from '../helpers/runtime-services.ts';
 import { wireFleetNeedsInputPush } from '../../runtime/fleet-needs-input-push.ts';
 import { RuntimeEventBus } from '@/runtime/index.ts';
+
+// Stop the shared test runtime graph when this file ends. Called here, not
+// registered inside the helper, for the reason its doc comment gives.
+disposeTestRuntimeServicesAfterAll();
 
 // ---------------------------------------------------------------------------
 // A local fake push sink standing in for a browser vendor's push service —

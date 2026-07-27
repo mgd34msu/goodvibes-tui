@@ -20,8 +20,23 @@ import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import type { ChatRequest, ChatResponse, LLMProvider } from '@pellux/goodvibes-sdk/platform/providers';
 import { createRuntimeStore } from '../../runtime/store/index.ts';
 import { createRuntimeServices } from '../../runtime/services.ts';
-import { resetTestRuntimeServices } from '../helpers/runtime-services.ts';
+import { resetTestRuntimeServices, disposeTestRuntimeServicesAfterAll } from '../helpers/runtime-services.ts';
 import { buildTestModelDefinition } from '../helpers/test-managers.ts';
+import { trackDisposables } from '../helpers/disposables.ts';
+
+// Stop the shared test runtime graph when this file ends. Called here, not
+// registered inside the helper, for the reason its doc comment gives.
+disposeTestRuntimeServicesAfterAll();
+
+/**
+ * A composed runtime graph starts a dozen pollers while it builds — the fleet
+ * registry tick, the config-file watch, the memory governor, the knowledge
+ * scheduler, the cross-session sweep, the orchestration snapshot writer, the
+ * push-subscription sweep and the snapshot / retention / consolidation
+ * schedulers. Nothing upstream stops a graph it did not compose itself, so the
+ * test that built it owns stopping it.
+ */
+const disposables = trackDisposables();
 
 const TEST_TOKEN = 'standalone-test-token-abc123';
 
@@ -61,7 +76,7 @@ async function startDaemon(
       'control-plane-gateway': 'enabled',
     },
   });
-  const runtimeServices = createRuntimeServices({
+  const runtimeServices = disposables.add(createRuntimeServices({
     configManager: env.config,
     featureFlags,
     runtimeBus,
@@ -69,7 +84,7 @@ async function startDaemon(
     workingDir: env.workingDir,
     homeDirectory: env.homeDir,
     getConversationTitle: () => 'standalone test',
-  });
+  }));
   // Ephemeral-port harness: bind on port 0 and capture the OS-assigned port so
   // two concurrent `bun test` processes never collide on a fixed base port.
   // Injecting a serveFactory also makes DaemonServer skip its pre-bind OS port

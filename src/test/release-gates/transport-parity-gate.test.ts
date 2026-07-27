@@ -120,6 +120,10 @@ function createRuntimeFixture(prefix: string) {
     runtimeBus,
     runtimeServices,
     dispose(): void {
+      // The graph starts a dozen pollers as it composes and nothing upstream
+      // stops one it did not build itself, so the fixture that made it owns
+      // stopping it.
+      runtimeServices.dispose();
       rmSync(tempRoot, { recursive: true, force: true });
     },
   };
