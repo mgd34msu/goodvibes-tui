@@ -21,6 +21,8 @@ import { THEME_MODE_CONFIG_KEY, coerceThemeModeSetting } from '../renderer/theme
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 import { buildFirstOpenItems, decodeFirstOpenChoice, selfRecordWorkspaceRegistration } from '../cli/tui-startup.ts';
 import type { WorkspaceTrustLevel } from '../runtime/trust/workspace-trust.ts';
+import { createShellPathService } from '@/runtime/index.ts';
+import { PaymentsConfigStore } from '../input/payments-store.ts';
 
 type WireShellUiOpenersOptions = {
   commandContext: CommandContext;
@@ -129,6 +131,13 @@ export function wireShellUiOpeners(options: WireShellUiOpenersOptions): void {
     render,
     trustPromptRef,
   } = options;
+
+  // Backs the settings modal's Payments category (see payments-config.ts /
+  // payments-store.ts): payments.* has no ConfigManager section, so it is a
+  // small dedicated JSON file, same shape as services.json/watchers.json.
+  const paymentsStore = new PaymentsConfigStore(
+    createShellPathService({ workingDirectory, homeDirectory }).resolveUserPath('tui', 'payments.json'),
+  );
 
   // Trust-at-consequence-time: raised by trustGatedAsk on the first non-read
   // request in an undecided workspace; the answer persists via setLevel().
@@ -400,6 +409,7 @@ export function wireShellUiOpeners(options: WireShellUiOpenersOptions): void {
       ...(commandContext.workspace?.gatewayMethods
         ? { gatewayMethods: commandContext.workspace.gatewayMethods }
         : {}),
+      paymentsStore,
       requestRender: render,
       onSettingApplied: (change) => {
         // forced dark/light applies immediately (rebuild palettes + full
