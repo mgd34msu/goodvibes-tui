@@ -4,8 +4,8 @@ import {
   renderLiveVerificationReportMarkdown,
   writeLiveVerificationReportFiles,
 } from '../src/verification/live-verifier.ts';
-import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
+import { resolveGoodVibesTreeDirectory } from '../src/config/goodvibes-home.ts';
 
 function readArgValue(args: readonly string[], flag: string): string | undefined {
   const index = args.indexOf(flag);
@@ -19,7 +19,8 @@ if (args.includes('--help') || args.includes('-h')) {
     'Usage: bun run scripts/verify-live.ts [options]',
     '',
     'Options:',
-    '  --home <path>        GoodVibes home directory. Defaults to ~/.goodvibes.',
+    '  --home <path>        The .goodvibes directory. Defaults to the tree under',
+    '                       GOODVIBES_HOME, or ~/.goodvibes when that is unset.',
     '  --binary <path>      Compiled goodvibes binary. Defaults to dist/goodvibes.',
     '  --daemon-url <url>   Daemon base URL. Defaults to configured control-plane port on 127.0.0.1.',
     '  --strict            Treat warnings as failures.',
@@ -31,7 +32,10 @@ if (args.includes('--help') || args.includes('-h')) {
 }
 
 const report = await buildLiveVerificationReport({
-  homeDir: readArgValue(args, '--home') ?? process.env.GOODVIBES_HOME ?? join(homedir(), '.goodvibes'),
+  // Derived from the tree root, the same way the runtime derives it. Reading
+  // GOODVIBES_HOME as the .goodvibes directory here meant this verifier and the
+  // binary it drives disagreed about which tree the run belonged to.
+  homeDir: readArgValue(args, '--home') ?? resolveGoodVibesTreeDirectory(),
   binaryPath: readArgValue(args, '--binary') ?? join(resolve(join(import.meta.dir, '..')), 'dist', 'goodvibes'),
   projectRoot: resolve(join(import.meta.dir, '..')),
   daemonBaseUrl: readArgValue(args, '--daemon-url'),

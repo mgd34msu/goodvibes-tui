@@ -81,6 +81,34 @@ export function resolveGoodVibesDaemonHome(
   return isAbsolute(override) ? override : resolve(process.cwd(), override);
 }
 
+/**
+ * The `.goodvibes` directory itself — the tree, not the root it sits under.
+ *
+ * This exists because the two were being derived independently and did not
+ * agree. `GOODVIBES_HOME` meant the tree ROOT to the runtime
+ * (`<GOODVIBES_HOME>/.goodvibes/...`) and meant the `.goodvibes` DIRECTORY to
+ * the two reporting scripts, which read it as
+ * `process.env.GOODVIBES_HOME ?? join(homedir(), '.goodvibes')`. Set it to
+ * `/tmp/sandbox` to isolate a run and the runtime wrote
+ * `/tmp/sandbox/.goodvibes/`, while a script inspected `/tmp/sandbox` as though
+ * it were already the tree — so the two halves of one round disagreed about
+ * which files were even in scope.
+ *
+ * That is the shape of an incident that has already happened here: a
+ * home-redirection variable honoured by one entry point and ignored by another
+ * put two throwaway credentials in the owner's live secret store. One variable
+ * has one meaning now, and it is the runtime's, because the runtime is what
+ * writes secrets and because an isolation harness needs a single root that
+ * everything falls under.
+ *
+ * A caller that genuinely wants to name a `.goodvibes` directory directly —
+ * auditing a tree that is not under any home — passes it explicitly rather than
+ * through the environment. Both scripts keep a `--home` flag for exactly that.
+ */
+export function resolveGoodVibesTreeDirectory(env: NodeJS.ProcessEnv = process.env): string {
+  return join(resolveGoodVibesHome(env), '.goodvibes');
+}
+
 /** Both roots at once — what an entry point wants. */
 export function resolveGoodVibesHomeOwnership(
   env: NodeJS.ProcessEnv = process.env,
