@@ -20,8 +20,16 @@ import { UserAuthManager } from '@pellux/goodvibes-sdk/platform/security';
 import { SpawnTokenManager } from '@pellux/goodvibes-sdk/platform/security';
 import { PolicyRuntimeState } from '@/runtime/index.ts';
 import { resolveAndValidatePath } from '@pellux/goodvibes-sdk/platform/utils';
-import { resetTestSpawnTokenManagers } from '../helpers/runtime-services.ts';
+import { resetTestSpawnTokenManagers, disposeTestRuntimeServicesAfterAll } from '../helpers/runtime-services.ts';
+import { trackDisposables } from '../helpers/disposables.ts';
+import { createRuntimeServices } from '../../runtime/services.ts';
+import { createRuntimeStore } from '../../runtime/store/index.ts';
+import { RuntimeEventBus } from '@/runtime/index.ts';
 import { resetSettingsControlPlaneStore } from '../helpers/settings-control-plane.ts';
+
+// Stop the shared test runtime graph when this file ends. Called here, not
+// registered inside the helper, for the reason its doc comment gives.
+disposeTestRuntimeServicesAfterAll();
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -63,6 +71,8 @@ let workingDir: string;
 let homeDir: string;
 let configDir: string;
 
+const disposables = trackDisposables();
+
 function createTestDaemon(): DaemonServer {
   return new DaemonServer({
     port: 0,
@@ -70,6 +80,19 @@ function createTestDaemon(): DaemonServer {
     configManager,
     workingDir,
     homeDirectory: homeDir,
+    // Injected rather than left to the facade's own composition. Every one of
+    // these tests exercises the danger gate and never binds a socket, and
+    // DaemonServer.stop() returns immediately when `server === null` — so a
+    // facade-composed graph here would have no reachable teardown, and its
+    // dozen pollers would run for the rest of the process. An injected graph is
+    // the caller's to stop, and this is the caller.
+    runtimeServices: disposables.add(createRuntimeServices({
+      configManager,
+      runtimeBus: new RuntimeEventBus(),
+      runtimeStore: createRuntimeStore(),
+      workingDir,
+      homeDirectory: homeDir,
+    })),
   });
 }
 

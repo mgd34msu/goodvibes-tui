@@ -13,10 +13,14 @@ import { DEFAULT_CONFIG } from '../../config/index.ts';
 import { getProviderIdFromModel } from '../../config/provider-model.ts';
 import { readOnboardingCheckMarker, type OnboardingSnapshotState } from '../../runtime/onboarding/index.ts';
 import { createDefaultUiRuntimeServices } from '../helpers/ui-services.ts';
-import { resetTestRuntimeServices } from '../helpers/runtime-services.ts';
+import { resetTestRuntimeServices, disposeTestRuntimeServicesAfterAll } from '../helpers/runtime-services.ts';
 import type { UiRuntimeServices } from '../../runtime/ui-services.ts';
 import type { InputToken } from '@pellux/goodvibes-sdk/platform/core';
 import type { HostServiceStatus } from '@/runtime/index.ts';
+
+// Stop the shared test runtime graph when this file ends. Called here, not
+// registered inside the helper, for the reason its doc comment gives.
+disposeTestRuntimeServicesAfterAll();
 
 afterEach(() => {
   resetTestRuntimeServices();

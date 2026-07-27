@@ -40,6 +40,7 @@ type CommandContextOverrides =
     extensions?: Partial<CommandContext['extensions']>;
   };
 import { MemoryEmbeddingProviderRegistry } from '@pellux/goodvibes-sdk/platform/state';
+import { trackDisposables } from '../helpers/disposables.ts';
 
 /**
  * registerBuiltinPanels wants a `MemoryAccess` client (the async facade), not
@@ -49,6 +50,16 @@ import { MemoryEmbeddingProviderRegistry } from '@pellux/goodvibes-sdk/platform/
 function makeMemoryAccess(registry: MemoryRegistry): MemorySpineClient {
   return new MemorySpineClient({ local: createLocalMemoryAccess(registry) });
 }
+
+/**
+ * A composed runtime graph starts a dozen pollers while it builds — the fleet
+ * registry tick, the config-file watch, the memory governor, the knowledge
+ * scheduler, the cross-session sweep, the orchestration snapshot writer, the
+ * push-subscription sweep and the snapshot / retention / consolidation
+ * schedulers. Nothing upstream stops a graph it did not compose itself, so the
+ * test that built it owns stopping it.
+ */
+const disposables = trackDisposables();
 
 describe('operator surfaces gate', () => {
   let configManager: ConfigManager;
@@ -61,14 +72,14 @@ describe('operator surfaces gate', () => {
     configManager.set('fleet.maxSize', 8);
     configManager.set('orchestration.maxDepth', 1);
     configManager.set('orchestration.recursionEnabled', true);
-    runtimeServices = createRuntimeServices({
+    runtimeServices = disposables.add(createRuntimeServices({
       runtimeBus: new RuntimeEventBus(),
       runtimeStore: createRuntimeStore(),
       configManager,
       workingDir: configManager.getControlPlaneConfigDir(),
       homeDirectory: tmpdir(),
       getConversationTitle: () => 'operator-surfaces',
-    });
+    }));
   });
 
   function makeCommandContext(

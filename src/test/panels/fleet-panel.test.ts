@@ -1337,6 +1337,9 @@ describe('FleetPanel — registration', () => {
     const opened = manager.open('fleet');
     expect(opened).toBeInstanceOf(FleetPanel);
     expect(manager.getPanel('fleet')).toBe(opened);
+    // Opening activates the panel, which starts its refresh tick; closing is
+    // what deactivates it and stops that tick.
+    manager.close('fleet');
   });
 
   test('registerType throws when another panel already owns the fleet icon (collision guard proves uniqueness is enforced)', () => {
@@ -1457,6 +1460,7 @@ describe('FleetPanel — receiveDeepLink (item 4)', () => {
     expect(again).toBe(first); // same instance — the existing-pane reuse path, not a fresh panel
     const selectedLine = linesText((again as FleetPanel).render(100, 24)).split('\n').find((l) => l.includes('▸'));
     expect(selectedLine).toContain('agent-2');
+    manager.close('fleet');
   });
 });
 

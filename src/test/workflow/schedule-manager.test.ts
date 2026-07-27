@@ -1,9 +1,21 @@
-import { describe, test, expect, beforeEach } from 'bun:test';
+import { describe, test, expect, afterEach, beforeEach } from 'bun:test';
 import { ScheduleManager, parseInterval } from '@pellux/goodvibes-sdk/platform/tools';
-import { getTestScheduleManager, resetTestRuntimeServices } from '../helpers/runtime-services.ts';
+import { getTestScheduleManager, resetTestRuntimeServices, disposeTestRuntimeServicesAfterAll } from '../helpers/runtime-services.ts';
+
+// Stop the shared test runtime graph when this file ends. Called here, not
+// registered inside the helper, for the reason its doc comment gives.
+disposeTestRuntimeServicesAfterAll();
 
 beforeEach(() => {
   resetTestRuntimeServices();
+});
+
+// An enabled schedule owns a live setInterval, and disposing the runtime graph
+// does not reach into ScheduleManager to stop it — removing the schedule is
+// what clears its timer, which is also the contract these tests exercise.
+afterEach(() => {
+  const manager = getTestScheduleManager();
+  for (const entry of manager.list()) manager.remove(entry.name);
 });
 
 // ---------------------------------------------------------------------------

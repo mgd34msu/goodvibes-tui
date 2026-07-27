@@ -4,7 +4,11 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import { createHookApi, HookWorkbench, listHookPointContracts } from '@pellux/goodvibes-sdk/platform/hooks';
-import { getTestHookDispatcher } from '../helpers/runtime-services.ts';
+import { getTestHookDispatcher, disposeTestRuntimeServicesAfterAll } from '../helpers/runtime-services.ts';
+
+// Stop the shared test runtime graph when this file ends. Called here, not
+// registered inside the helper, for the reason its doc comment gives.
+disposeTestRuntimeServicesAfterAll();
 
 describe('HookApi', () => {
   const configManager = new ConfigManager({ surfaceRoot: 'tui',

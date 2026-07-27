@@ -1,6 +1,10 @@
 import { beforeEach, describe, expect, test } from 'bun:test';
 import { createKnowledgeApi } from '@pellux/goodvibes-sdk/platform/knowledge';
-import { resetTestRuntimeServices, getTestRuntimeServices } from '../helpers/runtime-services.ts';
+import { resetTestRuntimeServices, getTestRuntimeServices, disposeTestRuntimeServicesAfterAll } from '../helpers/runtime-services.ts';
+
+// Stop the shared test runtime graph when this file ends. Called here, not
+// registered inside the helper, for the reason its doc comment gives.
+disposeTestRuntimeServicesAfterAll();
 
 describe('KnowledgeApi', () => {
   beforeEach(() => {

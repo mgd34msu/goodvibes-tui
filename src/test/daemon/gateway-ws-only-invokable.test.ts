@@ -13,7 +13,11 @@
  */
 import { describe, expect, test } from 'bun:test';
 import { assertEveryDescriptorHasHandler } from '@pellux/goodvibes-terminal-shell/conformance';
-import { getTestRuntimeServices } from '../helpers/runtime-services.ts';
+import { getTestRuntimeServices, disposeTestRuntimeServicesAfterAll } from '../helpers/runtime-services.ts';
+
+// Stop the shared test runtime graph when this file ends. Called here, not
+// registered inside the helper, for the reason its doc comment gives.
+disposeTestRuntimeServicesAfterAll();
 
 const WS_ONLY_METHOD_IDS = [
   'fleet.snapshot',

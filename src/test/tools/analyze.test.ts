@@ -8,7 +8,11 @@ import { makeTempDir, writeTempFile } from '../setup.ts';
 import { createAnalyzeTool } from '@pellux/goodvibes-sdk/platform/tools';
 import { GitService } from '@pellux/goodvibes-sdk/platform/git';
 import { createTestManagers } from '../helpers/test-managers.ts';
-import { getTestGitService } from '../helpers/runtime-services.ts';
+import { getTestGitService, disposeTestRuntimeServicesAfterAll } from '../helpers/runtime-services.ts';
+
+// Stop the shared test runtime graph when this file ends. Called here, not
+// registered inside the helper, for the reason its doc comment gives.
+disposeTestRuntimeServicesAfterAll();
 
 let analyzeTool: ReturnType<typeof createAnalyzeTool>;
 

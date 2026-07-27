@@ -1,6 +1,10 @@
 import { afterAll, describe, expect, test } from 'bun:test';
 import { normalizeEverySchedule } from '@pellux/goodvibes-sdk/platform/automation';
-import { getTestRuntimeServices, resetTestRuntimeServices } from '../helpers/runtime-services.ts';
+import { getTestRuntimeServices, resetTestRuntimeServices, disposeTestRuntimeServicesAfterAll } from '../helpers/runtime-services.ts';
+
+// Stop the shared test runtime graph when this file ends. Called here, not
+// registered inside the helper, for the reason its doc comment gives.
+disposeTestRuntimeServicesAfterAll();
 
 /**
  * Locks the model-override resolution wiring in the TUI's services composition:
