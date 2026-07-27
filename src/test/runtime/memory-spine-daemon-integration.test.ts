@@ -28,6 +28,19 @@ import { createTuiMemorySpineTransport, syncMemorySpineToHostStatus, type Memory
 const TOKEN = 'memory-spine-integration-token';
 
 /**
+ * Per-test budget for this file.
+ *
+ * A ceiling, not a target. Every test here boots a REAL daemon on a real socket
+ * and then makes several real HTTP round trips to it; on a fast host that is
+ * tens of milliseconds and the ceiling costs nothing, because nothing in the
+ * file waits out a fixed delay. bun's implicit 5 s default was an idle
+ * machine's number: on a loaded host these failed with "this test timed out
+ * after 5000ms" while the daemon was still coming up normally — the file as a
+ * whole takes far longer than 5 s there.
+ */
+const TEST_BUDGET_MS = 120_000;
+
+/**
  * A minimal, isolated in-memory MemoryAccess standing in for the TUI's own
  * local registry — the offline/host backend. Exposes its record map so tests
  * can assert a write never reached it (or did). Implements the full 1.2.0
@@ -196,7 +209,7 @@ describe('MemorySpineClient against a real bootDaemon (isolated home, ephemeral 
 
     const fetched = await client.get(record.id);
     expect(fetched?.summary).toBe('stays local');
-  });
+  }, TEST_BUDGET_MS);
 
   test('activating on an adopted daemon routes add/get/search/review/delete through the wire to the daemon\'s own canonical registry', async () => {
     harness = await startHarness();
@@ -224,7 +237,7 @@ describe('MemorySpineClient against a real bootDaemon (isolated home, ephemeral 
     const deleted = await client.delete(record.id);
     expect(deleted).toBe(true);
     expect(harness.daemon.memory.get(record.id)).toBeNull();
-  });
+  }, TEST_BUDGET_MS);
 
   test('a get() for an id the daemon has never seen resolves null over the wire (honest 404, not a thrown error)', async () => {
     harness = await startHarness();
@@ -234,7 +247,7 @@ describe('MemorySpineClient against a real bootDaemon (isolated home, ephemeral 
 
     await expect(client.get('no-such-record')).resolves.toBeNull();
     await expect(client.updateReview('no-such-record', { state: 'stale' })).resolves.toBeNull();
-  });
+  }, TEST_BUDGET_MS);
 });
 
 describe('memory-spine version-skew wire honesty (route-not-found vs record-missing 404)', () => {
@@ -253,28 +266,28 @@ describe('memory-spine version-skew wire honesty (route-not-found vs record-miss
       baseUrl: 'http://127.0.0.1:9', authToken: 'tok', fetchImpl: cannedFetch(404, routeNotFound),
     });
     await expect(transport.update!('mem_x', { summary: 's' })).rejects.toThrow(/does not support the 'update' memory verb/);
-  });
+  }, TEST_BUDGET_MS);
 
   test('a NULLABLE verb (update) against a current daemon with a missing record (record-missing 404) resolves null', async () => {
     const transport = createTuiMemorySpineTransport({
       baseUrl: 'http://127.0.0.1:9', authToken: 'tok', fetchImpl: cannedFetch(404, recordMissing),
     });
     await expect(transport.update!('mem_x', { summary: 's' })).resolves.toBeNull();
-  });
+  }, TEST_BUDGET_MS);
 
   test('a NON-NULLABLE verb (list) against an older daemon (route-not-found 404) REJECTS honestly instead of a raw 404', async () => {
     const transport = createTuiMemorySpineTransport({
       baseUrl: 'http://127.0.0.1:9', authToken: 'tok', fetchImpl: cannedFetch(404, routeNotFound),
     });
     await expect(transport.list!({})).rejects.toThrow(/does not support the 'list' memory verb/);
-  });
+  }, TEST_BUDGET_MS);
 
   test('a bare legacy 404 with no code is treated as method-unavailable, never a silent null', async () => {
     const transport = createTuiMemorySpineTransport({
       baseUrl: 'http://127.0.0.1:9', authToken: 'tok', fetchImpl: cannedFetch(404, { error: 'Not found' }),
     });
     await expect(transport.update!('mem_x', { summary: 's' })).rejects.toThrow(/does not support the 'update' memory verb/);
-  });
+  }, TEST_BUDGET_MS);
 });
 
 describe('memory-spine recall honesty passthrough', () => {
@@ -310,7 +323,7 @@ describe('memory-spine recall honesty passthrough', () => {
     expect(result.indexUnavailableReason).toBe(reason);
     expect(result.mode).toBe('literal');
     expect(result.requestedSemantic).toBe(true);
-  });
+  }, TEST_BUDGET_MS);
 });
 
 describe('memory-spine deactivation on daemon loss', () => {
@@ -343,5 +356,5 @@ describe('memory-spine deactivation on daemon loss', () => {
     // A write now lands on the LOCAL store again, not any wire target.
     const record = await client.add({ cls: 'fact', summary: 'back to local after daemon loss' });
     expect(records.has(record.id)).toBe(true);
-  });
+  }, TEST_BUDGET_MS);
 });
