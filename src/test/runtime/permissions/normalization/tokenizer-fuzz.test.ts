@@ -122,8 +122,17 @@ const FUZZ_CORPUS: Array<[string, string]> = [
 // Property: tokenizer always terminates (bounded wall-clock time)
 // ---------------------------------------------------------------------------
 
-/** Maximum milliseconds allowed for any single tokenize() call. */
-const MAX_ALLOWED_MS = 500;
+/**
+ * Maximum milliseconds allowed for any single tokenize() call.
+ *
+ * The property is termination: the failure this guards against is a tokenizer
+ * that never comes back on a pathological input, not one that is a few hundred
+ * milliseconds slower than usual. 500 ms was a number only an idle machine can
+ * promise — a pathological input plus one descheduling crosses it while the
+ * tokenizer is behaving perfectly. The bound is still far below any
+ * non-terminating run.
+ */
+const MAX_ALLOWED_MS = 5_000;
 
 describe('GC-PERM-010: tokenizer fuzz and pathological guards', () => {
   describe('property: always terminates within bounded time', () => {

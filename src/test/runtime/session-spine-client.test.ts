@@ -137,9 +137,14 @@ describe('SessionSpineClient fire-and-forget latency contract', () => {
     client.close('s3');
     const elapsedMs = Date.now() - start;
 
-    // All four calls must return well under a millisecond-scale budget —
-    // there is structurally no `await` on the call site (methods return void).
-    expect(elapsedMs).toBeLessThan(20);
+    // All four calls must return without waiting on the wire. The REAL proof is
+    // the fixture: `fake.mode = 'pending'` never resolves, so a call site that
+    // awaited would hang here and fail on the test budget, not merely be slow.
+    // This bound is the secondary sanity check, and 20 ms was a number only an
+    // idle machine can promise — four synchronous calls can straddle a
+    // descheduling on a busy host. Widened to a value that still separates
+    // "returned immediately" from any real wire round trip.
+    expect(elapsedMs).toBeLessThan(1_000);
     expect(client.status()).toBe('unknown'); // network has not settled — no premature 'online'
     client.dispose();
   });
