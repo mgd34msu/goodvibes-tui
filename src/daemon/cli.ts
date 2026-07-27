@@ -426,15 +426,17 @@ async function main(): Promise<void> {
     // daemon.stop() drives the ordered inbound teardown: it stops every gated
     // consumer and only then broadcasts the resignation, so another node on
     // this network takes over in about a second instead of waiting out the
-    // crash timeout. Handler surfaces (inbox store, catalog handlers) are
-    // released afterwards — before this, a SIGTERM left the inbox cursor store
-    // open and relied on process exit to clear the poll timers.
+    // crash timeout.
+    //
+    // This process built the runtime graph and handed it to DaemonServer, so by
+    // the SDK's ownership rule the facade leaves it alone — nothing else stops
+    // these pollers. Without dispose() the config watch, fleet tick, memory
+    // governor, watcher registry and six more kept ticking until process exit.
+    // The handler surfaces (inbox store + its poll timers, catalog handlers) are
+    // the FIRST thing dispose() unwinds — they are on the disposal owner list
+    // now rather than sequenced by hand here, which is what makes every other
+    // shutdown path stop them too instead of only this one.
     const stop = Promise.allSettled([listener.stop(), daemon.stop()])
-      .then(() => runtimeServices.daemonHandlers.unregister())
-      // This process built the runtime graph and handed it to DaemonServer, so
-      // by the SDK's ownership rule the facade leaves it alone — nothing else
-      // stops these pollers. Without this the config watch, fleet tick, memory
-      // governor, watcher registry and six more kept ticking until process exit.
       .then(() => { runtimeServices.dispose(); })
       .then(() => 'done' as const);
     const result = await Promise.race([stop, timeout]);

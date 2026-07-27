@@ -26,7 +26,16 @@ import { createRuntimeStore } from '../../runtime/store/index.ts';
 
 import { createRuntimeServices, type RuntimeServices } from '../../runtime/services.ts';
 
-/** Modules that own repeating work started by the graph. */
+/**
+ * Modules that own repeating work started by the graph.
+ *
+ * One repeating handle deliberately survives dispose() and is not listed:
+ * `workspace/checkpoint/cross-process-lock`'s 5s mtime refresh, which exists
+ * only while the checkpoint manager's async init holds a cross-process lock and
+ * ends when that lock is released. It belongs to an operation that was
+ * genuinely in flight, not to a subsystem the graph left running — the same
+ * distinction the SDK's own daemon-shutdown test draws.
+ */
 const POLLER_OWNERS = [
   'config/config-file-watcher',
   'runtime/fleet/registry',
@@ -39,6 +48,13 @@ const POLLER_OWNERS = [
   'state/memory-consolidation-scheduler',
   'knowledge/scheduling',
   'agents/wrfc-controller',
+  // Fork-only, and the two the SDK cannot know about: the inbox retention sweep
+  // and the per-account inbound poll loops, both owned by the daemon handler
+  // surfaces this product attaches to the SDK gateway catalog. They were absent
+  // from the disposal owner list, so a graph that had been told to stop kept
+  // sweeping and kept polling.
+  'daemon/handlers/inbox/cursor-store',
+  'daemon/handlers/inbox/poller',
 ] as const;
 
 interface Tracked { readonly kind: 'interval' | 'timeout'; readonly delayMs: number; readonly stack: string }
@@ -94,7 +110,11 @@ let services: RuntimeServices;
 let liveBeforeDispose: string[] = [];
 let liveAfterDispose: string[] = [];
 
-beforeAll(() => {
+function describe(): string[] {
+  return [...live.values()].map((t) => `${t.kind} ${t.delayMs}ms ${siteOf(t.stack)}`);
+}
+
+beforeAll(async () => {
   root = mkdtempSync(join(tmpdir(), 'tui-disposal-'));
   install();
   try {
@@ -106,13 +126,23 @@ beforeAll(() => {
       homeDirectory: root,
       getConversationTitle: () => 'disposal-test',
     });
-    liveBeforeDispose = [...live.values()].map((t) => `${t.kind} ${t.delayMs}ms ${siteOf(t.stack)}`);
+    // Not every poller is armed by the time the factory returns. The inbox
+    // surface starts its store bootstrap without awaiting it and arms the
+    // retention sweep two awaits later, so disposing the instant construction
+    // returns would measure a timer that does not exist yet and pass for
+    // entirely the wrong reason. Wait for it, bounded.
+    const deadline = Date.now() + 10_000;
+    while (Date.now() < deadline
+      && !describe().some((e) => e.includes('daemon/handlers/inbox/cursor-store'))) {
+      await new Promise((resolve) => realSetTimeout(resolve, 25));
+    }
+    liveBeforeDispose = describe();
     services.dispose();
-    liveAfterDispose = [...live.values()].map((t) => `${t.kind} ${t.delayMs}ms ${siteOf(t.stack)}`);
+    liveAfterDispose = describe();
   } finally {
     restore();
   }
-});
+}, 30_000);
 
 afterAll(() => {
   rmSync(root, { recursive: true, force: true });
@@ -122,6 +152,13 @@ test('composing the graph really does start pollers — the measurement is not v
   const started = liveBeforeDispose.filter((e) => POLLER_OWNERS.some((o) => e.includes(o)));
   expect(created).toBeGreaterThan(5);
   expect(started.length).toBeGreaterThan(0);
+});
+
+test('the inbox retention sweep is genuinely running before dispose() is asked to stop it', () => {
+  // Named on its own because it is the poller the owner list was missing, and
+  // because it is the one that arms asynchronously: without this assertion the
+  // survivor check below would pass on a timer that was never created.
+  expect(liveBeforeDispose.filter((e) => e.includes('daemon/handlers/inbox/cursor-store'))).not.toEqual([]);
 });
 
 test('dispose() stops every poller the graph started', () => {
