@@ -31,6 +31,19 @@ import { resolveRuntimeEndpointBinding } from '../../cli/endpoints.ts';
 const INSTALL_SH = join(import.meta.dir, '../../../scripts/install.sh');
 const created: string[] = [];
 
+/**
+ * Per-test ceiling for the tests that drive install.sh against a REAL process.
+ *
+ * A ceiling, not a target. The installer's own SIGTERM grace is up to 10 s by
+ * design, and these tests also spawn processes and shell out repeatedly; the
+ * previous 20 s budget left almost no headroom, so a loaded machine failed
+ * tests that were behaving correctly (observed: `Expected: 0 / Received: -1` at
+ * 20015 ms). Nothing in these tests waits out a fixed delay — every wait is a
+ * condition poll that returns the moment the condition holds — so a larger
+ * ceiling costs a fast host nothing while a genuinely stuck run still fails.
+ */
+const PROCESS_TEST_BUDGET_MS = 60_000;
+
 function scratch(prefix: string): string {
   const dir = mkdtempSync(join(tmpdir(), `${prefix}-`));
   created.push(dir);
@@ -68,6 +81,78 @@ const LOGINCTL_STUB = [
   '',
 ].join('\n');
 
+/**
+ * The absolute path of the real `pgrep`, resolved once. The stub below shadows
+ * `pgrep` on PATH, so it cannot look its own delegate up by name.
+ */
+const REAL_PGREP = (() => {
+  const found = Bun.spawnSync(['sh', '-c', 'command -v pgrep']).stdout.toString().trim();
+  return found === '' ? '/usr/bin/pgrep' : found;
+})();
+
+/**
+ * A `pgrep` that only ever sees processes started by THIS test's scratch tree.
+ *
+ * install.sh discovers a running daemon by process NAME
+ * (`pgrep -f '[g]oodvibes-daemon'` — daemon_bare_process_running, and the
+ * pattern restart_bare_processes/stop_bare_processes are handed). A process
+ * name is global to the machine, so an unscoped pgrep inside the test matched
+ * every OTHER process on the host carrying that name: a second copy of this
+ * suite running concurrently (the runner executes several test files at a
+ * time, and more than one checkout can be under test at once), or the
+ * developer's own running daemon. Two consequences, both observed:
+ *
+ *   - `daemon_running` answered true because a SIBLING test process's daemon
+ *     was alive, so `setup_daemon_service` took its "already running" early
+ *     return and printed nothing; the assertion on its output then failed
+ *     with `Received: "inactive\n"`.
+ *   - `restart_bare_processes` SIGTERMed those foreign pids and then waited up
+ *     to 10 s for each to exit — which broke the other test process and blew
+ *     this one's 20 s budget (`Expected: 0 / Received: -1` at 20015 ms).
+ *
+ * Delegating to the real pgrep and keeping only the pids whose command line
+ * starts with this test's own scratch root preserves everything under test —
+ * the installer still genuinely discovers, inspects, and stops the process this
+ * test really started — while making the outcome independent of every other
+ * process on the machine. Exit status follows pgrep's contract: 0 with a pid
+ * list on stdout, 1 when nothing matched.
+ */
+function pgrepStub(root: string): string {
+  return [
+    '#!/bin/sh',
+    `real=${JSON.stringify(REAL_PGREP)}`,
+    `root=${JSON.stringify(root)}`,
+    'pids=$("$real" "$@" 2>/dev/null) || pids=""',
+    '[ -n "$pids" ] || exit 1',
+    'found=""',
+    'for pid in $pids; do',
+    '  cmd=$(ps -o args= -p "$pid" 2>/dev/null || true)',
+    '  case "$cmd" in',
+    '    "$root"/*) found="$found$pid',
+    '" ;;',
+    '  esac',
+    'done',
+    '[ -n "$found" ] || exit 1',
+    "printf '%s' \"$found\"",
+    'exit 0',
+    '',
+  ].join('\n');
+}
+
+/**
+ * Write the host-tool stubs every stub bin dir shares: `loginctl` (linger
+ * state, see LOGINCTL_STUB) and `pgrep` (scoped process discovery, see
+ * pgrepStub).
+ */
+function writeSharedHostStubs(bin: string, root: string): void {
+  const loginctlPath = join(bin, 'loginctl');
+  writeFileSync(loginctlPath, LOGINCTL_STUB);
+  chmodSync(loginctlPath, 0o755);
+  const pgrepPath = join(bin, 'pgrep');
+  writeFileSync(pgrepPath, pgrepStub(root));
+  chmodSync(pgrepPath, 0o755);
+}
+
 /** Write a stub bin dir whose systemctl/launchctl are inert no-ops, so a
  * service-touching code path can be exercised without reaching the real host.
  * `is-active` reports inactive (exit 3); `cat` reports "no such unit" (exit 1),
@@ -97,9 +182,7 @@ function stubServiceBin(root: string): string {
     writeFileSync(path, stub);
     chmodSync(path, 0o755);
   }
-  const loginctlPath = join(bin, 'loginctl');
-  writeFileSync(loginctlPath, LOGINCTL_STUB);
-  chmodSync(loginctlPath, 0o755);
+  writeSharedHostStubs(bin, root);
   return bin;
 }
 
@@ -152,9 +235,7 @@ function stubStatefulServiceBin(root: string): string {
     writeFileSync(path, stub);
     chmodSync(path, 0o755);
   }
-  const loginctlPath = join(bin, 'loginctl');
-  writeFileSync(loginctlPath, LOGINCTL_STUB);
-  chmodSync(loginctlPath, 0o755);
+  writeSharedHostStubs(bin, root);
   return bin;
 }
 
@@ -285,9 +366,7 @@ function stubDualUnitServiceBin(root: string): string {
   ].join('\n');
   writeFileSync(join(bin, 'launchctl'), launchctlStub);
   chmodSync(join(bin, 'launchctl'), 0o755);
-  const loginctlPath = join(bin, 'loginctl');
-  writeFileSync(loginctlPath, LOGINCTL_STUB);
-  chmodSync(loginctlPath, 0o755);
+  writeSharedHostStubs(bin, root);
   return bin;
 }
 
@@ -302,10 +381,37 @@ function stubBuslessServiceBin(root: string): string {
     writeFileSync(path, stub);
     chmodSync(path, 0o755);
   }
-  const loginctlPath = join(bin, 'loginctl');
-  writeFileSync(loginctlPath, LOGINCTL_STUB);
-  chmodSync(loginctlPath, 0o755);
+  writeSharedHostStubs(bin, root);
   return bin;
+}
+
+/**
+ * Wait until the OS reports `pid` as running `binPath`.
+ *
+ * `Bun.spawn` returns as soon as the child process exists, which is BEFORE its
+ * `execve` has replaced the image — until then `ps`/`pgrep` still report the
+ * parent's command line, and that is exactly the view install.sh's discovery
+ * reads. The fixed 300 ms sleep this replaces was a budget sized for an idle
+ * machine: on a loaded one the exec lands later, the installer finds nothing to
+ * act on, and the test fails for a reason that has nothing to do with the
+ * installer. This polls the same view the installer uses and returns the
+ * instant it agrees, so a fast host pays nothing and a slow one is not
+ * punished. A process that never appears still fails, with a message that says
+ * what was being waited for.
+ */
+async function waitForSpawnedBinary(pid: number, binPath: string, budgetMs = 15_000): Promise<void> {
+  const deadline = Date.now() + budgetMs;
+  for (;;) {
+    const args = Bun.spawnSync(['ps', '-o', 'args=', '-p', String(pid)]).stdout.toString().trim();
+    if (args.startsWith(binPath)) return;
+    if (Date.now() > deadline) {
+      throw new Error(
+        `spawned pid ${pid} never became visible as "${binPath}" within ${budgetMs}ms ` +
+          `(ps reported: ${args === '' ? '<no such process>' : args})`,
+      );
+    }
+    await new Promise((r) => setTimeout(r, 20));
+  }
 }
 
 /** Source install.sh as a library and run `body`, returning combined output. */
@@ -747,7 +853,7 @@ describe('install.sh — supervised transfer from an ACTIVE legacy unit (the dom
       };
 
       try {
-        await new Promise((r) => setTimeout(r, 300)); // let pgrep see it
+        await waitForSpawnedBinary(pid, join(t.installDir, 'goodvibes-daemon'));
         const out = runLib('restart_running_daemon; setup_daemon_service; migrate_legacy_installer_unit', {
           ...t.env,
           STUB_LEGACY_MAINPID: String(pid),
@@ -789,7 +895,7 @@ describe('install.sh — supervised transfer from an ACTIVE legacy unit (the dom
         }
       }
     },
-    20000,
+    PROCESS_TEST_BUDGET_MS,
   );
 
   test(
@@ -818,7 +924,7 @@ describe('install.sh — supervised transfer from an ACTIVE legacy unit (the dom
       };
 
       try {
-        await new Promise((r) => setTimeout(r, 300));
+        await waitForSpawnedBinary(pid, join(t.installDir, 'goodvibes-daemon'));
         const out = runLib('restart_running_daemon', {
           ...t.env,
           STUB_PID_UNIT_PID: String(pid),
@@ -838,7 +944,7 @@ describe('install.sh — supervised transfer from an ACTIVE legacy unit (the dom
         }
       }
     },
-    20000,
+    PROCESS_TEST_BUDGET_MS,
   );
 
   test(
@@ -874,7 +980,7 @@ describe('install.sh — supervised transfer from an ACTIVE legacy unit (the dom
       };
 
       try {
-        await new Promise((r) => setTimeout(r, 300));
+        await waitForSpawnedBinary(pid, join(installDir, 'goodvibes-daemon'));
         const out = runLib('restart_running_daemon; setup_daemon_service; migrate_legacy_installer_unit', {
           HOME: home,
           GOODVIBES_INSTALL_DIR: installDir,
@@ -902,7 +1008,7 @@ describe('install.sh — supervised transfer from an ACTIVE legacy unit (the dom
         }
       }
     },
-    20000,
+    PROCESS_TEST_BUDGET_MS,
   );
 
   test('hand-written ACTIVE legacy unit in the CORPSE state (ExecStart binary deleted): never disabled, never renamed, never rewritten — honest note only', () => {
@@ -963,7 +1069,7 @@ describe('install.sh — supervised transfer from an ACTIVE legacy unit (the dom
     };
 
     try {
-      await new Promise((r) => setTimeout(r, 300));
+      await waitForSpawnedBinary(pid, join(installDir, 'goodvibes-daemon'));
       const out = runLib('os_tag=macos; restart_running_daemon', {
         HOME: home,
         GOODVIBES_INSTALL_DIR: installDir,
@@ -1309,7 +1415,7 @@ describe('install.sh — supervised transfer from an ACTIVE legacy unit (the dom
       };
 
       try {
-        await new Promise((r) => setTimeout(r, 300));
+        await waitForSpawnedBinary(pid, join(installDir, 'goodvibes-daemon'));
         // Dual stub with NO state files staged: every unit answers the modern
         // rc-4 'no such unit'; status <pid> answers rc 4 too → pid is free.
         const out = runLib('restart_running_daemon', {
@@ -1334,7 +1440,7 @@ describe('install.sh — supervised transfer from an ACTIVE legacy unit (the dom
         Bun.spawnSync(['pkill', '-f', `${installDir}/goodvibes-daemon`]);
       }
     },
-    20000,
+    PROCESS_TEST_BUDGET_MS,
   );
 
   test('GOODVIBES_RESTART_DAEMON=0 leaves an ACTIVE legacy unit completely untouched (the documented contract)', () => {
@@ -1938,7 +2044,7 @@ describe('install.sh — launchd migration analog (macOS upgrades get the args-d
       const launchctlLog = join(root, 'launchctl-log');
 
       try {
-        await new Promise((r) => setTimeout(r, 300));
+        await waitForSpawnedBinary(pid, join(installDir, 'goodvibes-daemon'));
         const out = runLib('os_tag=macos; restart_running_daemon', {
           HOME: home,
           GOODVIBES_INSTALL_DIR: installDir,
@@ -1965,7 +2071,7 @@ describe('install.sh — launchd migration analog (macOS upgrades get the args-d
         }
       }
     },
-    20000,
+    PROCESS_TEST_BUDGET_MS,
   );
 
   test('a hand-written plist (no marker) is left byte-identical', () => {
@@ -2272,8 +2378,9 @@ describe('install.sh — restart path validates the target before restarting/rel
       };
 
       try {
-        // Give pgrep a moment to see the process.
-        await new Promise((r) => setTimeout(r, 300));
+        // Wait until the OS genuinely reports the process as this binary —
+        // that is the view the installer's pgrep reads.
+        await waitForSpawnedBinary(pid, foreignBin);
 
         // Step 1: the restart path must recognize this pid as foreign (its
         // real executable is not under $INSTALL_DIR) and refuse to recover
@@ -2323,7 +2430,7 @@ describe('install.sh — restart path validates the target before restarting/rel
         }
       }
     },
-    20000,
+    PROCESS_TEST_BUDGET_MS,
   );
 });
 

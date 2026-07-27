@@ -19,12 +19,36 @@ import { createTuiSpineTransport, type SpineSessionsClient } from '../../runtime
 
 const TOKEN = 'spine-integration-token';
 
-async function waitFor<T>(fn: () => Promise<T | undefined | null>, timeoutMs = 2_000, intervalMs = 20): Promise<T> {
+/**
+ * Ceiling for a single poll, and per-test budget for the whole file.
+ *
+ * Both are ceilings, not targets. Every test here boots a REAL daemon on a real
+ * socket and talks to it over real HTTP; a fast host finishes in tens of
+ * milliseconds and pays nothing for the headroom, because every wait below
+ * returns the instant its condition holds. The previous numbers were an idle
+ * machine's numbers: a 2 s poll ceiling and bun's implicit 5 s per-test default,
+ * against work that legitimately includes process boot and socket setup. On a
+ * loaded host these tests failed with "this test timed out after 5000ms" while
+ * the daemon was still coming up perfectly normally — the whole file takes
+ * ~33 s there, so a 5 s budget for one of its tests was never realistic.
+ */
+const WAIT_CEILING_MS = 30_000;
+const TEST_BUDGET_MS = 120_000;
+
+async function waitFor<T>(
+  fn: () => Promise<T | undefined | null>,
+  what = 'unlabelled condition',
+  timeoutMs = WAIT_CEILING_MS,
+  intervalMs = 20,
+): Promise<T> {
   const startedAt = Date.now();
   for (;;) {
     const value = await fn();
     if (value !== undefined && value !== null) return value;
-    if (Date.now() - startedAt > timeoutMs) throw new Error('waitFor: timed out');
+    const elapsedMs = Date.now() - startedAt;
+    if (elapsedMs > timeoutMs) {
+      throw new Error(`waitFor: ${what} never became true — waited ${elapsedMs}ms (ceiling ${timeoutMs}ms)`);
+    }
     await new Promise((r) => setTimeout(r, intervalMs));
   }
 }
@@ -81,13 +105,13 @@ describe('SessionSpineClient against a real bootDaemon (isolated home, ephemeral
     const record = await waitFor(async () => {
       const sessions = await harness!.listSessions();
       return sessions.find((s) => s.id === 'tui-create-1') ?? null;
-    });
+    }, 'session tui-create-1 appears in sessions.list');
 
     expect(record.kind).toBe('tui');
     expect(record.project).toBe(harness.workingDir);
     expect(record.status).toBe('active');
     client.dispose();
-  });
+  }, TEST_BUDGET_MS);
 
   test('heartbeat advances the participant lastSeenAt on the daemon record', async () => {
     harness = await startHarness();
@@ -99,7 +123,7 @@ describe('SessionSpineClient against a real bootDaemon (isolated home, ephemeral
     const initial = await waitFor(async () => {
       const sessions = await harness!.listSessions();
       return sessions.find((s) => s.id === 'tui-heartbeat-1') ?? null;
-    });
+    }, 'session tui-heartbeat-1 appears in sessions.list');
     const initialLastSeen = initial.participants[0]?.lastSeenAt ?? 0;
 
     clock += 10_000; // past the heartbeat window
@@ -110,11 +134,11 @@ describe('SessionSpineClient against a real bootDaemon (isolated home, ephemeral
       const rec = sessions.find((s) => s.id === 'tui-heartbeat-1');
       const lastSeen = rec?.participants[0]?.lastSeenAt ?? 0;
       return lastSeen > initialLastSeen ? rec : null;
-    });
+    }, 'the participant lastSeenAt advances past its first value');
 
     expect((advanced!.participants[0]?.lastSeenAt ?? 0)).toBeGreaterThan(initialLastSeen);
     client.dispose();
-  });
+  }, TEST_BUDGET_MS);
 
   test('close is honest: the daemon record flips to status closed', async () => {
     harness = await startHarness();
@@ -125,18 +149,18 @@ describe('SessionSpineClient against a real bootDaemon (isolated home, ephemeral
     await waitFor(async () => {
       const sessions = await harness!.listSessions();
       return sessions.find((s) => s.id === 'tui-close-1') ?? null;
-    });
+    }, 'session tui-close-1 appears in sessions.list');
 
     client.close('tui-close-1');
 
     const closed = await waitFor(async () => {
       const session = await harness!.getSession('tui-close-1');
       return session?.status === 'closed' ? session : null;
-    });
+    }, 'session tui-close-1 reaches status closed');
 
     expect(closed?.status).toBe('closed');
     client.dispose();
-  });
+  }, TEST_BUDGET_MS);
 
   test('legacy fold: a fixture store is imported into the daemon (open session active, closed session stays closed)', async () => {
     harness = await startHarness();
@@ -158,18 +182,18 @@ describe('SessionSpineClient against a real bootDaemon (isolated home, ephemeral
     const openRecord = await waitFor(async () => {
       const sessions = await harness!.listSessions();
       return sessions.find((s) => s.id === 'legacy-open-1') ?? null;
-    });
+    }, 'folded session legacy-open-1 appears in sessions.list');
     expect(openRecord.status).toBe('active');
 
     const closedRecord = await waitFor(async () => {
       const session = await harness!.getSession('legacy-closed-1');
       return session?.status === 'closed' ? session : null;
-    });
+    }, 'folded session legacy-closed-1 stays closed');
     expect(closedRecord?.status).toBe('closed');
 
     // Idempotent — a second fold call with the marker present folds nothing.
     const second = foldLegacySpineStore(client, { storePath, markerPath, project: harness.workingDir });
     expect(second).toEqual({ folded: 0, skipped: true });
     client.dispose();
-  });
+  }, TEST_BUDGET_MS);
 });

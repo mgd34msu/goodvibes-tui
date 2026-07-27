@@ -29,6 +29,28 @@ import { RuntimeEventBus, startExternalServices } from '@/runtime/index.ts';
 import { HookDispatcher } from '@pellux/goodvibes-sdk/platform/hooks';
 import { getTestRuntimeServices } from '../helpers/runtime-services.ts';
 
+/**
+ * What the adopt probe is allowed to take, and what the test itself is allowed
+ * to take.
+ *
+ * The old pair was broken as a pair: the assertion budget was 5 000 ms and
+ * bun's implicit per-test default is also 5 000 ms, so the measurement could
+ * never actually fail its own assertion — the test died of bun's timeout first
+ * ("this test timed out after 5000ms", observed on every run of a loaded host),
+ * with no measured number reported at all. And 5 000 ms was an idle machine's
+ * figure for work that includes booting a real daemon and doing real socket
+ * I/O; on a busy host the adopt path takes longer while behaving perfectly.
+ *
+ * The regression this guards is a probe that HANGS or silently falls back to
+ * starting its own daemon — an order-of-magnitude change, not a few hundred
+ * milliseconds. A ceiling well clear of scheduling noise still catches that,
+ * and the measured number is logged on every run either way, so a genuine creep
+ * is visible rather than hidden behind a pass/fail line the host decides. The
+ * test budget sits above the assertion budget so the ASSERTION is what fails.
+ */
+const ADOPT_BUDGET_MS = 30_000;
+const TEST_BUDGET_MS = 120_000;
+
 /** Finds a free ephemeral TCP port (bootstrap-services.ts requires a concrete
  * 1-65535 port, not 0, for controlPlane.port/httpListener.port config values —
  * unlike bootDaemon's own `port: 0` OS-assignment convenience). */
@@ -83,14 +105,12 @@ describe('perf: real adopt-or-start probe cost (post daemon.enabled-by-default)'
       console.log(`[perf] adopt-or-start (adopt external daemon path): ${elapsedMs.toFixed(2)}ms`);
 
       expect(handle.daemonStatus.mode).toBe('external');
-      // Generous budget: this runs off the deferred (post-first-paint) path,
-      // not the interactive one, but should still complete quickly for a good UX.
-      expect(elapsedMs).toBeLessThan(5_000);
+      expect(elapsedMs).toBeLessThan(ADOPT_BUDGET_MS);
       await handle.stop();
     } finally {
       await daemon.stop();
       rmSync(homeDirectory, { recursive: true, force: true });
       rmSync(workingDir, { recursive: true, force: true });
     }
-  });
+  }, TEST_BUDGET_MS);
 });

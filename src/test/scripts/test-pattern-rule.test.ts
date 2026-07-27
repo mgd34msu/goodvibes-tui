@@ -25,6 +25,19 @@ describe('parseTestPattern', () => {
   test('a shell-injection-looking pattern is still just a plain string value', () => {
     expect(parseTestPattern(['; rm -rf /tmp/x'])).toBe('; rm -rf /tmp/x');
   });
+
+  test("--timeout's VALUE is skipped, never mistaken for the pattern", () => {
+    // A value-taking flag whose value is not skipped is read as the pattern,
+    // and the run then filters every test file out and exits 1 — a silent way
+    // to run nothing at all.
+    expect(parseTestPattern(['--timeout', '60000'])).toBeUndefined();
+    expect(parseTestPattern(['--timeout', '60000', 'diff-runtime'])).toBe('diff-runtime');
+    expect(parseTestPattern(['--coverage', '--jobs', '4', '--timeout', '60000', 'diff-runtime'])).toBe('diff-runtime');
+  });
+
+  test('--timeout=N is a single token and needs no value skip', () => {
+    expect(parseTestPattern(['--timeout=60000', 'diff-runtime'])).toBe('diff-runtime');
+  });
 });
 
 describe('filterTestFilesByPattern', () => {
