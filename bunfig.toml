@@ -10,3 +10,16 @@
 # lines >= 75%; measured baseline 2026-06-11: 73.14/76.80).
 coverageReporter = ["text"]
 coverageDir = "coverage"
+
+# Coverage measures THIS repository's sources, never a dependency's.
+#
+# Normally that is automatic: bun excludes node_modules, and the SDK lives
+# there. But a developer running against a local SDK checkout replaces that
+# directory with a symlink to it, and the resolved paths then land OUTSIDE this
+# repo, where the node_modules exclusion no longer applies. Every SDK dist file
+# joined the coverage table, and the run died partway through printing it
+# ("internal error (WriteFailed)") — so the gate failed for everyone using a
+# dev link, and reported nothing about this repo's coverage while doing it.
+#
+# A no-op in CI, where the SDK is an ordinary installed package.
+coveragePathIgnorePatterns = ["**/goodvibes-sdk/**", "**/node_modules/**"]
