@@ -2,6 +2,7 @@ import { type Line, createEmptyLine, createStyledCell } from '../types/grid.ts';
 import { getDisplayWidth, wrapText } from '../utils/terminal-width.ts';
 import { LAYOUT } from './layout.ts';
 import { GLYPHS } from './ui-primitives.ts';
+import { treeBranchCol, treeContentCol } from './conversation-tree.ts';
 
 export interface ConversationSurfacePalette {
   readonly accent: string;
@@ -104,7 +105,12 @@ export function renderConversationFragment(
   palette: ConversationFragmentPalette,
   indentCols = 0,
 ): Line[] {
-  const margin = LAYOUT.USER_BOX_MARGIN + Math.max(0, indentCols);
+  // A tree fragment is a continuation of the row above it, so it starts at that
+  // row's content column — which puts its ` ▸ ` prefix glyph in exactly the same
+  // column as the parent row's own ` ▸ N lines ` badge. A flush fragment (a user
+  // message ghost box) keeps the box margin it has always used.
+  const indent = Math.max(0, indentCols);
+  const margin = indent > 0 ? treeContentCol(indent) : LAYOUT.USER_BOX_MARGIN;
   const prefixWidth = getDisplayWidth(palette.prefix);
   // The indent is charged to the content budget rather than allowed to push the
   // fragment past the right edge — a narrow terminal shrinks the preview text
@@ -211,15 +217,26 @@ export function renderConversationStatusLine(
 ): Line {
   const line = createEmptyLine(width);
   const indent = Math.max(0, options.indentCols ?? 0);
-  const markerCol = LAYOUT.LEFT_MARGIN - 1 + indent;
-  const startCol = LAYOUT.LEFT_MARGIN + 1 + indent;
+  // Both columns come from conversation-tree.ts so a flush row and a branch row
+  // sit on one grid: the marker where its depth's glyph belongs, the segment run
+  // two columns further right.
+  const markerCol = treeBranchCol(indent);
+  const startCol = treeContentCol(indent);
   const endCol = Math.max(startCol, width - LAYOUT.RIGHT_MARGIN);
-  if (markerCol >= 0 && markerCol < width) {
-    line[markerCol] = createStyledCell(options.marker ?? '▌', {
+  const marker = options.marker ?? '▌';
+  const markerWidth = getDisplayWidth(marker);
+  if (markerCol >= 0 && markerCol < width && markerWidth > 0) {
+    const markerStyle = {
       fg: options.markerFg ?? '#64748b',
       bg: options.markerBg ?? options.bodyBg ?? '',
       bold: true,
-    });
+    };
+    line[markerCol] = createStyledCell(marker, markerStyle);
+    // A double-width marker claims its trailing cell, so the segment run that
+    // follows still starts where the grid says it does.
+    if (markerWidth > 1 && markerCol + 1 < width) {
+      line[markerCol + 1] = createStyledCell('', markerStyle);
+    }
   }
   let col = startCol;
   for (const segment of segments) {
