@@ -11,15 +11,19 @@ import { relative } from 'node:path';
 
 /**
  * Parse the first non-flag positional argv token as the test-file filter
- * pattern. Recognizes and skips the two existing flags (`--coverage`,
- * `--jobs N`) so a pattern can be combined with either; unrecognized flags
- * are skipped defensively rather than treated as the pattern.
+ * pattern. Recognizes and skips the runner's own flags (`--coverage`,
+ * `--jobs N`, `--timeout N`) so a pattern can be combined with any of them;
+ * unrecognized flags are skipped defensively rather than treated as the
+ * pattern. A value-taking flag whose value were NOT skipped would be read as
+ * the pattern, and the run would silently filter every file out.
  */
+const VALUE_FLAGS = new Set(['--jobs', '--timeout']);
+
 export function parseTestPattern(argv: readonly string[]): string | undefined {
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i]!;
     if (arg === '--coverage') continue;
-    if (arg === '--jobs') { i++; continue; } // skip the flag and its value
+    if (VALUE_FLAGS.has(arg)) { i++; continue; } // skip the flag and its value
     if (arg.startsWith('--')) continue; // ignore unrecognized flags defensively
     return arg;
   }

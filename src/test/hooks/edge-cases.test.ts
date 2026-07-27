@@ -416,8 +416,11 @@ describe('Concurrent hook execution limits', () => {
     const result = await dispatcher.fire(makeEvent());
     const elapsed = Date.now() - start;
 
-    // Async hook does not block
-    expect(elapsed).toBeLessThan(2000);
+    // Async hook does not block. The alternative this rules out is waiting on a
+    // 60 s sleep, so the bound only has to be far below 60 s — 2000 ms was
+    // tight enough that a busy host could cross it while the hook was in fact
+    // not blocking at all.
+    expect(elapsed).toBeLessThan(15_000);
     // Synchronous hook still runs
     expect(result.additionalContext).toBe('sync-ran');
   });
@@ -436,7 +439,10 @@ describe('Concurrent hook execution limits', () => {
     const result = await dispatcher.fire(makeEvent());
     const elapsed = Date.now() - start;
 
-    expect(elapsed).toBeLessThan(2000);
+    // Same reasoning as above: the shape being ruled out is blocking on five
+    // 60 s sleeps, which this separates from by a wide margin without asking
+    // the machine to be idle.
+    expect(elapsed).toBeLessThan(15_000);
     expect(result.ok).toBe(true);
   });
 
