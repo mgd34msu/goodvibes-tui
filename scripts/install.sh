@@ -353,17 +353,82 @@ resolve_version() {
 # a different $GOODVIBES_INSTALL_DIR elsewhere on the host, etc.). Shared by
 # the restart path (skip relaunching a foreign process) and uninstall (only
 # stop processes this install actually owns).
-proc_belongs_to_install_dir() {
+# proc_exe_path <pid> — the executable behind a pid, or empty when it cannot
+# be determined. Printed to the operator when a foreign process is left alone,
+# so "something else owns this" names WHICH something else.
+proc_exe_path() {
   _pid="$1"
   if [ -r "/proc/$_pid/exe" ]; then
-    _exe=$(readlink -f "/proc/$_pid/exe" 2>/dev/null || true)
-  else
-    _exe=$(ps -o args= -p "$_pid" 2>/dev/null | sed 's/ .*$//')
+    _resolved=$(readlink -f "/proc/$_pid/exe" 2>/dev/null || true)
+    if [ -n "$_resolved" ] && [ -e "$_resolved" ]; then
+      printf '%s' "$_resolved"
+      return 0
+    fi
+    # An upgrade that REPLACES the binary leaves the running process pointing
+    # at a deleted inode, which `readlink -f` cannot resolve. The raw link
+    # still records the path it was launched from, so this install's own
+    # daemon stays attributable to it across exactly the upgrade this script
+    # performs — without it, the process the restart path exists to restart
+    # would look foreign and be skipped.
+    _raw=$(readlink "/proc/$_pid/exe" 2>/dev/null || true)
+    _raw=${_raw% (deleted)}
+    if [ -n "$_raw" ]; then
+      printf '%s' "$_raw"
+      return 0
+    fi
   fi
+  ps -o args= -p "$_pid" 2>/dev/null | sed 's/ .*$//'
+}
+
+proc_belongs_to_install_dir() {
+  _exe=$(proc_exe_path "$1")
   case "$_exe" in
     "$INSTALL_DIR"/*) return 0 ;;
     *) return 1 ;;
   esac
+}
+
+# pids_owned_by_install <pgrep-pattern> — pids matching the pattern whose
+# executable resolves under $INSTALL_DIR.
+#
+# `pgrep -f` matches on a COMMAND LINE, which is a host-global namespace: it
+# cannot tell this install's daemon from one belonging to another checkout, a
+# worktree, a dev copy, or another user's tree. Every site that acts on the
+# result must filter first — a machine deliberately running more than one
+# goodvibes node is the case the clustering work exists to support, and an
+# installer that kills the other nodes defeats it.
+pids_owned_by_install() {
+  _matched=$(pgrep -f "$1" 2>/dev/null || true)
+  [ -n "$_matched" ] || return 0
+  for _p in $_matched; do
+    if proc_belongs_to_install_dir "$_p"; then
+      printf '%s\n' "$_p"
+    fi
+  done
+}
+
+# report_foreign_processes <pgrep-pattern> <label> — name the processes this
+# script matched but will NOT touch, so an operator who expected the installer
+# to restart something can see why it did not.
+report_foreign_processes() {
+  _matched=$(pgrep -f "$1" 2>/dev/null || true)
+  [ -n "$_matched" ] || return 0
+  for _p in $_matched; do
+    proc_belongs_to_install_dir "$_p" && continue
+    _foreign_exe=$(proc_exe_path "$_p")
+    # `pgrep -f` matches command lines, so anything that merely MENTIONS the
+    # binary — this script, a shell running it, an editor, a log tail — also
+    # matches. Reporting those as "a different install" would be false. Only
+    # a process whose executable is actually named like the one being managed
+    # is worth telling the operator about; the rest are skipped in silence
+    # because they were never candidates.
+    [ -n "$_foreign_exe" ] || continue
+    [ "${_foreign_exe##*/}" = "$2" ] || continue
+    say ""
+    say "Leaving $2 (pid $_p) alone — it belongs to a different install:"
+    say "  $_foreign_exe"
+    say "  This install manages only $INSTALL_DIR. Restart that one yourself if you meant to."
+  done
 }
 
 # Extract the ExecStart binary path systemd reports for a unit, out of the
@@ -700,7 +765,10 @@ restart_bare_processes() {
   # restart_bare_processes <pgrep-pattern> <new-binary>
   pattern="$1"
   new_bin="$2"
-  pids=$(pgrep -f "$pattern" 2>/dev/null || true)
+  # Only ever this install's own processes; anything else is named and left
+  # running. See pids_owned_by_install.
+  report_foreign_processes "$pattern" "${new_bin##*/}"
+  pids=$(pids_owned_by_install "$pattern")
   [ -n "$pids" ] || return 0
   for pid in $pids; do
     # A service-managed process is NEVER killed/relaunched here: its unit owns
@@ -720,27 +788,12 @@ restart_bare_processes() {
       say "  Nothing was touched. Restart it yourself after the upgrade if needed."
       continue
     fi
+    # Belt and braces: `pids` already came from pids_owned_by_install, so a
+    # process that is not this install's cannot reach here. It is re-checked
+    # rather than assumed because everything below this line signals a pid,
+    # and the previous version of this block SIGTERMed exactly the processes
+    # it had just identified as belonging to somebody else.
     if ! proc_belongs_to_install_dir "$pid"; then
-      # Its real executable is gone or lives outside $INSTALL_DIR — a
-      # leftover from a different install. Recovering its argv and
-      # relaunching would either restart a binary that no longer exists, or
-      # (worse) mangle a foreign process's arguments: the argv[0]-stripping
-      # below assumes argv[0] IS the daemon binary, which is not true for a
-      # process launched through another runtime (e.g. bun). Stop it and let
-      # first-run setup (or a manual start) bring up the new binary instead.
-      say ""
-      say "Stopping ${new_bin##*/} (pid $pid) — its executable is gone or is not $new_bin; not relaunching it."
-      kill "$pid" 2>/dev/null || continue
-      waited=0
-      while kill -0 "$pid" 2>/dev/null && [ "$waited" -lt 10 ]; do
-        sleep 1
-        waited=$((waited + 1))
-      done
-      if kill -0 "$pid" 2>/dev/null; then
-        say "  NOTE: pid $pid did not exit within 10s — stop it yourself: kill $pid"
-      else
-        say "  stopped    pid $pid (start the new binary yourself, or let first-run setup do it: $new_bin)"
-      fi
       continue
     fi
     # Recover the original arguments so flags (port, host, home dir) survive.
@@ -897,7 +950,11 @@ daemon_systemd_active() {
 }
 
 daemon_bare_process_running() {
-  pgrep -f '[g]oodvibes-daemon' >/dev/null 2>&1
+  # Scoped to THIS install. Answering "yes" for a daemon belonging to another
+  # checkout made first-run setup decide a daemon was already running and skip
+  # registering the service — so a fresh install silently ended up with no
+  # daemon of its own on any machine that already ran one.
+  [ -n "$(pids_owned_by_install '[g]oodvibes-daemon')" ]
 }
 
 daemon_running() {
@@ -1542,12 +1599,14 @@ stop_bare_processes() {
   # attributed to $INSTALL_DIR is left alone and reported, never killed.
   pattern="$1"
   label="$2"
-  pids=$(pgrep -f "$pattern" 2>/dev/null || true)
+  # The comment above promised foreign processes were "left alone and
+  # reported"; they were left alone but never reported, so an uninstall that
+  # deliberately skipped another install's daemon looked identical to one that
+  # found nothing at all.
+  report_foreign_processes "$pattern" "$label"
+  pids=$(pids_owned_by_install "$pattern")
   [ -n "$pids" ] || return 0
   for pid in $pids; do
-    if ! proc_belongs_to_install_dir "$pid"; then
-      continue
-    fi
     say "Stopping $label (pid $pid) ..."
     kill "$pid" 2>/dev/null || continue
     waited=0

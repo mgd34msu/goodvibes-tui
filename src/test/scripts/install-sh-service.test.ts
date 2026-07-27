@@ -2344,7 +2344,7 @@ describe('install.sh — restart path validates the target before restarting/rel
   });
 
   test(
-    'a bare process whose executable is outside $INSTALL_DIR is stopped, not relaunched, and setup proceeds',
+    'a bare process whose executable is outside $INSTALL_DIR is left running, named, and setup still proceeds',
     async () => {
       const root = scratch('gv-bare-foreign');
       const home = join(root, 'home');
@@ -2383,11 +2383,16 @@ describe('install.sh — restart path validates the target before restarting/rel
         await waitForSpawnedBinary(pid, foreignBin);
 
         // Step 1: the restart path must recognize this pid as foreign (its
-        // real executable is not under $INSTALL_DIR) and refuse to recover
-        // its argv and relaunch it. This assertion holds independent of how
-        // long the process actually takes to honor the TERM the installer
-        // sends it — that grace period (up to 10s, real installer
-        // behavior) is not what this test is checking.
+        // real executable is not under $INSTALL_DIR) and LEAVE IT RUNNING,
+        // naming the install it belongs to.
+        //
+        // This previously asserted the opposite — that the installer stopped
+        // it. `pgrep -f` matches on a command line, which is host-global, so
+        // "a process I did not install" was being SIGTERMed by whichever
+        // install ran last: another checkout, a worktree, a dev copy. A
+        // machine deliberately running more than one node is the case the
+        // clustering work exists to support, and an installer that kills the
+        // other nodes defeats it.
         const out = runLib('restart_running_daemon', {
           HOME: home,
           GOODVIBES_INSTALL_DIR: installDir,
@@ -2395,24 +2400,18 @@ describe('install.sh — restart path validates the target before restarting/rel
         });
         expect(out.code).toBe(0);
         expect(out.stdout).toContain(`pid ${pid}`);
-        expect(out.stdout).toContain('not relaunching');
+        expect(out.stdout).toContain('belongs to a different install');
+        // It names WHICH install, so the operator can act on the right one.
+        expect(out.stdout).toContain(foreignBin);
+        expect(out.stdout).not.toContain('not relaunching');
 
-        // Make sure it is actually gone before checking first-run setup —
-        // force it down rather than trusting the installer's own TERM to
-        // have landed within this test's window.
-        if (isAlive()) {
-          try {
-            process.kill(pid, 'SIGKILL');
-          } catch {
-            /* already gone */
-          }
-        }
-        for (let i = 0; i < 30 && isAlive(); i++) {
-          await new Promise((r) => setTimeout(r, 100));
-        }
-        expect(isAlive()).toBe(false);
+        // The foreign process is still running — that is the whole point.
+        expect(isAlive()).toBe(true);
 
-        // Step 2: with nothing running, first-run setup proceeds.
+        // Step 2: and first-run setup still proceeds. A daemon belonging to
+        // somebody else must not make this install decide one of its own is
+        // already running, which is what daemon_bare_process_running used to
+        // report before it was scoped to $INSTALL_DIR.
         const setupOut = runLib('setup_daemon_service', {
           HOME: home,
           GOODVIBES_INSTALL_DIR: installDir,
