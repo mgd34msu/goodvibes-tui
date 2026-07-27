@@ -48,6 +48,63 @@ const SETTINGS_BEHAVIOR_BASELINE = 184;
  * `src/test/verification/feature-knob-settings-persistence.test.ts`. They are
  * therefore genuinely behavior-verified locally and counted as such here.
  */
+/**
+ * The daemon's own mailbox and calendar keys (`surfaces.email.*`,
+ * `surfaces.calendar.*`), promoted into CONFIG_SCHEMA so the settings modal —
+ * which renders from that schema — can actually show them. Before, the
+ * daemon's handlers named these keys in their own error messages
+ * ("Set surfaces.calendar.caldavUrl and surfaces.calendar.caldavUser") while
+ * the UI that told an operator to set them could not display one of them.
+ *
+ * Declaring 25 keys raised the settings inventory `total` with no matching
+ * behavior coverage, which dropped `localBehaviorPercent` below its floor —
+ * the same arrival shape as the two lists above.
+ *
+ * THIS CONSTANT IS NOT A DIAL. Every key below is counted because
+ * `src/test/verification/daemon-mailbox-settings-persistence.test.ts` runs the
+ * same four-part persistence contract the other counted sets are counted for:
+ * schema default exposure, `set()` through the key's own validator to disk,
+ * reload into a fresh ConfigManager with read-back equality, and
+ * reset-to-default that also survives reload. That test also asserts this list
+ * is exactly the `surfaces.email.*` + `surfaces.calendar.*` schema key set and
+ * overlaps neither other counted set, so nothing is double-counted and nothing
+ * drifts in uncounted.
+ *
+ * PER-KEY EVIDENCE. All 25 are read by a LIVE consumer, which is why they were
+ * declared at all: the SDK's mail and calendar gateway compositions
+ * (platform/email/surface-config.ts and platform/calendar/caldav-gateway-config.ts)
+ * resolve every one of them when the daemon serves `email.*` and `calendar.*`.
+ * The three password keys additionally resolve through the daemon secret tier
+ * rather than from config, and carry no secret value in config themselves.
+ */
+export const DAEMON_MAILBOX_LOCAL_SETTINGS = [
+  'surfaces.email.host',
+  'surfaces.email.user',
+  'surfaces.email.username',
+  'surfaces.email.from',
+  'surfaces.email.password',
+  'surfaces.email.imapHost',
+  'surfaces.email.imapPort',
+  'surfaces.email.imapUser',
+  'surfaces.email.imapPassword',
+  'surfaces.email.imap.host',
+  'surfaces.email.imap.port',
+  'surfaces.email.imap.user',
+  'surfaces.email.imap.password',
+  'surfaces.email.imap.secure',
+  'surfaces.email.imap.mailbox',
+  'surfaces.email.imap.draftsMailbox',
+  'surfaces.email.smtp.host',
+  'surfaces.email.smtp.port',
+  'surfaces.email.smtp.password',
+  'surfaces.email.smtp.secure',
+  'surfaces.calendar.caldavUrl',
+  'surfaces.calendar.caldavUser',
+  'surfaces.calendar.caldavPassword',
+  'surfaces.calendar.defaultCalendarId',
+  'surfaces.calendar.calendars',
+] as const;
+
 export const FEATURE_KNOB_LOCAL_SETTINGS = [
   'provider.optimizerMode',
   'provider.optimizerPinnedModel',
@@ -247,6 +304,7 @@ const SETTINGS_BEHAVIOR_VERIFIED = SETTINGS_BEHAVIOR_BASELINE
   + FEATURE_KNOB_LOCAL_SETTINGS.length
   + DEVICE_AND_TRIGGER_LOCAL_SETTINGS.length
   + CLUSTER_GROUP_LOCAL_SETTINGS.length
+  + DAEMON_MAILBOX_LOCAL_SETTINGS.length
   + ENABLEMENT_KEYS_BEHAVIOR_VERIFIED;
 
 const EXTERNAL_SLASH_COMMANDS = new Set([
