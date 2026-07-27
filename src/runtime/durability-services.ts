@@ -93,6 +93,8 @@ export interface DurabilityServices {
    * the work rather than to release the loop.
    */
   readonly stopDurabilityHousekeeping: () => void;
+  /** Stops the live config-file watch this factory started. */
+  readonly stopConfigWatch: () => void;
 }
 
 export function createDurabilityServices(input: DurabilityServicesInput): DurabilityServices {
@@ -141,11 +143,13 @@ export function createDurabilityServices(input: DurabilityServicesInput): Durabi
     extraQuarantineDirs: [configManager.getControlPlaneConfigDir()],
   });
   // External config edits apply LIVE through the same subscribe() pipeline an
-  // in-process set() uses; the underlying watchers are unref'd.
-  configManager.watchConfigFiles();
+  // in-process set() uses; the underlying watchers are unref'd. The returned
+  // handle is the only way to stop them — dropping it left a 250ms poll running
+  // for the life of the process after the graph that started it was gone.
+  const stopConfigWatch = configManager.watchConfigFiles();
 
   const userPermissionRuleStore = new UserPermissionRuleStore(join(configManager.getControlPlaneConfigDir(), 'permission-rules.json'));
   void userPermissionRuleStore.init().catch((error) => logger.warn('user permission rule store init failed; asks will prompt', { error: summarizeError(error) }));
 
-  return { storeSnapshotScheduler, appendOnlyRetentionScheduler, userPermissionRuleStore, stopDurabilityHousekeeping };
+  return { storeSnapshotScheduler, appendOnlyRetentionScheduler, userPermissionRuleStore, stopDurabilityHousekeeping, stopConfigWatch };
 }
