@@ -56,10 +56,6 @@ export interface DaemonHandlerSurfaceProviders {
   readonly registerInbox: (ctx: HandlerContext, routing: RoutingRegistration) => Unregister;
   /** channels.drafts.* */
   readonly registerDrafts: SurfaceRegister;
-  /** calendar.* */
-  readonly registerCalendar: SurfaceRegister;
-  /** email.* */
-  readonly registerEmail: SurfaceRegister;
   /** remote.peers.* — supplies the host DistributedRuntimeRouteService + dispatch adapter. */
   readonly registerRemote: (ctx: HandlerContext) => RemoteSurfaceRegistration;
 }
@@ -82,8 +78,13 @@ export function registerDaemonHandlers(
 
   teardowns.push(providers.registerInbox(ctx, routing));
   teardowns.push(providers.registerDrafts(ctx));
-  teardowns.push(providers.registerCalendar(ctx));
-  teardowns.push(providers.registerEmail(ctx));
+  // calendar.* and email.* are NOT registered here any more. Both are served
+  // by the SDK (control-plane/routes/{calendar,email}.ts over the platform
+  // CalDAV/Google and IMAP/SMTP implementations), registered through
+  // registerGatewayVerbGroups in runtime/services.ts. This product used to
+  // carry its own handlers for the same descriptor ids and, registering later,
+  // won — two implementations behind one path, which is the drift the hoist
+  // exists to end.
 
   const remote = providers.registerRemote(ctx);
   teardowns.push(remote.unregister);

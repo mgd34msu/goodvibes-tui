@@ -27,8 +27,6 @@ import { registerRouting } from '../daemon/handlers/routing/index.ts';
 import { registerInboxMethods } from '../daemon/handlers/inbox/index.ts';
 import { registerTriagedInbox } from '../daemon/handlers/triage/index.ts';
 import { registerDraftMethods } from '../daemon/handlers/drafts/index.ts';
-import { registerCalendar } from '../daemon/handlers/calendar/index.ts';
-import { registerEmailMethods } from '../daemon/handlers/email/index.ts';
 import { registerRemoteSurface } from '../daemon/handlers/remote/index.ts';
 import { inboxPollerGate } from './cluster-composition.ts';
 
@@ -73,8 +71,6 @@ export function createDaemonHandlerComposition(
           options.clusterCoordinator.register(inboxPollerGate(providerId, control)),
       })).unregister,
     registerDrafts: (ctx) => registerDraftMethods(ctx),
-    registerCalendar,
-    registerEmail: (ctx) => registerEmailMethods(ctx),
     registerRemote: (ctx) => registerRemoteSurface(ctx, { manager: options.distributedRuntime }),
   });
 }
