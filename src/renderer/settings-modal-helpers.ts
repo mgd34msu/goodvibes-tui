@@ -107,6 +107,7 @@ export const CATEGORY_INFO: Record<SettingsCategory, string> = {
   agents: 'Sub-agent context-window awareness and per-turn passive knowledge/code injection: token budget, relevance floor, code-chunk limit, and the compaction threshold. Gated by the agent context/injection features.',
   security: 'API token scope and rotation auditing: rotation cadence, warning lead time, and whether overdue/over-scoped tokens are blocked or only reported. Gated by the Token Scope and Rotation Audit feature.',
   integrations: 'Integration delivery reliability (Slack/Discord/webhook): retry counts, backoff bounds, dead-letter queue size, and SLO enforcement. Gated by the Integration Delivery SLO feature.',
+  connections: 'Whether mail and calendar are actually usable right now. Each row is answered by asking the daemon that owns the connection, not by reading config here, so a row says ready only when a real request succeeded.',
   policy: 'Policy-as-code bundle loading: where the startup policy bundle is loaded from and its file path. Gated by the Policy-as-Code feature.',
   notifications: 'Notification router burst-suppression tuning: burst window, threshold, and cooldown. Gated by the Adaptive Notification Suppression feature.',
   relay: 'Outbound zero-knowledge relay reachability, for reaching this daemon from outside the LAN without opening an inbound port. Off by default — relay.enabled is the switch. The relay operator sees only ciphertext and connection metadata — self-host your own relay for full control.',
@@ -161,6 +162,7 @@ export const CATEGORY_LABELS: Record<(typeof SETTINGS_CATEGORIES)[number], strin
   agents: 'Agents & Context',
   security: 'Token Security',
   integrations: 'Integration Delivery',
+  connections: 'Connections',
   policy: 'Policy-as-Code',
   notifications: 'Notifications',
 };

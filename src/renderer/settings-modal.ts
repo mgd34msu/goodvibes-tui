@@ -11,6 +11,7 @@ import { SETTINGS_CATEGORIES, SETTINGS_CATEGORY_GROUPS } from '../input/settings
 import { FEATURE_SETTINGS_BY_ID, isFeatureValueEnabled } from '../runtime/feature-settings.ts';
 import { getDisplayWidth, wrapText } from '../utils/terminal-width.ts';
 import { CATEGORY_INFO, CATEGORY_LABELS, describeUiRouting, formatValue, getSettingLabel, inferSubscriptionRouteReason, valueColor } from './settings-modal-helpers.ts';
+import { buildConnectionContext, renderConnectionRows } from './settings-modal-connections.ts';
 import { isSecretConfigKey } from '../config/secret-config.ts';
 import { GLYPHS } from './ui-primitives.ts';
 import { formatHints, joinHints } from './hint-grammar.ts';
@@ -360,6 +361,8 @@ function buildContextLines(modal: SettingsModal, width: number): string[] {
     lines.push(...buildMcpContext(modal, modal.getSelectedMcp()));
   } else if (category === 'subscriptions') {
     lines.push(...buildSubscriptionContext(modal, modal.getSelectedSubscription()));
+  } else if (category === 'connections') {
+    lines.push(...buildConnectionContext(modal));
   } else {
     const selected = modal.getSelected();
     // A feature-unit header shows the feature's documentation (full
@@ -386,6 +389,7 @@ function buildContextLines(modal: SettingsModal, width: number): string[] {
 function categoryItemCount(modal: SettingsModal, category: SettingsCategory): number {
   if (category === 'mcp') return modal.mcpEntries.length;
   if (category === 'subscriptions') return modal.subscriptionEntries.length;
+  if (category === 'connections') return modal.connectionEntries.length;
   return modal.groups.get(category)?.length ?? 0;
 }
 
@@ -601,6 +605,7 @@ function renderControlRows(modal: SettingsModal, width: number, height: number):
   if (modal.searchFocused) return renderSearchRows(modal, width, height);
   if (modal.currentCategory === 'mcp') return renderMcpRows(modal, width, height);
   if (modal.currentCategory === 'subscriptions') return renderSubscriptionRows(modal, width, height);
+  if (modal.currentCategory === 'connections') return renderConnectionRows(modal, width, height);
   return renderSettingRows(modal, width, height);
 }
 

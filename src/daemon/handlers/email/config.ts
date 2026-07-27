@@ -30,14 +30,35 @@ export const CONFIG_PREFIX = 'surfaces.email';
 type ConfigManagerSlice = Pick<ConfigManager, 'get' | 'getCategory'>;
 type ConfigGetKey = Parameters<ConfigManager['get']>[0];
 
+/**
+ * Read a config value, treating an absent SECTION as an absent value.
+ *
+ * `surfaces.email.*` is not a CONFIG_SCHEMA section, so on an installation
+ * where nothing has ever been set there, `ConfigManager.get()` does not return
+ * undefined — it throws `Invalid config path: section 'surfaces.email' does not
+ * exist`. Unguarded, that turned "mail has not been set up" into an opaque
+ * config-path error surfaced to whoever called the verb, instead of the
+ * EMAIL_NOT_CONFIGURED this module exists to return.
+ *
+ * Only the section-shaped miss is swallowed; the value handling below is
+ * unchanged, so a value that IS present behaves exactly as before.
+ */
+function readConfigValue(configManager: ConfigManagerSlice, key: string): unknown {
+  try {
+    return configManager.get(key as ConfigGetKey);
+  } catch {
+    return undefined;
+  }
+}
+
 function readConfigString(configManager: ConfigManagerSlice, key: string): string | undefined {
-  const value = configManager.get(key as ConfigGetKey);
+  const value = readConfigValue(configManager, key);
   if (typeof value === 'string' && value.trim().length > 0) return value.trim();
   return undefined;
 }
 
 function readConfigNumber(configManager: ConfigManagerSlice, key: string, fallback: number): number {
-  const value = configManager.get(key as ConfigGetKey);
+  const value = readConfigValue(configManager, key);
   if (typeof value === 'number' && Number.isFinite(value)) return value;
   if (typeof value === 'string' && value.trim() !== '') {
     const parsed = Number(value);
@@ -47,7 +68,7 @@ function readConfigNumber(configManager: ConfigManagerSlice, key: string, fallba
 }
 
 function readConfigBool(configManager: ConfigManagerSlice, key: string, fallback: boolean): boolean {
-  const value = configManager.get(key as ConfigGetKey);
+  const value = readConfigValue(configManager, key);
   if (typeof value === 'boolean') return value;
   if (typeof value === 'string') {
     if (/^(true|1|yes)$/i.test(value.trim())) return true;
