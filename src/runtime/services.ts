@@ -55,6 +55,7 @@ import { SessionManager, CrossSessionTaskRegistry, SessionChangeTracker } from '
 import { ApiTokenAuditor, UserAuthManager } from '@pellux/goodvibes-sdk/platform/security';
 import { WebhookNotifier } from '@pellux/goodvibes-sdk/platform/integrations';
 import { McpRegistry } from '@pellux/goodvibes-sdk/platform/mcp';
+import { createRemoteExecutionServices } from './remote-execution-composition.ts';
 import { BenchmarkStore, CacheHitTracker, FavoritesStore, ModelLimitsService, ProviderCapabilityRegistry, ProviderOptimizer, ProviderRegistry } from '@pellux/goodvibes-sdk/platform/providers';
 import { KeybindingsManager } from '../input/keybindings.ts';
 import { AdaptivePlanner, DeterministicReplayEngine, ExecutionPlanManager, SessionLineageTracker, SessionMemoryStore } from '@pellux/goodvibes-sdk/platform/core';
@@ -504,12 +505,9 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
     automationBridge: automationManager,
   });
 
-  // Which machines are "us" on this network, and the socket they coordinate
-  // over. Inert until started — no socket, no key material read. See
-  // cluster-group-composition.ts.
   // Which machines on this network are "us", and which of them reads the
-  // shared inbox. Both inert until startCluster(); see
-  // cluster-group-composition.ts for why they are built together.
+  // shared inbox. Both inert until startCluster() — no socket, no key material
+  // read; see cluster-group-composition.ts for why they are built together.
   const { clusterGroup, clusterCoordinator } = createClusterServices({
     configManager, shellPaths, secretsManager,
   });
@@ -525,15 +523,12 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
     clusterCoordinator,
   });
 
-  const remoteRunnerRegistry = new RemoteRunnerRegistry(agentManager);
-  const remoteSupervisor = new RemoteSupervisor(remoteRunnerRegistry);
-  const sandboxSessionRegistry = new SandboxSessionRegistry(workingDirectory);
-  const mcpRegistry = new McpRegistry({
-    hookDispatcher,
-    sandboxSessions: sandboxSessionRegistry,
-  });
-  mcpRegistry.setRuntimeBus(options.runtimeBus);
-  mcpRegistry.setSandboxRuntime(configManager, sandboxSessionRegistry);
+  // Remote runners and the sandboxes tool calls are confined to; see
+  // remote-execution-composition.ts for why the four are built as one.
+  const { remoteRunnerRegistry, remoteSupervisor, sandboxSessionRegistry, mcpRegistry }
+    = createRemoteExecutionServices({
+      agentManager, workingDirectory, hookDispatcher, configManager, runtimeBus: options.runtimeBus,
+    });
   const tokenAuditor = new ApiTokenAuditor({ managed: false });
   const componentHealthMonitor = new ComponentHealthMonitor();
   const worktreeRegistry = new WorktreeRegistry(workingDirectory);
