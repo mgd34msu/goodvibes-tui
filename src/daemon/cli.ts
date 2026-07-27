@@ -431,6 +431,11 @@ async function main(): Promise<void> {
     // open and relied on process exit to clear the poll timers.
     const stop = Promise.allSettled([listener.stop(), daemon.stop()])
       .then(() => runtimeServices.daemonHandlers.unregister())
+      // This process built the runtime graph and handed it to DaemonServer, so
+      // by the SDK's ownership rule the facade leaves it alone — nothing else
+      // stops these pollers. Without this the config watch, fleet tick, memory
+      // governor, watcher registry and six more kept ticking until process exit.
+      .then(() => { runtimeServices.dispose(); })
       .then(() => 'done' as const);
     const result = await Promise.race([stop, timeout]);
     if (result === 'timeout') {
