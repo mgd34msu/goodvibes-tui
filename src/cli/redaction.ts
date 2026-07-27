@@ -1,6 +1,13 @@
 export const REDACTED_VALUE = '<redacted>';
 
 const SENSITIVE_PATH_PATTERN = /(^|\.)(apiKey|accessToken|botToken|appToken|signingSecret|webhookSecret|verifyToken|verificationToken|secret|password|token|keyFile)$/i;
+// payments.card.* (number, expiry, cvv, cardholderName — see
+// input/payments-config.ts) is sensitive by PREFIX, not by suffix: "number",
+// "expiry" and "cardholderName" match none of the suffix names above, so a
+// bundle export would carry them in plaintext if a value were ever stored as
+// a literal instead of a goodvibes:// secret reference. Every payments.card.*
+// path is always treated as sensitive regardless of its trailing field name.
+const SENSITIVE_PATH_PREFIX_PATTERN = /^payments\.card\./i;
 const SECRET_LIKE_TEXT_PATTERNS: readonly RegExp[] = [
   /\bsk-[A-Za-z0-9_-]{16,}\b/g,
   /\bghp_[A-Za-z0-9_]{16,}\b/g,
@@ -13,7 +20,7 @@ const SECRET_LIKE_TEXT_PATTERNS: readonly RegExp[] = [
 ];
 
 export function isSensitiveConfigPath(path: string): boolean {
-  return SENSITIVE_PATH_PATTERN.test(path);
+  return SENSITIVE_PATH_PATTERN.test(path) || SENSITIVE_PATH_PREFIX_PATTERN.test(path);
 }
 
 export function isRedactedValue(value: unknown): boolean {

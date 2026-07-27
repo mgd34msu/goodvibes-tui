@@ -14,6 +14,7 @@ import { CATEGORY_INFO, CATEGORY_LABELS, describeUiRouting, formatValue, getSett
 import { buildConnectionContext, renderConnectionRows } from './settings-modal-connections.ts';
 import { isSecretConfigKey } from '../config/secret-config.ts';
 import { maskConcealedText } from '../input/concealed-input.ts';
+import { CVV_PROMPT_TRADEOFF_WARNING } from '../input/payments-config.ts';
 import { GLYPHS } from './ui-primitives.ts';
 import { formatHints, joinHints } from './hint-grammar.ts';
 import {
@@ -105,6 +106,10 @@ const ENUM_VALUE_DESCRIPTIONS: Record<string, Record<string, string>> = {
   'surfaces.whatsapp.provider': {
     'meta-cloud': 'Use Meta Cloud API credentials and identifiers.',
     bridge: 'Use a bridge service URL/token flow instead of direct Meta Cloud API delivery.',
+  },
+  'payments.cvvHandling': {
+    stored: 'Store the CVV through the secret manager so the daemon can complete a purchase unattended.',
+    prompt: CVV_PROMPT_TRADEOFF_WARNING,
   },
 };
 

@@ -55,6 +55,12 @@ import { enrichRelaySettingDescriptions } from './relay-settings-descriptions.ts
 import { enrichDaemonOwnedSettingDescriptions } from './daemon-owned-settings-descriptions.ts';
 import { applyFeatureUnitLayout } from './feature-unit-layout.ts';
 import { FEATURE_SETTINGS_BY_ID } from '../runtime/feature-settings.ts';
+import {
+  buildPaymentsSyntheticEntries,
+  isPaymentsSyntheticConfigKey,
+  refreshPaymentsSyntheticEntry,
+} from './payments-config.ts';
+import type { PaymentsConfigStore } from './payments-store.ts';
 
 // ---------------------------------------------------------------------------
 // deepEqual — structural equality for isDefault comparisons
@@ -97,6 +103,7 @@ export function deepEqual(a: unknown, b: unknown): boolean {
 export function buildSettingGroups(
   configManager: ConfigManager,
   featureFlagManager?: FeatureFlagManager | null,
+  paymentsStore?: PaymentsConfigStore | null,
 ): Map<SettingsCategory, SettingEntry[]> {
   const groups = new Map<SettingsCategory, SettingEntry[]>();
   // Every category starts empty and is filled from CONFIG_SCHEMA below; the
@@ -248,6 +255,15 @@ export function buildSettingGroups(
   // CONFIG_SCHEMA, same rationale as the other synthetic settings above.
   injectSandboxExecSyntheticEntries(groups, configManager);
   injectExecEnvScrubSyntheticEntry(groups, configManager);
+
+  // Payment card capability (see payments-config.ts): cvvHandling selector,
+  // the four secret-tier card fields, and the two ordinary address fields.
+  // TUI-local synthetic settings, same rationale as the other synthetic
+  // entries above — none of these keys are in the SDK's CONFIG_SCHEMA yet.
+  const paymentsEntries = groups.get('payments');
+  if (paymentsEntries && paymentsEntries.length === 0 && paymentsStore) {
+    paymentsEntries.push(...buildPaymentsSyntheticEntries(paymentsStore));
+  }
 
   // relay.* is a real SDK CONFIG_SCHEMA domain; append the threat-model note
   // the SDK's own descriptions don't carry (see relay-settings-descriptions.ts).
@@ -623,6 +639,7 @@ function normalizeTtsSpeedValue(raw: unknown): number {
 export function refreshEntryValues(
   groups: Map<SettingsCategory, SettingEntry[]>,
   configManager: ConfigManager,
+  paymentsStore?: PaymentsConfigStore | null,
 ): void {
   for (const entries of groups.values()) {
     for (const entry of entries) {
@@ -656,6 +673,14 @@ export function refreshEntryValues(
         entry.currentValue = refreshed.currentValue; entry.isDefault = refreshed.isDefault;
         continue;
       }
+      // payments.* synthetic entries (see payments-config.ts): backed by
+      // PaymentsConfigStore, not configManager — see payments-config.ts's
+      // header comment for why. No store means nothing to refresh from; the
+      // entry keeps whatever it already had rather than guessing.
+      if (isPaymentsSyntheticConfigKey(entry.setting.key)) {
+        if (paymentsStore) refreshPaymentsSyntheticEntry(entry, paymentsStore);
+        continue;
+      }
       const raw = configManager.get(entry.setting.key as ConfigKey);
       // Synthetic entries (e.g. tts.speed) that have no SDK schema key return
       // undefined from configManager. Normalize using the same logic used at
@@ -680,6 +705,7 @@ export function updateEntryForKey(
   groups: Map<SettingsCategory, SettingEntry[]>,
   key: ConfigKey,
   configManager: ConfigManager,
+  paymentsStore?: PaymentsConfigStore | null,
 ): void {
   for (const entries of groups.values()) {
     const entry = entries.find((candidate) => candidate.setting.key === key);
@@ -692,6 +718,10 @@ export function updateEntryForKey(
       if (key === (MEMORY_SHOW_PROVENANCE_CONFIG_KEY as ConfigKey)) {
         const refreshed = buildMemoryProvenanceSyntheticEntry(configManager);
         entry.currentValue = refreshed.currentValue; entry.isDefault = refreshed.isDefault;
+        continue;
+      }
+      if (isPaymentsSyntheticConfigKey(key)) {
+        if (paymentsStore) refreshPaymentsSyntheticEntry(entry, paymentsStore);
         continue;
       }
       if (isSandboxExecListConfigKey(key)) {

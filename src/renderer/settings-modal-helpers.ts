@@ -112,6 +112,7 @@ export const CATEGORY_INFO: Record<SettingsCategory, string> = {
   notifications: 'Notification router burst-suppression tuning: burst window, threshold, and cooldown. Gated by the Adaptive Notification Suppression feature.',
   relay: 'Outbound zero-knowledge relay reachability, for reaching this daemon from outside the LAN without opening an inbound port. Off by default — relay.enabled is the switch. The relay operator sees only ciphertext and connection metadata — self-host your own relay for full control.',
   learning: 'Idle-time memory consolidation: merging duplicate standing memory records and decaying/archiving stale ones. Off by default — nothing runs until enabled.',
+  payments: 'Payment card on file for daemon-initiated purchases: card number, expiry, CVV, cardholder name, billing and shipping address, and whether the CVV is stored or requested at purchase time. Card fields are entered through /payments card (concealed input) and are secret-tier — never rendered in plaintext.',
 };
 
 export const CATEGORY_LABELS: Record<(typeof SETTINGS_CATEGORIES)[number], string> = {
@@ -165,6 +166,7 @@ export const CATEGORY_LABELS: Record<(typeof SETTINGS_CATEGORIES)[number], strin
   connections: 'Connections',
   policy: 'Policy-as-Code',
   notifications: 'Notifications',
+  payments: 'Payments',
 };
 
 const SETTING_LABELS: Partial<Record<string, string>> = {

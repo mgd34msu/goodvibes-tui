@@ -23,6 +23,13 @@ export const SECRET_CONFIG_KEYS = new Set<ConfigKey>([
   'surfaces.bluebubbles.password',
   'surfaces.mattermost.botToken',
   'surfaces.matrix.accessToken',
+  // TUI-local synthetic keys (not yet in the SDK's CONFIG_SCHEMA union — same
+  // situation as tts.speed, behavior.notifyAfterSeconds, etc. in
+  // settings-modal-data.ts), hence the cast. See input/payments-config.ts.
+  'payments.card.number' as ConfigKey,
+  'payments.card.expiry' as ConfigKey,
+  'payments.card.cvv' as ConfigKey,
+  'payments.card.cardholderName' as ConfigKey,
 ]);
 
 export interface SecretBackedConfigUpdate {
