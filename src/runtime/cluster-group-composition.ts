@@ -252,6 +252,32 @@ async function announceReturn(
     });
     return;
   }
+  if (result.terminal) {
+    // A member refused this machine and proved it was a member when it did.
+    // Retrying will never succeed, so this is not a quiet debug line: without
+    // it the operator sees a healthy daemon that is simply never given any
+    // work, with nothing anywhere saying why. Stated at ERROR with the command
+    // that fixes it, the same standard a surface this node cannot serve is
+    // held to.
+    logger.error('cluster: this machine is no longer in its group and will not be given work', {
+      reason: result.error,
+      action: result.fix,
+    });
+    return;
+  }
+  if (result.failure === 'unverifiable-replies') {
+    // Something answered and none of it could be authenticated. This machine
+    // cannot tell a removal it slept through from a stranger making noise, so
+    // it says exactly that and does not assert either. WARN rather than ERROR
+    // for the same reason: anything on the network can produce this, and a
+    // machine that shouted "you were removed" on cue would be worse than one
+    // that stayed quiet.
+    logger.warn('cluster: replies to this machine\'s return could not be authenticated', {
+      reason: result.error,
+      action: result.fix,
+    });
+    return;
+  }
   // Not an error. A machine that starts first, or is alone on the network, has
   // nobody to answer it and carries on with the keys it already holds.
   logger.debug('cluster: no other machine answered the return announcement', { reason: result.error });

@@ -19,7 +19,7 @@
  * `unsubs` registry is shared by reference and drained on exit.
  */
 import { existsSync } from 'node:fs';
-import { logger, summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
+import { flushActivityLogSync, logger, summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 import { createTerminalLifecycle, TERMINAL_ESCAPES } from '@pellux/goodvibes-terminal-shell';
 import { formatUserFacingErrorLine } from '../core/format-user-error.ts';
 import { allowTerminalWrite } from './terminal-output-guard.ts';
@@ -201,11 +201,17 @@ export function installProcessLifecycle(deps: ProcessLifecycleDeps): ProcessLife
   const uncaughtExceptionHandler = (err: Error): void => {
     restoreTerminal();
     logger.error('uncaughtException — terminal restored, exiting', { error: summarizeError(err) });
+    // The line naming the crash is the only record of it. process.exit does not
+    // drain the activity log's buffer, so it goes to disk here rather than
+    // relying on the exit hook that also runs — the crash log is worth stating
+    // the intent for at the site that produces it.
+    flushActivityLogSync();
     process.exit(1);
   };
   const terminationSignalHandler = (signal: NodeJS.Signals): void => {
     restoreTerminal();
     logger.error(`Received ${signal} — terminal restored, exiting`, {});
+    flushActivityLogSync();
     process.exit(signal === 'SIGHUP' ? 129 : 143);
   };
   const exitListener = (): void => { restoreTerminal(); };
@@ -285,6 +291,8 @@ export function installProcessLifecycle(deps: ProcessLifecycleDeps): ProcessLife
     // stop claiming the session is live regardless of whether the durable
     // save itself completed in time.
     removeLivenessMarker(ctx.services.surface, ctx.runtime.sessionId);
+    // An orderly exit's own record lands before the process stops being one.
+    flushActivityLogSync();
     process.exit(0);
   };
 

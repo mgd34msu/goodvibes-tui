@@ -14,7 +14,7 @@ import { createRuntimeStore } from '../runtime/store/index.ts';
 import { createRuntimeServices } from '../runtime/services.ts';
 import { DaemonServer, HttpListener } from '@pellux/goodvibes-sdk/platform/daemon';
 import { createHostPowerSeam } from '@pellux/goodvibes-sdk/platform/power';
-import { logger } from '@pellux/goodvibes-sdk/platform/utils';
+import { flushActivityLogSync, logger } from '@pellux/goodvibes-sdk/platform/utils';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 import {
   getOrCreateCompanionToken,
@@ -435,8 +435,12 @@ async function main(): Promise<void> {
     const result = await Promise.race([stop, timeout]);
     if (result === 'timeout') {
       logger.warn('shutdown deadline exceeded — forcing exit');
+      // A forced exit is exactly the case where the log matters most and is
+      // least likely to have drained on its own.
+      flushActivityLogSync();
       process.exit(1);
     }
+    flushActivityLogSync();
     process.exit(0);
   };
 
@@ -530,5 +534,9 @@ void main().catch(async (error) => {
   logger.error('goodvibes daemon host failed', {
     error: summarizeError(error),
   });
+  // The daemon never came up. Without this the reason is buffered in a process
+  // that is about to stop existing, and the failure reads as a daemon that
+  // never logged anything at all.
+  flushActivityLogSync();
   process.exit(1);
 });
