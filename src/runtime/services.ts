@@ -85,6 +85,14 @@ export interface RuntimeServicesOptions {
   readonly getConversationTitle?: () => string | undefined;
   readonly workingDir: string;
   readonly homeDirectory: string;
+  /**
+   * The daemon's state root when the host was told one (`--daemon-home`,
+   * `GOODVIBES_DAEMON_HOME`). Threaded into `SecretsManager` so the override
+   * MOVES the daemon-scoped credential store; without it a daemon told to run
+   * out of a temp tree still read the real home's daemon secrets, so an
+   * "isolated" test daemon held the owner's live credentials.
+   */
+  readonly daemonHome?: string | undefined;
   /** Opt-in (daemon-side only): fold host-observed external coding-agent sessions
    * into the fleet as 'observed-external' rows. Interactive leaves it off and reads
    * the daemon snapshot. Mirrors the SDK's own createRuntimeServices option. */
@@ -296,6 +304,8 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
     projectRoot: workingDirectory,
     globalHome: homeDirectory,
     configManager,
+    // Honour the override, or the daemon-scoped store stays in the real home.
+    ...(options.daemonHome === undefined ? {} : { daemonHome: options.daemonHome }),
   });
   // Step-up (WebAuthn) ceremony service, shared between the ceremony gateway verbs and the relay gate's verifier.
   const stepUpService = new StepUpService({ secrets: secretsManager });
