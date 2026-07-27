@@ -4,8 +4,7 @@ import {
   renderGoodVibesHomeAuditMarkdown,
   writeAuditReportFiles,
 } from '../src/config/goodvibes-home-audit.ts';
-import { homedir } from 'node:os';
-import { join } from 'node:path';
+import { resolveGoodVibesTreeDirectory } from '../src/config/goodvibes-home.ts';
 
 function readArgValue(args: readonly string[], flag: string): string | undefined {
   const index = args.indexOf(flag);
@@ -19,7 +18,8 @@ if (args.includes('--help') || args.includes('-h')) {
     'Usage: bun run scripts/audit-goodvibes-home.ts [options]',
     '',
     'Options:',
-    '  --home <path>     GoodVibes home directory to audit. Defaults to ~/.goodvibes.',
+    '  --home <path>     The .goodvibes directory to audit. Defaults to the tree under',
+    '                    GOODVIBES_HOME, or ~/.goodvibes when that is unset.',
     '  --hash            Include sha256 hashes for files in the JSON report.',
     '  --json            Print JSON instead of Markdown.',
     '  --out <dir>       Write goodvibes-home-audit.{json,md} to a directory.',
@@ -28,7 +28,12 @@ if (args.includes('--help') || args.includes('-h')) {
   process.exit(0);
 }
 
-const homeDir = readArgValue(args, '--home') ?? process.env.GOODVIBES_HOME ?? join(homedir(), '.goodvibes');
+// GOODVIBES_HOME names the tree ROOT, and the tree is derived from it — the
+// one meaning the runtime uses. This script used to read the variable as the
+// .goodvibes directory itself, so a redirected round audited a different place
+// than the one it had just written to. `--home` still names a .goodvibes
+// directory directly, for auditing a tree that sits under no home at all.
+const homeDir = readArgValue(args, '--home') ?? resolveGoodVibesTreeDirectory();
 const outputDir = readArgValue(args, '--out');
 const audit = await auditGoodVibesHome({
   homeDir,

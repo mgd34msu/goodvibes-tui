@@ -569,6 +569,28 @@ const rules: readonly Rule[] = [
     pattern: /\bprocess\.cwd\(\)|\bhomedir\(\)/,
     message: 'reusable code must not discover cwd/home implicitly; composition roots must pass owned roots explicitly',
   },
+  {
+    name: 'one-goodvibes-home-meaning',
+    // Scripts included on purpose: the disagreement this bans lived in
+    // scripts/, not in src/. audit-goodvibes-home.ts and verify-live.ts read
+    // GOODVIBES_HOME as the .goodvibes DIRECTORY while the runtime read it as
+    // the tree ROOT the directory sits under, so a redirected round inspected a
+    // different tree than the one it had just written to. One variable with two
+    // meanings is how a home-redirection incident starts, and one already has.
+    //
+    // Everything derives from src/config/goodvibes-home.ts now:
+    // resolveGoodVibesHome for the root, resolveGoodVibesTreeDirectory for the
+    // .goodvibes directory under it. Reading the raw variable anywhere else is
+    // how a second meaning gets reintroduced, so it is refused here rather than
+    // discouraged in a comment. Writing it (the systemd unit's Environment=
+    // block in src/cli/service-posture.ts) is untouched — this bans reads.
+    files: [...nonTestFiles, ...scriptFiles],
+    allow: [
+      'src/config/goodvibes-home.ts',
+    ],
+    pattern: /\benv(?:ironment)?\s*(?:\[\s*['"]GOODVIBES_HOME['"]\s*\]|\.GOODVIBES_HOME\b)/,
+    message: 'GOODVIBES_HOME has one meaning (the tree root) and one reader; derive from src/config/goodvibes-home.ts (resolveGoodVibesHome / resolveGoodVibesTreeDirectory) instead of reading the variable directly',
+  },
 ];
 
 for (const rule of rules) {
