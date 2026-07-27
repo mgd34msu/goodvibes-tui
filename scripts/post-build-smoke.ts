@@ -112,17 +112,37 @@ if (!existsSync(addonPath)) {
 // ---------------------------------------------------------------------------
 // Tmp home dir for isolated smoke run
 // ---------------------------------------------------------------------------
-// ConfigManager reads port from homeDir/.goodvibes/tui/settings.json.
-// GOODVIBES_CONTROL_PLANE_PORT is NOT honoured by the SDK — the port must be
-// set in the settings file so the daemon binds on the expected smoke port.
+// The daemon reads its settings from TWO files, and which key lives where is
+// decided by config ownership, not by convenience:
+//
+//   controlPlane.*  is DAEMON-owned, so it is read from the daemon tier —
+//                   <daemonHome>/settings.json, which GOODVIBES_DAEMON_HOME
+//                   points at. Writing the port into the surface file below
+//                   leaves it unread, the daemon falls back to the default
+//                   3421, and the smoke then polls a port nothing is listening
+//                   on — or the bind fails outright if something already holds
+//                   3421, which is how this surfaced.
+//
+//   danger.daemon / service.enabled are CLIENT-owned: they are properties of
+//                   this installation, so they stay in the surface file.
+//
+// GOODVIBES_CONTROL_PLANE_PORT is NOT honoured by the SDK either way.
 
 const smokeTmpDir = join(tmpdir(), `goodvibes-smoke-${process.pid}`);
 const settingsDir = join(smokeTmpDir, '.goodvibes', 'tui');
 mkdirSync(settingsDir, { recursive: true });
+// The daemon tier, under the relocated tree root: GOODVIBES_HOME below makes
+// this the file the daemon reads its own settings from.
+const daemonTierDir = join(smokeTmpDir, '.goodvibes', 'daemon');
+mkdirSync(daemonTierDir, { recursive: true });
+writeFileSync(
+  join(daemonTierDir, 'settings.json'),
+  JSON.stringify({ controlPlane: { port: SMOKE_PORT, enabled: true } }, null, 2),
+  'utf-8',
+);
 writeFileSync(
   join(settingsDir, 'settings.json'),
   JSON.stringify({
-    controlPlane: { port: SMOKE_PORT, enabled: true },
     danger: { daemon: true },
     // A compiled standalone daemon self-promotes at its first idle moment:
     // it installs a service unit and exits 0, handing over to the supervised
@@ -145,8 +165,12 @@ const daemonProc = spawn(BINARY, [], {
     // Token auth: readDaemonCliTokens() reads GOODVIBES_DAEMON_TOKEN from env.
     GOODVIBES_DAEMON_TOKEN: SMOKE_TOKEN,
     GOODVIBES_HTTP_TOKEN: SMOKE_TOKEN,
-    // Point the daemon at the smoke tmp dir so ConfigManager picks up our port.
-    GOODVIBES_DAEMON_HOME: smokeTmpDir,
+    // Relocate the whole GoodVibes tree, which is what an isolated harness
+    // wants: GOODVIBES_DAEMON_HOME names only the daemon's identity directory,
+    // so on its own it leaves the daemon reading the real user's settings —
+    // and therefore the real port — while writing state into the tmp dir.
+    GOODVIBES_HOME: smokeTmpDir,
+    GOODVIBES_DAEMON_HOME: join(smokeTmpDir, '.goodvibes', 'daemon'),
     // Working dir for the smoke run — keeps any session/project state out of the
     // real project root.
     GOODVIBES_WORKING_DIR: smokeTmpDir,
