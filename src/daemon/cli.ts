@@ -7,7 +7,7 @@ import {
 } from '@pellux/goodvibes-sdk/platform/config';
 import type { ConfigKey } from '@pellux/goodvibes-sdk/platform/config';
 import { formatProviderModel, getModelIdFromProviderModel, getProviderIdFromModel } from '../config/provider-model.ts';
-import { resolveGoodVibesHomeOwnership } from '../config/goodvibes-home.ts';
+import { resolveGoodVibesHomeOwnership, hasOverriddenGoodVibesHome } from '../config/goodvibes-home.ts';
 import { RuntimeEventBus, GlobalNetworkTransportInstaller } from '@/runtime/index.ts';
 import { bindFeatureSettingsBridge, createFeatureFlagManager, deriveFeatureStates } from '@/runtime/index.ts';
 import { createRuntimeStore } from '../runtime/store/index.ts';
@@ -371,8 +371,7 @@ async function main(): Promise<void> {
     // found the unit not running, wrote its own scratchpad ExecStart into
     // ~/.config/systemd/user/goodvibes.service and exited, and systemd then
     // supervised the throwaway as the machine's daemon for five hours.
-    hasOverriddenHome: process.env['GOODVIBES_DAEMON_HOME'] !== undefined
-      || process.env['GOODVIBES_HOME'] !== undefined,
+    hasOverriddenHome: hasOverriddenGoodVibesHome(),
     // The SAME coordinator this repository's inbox poller registered with (see
     // runtime/cluster-composition.ts). The facade must reuse it rather than
     // compose its own: two coordinators in one process are two nodes in the
