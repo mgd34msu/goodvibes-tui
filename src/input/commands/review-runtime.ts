@@ -26,7 +26,19 @@ interface RevertHunkResult {
   readonly refusal: { readonly reason: string } | null;
 }
 
-const INVOKE_CONTEXT = { context: { clientKind: 'tui' as const } };
+/**
+ * The review UI's invoke context.
+ *
+ * `explicitUserRequest: true` is honest here and only here-shaped: this path
+ * runs because a person is looking at a hunk and pressed a key. Scheduled
+ * work, triggers and channel-driven work must never set it — the distinction
+ * is exactly "did the owner ask for this right now", and it is what lets a
+ * confirmation-gated verb tell an authorized action apart from one initiated
+ * by content.
+ */
+const INVOKE_CONTEXT = {
+  context: { clientKind: 'tui' as const, metadata: { explicitUserRequest: true } },
+};
 
 /** True for the honest 409 the revert verb throws when the hunk drifted since it was captured. */
 function isConflict(err: unknown): boolean {
