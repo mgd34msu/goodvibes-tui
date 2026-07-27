@@ -20,7 +20,7 @@ import { createKnowledgeServices } from './knowledge-services.ts';
 import { MediaProviderRegistry, ensureBuiltinMediaProviders } from '@pellux/goodvibes-sdk/platform/media';
 import { MultimodalService } from '@pellux/goodvibes-sdk/platform/multimodal';
 import { AgentMessageBus, AgentOrchestrator, ArchetypeLoader, WrfcController } from '@pellux/goodvibes-sdk/platform/agents';
-import { AgentManager, ContextAccountingHolder, OverflowHandler, ProcessManager, createWorkflowServices, type WorkflowServices } from '@pellux/goodvibes-sdk/platform/tools';
+import { AgentManager, ContextAccountingHolder, OverflowHandler, ProcessManager, cancelAllAgentRuns, createWorkflowServices, type WorkflowServices } from '@pellux/goodvibes-sdk/platform/tools';
 import { FileStateCache, FileUndoManager, MemoryConsolidationScheduler, MemoryEmbeddingProviderRegistry, MemoryRegistry, MemoryStore, ModeManager, ProjectIndex, resolveCanonicalMemoryDbPath, type CodeIndexStore, type CodeIndexReindexScheduler } from '@pellux/goodvibes-sdk/platform/state';
 import type { StoreSnapshotScheduler } from '@pellux/goodvibes-sdk/platform/state/store-snapshots';
 import type { UserPermissionRuleStore } from '@pellux/goodvibes-sdk/platform/permissions';
@@ -232,6 +232,15 @@ export interface RuntimeServices {
   readonly integrationHelpers: IntegrationHelperService;
   /** Re-root path-bound stores (MemoryStore, ProjectIndex) to a new working directory, called by WorkspaceSwapManager after verification; stores needing a process restart just warn-log and keep serving the old path until the daemon restarts with the new --working-dir. */
   rerootStores(newWorkingDir: string): Promise<void>;
+  /**
+   * Cancel the agent runs this graph is hosting, returning how many.
+   *
+   * Required by the SDK's RuntimePollerOwners: by dispose() time the fleet
+   * registry, orchestration engine, process registry and bus these runs report
+   * through are already down, so a run still described as "running" is orphaned
+   * rather than preserved.
+   */
+  cancelHostedAgentRuns(): number;
   dispose(): void; // Stop every poller this graph started; best-effort, total, idempotent. This surface owns its graph — see disposal-wiring.ts.
 }
 
@@ -794,6 +803,13 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
     workspaceCheckpointManager,
     integrationHelpers,
     rerootStores: createStoreRerooter({ codeIndexStore, projectIndex }),
+    // Cancels the agent runs this graph was hosting. By dispose() time the
+    // fleet registry, orchestration engine, process registry and bus these runs
+    // report through are already down, so a run still described as "running" is
+    // orphaned rather than preserved — and this is the only shutdown-reachable
+    // way to abort its in-flight provider call instead of letting it sleep out
+    // a retry backoff nobody is waiting on.
+    cancelHostedAgentRuns: () => cancelAllAgentRuns(agentManager),
     dispose: (): void => disposalScope.dispose(),
   };
   registerSurfaceRuntimePollers(disposalScope.registry, services, { stopConfigWatch }); return services;

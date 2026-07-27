@@ -140,6 +140,15 @@ export class InboxCursorStore {
   private readonly setIntervalImpl: typeof setInterval;
   private readonly clearIntervalImpl: typeof clearInterval;
   private sweepTimer: ReturnType<typeof setInterval> | null = null;
+  /**
+   * Set by close(). `init()` is async and arms the retention timer only after
+   * two awaits, so a surface that is torn down while its bootstrap is still in
+   * flight would otherwise arm a timer AFTER the only thing that could clear it
+   * had already run. That is not hypothetical: registerInboxMethods() kicks
+   * init() off without awaiting it, so any shutdown inside the first tick of a
+   * daemon's life hits exactly this window.
+   */
+  private closed = false;
 
   constructor(
     workingDirectory: string,
@@ -201,7 +210,7 @@ export class InboxCursorStore {
   }
 
   private startSweepTimer(): void {
-    if (this.sweepTimer !== null || this.sweepIntervalMs <= 0) return;
+    if (this.closed || this.sweepTimer !== null || this.sweepIntervalMs <= 0) return;
     const handle = this.setIntervalImpl(() => {
       void this.runSweep();
     }, this.sweepIntervalMs);
@@ -415,6 +424,8 @@ export class InboxCursorStore {
 
   /** Stop the retention timer, flush (best-effort), then close the database. */
   async close(): Promise<void> {
+    if (this.closed) return;
+    this.closed = true;
     this.stopSweepTimer();
     try {
       await this.flush();
