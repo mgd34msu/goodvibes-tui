@@ -4,6 +4,20 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [1.24.0] - 2026-07-27
+
+### Changes
+
+- Added: when you run GoodVibes on more than one machine on the same network, they now agree on which one reads each inbox instead of all of them reading it. A message used to be picked up twice and answered twice; now exactly one machine holds each account — your laptop can hold the work Slack while the desktop holds the mailbox — and if a machine goes away, only the accounts it was reading move. Off by default: turn it on with `cluster.enabled`.
+- Added: `cluster` commands for saying which machines are yours — create a group, join one, list the machines in it, remove one, rotate the group key. Machines outside the group are not heard, and a machine you remove stops being heard immediately.
+- Added: `cluster status` reports which surfaces THIS machine is holding, so the question "is this the one that should be reading my inbox?" has an answer. Account names never appear — each surface is shown as a digest, in the log and on the wire alike.
+- Added: your daemon now keeps its own credentials, so a mailbox password follows the machine that takes over instead of staying behind on the one that went away.
+- Fixed: a daemon told to stop now stops what it started. Timers and pollers it owned kept running after shutdown.
+- Fixed: the daemon lost log lines written just before it exited, which is why an update that went wrong read as a daemon that simply vanished. What it says it wrote is now on disk before it stops.
+- Fixed: a daemon that was switched off while releases shipped now catches up when it starts, rather than waiting out a full interval first. An update that will not start rolls itself back to the version that did.
+- Fixed: the transcript's status markers sit in the assistant's own column and the tree's rails close properly.
+- Fixed: the installer only ever signals daemons it installed. Running it used to stop a daemon belonging to a different install on the same machine — which is exactly the setup the multi-machine work above exists to support. It now names the other install and leaves it alone.
+
 ## [1.23.0] - 2026-07-26
 
 ### Changes
