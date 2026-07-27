@@ -1,5 +1,5 @@
 #!/usr/bin/env bun
-import { homedir } from 'node:os';
+import { resolveGoodVibesDaemonHome, resolveGoodVibesHome } from './config/goodvibes-home.ts';
 import { Compositor } from './renderer/compositor.ts';
 import { type Line } from './types/grid.ts';
 import { UIFactory } from './renderer/ui-factory.ts';
@@ -87,9 +87,12 @@ import { VERSION } from './version.ts';
 async function main() {
   const stdout = process.stdout;
   const stdin = process.stdin;
+  // Both roots come from the one resolver the daemon CLI also uses. This line
+  // called homedir() unconditionally, so a harness that redirected the tree got
+  // a client that wrote the real one — secret store included.
   const { cli, configManager, bootstrapWorkingDir, bootstrapHomeDirectory } = await prepareShellCliRuntime(process.argv.slice(2), {
     defaultWorkingDirectory: process.env['GOODVIBES_WORKING_DIR'] ?? process.cwd(),
-    homeDirectory: homedir(),
+    homeDirectory: resolveGoodVibesHome(),
   }, 'goodvibes');
 
   // Between binary start and the first frame, boot used to be silent (config
@@ -106,6 +109,8 @@ async function main() {
     configManager,
     workingDir: bootstrapWorkingDir,
     homeDirectory: bootstrapHomeDirectory,
+    // Named, so GOODVIBES_DAEMON_HOME on its own moves the client's daemon tier.
+    daemonHomeDirectory: resolveGoodVibesDaemonHome(bootstrapHomeDirectory),
   });
   const {
     conversation,

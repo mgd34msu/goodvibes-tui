@@ -560,6 +560,11 @@ const rules: readonly Rule[] = [
     allow: [
       'src/main.ts',
       'src/daemon/cli.ts',
+      // The one place either root is allowed to ask. It exists BECAUSE the two
+      // roots each answered separately and the client's answer ignored
+      // GOODVIBES_HOME, so a redirected process wrote into the real tree. Every
+      // other module still takes its roots injected.
+      'src/config/goodvibes-home.ts',
     ],
     pattern: /\bprocess\.cwd\(\)|\bhomedir\(\)/,
     message: 'reusable code must not discover cwd/home implicitly; composition roots must pass owned roots explicitly',

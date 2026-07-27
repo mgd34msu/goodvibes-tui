@@ -1,5 +1,4 @@
 import { homedir } from 'node:os';
-import { isAbsolute, join, resolve } from 'node:path';
 import {
   ConfigManager,
   deriveControlPlaneBaseUrl,
@@ -8,6 +7,7 @@ import {
 } from '@pellux/goodvibes-sdk/platform/config';
 import type { ConfigKey } from '@pellux/goodvibes-sdk/platform/config';
 import { formatProviderModel, getModelIdFromProviderModel, getProviderIdFromModel } from '../config/provider-model.ts';
+import { resolveGoodVibesHomeOwnership } from '../config/goodvibes-home.ts';
 import { RuntimeEventBus, GlobalNetworkTransportInstaller } from '@/runtime/index.ts';
 import { bindFeatureSettingsBridge, createFeatureFlagManager, deriveFeatureStates } from '@/runtime/index.ts';
 import { createRuntimeStore } from '../runtime/store/index.ts';
@@ -83,11 +83,11 @@ type DaemonCliTokens = {
  * daemon home then falls under it unless separately overridden.
  */
 function resolveDaemonCliOwnership(): DaemonCliOwnership {
-  const homeDirectory = process.env['GOODVIBES_HOME']?.trim() || homedir();
-  const daemonHomeOverride = process.env['GOODVIBES_DAEMON_HOME']?.trim();
-  const daemonHomeDirectory = daemonHomeOverride
-    ? (isAbsolute(daemonHomeOverride) ? daemonHomeOverride : resolve(process.cwd(), daemonHomeOverride))
-    : join(homeDirectory, '.goodvibes', 'daemon');
+  // Both roots come from src/config/goodvibes-home.ts, which the CLIENT entry
+  // point also uses. They were resolved independently, and the client's copy
+  // simply did not read GOODVIBES_HOME — so a redirected client wrote into the
+  // real tree while the daemon honoured the redirect.
+  const { homeDirectory, daemonHomeDirectory } = resolveGoodVibesHomeOwnership();
   return {
     workingDirectory: process.env['GOODVIBES_WORKING_DIR'] ?? process.cwd(),
     homeDirectory,

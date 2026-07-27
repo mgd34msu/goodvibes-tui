@@ -85,6 +85,7 @@ export interface RuntimeServicesOptions {
   readonly getConversationTitle?: () => string | undefined;
   readonly workingDir: string;
   readonly homeDirectory: string;
+  /** Daemon identity directory; absent ⇒ `<homeDirectory>/.goodvibes/daemon`. */ readonly daemonHomeDirectory?: string | undefined;
   /** Opt-in (daemon-side only): fold host-observed external coding-agent sessions
    * into the fleet as 'observed-external' rows. Interactive leaves it off and reads
    * the daemon snapshot. Mirrors the SDK's own createRuntimeServices option. */
@@ -295,6 +296,8 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
   const secretsManager = new SecretsManager({
     projectRoot: workingDirectory,
     globalHome: homeDirectory,
+    // Threaded, not defaulted: otherwise an isolated client reads the real store.
+    ...(options.daemonHomeDirectory === undefined ? {} : { daemonHome: options.daemonHomeDirectory }),
     configManager,
   });
   // Step-up (WebAuthn) ceremony service, shared between the ceremony gateway verbs and the relay gate's verifier.
