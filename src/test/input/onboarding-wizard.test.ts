@@ -587,7 +587,11 @@ describe('OnboardingWizardController', () => {
       kind: 'set-secret',
       key: 'GOODVIBES_SURFACES_SLACK_BOT_TOKEN',
       value: 'xoxb-secret',
-      scope: 'project',
+      // Daemon scope, not project scope. 'project' filed a first-run credential
+      // under whatever directory the wizard happened to run in; the daemon
+      // never looks there. See the setSecret comment in
+      // input/onboarding/onboarding-wizard-apply.ts.
+      scope: 'daemon',
     }));
     expect(request.operations).toContainEqual({
       kind: 'set-config',

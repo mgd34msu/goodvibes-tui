@@ -281,7 +281,12 @@ export type OnboardingApplyOperation =
       readonly kind: 'set-secret';
       readonly key: string;
       readonly value: string;
-      readonly scope?: 'project' | 'user';
+      /**
+       * Which secret tier the value is filed in. 'daemon' is the tier the
+       * daemon reads with every surface closed — see
+       * config/secret-config.ts#defaultSecretBackedScope.
+       */
+      readonly scope?: 'project' | 'user' | 'daemon';
       readonly medium: 'secure' | 'plaintext';
     }
   | {
