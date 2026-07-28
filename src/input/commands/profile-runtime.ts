@@ -71,12 +71,16 @@ const USAGE = [
   '  /profile set <field> <value>             — record or correct one field',
   '  /profile note [--section <name>] <text>  — add a note (Notes unless you name a section)',
   '  /profile forget <field>                  — delete a field and every retained predecessor',
+  '  /profile forget --section <name> <text>  — delete a note, named by its exact text',
   '  /profile undo <field>                    — put a field\'s most recent superseded value back',
   '  /profile status                          — whether it loaded, from where, what did not validate',
   '',
   '  <field> is a field id such as commerce.shippingAddress, or the label as written',
   '  in the file (e.g. "shipping address") once that field is recorded. /profile show',
   '  prints each field id beside its value.',
+  '',
+  '  Notes in People, Places, Work and Notes have no field id — forget those with',
+  '  --section and the line\'s exact text, which /profile show prints.',
 ].join('\n');
 
 /**
@@ -196,8 +200,12 @@ async function runWrite<TVerb extends ProfileWriteVerb>(
   }
 }
 
-/** `/profile note [--section <name>] <text>` — section defaults to Notes. */
-function parseNoteArgs(args: readonly string[]): { section: string; text: string } {
+/**
+ * `--section <name>` followed by free text, shared by `/profile note` and
+ * `/profile forget`. Section defaults to Notes, which is only meaningful for
+ * `note` — `forget` calls this solely when `--section` was given.
+ */
+function parseSectionArgs(args: readonly string[]): { section: string; text: string } {
   if (args[1] === '--section' && typeof args[2] === 'string' && args[2].length > 0) {
     return { section: args[2], text: args.slice(3).join(' ').trim() };
   }
@@ -211,7 +219,7 @@ export function registerProfileRuntimeCommands(
   registry.register({
     name: 'profile',
     description: 'What the platform knows about you: read it, correct it, trace where a fact came from, or forget one',
-    usage: '[show|where <field>|set <field> <value>|note [--section <name>] <text>|forget <field>|undo <field>|status]',
+    usage: '[show|where <field>|set <field> <value>|note [--section <name>] <text>|forget <field>|forget --section <name> <text>|undo <field>|status]',
     argsHint: '[show|where|set|note|forget|undo|status]',
     async handler(args, ctx) {
       const sub = args[0] ?? 'show';
@@ -228,7 +236,20 @@ export function registerProfileRuntimeCommands(
       // do that — everything after the first token is the value — so a label
       // there must be one word, or the field id.
       const fieldToken = sub === 'set' ? args[1] : args.slice(1).join(' ').trim();
-      if ((sub === 'where' || sub === 'forget' || sub === 'undo') && !fieldToken) {
+
+      // `/profile forget --section <name> <text>` removes a prose bullet, which
+      // is the only way to forget a line in People, Places, Work or Notes —
+      // those sections have no mechanical fields at all (§4.3), so without this
+      // "forget that" would answer for a shipping address but not for a note
+      // about a person. The line is named by its exact text, never by position:
+      // the owner edits this file himself, so an index taken from an earlier
+      // read may address a different line by the time the delete lands (§9.2).
+      const forgetProse = sub === 'forget' && args[1] === '--section' ? parseSectionArgs(args) : null;
+      if (forgetProse && forgetProse.text.length === 0) {
+        ctx.print('Usage: /profile forget --section <name> <the exact text of the line>');
+        return;
+      }
+      if ((sub === 'where' || sub === 'undo' || (sub === 'forget' && !forgetProse)) && !fieldToken) {
         ctx.print(`Usage: /profile ${sub} <field>`);
         return;
       }
@@ -237,7 +258,7 @@ export function registerProfileRuntimeCommands(
         ctx.print('Usage: /profile set <field> <value>');
         return;
       }
-      const note = sub === 'note' ? parseNoteArgs(args) : null;
+      const note = sub === 'note' ? parseSectionArgs(args) : null;
       if (note && note.text.length === 0) {
         ctx.print('Usage: /profile note [--section <name>] <text>');
         return;
@@ -282,11 +303,12 @@ export function registerProfileRuntimeCommands(
         // written out once here rather than copied silently to the other
         // three write sites below.
         //
-        // The installed daemon would read an absent authority as owner-direct
-        // anyway, so this is not required to make the call work. It is stated
-        // because for `forget` and `undo` the authority check is the only gate
-        // there is, and a security-relevant field the caller leaves to a
-        // default is one the daemon can tighten without the caller noticing.
+        // The daemon requires it: `readAuthority` refuses an absent value
+        // outright. An earlier build defaulted it to owner-direct instead, and
+        // stating the claim rather than leaning on that default is precisely
+        // why this command kept working when it was tightened. It is the only
+        // gate `forget` and `undo` have — layers 2 and 3 do not apply to a
+        // removal — so it is not a field to leave to anyone else's default.
         //
         // This surface can hardcode it; the agent must not. The TUI's only
         // input is the owner at his own keyboard, whereas the agent can be
@@ -314,6 +336,14 @@ export function registerProfileRuntimeCommands(
       }
 
       if (sub === 'forget') {
+        if (forgetProse) {
+          await runWrite(invoke, 'profile.forget', {
+            section: forgetProse.section,
+            text: forgetProse.text,
+            authority: 'owner-direct',
+          }, print);
+          return;
+        }
         const fieldId = await resolveFieldToken(invoke, fieldToken!, print);
         if (fieldId === null) return;
         await runWrite(invoke, 'profile.forget', { fieldId, authority: 'owner-direct' }, print);

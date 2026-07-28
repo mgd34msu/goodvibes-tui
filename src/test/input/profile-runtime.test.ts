@@ -3,6 +3,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { CONFIG_SCHEMA, ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
+import { getOperatorContract } from '@pellux/goodvibes-contracts';
 import { buildSettingGroups } from '@/input/settings-modal-data.ts';
 import { CommandRegistry, type CommandContext } from '@/input/command-registry.ts';
 import { registerProfileRuntimeCommands, type ProfileCommandDeps } from '@/input/commands/profile-runtime.ts';
@@ -387,19 +388,20 @@ describe('containment', () => {
 // ---------------------------------------------------------------------------
 // Authority (§7): every write verb claims owner-direct, none send nothing
 //
-// Checked against the installed SDK: `readAuthority` in
-// platform/control-plane/routes/owner-profile.js reads an ABSENT authority as
-// `owner-direct` and only refuses an unrecognised string. So omitting the field
-// would still work today — which is exactly why a test is the right place to
-// hold the line rather than a runtime error.
+// `authority` is required on all four write verbs. Checked against the
+// installed SDK rather than assumed: `readAuthority` in
+// platform/control-plane/routes/owner-profile.js now throws
+// INVALID_ARGUMENT when it is absent, and the contract types the field
+// non-optional. An earlier build of the same module defaulted an absent value
+// to `owner-direct`; this command stated the claim explicitly even then, which
+// is why that tightening did not break it.
 //
 // It matters because for `forget` and `undo` the authority check is the ONLY
 // gate: layers 2 and 3 do not apply to a removal, since there is no value to
-// check for derivation and no owner utterance to quote. Leaving a
-// security-relevant field to a default that the daemon is free to tighten later
-// means the TUI would start failing at runtime instead of at build time. This
-// block is the one place that fails if a future edit drops the field from any
-// of the four write call sites.
+// check for derivation and no owner utterance to quote. This block is the one
+// place that fails if a future edit drops the field from any of the four write
+// call sites — the compile-time check below catches the same class earlier
+// still, but only for a shape the contract can see.
 // ---------------------------------------------------------------------------
 
 describe('every profile write verb claims owner-direct authority', () => {
@@ -433,6 +435,147 @@ describe('every profile write verb claims owner-direct authority', () => {
       await registry.get('profile')!.handler(args, ctx);
       expect(calls.map((call) => call.methodId)).toEqual([verb]);
       expect(calls[0]?.input.authority).toBe('owner-direct');
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The body each write sends conforms to the contract's DECLARED input
+//
+// Checked against the live operator manifest rather than a hand-written copy of
+// it, so this needs no tarball and no one to tell us the contract moved. It
+// catches both breaking changes this feature has already had:
+//
+//   - a field the contract REMOVED (profile.forget lost `lineIndex`) shows up
+//     as an undeclared property, because every profile input schema is
+//     additionalProperties:false;
+//   - a field the contract made REQUIRED (`authority`) shows up as a missing
+//     required property.
+//
+// The compile-time check is stronger and fires earlier — verified by seeding
+// both changes, each of which is a tsc error at the call site. This is the
+// backstop for the same class in a surface whose wrapper does not constrain its
+// input, which is how both changes reached the other two surfaces unnoticed.
+// ---------------------------------------------------------------------------
+
+describe('write payloads conform to the declared contract input', () => {
+  const WRITE_RESULT = { ok: true, reason: null, changes: [], disclosure: 'Noted.' };
+
+  interface DeclaredSchema {
+    readonly properties?: Record<string, { readonly type?: string }>;
+    readonly required?: readonly string[];
+    readonly additionalProperties?: boolean;
+  }
+
+  /** The input schema the operator contract declares for a method id. */
+  function declaredInput(methodId: string): DeclaredSchema {
+    const method = getOperatorContract().operator.methods.find((entry) => entry.id === methodId);
+    if (!method) throw new Error(`${methodId} is not in the operator contract`);
+    return (method.inputSchema ?? {}) as DeclaredSchema;
+  }
+
+  function expectConforms(methodId: string, body: Record<string, unknown>): void {
+    const schema = declaredInput(methodId);
+    const properties = schema.properties ?? {};
+
+    // Nothing the contract does not declare. This is the lineIndex class.
+    if (schema.additionalProperties === false) {
+      const undeclared = Object.keys(body).filter((key) => !(key in properties));
+      expect({ methodId, undeclared }).toEqual({ methodId, undeclared: [] });
+    }
+    // Everything the contract requires. This is the authority class.
+    const missing = (schema.required ?? []).filter((key) => !(key in body));
+    expect({ methodId, missing }).toEqual({ methodId, missing: [] });
+
+    // And the declared primitive type, where one is given.
+    const wrongType = Object.entries(body)
+      .filter(([key, value]) => {
+        const declaredType = properties[key]?.type;
+        return declaredType !== undefined && typeof value !== declaredType;
+      })
+      .map(([key]) => key);
+    expect({ methodId, wrongType }).toEqual({ methodId, wrongType: [] });
+  }
+
+  const SCRIPTS: ReadonlyArray<{ args: string[]; verb: string }> = [
+    { args: ['set', 'commerce.shippingAddress', '123', 'Main', 'St'], verb: 'profile.set' },
+    { args: ['note', 'a', 'note'], verb: 'profile.append' },
+    { args: ['forget', 'commerce.shippingAddress'], verb: 'profile.forget' },
+    { args: ['undo', 'commerce.shippingAddress'], verb: 'profile.undo' },
+  ];
+
+  for (const { args, verb } of SCRIPTS) {
+    test(`${verb} sends only declared properties and every required one`, async () => {
+      const ctx = makeCtx();
+      const { registry, calls } = makeScriptedRegistry((methodId) => {
+        if (methodId === verb) return WRITE_RESULT;
+        throw new Error(`unexpected call: ${methodId}`);
+      });
+      await registry.get('profile')!.handler(args, ctx);
+      expect(calls).toHaveLength(1);
+      expectConforms(verb, calls[0]!.input);
+    });
+  }
+
+  test('forget --section sends section and text, and no position', async () => {
+    const ctx = makeCtx();
+    const { registry, calls } = makeScriptedRegistry((methodId) => {
+      if (methodId === 'profile.forget') return WRITE_RESULT;
+      throw new Error(`unexpected call: ${methodId}`);
+    });
+    await registry.get('profile')!.handler(
+      ['forget', '--section', 'People', '-', 'Sarah,', 'sister,', 'sarah@example.com'],
+      ctx,
+    );
+    expect(calls).toHaveLength(1);
+    expect(calls[0]!.input.section).toBe('People');
+    expect(calls[0]!.input.text).toBe('- Sarah, sister, sarah@example.com');
+    expect(calls[0]!.input.fieldId).toBeUndefined();
+    expect('lineIndex' in calls[0]!.input).toBe(false);
+    expectConforms('profile.forget', calls[0]!.input);
+  });
+
+  test('forget --section with no text prints usage and never calls the daemon', async () => {
+    const ctx = makeCtx();
+    const { registry, calls } = makeScriptedRegistry(() => {
+      throw new Error('should not be called');
+    });
+    await registry.get('profile')!.handler(['forget', '--section', 'People'], ctx);
+    expect(ctx.printed.join('\n')).toContain('Usage: /profile forget --section');
+    expect(calls).toHaveLength(0);
+  });
+
+  test('a note that was already gone reports that, not success', async () => {
+    // The daemon answers content-addressed misses honestly; the renderer must
+    // pass that through rather than manufacture a receipt (§9.2).
+    const ctx = makeCtx();
+    const { registry } = makeScriptedRegistry(() => ({
+      ok: false,
+      reason: 'That line is not in People any more, so nothing was removed.',
+      changes: [],
+      disclosure: '',
+    }));
+    await registry.get('profile')!.handler(['forget', '--section', 'People', 'gone', 'already'], ctx);
+    const output = ctx.printed.join('\n');
+    expect(output).toContain('not in People any more');
+    expect(output).not.toMatch(/\bNoted\b/);
+    expect(output).not.toMatch(/\bremoved your\b/i);
+  });
+
+  test('profile.forget no longer declares lineIndex, so a positional delete cannot be sent', () => {
+    // §9.2: the owner is a concurrent writer, so a line index is only valid
+    // against the file state that produced it. Asserted against the contract so
+    // this test states the rule rather than trusting that nobody sends one.
+    const properties = declaredInput('profile.forget').properties ?? {};
+    expect('lineIndex' in properties).toBe(false);
+    expect('section' in properties).toBe(true);
+    expect('text' in properties).toBe(true);
+  });
+
+  test('authority is required on every write verb, not optional', () => {
+    for (const verb of ['profile.set', 'profile.append', 'profile.forget', 'profile.undo']) {
+      expect({ verb, required: declaredInput(verb).required ?? [] })
+        .toEqual({ verb, required: expect.arrayContaining(['authority']) });
     }
   });
 });
