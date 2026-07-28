@@ -72,7 +72,7 @@ const USAGE = [
   '  /profile set <field> <value>             — record or correct one field',
   '  /profile note [--section <name>] <text>  — add a note (Notes unless you name a section)',
   '  /profile forget <field>                  — delete a field and every retained predecessor',
-  '  /profile forget --section <name> <text>  — delete a note, named by its exact text',
+  '  /profile forget --section <name> <text>  — delete a note, named by its text',
   '  /profile undo <field>                    — put a field\'s most recent superseded value back',
   '  /profile status                          — whether it loaded, from where, what did not validate',
   '',
@@ -81,7 +81,8 @@ const USAGE = [
   '  prints each field id beside its value.',
   '',
   '  Notes in People, Places, Work and Notes have no field id — forget those with',
-  '  --section and the line\'s exact text, which /profile show prints.',
+  '  --section and the line as /profile show prints it. The leading "-" is optional;',
+  '  the rest must match, and if two notes read the same nothing is removed.',
 ].join('\n');
 
 /**

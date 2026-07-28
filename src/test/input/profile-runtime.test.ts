@@ -627,18 +627,21 @@ describe('write payloads conform to the declared contract input', () => {
   });
 
   test('what /profile show prints is exactly what /profile forget needs', async () => {
-    // The surface contract this command owns, and the reason it is worth a test:
-    // the daemon matches a prose line by its text AS STORED, which includes the
-    // `- ` bullet. So the owner must not have to know the file's storage form —
-    // he copies the line out of `/profile show` and it works.
+    // The surface contract this command owns: the owner copies a line out of
+    // `/profile show`, retypes it after `--section`, and it removes that line.
     //
-    // This is deliberately NOT a pin on the SDK's matching rule. The SDK's
-    // owner-profile module is not in the package's `exports` map (144 subpaths,
-    // no wildcard, `./platform/owner-profile` absent), so no test in this
-    // surface can import `forgetProseByText` to assert against it. What is
-    // asserted here is the round trip through this command, which holds
-    // whatever the daemon decides to match on: whatever `show` renders is what
-    // `forget` transmits.
+    // The daemon now strips a leading list marker from BOTH sides before
+    // comparing (`withoutListMarker`, only when whitespace follows, so
+    // `-5 degrees` keeps its minus), so the `- ` is optional on input. This test
+    // deliberately does not depend on that: it asserts the stricter property
+    // that what `show` renders is transmitted BYTE-IDENTICALLY, which satisfies
+    // the matcher whether or not it normalises and would still hold if the
+    // normalisation were reverted.
+    //
+    // It is deliberately NOT a pin on the SDK's matching rule, and cannot be:
+    // the SDK's owner-profile module is absent from the package's `exports` map
+    // (144 subpaths, no wildcard), so no test in this surface can import
+    // `forgetProseByText` to assert against it.
     const rendered = renderProfileDocument(checkedDocument());
     const shownLine = rendered
       .split('\n')
