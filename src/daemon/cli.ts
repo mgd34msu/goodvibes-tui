@@ -34,6 +34,9 @@ import {
   persistProviders,
 } from '@pellux/goodvibes-sdk/platform/discovery';
 import { createSafeHostServeFactory } from './safe-serve.ts';
+import { runSendCommand } from './send/command.ts';
+import { createSendStack } from './send/composition.ts';
+import { readAllStdin } from './send/stdin.ts';
 import { isDaemonServiceSubcommand, resolveInstalledDaemonBinary, runDaemonServiceCli } from './service-commands.ts';
 import { runClusterCommand } from '../cluster/commands.ts';
 import { resolveConfiguredServiceName } from '../runtime/legacy-daemon-migration.ts';
@@ -134,6 +137,44 @@ async function main(): Promise<void> {
       if (result.exitCode === 0) console.log(line);
       else console.error(line);
     }
+    process.exit(result.exitCode);
+  }
+
+  // `send …` is intercepted here for both of the reasons `cluster` is, plus one
+  // of its own.
+  //
+  // Before the parser, because the message is arbitrary operator text: a
+  // message beginning with a dash, or one carrying `--port` inside it, must
+  // reach the channel rather than be eaten as a daemon flag.
+  //
+  // Before the runtime, because this composes only the services a delivery
+  // needs (see send/composition.ts) and must not start a second copy of the
+  // pollers, cluster election and LAN scan a running daemon already owns.
+  //
+  // And it must work when NO daemon is running, which is much of the point: the
+  // reason to message the owner is usually that something stopped.
+  if (rawArgs[0] === 'send') {
+    const ownership = resolveDaemonCliOwnership();
+    runDaemonConfigMigration(ownership.homeDirectory);
+    const stack = createSendStack({
+      workingDirectory: ownership.workingDirectory,
+      homeDirectory: ownership.homeDirectory,
+      daemonHomeDirectory: ownership.daemonHomeDirectory,
+    });
+    const result = await runSendCommand(rawArgs.slice(1), {
+      configManager: stack.configManager,
+      deliver: stack.deliver,
+      readStdin: readAllStdin,
+      stdinIsTty: process.stdin.isTTY === true,
+    });
+    for (const line of result.lines) {
+      // eslint-disable-next-line no-console
+      if (result.exitCode === 0) console.log(line);
+      else console.error(line);
+    }
+    // The activity log holds the OUTBOUND_HTTP record for the send that just
+    // happened (or did not); a process exiting this promptly would drop it.
+    flushActivityLogSync();
     process.exit(result.exitCode);
   }
 
