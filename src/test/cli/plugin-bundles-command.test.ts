@@ -1,7 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { tmpdir } from 'node:os';
 import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import {
   scaffoldCapabilityBundleManifest,
@@ -13,6 +12,7 @@ import {
 import { parseGoodVibesCli } from '../../cli/parser.ts';
 import { handlePluginCommand } from '../../cli/plugin-command.ts';
 import type { CliCommandRuntime } from '../../cli/types.ts';
+import { makeProjectTempDir } from '../helpers/project-temp.ts';
 
 function makeRuntime(root: string, args: readonly string[]): CliCommandRuntime {
   const configManager = new ConfigManager({ workingDir: root, homeDir: root, surfaceRoot: 'tui' });
@@ -26,7 +26,7 @@ function makeRuntime(root: string, args: readonly string[]): CliCommandRuntime {
 
 describe('goodvibes plugin bundles', () => {
   let root = '';
-  beforeEach(() => { root = mkdtempSync(join(tmpdir(), 'goodvibes-plugin-bundles-')); });
+  beforeEach(() => { root = makeProjectTempDir('goodvibes-plugin-bundles'); });
   afterEach(() => { rmSync(root, { recursive: true, force: true }); });
 
   test('install refuses when --sha256 is missing (never an unpinned install path)', async () => {

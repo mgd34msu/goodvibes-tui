@@ -1,11 +1,11 @@
 import { describe, test, expect, mock, spyOn, beforeEach, afterEach } from 'bun:test';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { tmpdir } from 'node:os';
 import { WrfcController } from '@pellux/goodvibes-sdk/platform/agents';
 import { RuntimeEventBus, createEventEnvelope } from '@/runtime/index.ts';
 import type { AgentRecord } from '@pellux/goodvibes-sdk/platform/tools';
 import type { WrfcChain, WrfcChildRouteSelection } from '@pellux/goodvibes-sdk/platform/agents';
+import { makeProjectTempDir } from '../helpers/project-temp.ts';
 
 const flushMicrotasks = async () => {
   await Promise.resolve();
@@ -199,7 +199,7 @@ describe('WrfcController', () => {
   beforeEach(() => {
     runtimeBus = new RuntimeEventBus();
     emitSpy = spyOn(runtimeBus, 'emit');
-    projectRoot = mkdtempSync(join(tmpdir(), 'goodvibes-wrfc-test-'));
+    projectRoot = makeProjectTempDir('goodvibes-wrfc-test');
     // The SDK (>=0.33.38) runs verifyEngineerClaims, corroborating the engineer/fixer
     // report's claimed files against disk under projectRoot. Our engineer mock claims
     // filesModified: ['src/test.ts'], so materialize that file to make the claim

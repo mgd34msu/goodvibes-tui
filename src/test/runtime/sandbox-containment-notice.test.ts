@@ -1,12 +1,11 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { rmSync } from 'node:fs';
 import { createSandboxContainmentNotice } from '../../runtime/daemon-attach-notices.ts';
+import { makeProjectTempDir } from '../helpers/project-temp.ts';
 
 let dir: string;
 
-beforeEach(() => { dir = mkdtempSync(join(tmpdir(), 'gv-sandbox-notice-')); });
+beforeEach(() => { dir = makeProjectTempDir('gv-sandbox-notice'); });
 afterEach(() => { rmSync(dir, { recursive: true, force: true }); });
 
 describe('createSandboxContainmentNotice', () => {

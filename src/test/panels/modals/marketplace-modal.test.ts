@@ -1,11 +1,11 @@
 import { describe, test, expect } from 'bun:test';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { createMarketplaceModalSurface } from '../../../panels/modals/marketplace-modal.ts';
 import type { UiMarketplaceSnapshot, UiReadModel } from '../../../runtime/ui-read-models.ts';
 import type { EcosystemCatalogEntry, EcosystemCatalogPathOptions, EcosystemEntryKind } from '@/runtime/index.ts';
 import { actionCtx, captureCommands, findAction, open, tabRows, tabText } from './modal-surface-test-helpers.ts';
+import { makeProjectTempDir } from '../../helpers/project-temp.ts';
 
 function fixedReadModel(snapshot: UiMarketplaceSnapshot): UiReadModel<UiMarketplaceSnapshot> {
   return { getSnapshot: () => snapshot, subscribe: () => () => {} };
@@ -14,7 +14,7 @@ function makeEntry(kind: EcosystemEntryKind, id: string, name: string, sourcePat
   return { id, kind, name, summary: `${name} summary`, source: sourcePath, tags: [], provenance: 'local', version: '1.0.0' };
 }
 function seedCatalog(entriesByKind: Partial<Record<EcosystemEntryKind, EcosystemCatalogEntry[]>>): { paths: EcosystemCatalogPathOptions; cleanup: () => void } {
-  const root = mkdtempSync(join(tmpdir(), 'gv-marketplace-modal-'));
+  const root = makeProjectTempDir('gv-marketplace-modal');
   const catalogRoot = join(root, 'ecosystem');
   mkdirSync(catalogRoot, { recursive: true });
   const plural: Record<EcosystemEntryKind, string> = { plugin: 'plugins', skill: 'skills', 'hook-pack': 'hook-packs', 'policy-pack': 'policy-packs' };

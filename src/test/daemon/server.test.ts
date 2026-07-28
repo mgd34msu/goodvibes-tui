@@ -1,7 +1,6 @@
 import { describe, test, expect, beforeEach, afterEach, mock } from 'bun:test';
 import { createHmac, randomUUID } from 'node:crypto';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { ArtifactStore } from '@pellux/goodvibes-sdk/platform/artifacts';
 import { DaemonServer } from '@pellux/goodvibes-sdk/platform/daemon';
@@ -20,6 +19,7 @@ import { resetTestRuntimeServices, disposeTestRuntimeServicesAfterAll } from '..
 import { trackDisposables } from '../helpers/disposables.ts';
 import { createAuthenticatedWebSocket } from '../helpers/authenticated-websocket.ts';
 import { buildOperatorContract } from '@pellux/goodvibes-sdk/platform/control-plane';
+import { makeProjectTempDir } from '../helpers/project-temp.ts';
 
 // Stop the shared test runtime graph when this file ends. Called here, not
 // registered inside the helper, for the reason its doc comment gives.
@@ -174,7 +174,7 @@ describe('DaemonServer', () => {
 
   beforeEach(() => {
     resetTestRuntimeServices();
-    tempRoot = mkdtempSync(join(tmpdir(), 'gv-daemon-config-'));
+    tempRoot = makeProjectTempDir('gv-daemon-config');
     workingDir = join(tempRoot, 'workspace');
     homeDir = join(tempRoot, 'home');
     configDir = join(homeDir, '.goodvibes', 'tui');
@@ -3077,7 +3077,7 @@ describe('HttpListener', () => {
   });
 
   beforeEach(() => {
-    tempRoot = mkdtempSync(join(tmpdir(), 'gv-listener-config-'));
+    tempRoot = makeProjectTempDir('gv-listener-config');
     workingDir = join(tempRoot, 'workspace');
     homeDir = join(tempRoot, 'home');
     configDir = join(homeDir, '.goodvibes', 'tui');

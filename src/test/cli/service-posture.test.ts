@@ -1,7 +1,6 @@
 import { beforeEach, afterEach, describe, expect, test } from 'bun:test';
-import { chmodSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { tmpdir } from 'node:os';
 import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import type { ManagedServiceStatus } from '@pellux/goodvibes-sdk/platform/daemon';
 import {
@@ -10,6 +9,7 @@ import {
   getServiceStateRoot,
   resolveGoodVibesDaemonExecutable,
 } from '../../cli/service-posture.ts';
+import { makeProjectTempDir } from '../helpers/project-temp.ts';
 
 function makeExecutable(path: string): void {
   writeFileSync(path, '#!/bin/sh\nexit 0\n', 'utf-8');
@@ -35,7 +35,7 @@ describe('CLI service posture', () => {
   let root = '';
 
   beforeEach(() => {
-    root = mkdtempSync(join(tmpdir(), 'goodvibes-service-posture-'));
+    root = makeProjectTempDir('goodvibes-service-posture');
   });
 
   afterEach(() => {

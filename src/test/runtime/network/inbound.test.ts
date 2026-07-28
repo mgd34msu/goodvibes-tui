@@ -1,17 +1,16 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { chmodSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { mkdtempSync } from 'node:fs';
 import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import { inspectInboundTls } from '@/runtime/index.ts';
+import { makeProjectTempDir } from '../../helpers/project-temp.ts';
 
 describe('runtime/network inbound TLS', () => {
   let root: string;
   let configDir: string;
 
   beforeEach(() => {
-    root = mkdtempSync(join(tmpdir(), 'gv-network-inbound-'));
+    root = makeProjectTempDir('gv-network-inbound');
     configDir = join(root, '.goodvibes', 'tui');
     mkdirSync(configDir, { recursive: true });
   });

@@ -1,6 +1,5 @@
 import { afterEach, beforeEach, describe, expect, mock, spyOn, test } from 'bun:test';
-import { mkdirSync, rmSync, writeFileSync, mkdtempSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import {
@@ -9,13 +8,14 @@ import {
   inspectOutboundTls,
 } from '@/runtime/index.ts';
 import { logger } from '@pellux/goodvibes-sdk/platform/utils';
+import { makeProjectTempDir } from '../../helpers/project-temp.ts';
 
 describe('runtime/network outbound TLS', () => {
   let root: string;
   let configDir: string;
 
   beforeEach(() => {
-    root = mkdtempSync(join(tmpdir(), 'gv-network-outbound-'));
+    root = makeProjectTempDir('gv-network-outbound');
     configDir = join(root, '.goodvibes', 'tui');
     mkdirSync(configDir, { recursive: true });
   });

@@ -1,8 +1,7 @@
 import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
-import { mkdtempSync, rmSync } from 'fs';
-import { join } from 'path';
-import { tmpdir } from 'os';
+import { rmSync } from 'fs';
 import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
+import { makeProjectTempDir } from '../helpers/project-temp.ts';
 
 // Use a fresh ConfigManager instance for each test to avoid pollution from
 // leaked module state in other test files that used to replace shared config helpers.
@@ -11,7 +10,7 @@ describe('ConfigManager reset functionality', () => {
   let configDir: string;
 
   beforeEach(() => {
-    configDir = mkdtempSync(join(tmpdir(), 'goodvibes-config-reset-'));
+    configDir = makeProjectTempDir('goodvibes-config-reset');
     mgr = new ConfigManager({ surfaceRoot: 'tui',  configDir });
   });
 

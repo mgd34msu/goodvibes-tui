@@ -1,10 +1,9 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { mkdtempSync } from 'node:fs';
-import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import { createHookApi, HookWorkbench, listHookPointContracts } from '@pellux/goodvibes-sdk/platform/hooks';
 import { getTestHookDispatcher, disposeTestRuntimeServicesAfterAll } from '../helpers/runtime-services.ts';
+import { makeProjectTempDir } from '../helpers/project-temp.ts';
 
 // Stop the shared test runtime graph when this file ends. Called here, not
 // registered inside the helper, for the reason its doc comment gives.
@@ -12,7 +11,7 @@ disposeTestRuntimeServicesAfterAll();
 
 describe('HookApi', () => {
   const configManager = new ConfigManager({ surfaceRoot: 'tui',
-    configDir: join(tmpdir(), `gv-hook-api-config-${Date.now()}-${Math.random().toString(36).slice(2)}`),
+    configDir: makeProjectTempDir('gv-hook-api-config'),
   });
   let originalHooksFile: string;
   let tempDir: string;
@@ -20,7 +19,7 @@ describe('HookApi', () => {
 
   beforeEach(() => {
     originalHooksFile = configManager.get('tools.hooksFile') as string;
-    tempDir = mkdtempSync(join(tmpdir(), 'gv-hook-api-'));
+    tempDir = makeProjectTempDir('gv-hook-api');
     configManager.set('tools.hooksFile', join(tempDir, 'hooks.json'));
     getTestHookDispatcher().clear();
     hookWorkbench = new HookWorkbench(

@@ -6,9 +6,7 @@
  * advances a monotonic cursor, and reports total/truncated.
  */
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { mkdtemp, rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { rm } from 'node:fs/promises';
 import { GatewayMethodCatalog } from '@pellux/goodvibes-sdk/platform/control-plane';
 import type { HandlerContext } from '../../../daemon/handlers/context.ts';
 import type { DaemonCredentialStore } from '../../../daemon/handlers/credentials.ts';
@@ -25,6 +23,7 @@ import {
   type InboundProviderAdapter,
   type ProviderPollResult,
 } from '../../../daemon/handlers/inbox/provider-adapter.ts';
+import { makeProjectTempDir } from '../../helpers/project-temp.ts';
 
 const logger = { info() {}, warn() {}, error() {} };
 
@@ -93,7 +92,7 @@ let catalog: GatewayMethodCatalog;
 let ctx: HandlerContext;
 
 beforeEach(async () => {
-  dir = await mkdtemp(join(tmpdir(), 'inbox-register-'));
+  dir = await makeProjectTempDir('inbox-register');
   catalog = new GatewayMethodCatalog();
   ctx = {
     catalog,

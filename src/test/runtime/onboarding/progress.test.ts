@@ -1,6 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { createShellPathService } from '@/runtime/index.ts';
 import { saveWizardProgressForHandler } from '../../../input/handler-onboarding.ts';
@@ -12,13 +11,14 @@ import {
   readWizardProgress,
   writeWizardProgress,
 } from '../../../runtime/onboarding/index.ts';
+import { makeProjectTempDir } from '../../helpers/project-temp.ts';
 
 describe('wizard progress persistence', () => {
   let root: string;
   let shellPaths: ReturnType<typeof createShellPathService>;
 
   beforeEach(() => {
-    root = mkdtempSync(join(tmpdir(), 'gv-progress-'));
+    root = makeProjectTempDir('gv-progress');
     shellPaths = createShellPathService({
       workingDirectory: join(root, 'workspace'),
       homeDirectory: join(root, 'home'),

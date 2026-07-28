@@ -1,6 +1,4 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { mkdtempSync } from 'node:fs';
-import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import {
@@ -15,13 +13,14 @@ import {
 } from '@/runtime/index.ts';
 import type { ManagedSettingsBundle } from '@/runtime/index.ts';
 import { resetSettingsControlPlaneStore } from '../helpers/settings-control-plane.ts';
+import { makeProjectTempDir } from '../helpers/project-temp.ts';
 
 describe('runtime/settings/control-plane', () => {
   let root = '';
   let configDir = '';
 
   beforeEach(() => {
-    root = mkdtempSync(join(tmpdir(), 'gv-settings-plane-'));
+    root = makeProjectTempDir('gv-settings-plane');
     configDir = join(root, '.goodvibes', 'tui');
     resetSettingsControlPlaneStore(new ConfigManager({ surfaceRoot: 'tui',  configDir }));
   });

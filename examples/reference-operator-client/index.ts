@@ -8,6 +8,10 @@ import { createRuntimeStore } from '../../src/runtime/store/index.ts';
 import { createDirectTransport } from '@/runtime/index.ts';
 
 export async function runReferenceOperatorClientExample(): Promise<void> {
+  // A standalone example (not part of the test suite, may run outside this
+  // repo entirely), so it stays rooted at the real OS temp dir rather than
+  // the test-only makeProjectTempDir helper. Cleaned up in the `finally`
+  // below on every exit path.
   const root = mkdtempSync(join(tmpdir(), 'gv-reference-operator-'));
   const workingDir = join(root, 'workspace');
   const homeDir = join(root, 'home');

@@ -1,10 +1,10 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import { createShellPathService } from '@/runtime/index.ts';
 import { collectOnboardingSnapshot } from '../../../runtime/onboarding/index.ts';
+import { makeProjectTempDir } from '../../helpers/project-temp.ts';
 
 function buildLocalAuthSnapshot() {
   return {
@@ -25,7 +25,7 @@ describe('collectOnboardingSnapshot', () => {
   let shellPaths: ReturnType<typeof createShellPathService>;
 
   beforeEach(() => {
-    root = mkdtempSync(join(tmpdir(), 'gv-onboarding-snapshot-'));
+    root = makeProjectTempDir('gv-onboarding-snapshot');
     shellPaths = createShellPathService({
       workingDirectory: join(root, 'workspace'),
       homeDirectory: join(root, 'home'),

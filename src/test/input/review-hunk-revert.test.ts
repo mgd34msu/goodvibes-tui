@@ -14,8 +14,7 @@
 // ---------------------------------------------------------------------------
 
 import { describe, expect, test, afterEach } from 'bun:test';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { assertEveryDescriptorHasHandler } from '@pellux/goodvibes-terminal-shell/conformance';
 import { getTestRuntimeServices, disposeTestRuntimeServicesAfterAll } from '../helpers/runtime-services.ts';
@@ -24,6 +23,7 @@ import { registerReviewRuntimeCommands } from '../../input/commands/review-runti
 import { parseReviewDiff } from '../../panels/diff-review-model.ts';
 import { DiffReviewPanel } from '../../panels/diff-review-panel.ts';
 import { DiffPanel } from '../../panels/diff-panel.ts';
+import { makeProjectTempDir } from '../helpers/project-temp.ts';
 
 // Stop the shared test runtime graph when this file ends. Called here, not
 // registered inside the helper, for the reason its doc comment gives.
@@ -152,7 +152,7 @@ async function openReviewWithHunk(ctx: CommandContext): Promise<DiffReviewPanel>
 
 describe('/review reject action drives checkpoints.revertHunk with the token', () => {
   test('r → confirm → revertHunk(token) → [Revert] receipt in the transcript', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'gv-review-revert-')); tempDirs.push(dir);
+    const dir = makeProjectTempDir('gv-review-revert'); tempDirs.push(dir);
     const gateway = stubGateway({ previewApplies: true });
     const { ctx, systemMessages, getDiffPanel } = makeCtx(dir, gateway);
     const panel = await openReviewWithHunk(ctx);
@@ -174,7 +174,7 @@ describe('/review reject action drives checkpoints.revertHunk with the token', (
   });
 
   test('a preview that does not apply reports "changed since captured" and never opens a confirm', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'gv-review-revert-')); tempDirs.push(dir);
+    const dir = makeProjectTempDir('gv-review-revert'); tempDirs.push(dir);
     const gateway = stubGateway({ previewApplies: false });
     const { ctx, systemMessages, getDiffPanel } = makeCtx(dir, gateway);
     const panel = await openReviewWithHunk(ctx);
@@ -189,7 +189,7 @@ describe('/review reject action drives checkpoints.revertHunk with the token', (
   });
 
   test('a 409 on apply refreshes with a conflict message and writes nothing partial', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'gv-review-revert-')); tempDirs.push(dir);
+    const dir = makeProjectTempDir('gv-review-revert'); tempDirs.push(dir);
     const gateway = stubGateway({ previewApplies: true, applyThrows: Object.assign(new Error('hunk drifted'), { status: 409, code: 'CONFLICT' }) });
     const { ctx, systemMessages, getDiffPanel } = makeCtx(dir, gateway);
     const panel = await openReviewWithHunk(ctx);

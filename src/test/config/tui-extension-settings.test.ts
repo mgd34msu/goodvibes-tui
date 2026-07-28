@@ -1,10 +1,10 @@
 import { describe, expect, test, afterEach } from 'bun:test';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { WorkspaceCheckpointManager } from '@pellux/goodvibes-sdk/platform/workspace';
 import { readCheckpointGuardSettings, readUpdateSettings, withCheckpointGuardSettings } from '@/config/tui-extension-settings.ts';
 import type { ConfigManager } from '@/config/index.ts';
+import { makeProjectTempDir } from '../helpers/project-temp.ts';
 
 // A minimal stand-in for the ConfigManager surface the reader depends on.
 function fakeConfig(raw: Record<string, unknown>): Pick<ConfigManager, 'getRaw'> {
@@ -81,7 +81,7 @@ describe('checkpoint root-guard wiring (SDK 1.6.1 options are live)', () => {
     while (tempDirs.length > 0) rmSync(tempDirs.pop()!, { recursive: true, force: true });
   });
   function scratch(): string {
-    const dir = mkdtempSync(join(tmpdir(), 'gv-guard-wiring-'));
+    const dir = makeProjectTempDir('gv-guard-wiring');
     tempDirs.push(dir);
     return dir;
   }

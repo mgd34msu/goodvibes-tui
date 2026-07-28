@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, test } from 'bun:test';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { ArtifactStore } from '@pellux/goodvibes-sdk/platform/artifacts';
+import { makeProjectTempDir } from '../helpers/project-temp.ts';
 
 describe('ArtifactStore', () => {
   const roots: string[] = [];
@@ -14,7 +14,7 @@ describe('ArtifactStore', () => {
   });
 
   test('creates, lists, reloads, and reads stored artifacts', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'gv-artifacts-'));
+    const root = makeProjectTempDir('gv-artifacts');
     roots.push(root);
     const sourcePath = join(root, 'report.md');
     writeFileSync(sourcePath, '# hello\n', 'utf-8');
@@ -43,7 +43,7 @@ describe('ArtifactStore', () => {
   });
 
   test('stores inline text artifacts with inferred text metadata', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'gv-artifacts-'));
+    const root = makeProjectTempDir('gv-artifacts');
     roots.push(root);
     const store = new ArtifactStore({ rootDir: root });
 
@@ -59,7 +59,7 @@ describe('ArtifactStore', () => {
   });
 
   test('stores remote URI artifacts with SSRF-aware host policy and retention metadata', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'gv-artifacts-'));
+    const root = makeProjectTempDir('gv-artifacts');
     roots.push(root);
     const originalFetch = globalThis.fetch;
     const mockFetch = async (input: URL | RequestInfo, init?: RequestInit | BunFetchRequestInit) => {
@@ -97,7 +97,7 @@ describe('ArtifactStore', () => {
   });
 
   test('blocks remote URI artifacts that match SSRF policy', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'gv-artifacts-'));
+    const root = makeProjectTempDir('gv-artifacts');
     roots.push(root);
     const store = new ArtifactStore({ rootDir: root });
     // Loopback is no longer an SSRF-blocked tier (it has its own per-project
@@ -112,7 +112,7 @@ describe('ArtifactStore', () => {
   });
 
   test('requires config opt-in before allowing private-host remote fetches', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'gv-artifacts-'));
+    const root = makeProjectTempDir('gv-artifacts');
     roots.push(root);
     const store = new ArtifactStore({
       rootDir: root,
@@ -129,7 +129,7 @@ describe('ArtifactStore', () => {
   });
 
   test('allows explicit private-host remote fetches when config enables them', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'gv-artifacts-'));
+    const root = makeProjectTempDir('gv-artifacts');
     roots.push(root);
     const originalFetch = globalThis.fetch;
     const mockFetch = async (input: URL | RequestInfo, init?: RequestInit | BunFetchRequestInit) => {

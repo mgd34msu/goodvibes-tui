@@ -1,18 +1,18 @@
 import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { rm } from 'node:fs/promises';
 import { existsSync, readFileSync, mkdirSync } from 'node:fs';
-import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createWriteTool } from '@pellux/goodvibes-sdk/platform/tools';
 import { FileStateCache } from '@pellux/goodvibes-sdk/platform/state';
 import { ProjectIndex } from '@pellux/goodvibes-sdk/platform/state';
+import { makeProjectTempDir } from '../helpers/project-temp.ts';
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
 async function makeTempDir(): Promise<{ dir: string; cleanup: () => Promise<void> }> {
-  const dir = await mkdtemp(join(tmpdir(), 'gv-write-test-'));
+  const dir = await makeProjectTempDir('gv-write-test');
   return { dir, cleanup: () => rm(dir, { recursive: true, force: true }) };
 }
 

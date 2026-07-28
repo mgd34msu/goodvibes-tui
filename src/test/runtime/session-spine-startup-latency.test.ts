@@ -20,14 +20,13 @@
  * either way — the session spine only activates in the adopt path.)
  */
 import { describe, expect, test } from 'bun:test';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { rmSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { bootDaemon } from '@pellux/goodvibes-sdk/platform/daemon';
 import { RuntimeEventBus, startExternalServices } from '@/runtime/index.ts';
 import { HookDispatcher } from '@pellux/goodvibes-sdk/platform/hooks';
 import { getTestRuntimeServices, disposeTestRuntimeServicesAfterAll } from '../helpers/runtime-services.ts';
+import { makeProjectTempDir } from '../helpers/project-temp.ts';
 
 // Stop the shared test runtime graph when this file ends. Called here, not
 // registered inside the helper, for the reason its doc comment gives.
@@ -86,8 +85,8 @@ function createConfig(overrides: { controlPlanePort: number; httpListenerPort: n
 
 describe('perf: real adopt-or-start probe cost (post daemon.enabled-by-default)', () => {
   test('a compatible external daemon present -> adopt path completes well within the deferred-task budget', async () => {
-    const homeDirectory = mkdtempSync(join(tmpdir(), 'spine-delta-adopt-home-'));
-    const workingDir = mkdtempSync(join(tmpdir(), 'spine-delta-adopt-wd-'));
+    const homeDirectory = makeProjectTempDir('spine-delta-adopt-home');
+    const workingDir = makeProjectTempDir('spine-delta-adopt-wd');
     const token = 'spine-delta-token';
     const daemon = await bootDaemon({ homeDirectory, workingDir, port: 0, token });
     try {

@@ -1,6 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { ConfigManager } from '../config/index.ts';
 import { isFeatureConfigEnabled } from '../runtime/feature-settings.ts';
@@ -16,6 +15,7 @@ import {
   renderGoodVibesCommandHelp,
   renderGoodVibesHelp,
 } from '../cli-flags.ts';
+import { makeProjectTempDir } from './helpers/project-temp.ts';
 
 async function captureGoodVibesCliCommand(args: readonly string[], configManager: ConfigManager, root: string) {
   const logs: string[] = [];
@@ -248,7 +248,7 @@ describe('parseCliFlags', () => {
   });
 
   test('applies config overrides for the current process without persisting settings', () => {
-    const root = mkdtempSync(join(tmpdir(), 'goodvibes-cli-config-'));
+    const root = makeProjectTempDir('goodvibes-cli-config');
     const configDir = join(root, '.goodvibes', 'tui');
     const configManager = new ConfigManager({ surfaceRoot: 'tui', configDir, workingDir: root });
 
@@ -281,7 +281,7 @@ describe('parseCliFlags', () => {
   });
 
   test('feature overrides report capabilities with no off switch and unknown ids', () => {
-    const root = mkdtempSync(join(tmpdir(), 'goodvibes-cli-feature-errors-'));
+    const root = makeProjectTempDir('goodvibes-cli-feature-errors');
     const configManager = new ConfigManager({ surfaceRoot: 'tui', configDir: join(root, '.goodvibes', 'tui'), workingDir: root });
     const featureErrors = applyRuntimeFeatureFlagOverrides(configManager, {
       enableFeatures: ['no-such-feature'],
@@ -293,7 +293,7 @@ describe('parseCliFlags', () => {
   });
 
   test('applies endpoint flags for CLI commands without persisting settings', () => {
-    const root = mkdtempSync(join(tmpdir(), 'goodvibes-cli-endpoint-'));
+    const root = makeProjectTempDir('goodvibes-cli-endpoint');
     const configDir = join(root, '.goodvibes', 'tui');
     const configManager = new ConfigManager({ surfaceRoot: 'tui', configDir, workingDir: root });
     const cli = parseGoodVibesCli(['web', '--hostname', '0.0.0.0', '--port', '4568']);
@@ -308,7 +308,7 @@ describe('parseCliFlags', () => {
   });
 
   test('surface enable commands apply managed-service and LAN defaults', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'goodvibes-cli-surface-web-'));
+    const root = makeProjectTempDir('goodvibes-cli-surface-web');
     const configManager = new ConfigManager({
       surfaceRoot: 'tui',
       configDir: join(root, '.goodvibes', 'tui'),
@@ -345,7 +345,7 @@ describe('parseCliFlags', () => {
   });
 
   test('surface enable respects explicit local host overrides', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'goodvibes-cli-surface-local-web-'));
+    const root = makeProjectTempDir('goodvibes-cli-surface-local-web');
     const configManager = new ConfigManager({
       surfaceRoot: 'tui',
       configDir: join(root, '.goodvibes', 'tui'),
@@ -375,7 +375,7 @@ describe('parseCliFlags', () => {
   });
 
   test('external surface enable commands turn on listener service posture', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'goodvibes-cli-surface-slack-'));
+    const root = makeProjectTempDir('goodvibes-cli-surface-slack');
     const configManager = new ConfigManager({
       surfaceRoot: 'tui',
       configDir: join(root, '.goodvibes', 'tui'),
@@ -411,7 +411,7 @@ describe('parseCliFlags', () => {
   });
 
   test('listener test reports readiness issues for network webhook posture', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'goodvibes-cli-listener-readiness-'));
+    const root = makeProjectTempDir('goodvibes-cli-listener-readiness');
     const configManager = new ConfigManager({
       surfaceRoot: 'tui',
       configDir: join(root, '.goodvibes', 'tui'),
@@ -442,7 +442,7 @@ describe('parseCliFlags', () => {
   });
 
   test('surfaces check returns failure when enabled surfaces are not ready', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'goodvibes-cli-surfaces-check-'));
+    const root = makeProjectTempDir('goodvibes-cli-surfaces-check');
     const configManager = new ConfigManager({
       surfaceRoot: 'tui',
       configDir: join(root, '.goodvibes', 'tui'),
@@ -463,7 +463,7 @@ describe('parseCliFlags', () => {
   });
 
   test('surfaces check reports disabled feature gates for configured surfaces', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'goodvibes-cli-surfaces-feature-gates-'));
+    const root = makeProjectTempDir('goodvibes-cli-surfaces-feature-gates');
     const configManager = new ConfigManager({
       surfaceRoot: 'tui',
       configDir: join(root, '.goodvibes', 'tui'),
@@ -497,7 +497,7 @@ describe('parseCliFlags', () => {
   });
 
   test('bundle inspect resolves relative paths from the GoodVibes working directory', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'goodvibes-cli-bundle-'));
+    const root = makeProjectTempDir('goodvibes-cli-bundle');
     const configManager = new ConfigManager({
       surfaceRoot: 'tui',
       configDir: join(root, '.goodvibes', 'tui'),
@@ -530,7 +530,7 @@ describe('parseCliFlags', () => {
   });
 
   test('bundle export redacts secret config values and import skips redacted sentinels', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'goodvibes-cli-bundle-redaction-'));
+    const root = makeProjectTempDir('goodvibes-cli-bundle-redaction');
     const configManager = new ConfigManager({
       surfaceRoot: 'tui',
       configDir: join(root, '.goodvibes', 'tui'),
@@ -561,7 +561,7 @@ describe('parseCliFlags', () => {
     expect(bundle.redaction.redactedConfigPaths).toContain('surfaces.slack.signingSecret');
     expect(bundle.diagnostics.service.issues).toBeArray();
 
-    const importRoot = mkdtempSync(join(tmpdir(), 'goodvibes-cli-bundle-import-'));
+    const importRoot = makeProjectTempDir('goodvibes-cli-bundle-import');
     const importedConfig = new ConfigManager({
       surfaceRoot: 'tui',
       configDir: join(importRoot, '.goodvibes', 'tui'),
@@ -576,7 +576,7 @@ describe('parseCliFlags', () => {
   });
 
   test('service check reports lifecycle posture with failing readiness exit code', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'goodvibes-cli-service-check-'));
+    const root = makeProjectTempDir('goodvibes-cli-service-check');
     const configManager = new ConfigManager({
       surfaceRoot: 'tui',
       configDir: join(root, '.goodvibes', 'tui'),
@@ -603,7 +603,7 @@ describe('parseCliFlags', () => {
   });
 
   test('control-plane status returns readiness failures for enabled unreachable network posture', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'goodvibes-cli-control-plane-check-'));
+    const root = makeProjectTempDir('goodvibes-cli-control-plane-check');
     const configManager = new ConfigManager({
       surfaceRoot: 'tui',
       configDir: join(root, '.goodvibes', 'tui'),
@@ -629,7 +629,7 @@ describe('parseCliFlags', () => {
   });
 
   test('providers and models commands surface setup posture through CLI output', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'goodvibes-cli-provider-posture-'));
+    const root = makeProjectTempDir('goodvibes-cli-provider-posture');
     const configManager = new ConfigManager({
       surfaceRoot: 'tui',
       configDir: join(root, '.goodvibes', 'tui'),
@@ -655,7 +655,7 @@ describe('parseCliFlags', () => {
   });
 
   test('secrets test redacts resolved secret values in text and json output', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'goodvibes-cli-secret-redaction-'));
+    const root = makeProjectTempDir('goodvibes-cli-secret-redaction');
     const configManager = new ConfigManager({
       surfaceRoot: 'tui',
       configDir: join(root, '.goodvibes', 'tui'),
@@ -685,7 +685,7 @@ describe('parseCliFlags', () => {
   });
 
   test('rejects invalid runtime config overrides', () => {
-    const root = mkdtempSync(join(tmpdir(), 'goodvibes-cli-config-invalid-'));
+    const root = makeProjectTempDir('goodvibes-cli-config-invalid');
     const configManager = new ConfigManager({
       surfaceRoot: 'tui',
       configDir: join(root, '.goodvibes', 'tui'),
@@ -708,7 +708,7 @@ describe('parseCliFlags', () => {
   // ---------------------------------------------------------------------------
 
   test('applyRuntimeConfigDefault: respects explicit false in global settings file', () => {
-    const root = mkdtempSync(join(tmpdir(), 'goodvibes-config-default-global-'));
+    const root = makeProjectTempDir('goodvibes-config-default-global');
     const configDir = join(root, '.goodvibes', 'tui');
     mkdirSync(configDir, { recursive: true });
     // Write explicit false for display.showTokenSpeed to global settings file.
@@ -723,8 +723,8 @@ describe('parseCliFlags', () => {
 
   test('applyRuntimeConfigDefault: respects explicit false in project settings file when global file lacks the key', () => {
     // Use separate directories so global and project config paths are distinct.
-    const globalRoot = mkdtempSync(join(tmpdir(), 'goodvibes-config-default-global-dir-'));
-    const projectRoot = mkdtempSync(join(tmpdir(), 'goodvibes-config-default-project-dir-'));
+    const globalRoot = makeProjectTempDir('goodvibes-config-default-global-dir');
+    const projectRoot = makeProjectTempDir('goodvibes-config-default-project-dir');
     // Global configDir is in globalRoot — no settings file there (key absent globally).
     const configDir = join(globalRoot, '.goodvibes', 'tui');
     // Project config is at projectRoot/.goodvibes/tui/settings.json.
@@ -740,7 +740,7 @@ describe('parseCliFlags', () => {
   });
 
   test('applyRuntimeConfigDefault: applies default when key absent from both global and project files', () => {
-    const root = mkdtempSync(join(tmpdir(), 'goodvibes-config-default-absent-'));
+    const root = makeProjectTempDir('goodvibes-config-default-absent');
     const configDir = join(root, '.goodvibes', 'tui');
     // Neither global nor project settings file contains display.showTokenSpeed.
     // No files written — clean install scenario.
@@ -760,8 +760,8 @@ describe('parseCliFlags', () => {
     // corruption that occurs after startup. applyRuntimeConfigDefault reads the raw
     // file directly, so the per-path isolation must handle the parse failure without
     // abandoning the project file check.
-    const globalRoot = mkdtempSync(join(tmpdir(), 'goodvibes-config-default-corrupt-global-'));
-    const projectRoot = mkdtempSync(join(tmpdir(), 'goodvibes-config-default-corrupt-global-proj-'));
+    const globalRoot = makeProjectTempDir('goodvibes-config-default-corrupt-global');
+    const projectRoot = makeProjectTempDir('goodvibes-config-default-corrupt-global-proj');
     const configDir = join(globalRoot, '.goodvibes', 'tui');
     const projectConfigDir = join(projectRoot, '.goodvibes', 'tui');
     mkdirSync(configDir, { recursive: true });
@@ -785,8 +785,8 @@ describe('parseCliFlags', () => {
     // then overwrite the project settings file with malformed JSON to simulate on-disk
     // corruption after startup. The global file explicitly sets the key to false:
     // the per-path isolation must still find and respect it.
-    const globalRoot = mkdtempSync(join(tmpdir(), 'goodvibes-config-default-corrupt-project-'));
-    const projectRoot = mkdtempSync(join(tmpdir(), 'goodvibes-config-default-corrupt-project-proj-'));
+    const globalRoot = makeProjectTempDir('goodvibes-config-default-corrupt-project');
+    const projectRoot = makeProjectTempDir('goodvibes-config-default-corrupt-project-proj');
     const configDir = join(globalRoot, '.goodvibes', 'tui');
     const projectConfigDir = join(projectRoot, '.goodvibes', 'tui');
     mkdirSync(configDir, { recursive: true });
