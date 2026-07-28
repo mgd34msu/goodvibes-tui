@@ -34,6 +34,21 @@
  *    race, and only that child's own directories are touched, which keeps it safe
  *    with 8 test processes sharing <repo>/.test-tmp.
  *
+ * THE LATE WRITER IS FIXED UPSTREAM, AND THIS STAYS. The suite that recreated
+ * its directory after teardown was src/test/daemon/server.test.ts, and the
+ * writer was the SDK's ActivityLogger: `dispose()` flushed through a path that
+ * REBUILDS a log directory that has vanished, and a disposed logger still
+ * accepted entries and re-armed its flush timer. Both are fixed in
+ * goodvibes-sdk (ActivityLogger.dispose now flushes with
+ * recreateDestination: false and marks the logger inert). Measured against
+ * this worktree with only that file replaced: 4 residue directories before, 0
+ * after.
+ *
+ * This repository consumes the PUBLISHED SDK, so it does not have that fix
+ * until the next release, and the containment below is what keeps the suite
+ * clean in the meantime. Keep it afterwards too: it is the regression guard
+ * for the whole class, not a workaround for one logger.
+ *
  * KNOWN LIMIT, stated rather than papered over: Bun snapshots the environment at
  * process start for spawned children, so a child process started by a test still
  * sees the TMPDIR this process inherited, not the redirected one. Under
