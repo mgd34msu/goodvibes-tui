@@ -363,7 +363,7 @@ GoodVibes ships **154** built-in slash commands across **74** categories. Every 
 
 | Command | Aliases | Usage | Description |
 | --- | --- | --- | --- |
-| `/profile` | — | `[show\|where <field>\|set <field> <value>\|note [--section <name>] <text>\|forget <field>\|undo <field>\|status]` | What the platform knows about you: read it, correct it, trace where a fact came from, or forget one |
+| `/profile` | — | `[show\|where <field>\|set <field> <value>\|note [--section <name>] <text>\|forget <field>\|forget --section <name> <text>\|undo <field>\|status]` | What the platform knows about you: read it, correct it, trace where a fact came from, or forget one |
 
 ## Permissions
 
