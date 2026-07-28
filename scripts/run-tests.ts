@@ -1,8 +1,8 @@
 import { mkdirSync, readdirSync, rmSync } from 'node:fs';
-import { availableParallelism } from 'node:os';
+import { availableParallelism, tmpdir } from 'node:os';
 import { join, relative } from 'node:path';
 import { filterTestFilesByPattern, parseTestPattern } from './test-pattern-rule.ts';
-import { sweepStaleTestTmp } from './stale-tmp-sweep.ts';
+import { sweepStaleTestTmp, sweepStaleOsTmpEntries } from './stale-tmp-sweep.ts';
 
 const ROOT = process.cwd();
 const SEARCH_ROOT = join(ROOT, 'src');
@@ -94,6 +94,14 @@ const testFiles = filterTestFilesByPattern(allTestFiles, ROOT, PATTERN);
 // Sweep stale sibling entries (older than 1 h), then create this runner's own
 // subdir. Sibling runners still in progress are untouched by the sweep.
 sweepStaleTestTmp(TEST_TMP_ROOT);
+// Also sweep the real OS temp dir for this project's own known mkdtemp
+// prefixes (age-gated at 4 h — see scripts/stale-tmp-sweep.ts). This is a
+// backstop for orphans that predate the makeProjectTempDir migration, or
+// that came from an invocation path other than this one (bun run
+// test:coverage's whole-suite `bun test` spawn has its own call to this
+// same sweep — see scripts/coverage-gate.ts — since it doesn't go through
+// this file at all).
+sweepStaleOsTmpEntries(tmpdir());
 rmSync(RUNNER_DIR, { recursive: true, force: true });
 mkdirSync(RUNNER_DIR, { recursive: true });
 
@@ -141,13 +149,17 @@ async function runFile(testFile: string): Promise<void> {
         // TMPDIR is redirected *inside* this project's own repo, so a bare temp dir
         // created by a test sits under the project `.git` and git discovery walks up
         // and finds it — breaking any test that needs a genuinely non-git directory.
-        // Fence discovery at the per-file temp root so git stops before the project
-        // repo. (Set here in the child's spawn env because Bun snapshots the
-        // environment at process start — a late process.env mutation inside a test
-        // would not reach GitService.isGitRepo's inherited Bun.spawnSync.) Temp repos
-        // a test `git init`s under this dir are unaffected: their own `.git` is found
-        // before discovery reaches the ceiling.
-        GIT_CEILING_DIRECTORIES: testTmpDir,
+        // Fence discovery at TEST_TMP_ROOT (`.test-tmp`, an ancestor of both this
+        // file's TMPDIR-scoped testTmpDir AND every makeProjectTempDir output,
+        // which lives directly under TEST_TMP_ROOT rather than under testTmpDir)
+        // so git stops before the project repo either way. (Set here in the
+        // child's spawn env because Bun snapshots the environment at process
+        // start — a later process.env mutation inside a test would not reach
+        // GitService.isGitRepo's inherited Bun.spawnSync; this must be part of
+        // the child's OWN startup environment.) Temp repos a test `git init`s
+        // under this dir are unaffected: their own `.git` is found before
+        // discovery reaches the ceiling.
+        GIT_CEILING_DIRECTORIES: TEST_TMP_ROOT,
       },
       stdout: 'pipe',
       stderr: 'pipe',
