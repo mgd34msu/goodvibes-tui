@@ -1,0 +1,293 @@
+/**
+ * profile-runtime.ts
+ *
+ * `/profile` — the owner profile in the TUI: what the platform knows about the
+ * person who owns it, kept as one hand-editable Markdown file at daemon scope
+ * (docs/owner-profile.md).
+ *
+ * The subcommands exist to make §8.3's three questions answerable here, not just
+ * in the agent:
+ *
+ *   /profile        → profile.read        "what do you know about me?"
+ *   /profile where  → profile.provenance  "where did you get that?"
+ *   /profile forget → profile.forget      "forget that"
+ *
+ * plus `set`, `note`, `undo` and `status` so a correction, a note, a recovery
+ * and a diagnosis do not require leaving the terminal or hand-editing the file
+ * (which remains allowed, and authoritative — §4.5).
+ *
+ * ## Why it goes over the operator wire
+ *
+ * Same reason `/principals`, `/ci` and `/checkin` do (see operator-rpc.ts): the
+ * `profile.*` family ships in the operator contract and has not been promoted to
+ * the in-process `OperatorClient` facade. Surfaces never open the profile file —
+ * the daemon is the single writer, which is what makes its rename-based atomic
+ * writes sufficient with no lock (§3, §5.4). This command therefore has no file
+ * path, no parser and no writer of its own, and could not corrupt the document
+ * if it tried.
+ *
+ * ## Containment
+ *
+ * Values reach exactly one place: the string handed to `ctx.print`. This module
+ * imports no logger, builds no diagnostic payload, and never puts a value in an
+ * error message — a failed call renders `describeOperatorRpcError`, which
+ * describes the transport, not the content. A write prints the daemon's
+ * one-line disclosure and the field names that changed, never the value that was
+ * just recorded (§8.2). The `People` section is third-party personal data and is
+ * shown only in `/profile show`, i.e. only when the owner asked this surface,
+ * this turn, what it knows about him.
+ */
+import type { CommandContext, CommandRegistry } from '../command-registry.ts';
+import { describeOperatorRpcError, getOperatorRpc, type OperatorRpc } from './operator-rpc.ts';
+import {
+  MALFORMED,
+  toProfileDocument,
+  toProfileProvenanceReport,
+  toProfileState,
+  toProfileWriteResult,
+} from './profile-types.ts';
+import {
+  PROFILE_TAG,
+  collectFieldLabels,
+  normalizeFieldToken,
+  renderProfileDocument,
+  renderProfileProvenance,
+  renderProfileStatus,
+  renderProfileWriteResult,
+} from './profile-render.ts';
+
+/** Which surface is recording a line. Named in the provenance suffix. */
+const TUI_SURFACE = 'tui';
+
+const SUBCOMMANDS = ['show', 'where', 'set', 'note', 'forget', 'undo', 'status'] as const;
+
+const USAGE = [
+  'Usage: /profile <subcommand>',
+  '  /profile [show]                          — what the platform knows about you, by section',
+  '  /profile where <field>                   — where that came from: surface, date, your exact words',
+  '  /profile set <field> <value>             — record or correct one field',
+  '  /profile note [--section <name>] <text>  — add a note (Notes unless you name a section)',
+  '  /profile forget <field>                  — delete a field and every retained predecessor',
+  '  /profile undo <field>                    — put a field\'s most recent superseded value back',
+  '  /profile status                          — whether it loaded, from where, what did not validate',
+  '',
+  '  <field> is a field id such as commerce.shippingAddress, or the label as written',
+  '  in the file (e.g. "shipping address") once that field is recorded. /profile show',
+  '  prints each field id beside its value.',
+].join('\n');
+
+/**
+ * Invoke a `profile.*` verb generically.
+ *
+ * `methodId` is typed `string` rather than a literal on purpose: that selects
+ * the operator client's generic `invoke<T = unknown>(methodId: string, …)`
+ * overload, which resolves whether or not the installed contract knows these
+ * method ids yet. The result is `unknown` and is narrowed by the checkers in
+ * profile-types.ts before anything reads a property off it.
+ */
+type ProfileInvoke = (methodId: string, input: Record<string, unknown>) => Promise<unknown>;
+
+/**
+ * The rpc resolver, injectable so tests can drive the full command against a
+ * scripted daemon instead of a live one. Production always uses
+ * {@link getOperatorRpc}.
+ */
+export interface ProfileCommandDeps {
+  readonly resolveRpc: (context: CommandContext) => OperatorRpc;
+}
+
+const DEFAULT_DEPS: ProfileCommandDeps = { resolveRpc: getOperatorRpc };
+
+function unrecognizedResponse(verb: string): string {
+  return `${PROFILE_TAG} the daemon answered ${verb} with a response this build does not recognise — it is probably running a different platform version. Nothing was read or written.`;
+}
+
+/**
+ * Resolve what the owner typed to a field id.
+ *
+ * A dotted token is already an id and is passed through untouched. A bare label
+ * ("shipping address") is matched against the labels in the live `profile.read`
+ * response — deliberately NOT against a copy of the SDK's field registry, which
+ * would be a second list to keep in step with the first. A label that matches
+ * nothing is passed through unchanged so the daemon answers with its own message
+ * naming what is wrong, rather than this command guessing.
+ */
+async function resolveFieldToken(
+  invoke: ProfileInvoke,
+  token: string,
+  print: (text: string) => void,
+): Promise<string | null> {
+  if (token.includes('.')) return token;
+  let raw: unknown;
+  try {
+    raw = await invoke('profile.read', {});
+  } catch {
+    return token;
+  }
+  const document = toProfileDocument(raw);
+  if (document === MALFORMED) return token;
+  const matches = collectFieldLabels(document).get(normalizeFieldToken(token));
+  if (!matches || matches.length === 0) return token;
+  if (matches.length === 1) return matches[0] ?? token;
+  print(`${PROFILE_TAG} "${token}" matches more than one field: ${matches.join(', ')}. Use the full field id.`);
+  return null;
+}
+
+async function runShow(invoke: ProfileInvoke, print: (text: string) => void): Promise<void> {
+  try {
+    const document = toProfileDocument(await invoke('profile.read', {}));
+    print(document === MALFORMED ? unrecognizedResponse('profile.read') : renderProfileDocument(document));
+  } catch (error) {
+    print(`${PROFILE_TAG} ${describeOperatorRpcError(error)}`);
+  }
+}
+
+async function runStatus(invoke: ProfileInvoke, print: (text: string) => void): Promise<void> {
+  try {
+    const state = toProfileState(await invoke('profile.status', {}));
+    print(state === MALFORMED ? unrecognizedResponse('profile.status') : renderProfileStatus(state));
+  } catch (error) {
+    print(`${PROFILE_TAG} ${describeOperatorRpcError(error)}`);
+  }
+}
+
+async function runWhere(invoke: ProfileInvoke, token: string, print: (text: string) => void): Promise<void> {
+  const fieldId = await resolveFieldToken(invoke, token, print);
+  if (fieldId === null) return;
+  try {
+    const report = toProfileProvenanceReport(await invoke('profile.provenance', { fieldId }));
+    print(report === MALFORMED ? unrecognizedResponse('profile.provenance') : renderProfileProvenance(report));
+  } catch (error) {
+    print(`${PROFILE_TAG} ${describeOperatorRpcError(error)}`);
+  }
+}
+
+/**
+ * Run one write verb and render what it actually did.
+ *
+ * The response is the only source of the outcome line: a refusal prints the
+ * daemon's reason and a no-op prints "nothing changed", so a `/profile forget`
+ * for something that was not recorded can never come back as a success (§9.2).
+ */
+async function runWrite(
+  invoke: ProfileInvoke,
+  verb: string,
+  input: Record<string, unknown>,
+  print: (text: string) => void,
+): Promise<void> {
+  try {
+    const result = toProfileWriteResult(await invoke(verb, input));
+    print(result === MALFORMED ? unrecognizedResponse(verb) : renderProfileWriteResult(result));
+  } catch (error) {
+    print(`${PROFILE_TAG} ${describeOperatorRpcError(error)}`);
+  }
+}
+
+/** `/profile note [--section <name>] <text>` — section defaults to Notes. */
+function parseNoteArgs(args: readonly string[]): { section: string; text: string } {
+  if (args[1] === '--section' && typeof args[2] === 'string' && args[2].length > 0) {
+    return { section: args[2], text: args.slice(3).join(' ').trim() };
+  }
+  return { section: 'Notes', text: args.slice(1).join(' ').trim() };
+}
+
+export function registerProfileRuntimeCommands(
+  registry: CommandRegistry,
+  deps: ProfileCommandDeps = DEFAULT_DEPS,
+): void {
+  registry.register({
+    name: 'profile',
+    description: 'What the platform knows about you: read it, correct it, trace where a fact came from, or forget one',
+    usage: '[show|where <field>|set <field> <value>|note [--section <name>] <text>|forget <field>|undo <field>|status]',
+    argsHint: '[show|where|set|note|forget|undo|status]',
+    async handler(args, ctx) {
+      const sub = args[0] ?? 'show';
+      if (!(SUBCOMMANDS as readonly string[]).includes(sub)) {
+        ctx.print(USAGE);
+        return;
+      }
+
+      // Validate each subcommand's arguments before touching the connection, so
+      // a usage mistake never depends on daemon reachability to be reported.
+      //
+      // where/forget/undo take the whole remainder as the field, so a label
+      // written with a space ("shipping address") works unquoted. `set` cannot
+      // do that — everything after the first token is the value — so a label
+      // there must be one word, or the field id.
+      const fieldToken = sub === 'set' ? args[1] : args.slice(1).join(' ').trim();
+      if ((sub === 'where' || sub === 'forget' || sub === 'undo') && !fieldToken) {
+        ctx.print(`Usage: /profile ${sub} <field>`);
+        return;
+      }
+      const setValue = sub === 'set' ? args.slice(2).join(' ').trim() : '';
+      if (sub === 'set' && (!fieldToken || setValue.length === 0)) {
+        ctx.print('Usage: /profile set <field> <value>');
+        return;
+      }
+      const note = sub === 'note' ? parseNoteArgs(args) : null;
+      if (note && note.text.length === 0) {
+        ctx.print('Usage: /profile note [--section <name>] <text>');
+        return;
+      }
+
+      const rpc = deps.resolveRpc(ctx);
+      if (!rpc.available) {
+        ctx.print(`${PROFILE_TAG} ${rpc.reason}`);
+        return;
+      }
+      const invoke: ProfileInvoke = (methodId, input) => rpc.sdk.operator.invoke(methodId, input);
+      const print = (text: string): void => { ctx.print(text); };
+
+      if (sub === 'show') {
+        await runShow(invoke, print);
+        return;
+      }
+      if (sub === 'status') {
+        await runStatus(invoke, print);
+        return;
+      }
+      if (sub === 'where') {
+        await runWhere(invoke, fieldToken!, print);
+        return;
+      }
+
+      if (sub === 'set') {
+        const fieldId = await resolveFieldToken(invoke, fieldToken!, print);
+        if (fieldId === null) return;
+        // `said` is the command as typed. It is a verbatim owner utterance,
+        // which is what layer 3 of the trust gate requires (§7) and what makes
+        // "where did you get that" answer with something he recognises.
+        await runWrite(invoke, 'profile.set', {
+          fieldId,
+          value: setValue,
+          surface: TUI_SURFACE,
+          said: `/profile set ${fieldToken} ${setValue}`,
+        }, print);
+        return;
+      }
+
+      if (sub === 'note' && note) {
+        await runWrite(invoke, 'profile.append', {
+          section: note.section,
+          text: note.text,
+          surface: TUI_SURFACE,
+          said: `/profile note ${note.text}`,
+        }, print);
+        return;
+      }
+
+      if (sub === 'forget') {
+        const fieldId = await resolveFieldToken(invoke, fieldToken!, print);
+        if (fieldId === null) return;
+        await runWrite(invoke, 'profile.forget', { fieldId }, print);
+        return;
+      }
+
+      if (sub === 'undo') {
+        const fieldId = await resolveFieldToken(invoke, fieldToken!, print);
+        if (fieldId === null) return;
+        await runWrite(invoke, 'profile.undo', { fieldId }, print);
+      }
+    },
+  });
+}
