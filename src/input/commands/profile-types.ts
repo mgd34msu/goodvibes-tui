@@ -4,140 +4,101 @@
  * Response shapes for the owner-profile control-plane verbs (`profile.*`), and
  * the runtime checks that turn an untyped daemon response into one of them.
  *
- * ## Why these live here instead of coming from the SDK
+ * ## The shapes come from the contract, not from a copy of it
  *
- * The `profile.*` verbs are new (docs/owner-profile.md §11.1) and the installed
- * `@pellux/goodvibes-sdk` predates them, so `OperatorMethodOutput<'profile.read'>`
- * does not exist yet and `sdk.operator.invoke('profile.read', …)` resolves to the
- * generic `invoke<T = unknown>(methodId: string, …)` overload. These interfaces
- * mirror the SDK's own output schemas field for field
- * (`platform/control-plane/method-catalog-owner-profile.ts`) so the two cannot
- * disagree about what a response looks like. When a published SDK exports them,
- * delete the interfaces below and re-export the SDK's — the guards keep working
- * unchanged because they only read properties.
+ * Every type below is derived from `OperatorMethodOutput<'profile.…'>` — the
+ * types generated from the SDK's own output schemas
+ * (`platform/control-plane/method-catalog-owner-profile.ts`). Nothing here
+ * restates a field name, so this file cannot drift from the contract: if a
+ * verb's shape changes, the checkers stop compiling against it.
  *
- * ## Why every response is checked rather than cast
+ * ## Why the responses are still checked at runtime
  *
- * `invoke` hands back `unknown`. A bare `as` on that would let a daemon on a
- * different version — or a 200 from something that is not this daemon at all —
- * reach the renderer and throw on a missing array, which in a slash command
- * means a stack trace instead of an answer. So each `toX` function does the cast
- * to `Record<string, unknown>` in ONE place, checks every property the renderer
- * will read, and returns {@link MALFORMED} when anything is off. The command
- * then prints an honest "this build does not understand that response" line.
+ * A generated type is a compile-time claim about what the wire *should* carry,
+ * and nothing enforces it at runtime here. The operator client's
+ * `validateResponses` defaults on, but it only validates method ids with a
+ * matching exported Zod schema and `buildSchemaRegistry` silently skips the
+ * rest. Measured against the installed contracts package: 5 of 452 method ids
+ * have one, and no `profile.*` verb is among them. So response validation is
+ * not a safety net this command can lean on — for these verbs or for most
+ * others.
+ *
+ * So a daemon on a different version — or a 200 from something that is not this
+ * daemon at all — would otherwise reach a renderer and throw on a missing array,
+ * which in a slash command means a stack trace instead of an answer. Each `toX`
+ * function does the cast to `Record<string, unknown>` in ONE place, checks every
+ * property a renderer will read, and returns {@link MALFORMED} when anything is
+ * off. The command then prints an honest "this build does not recognise that
+ * response" line.
  *
  * A malformed *member* fails the whole response rather than being filtered out.
  * Silently dropping a section or a line the checker did not recognise would be
  * the same failure §4.4 forbids in the parser: content disappearing without
  * anyone being told.
  */
+import type { OperatorMethodInput, OperatorMethodOutput } from '@pellux/goodvibes-sdk';
 
 /** Returned by every checker when the response does not match the contract. */
 export const MALFORMED: unique symbol = Symbol('malformed-profile-response');
 export type Checked<T> = T | typeof MALFORMED;
 
-/** Where a line came from: which surface, when, and the owner's exact words. */
-export interface ProfileProvenanceView {
-  readonly surface: string;
-  readonly date: string;
-  readonly said: string;
-}
+/** The verbs this command calls. Typing the ids is what types the inputs. */
+export type ProfileReadVerb = 'profile.read' | 'profile.provenance' | 'profile.status';
+export type ProfileWriteVerb = 'profile.set' | 'profile.append' | 'profile.forget' | 'profile.undo';
+export type ProfileVerb = ProfileReadVerb | ProfileWriteVerb;
 
-/** One prose line, preserved as written. */
-export interface ProfileLineView {
-  readonly lineIndex: number;
-  readonly section: string;
-  readonly text: string;
-  readonly provenance?: ProfileProvenanceView;
-}
+/** The contract's own input shape for a verb, so a wrong field name will not compile. */
+export type ProfileInput<TVerb extends ProfileVerb> = OperatorMethodInput<TVerb>;
 
-/** One mechanical field. `valid: false` still carries the value — see §4.3. */
-export interface ProfileFieldView {
-  readonly fieldId: string;
-  readonly label: string;
-  readonly value: string;
-  readonly valid: boolean;
-  readonly invalidReason?: string;
-  readonly provenance?: ProfileProvenanceView;
-}
-
-/** One `## ` section, with the tier its content belongs to. */
-export interface ProfileSectionView {
-  readonly heading: string;
-  readonly tier: string;
-  readonly fields: readonly ProfileFieldView[];
-  readonly prose: readonly ProfileLineView[];
-}
-
-/** A mechanical value that did not validate, and why. Never fails the file. */
-export interface ProfileInvalidFieldView {
-  readonly fieldId: string;
-  readonly reason: string;
-}
+/** What `profile.read` answers: the whole document, by section. */
+export type ProfileDocumentView = OperatorMethodOutput<'profile.read'>;
 
 /**
- * Load state — what `profile.status` answers.
+ * Load state — what `profile.status` answers, and the `state` half of a read.
  *
  * `kind` is `loaded` | `unavailable` | `disabled`. The counts belong to
  * `loaded` and `reason` to `unavailable`. There is no value property anywhere
  * in this shape, which is what makes the status output safe to show in a
  * diagnostic context (§11.3).
  */
-export interface ProfileStateView {
-  readonly kind: string;
-  readonly path: string;
-  readonly exists?: boolean;
-  readonly lineCount?: number;
-  readonly fieldCount?: number;
-  readonly proseLineCount?: number;
-  readonly sections?: readonly string[];
-  readonly invalidFields?: readonly ProfileInvalidFieldView[];
-  readonly reason?: string;
-}
-
-/** What `profile.read` answers: the whole document, by section. */
-export interface ProfileDocumentView {
-  readonly state: ProfileStateView;
-  readonly sections: readonly ProfileSectionView[];
-}
-
-/** A retained `<!-- was: … -->` predecessor, so a wrong correction is recoverable. */
-export interface ProfileSupersededView {
-  readonly lineIndex: number;
-  readonly fieldId: string;
-  readonly section: string;
-  readonly text: string;
-  readonly value: string;
-  readonly supersededOn: string;
-  readonly previousLine: string;
-  readonly provenance?: ProfileProvenanceView;
-}
+export type ProfileStateView = OperatorMethodOutput<'profile.status'>;
 
 /** What `profile.provenance` answers for one field. */
-export interface ProfileProvenanceReportView {
-  readonly fieldId: string;
-  readonly present: boolean;
-  readonly handEdited: boolean;
-  readonly provenance?: ProfileProvenanceView;
-  readonly superseded: readonly ProfileSupersededView[];
-}
-
-/** One thing a write did. Names the field; never repeats the value. */
-export interface ProfileChangeView {
-  readonly kind: string;
-  readonly fieldId?: string;
-  readonly section: string;
-  readonly label: string;
-  readonly superseded: boolean;
-}
+export type ProfileProvenanceReportView = OperatorMethodOutput<'profile.provenance'>;
 
 /** What every write verb answers. `ok: false` always carries a reason. */
-export interface ProfileWriteResultView {
-  readonly ok: boolean;
-  readonly reason?: string;
-  readonly changes: readonly ProfileChangeView[];
-  readonly disclosure: string;
-}
+export type ProfileWriteResultView = OperatorMethodOutput<'profile.set'>;
+
+/** One `## ` section, with the tier its content belongs to. */
+export type ProfileSectionView = ProfileDocumentView['sections'][number];
+/** One mechanical field. `valid: false` still carries the value — see §4.3. */
+export type ProfileFieldView = ProfileSectionView['fields'][number];
+/** One prose line, preserved as written. */
+export type ProfileLineView = ProfileSectionView['prose'][number];
+/** Where a line came from: which surface, when, and the owner's exact words. */
+export type ProfileProvenanceView = NonNullable<ProfileFieldView['provenance']>;
+/** A mechanical value that did not validate, and why. Never fails the file. */
+export type ProfileInvalidFieldView = NonNullable<ProfileStateView['invalidFields']>[number];
+/** A retained `<!-- was: … -->` predecessor, so a wrong correction is recoverable. */
+export type ProfileSupersededView = ProfileProvenanceReportView['superseded'][number];
+/** One thing a write did. Names the field; never repeats the value. */
+export type ProfileChangeView = ProfileWriteResultView['changes'][number];
+
+/**
+ * Compile-time proof of two things this file assumes: that all four write verbs
+ * really do answer one shape, and that `profile.status` really is the same
+ * `state` a read carries.
+ *
+ * One write checker serves four verbs and `toProfileState` checks both the
+ * status response and a read's `state`. If the contract ever splits them,
+ * `Exact` collapses to `never` and this assignment stops compiling, rather than
+ * the difference going unnoticed until a response renders wrong.
+ */
+type Exact<A, B> = [A] extends [B] ? ([B] extends [A] ? true : never) : never;
+export const PROFILE_CONTRACT_SHAPES_AGREE: Exact<OperatorMethodOutput<'profile.append'>, ProfileWriteResultView>
+  & Exact<OperatorMethodOutput<'profile.forget'>, ProfileWriteResultView>
+  & Exact<OperatorMethodOutput<'profile.undo'>, ProfileWriteResultView>
+  & Exact<ProfileDocumentView['state'], ProfileStateView> = true;
 
 // ---------------------------------------------------------------------------
 // Primitive checks

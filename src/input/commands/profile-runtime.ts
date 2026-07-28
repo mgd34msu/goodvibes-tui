@@ -45,6 +45,9 @@ import {
   toProfileProvenanceReport,
   toProfileState,
   toProfileWriteResult,
+  type ProfileInput,
+  type ProfileVerb,
+  type ProfileWriteVerb,
 } from './profile-types.ts';
 import {
   PROFILE_TAG,
@@ -77,15 +80,25 @@ const USAGE = [
 ].join('\n');
 
 /**
- * Invoke a `profile.*` verb generically.
+ * Invoke a `profile.*` verb.
  *
- * `methodId` is typed `string` rather than a literal on purpose: that selects
- * the operator client's generic `invoke<T = unknown>(methodId: string, …)`
- * overload, which resolves whether or not the installed contract knows these
- * method ids yet. The result is `unknown` and is narrowed by the checkers in
- * profile-types.ts before anything reads a property off it.
+ * The verb id and its input ARE checked against the generated contract, so a
+ * misspelled field name or a missing required argument is a compile error here
+ * rather than a 400 discovered at runtime.
+ *
+ * The RESULT is deliberately `unknown`. Widening the method id to `string` at
+ * the call site selects the client's generic
+ * `invoke<T = unknown>(methodId: string, …)` overload rather than the typed
+ * one, because the typed overload's return type is a claim about the wire that
+ * nothing enforces: only 5 of the contract's 452 method ids carry a Zod
+ * response schema and no `profile.*` verb is one of them (see
+ * profile-types.ts). Every response goes through a checker before a renderer
+ * reads a property off it.
  */
-type ProfileInvoke = (methodId: string, input: Record<string, unknown>) => Promise<unknown>;
+type ProfileInvoke = <TVerb extends ProfileVerb>(
+  methodId: TVerb,
+  input: ProfileInput<TVerb>,
+) => Promise<unknown>;
 
 /**
  * The rpc resolver, injectable so tests can drive the full command against a
@@ -169,10 +182,10 @@ async function runWhere(invoke: ProfileInvoke, token: string, print: (text: stri
  * daemon's reason and a no-op prints "nothing changed", so a `/profile forget`
  * for something that was not recorded can never come back as a success (§9.2).
  */
-async function runWrite(
+async function runWrite<TVerb extends ProfileWriteVerb>(
   invoke: ProfileInvoke,
-  verb: string,
-  input: Record<string, unknown>,
+  verb: TVerb,
+  input: ProfileInput<TVerb>,
   print: (text: string) => void,
 ): Promise<void> {
   try {
@@ -235,7 +248,10 @@ export function registerProfileRuntimeCommands(
         ctx.print(`${PROFILE_TAG} ${rpc.reason}`);
         return;
       }
-      const invoke: ProfileInvoke = (methodId, input) => rpc.sdk.operator.invoke(methodId, input);
+      // `methodId as string` is what picks the generic overload, so the result
+      // stays `unknown` and has to go through a checker — see ProfileInvoke.
+      const invoke: ProfileInvoke = (methodId, input) =>
+        rpc.sdk.operator.invoke(methodId as string, input as unknown as Record<string, unknown>);
       const print = (text: string): void => { ctx.print(text); };
 
       if (sub === 'show') {

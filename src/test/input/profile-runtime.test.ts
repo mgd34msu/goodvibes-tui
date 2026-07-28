@@ -1,4 +1,9 @@
-import { describe, expect, test } from 'bun:test';
+import { afterEach, describe, expect, test } from 'bun:test';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { CONFIG_SCHEMA, ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
+import { buildSettingGroups } from '@/input/settings-modal-data.ts';
 import { CommandRegistry, type CommandContext } from '@/input/command-registry.ts';
 import { registerProfileRuntimeCommands, type ProfileCommandDeps } from '@/input/commands/profile-runtime.ts';
 import type { OperatorRpc } from '@/input/commands/operator-rpc.ts';
@@ -521,5 +526,82 @@ describe('profile settings category', () => {
   test('the category has a display name and a real description', () => {
     expect(CATEGORY_LABELS.profile).toBe('Owner Profile');
     expect(CATEGORY_INFO.profile.length).toBeGreaterThan(80);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The keys actually reach the settings workspace
+//
+// The category union and group membership above are necessary but not
+// sufficient: buildSettingGroups guards every push with `if (groups.has(cat))`,
+// so this is the test that proves nothing is dropped between CONFIG_SCHEMA and
+// the rendered category. push.* and cluster.* each passed a "the category
+// exists" check and still vanished; only this one would have caught it.
+// ---------------------------------------------------------------------------
+
+describe('profile.* keys reach the settings workspace', () => {
+  const roots: string[] = [];
+  afterEach(() => {
+    for (const root of roots.splice(0)) {
+      try { rmSync(root, { recursive: true, force: true }); } catch { /* best effort */ }
+    }
+  });
+
+  function makeConfig(): ConfigManager {
+    const dir = mkdtempSync(join(tmpdir(), 'gv-owner-profile-settings-'));
+    roots.push(dir);
+    return new ConfigManager({ workingDir: dir, homeDir: dir, surfaceRoot: 'tui' });
+  }
+
+  /** The eight keys design §12 specifies, by name rather than by count. */
+  const EXPECTED_KEYS = [
+    'profile.enabled',
+    'profile.autonomousWrites',
+    'profile.discloseWrites',
+    'profile.injectOpenTier',
+    'profile.discloseClosedTierReads',
+    'profile.consumerFallback',
+    'profile.reloadThrottleMs',
+    'profile.path',
+  ] as const;
+
+  test('the SDK schema carries every profile.* key the design specifies', () => {
+    const inSchema = new Set(
+      CONFIG_SCHEMA.filter((setting) => setting.key.startsWith('profile.')).map((setting) => setting.key),
+    );
+    for (const key of EXPECTED_KEYS) expect(inSchema.has(key)).toBe(true);
+    // No extras: a key here that the design does not name is a drift signal.
+    expect(inSchema.size).toBe(EXPECTED_KEYS.length);
+  });
+
+  test('every one of them lands in the "profile" category, none dropped', () => {
+    const groups = buildSettingGroups(makeConfig());
+    const rows = groups.get('profile') ?? [];
+    const keysInCategory = new Set(rows.map((entry) => entry.setting.key));
+    for (const key of EXPECTED_KEYS) expect(keysInCategory.has(key)).toBe(true);
+    expect(rows.length).toBe(EXPECTED_KEYS.length);
+  });
+
+  test('the category is not empty, which is what the silent-drop failure looks like', () => {
+    const rows = buildSettingGroups(makeConfig()).get('profile') ?? [];
+    expect(rows.length).toBeGreaterThan(0);
+  });
+
+  test('the rows are real editable settings with types, defaults and descriptions', () => {
+    const rows = buildSettingGroups(makeConfig()).get('profile') ?? [];
+    for (const row of rows) {
+      expect(row.setting.type.length).toBeGreaterThan(0);
+      expect(row.setting.description.length).toBeGreaterThan(0);
+      expect(row.setting.default).toBeDefined();
+      // Nothing is configured in a fresh workspace, so every row reads default.
+      expect(row.isDefault).toBe(true);
+    }
+    // §12's defaults: the feature ships on, not dark.
+    const enabled = rows.find((row) => row.setting.key === 'profile.enabled');
+    expect(enabled?.currentValue).toBe(true);
+    const autonomous = rows.find((row) => row.setting.key === 'profile.autonomousWrites');
+    expect(autonomous?.currentValue).toBe(true);
+    const disclose = rows.find((row) => row.setting.key === 'profile.discloseWrites');
+    expect(disclose?.currentValue).toBe(true);
   });
 });
