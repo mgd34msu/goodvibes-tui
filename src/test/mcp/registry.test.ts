@@ -6,6 +6,7 @@ import { mkdirSync, writeFileSync, rmSync, existsSync } from 'fs';
 import { tmpdir } from 'os';
 import { SandboxSessionRegistry } from '@/runtime/index.ts';
 import { createHookDispatcher } from '@pellux/goodvibes-sdk/platform/hooks';
+import { registerTempDirForCleanup } from '../helpers/temp-registry.ts';
 
 // Minimal stub MCP server script for registry tests
 const STUB_SCRIPT = /* js */ `
@@ -38,13 +39,14 @@ rl.on('line', (line) => {
 });
 `;
 
-const SANDBOX_WORKSPACE_ROOT = join(tmpdir(), `gv-mcp-registry-workspace-${process.pid}-${Date.now()}`);
+// Registered with the shared temp registry rather than a `process.on('exit')`
+// hook: `bun test` does not fire exit handlers, so the hook that used to sit
+// here never removed this directory on any run, green or not. The preload's
+// afterAll (src/test/preload/temp-cleanup.ts) drains the registry instead.
+const SANDBOX_WORKSPACE_ROOT = registerTempDirForCleanup(
+  join(tmpdir(), `gv-mcp-registry-workspace-${process.pid}-${Date.now()}`),
+);
 mkdirSync(SANDBOX_WORKSPACE_ROOT, { recursive: true });
-process.on('exit', () => {
-  if (existsSync(SANDBOX_WORKSPACE_ROOT)) {
-    rmSync(SANDBOX_WORKSPACE_ROOT, { recursive: true, force: true });
-  }
-});
 
 function stubServerConfig(name: string): McpServerConfig {
   return { name, command: 'bun', args: ['--eval', STUB_SCRIPT] };

@@ -14,17 +14,20 @@ export const DEFAULT_STALE_MS = 60 * 60 * 1000;
 /**
  * Remove stale entries under the shared `.test-tmp` root.
  *
- * Two distinct leak vectors accumulate here, both bounded by this age-gated
- * sweep:
- *   1. `run-<pid>` runner subtrees — run-tests.ts removes its own on a clean
- *      exit, but a hard-killed runner (timeout/OOM) can leave one behind.
+ * This is the BACKSTOP for a signal-killed process, not the primary cleanup.
+ * Two leak vectors reach it:
+ *   1. `run-<pid>` runner subtrees — run-tests.ts removes its own in a
+ *      `finally`, but a hard-killed runner (timeout/OOM) can leave one behind.
  *   2. `makeProjectTempDir` leftovers (`<prefix>-<random>`, see
- *      src/test/helpers/project-temp.ts) — those are cleaned by a
- *      `process.on('exit')` hook, which does NOT fire when a test process is
- *      signal-killed (a `timeout 300` wrapper, the runner killing a hung file,
- *      an OOM). Under these worktrees the project lives on /tmp, so each leaked
- *      subtree is a leaked /tmp inode subtree — the class that exhausted /tmp
- *      across earlier work orders.
+ *      src/test/helpers/project-temp.ts) — normally removed by the `afterAll`
+ *      in src/test/preload/temp-cleanup.ts when the test process finishes, so
+ *      only a process that never reached its afterAll (SIGKILL, OOM) leaves one.
+ *      Under these worktrees the project lives on /tmp, so each leaked subtree
+ *      is a leaked /tmp inode subtree.
+ *
+ * That primary cleanup used to be a `process.on('exit')` hook, which `bun test`
+ * never fires at all — so until it was replaced this sweep was reaping the
+ * output of every ordinary green run, an hour late.
  *
  * Age-gated (default 1 h) so it is safe under concurrency: a live sibling
  * runner's `run-<pid>` dir and any in-flight `makeProjectTempDir` dir are at

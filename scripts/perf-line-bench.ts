@@ -41,7 +41,7 @@ import { ConversationManager } from '../src/core/conversation.ts';
 import { renderMarkdownTracked } from '../src/renderer/markdown.ts';
 import { renderCodeBlock } from '../src/renderer/code-block.ts';
 import { PanelManager } from '../src/panels/panel-manager.ts';
-import type { Panel } from '../src/panels/types.ts';
+import type { Panel, PanelCategory } from '../src/panels/types.ts';
 import { createEmptyLine, createStyledCell } from '../src/types/grid.ts';
 import { buildPanelCompositeData } from '../src/renderer/panel-composite.ts';
 import { renderHelpOverlay } from '../src/renderer/help-overlay.ts';
@@ -295,10 +295,18 @@ function makeConversationContext() {
  * now-deleted panel — with this bench-local implementation so the perf bench
  * never breaks when a domain panel is retired.
  */
+/**
+ * Category the bench panels register under. Typed as PanelCategory so a future
+ * rename of the category union fails `bun run typecheck` here instead of at run
+ * time — the string literal 'system' used to sit inline and had already gone
+ * stale when the union was split into the current nine categories.
+ */
+const BENCH_PANEL_CATEGORY: PanelCategory = 'runtime-ops';
+
 function createBenchPanel(id: string, name: string, icon: string): Panel {
   const palette = ['#e2e8f0', '#94a3b8', '#38bdf8', '#22c55e', '#f59e0b'];
   return {
-    id, name, icon, category: 'system',
+    id, name, icon, category: BENCH_PANEL_CATEGORY,
     onActivate: () => {}, onDeactivate: () => {}, onDestroy: () => {},
     isTransient: false, isPinned: false, needsRender: true,
     invalidate: () => {}, markRendered: () => {},
@@ -327,8 +335,8 @@ function createBenchPanel(id: string, name: string, icon: string): Panel {
 /** Register two full-pane content panels and open them in the top and bottom panes. */
 function makeTwoPaneManager(): { manager: PanelManager; input: InputHandler } {
   const manager = new PanelManager();
-  manager.registerType({ id: 'bench-top', name: 'Top', icon: '⬆', category: 'system', description: 'bench top pane', factory: () => createBenchPanel('bench-top', 'Top', '⬆') });
-  manager.registerType({ id: 'bench-bottom', name: 'Bottom', icon: '⬇', category: 'system', description: 'bench bottom pane', factory: () => createBenchPanel('bench-bottom', 'Bottom', '⬇') });
+  manager.registerType({ id: 'bench-top', name: 'Top', icon: '⬆', category: BENCH_PANEL_CATEGORY, description: 'bench top pane', factory: () => createBenchPanel('bench-top', 'Top', '⬆') });
+  manager.registerType({ id: 'bench-bottom', name: 'Bottom', icon: '⬇', category: BENCH_PANEL_CATEGORY, description: 'bench bottom pane', factory: () => createBenchPanel('bench-bottom', 'Bottom', '⬇') });
   manager.show();
   manager.open('bench-top', 'top');
   manager.open('bench-bottom', 'bottom');
@@ -408,7 +416,10 @@ export async function runLineBenches(): Promise<LineBenchCase[]> {
   // the honest cost of a resize on a large transcript.
   {
     const seed = buildMixedConversation(transcriptMessages);
-    let w = width;
+    // Annotated `number`: LINE_BENCH_CONFIG is `as const`, so `width` is the
+    // literal type 100 and an unannotated `let` would inherit it and reject the
+    // width flip below.
+    let w: number = width;
     const cm = new ConversationManager(() => w);
     cm.fromJSON({ messages: seed as never[] });
     cm.getDisplayBlocks();

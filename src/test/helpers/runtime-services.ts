@@ -1,4 +1,4 @@
-import { mkdirSync, rmSync } from 'node:fs';
+import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterAll } from 'bun:test';
 import { ArchetypeLoader } from '@pellux/goodvibes-sdk/platform/agents';
@@ -51,7 +51,6 @@ type IntelligenceTestRoots = {
 };
 
 let testRoots: IntelligenceTestRoots | null = null;
-let cleanupRegistered = false;
 
 let runtimeServices: RuntimeServices | null = null;
 let runtimeCounter = 0;
@@ -88,18 +87,11 @@ function getTestRoots(): IntelligenceTestRoots {
     }),
   };
 
-  if (!cleanupRegistered) {
-    process.on('exit', () => {
-      if (!testRoots) return;
-      try {
-        rmSync(testRoots.root, { recursive: true, force: true });
-      } catch {
-        // ignore cleanup failures
-      }
-    });
-    cleanupRegistered = true;
-  }
-
+  // No cleanup wiring here on purpose. `root` came from makeProjectTempDir,
+  // which registers it with helpers/temp-registry.ts, and the preload's
+  // afterAll removes it when the test process finishes. The
+  // `process.on('exit')` hook this function used to register was dead code:
+  // `bun test` does not fire exit handlers, so it never removed anything.
   return testRoots;
 }
 

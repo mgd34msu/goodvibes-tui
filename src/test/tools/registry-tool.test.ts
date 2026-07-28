@@ -5,11 +5,12 @@
  * .goodvibes/agents to isolate tests from the real filesystem.
  */
 import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
-import { mkdirSync, existsSync, rmSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdirSync, existsSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { ToolRegistry } from '@pellux/goodvibes-sdk/platform/tools';
 import { createRegistryTool } from '@pellux/goodvibes-sdk/platform/tools';
 import type { Tool, ToolDefinition } from '@pellux/goodvibes-sdk/platform/types';
+import { makeProjectTempDir } from '../helpers/project-temp.ts';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -18,9 +19,11 @@ import type { Tool, ToolDefinition } from '@pellux/goodvibes-sdk/platform/types'
 const PROJECT_ROOT = process.cwd();
 
 function makeTmpDir(): string {
-  const base = join(PROJECT_ROOT, '.test-tmp');
-  if (!existsSync(base)) mkdirSync(base, { recursive: true });
-  return mkdtempSync(join(base, 'registry-tool-'));
+  // makeProjectTempDir registers the directory with the shared cleanup registry,
+  // so the test process removes it before it ends. The hand-rolled creation this
+  // replaced was tracked by nothing and left directories under .test-tmp behind
+  // after a fully green run.
+  return makeProjectTempDir('registry-tool');
 }
 
 function makeTool(name: string, description = `Mock tool: ${name}`): Tool {
