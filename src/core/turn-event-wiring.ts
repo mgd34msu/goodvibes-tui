@@ -332,16 +332,22 @@ export function wireTurnEventHandlers(
         // as cancelled (the reason already carries the landed-work count from the
         // chain's edit ledger), so the notification never contradicts the cancelled
         // chain/owner/cohort surfaces.
+        // A desktop notification is read by the person, not by an operator
+        // console, so it carries no chain identifier. `WRFC` names the machinery
+        // and the 12-character chain id is a register id; neither is something
+        // a reader can act on, and the standing rule keeps both out of
+        // outward-facing text. The id is still on the event for correlation and
+        // still in the operator feed — it just does not reach the popup.
         if (payload.failureKind === 'cancelled') {
-          notifyCompletion('GoodVibes — WRFC chain cancelled', `chain ${payload.chainId.slice(0, 12)} cancelled: ${payload.reason}`, FORCE_NOTIFY_DURATION_MS);
+          notifyCompletion('GoodVibes — workstream cancelled', `The workstream was cancelled: ${payload.reason}`, FORCE_NOTIFY_DURATION_MS);
         } else if (payload.failureKind === 'max_turns') {
           // A turn-budget exhaustion is a spent ceiling, not an infrastructure
           // failure — narrate the limit and where it came from, from the typed
           // event fields, never a regex of the prose reason.
-          notifyCompletion('GoodVibes — WRFC chain hit its turn budget', `chain ${payload.chainId.slice(0, 12)} ${formatTurnBudgetOutcome({ limit: payload.turnLimit, source: payload.turnLimitSource })}`, FORCE_NOTIFY_DURATION_MS);
+          notifyCompletion('GoodVibes — workstream hit its turn budget', `The workstream ${formatTurnBudgetOutcome({ limit: payload.turnLimit, source: payload.turnLimitSource })}`, FORCE_NOTIFY_DURATION_MS);
         } else {
           const kindLabel = payload.failureKind === 'transport' ? 'transient transport error' : payload.reason;
-          notifyCompletion('GoodVibes — WRFC chain failed', `chain ${payload.chainId.slice(0, 12)} failed: ${kindLabel}`, FORCE_NOTIFY_DURATION_MS);
+          notifyCompletion('GoodVibes — workstream failed', `The workstream could not be finished: ${kindLabel}`, FORCE_NOTIFY_DURATION_MS);
         }
       } catch (err) {
         logger.debug('turn-event-wiring: chain-failure notify error', { error: String(err) });
