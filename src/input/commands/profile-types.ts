@@ -61,16 +61,36 @@ type UnionKeys<T> = T extends unknown ? keyof T : never;
  * Reject a key the contract does not declare, including on a body that is not a
  * fresh object literal.
  *
- * Typing a parameter as the contract input is NOT sufficient on its own:
- * TypeScript applies excess-property checking only to fresh literals, so
- * `const body = { …, lineIndex: 3 }; invoke('profile.forget', body)` compiles
- * clean while the identical keys written inline are an error. Verified against
- * this very command, not assumed.
+ * DO NOT "simplify" this away to plain parameter typing. It is load-bearing,
+ * not a belt-and-braces backstop, and the measurements say which cases it
+ * carries alone. Four ways a stale key can arrive, all compiled against this
+ * repo's TypeScript with a `profile.forget`-shaped input:
  *
- * That is not hypothetical — `profile.forget` really did retire `lineIndex`,
- * and a body built one line earlier would have carried it silently past a
- * correctly typed parameter. Seeding inline literals proves only the cases
- * someone thought to seed; this closes the shape.
+ *   1. written inline in a fresh literal      — parameter typing already rejects
+ *   2. written inline BESIDE a spread         — parameter typing already rejects
+ *   3. body built as a variable first         — SLIPS PAST parameter typing
+ *   4. carried in by the spread source's type — SLIPS PAST parameter typing
+ *
+ * A spread literal is not uniformly unchecked, which is the easy thing to get
+ * wrong: anything written inline in one is still checked normally, and only what
+ * arrives THROUGH the spread escapes, because it belongs to the source's type
+ * rather than to the literal. Rows 3 and 4 are the two nothing else catches, and
+ * this guard rejects both with TS2345 — measured, not reasoned about.
+ *
+ * That is not hypothetical: `profile.forget` really did retire `lineIndex`, and
+ * a body built one line earlier would have carried it silently past a correctly
+ * typed parameter. Seeding inline literals proves only the cases someone thought
+ * to seed; this closes the shape.
+ *
+ * There is a second reason it earns its place here. The SDK's `invoke` is
+ * OVERLOADED — a typed signature plus a loose
+ * `invoke<T = unknown>(methodId: string, input?: Record<string, unknown>)`. At a
+ * bare call site a body the typed overload rejects does not raise an
+ * excess-property error at all; overload resolution simply falls through to the
+ * loose one and the result degrades to `unknown`. Any error is then incidental,
+ * downstream, and disappears entirely if the caller ignores or casts the result.
+ * `ProfileInvoke` is a single generic signature with no such fallback, so a bad
+ * body fails here, at the call, naming the offending key.
  *
  * Intersecting the parameter with this maps every undeclared key to `never`, so
  * no real value satisfies it however the object was built. Distributed over the

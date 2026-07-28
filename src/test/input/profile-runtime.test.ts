@@ -507,6 +507,25 @@ function compileTimePayloadExactness(): void {
     // @ts-expect-error `valu` is not `value`.
     acceptsExactBody('profile.set', setWithMisspelledKey);
 
+    // The third construction form, and the one that slipped past every lane. A
+    // FRESH literal normally gets excess-property checking, but a spread inside
+    // it defeats that check, so correct parameter typing alone accepts a stale
+    // key. Both spread shapes are held: a plain spread, and the conditional
+    // spread that assembles a body across branches — the latter infers an
+    // OPTIONAL property, so it fails against `never` on its `undefined` arm
+    // rather than on the value.
+    const staleFields = { lineIndex: 3 };
+    // @ts-expect-error a spread cannot smuggle a retired key past the declared input.
+    acceptsExactBody('profile.forget', { ...staleFields, fieldId: 'x', authority: 'owner-direct' });
+
+    const conditionally: boolean = true;
+    // @ts-expect-error nor can a conditional spread, which is the shape the same key survived in elsewhere.
+    acceptsExactBody('profile.forget', {
+      ...(conditionally ? { lineIndex: 3 } : {}),
+      fieldId: 'x',
+      authority: 'owner-direct',
+    });
+
     // Positive control: the shapes the command actually sends must still be
     // accepted, so the guard cannot pass by rejecting everything.
     const validForget = { fieldId: 'commerce.shippingAddress', authority: 'owner-direct' };
