@@ -214,6 +214,7 @@ describe('/profile forget on a field that is not recorded', () => {
     expect(output).not.toMatch(/\bdeleted\b/i);
     expect(output).not.toMatch(/\bdone\b/i);
     expect(calls.map((call) => call.methodId)).toEqual(['profile.forget']);
+    expect(calls[0]?.input.authority).toBe('owner-direct');
   });
 
   test('renderProfileWriteResult refuses to synthesise a receipt over ok:false', () => {
@@ -277,6 +278,9 @@ describe('write disclosure', () => {
     expect(set?.input.surface).toBe('tui');
     expect(String(set?.input.said ?? '')).toContain('/profile set');
     expect(String(set?.input.said ?? '').length).toBeGreaterThan(0);
+    // The write states its authority rather than leaning on the daemon's
+    // default — see the authority block below for why that matters.
+    expect(set?.input.authority).toBe('owner-direct');
   });
 
   test('/profile note appends to Notes by default and honours --section', async () => {
@@ -296,11 +300,13 @@ describe('write disclosure', () => {
     seen.push(...first.calls);
     expect(first.calls[0]?.input.section).toBe('Notes');
     expect(first.calls[0]?.input.text).toBe('allergic to shellfish');
+    expect(first.calls[0]?.input.authority).toBe('owner-direct');
 
     const second = makeScriptedRegistry(respond);
     await second.registry.get('profile')!.handler(['note', '--section', 'Places', 'gym', 'is', 'the', 'Y'], makeCtx());
     expect(second.calls[0]?.input.section).toBe('Places');
     expect(second.calls[0]?.input.text).toBe('gym is the Y');
+    expect(second.calls[0]?.input.authority).toBe('owner-direct');
     expect(seen.length).toBe(1);
   });
 });
@@ -375,6 +381,59 @@ describe('containment', () => {
     const document = toProfileDocument({ state: { kind: 'disabled', path: '/tmp/owner-profile.md' }, sections: [] });
     expect(document).not.toBe(MALFORMED);
     expect(renderProfileDocument(document as ProfileDocumentView)).toContain('turned off');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Authority (§7): every write verb claims owner-direct, none send nothing
+//
+// Checked against the installed SDK: `readAuthority` in
+// platform/control-plane/routes/owner-profile.js reads an ABSENT authority as
+// `owner-direct` and only refuses an unrecognised string. So omitting the field
+// would still work today — which is exactly why a test is the right place to
+// hold the line rather than a runtime error.
+//
+// It matters because for `forget` and `undo` the authority check is the ONLY
+// gate: layers 2 and 3 do not apply to a removal, since there is no value to
+// check for derivation and no owner utterance to quote. Leaving a
+// security-relevant field to a default that the daemon is free to tighten later
+// means the TUI would start failing at runtime instead of at build time. This
+// block is the one place that fails if a future edit drops the field from any
+// of the four write call sites.
+// ---------------------------------------------------------------------------
+
+describe('every profile write verb claims owner-direct authority', () => {
+  const WRITE_RESULT = { ok: true, reason: null, changes: [], disclosure: 'Noted.' };
+
+  test('/profile undo sends authority: owner-direct', async () => {
+    const ctx = makeCtx();
+    const { registry, calls } = makeScriptedRegistry((methodId) => {
+      if (methodId === 'profile.undo') return WRITE_RESULT;
+      throw new Error(`unexpected call: ${methodId}`);
+    });
+    await registry.get('profile')!.handler(['undo', 'commerce.shippingAddress'], ctx);
+    expect(calls.map((call) => call.methodId)).toEqual(['profile.undo']);
+    expect(calls[0]?.input.fieldId).toBe('commerce.shippingAddress');
+    expect(calls[0]?.input.authority).toBe('owner-direct');
+  });
+
+  test('set, note, forget and undo each send authority: owner-direct', async () => {
+    const scripts: ReadonlyArray<{ args: string[]; verb: string }> = [
+      { args: ['set', 'commerce.shippingAddress', '123', 'Main', 'St'], verb: 'profile.set' },
+      { args: ['note', 'a', 'note'], verb: 'profile.append' },
+      { args: ['forget', 'commerce.shippingAddress'], verb: 'profile.forget' },
+      { args: ['undo', 'commerce.shippingAddress'], verb: 'profile.undo' },
+    ];
+    for (const { args, verb } of scripts) {
+      const ctx = makeCtx();
+      const { registry, calls } = makeScriptedRegistry((methodId) => {
+        if (methodId === verb) return WRITE_RESULT;
+        throw new Error(`unexpected call: ${methodId}`);
+      });
+      await registry.get('profile')!.handler(args, ctx);
+      expect(calls.map((call) => call.methodId)).toEqual([verb]);
+      expect(calls[0]?.input.authority).toBe('owner-direct');
+    }
   });
 });
 

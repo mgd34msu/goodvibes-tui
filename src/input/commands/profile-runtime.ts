@@ -273,11 +273,31 @@ export function registerProfileRuntimeCommands(
         // `said` is the command as typed. It is a verbatim owner utterance,
         // which is what layer 3 of the trust gate requires (§7) and what makes
         // "where did you get that" answer with something he recognises.
+        //
+        // `authority: 'owner-direct'` is claimed here, not defaulted by the
+        // daemon: every call in this handler runs because the owner typed a
+        // `/profile` command into this terminal on his own machine, which is
+        // exactly what the owner-direct tier means (docs/owner-profile.md
+        // §7). That is the whole justification for the claim, so it is
+        // written out once here rather than copied silently to the other
+        // three write sites below.
+        //
+        // The installed daemon would read an absent authority as owner-direct
+        // anyway, so this is not required to make the call work. It is stated
+        // because for `forget` and `undo` the authority check is the only gate
+        // there is, and a security-relevant field the caller leaves to a
+        // default is one the daemon can tighten without the caller noticing.
+        //
+        // This surface can hardcode it; the agent must not. The TUI's only
+        // input is the owner at his own keyboard, whereas the agent can be
+        // handed a purported fact by a page, an email or a channel message and
+        // has to state the real source per write.
         await runWrite(invoke, 'profile.set', {
           fieldId,
           value: setValue,
           surface: TUI_SURFACE,
           said: `/profile set ${fieldToken} ${setValue}`,
+          authority: 'owner-direct',
         }, print);
         return;
       }
@@ -288,6 +308,7 @@ export function registerProfileRuntimeCommands(
           text: note.text,
           surface: TUI_SURFACE,
           said: `/profile note ${note.text}`,
+          authority: 'owner-direct',
         }, print);
         return;
       }
@@ -295,14 +316,14 @@ export function registerProfileRuntimeCommands(
       if (sub === 'forget') {
         const fieldId = await resolveFieldToken(invoke, fieldToken!, print);
         if (fieldId === null) return;
-        await runWrite(invoke, 'profile.forget', { fieldId }, print);
+        await runWrite(invoke, 'profile.forget', { fieldId, authority: 'owner-direct' }, print);
         return;
       }
 
       if (sub === 'undo') {
         const fieldId = await resolveFieldToken(invoke, fieldToken!, print);
         if (fieldId === null) return;
-        await runWrite(invoke, 'profile.undo', { fieldId }, print);
+        await runWrite(invoke, 'profile.undo', { fieldId, authority: 'owner-direct' }, print);
       }
     },
   });
