@@ -45,6 +45,7 @@ import {
   toProfileProvenanceReport,
   toProfileState,
   toProfileWriteResult,
+  type ExactProfileInput,
   type ProfileInput,
   type ProfileVerb,
   type ProfileWriteVerb,
@@ -99,9 +100,9 @@ const USAGE = [
  * profile-types.ts). Every response goes through a checker before a renderer
  * reads a property off it.
  */
-type ProfileInvoke = <TVerb extends ProfileVerb>(
+type ProfileInvoke = <TVerb extends ProfileVerb, TBody extends ProfileInput<TVerb>>(
   methodId: TVerb,
-  input: ProfileInput<TVerb>,
+  input: ExactProfileInput<TVerb, TBody>,
 ) => Promise<unknown>;
 
 /**
@@ -186,10 +187,10 @@ async function runWhere(invoke: ProfileInvoke, token: string, print: (text: stri
  * daemon's reason and a no-op prints "nothing changed", so a `/profile forget`
  * for something that was not recorded can never come back as a success (§9.2).
  */
-async function runWrite<TVerb extends ProfileWriteVerb>(
+async function runWrite<TVerb extends ProfileWriteVerb, TBody extends ProfileInput<TVerb>>(
   invoke: ProfileInvoke,
   verb: TVerb,
-  input: ProfileInput<TVerb>,
+  input: ExactProfileInput<TVerb, TBody>,
   print: (text: string) => void,
 ): Promise<void> {
   try {

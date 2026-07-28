@@ -21,8 +21,11 @@ import {
   toProfileProvenanceReport,
   toProfileState,
   toProfileWriteResult,
+  type ExactProfileInput,
   type ProfileDocumentView,
+  type ProfileInput,
   type ProfileStateView,
+  type ProfileVerb,
 } from '@/input/commands/profile-types.ts';
 import { SETTINGS_CATEGORIES, SETTINGS_CATEGORY_GROUPS } from '@/input/settings-modal-types.ts';
 import { CATEGORY_INFO, CATEGORY_LABELS } from '@/renderer/settings-modal-helpers.ts';
@@ -452,11 +455,80 @@ describe('every profile write verb claims owner-direct authority', () => {
 //   - a field the contract made REQUIRED (`authority`) shows up as a missing
 //     required property.
 //
-// The compile-time check is stronger and fires earlier — verified by seeding
-// both changes, each of which is a tsc error at the call site. This is the
-// backstop for the same class in a surface whose wrapper does not constrain its
-// input, which is how both changes reached the other two surfaces unnoticed.
+// The compile-time check is stronger and fires earlier, and the block below
+// holds it permanently rather than relying on someone re-seeding it. This
+// runtime pass is the backstop for the same class in a surface whose wrapper
+// does not constrain its input, which is how both changes reached the other two
+// surfaces unnoticed.
 // ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// Compile-time: the body may not carry a key the contract does not declare
+//
+// These assertions are checked by `tsc -p tsconfig.test.json`, not at runtime.
+// Each `@ts-expect-error` FAILS THE BUILD if the error it expects stops
+// happening — so unlike seeding a mistake by hand, this cannot quietly rot.
+//
+// The case that matters is a body built as a VARIABLE. TypeScript applies
+// excess-property checking only to fresh object literals, so a correctly typed
+// parameter alone accepts `const body = { …, lineIndex: 3 }`. Verified against
+// this command before the guard existed: it compiled clean. ExactProfileInput
+// closes that by mapping every undeclared key to `never`.
+// ---------------------------------------------------------------------------
+
+declare function acceptsExactBody<TVerb extends ProfileVerb, TBody extends ProfileInput<TVerb>>(
+  verb: TVerb,
+  body: ExactProfileInput<TVerb, TBody>,
+): void;
+
+/**
+ * Never invoked. `acceptsExactBody` is a `declare`d signature with no runtime
+ * body, so this exists purely to be typechecked — calling it would throw.
+ * `bun test` does not enforce any of this; `tsc -p tsconfig.test.json` does.
+ */
+function compileTimePayloadExactness(): void {
+  {
+    // Bodies deliberately built as variables, never as fresh literals at the
+    // call site, because the literal form is already checked by TypeScript and
+    // is not the case that regressed.
+    const forgetWithRetiredKey = { fieldId: 'commerce.shippingAddress', lineIndex: 3, authority: 'owner-direct' };
+    // @ts-expect-error profile.forget retired lineIndex — a position cannot address a line the owner may have moved (§9.2).
+    acceptsExactBody('profile.forget', forgetWithRetiredKey);
+
+    const undoMissingAuthority = { fieldId: 'commerce.shippingAddress' };
+    // @ts-expect-error authority is required on every write verb; for undo and forget it is the only gate there is (§7).
+    acceptsExactBody('profile.undo', undoMissingAuthority);
+
+    const undoWithSiblingVerbKeys = { fieldId: 'x', section: 'People', text: 'a line', authority: 'owner-direct' };
+    // @ts-expect-error section/text belong to profile.forget, not profile.undo — keys are checked per verb, not across the family.
+    acceptsExactBody('profile.undo', undoWithSiblingVerbKeys);
+
+    const setWithMisspelledKey = { fieldId: 'x', valu: 'y', surface: 'tui', said: 'q', authority: 'owner-direct' };
+    // @ts-expect-error `valu` is not `value`.
+    acceptsExactBody('profile.set', setWithMisspelledKey);
+
+    // Positive control: the shapes the command actually sends must still be
+    // accepted, so the guard cannot pass by rejecting everything.
+    const validForget = { fieldId: 'commerce.shippingAddress', authority: 'owner-direct' };
+    acceptsExactBody('profile.forget', validForget);
+    const validForgetProse = { section: 'People', text: '- Sarah', authority: 'owner-direct' };
+    acceptsExactBody('profile.forget', validForgetProse);
+    const validSet = { fieldId: 'x', value: 'y', surface: 'tui', said: 'q', authority: 'owner-direct' };
+    acceptsExactBody('profile.set', validSet);
+  }
+}
+
+describe('compile-time payload exactness', () => {
+  test('the exactness assertions are enforced by the test typecheck, not here', () => {
+    // Deliberately not called: every assertion in it is a type-level one that
+    // `tsc -p tsconfig.test.json` checks. Each `@ts-expect-error` in that body
+    // FAILS THE BUILD if the error it expects stops happening, so weakening
+    // ExactProfileInput back to plain parameter typing cannot pass silently —
+    // verified by doing exactly that, which turned two of the four directives
+    // into "Unused '@ts-expect-error' directive" errors.
+    expect(typeof compileTimePayloadExactness).toBe('function');
+  });
+});
 
 describe('write payloads conform to the declared contract input', () => {
   const WRITE_RESULT = { ok: true, reason: null, changes: [], disclosure: 'Noted.' };
@@ -533,6 +605,41 @@ describe('write payloads conform to the declared contract input', () => {
     expect(calls[0]!.input.fieldId).toBeUndefined();
     expect('lineIndex' in calls[0]!.input).toBe(false);
     expectConforms('profile.forget', calls[0]!.input);
+  });
+
+  test('what /profile show prints is exactly what /profile forget needs', async () => {
+    // The surface contract this command owns, and the reason it is worth a test:
+    // the daemon matches a prose line by its text AS STORED, which includes the
+    // `- ` bullet. So the owner must not have to know the file's storage form —
+    // he copies the line out of `/profile show` and it works.
+    //
+    // This is deliberately NOT a pin on the SDK's matching rule. The SDK's
+    // owner-profile module is not in the package's `exports` map (144 subpaths,
+    // no wildcard, `./platform/owner-profile` absent), so no test in this
+    // surface can import `forgetProseByText` to assert against it. What is
+    // asserted here is the round trip through this command, which holds
+    // whatever the daemon decides to match on: whatever `show` renders is what
+    // `forget` transmits.
+    const rendered = renderProfileDocument(checkedDocument());
+    const shownLine = rendered
+      .split('\n')
+      .map((line) => line.trim())
+      .find((line) => line.includes('Sarah'));
+    expect(shownLine).toBe(SISTER_LINE);
+
+    // Retyping what he saw, tokenised the way the composer splits it.
+    const ctx = makeCtx();
+    const { registry, calls } = makeScriptedRegistry((methodId) => {
+      if (methodId === 'profile.forget') return WRITE_RESULT;
+      throw new Error(`unexpected call: ${methodId}`);
+    });
+    await registry.get('profile')!.handler(
+      ['forget', '--section', 'People', ...shownLine!.split(' ')],
+      ctx,
+    );
+    expect(calls).toHaveLength(1);
+    // Byte-identical to the line as stored — no marker added, none stripped.
+    expect(calls[0]!.input.text).toBe(SISTER_LINE);
   });
 
   test('forget --section with no text prints usage and never calls the daemon', async () => {

@@ -50,6 +50,39 @@ export type ProfileVerb = ProfileReadVerb | ProfileWriteVerb;
 /** The contract's own input shape for a verb, so a wrong field name will not compile. */
 export type ProfileInput<TVerb extends ProfileVerb> = OperatorMethodInput<TVerb>;
 
+/**
+ * Every key of every member of a union. `keyof` on a union yields only the keys
+ * the members SHARE, so a union target would be checked against that
+ * intersection and would wave through a key belonging to a sibling verb.
+ */
+type UnionKeys<T> = T extends unknown ? keyof T : never;
+
+/**
+ * Reject a key the contract does not declare, including on a body that is not a
+ * fresh object literal.
+ *
+ * Typing a parameter as the contract input is NOT sufficient on its own:
+ * TypeScript applies excess-property checking only to fresh literals, so
+ * `const body = { …, lineIndex: 3 }; invoke('profile.forget', body)` compiles
+ * clean while the identical keys written inline are an error. Verified against
+ * this very command, not assumed.
+ *
+ * That is not hypothetical — `profile.forget` really did retire `lineIndex`,
+ * and a body built one line earlier would have carried it silently past a
+ * correctly typed parameter. Seeding inline literals proves only the cases
+ * someone thought to seed; this closes the shape.
+ *
+ * Intersecting the parameter with this maps every undeclared key to `never`, so
+ * no real value satisfies it however the object was built. Distributed over the
+ * target union via {@link UnionKeys} so each member is checked rather than only
+ * the keys they have in common.
+ */
+export type NoExcessKeys<TBody, TShape> = Record<Exclude<keyof TBody, UnionKeys<TShape>>, never>;
+
+/** A body that conforms to a verb's declared input and carries nothing extra. */
+export type ExactProfileInput<TVerb extends ProfileVerb, TBody> =
+  TBody & NoExcessKeys<TBody, ProfileInput<TVerb>>;
+
 /** What `profile.read` answers: the whole document, by section. */
 export type ProfileDocumentView = OperatorMethodOutput<'profile.read'>;
 
