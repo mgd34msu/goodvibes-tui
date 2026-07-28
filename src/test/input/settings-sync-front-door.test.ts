@@ -6,20 +6,20 @@
  * working via `/settings-sync report`.
  */
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import { CommandRegistry } from '../../input/command-registry.ts';
 import type { CommandContext } from '../../input/command-registry.ts';
 import { registerSettingsSyncRuntimeCommands } from '../../input/commands/settings-sync-runtime.ts';
+import { makeProjectTempDir } from '../helpers/project-temp.ts';
 
 describe('/settings-sync front door (item 3)', () => {
   let root = '';
   let configManager: ConfigManager;
 
   beforeEach(() => {
-    root = mkdtempSync(join(tmpdir(), 'gv-settings-sync-front-door-'));
+    root = makeProjectTempDir('gv-settings-sync-front-door');
     configManager = new ConfigManager({ surfaceRoot: 'tui', configDir: join(root, '.goodvibes', 'tui') });
   });
 

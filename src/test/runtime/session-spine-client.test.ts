@@ -1,10 +1,10 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { RegisterSharedSessionInput, SharedSessionRecord, SharedSessionRegisterResult } from '@pellux/goodvibes-sdk/platform/control-plane';
 import { foldLegacySpineStore, SessionSpineClient, TUI_SPINE_PARTICIPANT } from '@pellux/goodvibes-sdk/platform/runtime/session-spine';
 import { createTuiSpineTransport, type SpineSessionsClient } from '../../runtime/session-spine-transport.ts';
+import { makeProjectTempDir } from '../helpers/project-temp.ts';
 
 const settle = async (): Promise<void> => {
   for (let i = 0; i < 5; i += 1) await new Promise<void>((r) => setTimeout(r, 0));
@@ -309,7 +309,7 @@ describe('foldLegacySpineStore', () => {
   let root: string;
 
   beforeEach(() => {
-    root = mkdtempSync(join(tmpdir(), 'goodvibes-tui-spine-fold-'));
+    root = makeProjectTempDir('goodvibes-tui-spine-fold');
   });
 
   afterEach(() => {

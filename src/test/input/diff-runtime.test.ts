@@ -8,12 +8,12 @@
 // ---------------------------------------------------------------------------
 
 import { describe, expect, test } from 'bun:test';
-import { readFileSync, mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { CommandRegistry, type CommandContext } from '../../input/command-registry.ts';
 import { registerDiffRuntimeCommands } from '../../input/commands/diff-runtime.ts';
 import { createShellPathService } from '@/runtime/index.ts';
+import { makeProjectTempDir } from '../helpers/project-temp.ts';
 
 /**
  * Every `Bun.spawn(` call site's option object must include `stderr:` — a
@@ -90,7 +90,7 @@ function makeCtx(dir: string): { ctx: CommandContext; printed: string[]; opened:
 
 describe('(b) /diff short-circuits in a non-git directory', () => {
   test('prints a friendly "not a git repository" message and never opens the diff panel', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'gv-diff-runtime-nogit-'));
+    const dir = makeProjectTempDir('gv-diff-runtime-nogit');
     try {
       const registry = new CommandRegistry();
       registerDiffRuntimeCommands(registry);
@@ -108,7 +108,7 @@ describe('(b) /diff short-circuits in a non-git directory', () => {
   });
 
   test('the same short-circuit applies to the working/head/staged subcommands too', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'gv-diff-runtime-nogit-'));
+    const dir = makeProjectTempDir('gv-diff-runtime-nogit');
     try {
       const registry = new CommandRegistry();
       registerDiffRuntimeCommands(registry);

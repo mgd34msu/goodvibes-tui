@@ -1,6 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { CommandRegistry } from '../../input/command-registry.ts';
 import type { CommandContext } from '../../input/command-registry.ts';
@@ -11,6 +10,7 @@ import { MemoryRegistry, MemoryStore } from '@pellux/goodvibes-sdk/platform/stat
 import { MemoryEmbeddingProviderRegistry } from '@pellux/goodvibes-sdk/platform/state';
 import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import { createShellPathService } from '@/runtime/index.ts';
+import { makeProjectTempDir } from '../helpers/project-temp.ts';
 
 /**
  * Memory front-door scope isolation tests.
@@ -80,7 +80,7 @@ describe('memory product front-door scope isolation', () => {
   let printed: string[];
 
   beforeEach(async () => {
-    dir = mkdtempSync(join(tmpdir(), 'gv-front-door-'));
+    dir = makeProjectTempDir('gv-front-door');
     const configManager = new ConfigManager({
       surfaceRoot: 'tui',
       configDir: join(dir, '.goodvibes', 'tui'),

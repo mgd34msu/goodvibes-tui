@@ -1,6 +1,4 @@
 import { beforeEach, describe, expect, test } from 'bun:test';
-import { mkdtempSync } from 'node:fs';
-import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
   authenticateOperatorRequest,
@@ -10,12 +8,13 @@ import {
   OPERATOR_SESSION_COOKIE_NAME,
 } from '@pellux/goodvibes-sdk/platform/security';
 import { UserAuthManager } from '@pellux/goodvibes-sdk/platform/security';
+import { makeProjectTempDir } from '../helpers/project-temp.ts';
 
 describe('http auth helpers', () => {
   let userAuth: UserAuthManager;
 
   beforeEach(() => {
-    const root = mkdtempSync(join(tmpdir(), 'gv-http-auth-'));
+    const root = makeProjectTempDir('gv-http-auth');
     userAuth = new UserAuthManager({
       bootstrapFilePath: join(root, 'users.json'),
       bootstrapCredentialPath: join(root, 'bootstrap.txt'),

@@ -19,8 +19,7 @@
  */
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync } from 'node:fs';
 import { join, relative, resolve, sep } from 'node:path';
 import {
   resolveGoodVibesDaemonHome,
@@ -28,6 +27,7 @@ import {
   resolveGoodVibesHomeOwnership,
   resolveGoodVibesTreeDirectory,
 } from '../../config/goodvibes-home.ts';
+import { makeProjectTempDir } from '../helpers/project-temp.ts';
 
 const projectRoot = resolve(join(import.meta.dir, '..', '..', '..'));
 
@@ -88,9 +88,9 @@ describe('a client process cannot write outside a redirected home', () => {
   let workingDir = '';
 
   beforeEach(() => {
-    loginHome = mkdtempSync(join(tmpdir(), 'goodvibes-client-login-home-'));
-    sandbox = mkdtempSync(join(tmpdir(), 'goodvibes-client-sandbox-'));
-    workingDir = mkdtempSync(join(tmpdir(), 'goodvibes-client-work-'));
+    loginHome = makeProjectTempDir('goodvibes-client-login-home');
+    sandbox = makeProjectTempDir('goodvibes-client-sandbox');
+    workingDir = makeProjectTempDir('goodvibes-client-work');
     mkdirSync(join(loginHome, '.goodvibes'), { recursive: true });
   });
 
@@ -172,8 +172,8 @@ describe('GOODVIBES_HOME has exactly one meaning', () => {
   let sandbox = '';
 
   beforeEach(() => {
-    loginHome = mkdtempSync(join(tmpdir(), 'goodvibes-meaning-login-'));
-    sandbox = mkdtempSync(join(tmpdir(), 'goodvibes-meaning-sandbox-'));
+    loginHome = makeProjectTempDir('goodvibes-meaning-login');
+    sandbox = makeProjectTempDir('goodvibes-meaning-sandbox');
   });
 
   afterEach(() => {

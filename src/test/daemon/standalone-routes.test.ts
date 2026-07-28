@@ -10,8 +10,7 @@
  * real HTTP requests. No mocks of HTTP or SDK internals.
  */
 import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { mkdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { DaemonServer } from '@pellux/goodvibes-sdk/platform/daemon';
 import { UserAuthManager } from '@pellux/goodvibes-sdk/platform/security';
@@ -23,6 +22,7 @@ import { createRuntimeServices } from '../../runtime/services.ts';
 import { resetTestRuntimeServices, disposeTestRuntimeServicesAfterAll } from '../helpers/runtime-services.ts';
 import { buildTestModelDefinition } from '../helpers/test-managers.ts';
 import { trackDisposables } from '../helpers/disposables.ts';
+import { makeProjectTempDir } from '../helpers/project-temp.ts';
 
 // Stop the shared test runtime graph when this file ends. Called here, not
 // registered inside the helper, for the reason its doc comment gives.
@@ -41,7 +41,7 @@ const disposables = trackDisposables();
 const TEST_TOKEN = 'standalone-test-token-abc123';
 
 function makeTempDir(): string {
-  return mkdtempSync(join(tmpdir(), 'gv-standalone-'));
+  return makeProjectTempDir('gv-standalone');
 }
 
 function makeEnv(tempRoot: string): {

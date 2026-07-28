@@ -207,6 +207,11 @@ export function createMarketplaceModalSurface(deps: MarketplaceModalDeps): Confi
  * missing paths with existsSync → [], so refresh() finds nothing and renders the
  * honest empty-state copy). The random tmp path never appears in the
  * rendered lines (the empty-state copy is static), so the golden is byte-stable.
+ *
+ * This is production code (ships in the real binary), not test scratch, so
+ * it stays rooted at the real OS temp dir rather than the test-only
+ * makeProjectTempDir helper. Created and removed synchronously in the same
+ * call, so the on-disk window is negligible.
  */
 export function marketplaceModalGoldenSurface(): ConfigModalSurface {
   const root = mkdtempSync(join(tmpdir(), 'gv-marketplace-golden-'));

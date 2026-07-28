@@ -9,16 +9,16 @@
  */
 
 import { afterEach, describe, test, expect } from 'bun:test';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { ExecutionPlanManager } from '@pellux/goodvibes-sdk/platform/core';
 import type { ExecutionPlan, PlanItem } from '@pellux/goodvibes-sdk/platform/core';
+import { makeProjectTempDir } from '../helpers/project-temp.ts';
 
 const planRoots = new Set<string>();
 
 function createPlanManager(): ExecutionPlanManager {
-  const projectRoot = mkdtempSync(join(tmpdir(), 'gv-plan-integration-'));
+  const projectRoot = makeProjectTempDir('gv-plan-integration');
   planRoots.add(projectRoot);
   return new ExecutionPlanManager(projectRoot);
 }

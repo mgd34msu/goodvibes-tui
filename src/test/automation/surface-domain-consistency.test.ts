@@ -1,6 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { AutomationDeliveryManager } from '@pellux/goodvibes-sdk/platform/automation';
 import type { AutomationJob } from '@pellux/goodvibes-sdk/platform/automation';
@@ -16,6 +15,7 @@ import { SubscriptionManager } from '@pellux/goodvibes-sdk/platform/config';
 import { RuntimeEventBus } from '@/runtime/index.ts';
 import type { DeliveryEvent } from '@/runtime/index.ts';
 import type { RouteEvent } from '@/runtime/index.ts';
+import { makeProjectTempDir } from '../helpers/project-temp.ts';
 
 // Drain queued microtasks so bus.emit() listeners (OBS-14 async dispatch) run before assertions.
 const flushMicrotasks = async () => { await Promise.resolve(); await Promise.resolve(); await Promise.resolve(); };
@@ -24,7 +24,7 @@ describe('surface domain consistency', () => {
   let root = '';
 
   beforeEach(() => {
-    root = mkdtempSync(join(tmpdir(), 'gv-surface-domain-'));
+    root = makeProjectTempDir('gv-surface-domain');
   });
 
   afterEach(() => {

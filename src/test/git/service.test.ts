@@ -2,11 +2,11 @@ import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'fs';
 import { execSync } from 'child_process';
 import { join, resolve } from 'path';
-import { tmpdir } from 'os';
+import { getTestGitService, resetTestGitServices, disposeTestRuntimeServicesAfterAll } from '../helpers/runtime-services.ts';
+import { makeProjectTempDir, PROJECT_TEST_TMP_ROOT } from '../helpers/project-temp.ts';
 import { GitService } from '@pellux/goodvibes-sdk/platform/git';
 import { HookDispatcher } from '@pellux/goodvibes-sdk/platform/hooks';
 import type { HookEvent } from '@pellux/goodvibes-sdk/platform/hooks';
-import { getTestGitService, resetTestGitServices, disposeTestRuntimeServicesAfterAll } from '../helpers/runtime-services.ts';
 
 // Stop the shared test runtime graph when this file ends. Called here, not
 // registered inside the helper, for the reason its doc comment gives.
@@ -18,19 +18,43 @@ disposeTestRuntimeServicesAfterAll();
 
 /** Create an isolated temp git repo and return its path */
 function makeTempRepo(): string {
-  const tmpDir = mkdtempSync(join(tmpdir(), 'git-test-'));
+  const tmpDir = makeProjectTempDir('git-test');
   execSync('git init', { cwd: tmpDir });
   execSync('git config user.email "test@test.com"', { cwd: tmpDir });
   execSync('git config user.name "Test"', { cwd: tmpDir });
   return tmpDir;
 }
 
+// Returns a path that does not yet exist (git clone / worktree add both
+// require their target to be absent). Rooted under the project's own
+// .test-tmp so a killed test run leaks into a swept, gitignored location
+// instead of the real OS temp dir.
 function makeTempPath(prefix: string): string {
-  return join(tmpdir(), `${prefix}-${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+  mkdirSync(PROJECT_TEST_TMP_ROOT, { recursive: true });
+  return join(PROJECT_TEST_TMP_ROOT, `${prefix}-${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2)}`);
 }
 
+// Deliberately NOT rooted under the project's .test-tmp: this directory
+// must sit outside any git repository so tests can exercise "not inside a
+// repo" behavior. .test-tmp lives inside this project's own working tree,
+// which would make it a false negative for that check. Existing call sites
+// already rmSync these in an afterEach/finally, but a process kill would
+// skip that, so register a best-effort exit-hook cleanup too (mirrors
+// makeProjectTempDir's own safety net for the same failure mode).
+const _externalDirs = new Set<string>();
+let _externalDirCleanupRegistered = false;
 function makeExternalDir(prefix: string): string {
-  return mkdtempSync(join(resolve(process.cwd(), '..'), `${prefix}-`));
+  if (!_externalDirCleanupRegistered) {
+    _externalDirCleanupRegistered = true;
+    process.on('exit', () => {
+      for (const dir of _externalDirs) {
+        try { rmSync(dir, { recursive: true, force: true }); } catch { /* best effort */ }
+      }
+    });
+  }
+  const dir = mkdtempSync(join(resolve(process.cwd(), '..'), `${prefix}-`));
+  _externalDirs.add(dir);
+  return dir;
 }
 
 /** Write a file into the repo and stage + commit it */

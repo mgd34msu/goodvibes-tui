@@ -16,8 +16,7 @@
  *     so building a runtime in a test never joins a network.
  */
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { mkdtemp, readdir, rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { readdir, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { GatewayMethodCatalog } from '@pellux/goodvibes-sdk/platform/control-plane';
 import type { HandlerContext } from '../../daemon/handlers/context.ts';
@@ -36,6 +35,7 @@ import {
 } from '../../daemon/handlers/inbox/provider-adapter.ts';
 import { inboxSurface, surfaceIdFor } from '@pellux/goodvibes-sdk/platform/cluster';
 import { createClusterComposition, inboxPollerGate } from '../../runtime/cluster-composition.ts';
+import { makeProjectTempDir } from '../helpers/project-temp.ts';
 
 const logger = { info() {}, warn() {}, error() {} };
 
@@ -88,7 +88,7 @@ let catalog: GatewayMethodCatalog;
 let ctx: HandlerContext;
 
 beforeEach(async () => {
-  dir = await mkdtemp(join(tmpdir(), 'cluster-inbox-'));
+  dir = await makeProjectTempDir('cluster-inbox');
   catalog = new GatewayMethodCatalog();
   installCountingProvider();
   ctx = {
@@ -221,7 +221,7 @@ describe('inbox polling under leadership', () => {
 
 describe('cluster composition', () => {
   test('building the coordinator opens no socket and writes no state', async () => {
-    const stateRoot = await mkdtemp(join(tmpdir(), 'cluster-state-'));
+    const stateRoot = await makeProjectTempDir('cluster-state');
     const shellPaths = {
       resolveProjectPath: (...segments: string[]) => join(stateRoot, ...segments),
     } as unknown as Parameters<typeof createClusterComposition>[0]['shellPaths'];
@@ -241,7 +241,7 @@ describe('cluster composition', () => {
   });
 
   test('registering a gate before start does not run it', async () => {
-    const stateRoot = await mkdtemp(join(tmpdir(), 'cluster-state-'));
+    const stateRoot = await makeProjectTempDir('cluster-state');
     const shellPaths = {
       resolveProjectPath: (...segments: string[]) => join(stateRoot, ...segments),
     } as unknown as Parameters<typeof createClusterComposition>[0]['shellPaths'];

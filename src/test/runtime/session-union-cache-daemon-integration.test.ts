@@ -9,13 +9,12 @@
  * the served rows to local-only honestly.
  */
 import { afterEach, describe, expect, test } from 'bun:test';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { rmSync } from 'node:fs';
 import { bootDaemon, type BootedDaemon } from '@pellux/goodvibes-sdk/platform/daemon';
 import { createHttpTransport } from '@/runtime/index.ts';
 import type { SharedSessionRecord } from '@pellux/goodvibes-sdk/platform/control-plane';
 import { SessionUnionCache, type LocalSessionReader } from '@pellux/goodvibes-sdk/platform/runtime/session-spine';
+import { makeProjectTempDir } from '../helpers/project-temp.ts';
 
 const TOKEN = 'union-integration-token';
 
@@ -35,8 +34,8 @@ interface Harness {
 }
 
 async function startHarness(): Promise<Harness> {
-  const homeDirectory = mkdtempSync(join(tmpdir(), 'goodvibes-union-daemon-home-'));
-  const workingDir = mkdtempSync(join(tmpdir(), 'goodvibes-union-daemon-project-'));
+  const homeDirectory = makeProjectTempDir('goodvibes-union-daemon-home');
+  const workingDir = makeProjectTempDir('goodvibes-union-daemon-project');
   const daemon = await bootDaemon({ homeDirectory, workingDir, port: 0, token: TOKEN });
   const transport = createHttpTransport({ baseUrl: daemon.url, authToken: TOKEN });
   return {

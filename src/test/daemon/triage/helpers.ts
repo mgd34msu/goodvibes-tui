@@ -1,9 +1,8 @@
 // Shared test helpers for the daemon-internal triage handler surface.
 // No secret-shaped strings here — only obvious word-style fakes.
 
-import { mkdtemp, rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { rm } from 'node:fs/promises';
+import { makeProjectTempDir } from '../../helpers/project-temp.ts';
 import type { HandlerContext, HandlerLogger } from '../../../daemon/handlers/context.ts';
 import type { DaemonCredentialStore } from '../../../daemon/handlers/credentials.ts';
 import type { GatewayMethodCatalog } from '../../../daemon/handlers/contracts.ts';
@@ -58,7 +57,7 @@ export function fakeContext(options: FakeContextOptions): HandlerContext {
 }
 
 export async function makeTempDir(prefix: string): Promise<string> {
-  return mkdtemp(join(tmpdir(), prefix));
+  return makeProjectTempDir(prefix.replace(/-+$/, ''));
 }
 
 export async function removeTempDir(dir: string): Promise<void> {

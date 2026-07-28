@@ -1,9 +1,9 @@
 import { describe, test, expect } from 'bun:test';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { createSkillsModalSurface } from '../../../panels/modals/skills-modal.ts';
 import { findAction, open, tabText } from './modal-surface-test-helpers.ts';
+import { makeProjectTempDir } from '../../helpers/project-temp.ts';
 
 function seedSkill(root: string, options: { global?: boolean } = {}): { cwd: string; homeDir: string; cleanup: () => void } {
   const cwd = join(root, 'project');
@@ -18,7 +18,7 @@ describe('skills modal surface', () => {
   test('surface identity', () => { expect(createSkillsModalSurface({ shellPaths: { workingDirectory: '/x', homeDirectory: '/x' } }).name).toBe('skills-modal'); });
 
   test('empty discovery renders honest next-step guidance', () => {
-    const root = mkdtempSync(join(tmpdir(), 'gv-skills-modal-empty-'));
+    const root = makeProjectTempDir('gv-skills-modal-empty');
     try {
       const text = tabText(open(createSkillsModalSurface({ shellPaths: { workingDirectory: root, homeDirectory: root } })), 'skills');
       expect(text).toContain('No skills discovered.');
@@ -28,7 +28,7 @@ describe('skills modal surface', () => {
   });
 
   test('project-local skill is discovered, parsed, and folds deps/includes into the row', () => {
-    const root = mkdtempSync(join(tmpdir(), 'gv-skills-modal-project-'));
+    const root = makeProjectTempDir('gv-skills-modal-project');
     const { cwd, homeDir, cleanup } = seedSkill(root);
     try {
       const view = open(createSkillsModalSurface({ shellPaths: { workingDirectory: cwd, homeDirectory: homeDir } }));
@@ -43,7 +43,7 @@ describe('skills modal surface', () => {
   });
 
   test('global skill is tagged with global origin, distinct from project-local', () => {
-    const root = mkdtempSync(join(tmpdir(), 'gv-skills-modal-global-'));
+    const root = makeProjectTempDir('gv-skills-modal-global');
     const { cwd, homeDir, cleanup } = seedSkill(root, { global: true });
     try {
       expect(tabText(open(createSkillsModalSurface({ shellPaths: { workingDirectory: cwd, homeDirectory: homeDir } })), 'skills')).toContain('skills 1  project 0  global 1');

@@ -34,8 +34,7 @@
 // ---------------------------------------------------------------------------
 
 import { describe, test, expect } from 'bun:test';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { buildShellFooter } from '../../renderer/shell-surface.ts';
 import { UIFactory } from '../../renderer/ui-factory.ts';
@@ -87,6 +86,7 @@ import { resolveApprovalRequester } from '../../permissions/hunk-selection.ts';
 import { ModalFactory } from '../../renderer/modal-factory.ts';
 import type { Cell, Line } from '../../types/grid.ts';
 import { makeTestSurface } from '../helpers/session-surface.ts';
+import { makeProjectTempDir } from '../helpers/project-temp.ts';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -1109,7 +1109,7 @@ describeOverlayGolden('shortcuts-overlay', renderShortcutsSurface);
 function renderSettingsSurface(width: number, height: number): Line[] {
   const originalCwd = process.cwd();
   const originalHome = process.env.HOME;
-  const tmpDir = mkdtempSync(join(tmpdir(), 'gv-golden-settings-'));
+  const tmpDir = makeProjectTempDir('gv-golden-settings');
   try {
     process.env.HOME = tmpDir;
     process.chdir(tmpDir);
@@ -1148,7 +1148,7 @@ describeOverlayGolden('settings-modal', renderSettingsSurface);
 // Date accessors).
 function renderSessionPickerSurface(width: number, height: number): Line[] {
   return withUtcTz(() => {
-    const rootDir = mkdtempSync(join(tmpdir(), 'gv-golden-session-picker-'));
+    const rootDir = makeProjectTempDir('gv-golden-session-picker');
     try {
       const sessionManager = new SessionManager(rootDir, { surface: makeTestSurface(rootDir) });
       const modal = new SessionPickerModal(sessionManager);
@@ -1169,7 +1169,7 @@ describeOverlayGolden('session-picker-modal', renderSessionPickerSurface);
 
 function renderProfilePickerSurface(width: number, height: number): Line[] {
   return withUtcTz(() => {
-    const rootDir = mkdtempSync(join(tmpdir(), 'gv-golden-profile-picker-'));
+    const rootDir = makeProjectTempDir('gv-golden-profile-picker');
     try {
       const profileManager = new ProfileManager(rootDir);
       const modal = new ProfilePickerModal(profileManager);

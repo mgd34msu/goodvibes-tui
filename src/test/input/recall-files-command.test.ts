@@ -1,6 +1,5 @@
 import { beforeEach, describe, expect, test } from 'bun:test';
-import { existsSync, mkdtempSync, readFileSync, readdirSync, writeFileSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { existsSync, readFileSync, readdirSync, writeFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import type { CommandContext } from '../../input/command-registry.ts';
 import { recallCommand } from '../../input/commands/memory.ts';
@@ -9,6 +8,7 @@ import type { MemoryAddOptions } from '@pellux/goodvibes-sdk/platform/state';
 import { createMemoryApi } from '@pellux/goodvibes-sdk/platform/knowledge';
 import { MemorySpineClient, createLocalMemoryAccess, type LocalMemoryStore } from '@pellux/goodvibes-sdk/platform/runtime/memory-spine';
 import { ForensicsRegistry, createShellPathService } from '@/runtime/index.ts';
+import { makeProjectTempDir } from '../helpers/project-temp.ts';
 
 // ── A minimal in-memory MemoryRegistry fake, same shape as recall-command.test.ts ──
 
@@ -136,7 +136,7 @@ describe('/recall files (memory file projection surface)', () => {
 
   beforeEach(async () => {
     printed = [];
-    root = mkdtempSync(join(tmpdir(), 'gv-recall-files-'));
+    root = makeProjectTempDir('gv-recall-files');
     registry = makeRegistry();
     dir = join(root, 'projection');
     await registry.add({ cls: 'decision', summary: 'Ship dark flags before the review pass.', scope: 'project', tags: ['flags'] });

@@ -1,10 +1,10 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
-import { tmpdir } from 'node:os';
 import { OpenAICodexProvider } from '@pellux/goodvibes-sdk/platform/providers';
 import { OpenAIProvider } from '@pellux/goodvibes-sdk/platform/providers';
 import { createTestManagers } from '../helpers/test-managers.ts';
+import { makeProjectTempDir } from '../helpers/project-temp.ts';
 
 const testManagers = createTestManagers();
 
@@ -20,7 +20,7 @@ describe('OpenAI subscription-backed Codex path', () => {
   let root: string;
 
   beforeEach(() => {
-    root = mkdtempSync(join(tmpdir(), 'gv-openai-codex-'));
+    root = makeProjectTempDir('gv-openai-codex');
     process.env.HOME = root;
     process.chdir(root);
     mkdirSync(join(root, '.goodvibes', 'tui'), { recursive: true });

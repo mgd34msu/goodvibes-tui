@@ -1,15 +1,14 @@
 import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { rmSync } from 'node:fs';
 import { ProfileManager } from '@pellux/goodvibes-sdk/platform/profiles';
+import { makeProjectTempDir } from '../helpers/project-temp.ts';
 
 describe('ProfileManager', () => {
   let dir: string;
   let pm: ProfileManager;
 
   beforeEach(() => {
-    dir = mkdtempSync(join(tmpdir(), 'gv-pm-test-'));
+    dir = makeProjectTempDir('gv-pm-test');
     pm = new ProfileManager(dir);
   });
 

@@ -1,14 +1,14 @@
 import { afterEach, beforeEach, describe, test, expect } from 'bun:test';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { rmSync } from 'node:fs';
 import { join } from 'node:path';
-import { tmpdir } from 'node:os';
 import { ChannelPolicyManager } from '@pellux/goodvibes-sdk/platform/channels';
+import { makeProjectTempDir } from '../helpers/project-temp.ts';
 
 describe('ChannelPolicyManager', () => {
   let root = '';
 
   beforeEach(() => {
-    root = mkdtempSync(join(tmpdir(), 'goodvibes-channel-policy-'));
+    root = makeProjectTempDir('goodvibes-channel-policy');
   });
 
   afterEach(() => {

@@ -1,7 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { rmSync } from 'node:fs';
 import { GatewayMethodCatalog } from '@pellux/goodvibes-sdk/platform/control-plane';
 import type { GatewayMethodInvocation } from '@pellux/goodvibes-sdk/platform/control-plane';
 import type { HandlerContext } from '../../../daemon/handlers/context.ts';
@@ -11,6 +9,7 @@ import {
   DraftSyncStore,
   registerDraftMethods,
 } from '../../../daemon/handlers/drafts/index.ts';
+import { makeProjectTempDir } from '../../helpers/project-temp.ts';
 
 const LIST = 'channels.drafts.list';
 const GET = 'channels.drafts.get';
@@ -81,7 +80,7 @@ describe('registerDraftMethods', () => {
   let unregister: Unregister;
 
   beforeEach(async () => {
-    dir = mkdtempSync(join(tmpdir(), 'gv-drafts-reg-'));
+    dir = makeProjectTempDir('gv-drafts-reg');
     catalog = new GatewayMethodCatalog();
     let n = 0;
     let clock = 1_000;

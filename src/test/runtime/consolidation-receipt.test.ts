@@ -1,11 +1,11 @@
 import { describe, expect, test } from 'bun:test';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { FeatureAnnouncementStore } from '@pellux/goodvibes-sdk/platform/runtime/feature-announcements';
 import type { MemoryConsolidationRunReceipt } from '@pellux/goodvibes-sdk/platform/state';
 import { formatConsolidationReceipt } from '../../core/consolidation-receipt.ts';
 import { consumeDaemonAttachNotices } from '../../runtime/daemon-attach-notices.ts';
+import { makeProjectTempDir } from '../helpers/project-temp.ts';
 
 // ---------------------------------------------------------------------------
 // STEP 7 — memory-consolidation receipts arriving through the attach-time queue
@@ -56,7 +56,7 @@ describe('formatConsolidationReceipt (STEP 7)', () => {
 
 describe('consolidation receipt through the attach-time queue (STEP 7)', () => {
   test('a seeded consolidation receipt renders as a one-line attach notice, once', () => {
-    const dir = mkdtempSync(join(tmpdir(), 'gv-consolidation-'));
+    const dir = makeProjectTempDir('gv-consolidation');
     try {
       const storePath = join(dir, 'announcements.json');
       // The scheduler's onReceipt records the formatted line into the file-backed

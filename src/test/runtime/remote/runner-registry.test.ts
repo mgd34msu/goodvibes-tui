@@ -1,6 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { mkdtempSync, existsSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { createRuntimeStore } from '../../../runtime/store/index.ts';
 import { getTestAgentManager, resetTestRuntimeServices, disposeTestRuntimeServicesAfterAll } from '../../helpers/runtime-services.ts';
@@ -9,6 +8,7 @@ import {
   exportRemoteArtifactForAgent,
   importRemoteArtifact,
 } from '@/runtime/index.ts';
+import { makeProjectTempDir } from '../../helpers/project-temp.ts';
 
 // Stop the shared test runtime graph when this file ends. Called here, not
 // registered inside the helper, for the reason its doc comment gives.
@@ -78,7 +78,7 @@ describe('RemoteRunnerRegistry', () => {
 
     const store = createRuntimeStore();
     const registry = new RemoteRunnerRegistry(manager);
-    const dir = mkdtempSync(join(tmpdir(), 'gv-remote-artifacts-'));
+    const dir = makeProjectTempDir('gv-remote-artifacts');
     const exportPath = join(dir, 'artifact.json');
 
     const exported = await exportRemoteArtifactForAgent(registry, agent.id, store, exportPath);

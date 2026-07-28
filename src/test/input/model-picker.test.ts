@@ -2,8 +2,7 @@
  * Tests for ModelPickerModal state class.
  */
 import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { ModelPickerModal, detectFamily, tierToCategoryFilter, POPULAR_PROVIDERS } from '../../input/model-picker.ts';
 import type { CategoryFilter, PickerMode } from '../../input/model-picker.ts';
@@ -17,6 +16,7 @@ import { CacheHitTracker } from '@pellux/goodvibes-sdk/platform/providers';
 import { ProviderCapabilityRegistry } from '@pellux/goodvibes-sdk/platform/providers';
 import { FavoritesStore } from '@pellux/goodvibes-sdk/platform/providers';
 import { BenchmarkStore, type BenchmarkEntry } from '@pellux/goodvibes-sdk/platform/providers';
+import { makeProjectTempDir } from '../helpers/project-temp.ts';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -80,7 +80,7 @@ function writeBenchmarksCache(entries: BenchmarkEntry[], benchmarkStore: Benchma
 }
 
 function createPickerHarness(): PickerHarness {
-  const rootDir = mkdtempSync(join(tmpdir(), 'gv-model-picker-'));
+  const rootDir = makeProjectTempDir('gv-model-picker');
   const configDir = join(rootDir, 'config');
   const dataDir = join(rootDir, 'provider-data');
   const subscriptionsPath = join(rootDir, 'subscriptions.json');

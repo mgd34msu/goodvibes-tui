@@ -3,14 +3,13 @@
  * cursor advancement, and feed queries.
  */
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { mkdtemp, rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { rm } from 'node:fs/promises';
 import {
   InboxCursorStore,
   type InboxSweepSummary,
 } from '../../../daemon/handlers/inbox/cursor-store.ts';
 import type { InboundChannelItem } from '../../../daemon/handlers/inbox/provider-adapter.ts';
+import { makeProjectTempDir } from '../../helpers/project-temp.ts';
 
 function item(over: Partial<InboundChannelItem> & { id: string }): InboundChannelItem {
   return {
@@ -29,7 +28,7 @@ let dir: string;
 let store: InboxCursorStore;
 
 beforeEach(async () => {
-  dir = await mkdtemp(join(tmpdir(), 'inbox-cursor-'));
+  dir = await makeProjectTempDir('inbox-cursor');
   store = new InboxCursorStore(dir);
   await store.init();
 });
