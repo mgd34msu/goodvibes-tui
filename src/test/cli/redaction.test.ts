@@ -223,3 +223,54 @@ describe('redactText', () => {
     expect(redactText('bot xoxb-1234567890-abcdefghij here')).not.toContain('xoxb-1234567890-abcdefghij');
   });
 });
+
+describe('a support bundle never carries card material', () => {
+  /**
+   * The defect this pins, in its exact original form: the redactor keyed on a
+   * naming habit — a trailing `password`/`token`/`secret` — and `cardNumber`,
+   * `cardExpiry` and `cardholderName` end in none of them. Four card fields
+   * matched nothing and would have gone into a support bundle in the clear.
+   *
+   * The cure is that they are DECLARED, not that a second regex was bolted on
+   * beside the first. These tests assert the outcome, so a merge that takes one
+   * product's list wholesale in place of another's fails here rather than
+   * silently dropping whatever the winner omits.
+   */
+  const CARD_CONFIG = {
+    payments: {
+      cardNumber: '4111111111111111',
+      cardExpiry: '12/29',
+      cardCvv: '123',
+      cardholderName: 'M Davis',
+      currency: 'USD',
+    },
+  };
+
+  test('every card field is redacted out of a bundled config', () => {
+    const { value } = redactConfig(CARD_CONFIG);
+    const payments = value.payments;
+    expect(payments.cardNumber).toBe(REDACTED_VALUE);
+    expect(payments.cardExpiry).toBe(REDACTED_VALUE);
+    expect(payments.cardCvv).toBe(REDACTED_VALUE);
+    expect(payments.cardholderName).toBe(REDACTED_VALUE);
+  });
+
+  test('the card number never survives anywhere in the serialised bundle', () => {
+    const { value } = redactConfig(CARD_CONFIG);
+    expect(JSON.stringify(value)).not.toContain('4111111111111111');
+    expect(JSON.stringify(value)).not.toContain('M Davis');
+  });
+
+  test('an ordinary payments setting is left alone, so this is not blanket masking', () => {
+    const { value } = redactConfig(CARD_CONFIG);
+    expect(value.payments.currency).toBe('USD');
+  });
+
+  test('each card field is recognised individually', () => {
+    for (const path of ['payments.cardNumber', 'payments.cardExpiry', 'payments.cardCvv', 'payments.cardholderName']) {
+      expect(isSensitiveConfigPath(path)).toBe(true);
+      // ...and case-insensitively, because the lookup lowercases.
+      expect(isSensitiveConfigPath(path.toUpperCase())).toBe(true);
+    }
+  });
+});

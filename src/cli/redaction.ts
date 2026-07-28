@@ -36,6 +36,19 @@ const SENSITIVE_CONFIG_KEYS: ReadonlySet<string> = new Set([
   'cloudflare.accessServiceTokenRef',
   'cloudflare.workerTokenRef',
   'cloudflare.workerClientTokenRef',
+  // Cluster shared phrase.
+  'cluster.secret',
+  // Payment card material. ADDED to this set, never substituted for it: this
+  // set is a hardcoded list with no delegation, so replacing it wholesale with
+  // another product's would silently stop redacting whatever that one omits.
+  // The four names below end in no word the suffix pattern knows —
+  // "cardNumber", "cardExpiry" and "cardholderName" match none of them — which
+  // is the whole reason a declared list exists rather than a naming habit.
+  // (The `.map` below lowercases every entry; the lookup lowercases too.)
+  'payments.cardNumber',
+  'payments.cardExpiry',
+  'payments.cardCvv',
+  'payments.cardholderName',
 ].map((key) => key.toLowerCase()));
 
 const SECRET_LIKE_TEXT_PATTERNS: readonly RegExp[] = [
