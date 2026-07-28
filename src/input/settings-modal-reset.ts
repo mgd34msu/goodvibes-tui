@@ -15,7 +15,7 @@
 
 import type { ConfigKey } from '@pellux/goodvibes-sdk/platform/config';
 import { logger, summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
-import { buildGoodVibesSecretKey, isSecretConfigKey } from '../config/secret-config.ts';
+import { buildGoodVibesSecretKey, defaultSecretBackedScope, isSecretConfigKey } from '../config/secret-config.ts';
 import type { SettingEntry, SettingsCategory } from './settings-modal-types.ts';
 import type { SettingsSecretsManager } from './settings-modal-secrets.ts';
 
@@ -41,7 +41,11 @@ export function resetSelected({
   const key = selected.setting.key as ConfigKey;
   setValue(key, selected.setting.default);
   if (isSecretConfigKey(key) && secretsManager) {
-    void secretsManager.delete(buildGoodVibesSecretKey(key), { scope: 'user' }).catch((error) => {
+    // Delete from the tier the write went to. A daemon-owned key was stored in
+    // the daemon tier (defaultSecretBackedScope), so a delete narrowed to 'user'
+    // would report a cleared setting while the daemon kept using the live
+    // credential — the reset that isn't one.
+    void secretsManager.delete(buildGoodVibesSecretKey(key), { scope: defaultSecretBackedScope(key) }).catch((error) => {
       logger.error('SettingsModal: failed to clear secret while resetting setting', { key, error: summarizeError(error) });
     });
   }
