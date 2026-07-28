@@ -17,7 +17,11 @@
 import { describe, expect, test } from 'bun:test';
 
 import { trackDisposables } from './disposables.ts';
-import { getTestRuntimeServices, resetTestRuntimeServices } from './runtime-services.ts';
+import { getTestRuntimeServices, resetTestRuntimeServices, disposeTestRuntimeServicesAfterAll } from './runtime-services.ts';
+
+// Stop the shared test runtime graph when this file ends. Called here, not
+// registered inside the helper, for the reason its doc comment gives.
+disposeTestRuntimeServicesAfterAll();
 
 const disposables = trackDisposables();
 

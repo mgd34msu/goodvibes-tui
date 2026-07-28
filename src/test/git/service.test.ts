@@ -1,4 +1,4 @@
-import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
+import { describe, test, expect, beforeEach, afterEach, afterAll } from 'bun:test';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'fs';
 import { execSync } from 'child_process';
 import { join, resolve } from 'path';
@@ -39,19 +39,27 @@ function makeTempPath(prefix: string): string {
 // repo" behavior. .test-tmp lives inside this project's own working tree,
 // which would make it a false negative for that check. Existing call sites
 // already rmSync these in an afterEach/finally, but a process kill would
-// skip that, so register a best-effort exit-hook cleanup too (mirrors
-// makeProjectTempDir's own safety net for the same failure mode).
+// skip that — this is the one directory in this file that lands in the
+// REAL OS temp dir, so its cleanup matters most.
+//
+// Cleanup is a top-level `afterAll` (bun:test), not `process.on('exit')`:
+// confirmed empirically that Bun's test runner never fires
+// `process.on('exit')` handlers under `bun test` (a marker-file exit
+// handler in a .test.ts file never wrote its marker, while the identical
+// handler in a plain `bun run script.ts` did) — so a process.on('exit')
+// hook here would be dead code on every run, not just a killed one.
+// `afterAll` must be registered at true module top level (here, not lazily
+// from inside makeExternalDir) for the same reason: bun:test only reliably
+// attaches lifecycle hooks registered during the collection phase, not ones
+// registered from inside an already-running test.
 const _externalDirs = new Set<string>();
-let _externalDirCleanupRegistered = false;
-function makeExternalDir(prefix: string): string {
-  if (!_externalDirCleanupRegistered) {
-    _externalDirCleanupRegistered = true;
-    process.on('exit', () => {
-      for (const dir of _externalDirs) {
-        try { rmSync(dir, { recursive: true, force: true }); } catch { /* best effort */ }
-      }
-    });
+afterAll(() => {
+  for (const dir of _externalDirs) {
+    try { rmSync(dir, { recursive: true, force: true }); } catch { /* best effort */ }
   }
+  _externalDirs.clear();
+});
+function makeExternalDir(prefix: string): string {
   const dir = mkdtempSync(join(resolve(process.cwd(), '..'), `${prefix}-`));
   _externalDirs.add(dir);
   return dir;
