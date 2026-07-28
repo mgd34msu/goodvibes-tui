@@ -3,7 +3,12 @@ import { InputHandler } from '../../input/handler.ts';
 import { SelectionManager } from '../../input/selection.ts';
 import { InfiniteBuffer } from '../../core/history.ts';
 import { createDefaultUiRuntimeServices } from '../helpers/ui-services.ts';
+import { disposeTestRuntimeServicesAfterAll } from '../helpers/runtime-services.ts';
 import { registerPaste } from '../../input/handler-content-actions.ts';
+
+// Stop the shared test runtime graph when this file ends. Called here, not
+// registered inside the helper, for the reason its doc comment gives.
+disposeTestRuntimeServicesAfterAll();
 
 function makeInput(contentWidth = 40): InputHandler {
   const sel = new SelectionManager();

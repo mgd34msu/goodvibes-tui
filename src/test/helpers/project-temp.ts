@@ -1,13 +1,71 @@
 import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
+import { afterAll } from 'bun:test';
 
 export const PROJECT_TEST_TMP_ROOT = join(process.cwd(), '.test-tmp');
 
 // Set of dirs created by this module in the current process.
-// The exit hook walks this set and removes each one.
+// The cleanup hooks below walk this set and remove each one.
 const _registeredDirs = new Set<string>();
-let _exitHookRegistered = false;
 let _gitCeilingSet = false;
+
+function _cleanupRegisteredDirs(): void {
+  for (const dir of _registeredDirs) {
+    try {
+      rmSync(dir, { recursive: true, force: true });
+    } catch {
+      // ignore cleanup failures
+    }
+  }
+  _registeredDirs.clear();
+}
+
+// Registered at true module top level (evaluated once, the moment this
+// module is first imported) — NOT lazily from inside makeProjectTempDir.
+//
+// Primary mechanism is `afterAll` (bun:test), not `process.on('exit', ...)`:
+// confirmed empirically that Bun's test runner never fires
+// `process.on('exit')` handlers under `bun test` (a marker-file exit
+// handler in a `.test.ts` file never wrote its marker; the identical
+// handler in a plain `bun run script.ts` did). That is why `.test-tmp`
+// accumulated real, non-zero residue even on fully green, unkilled suite
+// runs — not just killed ones. `afterAll`, by contrast, is reliably driven
+// by the test runner — but only when registered during the collection
+// phase; calling it lazily from inside an already-running test/beforeEach
+// body (the previous exit-hook's pattern) does not reliably attach it,
+// which is why this call sits at the top of the file instead of behind a
+// lazy first-call guard.
+//
+// `afterAll()` throws ("Cannot use afterAll() outside of the test runner")
+// when this module is imported from a plain script rather than an actual
+// `bun test` run — a real, already-tested use case (see
+// project-temp.test.ts's "exit-hook registration" test, which spawns a
+// bare `bun --eval` script that imports this module directly). The
+// try/catch below detects that and falls back to `process.on('exit')`,
+// which fires correctly in that non-test context — confirmed empirically
+// both ways.
+//
+// Known scope limit even in the `afterAll` branch: this module is cached
+// (standard ESM import semantics), so its top-level code runs once per
+// process. Under `bun run test` (scripts/run-tests.ts spawns one bun
+// process PER test file) that means a fresh module instance — and a
+// correctly-scoped `afterAll` — every time, so every file gets real
+// cleanup. Under a whole-suite single-process invocation
+// (`bun test --coverage src`, what `bun run test:coverage` /
+// scripts/coverage-gate.ts spawns), only whichever file happens to trigger
+// this module's first evaluation gets a working hook; every other file's
+// directories are left for the age-gated `.test-tmp` sweep. Fixing that
+// completely would mean not relying on a shared module's own top-level
+// afterAll at all (registering one per consuming file instead) — out of
+// scope here since `.test-tmp` lives on this project's own filesystem, not
+// the OS temp dir that actually exhausted a host's tmpfs inodes.
+try {
+  afterAll(() => {
+    _cleanupRegisteredDirs();
+  });
+} catch {
+  process.on('exit', _cleanupRegisteredDirs);
+}
 
 /**
  * Fence git's upward repo discovery at `.test-tmp`, once per process.
@@ -62,29 +120,16 @@ function ensureProjectTestTmpRoot(): string {
   return PROJECT_TEST_TMP_ROOT;
 }
 
-function ensureExitHook(): void {
-  if (_exitHookRegistered) return;
-  _exitHookRegistered = true;
-  process.on('exit', () => {
-    for (const dir of _registeredDirs) {
-      try {
-        rmSync(dir, { recursive: true, force: true });
-      } catch {
-        // ignore cleanup failures
-      }
-    }
-  });
-}
-
 /**
  * Create a temporary directory under `.test-tmp/<prefix>-<random>`.
  *
- * The directory is automatically removed when the current process exits
- * (via a registered `process.on('exit')` hook). Callers do NOT need to
- * wire a manual cleanup, though doing so is harmless.
+ * The directory is automatically removed once the current test file's
+ * suite finishes (via the module-top-level `afterAll` above). Callers do
+ * NOT need to wire a manual cleanup, though doing so is harmless and, for
+ * a whole-suite single-process invocation (see the afterAll comment's
+ * "known scope limit"), still worth keeping as a per-file belt-and-braces.
  */
 export function makeProjectTempDir(prefix: string): string {
-  ensureExitHook();
   const dir = mkdtempSync(join(ensureProjectTestTmpRoot(), `${prefix}-`));
   _registeredDirs.add(dir);
   return dir;
