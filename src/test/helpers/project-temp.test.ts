@@ -1,13 +1,17 @@
 /**
- * Tests for makeProjectTempDir helper — verifies temp dir is created and
- * a process-exit cleanup is registered.
+ * Tests for the makeProjectTempDir helper — the directory it creates, where it
+ * puts it, and that the directory is handed to the shared cleanup registry.
+ *
+ * That the registry is actually drained when a `bun test` process ends is
+ * measured separately, by counting directories after a real child process
+ * finishes, in helpers/temp-cleanup.test.ts.
  */
 import { describe, test, expect, beforeEach, afterAll } from 'bun:test';
 import { existsSync, mkdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 
-// Use the actual module so we exercise the real exit-hook registration path.
 import { makeProjectTempDir, PROJECT_TEST_TMP_ROOT } from './project-temp.ts';
+import { registeredTempDirs } from './temp-registry.ts';
 
 describe('makeProjectTempDir', () => {
   // Track dirs created within this test suite so we can clean up regardless.
@@ -44,29 +48,23 @@ describe('makeProjectTempDir', () => {
     expect(existsSync(b)).toBe(true);
   });
 
-  test('exit-hook registration: dirs created in same process are cleaned up on exit', () => {
-    // Spawn a child process that creates a temp dir via makeProjectTempDir and
-    // exits normally. After it exits, the temp dir should not exist because
-    // the exit hook removes it.
-    const script = /* ts */ `
-import { makeProjectTempDir } from '${join(import.meta.dir, 'project-temp.ts')}';
-const dir = makeProjectTempDir('gv-exitclean');
-// Write the path to stdout so the parent can check it after exit.
-process.stdout.write(dir);
-// Normal exit — triggers the registered 'exit' hook.
-`;
-    const result = Bun.spawnSync(['bun', '--eval', script], {
-      cwd: process.cwd(),
-      stdio: ['inherit', 'pipe', 'inherit'],
-    });
-    const createdPath = result.stdout.toString().trim();
-    expect(createdPath.length).toBeGreaterThan(0);
-    // After the child process exited normally the hook should have removed it.
-    expect(existsSync(createdPath)).toBe(false);
+  test('a directory is registered for cleanup as soon as it is created', () => {
+    const dir = makeProjectTempDir('gv-registered');
+    created.push(dir);
+    expect(registeredTempDirs()).toContain(dir);
   });
 
-  // Best-effort cleanup of any dirs that survived.
-  // (The exit hook handles cleanup in production; this is belt-and-suspenders for the test runner.)
+  // NOTE ON WHAT USED TO BE HERE. This slot held a test called "exit-hook
+  // registration: dirs created in same process are cleaned up on exit". It
+  // spawned `bun --eval`, which is `bun run` semantics — a runtime where
+  // `process.on('exit')` DOES fire. `bun test`, the runtime the whole suite
+  // actually uses, never fires exit handlers, so the test reported green while
+  // the cleanup it described removed nothing on any real run. Cleanup under
+  // `bun test` is now measured end to end by counting directories after a real
+  // `bun test` child process finishes, in helpers/temp-cleanup.test.ts.
+
+  // Belt and braces. The preload's afterAll removes these anyway; removing them
+  // here too keeps the directories from sitting around for the rest of the file.
   afterAll(() => {
     for (const d of created) {
       try { rmSync(d, { recursive: true, force: true }); } catch { /* ignore */ }

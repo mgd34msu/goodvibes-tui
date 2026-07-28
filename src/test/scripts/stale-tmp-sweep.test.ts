@@ -5,10 +5,11 @@ import { tmpdir } from 'node:os';
 import { sweepStaleTestTmp, DEFAULT_STALE_MS } from '../../../scripts/stale-tmp-sweep.ts';
 
 // Exercises the .test-tmp stale sweep (scripts/stale-tmp-sweep.ts). This is the
-// backstop that closes the /tmp inode leak: makeProjectTempDir leftovers
-// (<prefix>-<random>) whose owning test process was signal-killed — so its
-// process.on('exit') cleanup never fired — and orphaned run-<pid> subtrees are
-// both age-swept here. The age gate is what keeps it concurrency-safe.
+// BACKSTOP, not the primary cleanup: makeProjectTempDir leftovers
+// (<prefix>-<random>) are removed when the owning test process finishes, by the
+// afterAll in src/test/preload/temp-cleanup.ts. What reaches this sweep is what
+// a signal-killed process (SIGKILL, OOM) never got to clean, plus orphaned
+// run-<pid> subtrees. The age gate is what keeps it concurrency-safe.
 
 describe('sweepStaleTestTmp', () => {
   let root: string;

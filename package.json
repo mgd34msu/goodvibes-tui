@@ -43,6 +43,7 @@
     "build:all-shell": "bun run build:linux-x64 && bun run build:linux-arm64 && bun run build:macos-x64 && bun run build:macos-arm64 && bun run build:windows",
     "typecheck": "bunx tsc --noEmit",
     "typecheck:test": "bunx tsc --noEmit -p tsconfig.test.json",
+    "typecheck:coverage": "bun run scripts/typecheck-coverage-rule.ts",
     "test": "bun run scripts/run-tests.ts",
     "test:coverage": "bun run scripts/coverage-gate.ts",
     "version": "bun run scripts/prebuild.ts",
