@@ -41,12 +41,14 @@ export function getProviderCachePaths(cacheDir: string): ProviderCachePaths {
 export function writeModelCatalogCache(models: CatalogModel[], cacheDir: string, fetchedAt = Date.now(), ttlMs = 86_400_000): void {
   const { catalogPath } = getProviderCachePaths(cacheDir);
   mkdirSync(cacheDir, { recursive: true });
-  // Envelope version 3 = the sdk's current CATALOG_CACHE_VERSION. Version 3
-  // added `reasoningOptions` (the models.dev `reasoning_options` array that
-  // decides which reasoning levels each model really accepts); a version-2
-  // envelope predates the field and is discarded as stale, which reads here as
-  // an empty catalog rather than as a parse error.
-  const payload = { version: 3 as const, fetchedAt, ttlMs, models };
+  // Envelope version 4 = the sdk's current CATALOG_CACHE_VERSION. Version 4
+  // added `inputModalities` (the models.dev `modalities.input` list, which
+  // decides `multimodal` per model rather than by vendor); version 3 before it
+  // added `reasoningOptions`. An older envelope is discarded as stale, which
+  // reads here as an empty catalog rather than as a parse error — which is
+  // exactly how a stale version number in this helper shows up: every
+  // catalog-backed assertion in the suite silently sees zero models.
+  const payload = { version: 4 as const, fetchedAt, ttlMs, models };
   writeFileSync(catalogPath, JSON.stringify(payload, null, 2), 'utf-8');
 }
 

@@ -859,13 +859,27 @@ describe('AgentOrchestrator', () => {
       expect(result).toContain('\u2026');
     });
 
-    test('falls back to first string value when no priority key matches', () => {
-      const result = summarizeToolArgs({ unknownKey: 'some-value' });
-      expect(result).toBe(' — some-value');
+    test('says nothing when no argument names what the tool is doing', () => {
+      // The old "otherwise use the first string value found" fallback is gone.
+      // It is what produced `exec — standard`: the flat scan missed the nested
+      // `cmd` and grabbed `verbosity`, whose default is the literal string
+      // "standard", so the label named a tool and then a value with nothing to
+      // do with what it was about to run. A bare tool name is the honest answer.
+      expect(summarizeToolArgs({ unknownKey: 'some-value' })).toBe('');
+      expect(summarizeToolArgs({ verbosity: 'standard' })).toBe('');
+    });
+
+    test('reads an informative argument one level down', () => {
+      // `exec` takes `commands: [{ cmd }]` and `fetch` takes `urls: [{ url }]`,
+      // so the thing worth showing is inside the array, not at the top level.
+      expect(summarizeToolArgs({ commands: [{ cmd: 'npm run build' }], verbosity: 'standard' }))
+        .toBe(' — npm run build');
+      expect(summarizeToolArgs({ urls: [{ url: 'https://example.com' }] }))
+        .toBe(' — https://example.com');
     });
 
     test('ignores non-string values', () => {
-      const result = summarizeToolArgs({ count: 5, flag: true, name: 'ok' });
+      const result = summarizeToolArgs({ count: 5, flag: true, path: 'ok' });
       expect(result).toBe(' — ok');
     });
 

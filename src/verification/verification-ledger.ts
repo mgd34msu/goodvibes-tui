@@ -70,10 +70,12 @@ const SETTINGS_BEHAVIOR_BASELINE = 184;
  * overlaps neither other counted set, so nothing is double-counted and nothing
  * drifts in uncounted.
  *
- * PER-KEY EVIDENCE. All 25 are read by a LIVE consumer, which is why they were
+ * PER-KEY EVIDENCE. All 42 are read by a LIVE consumer, which is why they were
  * declared at all: the SDK's mail and calendar gateway compositions
  * (platform/email/surface-config.ts and platform/calendar/caldav-gateway-config.ts)
- * resolve every one of them when the daemon serves `email.*` and `calendar.*`.
+ * resolve every one of them when the daemon serves `email.*` and `calendar.*`,
+ * and the `surfaces.email.inbound.*` block is read by the daemon's inbound mail
+ * reader — the poller/IDLE path that makes incoming mail visible at all.
  * The five password keys (email.password, email.imapPassword,
  * email.imap.password, email.smtp.password, calendar.caldavPassword)
  * additionally resolve through the daemon secret tier rather than from config,
@@ -104,6 +106,31 @@ export const DAEMON_MAILBOX_LOCAL_SETTINGS = [
   'surfaces.email.smtp.port',
   'surfaces.email.smtp.password',
   'surfaces.email.smtp.secure',
+  // Inbound mail — the poller/IDLE reader the daemon runs to actually READ mail,
+  // which arrived with the platform runtime. These are counted for exactly the
+  // reason the keys above are: the same four-part persistence contract runs over
+  // every one of them in
+  // src/test/verification/daemon-mailbox-settings-persistence.test.ts, and the
+  // list is asserted there to be the complete surfaces.email.*/surfaces.calendar.*
+  // schema set. Arriving uncounted is what dropped localBehaviorPercent through
+  // its floor when the schema grew.
+  'surfaces.email.inbound.enabled',
+  'surfaces.email.inbound.accounts',
+  'surfaces.email.inbound.source',
+  'surfaces.email.inbound.gmailPollSecondsExpecting',
+  'surfaces.email.inbound.gmailPollSecondsIdle',
+  'surfaces.email.inbound.mode',
+  'surfaces.email.inbound.pollIntervalSeconds',
+  'surfaces.email.inbound.idleReissueMinutes',
+  'surfaces.email.inbound.reconnect.maxBackoffSeconds',
+  'surfaces.email.inbound.notice.route',
+  'surfaces.email.inbound.notice.mode',
+  'surfaces.email.inbound.expectationWindowMinutes',
+  'surfaces.email.inbound.dedupTtlMinutes',
+  'surfaces.email.inbound.retentionDays',
+  'surfaces.email.inbound.maxRecords',
+  'surfaces.email.inbound.capabilityRecheckMinutes',
+  'surfaces.email.inbound.onInsufficientCapability',
   'surfaces.calendar.caldavUrl',
   'surfaces.calendar.caldavUser',
   'surfaces.calendar.caldavPassword',
@@ -365,6 +392,10 @@ export const PAYMENTS_LOCAL_SETTINGS = [
   'payments.shippingAddress.country',
   'payments.windows.vetoMinutes',
   'payments.windows.approvalMinutes',
+  'payments.majorRetailersAdditional',
+  'payments.majorRetailersExcluded',
+  'payments.ebayMinSellerFeedbackCount',
+  'payments.ebayMinSellerPositivePercent',
   'payments.notifyChannels',
 ] as const;
 

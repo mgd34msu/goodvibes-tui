@@ -6,7 +6,7 @@
 
 # Command Reference
 
-GoodVibes ships **154** built-in slash commands across **74** categories. Every command below is generated directly from the command registry, so this list is always complete and current. Type a command in the composer prefixed with `/`, or press `Ctrl+K` (or run `/palette`) to search them all in the command palette.
+GoodVibes ships **155** built-in slash commands across **75** categories. Every command below is generated directly from the command registry, so this list is always complete and current. Type a command in the composer prefixed with `/`, or press `Ctrl+K` (or run `/palette`) to search them all in the command palette.
 
 ## Categories
 
@@ -50,6 +50,7 @@ GoodVibes ships **154** built-in slash commands across **74** categories. Every 
 - [Onboarding](#onboarding) — 1
 - [Operator](#operator) — 10
 - [Owner Profile](#owner-profile) — 1
+- [Payments](#payments) — 1
 - [Permissions](#permissions) — 1
 - [Planning](#planning) — 2
 - [Platform](#platform) — 1
@@ -364,6 +365,12 @@ GoodVibes ships **154** built-in slash commands across **74** categories. Every 
 | Command | Aliases | Usage | Description |
 | --- | --- | --- | --- |
 | `/profile` | — | `[show\|where <field>\|set <field> <value>\|note [--section <name>] <text>\|forget <field>\|forget --section <name> <text>\|undo <field>\|status]` | What the platform knows about you: read it, correct it, trace where a fact came from, or forget one |
+
+## Payments
+
+| Command | Aliases | Usage | Description |
+| --- | --- | --- | --- |
+| `/payments` | — | `/payments [card]` | Payment card on file for daemon-initiated purchases (card entry is masked input) |
 
 ## Permissions
 

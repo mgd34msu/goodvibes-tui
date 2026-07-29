@@ -73,14 +73,22 @@ describe('ProviderCapabilityRegistry.getCapability — merge order', () => {
   });
 
   test('MODEL_OVERRIDES take precedence over self-declared capabilities', () => {
-    // claude-opus-4-5 has MODEL_OVERRIDES: { reasoningControls: true, maxOutputTokens: 32_000 }
-    // Even if self-declared says false, override wins
+    // What this test is for is PRECEDENCE. It used to pin the override's literal
+    // numbers (maxOutputTokens: 32_000), which made it a second copy of the sdk's
+    // model table and went stale the moment that model's output ceiling was
+    // raised — a red test that said nothing about precedence. So the override's
+    // own answer is read first, and the self-declared call is compared to it.
+    const overridden = registry.getCapability('anthropic', 'claude-opus-4-5');
+    expect(overridden.reasoningControls).toBe(true);
+    expect(overridden.maxOutputTokens).toBeGreaterThan(1);
+
     const selfDeclared = {
-      capabilities: { reasoningControls: false } as Partial<ProviderCapability>,
+      capabilities: { reasoningControls: false, maxOutputTokens: 1 } as Partial<ProviderCapability>,
     };
     const cap = registry.getCapability('anthropic', 'claude-opus-4-5', selfDeclared);
     expect(cap.reasoningControls).toBe(true);
-    expect(cap.maxOutputTokens).toBe(32_000);
+    expect(cap.maxOutputTokens).toBe(overridden.maxOutputTokens);
+    expect(cap.maxOutputTokens).not.toBe(1);
   });
 
   test('result is frozen (immutable)', () => {

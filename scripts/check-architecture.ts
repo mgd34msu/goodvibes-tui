@@ -586,6 +586,24 @@ const rules: readonly Rule[] = [
     // dir-creation shape, not every mention of tmpdir().
     name: 'no-raw-mkdtemp-under-os-tmpdir-in-tests',
     files: testFiles,
+    // The containment mechanism itself, and the file that tests it. Neither can
+    // route through makeProjectTempDir without becoming circular:
+    //  - preload/temp-cleanup.ts creates the ONE per-process directory inside
+    //    the inherited temp root and then repoints TMPDIR/TMP/TEMP at it. That
+    //    creation is what makes every other mkdtemp in the run land somewhere
+    //    contained; rooting it under .test-tmp instead would leave the real temp
+    //    dir unredirected, which is the leak this rule exists to stop.
+    //  - helpers/temp-cleanup.test.ts spawns child `bun test` processes on
+    //    GENERATED fixture files whose source calls mkdtempSync(join(tmpdir(),…))
+    //    on purpose: that call is the behaviour under test — inside the child the
+    //    preload has already repointed tmpdir(), and the assertion is that the
+    //    directories land in the isolated root. The scratch this file creates for
+    //    itself does go through makeProjectTempDir; only the fixture SOURCE
+    //    strings match this pattern.
+    allow: [
+      'src/test/preload/temp-cleanup.ts',
+      'src/test/helpers/temp-cleanup.test.ts',
+    ],
     pattern: /\bmkdtemp(Sync)?\s*\([^)]*\btmpdir\s*\(\s*\)/,
     message: 'do not mkdtemp/mkdtempSync directly under the real OS temp dir (tmpdir()/os.tmpdir()) in a test — use makeProjectTempDir from src/test/helpers/project-temp.ts instead, so a signal-killed process leaks into the swept .test-tmp root, not the real /tmp',
   },

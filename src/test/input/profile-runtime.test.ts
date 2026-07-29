@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test } from 'bun:test';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { rmSync } from 'node:fs';
+import { makeProjectTempDir } from '../helpers/project-temp.ts';
 import { join } from 'node:path';
 import { CONFIG_SCHEMA, ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import { getOperatorContract } from '@pellux/goodvibes-contracts';
@@ -879,7 +879,7 @@ describe('profile.* keys reach the settings workspace', () => {
   });
 
   function makeConfig(): ConfigManager {
-    const dir = mkdtempSync(join(tmpdir(), 'gv-owner-profile-settings-'));
+    const dir = makeProjectTempDir('gv-owner-profile-settings');
     roots.push(dir);
     return new ConfigManager({ workingDir: dir, homeDir: dir, surfaceRoot: 'tui' });
   }

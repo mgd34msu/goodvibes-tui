@@ -15,18 +15,37 @@
  */
 import { afterEach, describe, expect, test } from 'bun:test';
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { createTempDirRegistry, drainTempDirsUntilSettled } from './temp-registry.ts';
+import { makeProjectTempDir } from './project-temp.ts';
 
 /** Repo root — this file is src/test/helpers/, so three levels up. */
 const REPO_ROOT = resolve(import.meta.dir, '..', '..', '..');
+
+/**
+ * One root under <repo>/.test-tmp for every directory this file creates.
+ *
+ * Not `tmpdir()`: this file is the test for the mechanism that stops scratch
+ * from landing in the real OS temp dir, so it is the last file that should put
+ * scratch there itself. The fixture SOURCES below still call `tmpdir()` on
+ * purpose — that is the behaviour under test, and inside the spawned child the
+ * preload has already repointed it at a contained root.
+ *
+ * The registry cases below build their own registries and must not add entries
+ * to the process-wide one; only this single root is registered, so that holds.
+ */
+const FILE_TEMP_ROOT = makeProjectTempDir('gv-temp-cleanup-spec-root');
+
+/** A directory under this file's own root, named like the old tmpdir() calls. */
+function specDir(prefix: string): string {
+  return mkdtempSync(join(FILE_TEMP_ROOT, `${prefix}-`));
+}
 
 /** Scratch space for the fixtures these tests spawn. Removed after each test. */
 let scratch: string | null = null;
 
 function makeScratch(): string {
-  scratch = mkdtempSync(join(tmpdir(), 'gv-temp-cleanup-spec-'));
+  scratch = specDir('gv-temp-cleanup-spec');
   return scratch;
 }
 
@@ -74,7 +93,7 @@ function writeFixture(dir: string, name: string, source: string): string {
 describe('temp-registry', () => {
   test('cleanup removes what was registered and reports it', () => {
     const registry = createTempDirRegistry();
-    const dir = mkdtempSync(join(tmpdir(), 'gv-registry-unit-'));
+    const dir = specDir('gv-registry-unit');
     registry.register(dir);
     expect(registry.entries()).toContain(dir);
     expect(existsSync(dir)).toBe(true);
@@ -91,8 +110,8 @@ describe('temp-registry', () => {
     // temp directory it can see". If this ever came back false the removal in
     // the previous test would prove nothing about registration.
     const registry = createTempDirRegistry();
-    const kept = mkdtempSync(join(tmpdir(), 'gv-registry-keep-'));
-    const dropped = mkdtempSync(join(tmpdir(), 'gv-registry-drop-'));
+    const kept = specDir('gv-registry-keep');
+    const dropped = specDir('gv-registry-drop');
     registry.register(kept);
     registry.register(dropped);
     registry.unregister(kept);
@@ -108,7 +127,7 @@ describe('temp-registry', () => {
 
   test('cleanup of an already-deleted directory does not throw', () => {
     const registry = createTempDirRegistry();
-    const dir = mkdtempSync(join(tmpdir(), 'gv-registry-gone-'));
+    const dir = specDir('gv-registry-gone');
     registry.register(dir);
     rmSync(dir, { recursive: true, force: true });
     expect(() => registry.cleanup()).not.toThrow();
@@ -122,7 +141,7 @@ describe('temp-registry', () => {
 describe('drainTempDirsUntilSettled', () => {
   test('stops after one pass when nothing comes back', async () => {
     const registry = createTempDirRegistry();
-    const dir = registry.register(mkdtempSync(join(tmpdir(), 'gv-drain-clean-')));
+    const dir = registry.register(specDir('gv-drain-clean'));
     const waits: number[] = [];
 
     const result = await drainTempDirsUntilSettled({
@@ -144,7 +163,7 @@ describe('drainTempDirsUntilSettled', () => {
     // suite reports would be "removed" while the directory was back on disk —
     // which is what a single-pass drain measured on 4 of 314 real test files.
     const registry = createTempDirRegistry();
-    const dir = registry.register(mkdtempSync(join(tmpdir(), 'gv-drain-flapping-')));
+    const dir = registry.register(specDir('gv-drain-flapping'));
     let recreations = 0;
 
     const result = await drainTempDirsUntilSettled({
@@ -171,7 +190,7 @@ describe('drainTempDirsUntilSettled', () => {
     // a survivor. A drain that always returns an empty survivor list would let a
     // permanent leak read as clean.
     const registry = createTempDirRegistry();
-    const dir = registry.register(mkdtempSync(join(tmpdir(), 'gv-drain-stuck-')));
+    const dir = registry.register(specDir('gv-drain-stuck'));
 
     const result = await drainTempDirsUntilSettled({
       registry,

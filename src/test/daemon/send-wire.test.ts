@@ -15,8 +15,8 @@
  * Both would keep passing against a stub no matter how wrong they got.
  */
 import { afterEach, describe, expect, test } from 'bun:test';
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { makeProjectTempDir } from '../helpers/project-temp.ts';
 import { join } from 'node:path';
 import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import { SecretsManager } from '../../config/secrets.ts';
@@ -43,7 +43,7 @@ function arrange(settings: Record<string, unknown>, respond?: () => Response): {
   readonly stack: ReturnType<typeof createSendStack>;
   readonly captured: CapturedRequest[];
 } {
-  const root = mkdtempSync(join(tmpdir(), 'gv-send-wire-'));
+  const root = makeProjectTempDir('gv-send-wire');
   roots.push(root);
   mkdirSync(join(root, '.goodvibes', 'daemon'), { recursive: true });
   mkdirSync(join(root, 'work'), { recursive: true });
@@ -93,7 +93,7 @@ describe('goodvibes-daemon send — the credential comes out of the daemon\'s ow
    * not `daemonHome` is threaded, which is precisely why this one is here.
    */
   test('a goodvibes://secrets/... reference resolves from the daemon store, not a client silo', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'gv-send-secret-'));
+    const root = makeProjectTempDir('gv-send-secret');
     roots.push(root);
     const daemonHome = join(root, '.goodvibes', 'daemon');
     mkdirSync(daemonHome, { recursive: true });
@@ -157,7 +157,7 @@ describe('goodvibes-daemon send — the credential comes out of the daemon\'s ow
    * threading is unpinned and a future tidy-up removes it silently.
    */
   test('the credential is read from an overridden daemon home, not the default one', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'gv-send-altdaemon-'));
+    const root = makeProjectTempDir('gv-send-altdaemon');
     roots.push(root);
     const daemonHome = join(root, 'somewhere-else', 'daemon-state');
     mkdirSync(daemonHome, { recursive: true });

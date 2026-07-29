@@ -167,6 +167,7 @@ describe('getCatalogModelDefinitionsFrom', () => {
       pricing: { input: 5, output: 15 },
       tier: 'paid',
       contextWindow: 400_000,
+      inputModalities: ['text', 'image'],
     },
     {
       id: 'claude-sonnet-4-6',
@@ -190,6 +191,10 @@ describe('getCatalogModelDefinitionsFrom', () => {
       pricing: { input: 0, output: 0 },
       tier: 'free',
       contextWindow: 128_000,
+      // Same vendor as gpt-5.4 above, text-only. The pair is the point: the
+      // catalog decides image support per model, so one OpenAI entry is
+      // multimodal here and the other is not.
+      inputModalities: ['text'],
     },
   ];
 
@@ -201,13 +206,27 @@ describe('getCatalogModelDefinitionsFrom', () => {
     expect(defs[0]?.selectable).toBe(true);
   });
 
-  it('marks OpenAI models as multimodal', () => {
+  it('reads image support per model rather than per vendor', () => {
+    // This used to assert "every OpenAI model is multimodal", which the catalog
+    // itself contradicts: vendors ship both kinds, and the two OpenAI entries in
+    // the fixture differ. `modalities.input` from the feed is what decides.
     const defs = getCatalogModelDefinitionsFrom(fixture);
-    const openaiModels = defs.filter((def) => def.provider === 'openai');
-    expect(openaiModels.length).toBeGreaterThan(0);
-    for (const model of openaiModels) {
-      expect(model.capabilities.multimodal).toBe(true);
-    }
+    const withImages = defs.find((def) => def.id === 'gpt-5.4');
+    const textOnly = defs.find((def) => def.id === 'gpt-oss-120b');
+    expect(withImages?.provider).toBe('openai');
+    expect(textOnly?.provider).toBe('openai');
+    expect(withImages?.capabilities.multimodal).toBe(true);
+    expect(textOnly?.capabilities.multimodal).toBe(false);
+  });
+
+  it('reports an entry that declares no modalities as text-only', () => {
+    // The malformed-entry branch: guessing by vendor here is what produced the
+    // wrong answers above, so an entry that says nothing is reported as saying
+    // nothing rather than inferred from its provider.
+    const defs = getCatalogModelDefinitionsFrom([
+      { ...fixture[0]!, id: 'gpt-5.4-unspecified', inputModalities: undefined },
+    ]);
+    expect(defs[0]?.capabilities.multimodal).toBe(false);
   });
 
   it('marks reasoning models and supplies effort levels', () => {
