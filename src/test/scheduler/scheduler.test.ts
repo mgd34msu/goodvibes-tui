@@ -1,10 +1,26 @@
 import { describe, test, expect, beforeEach } from 'bun:test';
 import { TaskScheduler } from '@pellux/goodvibes-sdk/platform/scheduler';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { getTestTaskScheduler, resetTestTaskScheduler, disposeTestRuntimeServicesAfterAll } from '../helpers/runtime-services.ts';
 
 // Stop the shared test runtime graph when this file ends. Called here, not
 // registered inside the helper, for the reason its doc comment gives.
 disposeTestRuntimeServicesAfterAll();
+
+/**
+ * Store path for a scheduler under test.
+ *
+ * These paths used to be built from a literal `'/tmp/…'`, under a comment
+ * calling them an "in-memory store path that won't write to real disk". They
+ * wrote to real disk: a full green suite run left six gv-scheduler-*.json files
+ * in /tmp, outside every temp root the suite controls. Going through tmpdir()
+ * puts them inside the per-process temp root the test preload creates and
+ * removes (src/test/preload/temp-cleanup.ts).
+ */
+function storePath(prefix: string): string {
+  return join(tmpdir(), `${prefix}-${Math.random().toString(36).slice(2)}.json`);
+}
 
 // ---------------------------------------------------------------------------
 // Cron parser — tested indirectly via getNextRun
@@ -15,7 +31,7 @@ describe('Cron parser', () => {
 
   beforeEach(() => {
     resetTestTaskScheduler();
-    scheduler = getTestTaskScheduler('/tmp/gv-scheduler-cron-' + Math.random().toString(36).slice(2) + '.json');
+    scheduler = getTestTaskScheduler(storePath('gv-scheduler-cron'));
   });
 
   test('wildcard (*) matches any minute', () => {
@@ -94,7 +110,7 @@ describe('computeNextRun — dayOfMonth/dayOfWeek OR logic', () => {
 
   beforeEach(() => {
     resetTestTaskScheduler();
-    scheduler = getTestTaskScheduler('/tmp/gv-scheduler-dom-dow-' + Math.random().toString(36).slice(2) + '.json');
+    scheduler = getTestTaskScheduler(storePath('gv-scheduler-dom-dow'));
   });
 
   test('both wildcard — matches every day', () => {
@@ -154,7 +170,7 @@ describe('computeNextRun basic cases', () => {
 
   beforeEach(() => {
     resetTestTaskScheduler();
-    scheduler = getTestTaskScheduler('/tmp/gv-scheduler-tz-' + Math.random().toString(36).slice(2) + '.json');
+    scheduler = getTestTaskScheduler(storePath('gv-scheduler-tz'));
   });
 
   test('every 30 minutes', () => {
@@ -193,8 +209,7 @@ describe('Task lifecycle', () => {
 
   beforeEach(() => {
     resetTestTaskScheduler();
-    // Use in-memory store path that won't write to real disk
-    scheduler = getTestTaskScheduler('/tmp/gv-scheduler-test-' + Math.random().toString(36).slice(2) + '.json');
+    scheduler = getTestTaskScheduler(storePath('gv-scheduler-test'));
   });
 
   test('add() creates a task with generated id and nextRun', () => {
@@ -263,7 +278,7 @@ describe('Task lifecycle', () => {
   });
 
   test('test helper accepts an explicit storePath', () => {
-    const path = '/tmp/gv-test-scheduler-' + Math.random().toString(36).slice(2) + '.json';
+    const path = storePath('gv-test-scheduler');
     const inst = getTestTaskScheduler(path);
     expect(inst).toBeInstanceOf(TaskScheduler);
     resetTestTaskScheduler();
@@ -271,7 +286,7 @@ describe('Task lifecycle', () => {
 
   test('runNow reschedules task after execution (even on failure)', async () => {
     const scheduler2 = new TaskScheduler({
-      storePath: '/tmp/gv-scheduler-test-' + Math.random().toString(36).slice(2) + '.json',
+      storePath: storePath('gv-scheduler-test'),
       spawnTask: () => 'agent-scheduler-runnow',
     });
     scheduler2.start();

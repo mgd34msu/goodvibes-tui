@@ -5,13 +5,14 @@
  * because resolveAndValidatePath() enforces the project root boundary.
  */
 import { describe, test, expect, beforeEach, afterEach, spyOn } from 'bun:test';
-import { mkdirSync, writeFileSync, rmSync, mkdtempSync, existsSync } from 'node:fs';
+import { mkdirSync, writeFileSync, rmSync, existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { ReadTool } from '@pellux/goodvibes-sdk/platform/tools';
 import { FileStateCache } from '@pellux/goodvibes-sdk/platform/state';
 import { ProjectIndex } from '@pellux/goodvibes-sdk/platform/state';
 import { CodeIntelligence } from '@pellux/goodvibes-sdk/platform/intelligence';
 import { getTestCodeIntelligence, getTestProjectIndex, resetTestProjectIndexes, disposeTestRuntimeServicesAfterAll } from '../helpers/runtime-services.ts';
+import { makeProjectTempDir } from '../helpers/project-temp.ts';
 
 // Stop the shared test runtime graph when this file ends. Called here, not
 // registered inside the helper, for the reason its doc comment gives.
@@ -25,9 +26,11 @@ const PROJECT_ROOT = process.cwd();
 
 /** Create a unique temp directory within the project root. */
 function makeTmpDir(): string {
-  const base = join(PROJECT_ROOT, '.test-tmp');
-  if (!existsSync(base)) mkdirSync(base, { recursive: true });
-  return mkdtempSync(join(base, 'read-'));
+  // makeProjectTempDir registers the directory with the shared cleanup registry,
+  // so the test process removes it before it ends. The hand-rolled creation this
+  // replaced was tracked by nothing and left directories under .test-tmp behind
+  // after a fully green run.
+  return makeProjectTempDir('read');
 }
 
 /** Write content to a file, returning the relative path from project root. */

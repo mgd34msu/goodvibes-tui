@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { existsSync, mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { PanelManager } from '../../panels/panel-manager.ts';
 import { registerBuiltinPanels } from '../../panels/builtin-panels.ts';
@@ -12,6 +12,7 @@ import type { Line } from '../../types/grid.ts';
 import type { ShellPathService } from '@/runtime/index.ts';
 import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import { trackDisposables } from '../helpers/disposables.ts';
+import { makeProjectTempDir } from '../helpers/project-temp.ts';
 
 /**
  * A composed runtime graph starts a dozen pollers while it builds — the fleet
@@ -42,9 +43,11 @@ function makeShellPaths(workingDirectory: string, homeDirectory: string): Pick<S
 }
 
 function makeTestTempDir(prefix: string): string {
-  const base = join(process.cwd(), '.test-tmp', 'skills-panel');
-  mkdirSync(base, { recursive: true });
-  return mkdtempSync(join(base, prefix));
+  // makeProjectTempDir registers the directory with the shared cleanup registry,
+  // so the test process removes it before it ends. The version this replaced
+  // nested the directories under an extra `.test-tmp/skills-panel/` level that
+  // the afterEach never removed, so that level survived every green run.
+  return makeProjectTempDir(prefix.replace(/-+$/, ''));
 }
 
 describe('SkillsPanel', () => {
