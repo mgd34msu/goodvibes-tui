@@ -1,13 +1,13 @@
 import { afterEach, describe, expect, test } from 'bun:test';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { loadCustomProviders } from '@pellux/goodvibes-sdk/platform/providers';
+import { makeProjectTempDir } from '../helpers/project-temp.ts';
 
 const tempRoots: string[] = [];
 
 function makeProvidersDir(): string {
-  const root = mkdtempSync(join(tmpdir(), 'gv-custom-providers-'));
+  const root = makeProjectTempDir('gv-custom-providers');
   tempRoots.push(root);
   return join(root, 'providers');
 }

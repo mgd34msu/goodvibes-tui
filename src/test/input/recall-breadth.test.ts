@@ -1,7 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
-import { tmpdir } from 'node:os';
 import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import type { CommandContext } from '../../input/command-registry.ts';
 import { recallCommand } from '../../input/commands/memory.ts';
@@ -10,6 +9,7 @@ import { MemorySpineClient, createLocalMemoryAccess, type LocalMemoryStore } fro
 import { MemoryRegistry, MemoryStore } from '@pellux/goodvibes-sdk/platform/state';
 import { MemoryEmbeddingProviderRegistry } from '@pellux/goodvibes-sdk/platform/state';
 import { createShellPathService } from '@/runtime/index.ts';
+import { makeProjectTempDir } from '../helpers/project-temp.ts';
 
 function makeBaseContext(registry: MemoryRegistry, printed: string[]): CommandContext {
   const providerRegistry = {} as never;
@@ -71,7 +71,7 @@ describe('recall command breadth', () => {
   let configManager: ConfigManager;
 
   beforeEach(async () => {
-    dir = mkdtempSync(join(tmpdir(), 'gv-recall-'));
+    dir = makeProjectTempDir('gv-recall');
     configManager = new ConfigManager({ surfaceRoot: 'tui',  configDir: join(dir, '.goodvibes', 'tui'), workingDir: dir });
     store = new MemoryStore(join(dir, 'memory.sqlite'), {
       embeddingRegistry: new MemoryEmbeddingProviderRegistry({ configManager }),
@@ -146,7 +146,7 @@ describe('recall command breadth', () => {
     expect(bundleText).toContain('"scope": "team"');
     expect(bundleText).toContain('"recordCount": 1');
 
-    const importDir = mkdtempSync(join(tmpdir(), 'gv-recall-import-'));
+    const importDir = makeProjectTempDir('gv-recall-import');
     const importConfig = new ConfigManager({ surfaceRoot: 'tui',  configDir: join(importDir, '.goodvibes', 'tui'), workingDir: importDir });
     const importStore = new MemoryStore(join(importDir, 'memory.sqlite'), {
       embeddingRegistry: new MemoryEmbeddingProviderRegistry({ configManager: importConfig }),
@@ -179,7 +179,7 @@ describe('recall command breadth', () => {
     recallCommand.handler(['handoff-inspect', handoffPath], context);
     expect(printed.some((line) => line.includes('Memory Handoff Review'))).toBe(true);
 
-    const importDir = mkdtempSync(join(tmpdir(), 'gv-recall-handoff-import-'));
+    const importDir = makeProjectTempDir('gv-recall-handoff-import');
     const importConfig = new ConfigManager({ surfaceRoot: 'tui',  configDir: join(importDir, '.goodvibes', 'tui'), workingDir: importDir });
     const importStore = new MemoryStore(join(importDir, 'memory.sqlite'), {
       embeddingRegistry: new MemoryEmbeddingProviderRegistry({ configManager: importConfig }),

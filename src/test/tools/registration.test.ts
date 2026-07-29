@@ -1,6 +1,4 @@
 import { describe, test, expect } from 'bun:test';
-import { mkdtempSync } from 'node:fs';
-import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { ToolRegistry } from '@pellux/goodvibes-sdk/platform/tools';
 import { registerAllTools } from '@pellux/goodvibes-sdk/platform/tools';
@@ -16,6 +14,7 @@ import { FileUndoManager } from '@pellux/goodvibes-sdk/platform/state';
 import { ModeManager } from '@pellux/goodvibes-sdk/platform/state';
 import { ProcessManager } from '@pellux/goodvibes-sdk/platform/tools';
 import { createWorkflowServices } from '@pellux/goodvibes-sdk/platform/tools';
+import { makeProjectTempDir } from '../helpers/project-temp.ts';
 
 // CrossSessionTaskRegistry starts an hourly sweep in its constructor and
 // registerAllTools' workflow services start their own ticks; dispose()/stop()
@@ -24,7 +23,7 @@ const disposables = trackDisposables();
 
 function registerTools(registry: ToolRegistry): void {
   const services = createTestManagers();
-  const workingDirectory = mkdtempSync(join(tmpdir(), 'gv-tool-registry-'));
+  const workingDirectory = makeProjectTempDir('gv-tool-registry');
   const agentManager = new AgentManager({
     messageBus: new AgentMessageBus(),
     configManager: services.configManager,

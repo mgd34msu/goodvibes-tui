@@ -8,9 +8,9 @@ import { MemorySpineClient, createLocalMemoryAccess, type LocalMemoryStore } fro
 import { ForensicsRegistry } from '@/runtime/index.ts';
 import { PolicyRuntimeState } from '@/runtime/index.ts';
 import { createShellPathService } from '@/runtime/index.ts';
-import { existsSync, mkdtempSync, readFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { makeProjectTempDir } from '../helpers/project-temp.ts';
 
 function makeRegistry(): MemoryRegistry {
   const links: Array<{ fromId: string; toId: string; relation: string; createdAt: number }> = [];
@@ -337,7 +337,7 @@ describe('recallCommand', () => {
 
     expect(printed.some((line) => line.includes('Promoted mem-1 to team scope'))).toBe(true);
 
-    const dir = mkdtempSync(join(tmpdir(), 'gv-memory-handoff-'));
+    const dir = makeProjectTempDir('gv-memory-handoff');
     const bundlePath = join(dir, 'team-handoff.json');
     const shellPaths = createShellPathService({
       workingDirectory: dir,

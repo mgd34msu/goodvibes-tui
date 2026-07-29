@@ -1,10 +1,9 @@
-import { mkdtempSync } from 'node:fs';
-import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, test } from 'bun:test';
 import { CommandRegistry, type CommandContext } from '../../input/command-registry.ts';
 import { registerWorkPlanRuntimeCommands } from '../../input/commands/work-plan-runtime.ts';
 import { WorkPlanStore } from '../../work-plans/work-plan-store.ts';
+import { makeProjectTempDir } from '../helpers/project-temp.ts';
 
 function makeContext(out: string[], opened: string[], store: WorkPlanStore): CommandContext {
   return {
@@ -50,7 +49,7 @@ describe('workplan command', () => {
     const command = registry.get('workplan');
     expect(command).toBeDefined();
     const store = new WorkPlanStore({
-      homeDirectory: mkdtempSync(join(tmpdir(), 'gv-work-plan-command-')),
+      homeDirectory: makeProjectTempDir('gv-work-plan-command'),
       projectId: 'project:command',
       projectRoot: '/tmp/command',
     });
@@ -80,7 +79,7 @@ describe('workplan command', () => {
     registerWorkPlanRuntimeCommands(registry);
     const command = registry.get('workplan')!;
     const store = new WorkPlanStore({
-      homeDirectory: mkdtempSync(join(tmpdir(), 'gv-work-plan-edit-')),
+      homeDirectory: makeProjectTempDir('gv-work-plan-edit'),
       projectId: 'project:edit',
       projectRoot: '/tmp/edit',
     });

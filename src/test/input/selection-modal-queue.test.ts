@@ -19,8 +19,13 @@ import { InputHandler } from '../../input/handler.ts';
 import { SelectionManager } from '../../input/selection.ts';
 import { InfiniteBuffer } from '../../core/history.ts';
 import { createDefaultUiRuntimeServices } from '../helpers/ui-services.ts';
+import { disposeTestRuntimeServicesAfterAll } from '../helpers/runtime-services.ts';
 import type { SelectionItem, SelectionResult } from '../../input/selection-modal.ts';
 import { MAX_QUEUED_SELECTIONS } from '../../input/selection-modal-queue.ts';
+
+// Stop the shared test runtime graph when this file ends. Called here, not
+// registered inside the helper, for the reason its doc comment gives.
+disposeTestRuntimeServicesAfterAll();
 
 function mkItems(prefix: string, count: number): SelectionItem[] {
   return Array.from({ length: count }, (_, i) => ({ id: `${prefix}-${i}`, label: `${prefix} ${i}` }));

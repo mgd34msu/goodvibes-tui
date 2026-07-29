@@ -1,11 +1,11 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { tmpdir } from 'node:os';
 import { SecretsManager } from '../../config/secrets.ts';
 import { ServiceRegistry } from '@pellux/goodvibes-sdk/platform/config';
 import { SubscriptionManager } from '@pellux/goodvibes-sdk/platform/config';
 import { Notifier } from '@pellux/goodvibes-sdk/platform/integrations';
+import { makeProjectTempDir } from '../helpers/project-temp.ts';
 
 describe('Notifier.fromConfig', () => {
   let root: string;
@@ -13,7 +13,7 @@ describe('Notifier.fromConfig', () => {
 
   beforeEach(() => {
     previousCwd = process.cwd();
-    root = mkdtempSync(join(tmpdir(), 'gv-notifier-'));
+    root = makeProjectTempDir('gv-notifier');
     mkdirSync(join(root, '.goodvibes', 'tui'), { recursive: true });
     writeFileSync(join(root, '.goodvibes', 'tui', 'services.json'), JSON.stringify({
       slack: {

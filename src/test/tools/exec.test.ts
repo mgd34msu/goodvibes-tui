@@ -1,10 +1,10 @@
 import { describe, test, expect, beforeEach } from 'bun:test';
-import { mkdtempSync, writeFileSync, existsSync, mkdirSync, readFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { writeFileSync, existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { createExecTool } from '@pellux/goodvibes-sdk/platform/tools';
 import { ProcessManager } from '@pellux/goodvibes-sdk/platform/tools';
 import { OverflowHandler } from '@pellux/goodvibes-sdk/platform/tools';
+import { makeProjectTempDir } from '../helpers/project-temp.ts';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -18,7 +18,7 @@ function parseOutput(output: string | undefined): Record<string, unknown> {
 
 /** Create a temp directory and return its path. */
 function makeTmpDir(): string {
-  return mkdtempSync(join(tmpdir(), 'exec-test-'));
+  return makeProjectTempDir('exec-test');
 }
 
 let execTool: ReturnType<typeof createExecTool>;

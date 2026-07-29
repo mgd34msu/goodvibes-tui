@@ -1,16 +1,15 @@
 import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
-import { mkdirSync, rmSync, writeFileSync, existsSync } from 'fs';
+import { rmSync, writeFileSync, existsSync } from 'fs';
 import { join } from 'path';
-import { mkdtempSync } from 'fs';
-import { tmpdir } from 'os';
 import { FileStateCache } from '@pellux/goodvibes-sdk/platform/state';
+import { makeProjectTempDir } from '../helpers/project-temp.ts';
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
 function makeTmpDir(): string {
-  return mkdtempSync(join(tmpdir(), 'gv-fc-test-'));
+  return makeProjectTempDir('gv-fc-test');
 }
 
 // ---------------------------------------------------------------------------

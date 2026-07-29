@@ -1,7 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
+import { mkdirSync, rmSync } from 'node:fs';
 import { createServer } from 'node:net';
-import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import { DaemonServer } from '@pellux/goodvibes-sdk/platform/daemon';
@@ -13,6 +12,7 @@ import { createRuntimeServices } from '../../runtime/services.ts';
 import { createRuntimeStore } from '../../runtime/store/index.ts';
 import { trackDisposables } from '../helpers/disposables.ts';
 import { UserAuthManager } from '@pellux/goodvibes-sdk/platform/security';
+import { makeProjectTempDir } from '../helpers/project-temp.ts';
 
 const TEST_TOKEN = 'http-transport-token-abc123';
 
@@ -84,7 +84,7 @@ describe('HttpTransport', () => {
   let port: number;
 
   beforeEach(async () => {
-    tempRoot = mkdtempSync(join(tmpdir(), 'gv-http-transport-'));
+    tempRoot = makeProjectTempDir('gv-http-transport');
     workingDir = join(tempRoot, 'workspace');
     homeDir = join(tempRoot, 'home');
     port = await reservePort();

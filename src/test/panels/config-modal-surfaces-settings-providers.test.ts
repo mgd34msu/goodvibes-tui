@@ -1,12 +1,11 @@
 import { describe, expect, test } from 'bun:test';
-import { mkdtempSync } from 'node:fs';
 import { join } from 'node:path';
-import { tmpdir } from 'node:os';
 import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import { createSettingsSyncModalSurface } from '../../panels/modals/settings-sync-modal.ts';
 import { createProviderHealthModalSurface, type ProviderRuntimeInspect } from '../../panels/modals/provider-health-modal.ts';
 import type { ProviderRuntimeSnapshot } from '@pellux/goodvibes-sdk/platform/providers';
 import type { ConfigModalActionContext, ConfigModalRow } from '../../input/config-modal-types.ts';
+import { makeProjectTempDir } from '../helpers/project-temp.ts';
 
 function flush(): Promise<void> {
   return new Promise((r) => setTimeout(r, 0));
@@ -17,7 +16,7 @@ function ctx(row: ConfigModalRow | null, extra: Partial<ConfigModalActionContext
 }
 
 function makeConfig(): ConfigManager {
-  const root = mkdtempSync(join(tmpdir(), 'gv-ss-modal-'));
+  const root = makeProjectTempDir('gv-ss-modal');
   return new ConfigManager({ surfaceRoot: 'tui', configDir: join(root, '.goodvibes', 'tui'), workingDir: root });
 }
 

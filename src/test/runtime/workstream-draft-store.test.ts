@@ -12,8 +12,7 @@
 // ---------------------------------------------------------------------------
 
 import { afterEach, describe, expect, test } from 'bun:test';
-import { mkdtempSync, readdirSync, rmSync, statSync, utimesSync, writeFileSync, mkdirSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { readdirSync, rmSync, statSync, utimesSync, writeFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import type { WorkstreamDraft } from '../../runtime/workstream-services.ts';
 import {
@@ -23,6 +22,7 @@ import {
   formatWorkstreamDraftReclaim,
   type WorkstreamDraftReclaim,
 } from '../../runtime/workstream-draft-store.ts';
+import { makeProjectTempDir } from '../helpers/project-temp.ts';
 
 const NOW = Date.now();
 /** A draft age that is comfortably inside the retention window. */
@@ -47,7 +47,7 @@ afterEach(() => {
   while (tempDirs.length > 0) rmSync(tempDirs.pop()!, { recursive: true, force: true });
 });
 function scratchRoot(): string {
-  const dir = mkdtempSync(join(tmpdir(), 'gv-draft-store-'));
+  const dir = makeProjectTempDir('gv-draft-store');
   tempDirs.push(dir);
   return dir;
 }

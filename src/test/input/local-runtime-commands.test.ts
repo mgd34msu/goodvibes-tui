@@ -1,6 +1,4 @@
 import { describe, expect, test } from 'bun:test';
-import { mkdtempSync } from 'node:fs';
-import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { CommandRegistry } from '../../input/command-registry.ts';
 import type { CommandContext } from '../../input/command-registry.ts';
@@ -16,6 +14,7 @@ import {
   resetTestRuntimeServices,
   disposeTestRuntimeServicesAfterAll,
 } from '../helpers/runtime-services.ts';
+import { makeProjectTempDir } from '../helpers/project-temp.ts';
 
 // Stop the shared test runtime graph when this file ends. Called here, not
 // registered inside the helper, for the reason its doc comment gives.
@@ -23,7 +22,7 @@ disposeTestRuntimeServicesAfterAll();
 
 function makeContext(store = createRuntimeStore()) {
   const printed: string[] = [];
-  const shellRoot = mkdtempSync(join(tmpdir(), 'gv-local-remote-shell-'));
+  const shellRoot = makeProjectTempDir('gv-local-remote-shell');
   const remoteRunnerRegistry = getTestRemoteRunnerRegistry();
   const remoteSupervisor = getTestRemoteSupervisor();
   const remoteRuntime = {

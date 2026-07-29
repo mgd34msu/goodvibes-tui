@@ -1,6 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { rmSync } from 'node:fs';
 import { join } from 'node:path';
 import {
   AutomationJobStore,
@@ -12,12 +11,13 @@ import type { AutomationJob } from '@pellux/goodvibes-sdk/platform/automation';
 import type { AutomationRouteBinding } from '@pellux/goodvibes-sdk/platform/automation';
 import type { AutomationRun } from '@pellux/goodvibes-sdk/platform/automation';
 import type { AutomationSourceRecord } from '@pellux/goodvibes-sdk/platform/automation';
+import { makeProjectTempDir } from '../helpers/project-temp.ts';
 
 describe('automation persistent stores', () => {
   let root = '';
 
   beforeEach(() => {
-    root = mkdtempSync(join(tmpdir(), 'gv-automation-store-'));
+    root = makeProjectTempDir('gv-automation-store');
   });
 
   afterEach(() => {

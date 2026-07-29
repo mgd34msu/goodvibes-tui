@@ -6,13 +6,13 @@
 // ---------------------------------------------------------------------------
 
 import { describe, expect, test } from 'bun:test';
-import { mkdtempSync, rmSync, writeFileSync, readFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { rmSync, writeFileSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { CommandRegistry, type CommandContext } from '../../input/command-registry.ts';
 import { registerGitRuntimeCommands } from '../../input/commands/git-runtime.ts';
 import { createShellPathService } from '@/runtime/index.ts';
 import type { StructuredDiff } from '@pellux/goodvibes-sdk/platform/git';
+import { makeProjectTempDir } from '../helpers/project-temp.ts';
 
 function sh(cmd: string, cwd: string): void {
   const proc = Bun.spawnSync(['/bin/sh', '-c', cmd], { cwd, stdout: 'pipe', stderr: 'pipe' });
@@ -54,7 +54,7 @@ function makeCtx(dir: string): {
 
 describe('/git diff routes to the diff panel via the structural diff (STEP 2c)', () => {
   test('a >4,000-char diff is handed to the panel complete, and no truncation stub is printed', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'gv-git-diff-'));
+    const dir = makeProjectTempDir('gv-git-diff');
     try {
       sh('git init -q && git config user.email t@t && git config user.name t', dir);
       // A committed baseline, then a large modification (well past 4,000 chars).
@@ -94,7 +94,7 @@ describe('/git diff routes to the diff panel via the structural diff (STEP 2c)',
   });
 
   test('an empty working tree prints "No unstaged changes." and never opens the panel', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'gv-git-diff-clean-'));
+    const dir = makeProjectTempDir('gv-git-diff-clean');
     try {
       sh('git init -q && git config user.email t@t && git config user.name t', dir);
       writeFileSync(join(dir, 'a.ts'), 'const a = 1;\n');

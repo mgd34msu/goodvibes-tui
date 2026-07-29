@@ -129,3 +129,21 @@ export function resolveGoodVibesHomeOwnership(
     isOverridden: Boolean(env['GOODVIBES_HOME']?.trim()) || Boolean(env['GOODVIBES_DAEMON_HOME']?.trim()),
   };
 }
+
+/**
+ * True when either root was relocated for this process.
+ *
+ * The daemon lifecycle asks this to decide whether it may adopt the machine's
+ * service unit: a process told to run out of somewhere else is a throwaway, and
+ * one that adopted the unit had systemd supervise it as the machine's daemon
+ * for five hours while it read the real home's credentials.
+ *
+ * It lives here because the two variables have exactly one reader, and the
+ * answer is a question ABOUT them. A caller checking `process.env` for itself is
+ * how the second meaning that started all of this gets reintroduced — so the
+ * question is answered here rather than asked again somewhere else.
+ */
+export function hasOverriddenGoodVibesHome(env: NodeJS.ProcessEnv = process.env): boolean {
+  return (env['GOODVIBES_HOME']?.trim() ?? '') !== ''
+    || (env['GOODVIBES_DAEMON_HOME']?.trim() ?? '') !== '';
+}

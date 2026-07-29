@@ -16,13 +16,12 @@
  * would keep passing if the wiring were removed.
  */
 import { describe, expect, test } from 'bun:test';
-import { mkdtempSync } from 'node:fs';
-import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { inboxSurface, surfaceIdFor } from '@pellux/goodvibes-sdk/platform/cluster';
 import { createClusterServices } from '../../runtime/cluster-group-composition.ts';
 import type { ConfigManager, SecretsManager } from '@pellux/goodvibes-sdk/platform/config';
 import type { ShellPathService } from '@/runtime/index.ts';
+import { makeProjectTempDir } from '../helpers/project-temp.ts';
 
 /**
  * Clustering ON with a short boot probe, so an election concludes in about a
@@ -49,7 +48,7 @@ function secretsManager(): SecretsManager {
 }
 
 function services(): ReturnType<typeof createClusterServices> {
-  const root = mkdtempSync(join(tmpdir(), 'goodvibes-cluster-holdings-'));
+  const root = makeProjectTempDir('goodvibes-cluster-holdings');
   return createClusterServices({
     configManager: configManager(),
     shellPaths: {

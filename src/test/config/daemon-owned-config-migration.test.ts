@@ -14,15 +14,15 @@
  */
 
 import { afterEach, describe, expect, test } from 'bun:test';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { ConfigManager, daemonConfigPath } from '@pellux/goodvibes-sdk/platform/config';
 import { runDaemonConfigMigration } from '../../config/run-daemon-config-migration.ts';
+import { makeProjectTempDir } from '../helpers/project-temp.ts';
 
 const roots: string[] = [];
 function home(): string {
-  const dir = mkdtempSync(join(tmpdir(), 'gv-daemon-config-migration-'));
+  const dir = makeProjectTempDir('gv-daemon-config-migration');
   roots.push(dir);
   return dir;
 }

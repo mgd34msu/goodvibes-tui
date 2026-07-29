@@ -1,12 +1,11 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
-import { mkdtempSync } from 'node:fs';
-import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { ArtifactStore } from '@pellux/goodvibes-sdk/platform/artifacts';
 import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import { KnowledgeService, KnowledgeStore } from '@pellux/goodvibes-sdk/platform/knowledge';
 import { MemoryRegistry, MemoryStore } from '@pellux/goodvibes-sdk/platform/state';
 import { MemoryEmbeddingProviderRegistry } from '@pellux/goodvibes-sdk/platform/state';
+import { makeProjectTempDir } from '../helpers/project-temp.ts';
 
 let server: ReturnType<typeof Bun.serve>;
 let baseUrl = '';
@@ -38,7 +37,7 @@ describe('Knowledge projections', () => {
   let configManager: ConfigManager;
 
   beforeEach(async () => {
-    root = mkdtempSync(join(tmpdir(), 'gv-knowledge-projection-'));
+    root = makeProjectTempDir('gv-knowledge-projection');
     configManager = new ConfigManager({ surfaceRoot: 'tui',  configDir: join(root, '.goodvibes', 'tui'), workingDir: root });
     configManager.set('network.remoteFetch.allowPrivateHosts', true);
     artifactStore = new ArtifactStore({

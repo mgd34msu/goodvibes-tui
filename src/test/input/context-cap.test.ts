@@ -3,8 +3,7 @@
  * InputHandler key routing for the contextCap mode.
  */
 import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { ModelPickerModal } from '../../input/model-picker.ts';
 import { handleModelPickerToken } from '../../input/handler-picker-routes.ts';
@@ -21,6 +20,7 @@ import { ProviderCapabilityRegistry } from '@pellux/goodvibes-sdk/platform/provi
 import { FavoritesStore } from '@pellux/goodvibes-sdk/platform/providers';
 import { BenchmarkStore } from '@pellux/goodvibes-sdk/platform/providers';
 import type { DiscoveredServer } from '@pellux/goodvibes-sdk/platform/discovery';
+import { makeProjectTempDir } from '../helpers/project-temp.ts';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -66,7 +66,7 @@ interface PickerHarness {
 }
 
 function createPickerHarness(): PickerHarness {
-  const rootDir = mkdtempSync(join(tmpdir(), 'gv-context-cap-'));
+  const rootDir = makeProjectTempDir('gv-context-cap');
   const configDir = join(rootDir, 'config');
   const dataDir = join(rootDir, 'provider-data');
   const subscriptionsPath = join(rootDir, 'subscriptions.json');

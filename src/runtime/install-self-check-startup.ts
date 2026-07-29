@@ -17,6 +17,7 @@
 import { existsSync } from 'node:fs';
 import { getGoodVibesPackageRoot, resolveGoodVibesDaemonExecutable } from '../cli/service-posture.ts';
 import { runInstallSelfCheck } from './install-self-check.ts';
+import { announceReachability } from './path-shadow-startup.ts';
 import type { SystemMessageRouter } from '../core/system-message-router.ts';
 
 export function announceInstallSelfCheck(router: SystemMessageRouter): void {
@@ -33,4 +34,26 @@ export function announceInstallSelfCheck(router: SystemMessageRouter): void {
   } catch {
     // Best-effort — an install self-check must never block or crash boot.
   }
+}
+
+/**
+ * The one call boot makes about the state of this install: is it complete
+ * (the check above), is it the copy the shell actually reaches, and is it the
+ * current release (path-shadow-startup).
+ *
+ * They are announced together because they are the same question from the
+ * user's side — "am I looking at the build I think I am" — and because the
+ * three answers are useless apart: a complete install nobody can reach, or a
+ * reachable install three versions old, both end with the product appearing
+ * to have lost a capability it never had.
+ *
+ * The reachability half is async (it may look up the latest release) and is
+ * deliberately not awaited: boot continues, the notice arrives through the
+ * same router a moment later.
+ */
+export function announceInstallHealth(router: SystemMessageRouter): void {
+  announceInstallSelfCheck(router);
+  void announceReachability(router).catch(() => {
+    // Best-effort — a reachability check must never block or crash boot.
+  });
 }

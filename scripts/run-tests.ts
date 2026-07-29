@@ -1,8 +1,9 @@
 import { mkdirSync, readdirSync, rmSync } from 'node:fs';
-import { availableParallelism } from 'node:os';
+import { availableParallelism, tmpdir } from 'node:os';
 import { join, relative } from 'node:path';
 import { filterTestFilesByPattern, parseTestPattern } from './test-pattern-rule.ts';
-import { sweepStaleTestTmp } from './stale-tmp-sweep.ts';
+import { sweepStaleTestTmp, sweepStaleOsTmpEntries } from './stale-tmp-sweep.ts';
+import { TEST_TEMP_MANIFEST_ENV, removeManifestedTempDirs } from './test-temp-manifest.ts';
 
 const ROOT = process.cwd();
 const SEARCH_ROOT = join(ROOT, 'src');
@@ -14,6 +15,15 @@ const TEST_TMP_ROOT = join(ROOT, '.test-tmp');
 // parallel (e.g., concurrent agent chains). Only this runner's subdir is
 // created/deleted; sibling runners are never touched.
 const RUNNER_DIR = join(TEST_TMP_ROOT, `run-${process.pid}`);
+
+// Temp-directory containment and teardown for every child (see
+// src/test/preload/temp-cleanup.ts). bunfig.toml declares the same preload, but
+// bun resolves that path relative to the CURRENT WORKING DIRECTORY and skips it
+// in silence when it does not resolve — running `bun test` from src/ loads no
+// preload and reports nothing. Passing it here as an absolute path makes the
+// runner's behaviour independent of where it was invoked from; loading it twice
+// is a no-op because both specifiers resolve to the same module.
+const TEMP_CLEANUP_PRELOAD = join(ROOT, 'src', 'test', 'preload', 'temp-cleanup.ts');
 
 // Pass --coverage through to bun test when invoked with that flag.
 const COVERAGE = process.argv.includes('--coverage');
@@ -69,9 +79,10 @@ const TIMEOUT_MS = (() => {
 // Age-based sweep at startup (see scripts/stale-tmp-sweep.ts): remove stale
 // entries older than 1 h under .test-tmp — both leftover run-* runner subtrees
 // AND makeProjectTempDir leftovers (<prefix>-<random>) that a signal-killed test
-// process's exit hook never cleaned. Replaces the previous full-root wipe and is
-// safe under concurrency: a live sibling's dirs were created moments ago and are
-// never 1 h old.
+// process never cleaned. Ordinary runs no longer reach this sweep at all: the
+// afterAll in src/test/preload/temp-cleanup.ts removes those directories when
+// each test process finishes. Safe under concurrency: a live sibling's dirs were
+// created moments ago and are never 1 h old.
 
 function collectTests(dir: string, acc: string[]): void {
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
@@ -94,6 +105,14 @@ const testFiles = filterTestFilesByPattern(allTestFiles, ROOT, PATTERN);
 // Sweep stale sibling entries (older than 1 h), then create this runner's own
 // subdir. Sibling runners still in progress are untouched by the sweep.
 sweepStaleTestTmp(TEST_TMP_ROOT);
+// Also sweep the real OS temp dir for this project's own known mkdtemp
+// prefixes (age-gated at 4 h — see scripts/stale-tmp-sweep.ts). This is a
+// backstop for orphans that predate the makeProjectTempDir migration, or
+// that came from an invocation path other than this one (bun run
+// test:coverage's whole-suite `bun test` spawn has its own call to this
+// same sweep — see scripts/coverage-gate.ts — since it doesn't go through
+// this file at all).
+sweepStaleOsTmpEntries(tmpdir());
 rmSync(RUNNER_DIR, { recursive: true, force: true });
 mkdirSync(RUNNER_DIR, { recursive: true });
 
@@ -121,6 +140,9 @@ async function runFile(testFile: string): Promise<void> {
   );
   rmSync(testTmpDir, { recursive: true, force: true });
   mkdirSync(testTmpDir, { recursive: true });
+  // Sits OUTSIDE testTmpDir so it survives that directory's removal. The child's
+  // teardown writes the directories it owned here; see the finally below.
+  const manifestPath = `${testTmpDir}.temp-manifest.json`;
   // try/finally so the per-file tmp dir is removed on EVERY exit path — not just
   // a clean run or a non-zero test exit (both of which reach the end normally),
   // but also an exception thrown by Bun.spawn or the stdout/stderr reads. Under
@@ -128,7 +150,7 @@ async function runFile(testFile: string): Promise<void> {
   // leaked /tmp inode subtree; the finally keeps the leak from surviving a
   // crash-mid-file until the 1 h stale sweep.
   try {
-    const bunArgs = ['bun', 'test', `--timeout=${TIMEOUT_MS}`];
+    const bunArgs = ['bun', 'test', '--preload', TEMP_CLEANUP_PRELOAD, `--timeout=${TIMEOUT_MS}`];
     if (COVERAGE) bunArgs.push('--coverage');
     bunArgs.push(testFile);
     const proc = Bun.spawn(bunArgs, {
@@ -141,13 +163,20 @@ async function runFile(testFile: string): Promise<void> {
         // TMPDIR is redirected *inside* this project's own repo, so a bare temp dir
         // created by a test sits under the project `.git` and git discovery walks up
         // and finds it — breaking any test that needs a genuinely non-git directory.
-        // Fence discovery at the per-file temp root so git stops before the project
-        // repo. (Set here in the child's spawn env because Bun snapshots the
-        // environment at process start — a late process.env mutation inside a test
-        // would not reach GitService.isGitRepo's inherited Bun.spawnSync.) Temp repos
-        // a test `git init`s under this dir are unaffected: their own `.git` is found
-        // before discovery reaches the ceiling.
-        GIT_CEILING_DIRECTORIES: testTmpDir,
+        // Fence discovery at TEST_TMP_ROOT (`.test-tmp`, an ancestor of both this
+        // file's TMPDIR-scoped testTmpDir AND every makeProjectTempDir output,
+        // which lives directly under TEST_TMP_ROOT rather than under testTmpDir)
+        // so git stops before the project repo either way. (Set here in the
+        // child's spawn env because Bun snapshots the environment at process
+        // start — a later process.env mutation inside a test would not reach
+        // GitService.isGitRepo's inherited Bun.spawnSync; this must be part of
+        // the child's OWN startup environment.) Temp repos a test `git init`s
+        // under this dir are unaffected: their own `.git` is found before
+        // discovery reaches the ceiling.
+        GIT_CEILING_DIRECTORIES: TEST_TMP_ROOT,
+        // Where the child's teardown records the temp directories it owned, so
+        // this process can finish removing them after the child has exited.
+        [TEST_TEMP_MANIFEST_ENV]: manifestPath,
       },
       stdout: 'pipe',
       stderr: 'pipe',
@@ -166,6 +195,13 @@ async function runFile(testFile: string): Promise<void> {
     if (ok) passedFiles += 1;
     else failedFiles += 1;
   } finally {
+    // Order matters: the child is gone by now, so nothing can recreate what we
+    // remove. In-process teardown cannot make that guarantee — a few suites are
+    // still writing when their last test ends and put a directory back moments
+    // after it was deleted. Directories the child recorded but that live OUTSIDE
+    // testTmpDir (makeProjectTempDir writes under <repo>/.test-tmp, which does
+    // not follow TMPDIR) would otherwise wait for the 1 h stale sweep.
+    removeManifestedTempDirs(manifestPath);
     rmSync(testTmpDir, { recursive: true, force: true });
   }
 }

@@ -10,8 +10,7 @@
  * reads via formatValue) must not reflow the table or move the cursor.
  */
 import { describe, test, expect } from 'bun:test';
-import { mkdtempSync, mkdirSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { mkdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import type { Line } from '../../types/grid.ts';
 import { createStyledCell } from '../../types/grid.ts';
@@ -27,6 +26,7 @@ import {
   selectionRow,
   DEFAULT_STRUCTURAL_GLYPHS,
 } from '../helpers/liveness.ts';
+import { makeProjectTempDir } from '../helpers/project-temp.ts';
 
 const W = 120;
 const H = 28;
@@ -35,7 +35,7 @@ const H = 28;
 function withSettingsModal<T>(body: (modal: SettingsModal, cm: ConfigManager) => T): T {
   const originalCwd = process.cwd();
   const originalHome = process.env.HOME;
-  const tmpDir = mkdtempSync(join(tmpdir(), 'gv-liveness-settings-'));
+  const tmpDir = makeProjectTempDir('gv-liveness-settings');
   try {
     process.env.HOME = tmpDir;
     process.chdir(tmpDir);

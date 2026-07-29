@@ -1,15 +1,14 @@
 import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { rmSync } from 'node:fs';
 import { BookmarkManager } from '@pellux/goodvibes-sdk/platform/bookmarks';
+import { makeProjectTempDir } from '../helpers/project-temp.ts';
 
 describe('BookmarkManager', () => {
   let dir: string;
   let bm: BookmarkManager;
 
   beforeEach(() => {
-    dir = mkdtempSync(join(tmpdir(), 'gv-bm-test-'));
+    dir = makeProjectTempDir('gv-bm-test');
     bm = new BookmarkManager(dir);
   });
 

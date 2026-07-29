@@ -22,12 +22,11 @@
  * OS port check). No sleeps >100 ms. No real network on fixed ports.
  */
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { mkdtempSync } from 'node:fs';
-import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { HttpListener } from '@pellux/goodvibes-sdk/platform/daemon';
 import { UserAuthManager } from '@pellux/goodvibes-sdk/platform/security';
 import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
+import { makeProjectTempDir } from '../helpers/project-temp.ts';
 
 // ---------------------------------------------------------------------------
 // Shared helpers
@@ -37,7 +36,7 @@ function makeTempAuthEnv(): {
   configManager: ConfigManager;
   userAuth: UserAuthManager;
 } {
-  const dir = mkdtempSync(join(tmpdir(), 'gv-auth-behavior-'));
+  const dir = makeProjectTempDir('gv-auth-behavior');
   const configManager = new ConfigManager({
     surfaceRoot: 'tui',
     configDir: join(dir, 'config'),
@@ -372,7 +371,7 @@ describe('empty/whitespace password rejection', () => {
   // --- 3a. UserAuthManager.addUser rejects empty/short passwords ---
 
   test('addUser rejects empty password', () => {
-    const dir = mkdtempSync(join(tmpdir(), 'gv-pw-empty-'));
+    const dir = makeProjectTempDir('gv-pw-empty');
     const auth = new UserAuthManager({
       bootstrapFilePath: join(dir, 'users.json'),
       bootstrapCredentialPath: join(dir, 'bootstrap.txt'),
@@ -381,7 +380,7 @@ describe('empty/whitespace password rejection', () => {
   });
 
   test('addUser rejects whitespace-only password (length < 8)', () => {
-    const dir = mkdtempSync(join(tmpdir(), 'gv-pw-ws-'));
+    const dir = makeProjectTempDir('gv-pw-ws');
     const auth = new UserAuthManager({
       bootstrapFilePath: join(dir, 'users.json'),
       bootstrapCredentialPath: join(dir, 'bootstrap.txt'),
@@ -391,7 +390,7 @@ describe('empty/whitespace password rejection', () => {
   });
 
   test('addUser rejects password shorter than 8 characters', () => {
-    const dir = mkdtempSync(join(tmpdir(), 'gv-pw-short-'));
+    const dir = makeProjectTempDir('gv-pw-short');
     const auth = new UserAuthManager({
       bootstrapFilePath: join(dir, 'users.json'),
       bootstrapCredentialPath: join(dir, 'bootstrap.txt'),
@@ -402,7 +401,7 @@ describe('empty/whitespace password rejection', () => {
   // --- 3b. UserAuthManager.rotatePassword rejects empty/short passwords ---
 
   test('rotatePassword rejects empty password', () => {
-    const dir = mkdtempSync(join(tmpdir(), 'gv-rot-empty-'));
+    const dir = makeProjectTempDir('gv-rot-empty');
     const auth = new UserAuthManager({
       bootstrapFilePath: join(dir, 'users.json'),
       bootstrapCredentialPath: join(dir, 'bootstrap.txt'),
@@ -411,7 +410,7 @@ describe('empty/whitespace password rejection', () => {
   });
 
   test('rotatePassword rejects whitespace-only password (length < 8)', () => {
-    const dir = mkdtempSync(join(tmpdir(), 'gv-rot-ws-'));
+    const dir = makeProjectTempDir('gv-rot-ws');
     const auth = new UserAuthManager({
       bootstrapFilePath: join(dir, 'users.json'),
       bootstrapCredentialPath: join(dir, 'bootstrap.txt'),
@@ -420,7 +419,7 @@ describe('empty/whitespace password rejection', () => {
   });
 
   test('rotatePassword rejects password shorter than 8 characters', () => {
-    const dir = mkdtempSync(join(tmpdir(), 'gv-rot-short-'));
+    const dir = makeProjectTempDir('gv-rot-short');
     const auth = new UserAuthManager({
       bootstrapFilePath: join(dir, 'users.json'),
       bootstrapCredentialPath: join(dir, 'bootstrap.txt'),

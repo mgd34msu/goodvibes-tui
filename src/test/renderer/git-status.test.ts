@@ -1,9 +1,8 @@
 import { describe, test, expect, afterEach } from 'bun:test';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { rmSync } from 'node:fs';
 import { GitService } from '@pellux/goodvibes-sdk/platform/git';
 import { GitStatusProvider } from '../../renderer/git-status.ts';
+import { makeProjectTempDir } from '../helpers/project-temp.ts';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -105,7 +104,7 @@ describe('GitStatusProvider', () => {
 
   describe('unborn HEAD (repo with no commits) — 5a', () => {
     test('shows "new" instead of "?" for a freshly-initialised repo', async () => {
-      const dir = mkdtempSync(join(tmpdir(), 'gv-git-new-'));
+      const dir = makeProjectTempDir('gv-git-new');
       try {
         Bun.spawnSync(['git', 'init'], { cwd: dir });
         const provider = new GitStatusProvider(dir);
@@ -227,7 +226,7 @@ describe('GitStatusProvider', () => {
     }
 
     test('a live not-a-repo -> is-a-repo flip (external `git init`) triggers exactly one refresh-driven onChange call', async () => {
-      tmpDir = mkdtempSync(join(tmpdir(), 'gv-git-status-poll-'));
+      tmpDir = makeProjectTempDir('gv-git-status-poll');
       const provider = new GitStatusProvider(tmpDir);
       providers.push(provider);
 
@@ -252,7 +251,7 @@ describe('GitStatusProvider', () => {
     });
 
     test('no-op if the repo state does not change between ticks', async () => {
-      tmpDir = mkdtempSync(join(tmpdir(), 'gv-git-status-poll-nochange-'));
+      tmpDir = makeProjectTempDir('gv-git-status-poll-nochange');
       const provider = new GitStatusProvider(tmpDir);
       providers.push(provider);
 
@@ -266,7 +265,7 @@ describe('GitStatusProvider', () => {
     });
 
     test('stopPolling() clears the interval — no further onChange after it is called', async () => {
-      tmpDir = mkdtempSync(join(tmpdir(), 'gv-git-status-poll-stop-'));
+      tmpDir = makeProjectTempDir('gv-git-status-poll-stop');
       const provider = new GitStatusProvider(tmpDir);
       providers.push(provider);
 
@@ -283,7 +282,7 @@ describe('GitStatusProvider', () => {
     });
 
     test('never throws even if GitService.isGitRepo itself throws', async () => {
-      tmpDir = mkdtempSync(join(tmpdir(), 'gv-git-status-poll-throws-'));
+      tmpDir = makeProjectTempDir('gv-git-status-poll-throws');
       const provider = new GitStatusProvider(tmpDir);
       providers.push(provider);
 

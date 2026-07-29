@@ -12,13 +12,13 @@
 // ---------------------------------------------------------------------------
 
 import { beforeEach, describe, expect, test } from 'bun:test';
-import { mkdtempSync, readFileSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { tmpdir } from 'node:os';
 import { UserAuthManager } from '@pellux/goodvibes-sdk/platform/security';
 import { LocalAuthPanel } from '../../panels/local-auth-panel.ts';
 import type { Line } from '../../types/grid.ts';
 import { InputHistory } from '../../input/input-history.ts';
+import { makeProjectTempDir } from '../helpers/project-temp.ts';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -54,7 +54,7 @@ describe('LocalAuthPanel masked-entry render', () => {
   let auth: UserAuthManager;
 
   beforeEach(() => {
-    dir = mkdtempSync(join(tmpdir(), 'gv-masked-panel-'));
+    dir = makeProjectTempDir('gv-masked-panel');
     usersPath = join(dir, 'auth-users.json');
     bootstrapPath = join(dir, 'auth-bootstrap.txt');
     auth = new UserAuthManager({
@@ -146,7 +146,7 @@ describe('LocalAuthPanel masked-entry submit path', () => {
   let auth: UserAuthManager;
 
   beforeEach(() => {
-    dir = mkdtempSync(join(tmpdir(), 'gv-masked-submit-'));
+    dir = makeProjectTempDir('gv-masked-submit');
     usersPath = join(dir, 'auth-users.json');
     bootstrapPath = join(dir, 'auth-bootstrap.txt');
     auth = new UserAuthManager({
@@ -245,7 +245,7 @@ describe('LocalAuthPanel masked-entry Esc abort', () => {
   let auth: UserAuthManager;
 
   beforeEach(() => {
-    dir = mkdtempSync(join(tmpdir(), 'gv-masked-esc-'));
+    dir = makeProjectTempDir('gv-masked-esc');
     usersPath = join(dir, 'auth-users.json');
     bootstrapPath = join(dir, 'auth-bootstrap.txt');
     auth = new UserAuthManager({
@@ -292,7 +292,7 @@ describe('LocalAuthPanel masked-entry backspace', () => {
   let auth: UserAuthManager;
 
   beforeEach(() => {
-    dir = mkdtempSync(join(tmpdir(), 'gv-masked-bs-'));
+    dir = makeProjectTempDir('gv-masked-bs');
     usersPath = join(dir, 'auth-users.json');
     bootstrapPath = join(dir, 'auth-bootstrap.txt');
     auth = new UserAuthManager({
@@ -366,7 +366,7 @@ describe('LocalAuthPanel masked-entry: secret never in history', () => {
   let auth: UserAuthManager;
 
   beforeEach(() => {
-    dir = mkdtempSync(join(tmpdir(), 'gv-masked-hist-'));
+    dir = makeProjectTempDir('gv-masked-hist');
     usersPath = join(dir, 'auth-users.json');
     bootstrapPath = join(dir, 'auth-bootstrap.txt');
     historyPath = join(dir, 'history.json');

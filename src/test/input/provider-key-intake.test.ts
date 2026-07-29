@@ -108,7 +108,10 @@ describe('runProviderKeyIntake — selection completes after intake', () => {
     await Promise.resolve();
 
     expect(bag.setCalls).toEqual([
-      { key: 'ACME_API_KEY', value: 'sk-secret-value', options: { scope: 'user', medium: 'secure' } },
+      // Daemon scope, not user scope: the daemon is the process that runs the
+      // model, and it does so with this TUI closed. See the comment at the
+      // write site in input/provider-key-intake.ts.
+      { key: 'ACME_API_KEY', value: 'sk-secret-value', options: { scope: 'daemon', medium: 'secure' } },
     ]);
     expect(bag.counters.refreshCalls).toBe(1);
     expect(completed).toBe(1);

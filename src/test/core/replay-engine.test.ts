@@ -5,15 +5,16 @@
  * diff (match/mismatch), export path validation, engine state transitions.
  */
 import { describe, test, expect, beforeEach } from 'bun:test';
-import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { unlinkSync } from 'node:fs';
 import {
   DeterministicReplayEngine,
 } from '@pellux/goodvibes-sdk/platform/core';
 import { handleReplayCommand } from '@pellux/goodvibes-sdk/platform/core';
 import type { LedgerEntry } from '@/runtime/index.ts';
 import type { RuntimeStateSnapshot } from '@/runtime/index.ts';
+import { makeProjectTempDir } from '../helpers/project-temp.ts';
 
 // ── Fixtures ────────────────────────────────────────────────────────────────
 
@@ -59,7 +60,7 @@ describe('DeterministicReplayEngine', () => {
   let projectRoot: string;
 
   beforeEach(() => {
-    projectRoot = mkdtempSync(join(tmpdir(), 'gv-replay-root-'));
+    projectRoot = makeProjectTempDir('gv-replay-root');
     engine = new DeterministicReplayEngine(projectRoot);
   });
 
@@ -344,8 +345,17 @@ describe('DeterministicReplayEngine', () => {
 
     test('accepts paths inside the active temp root', async () => {
       loadEngine(engine, [makeEntry(1, 'turn:start')]);
+      // Deliberately anchored to the real OS temp dir (not the .test-tmp
+      // helper): the engine's own path-traversal guard resolves against
+      // `os.tmpdir()` directly, so this test needs a path under the real
+      // one to exercise that acceptance branch. Cleaned up explicitly
+      // below since it's outside the sanctioned helper's exit-hook sweep.
       const path = join(tmpdir(), `replay-test-${Date.now()}.json`);
-      await expect(engine.export(path)).resolves.toBeUndefined();
+      try {
+        await expect(engine.export(path)).resolves.toBeUndefined();
+      } finally {
+        unlinkSync(path);
+      }
     });
   });
 

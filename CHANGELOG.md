@@ -3,6 +3,23 @@
 All notable changes to GoodVibes TUI.
 
 ---
+## [1.25.0] - 2026-07-27
+
+### Changes
+
+- Mail and calendar are surfaces here now: `/mail` and `/calendar`, a Connections category in settings, and sending behind `--confirm`.
+- The daemon this package ships stops carrying its own CalDAV and IMAP/SMTP handlers and lets the platform serve `calendar.*` and `email.*`. Both implementations were bound to the same descriptor ids and the local ones registered later, so they were the ones answering — two implementations behind one path, which is the drift the move exists to end. Nothing was deleted until the platform could do it: generic CalDAV, both spellings of the mail settings with their fallbacks, and address-digested logging were all ported first.
+- The Connections category shows what mail and calendar are actually doing, and never guesses. A row starts as "checking" and only ever changes to something the daemon confirmed; an unconfigured account reports needs-setup naming the exact keys to set, and a daemon that does not serve the surface at all reports unreachable instead. Those two are kept apart deliberately: telling someone to connect an account when the daemon cannot serve mail at all would be a wasted afternoon.
+- Setting a mail or calendar password now works from here. The platform declares the whole mail and CalDAV connection as daemon-owned, so `/secrets set` is relocated into the daemon's own tier rather than filed in this client's store where the daemon never looked. The old guidance said to put it in the daemon's environment and restart, because that was the only thing that actually reached it; that is no longer necessary and the guidance says so.
+
+### Fixes
+
+- `GOODVIBES_HOME` has one meaning and one reader. The client CLI now honours the same home redirection the daemon already did, and an architecture rule covers `scripts/` so a new entry point cannot quietly read it a second way.
+- `--daemon-home` / `GOODVIBES_DAEMON_HOME` reaches the credential store, not just the identity directory. Without it a daemon told to run out of a temp tree still read the real home's daemon secrets, so an "isolated" test daemon held live credentials.
+- A daemon started with an overridden home never adopts the machine's service unit. One did: launched from a scratchpad, it found the unit not running, wrote its own scratchpad command line into the systemd user unit and exited, and systemd then supervised the throwaway as the machine's daemon for five hours while it read real credentials and long-polled a real bot. The check runs before the service-enabled setting deliberately — that setting is client-owned and resolves against the real home, so a test tree's own opt-out was written and never read, and isolation that depends on the isolated process reading its own settings file is not isolation.
+- The review pane declares itself an explicit user request, which is honest there and only there: that path runs because a person is looking at a hunk and pressed a key. It is what lets a confirmation-gated verb tell an authorized action apart from one initiated by content, so scheduled work, triggers and channel-driven work deliberately do not set it.
+- The daemon launcher now says, in the file, that it prefers a prebuilt binary over this source tree. A route added to source answers 404 and every explanation reached for is wrong, because the process answering never contained the code. It cost a round several hours.
+
 
 ## [1.24.2] - 2026-07-27
 

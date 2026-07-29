@@ -41,6 +41,10 @@ export function resetSelected({
   const key = selected.setting.key as ConfigKey;
   setValue(key, selected.setting.default);
   if (isSecretConfigKey(key) && secretsManager) {
+    // Delete from the tier the write went to. A daemon-owned key was stored in
+    // the daemon tier (defaultSecretBackedScope), so a delete narrowed to 'user'
+    // would report a cleared setting while the daemon kept using the live
+    // credential — the reset that isn't one.
     void secretsManager.delete(buildGoodVibesSecretKey(key), { scope: defaultSecretBackedScope(key) }).catch((error) => {
       logger.error('SettingsModal: failed to clear secret while resetting setting', { key, error: summarizeError(error) });
     });

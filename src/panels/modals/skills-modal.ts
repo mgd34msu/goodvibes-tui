@@ -180,6 +180,11 @@ export function createSkillsModalSurface(deps: SkillsModalDeps): ConfigModalSurf
  * homeDir and removed immediately (scanSkillDirectorySync catches missing dirs →
  * []), so refresh() finds no `.goodvibes/skills` directories and renders the
  * static empty-state copy. The random tmp path never appears in the output.
+ *
+ * This is production code (ships in the real binary), not test scratch, so
+ * it stays rooted at the real OS temp dir rather than the test-only
+ * makeProjectTempDir helper. Created and removed synchronously in the same
+ * call, so the on-disk window is negligible.
  */
 export function skillsModalGoldenSurface(): ConfigModalSurface {
   const root = mkdtempSync(join(tmpdir(), 'gv-skills-golden-'));

@@ -1,10 +1,10 @@
 import { afterAll, describe, expect, test } from 'bun:test';
 import { createHash } from 'node:crypto';
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { chmodSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { resolveArtifactNames, CHECKSUM_MANIFEST_NAME } from '@/runtime/release-artifacts.ts';
 import { rollbackUpdate, PREVIOUS_FILE_SUFFIX } from '@/input/commands/update-runtime.ts';
+import { makeProjectTempDir } from '../helpers/project-temp.ts';
 
 /**
  * Per-test ceiling for this file.
@@ -66,7 +66,7 @@ afterAll(() => {
 });
 
 function scratch(prefix: string): string {
-  const dir = mkdtempSync(join(tmpdir(), `${prefix}-`));
+  const dir = makeProjectTempDir(prefix);
   created.push(dir);
   return dir;
 }

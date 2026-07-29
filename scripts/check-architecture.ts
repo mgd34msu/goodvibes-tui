@@ -570,6 +570,26 @@ const rules: readonly Rule[] = [
     message: 'reusable code must not discover cwd/home implicitly; composition roots must pass owned roots explicitly',
   },
   {
+    // Rationale: this exact combination — a directory created straight under
+    // the real OS temp dir, cleaned up only via afterEach/afterAll/finally —
+    // is what exhausted /tmp (1,048,436 of 1,048,576 inodes in use on one
+    // host): that cleanup never runs when the test process is killed by a
+    // signal (a `timeout 300` wrapper, the runner killing a hung file, an
+    // OOM). The sanctioned replacement, makeProjectTempDir
+    // (src/test/helpers/project-temp.ts), roots scratch under this repo's
+    // own .test-tmp instead, where a killed process's leftovers are bounded
+    // by the age-gated sweep in scripts/stale-tmp-sweep.ts. A handful of
+    // tests legitimately need a real path under the OS temp dir for
+    // behavioral reasons (proving a boundary check accepts/rejects the real
+    // temp root, or a "not inside a repo" check) — none of those call
+    // mkdtemp/mkdtempSync to do it, so this rule bans only the exact
+    // dir-creation shape, not every mention of tmpdir().
+    name: 'no-raw-mkdtemp-under-os-tmpdir-in-tests',
+    files: testFiles,
+    pattern: /\bmkdtemp(Sync)?\s*\([^)]*\btmpdir\s*\(\s*\)/,
+    message: 'do not mkdtemp/mkdtempSync directly under the real OS temp dir (tmpdir()/os.tmpdir()) in a test — use makeProjectTempDir from src/test/helpers/project-temp.ts instead, so a signal-killed process leaks into the swept .test-tmp root, not the real /tmp',
+  },
+  {
     name: 'one-goodvibes-home-meaning',
     // Scripts included on purpose: the disagreement this bans lived in
     // scripts/, not in src/. audit-goodvibes-home.ts and verify-live.ts read

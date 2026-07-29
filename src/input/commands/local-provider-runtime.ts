@@ -130,7 +130,15 @@ export function registerLocalProviderRuntimeCommands(registry: CommandRegistry):
               }
               void (async () => {
                 try {
-                  await secretsManager.set(keyName, value, { scope: 'user', medium: 'secure' });
+                  // Daemon scope, stated explicitly here rather than left to the
+                  // platform's daemon-owned credential registry: that registry
+                  // recognises credentials by NAME, and this name is derived
+                  // from an operator-chosen provider name
+                  // (customProviderKeyName above), so no shipped list can
+                  // contain it. The daemon is what runs the model, so the key
+                  // has to reach the daemon tier or a locally-hosted endpoint
+                  // is usable only while this TUI is open.
+                  await secretsManager.set(keyName, value, { scope: 'daemon', medium: 'secure' });
                   ctx.print(`Stored the API key for '${name}' (value hidden). It resolves live for this provider — no restart needed.`);
                 } catch (error) {
                   ctx.print(`Could not store the key for '${name}': ${summarizeError(error)}`);

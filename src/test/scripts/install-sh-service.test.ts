@@ -10,11 +10,11 @@ import {
   rmSync,
   writeFileSync,
 } from 'node:fs';
-import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import { buildManagedDaemonServiceManager } from '../../runtime/legacy-daemon-migration.ts';
 import { resolveRuntimeEndpointBinding } from '../../cli/endpoints.ts';
+import { makeProjectTempDir } from '../helpers/project-temp.ts';
 
 // Shell-level coverage for the two installer features added in this file:
 //   1. first-run daemon service setup (systemd unit / launchd plist generation,
@@ -45,7 +45,7 @@ const created: string[] = [];
 const PROCESS_TEST_BUDGET_MS = 60_000;
 
 function scratch(prefix: string): string {
-  const dir = mkdtempSync(join(tmpdir(), `${prefix}-`));
+  const dir = makeProjectTempDir(prefix);
   created.push(dir);
   return dir;
 }
