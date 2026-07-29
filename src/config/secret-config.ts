@@ -42,6 +42,16 @@ export const SECRET_CONFIG_KEYS = new Set<ConfigKey>([
   'surfaces.bluebubbles.password',
   'surfaces.mattermost.botToken',
   'surfaces.matrix.accessToken',
+  // TUI-local synthetic sub-keys, one level under the SDK's real `payments`
+  // section (not yet a scalar CONFIG_SCHEMA entry — same situation as
+  // tts.speed, behavior.notifyAfterSeconds, etc. in settings-modal-data.ts),
+  // hence the cast. See input/payments-config.ts for why these are named flat
+  // (payments.cardNumber, not payments.card.number): a flat one-level leaf is
+  // the shape the real ConfigManager tolerates for an undeclared key.
+  'payments.cardNumber' as ConfigKey,
+  'payments.cardExpiry' as ConfigKey,
+  'payments.cardCvv' as ConfigKey,
+  'payments.cardholderName' as ConfigKey,
 ]);
 
 export interface SecretBackedConfigUpdate {
@@ -118,9 +128,9 @@ export function buildSecretBackedConfigUpdate(configKey: ConfigKey, rawValue: st
 /**
  * Where a secret-backed write lands when the caller did not name a scope.
  *
- * A daemon-owned config key (`surfaces.*`, `controlPlane.*`, ...) names a
- * credential the DAEMON executes with, not this interactive client, so its
- * secret material belongs in the daemon-scoped tier the daemon actually
+ * A daemon-owned config key (`surfaces.*`, `payments.*`, `controlPlane.*`, ...)
+ * names a credential the DAEMON executes with, not this interactive client, so
+ * its secret material belongs in the daemon-scoped tier the daemon actually
  * reads — the same rule the SDK's config-ownership.ts already applies to the
  * `goodvibes://` reference that points at it.
  *
@@ -130,7 +140,8 @@ export function buildSecretBackedConfigUpdate(configKey: ConfigKey, rawValue: st
  * the daemon never resolves. The surface reported success and the daemon found
  * nothing. For the mailbox password that is the whole feature failing silently —
  * the daemon is the process that polls IMAP and answers over Telegram, and it
- * does so with every surface closed.
+ * does so with every surface closed. A payment card entered through
+ * /payments card is the same shape of failure at purchase time.
  */
 export function defaultSecretBackedScope(configKey: ConfigKey): SecretScope {
   return isDaemonOwnedConfigKey(configKey) ? 'daemon' : 'user';

@@ -44,6 +44,15 @@ export interface GoodVibesHomeOwnership {
   readonly homeDirectory: string;
   /** The daemon's own identity directory, under the tree root by default. */
   readonly daemonHomeDirectory: string;
+  /**
+   * True when either `GOODVIBES_HOME` or `GOODVIBES_DAEMON_HOME` named an
+   * override (a blank/whitespace-only value does not count — see
+   * resolveGoodVibesHome). Callers that need to know "is this process running
+   * out of a relocated tree or identity directory" (e.g. to refuse adopting
+   * the machine's real service unit) read this instead of re-reading the raw
+   * environment variable themselves — this module is the one reader.
+   */
+  readonly isOverridden: boolean;
 }
 
 /**
@@ -117,6 +126,7 @@ export function resolveGoodVibesHomeOwnership(
   return {
     homeDirectory,
     daemonHomeDirectory: resolveGoodVibesDaemonHome(homeDirectory, env),
+    isOverridden: Boolean(env['GOODVIBES_HOME']?.trim()) || Boolean(env['GOODVIBES_DAEMON_HOME']?.trim()),
   };
 }
 

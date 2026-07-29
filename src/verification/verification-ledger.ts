@@ -306,11 +306,74 @@ export const CLUSTER_GROUP_LOCAL_SETTINGS = [
   'cluster.rosterGossipSeconds',
 ] as const;
 
+/**
+ * Config keys for the daemon's payment capability: the master switch, which
+ * card to use by default, the settlement currency, CVV handling, the six
+ * budget knobs, the shipping-tier preference, the fourteen billing/shipping
+ * address sub-fields, the two approval/veto windows, and the notify-channel
+ * list. Card MATERIAL (number, expiry, CVV, cardholder name) is intentionally
+ * NOT here — see the SDK's schema-domain-payments.ts header and this repo's
+ * own input/payments-config.ts: that material lives write-only in the daemon
+ * secret store, never in CONFIG_SCHEMA, so there is nothing for a persistence
+ * contract to count.
+ *
+ * THIS CONSTANT IS NOT A DIAL, for the same reason as the sets above. Every
+ * key below is counted because
+ * `src/test/verification/payments-settings-persistence.test.ts` runs the same
+ * four-part persistence contract the other counted sets are counted for:
+ * schema default exposure, `set()` through the key's own validator to disk,
+ * reload into a fresh ConfigManager with read-back equality, and
+ * reset-to-default that also survives reload. That test also asserts this
+ * list is exactly the CONFIG_SCHEMA's `payments.*` key set, so a future SDK
+ * addition under this domain is caught (fails the inventory-integrity test)
+ * rather than silently uncounted.
+ *
+ * PER-KEY EVIDENCE. All 28 are read by the daemon's own payment capability
+ * (platform/payments, platform/control-plane/routes/payments.ts): the budget
+ * keys size the daily/overage/tolerance pools, the window keys size the
+ * veto/approval timers, cvvHandling and shipping.preferredTier select the
+ * enum behaviors `platform/payments` documents, and the address sub-fields
+ * are read directly by the daemon's shipping-address-required refusal and the
+ * card-issuer address-verification path. `enabled` and `defaultCardId` gate
+ * and select, respectively, whether/which card a purchase uses.
+ */
+export const PAYMENTS_LOCAL_SETTINGS = [
+  'payments.enabled',
+  'payments.defaultCardId',
+  'payments.currency',
+  'payments.cvvHandling',
+  'payments.budget.dailyItemCents',
+  'payments.budget.dailyOverageCents',
+  'payments.budget.perPurchaseCeilingEnabled',
+  'payments.budget.perPurchaseCeilingCents',
+  'payments.budget.overageToleranceEnabled',
+  'payments.budget.overageToleranceDailyAllowanceCents',
+  'payments.shipping.preferredTier',
+  'payments.billingAddress.name',
+  'payments.billingAddress.line1',
+  'payments.billingAddress.line2',
+  'payments.billingAddress.city',
+  'payments.billingAddress.region',
+  'payments.billingAddress.postalCode',
+  'payments.billingAddress.country',
+  'payments.shippingAddress.name',
+  'payments.shippingAddress.line1',
+  'payments.shippingAddress.line2',
+  'payments.shippingAddress.city',
+  'payments.shippingAddress.region',
+  'payments.shippingAddress.postalCode',
+  'payments.shippingAddress.country',
+  'payments.windows.vetoMinutes',
+  'payments.windows.approvalMinutes',
+  'payments.notifyChannels',
+] as const;
+
 const SETTINGS_BEHAVIOR_VERIFIED = SETTINGS_BEHAVIOR_BASELINE
   + FEATURE_KNOB_LOCAL_SETTINGS.length
   + DEVICE_AND_TRIGGER_LOCAL_SETTINGS.length
   + CLUSTER_GROUP_LOCAL_SETTINGS.length
   + DAEMON_MAILBOX_LOCAL_SETTINGS.length
+  + PAYMENTS_LOCAL_SETTINGS.length
   + ENABLEMENT_KEYS_BEHAVIOR_VERIFIED;
 
 const EXTERNAL_SLASH_COMMANDS = new Set([

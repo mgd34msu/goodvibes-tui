@@ -55,6 +55,11 @@ import { enrichRelaySettingDescriptions } from './relay-settings-descriptions.ts
 import { enrichDaemonOwnedSettingDescriptions } from './daemon-owned-settings-descriptions.ts';
 import { applyFeatureUnitLayout } from './feature-unit-layout.ts';
 import { FEATURE_SETTINGS_BY_ID } from '../runtime/feature-settings.ts';
+import {
+  buildPaymentsSyntheticEntries,
+  isPaymentsSyntheticConfigKey,
+  refreshPaymentsSyntheticEntry,
+} from './payments-config.ts';
 
 // ---------------------------------------------------------------------------
 // deepEqual — structural equality for isDefault comparisons
@@ -248,6 +253,19 @@ export function buildSettingGroups(
   // CONFIG_SCHEMA, same rationale as the other synthetic settings above.
   injectSandboxExecSyntheticEntries(groups, configManager);
   injectExecEnvScrubSyntheticEntry(groups, configManager);
+
+  // Payment card capability (see payments-config.ts): the CONFIG_SCHEMA loop
+  // above already populated 'payments' with the fourteen real SDK settings
+  // (enabled, defaultCardId, currency, cvvHandling, budgets, shipping,
+  // windows, notifyChannels). What's injected here are the four secret-tier
+  // card-material fields and the two ordinary address fields, which are
+  // TUI-local synthetic sub-keys under that real section (not yet SDK
+  // CONFIG_SCHEMA entries — see payments-config.ts's header comment), backed
+  // by the same real configManager as everything else in this group.
+  const paymentsEntries = groups.get('payments');
+  if (paymentsEntries && !paymentsEntries.some((e) => isPaymentsSyntheticConfigKey(e.setting.key))) {
+    paymentsEntries.push(...buildPaymentsSyntheticEntries(configManager));
+  }
 
   // relay.* is a real SDK CONFIG_SCHEMA domain; append the threat-model note
   // the SDK's own descriptions don't carry (see relay-settings-descriptions.ts).
@@ -656,6 +674,14 @@ export function refreshEntryValues(
         entry.currentValue = refreshed.currentValue; entry.isDefault = refreshed.isDefault;
         continue;
       }
+      // payments.* synthetic sub-keys (card material + addresses — see
+      // payments-config.ts): real configManager-backed now, but still
+      // defensively normalized (undefined -> '') the same way the initial
+      // build does, so isDefault stays consistent between build and refresh.
+      if (isPaymentsSyntheticConfigKey(entry.setting.key)) {
+        refreshPaymentsSyntheticEntry(entry, configManager);
+        continue;
+      }
       const raw = configManager.get(entry.setting.key as ConfigKey);
       // Synthetic entries (e.g. tts.speed) that have no SDK schema key return
       // undefined from configManager. Normalize using the same logic used at
@@ -692,6 +718,10 @@ export function updateEntryForKey(
       if (key === (MEMORY_SHOW_PROVENANCE_CONFIG_KEY as ConfigKey)) {
         const refreshed = buildMemoryProvenanceSyntheticEntry(configManager);
         entry.currentValue = refreshed.currentValue; entry.isDefault = refreshed.isDefault;
+        continue;
+      }
+      if (isPaymentsSyntheticConfigKey(key)) {
+        refreshPaymentsSyntheticEntry(entry, configManager);
         continue;
       }
       if (isSandboxExecListConfigKey(key)) {

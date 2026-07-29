@@ -52,6 +52,10 @@ export type SettingsCategory =
   | 'update'
   | 'power'
   | 'memory'
+  // payments.* — the card on file for daemon-initiated purchases. Like
+  // 'profile' below, this entry and its SETTINGS_CATEGORY_GROUPS membership are
+  // both mandatory or the whole prefix is dropped from the workspace.
+  | 'payments'
   // profile.* — the owner profile (docs/owner-profile.md §12.1). This entry and
   // its SETTINGS_CATEGORY_GROUPS membership below are both mandatory:
   // buildSettingGroups guards every push with `if (groups.has(cat))`, so a
@@ -71,7 +75,7 @@ export const SETTINGS_CATEGORY_GROUPS: ReadonlyArray<{
   { label: 'AI Routing', categories: ['provider', 'pricing', 'subscriptions', 'helper', 'tools', 'tts', 'voice'] },
   { label: 'Service & Network', categories: ['service', 'daemon', 'network', 'controlPlane', 'httpListener', 'web', 'relay'] },
   { label: 'Surfaces & Cloud', categories: ['surfaces', 'device', 'conversationGate', 'integrations', 'connections', 'mcp', 'cloudflare'] },
-  { label: 'Automation', categories: ['batch', 'automation', 'checkin', 'watchers', 'orchestration', 'planner', 'wrfc'] },
+  { label: 'Automation', categories: ['batch', 'automation', 'checkin', 'watchers', 'orchestration', 'planner', 'wrfc', 'payments'] },
   // 'profile' sits beside 'memory' and 'learning': all three are what the
   // platform retains about the person using it, and this is the group a reader
   // looking for "what does it know about me" already scans — Interface is
