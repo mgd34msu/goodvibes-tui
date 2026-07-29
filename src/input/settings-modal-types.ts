@@ -52,6 +52,13 @@ export type SettingsCategory =
   | 'update'
   | 'power'
   | 'memory'
+  // profile.* — the owner profile (docs/owner-profile.md §12.1). This entry and
+  // its SETTINGS_CATEGORY_GROUPS membership below are both mandatory:
+  // buildSettingGroups guards every push with `if (groups.has(cat))`, so a
+  // config prefix with no category here is dropped from the workspace entirely
+  // and reachable only by hand-editing a settings file — see the push.* and
+  // cluster.* comments in settings-modal-data.ts for the two times that happened.
+  | 'profile'
   | 'danger';
 
 export type SettingsFocusPane = 'categories' | 'settings';
@@ -65,7 +72,11 @@ export const SETTINGS_CATEGORY_GROUPS: ReadonlyArray<{
   { label: 'Service & Network', categories: ['service', 'daemon', 'network', 'controlPlane', 'httpListener', 'web', 'relay'] },
   { label: 'Surfaces & Cloud', categories: ['surfaces', 'device', 'conversationGate', 'integrations', 'connections', 'mcp', 'cloudflare'] },
   { label: 'Automation', categories: ['batch', 'automation', 'checkin', 'watchers', 'orchestration', 'planner', 'wrfc'] },
-  { label: 'Runtime & Data', categories: ['storage', 'atRest', 'sandbox', 'fetch', 'agents', 'runtime', 'power', 'memory', 'cache', 'telemetry', 'diagnostics', 'learning'] },
+  // 'profile' sits beside 'memory' and 'learning': all three are what the
+  // platform retains about the person using it, and this is the group a reader
+  // looking for "what does it know about me" already scans — Interface is
+  // presentation and permission posture, and nothing there is a store of facts.
+  { label: 'Runtime & Data', categories: ['storage', 'atRest', 'sandbox', 'fetch', 'agents', 'runtime', 'power', 'profile', 'memory', 'cache', 'telemetry', 'diagnostics', 'learning'] },
   { label: 'Advanced', categories: ['release', 'update', 'danger'] },
 ];
 
