@@ -14,9 +14,7 @@
 // ---------------------------------------------------------------------------
 
 import { beforeEach, describe, expect, test } from 'bun:test';
-import { mkdtempSync } from 'node:fs';
 import { join } from 'node:path';
-import { tmpdir } from 'node:os';
 import { UserAuthManager } from '@pellux/goodvibes-sdk/platform/security';
 import { InputTokenizer } from '@pellux/goodvibes-sdk/platform/core';
 import { PanelManager } from '../../panels/panel-manager.ts';
@@ -29,6 +27,7 @@ import { handlePanelFocusToken } from '../../input/handler-feed-routes.ts';
 import type { PanelFocusRouteState } from '../../input/handler-feed-routes.ts';
 import { KeybindingsManager } from '../../input/keybindings.ts';
 import type { Line } from '../../types/grid.ts';
+import { makeProjectTempDir } from '../helpers/project-temp.ts';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -131,7 +130,7 @@ describe('local-auth masked-entry command routing — bootstrap wiring', () => {
   let panelManager: PanelManager;
 
   beforeEach(() => {
-    dir = mkdtempSync(join(tmpdir(), 'gv-routing-'));
+    dir = makeProjectTempDir('gv-routing');
     auth = new UserAuthManager({
       bootstrapFilePath: join(dir, 'users.json'),
       bootstrapCredentialPath: join(dir, 'bootstrap.txt'),

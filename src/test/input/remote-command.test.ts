@@ -1,6 +1,5 @@
 import { describe, expect, mock, test } from 'bun:test';
-import { existsSync, mkdtempSync, readFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { CommandRegistry } from '../../input/command-registry.ts';
 import type { CommandContext } from '../../input/command-registry.ts';
@@ -18,6 +17,7 @@ import {
   resetTestRuntimeServices,
   disposeTestRuntimeServicesAfterAll,
 } from '../helpers/runtime-services.ts';
+import { makeProjectTempDir } from '../helpers/project-temp.ts';
 
 // Stop the shared test runtime graph when this file ends. Called here, not
 // registered inside the helper, for the reason its doc comment gives.
@@ -40,7 +40,7 @@ function createRemoteCommandContext(
   out: string[],
   overrides: CommandContextOverrides = {},
 ): CommandContext {
-  const shellRoot = mkdtempSync(join(tmpdir(), 'gv-remote-shell-'));
+  const shellRoot = makeProjectTempDir('gv-remote-shell');
   const remoteRunnerRegistry = getTestRemoteRunnerRegistry();
   const remoteSupervisor = getTestRemoteSupervisor();
   const remoteRuntime = {
@@ -252,7 +252,7 @@ describe('remote command', () => {
     }));
 
     const out: string[] = [];
-    const dir = mkdtempSync(join(tmpdir(), 'gv-remote-cmd-'));
+    const dir = makeProjectTempDir('gv-remote-cmd');
     const path = join(dir, 'review-artifact.json');
 
     const ctx = createRemoteCommandContext(store, out);
@@ -348,7 +348,7 @@ describe('remote command', () => {
 
     const store = createRuntimeStore();
     const out: string[] = [];
-    const dir = mkdtempSync(join(tmpdir(), 'gv-remote-env-'));
+    const dir = makeProjectTempDir('gv-remote-env');
     const envPath = join(dir, 'remote-env.sh');
 
     const ctx = createRemoteCommandContext(store, out, {
@@ -402,7 +402,7 @@ describe('remote command', () => {
 
     const store = createRuntimeStore();
     const out: string[] = [];
-    const dir = mkdtempSync(join(tmpdir(), 'gv-remote-setup-daemon-'));
+    const dir = makeProjectTempDir('gv-remote-setup-daemon');
 
     const defaultCtx = createRemoteCommandContext(store, out, {
       platform: {
@@ -501,7 +501,7 @@ describe('remote command', () => {
 
     const store = createRuntimeStore();
     const out: string[] = [];
-    const dir = mkdtempSync(join(tmpdir(), 'gv-teleport-cmd-'));
+    const dir = makeProjectTempDir('gv-teleport-cmd');
     const ctx = createRemoteCommandContext(store, out, {
       session: {
         runtime: {

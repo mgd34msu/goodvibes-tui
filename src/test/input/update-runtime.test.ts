@@ -1,7 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { createHash } from 'node:crypto';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterAll } from 'bun:test';
 import {
@@ -17,6 +16,7 @@ import {
 } from '../../input/commands/update-runtime.ts';
 import type { UpdateFetchLike } from '../../runtime/update-check.ts';
 import { realUpdateFileIo, type UpdateFileIo } from '@pellux/goodvibes-sdk/platform/runtime/self-update';
+import { makeProjectTempDir } from '../helpers/project-temp.ts';
 
 // This suite pins fixture versions ('1.0.0' / '1.1.0' / 'v9.9.9') rather than
 // the live build VERSION, per this repo's rule that tests must never compare
@@ -472,7 +472,7 @@ describe('detectDaemonServiceManaged', () => {
 
 const scratchDirs: string[] = [];
 function scratchDir(): string {
-  const dir = mkdtempSync(join(tmpdir(), 'gv-update-rollback-'));
+  const dir = makeProjectTempDir('gv-update-rollback');
   scratchDirs.push(dir);
   return dir;
 }

@@ -1,13 +1,13 @@
 import { describe, expect, test } from 'bun:test';
-import { existsSync, mkdtempSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 
 import type { SpillBackend } from '@pellux/goodvibes-sdk/platform/tools';
 import { OverflowHandler } from '@pellux/goodvibes-sdk/platform/tools';
+import { makeProjectTempDir } from '../../helpers/project-temp.ts';
 
 function makeTmpDir(): string {
-  return mkdtempSync(join(tmpdir(), 'overflow-test-'));
+  return makeProjectTempDir('overflow-test');
 }
 
 function makeString(length: number): string {

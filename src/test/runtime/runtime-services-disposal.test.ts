@@ -16,8 +16,7 @@
  */
 
 import { afterAll, beforeAll, expect, test } from 'bun:test';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { rmSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
@@ -25,6 +24,7 @@ import { RuntimeEventBus } from '@/runtime/index.ts';
 import { createRuntimeStore } from '../../runtime/store/index.ts';
 
 import { createRuntimeServices, type RuntimeServices } from '../../runtime/services.ts';
+import { makeProjectTempDir } from '../helpers/project-temp.ts';
 
 /**
  * Modules that own repeating work started by the graph.
@@ -115,7 +115,7 @@ function describe(): string[] {
 }
 
 beforeAll(async () => {
-  root = mkdtempSync(join(tmpdir(), 'tui-disposal-'));
+  root = makeProjectTempDir('tui-disposal');
   install();
   try {
     services = createRuntimeServices({

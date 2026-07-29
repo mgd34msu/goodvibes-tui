@@ -9,13 +9,13 @@
  * and the legacy-fold path imports a fixture store into the same daemon.
  */
 import { afterEach, describe, expect, test } from 'bun:test';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { bootDaemon, type BootedDaemon } from '@pellux/goodvibes-sdk/platform/daemon';
 import { createHttpTransport } from '@/runtime/index.ts';
 import { foldLegacySpineStore, SessionSpineClient, TUI_SPINE_PARTICIPANT } from '@pellux/goodvibes-sdk/platform/runtime/session-spine';
 import { createTuiSpineTransport, type SpineSessionsClient } from '../../runtime/session-spine-transport.ts';
+import { makeProjectTempDir } from '../helpers/project-temp.ts';
 
 const TOKEN = 'spine-integration-token';
 
@@ -63,8 +63,8 @@ interface Harness {
 }
 
 async function startHarness(): Promise<Harness> {
-  const homeDirectory = mkdtempSync(join(tmpdir(), 'goodvibes-spine-daemon-home-'));
-  const workingDir = mkdtempSync(join(tmpdir(), 'goodvibes-spine-daemon-project-'));
+  const homeDirectory = makeProjectTempDir('goodvibes-spine-daemon-home');
+  const workingDir = makeProjectTempDir('goodvibes-spine-daemon-project');
   const daemon = await bootDaemon({ homeDirectory, workingDir, port: 0, token: TOKEN });
   const transport = createHttpTransport({ baseUrl: daemon.url, authToken: TOKEN });
   const sessionsClient: SpineSessionsClient = {

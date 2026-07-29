@@ -1,10 +1,10 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { tmpdir } from 'node:os';
 import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import { handleDoctorSubcommand } from '../../cli/doctor.ts';
 import type { GoodVibesCliOutputFormat } from '../../cli/types.ts';
+import { makeProjectTempDir } from '../helpers/project-temp.ts';
 
 function makeOptions(root: string, subcommand: string, args: string[], outputFormat: GoodVibesCliOutputFormat = 'text') {
   const configManager = new ConfigManager({ workingDir: root, homeDir: root, surfaceRoot: 'tui' });
@@ -13,7 +13,7 @@ function makeOptions(root: string, subcommand: string, args: string[], outputFor
 
 describe('goodvibes doctor subcommands', () => {
   let root = '';
-  beforeEach(() => { root = mkdtempSync(join(tmpdir(), 'gv-doctor-')); });
+  beforeEach(() => { root = makeProjectTempDir('gv-doctor'); });
   afterEach(() => { rmSync(root, { recursive: true, force: true }); });
 
   test('unknown subcommand returns null so the classic doctor renders', async () => {

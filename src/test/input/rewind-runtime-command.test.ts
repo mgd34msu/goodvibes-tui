@@ -10,8 +10,7 @@
 // ---------------------------------------------------------------------------
 
 import { describe, expect, test, afterEach, beforeEach } from 'bun:test';
-import { mkdtempSync, rmSync, readFileSync, writeFileSync, existsSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { rmSync, readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { WorkspaceCheckpointManager } from '@pellux/goodvibes-sdk/platform/workspace';
 import { CommandRegistry, type CommandContext } from '../../input/command-registry.ts';
@@ -23,6 +22,7 @@ import {
 } from '../../input/commands/rewind-runtime.ts';
 import { recordTurnAnchor, clearTurnAnchors } from '../../core/rewind-turn-anchors.ts';
 import { DiffPanel } from '../../panels/diff-panel.ts';
+import { makeProjectTempDir } from '../helpers/project-temp.ts';
 
 const SESSION = 's-rewind';
 
@@ -36,7 +36,7 @@ beforeEach(() => {
 });
 
 function makeScratchWorkspace(): string {
-  const dir = mkdtempSync(join(tmpdir(), 'gv-rewind-runtime-'));
+  const dir = makeProjectTempDir('gv-rewind-runtime');
   tempDirs.push(dir);
   return dir;
 }

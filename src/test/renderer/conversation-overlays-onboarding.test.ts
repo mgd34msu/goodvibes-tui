@@ -7,7 +7,12 @@ import { applyConversationOverlays } from '../../renderer/conversation-overlays.
 import { createEmptyLine } from '../../types/grid.ts';
 import { InfiniteBuffer } from '../../core/history.ts';
 import { createDefaultUiRuntimeServices } from '../helpers/ui-services.ts';
+import { disposeTestRuntimeServicesAfterAll } from '../helpers/runtime-services.ts';
 import { linesToText } from '../setup.ts';
+
+// Stop the shared test runtime graph when this file ends. Called here, not
+// registered inside the helper, for the reason its doc comment gives.
+disposeTestRuntimeServicesAfterAll();
 
 function makeInput(): InputHandler {
   const history = new InfiniteBuffer();

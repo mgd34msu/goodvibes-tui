@@ -12,12 +12,12 @@
 // ---------------------------------------------------------------------------
 
 import { describe, expect, test, afterEach } from 'bun:test';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { WorkspaceCheckpointManager } from '@pellux/goodvibes-sdk/platform/workspace';
 import { CommandRegistry, type CommandContext } from '../../input/command-registry.ts';
 import { registerCheckpointRuntimeCommands } from '../../input/commands/checkpoint-runtime.ts';
+import { makeProjectTempDir } from '../helpers/project-temp.ts';
 
 const tempDirs: string[] = [];
 afterEach(() => {
@@ -28,7 +28,7 @@ afterEach(() => {
 });
 
 function makeScratchWorkspace(): string {
-  const dir = mkdtempSync(join(tmpdir(), 'gv-checkpoint-runtime-'));
+  const dir = makeProjectTempDir('gv-checkpoint-runtime');
   tempDirs.push(dir);
   return dir;
 }

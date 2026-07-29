@@ -20,14 +20,14 @@
 // ---------------------------------------------------------------------------
 
 import { describe, expect, test } from 'bun:test';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { createShellPathService } from '@/runtime/index.ts';
 import type { ProcessNode } from '@pellux/goodvibes-sdk/platform/runtime/fleet';
 import { FleetPanel, type FleetActionCallbacks } from '../../panels/fleet-panel.ts';
 import { buildFleetSnapshot, createStaticFleetReadModel } from '../../panels/fleet-read-model.ts';
 import type { Line } from '../../types/grid.ts';
+import { makeProjectTempDir } from '../helpers/project-temp.ts';
 
 const NOW = 1_700_000_000_000;
 
@@ -49,7 +49,7 @@ function makeDoneAgentNode(id: string): ProcessNode {
 
 describe('resolveSessionLogPath — real ShellPathService wiring (operations.ts shape)', () => {
   test('resolves to <workingDirectory>/.goodvibes/tui/sessions/<agentId>.jsonl', () => {
-    const workingDirectory = mkdtempSync(join(tmpdir(), 'gv-fleet-resolver-'));
+    const workingDirectory = makeProjectTempDir('gv-fleet-resolver');
     try {
       const shellPaths = createShellPathService({ workingDirectory, homeDirectory: workingDirectory });
       // The EXACT expression from src/panels/builtin/operations.ts's FleetPanel
@@ -66,7 +66,7 @@ describe('resolveSessionLogPath — real ShellPathService wiring (operations.ts 
   });
 
   test('a scratch on-disk ledger at the resolved path is found and rendered by FleetPanel end to end (not just a path-string match)', async () => {
-    const workingDirectory = mkdtempSync(join(tmpdir(), 'gv-fleet-resolver-e2e-'));
+    const workingDirectory = makeProjectTempDir('gv-fleet-resolver-e2e');
     try {
       const shellPaths = createShellPathService({ workingDirectory, homeDirectory: workingDirectory });
       const agentId = 'agent-done-e2e';
@@ -108,7 +108,7 @@ describe('resolveSessionLogPath — real ShellPathService wiring (operations.ts 
   });
 
   test('a missing file at the resolved path degrades to an empty (not thrown) ledger, matching agent-inspector-panel.ts\'s ENOENT convention', async () => {
-    const workingDirectory = mkdtempSync(join(tmpdir(), 'gv-fleet-resolver-missing-'));
+    const workingDirectory = makeProjectTempDir('gv-fleet-resolver-missing');
     try {
       const shellPaths = createShellPathService({ workingDirectory, homeDirectory: workingDirectory });
       const agentId = 'agent-never-wrote-a-file';

@@ -12,13 +12,13 @@
 // ---------------------------------------------------------------------------
 
 import { describe, test, expect, afterEach } from 'bun:test';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { rmSync, writeFileSync } from 'node:fs';
 import { execSync } from 'node:child_process';
 import { dirname, join } from 'node:path';
-import { tmpdir } from 'node:os';
 import type { Line } from '../../types/grid.ts';
 import { DiffPanel } from '../../panels/diff-panel.ts';
 import { GitPanel } from '../../panels/git-panel.ts';
+import { makeProjectTempDir } from '../helpers/project-temp.ts';
 
 function linesText(lines: Line[]): string {
   return lines.map((l) => l.map((c) => c.char ?? ' ').join('')).join('\n');
@@ -31,7 +31,7 @@ const H = 24;
 
 /** Create an isolated temp git repo and return its path. */
 function makeTempRepo(): string {
-  const dir = mkdtempSync(join(tmpdir(), 'gv-git-panel-'));
+  const dir = makeProjectTempDir('gv-git-panel');
   execSync('git init', { cwd: dir });
   execSync('git config user.email "test@test.com"', { cwd: dir });
   execSync('git config user.name "Test"', { cwd: dir });
@@ -163,7 +163,7 @@ describe('DiffPanel — self-load via its own diff plumbing (w/h/s)', () => {
 
 describe('DiffPanel — not-a-git-repo gate (defensive, mirrors GitPanel)', () => {
   test('w/h/s and showFileDiffs all report a friendly not-a-git-repo placeholder instead of a raw git error', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'gv-diff-nogit-'));
+    const dir = makeProjectTempDir('gv-diff-nogit');
     tempDirs.push(dir);
 
     const panel = new DiffPanel(dir);
@@ -350,7 +350,7 @@ describe('GitPanel — Enter on a commit row shows diffBetween/diffStat', () => 
 
 describe('GitPanel — no more auto `git init`; explicit i confirm instead', () => {
   test('a non-git directory does not get auto-initialised, but i + y does it explicitly', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'gv-git-panel-nonrepo-'));
+    const dir = makeProjectTempDir('gv-git-panel-nonrepo');
     tempDirs.push(dir);
 
     // This test needs `dir` to be genuinely outside any git work tree. That is

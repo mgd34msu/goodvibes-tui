@@ -2,13 +2,14 @@ import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { mkdir } from 'node:fs/promises';
-import { mkdtempSync, rmSync, writeFileSync } from 'fs';
+import { rmSync, writeFileSync } from 'fs';
 import { execSync } from 'child_process';
 import { makeTempDir, writeTempFile } from '../setup.ts';
 import { createAnalyzeTool } from '@pellux/goodvibes-sdk/platform/tools';
 import { GitService } from '@pellux/goodvibes-sdk/platform/git';
 import { createTestManagers } from '../helpers/test-managers.ts';
 import { getTestGitService, disposeTestRuntimeServicesAfterAll } from '../helpers/runtime-services.ts';
+import { makeProjectTempDir } from '../helpers/project-temp.ts';
 
 // Stop the shared test runtime graph when this file ends. Called here, not
 // registered inside the helper, for the reason its doc comment gives.
@@ -547,7 +548,7 @@ describe('bundle mode', () => {
 
 /** Create an isolated temp git repo with a configured identity. */
 function makeTempGitRepo(prefix = 'analyze-git-test'): string {
-  const tmpDir = mkdtempSync(join(tmpdir(), `${prefix}-`));
+  const tmpDir = makeProjectTempDir(prefix);
   execSync('git init', { cwd: tmpDir });
   execSync('git config user.email "test@test.com"', { cwd: tmpDir });
   execSync('git config user.name "Test"', { cwd: tmpDir });

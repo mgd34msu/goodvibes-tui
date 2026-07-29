@@ -16,14 +16,13 @@
  *     SDK's own honest note, and further writes land on the local store again.
  */
 import { afterEach, describe, expect, test } from 'bun:test';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { rmSync } from 'node:fs';
 import { bootDaemon, type BootedDaemon } from '@pellux/goodvibes-sdk/platform/daemon';
 import { MemorySpineClient } from '@pellux/goodvibes-sdk/platform/runtime/memory-spine';
 import type { MemoryAccess, MemoryTransport } from '@pellux/goodvibes-sdk/platform/runtime/memory-spine';
 import type { MemoryLink, MemoryRecord } from '@pellux/goodvibes-sdk/platform/state';
 import { createTuiMemorySpineTransport, syncMemorySpineToHostStatus, type MemorySpineActiveRef } from '../../runtime/memory-spine-transport.ts';
+import { makeProjectTempDir } from '../helpers/project-temp.ts';
 
 const TOKEN = 'memory-spine-integration-token';
 
@@ -173,8 +172,8 @@ interface Harness {
 }
 
 async function startHarness(): Promise<Harness> {
-  const homeDirectory = mkdtempSync(join(tmpdir(), 'goodvibes-memory-spine-daemon-home-'));
-  const workingDir = mkdtempSync(join(tmpdir(), 'goodvibes-memory-spine-daemon-project-'));
+  const homeDirectory = makeProjectTempDir('goodvibes-memory-spine-daemon-home');
+  const workingDir = makeProjectTempDir('goodvibes-memory-spine-daemon-project');
   const daemon = await bootDaemon({ homeDirectory, workingDir, port: 0, token: TOKEN });
   return { daemon, homeDirectory, workingDir };
 }

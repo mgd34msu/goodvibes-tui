@@ -1,6 +1,5 @@
 import { afterEach, describe, expect, test } from 'bun:test';
-import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { rmSync, writeFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { makeTestSurface } from '../helpers/session-surface.ts';
 import {
@@ -12,10 +11,11 @@ import {
   restoreTurnAnchors,
   type TurnAnchor,
 } from '../../core/rewind-turn-anchors.ts';
+import { makeProjectTempDir } from '../helpers/project-temp.ts';
 
 const tempDirs: string[] = [];
 function makeWorkingDir(): string {
-  const dir = mkdtempSync(join(tmpdir(), 'gv-anchors-'));
+  const dir = makeProjectTempDir('gv-anchors');
   tempDirs.push(dir);
   return dir;
 }

@@ -1,15 +1,14 @@
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { rmSync } from 'node:fs';
 import { GatewayMethodCatalog } from '@pellux/goodvibes-sdk/platform/control-plane';
 import type { HandlerContext, HandlerLogger } from '../../../daemon/handlers/context.ts';
 import type {
   GatewayMethodInvocation,
 } from '../../../daemon/handlers/contracts.ts';
+import { makeProjectTempDir } from '../../helpers/project-temp.ts';
 
 /** A throwaway working directory rooted in the OS temp dir for SQLite files. */
 export function makeTmpWorkingDir(): { dir: string; cleanup: () => void } {
-  const dir = mkdtempSync(join(tmpdir(), 'gv-routing-test-'));
+  const dir = makeProjectTempDir('gv-routing-test');
   return {
     dir,
     cleanup: () => {

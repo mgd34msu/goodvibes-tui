@@ -1,13 +1,13 @@
 import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
-import { mkdirSync, writeFileSync, rmSync, mkdtempSync } from 'fs';
+import { writeFileSync, rmSync } from 'fs';
 import { join } from 'path';
-import { tmpdir } from 'os';
 import { readPromptFile, loadSystemPrompt } from '@pellux/goodvibes-sdk/platform/utils';
+import { makeProjectTempDir } from '../helpers/project-temp.ts';
 
 // --- helpers ---
 
 function tmpDir(): string {
-  return mkdtempSync(join(tmpdir(), 'prompt-loader-test-'));
+  return makeProjectTempDir('prompt-loader-test');
 }
 
 function write(dir: string, name: string, content: string): string {

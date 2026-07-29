@@ -20,11 +20,13 @@
  *   overrides the CLI --coverage flag and the child emits no coverage table.
  */
 import { readFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   evaluateCoverageGate,
   parseCoverageSummary as toolchainParseCoverageSummary,
 } from "@pellux/goodvibes-toolchain";
+import { sweepStaleOsTmpEntries } from "./stale-tmp-sweep.ts";
 
 interface CoverageConfigShape {
   readonly funcsFloor: number;
@@ -110,7 +112,28 @@ export async function runCoverageGate(options: RunGateOptions = {}): Promise<Gat
   const cwd = options.cwd ?? process.cwd();
   const configured = coverageConfig.command ? [...coverageConfig.command] : ["bun", "test", "--coverage", "src"];
   const cmd = options.cmd ?? configured;
-  const proc = Bun.spawn(cmd, { cwd, stdout: "pipe", stderr: "pipe" });
+  // This spawns a single whole-suite `bun test` process directly — unlike
+  // `bun run test` (scripts/run-tests.ts), there is no per-file TMPDIR
+  // redirection here, so anything the suite creates via a raw
+  // mkdtemp(tmpdir()) call lands in the real OS temp dir. Sweep this
+  // project's own known-stale entries there before every run (age-gated,
+  // see scripts/stale-tmp-sweep.ts) so this entry point — the one CI
+  // actually calls via `bun run test:coverage` — isn't left unswept.
+  sweepStaleOsTmpEntries(tmpdir());
+  // Fence git's upward repo discovery at `.test-tmp` for the same reason
+  // scripts/run-tests.ts does (see its longer comment): makeProjectTempDir
+  // scratch has no `.git` of its own, so it sits inside this project's own
+  // repo, and any test that needs a genuinely non-repo directory would
+  // otherwise silently resolve to the project root instead. Set in the
+  // spawn env (not mutated later) so it is part of this child process's own
+  // startup snapshot — Bun.spawnSync-based git calls only honor a ceiling
+  // set before the process starts, not a later same-process mutation.
+  const testTmpRoot = join(cwd, ".test-tmp");
+  const existingCeiling = process.env.GIT_CEILING_DIRECTORIES;
+  const ceilingEntries = existingCeiling ? existingCeiling.split(":") : [];
+  if (!ceilingEntries.includes(testTmpRoot)) ceilingEntries.push(testTmpRoot);
+  const env = { ...process.env, GIT_CEILING_DIRECTORIES: ceilingEntries.join(":") };
+  const proc = Bun.spawn(cmd, { cwd, env, stdout: "pipe", stderr: "pipe" });
   const [stdout, stderr] = await Promise.all([
     new Response(proc.stdout).text(),
     new Response(proc.stderr).text(),

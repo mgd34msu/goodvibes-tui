@@ -12,8 +12,7 @@
 // ---------------------------------------------------------------------------
 
 import { describe, expect, test, afterEach } from 'bun:test';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import type { ConfigKey } from '@pellux/goodvibes-sdk/platform/config';
@@ -22,6 +21,7 @@ import type { CodeIndexStore } from '@pellux/goodvibes-sdk/platform/state';
 import { CommandRegistry, type CommandContext } from '../../input/command-registry.ts';
 import { registerCodebaseRuntimeCommands } from '../../input/commands/codebase-runtime.ts';
 import { CODE_INDEX_ENABLED_CONFIG_KEY, createCodeIndexServices } from '../../runtime/code-index-services.ts';
+import { makeProjectTempDir } from '../helpers/project-temp.ts';
 
 const tempDirs: string[] = [];
 
@@ -30,7 +30,7 @@ afterEach(() => {
 });
 
 function makeScratchWorkingDirectory(): string {
-  const dir = mkdtempSync(join(tmpdir(), 'gv-codebase-command-'));
+  const dir = makeProjectTempDir('gv-codebase-command');
   tempDirs.push(dir);
   mkdirSync(join(dir, 'src'), { recursive: true });
   writeFileSync(

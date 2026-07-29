@@ -7,9 +7,9 @@ import { createFetchTool } from '@pellux/goodvibes-sdk/platform/tools';
 import { ServiceRegistry } from '@pellux/goodvibes-sdk/platform/config';
 import { SecretsManager } from '../../config/secrets.ts';
 import { SubscriptionManager } from '@pellux/goodvibes-sdk/platform/config';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { tmpdir } from 'node:os';
+import { makeProjectTempDir } from '../helpers/project-temp.ts';
 
 // ---------------------------------------------------------------------------
 // Local test server — echoes headers so we can verify auth was applied
@@ -172,7 +172,7 @@ describe('fetch tool - inline auth api-key', () => {
 
 describe('fetch tool - service registry auth', () => {
   test('applies bearer auth from service registry via env var', async () => {
-    const tempDir = mkdtempSync(join(tmpdir(), 'gv-fetch-auth-'));
+    const tempDir = makeProjectTempDir('gv-fetch-auth');
     try {
       writeFileSync(join(tempDir, 'services.json'), JSON.stringify({
         echo: { name: 'echo', authType: 'bearer', tokenKey: 'TEST_SERVICE_TOKEN' },
@@ -207,7 +207,7 @@ describe('fetch tool - service registry auth', () => {
   });
 
   test('inline auth takes precedence over service field (auth wins when both set)', async () => {
-    const tempDir = mkdtempSync(join(tmpdir(), 'gv-fetch-auth-'));
+    const tempDir = makeProjectTempDir('gv-fetch-auth');
     writeFileSync(join(tempDir, 'services.json'), JSON.stringify({
       echo: { name: 'echo', authType: 'bearer', tokenKey: 'TEST_SERVICE_TOKEN' },
     }, null, 2), 'utf-8');

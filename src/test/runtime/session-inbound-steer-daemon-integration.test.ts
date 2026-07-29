@@ -12,9 +12,7 @@
  * different projects, a steer to each lands only in the owning session's poller.
  */
 import { describe, expect, test } from 'bun:test';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { rmSync } from 'node:fs';
 import { bootDaemon, type BootedDaemon } from '@pellux/goodvibes-sdk/platform/daemon';
 import { createHttpTransport } from '@/runtime/index.ts';
 import { SessionSpineClient, TUI_SPINE_PARTICIPANT } from '@pellux/goodvibes-sdk/platform/runtime/session-spine';
@@ -24,6 +22,7 @@ import {
   type InboundSteer,
   type SpineInboundInputsClient,
 } from '../../runtime/session-inbound-inputs.ts';
+import { makeProjectTempDir } from '../helpers/project-temp.ts';
 
 const TOKEN = 'inbound-steer-integration-token';
 const SILENT = { debug: () => {}, info: () => {} };
@@ -51,8 +50,8 @@ interface Harness {
 }
 
 async function startHarness(): Promise<Harness> {
-  const homeDirectory = mkdtempSync(join(tmpdir(), 'goodvibes-inbound-home-'));
-  const workingDir = mkdtempSync(join(tmpdir(), 'goodvibes-inbound-project-'));
+  const homeDirectory = makeProjectTempDir('goodvibes-inbound-home');
+  const workingDir = makeProjectTempDir('goodvibes-inbound-project');
   const daemon = await bootDaemon({ homeDirectory, workingDir, port: 0, token: TOKEN });
   const transport = createHttpTransport({ baseUrl: daemon.url, authToken: TOKEN });
   const spineClient: SpineSessionsClient = {

@@ -1,10 +1,10 @@
 import { afterEach, describe, expect, test } from 'bun:test';
 import { execSync } from 'child_process';
-import { mkdtempSync, rmSync, writeFileSync } from 'fs';
+import { rmSync, writeFileSync } from 'fs';
 import { join } from 'path';
-import { tmpdir } from 'os';
 import type { CommandContext } from '../../input/command-registry.ts';
 import { buildWriteQuitCommitMessage, collectGitChanges, executeWriteQuit } from '../../input/commands/quit-shared.ts';
+import { makeProjectTempDir } from '../helpers/project-temp.ts';
 
 function makeCommandContext(overrides: Partial<CommandContext> = {}): Pick<CommandContext, 'print' | 'exit'> {
   return {
@@ -56,7 +56,7 @@ describe('write quit helpers', () => {
   });
 
   test('stages all changes, commits them, and then exits', async () => {
-    const repoDir = mkdtempSync(join(tmpdir(), 'goodvibes-wq-'));
+    const repoDir = makeProjectTempDir('goodvibes-wq');
     tempDirs.push(repoDir);
 
     execSync('git init', { cwd: repoDir, stdio: 'ignore' });

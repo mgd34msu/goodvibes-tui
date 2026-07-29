@@ -1,15 +1,15 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { PersistentStore } from '@pellux/goodvibes-sdk/platform/state';
 import {
   DistributedRuntimeManager,
   type DistributedRuntimeSnapshotStore,
 } from '@/runtime/index.ts';
+import { makeProjectTempDir } from '../../helpers/project-temp.ts';
 
 function createManager() {
-  const dir = mkdtempSync(join(tmpdir(), 'gv-distributed-runtime-'));
+  const dir = makeProjectTempDir('gv-distributed-runtime');
   const store = new PersistentStore<DistributedRuntimeSnapshotStore>(join(dir, 'distributed-runtime.json'));
   const manager = new DistributedRuntimeManager(store);
   return { dir, manager };

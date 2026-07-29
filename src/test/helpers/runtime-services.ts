@@ -1,4 +1,4 @@
-import { mkdirSync } from 'node:fs';
+import { mkdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterAll } from 'bun:test';
 import { ArchetypeLoader } from '@pellux/goodvibes-sdk/platform/agents';
@@ -87,11 +87,22 @@ function getTestRoots(): IntelligenceTestRoots {
     }),
   };
 
-  // No cleanup wiring here on purpose. `root` came from makeProjectTempDir,
-  // which registers it with helpers/temp-registry.ts, and the preload's
-  // afterAll removes it when the test process finishes. The
-  // `process.on('exit')` hook this function used to register was dead code:
-  // `bun test` does not fire exit handlers, so it never removed anything.
+  // No cleanup wiring here on purpose, and two things clean this root up
+  // instead. A `process.on('exit', ...)` registered from inside this lazily-
+  // called function used to sit here — the same dead-code pattern documented
+  // on makeProjectTempDir in project-temp.ts: `bun test` never fires exit
+  // handlers, and afterAll doesn't reliably attach when called from inside an
+  // already-running test/beforeEach rather than at collection time. It was
+  // leaking one `gv-test-runtime` tree per test file that touched this shared
+  // graph. What replaces it: (1) disposeTestRuntimeServicesAfterAll's
+  // top-level afterAll removes this root per file, and (2) `root` came from
+  // makeProjectTempDir, so it is registered with helpers/temp-registry.ts and
+  // the preload's afterAll drains it — with re-checks — when the test process
+  // finishes. (2) is what closes the residual noted on
+  // disposeTestRuntimeServicesAfterAll below, where a late async write inside
+  // the SDK recreates a few files microtasks after the per-file rmSync.
+
+
   return testRoots;
 }
 
@@ -165,10 +176,41 @@ export function resetTestRuntimeServices(): void {
  * `resetTestRuntimeServices()` in an `afterEach` already covers the graphs a
  * file builds between tests; this covers the last one, which nothing else
  * would ever stop.
+ *
+ * Also removes `getTestRoots()`'s temp directory (the `gv-test-runtime-*`
+ * scratch shared by getTestRuntimeServices/getTestLspService/
+ * getTestCodeIntelligence/getTestTaskScheduler), which used to rely on a
+ * `process.on('exit', ...)` hook registered lazily inside getTestRoots — Bun's
+ * test runner never fires that under `bun test`, so it leaked the ENTIRE
+ * directory tree (never removed at all) for every test file that touched any
+ * of those shared services. This function is already the established
+ * per-file `afterAll` entry point, so folding the cleanup in here reaches
+ * every file without a second thing to remember to call.
+ *
+ * Known residual: confirmed by direct instrumentation that this rmSync
+ * genuinely succeeds at the moment it runs, but for some files a handful of
+ * files reappear under the same path microtasks later — some subsystem
+ * inside the created RuntimeServices graph (not identified further; it is
+ * inside @pellux/goodvibes-sdk, not this repo) performs an async write after
+ * `previous?.dispose()` above has synchronously returned, without this
+ * module awaiting it (resetTestRuntimeServices()'s signature is used
+ * synchronously in dozens of afterEach hooks elsewhere, so it isn't safe to
+ * make it async just for this). That residue is a small fraction of what
+ * used to leak (a file or two under `runtime-N/config/...`, not the whole
+ * populated `intelligence-workspace`/`intelligence-home` tree), and is still
+ * bounded by the age-gated `.test-tmp` sweep like everything else here.
  */
 export function disposeTestRuntimeServicesAfterAll(): void {
   afterAll(() => {
     resetTestRuntimeServices();
+    if (testRoots) {
+      try {
+        rmSync(testRoots.root, { recursive: true, force: true });
+      } catch {
+        // ignore cleanup failures
+      }
+      testRoots = null;
+    }
   });
 }
 

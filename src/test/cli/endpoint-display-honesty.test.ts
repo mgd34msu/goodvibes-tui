@@ -1,11 +1,10 @@
 import { afterAll, describe, expect, test } from 'bun:test';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { rmSync } from 'node:fs';
 import { parseGoodVibesCli } from '../../cli/parser.ts';
 import { buildControlPlaneStatusResult, formatControlPlaneStatus } from '../../cli/management-commands.ts';
 import { buildListenerTestResult, formatListenerTestResult } from '../../cli/surface-command.ts';
 import type { CliCommandRuntime } from '../../cli/types.ts';
+import { makeProjectTempDir } from '../helpers/project-temp.ts';
 
 /**
  * Mirrors the verifier's live probe: a daemon can be serving an endpoint
@@ -16,7 +15,7 @@ import type { CliCommandRuntime } from '../../cli/types.ts';
  * daemon demonstrably answers.
  */
 describe('endpoint display honesty — not-probed is a tri-state, never coerced to false', () => {
-  const scratch = mkdtempSync(join(tmpdir(), 'gv-display-honesty-'));
+  const scratch = makeProjectTempDir('gv-display-honesty');
   // A real listener: the "daemon demonstrably answering" in the verifier's probe.
   const listener = Bun.listen({
     hostname: '127.0.0.1',

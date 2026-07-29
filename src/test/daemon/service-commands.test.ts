@@ -1,8 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 import { join } from 'node:path';
-import { tmpdir } from 'node:os';
 import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import {
   buildInstallResultLines,
@@ -24,6 +23,7 @@ import {
   INSTALLER_UNIT_MARKER,
 } from '../../runtime/legacy-daemon-reconcile.ts';
 import { resolveRuntimeEndpointBinding } from '../../cli/endpoints.ts';
+import { makeProjectTempDir } from '../helpers/project-temp.ts';
 
 describe('resolveConfiguredServiceName — config-honest name for pre-manager callers', () => {
   function config(value: unknown): { get(key: string): unknown } {
@@ -118,7 +118,7 @@ describe('runDaemonServiceCli (systemd path, real PlatformServiceManager, stubbe
   let defaultStub: { runner: ManagedServiceActionRunner; calls: string[][] };
 
   beforeEach(() => {
-    dir = mkdtempSync(join(tmpdir(), 'gv-service-commands-'));
+    dir = makeProjectTempDir('gv-service-commands');
     defaultStub = stubSystemctl();
   });
 
@@ -306,7 +306,7 @@ describe('runDaemonServiceCli — install-script unit detection', () => {
   let dir = '';
 
   beforeEach(() => {
-    dir = mkdtempSync(join(tmpdir(), 'gv-service-commands-legacy-'));
+    dir = makeProjectTempDir('gv-service-commands-legacy');
   });
 
   afterEach(() => {
@@ -486,7 +486,7 @@ describe('runDaemonServiceCli — migrate-service', () => {
   let dir = '';
 
   beforeEach(() => {
-    dir = mkdtempSync(join(tmpdir(), 'gv-service-commands-migrate-'));
+    dir = makeProjectTempDir('gv-service-commands-migrate');
   });
 
   afterEach(() => {
@@ -1217,7 +1217,7 @@ describe('reconcileRedundantLegacyUnit — auto-retire a redundant install-scrip
     // HOST's systemctl, so it only passed while the developer's own
     // goodvibes.service happened to be inactive — and, with an active one, it
     // could have dispatched a real `systemctl --user disable`.
-    const dir = mkdtempSync(join(tmpdir(), 'gv-reconcile-timeout-'));
+    const dir = makeProjectTempDir('gv-reconcile-timeout');
     const stub = join(dir, 'systemctl');
     writeFileSync(stub, '#!/bin/sh\nsleep 30\n');
     chmodSync(stub, 0o755);
@@ -1254,7 +1254,7 @@ describe('reconcileRedundantLegacyUnit — auto-retire a redundant install-scrip
     // so PATH is pointed at a systemctl stub that records its own invocation.
     // If the deadline wrapper ever regressed, the marker file would appear and
     // this test would say so — instead of quietly querying the host's systemd.
-    const dir = mkdtempSync(join(tmpdir(), 'gv-reconcile-deadline-'));
+    const dir = makeProjectTempDir('gv-reconcile-deadline');
     const marker = join(dir, 'systemctl-was-invoked');
     const stub = join(dir, 'systemctl');
     writeFileSync(stub, `#!/bin/sh\ntouch ${marker}\nexit 1\n`);
@@ -1291,7 +1291,7 @@ describe('reconcileRedundantLegacyUnit — auto-retire a redundant install-scrip
  */
 describe('canonical unit content parity — installer and product agree, endpoint comes from config at boot', () => {
   test('product-written unit on a hostMode=network/port-3500 fixture bakes no endpoint; boot-time resolution yields the configured endpoint', () => {
-    const dir = mkdtempSync(join(tmpdir(), 'gv-unit-parity-'));
+    const dir = makeProjectTempDir('gv-unit-parity');
     try {
       const configManager = new ConfigManager({ workingDir: dir, homeDir: dir, surfaceRoot: 'tui' });
       configManager.setDynamic('controlPlane.hostMode', 'network');

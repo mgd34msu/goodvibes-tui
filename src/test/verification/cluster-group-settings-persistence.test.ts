@@ -28,9 +28,7 @@
  * key and the ledger already counts those in its own set.
  */
 import { describe, test, expect, beforeEach } from 'bun:test';
-import { mkdtempSync } from 'node:fs';
 import { join } from 'node:path';
-import { tmpdir } from 'node:os';
 import { ConfigManager, CONFIG_SCHEMA } from '../../config/index.ts';
 import type { ConfigKey } from '../../config/index.ts';
 import { FEATURE_SETTINGS } from '@pellux/goodvibes-sdk/platform/runtime/state';
@@ -39,6 +37,7 @@ import {
   DEVICE_AND_TRIGGER_LOCAL_SETTINGS,
   FEATURE_KNOB_LOCAL_SETTINGS,
 } from '../../verification/verification-ledger.ts';
+import { makeProjectTempDir } from '../helpers/project-temp.ts';
 
 /** A valid alternate value, distinct from the default and inside each validator's range. */
 const ALTERNATE_VALUE: Record<string, unknown> = {
@@ -51,7 +50,7 @@ const ALTERNATE_VALUE: Record<string, unknown> = {
 const schemaByKey = new Map(CONFIG_SCHEMA.map((setting) => [setting.key, setting]));
 
 function freshManager(): { manager: ConfigManager; root: string; configDir: string } {
-  const root = mkdtempSync(join(tmpdir(), 'goodvibes-cluster-group-'));
+  const root = makeProjectTempDir('goodvibes-cluster-group');
   const configDir = join(root, '.config-override');
   return { manager: new ConfigManager({ surfaceRoot: 'tui', workingDir: root, configDir }), root, configDir };
 }

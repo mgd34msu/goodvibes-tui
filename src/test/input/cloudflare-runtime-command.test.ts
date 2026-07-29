@@ -1,9 +1,8 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { mkdtempSync } from 'node:fs';
-import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { CommandRegistry, type CommandContext } from '../../input/command-registry.ts';
 import { registerCloudflareRuntimeCommands } from '../../input/commands/cloudflare-runtime.ts';
+import { makeProjectTempDir } from '../helpers/project-temp.ts';
 
 function makeContext(options: {
   readonly out?: string[];
@@ -29,7 +28,7 @@ function makeContext(options: {
     provider: { providerRegistry: {} as never },
     workspace: {
       shellPaths: {
-        homeDirectory: options.homeDirectory ?? mkdtempSync(join(tmpdir(), 'goodvibes-cloudflare-cmd-')),
+        homeDirectory: options.homeDirectory ?? makeProjectTempDir('goodvibes-cloudflare-cmd'),
         workingDirectory: process.cwd(),
       } as never,
     },
