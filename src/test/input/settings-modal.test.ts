@@ -6,6 +6,7 @@ import { mkdirSync, rmSync, existsSync, readFileSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
 import { SettingsModal, SETTINGS_CATEGORIES, SETTINGS_CATEGORY_GROUPS } from '../../input/settings-modal.ts';
+import { InputHistory } from '../../input/input-history.ts';
 import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import { CONFIG_SCHEMA } from '@pellux/goodvibes-sdk/platform/config';
 import { SecretsManager } from '../../config/secrets.ts';
@@ -356,6 +357,30 @@ describe('SettingsModal', () => {
     const secretKey = buildGoodVibesSecretKey('surfaces.homeassistant.accessToken');
     expect(cm.get('surfaces.homeassistant.accessToken')).toBe(buildGoodVibesSecretRef(secretKey));
     expect(await secrets.get(secretKey)).toBe('ha-long-lived-token');
+  });
+
+  test('typing a secret-backed setting value never reaches the composer input history', async () => {
+    const secrets = new SecretsManager({ projectRoot: tmpDir, globalHome: tmpDir, configManager: cm });
+    const history = new InputHistory({ persist: false, userRoot: tmpDir });
+    modal.open(cm, ffm, subscriptionManager, serviceRegistry, mcpRegistry, secrets);
+    while (modal.currentCategory !== 'surfaces') modal.nextCategory();
+
+    modal.selectedIndex = modal.currentItems.findIndex((entry) => entry.setting.key === 'surfaces.homeassistant.accessToken');
+    modal.activateSelected();
+    expect(modal.editingMode).toBe(true);
+
+    const typed = 'ha-super-secret-long-lived-token';
+    for (const char of typed) modal.editChar(char);
+    expect(modal.editBuffer).toBe(typed);
+    expect(modal.commitEdit()).toBe(true);
+
+    // The settings-modal edit buffer is a wholly separate field from the main
+    // composer's InputHistory (arrow-up recall) — nothing in the edit/commit
+    // path ever calls history.add() with the typed plaintext. Assert the
+    // invariant directly so a future wiring that routes settings-modal
+    // keystrokes through the shared composer path cannot silently leak it.
+    expect(history.getEntries()).toEqual([]);
+    expect(history.getEntries().join('\n')).not.toContain(typed);
   });
 
   test('close() deactivates modal and clears editing state', () => {

@@ -25,10 +25,11 @@ export function setSecretBackedSettingValue(args: {
   }
 
   const update = buildSecretBackedConfigUpdate(key, value);
-  // A daemon-owned key (surfaces.*, controlPlane.*, ...) names a credential the
-  // daemon executes with, so its value goes to the daemon tier — the one the
-  // daemon reads with every surface closed. Everything else stays at user
-  // scope. See defaultSecretBackedScope.
+  // A daemon-owned key (surfaces.*, payments.*, controlPlane.*, ...) names a
+  // credential the daemon itself executes with, so its secret material lands in
+  // the daemon tier — the one the daemon reads with every surface closed —
+  // regardless of which client edited it. Everything else stays at user scope.
+  // See secret-config.ts's defaultSecretBackedScope.
   const scope = defaultSecretBackedScope(key);
   if (update.secretKey && update.secretValue !== undefined) {
     void secretsManager.set(update.secretKey, update.secretValue, {

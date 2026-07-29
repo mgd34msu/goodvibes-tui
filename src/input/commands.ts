@@ -11,6 +11,7 @@ import { registerConfigCommand } from './commands/config.ts';
 import { registerDiscoveryRuntimeCommands } from './commands/discovery-runtime.ts';
 import { registerPlanningRuntimeCommands } from './commands/planning-runtime.ts';
 import { registerSecretRuntimeCommands } from './commands/secret-runtime.ts';
+import { registerPaymentCardCommands } from './commands/payment-card-intake.ts';
 import { registerScheduleRuntimeCommands } from './commands/schedule-runtime.ts';
 import { registerBranchRuntimeCommands } from './commands/branch-runtime.ts';
 import { registerOperatorRuntimeCommands } from './commands/operator-runtime.ts';
@@ -163,6 +164,7 @@ export const BUILTIN_COMMAND_GROUPS: readonly BuiltinCommandGroup[] = [
   { category: 'Discovery', register: registerDiscoveryRuntimeCommands },
   { category: 'Planning', register: registerPlanningRuntimeCommands },
   { category: 'Secrets', register: registerSecretRuntimeCommands },
+  { category: 'Payments', register: registerPaymentCardCommands },
   { category: 'Scheduling', register: registerScheduleRuntimeCommands },
   { category: 'Branches', register: registerBranchRuntimeCommands },
   { category: 'Session Content', register: registerSessionContentCommands },

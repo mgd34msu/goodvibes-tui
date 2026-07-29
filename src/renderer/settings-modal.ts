@@ -13,6 +13,8 @@ import { getDisplayWidth, wrapText } from '../utils/terminal-width.ts';
 import { CATEGORY_INFO, CATEGORY_LABELS, describeUiRouting, formatValue, getSettingLabel, inferSubscriptionRouteReason, valueColor } from './settings-modal-helpers.ts';
 import { buildConnectionContext, renderConnectionRows } from './settings-modal-connections.ts';
 import { isSecretConfigKey } from '../config/secret-config.ts';
+import { maskConcealedText } from '../input/concealed-input.ts';
+import { CVV_PROMPT_TRADEOFF_WARNING } from '@pellux/goodvibes-sdk/platform/payments';
 import { GLYPHS } from './ui-primitives.ts';
 import { formatHints, joinHints } from './hint-grammar.ts';
 import {
@@ -105,6 +107,10 @@ const ENUM_VALUE_DESCRIPTIONS: Record<string, Record<string, string>> = {
     'meta-cloud': 'Use Meta Cloud API credentials and identifiers.',
     bridge: 'Use a bridge service URL/token flow instead of direct Meta Cloud API delivery.',
   },
+  'payments.cvvHandling': {
+    stored: 'Store the CVV through the secret manager so the daemon can complete a purchase unattended.',
+    prompt: CVV_PROMPT_TRADEOFF_WARNING,
+  },
 };
 
 function paddedWrapped(text: string, width: number, prefix = ''): string[] {
@@ -121,7 +127,16 @@ function formatDefaultValue(value: unknown): string {
 }
 
 function currentSettingValue(modal: SettingsModal, entry: SettingEntry, selected: boolean): string {
-  if (selected && modal.editingMode) return `${modal.editBuffer}${GLYPHS.surface.cursor}`;
+  if (selected && modal.editingMode) {
+    // Secret-backed keys (surfaces.*.botToken, .signingSecret, etc. — see
+    // secret-config.ts) must never echo the in-progress plaintext buffer:
+    // not in the row, not in the "Current: ..." context line, not in search
+    // results. Reuse the composer's concealed-input mask (concealed-input.ts)
+    // rather than a second masking implementation — same bullet-per-character
+    // shape, so keystrokes still visibly register without revealing content.
+    const buffer = isSecretConfigKey(entry.setting.key) ? maskConcealedText(modal.editBuffer) : modal.editBuffer;
+    return `${buffer}${GLYPHS.surface.cursor}`;
+  }
   return formatValue(entry);
 }
 

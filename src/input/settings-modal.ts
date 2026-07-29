@@ -21,19 +21,14 @@ import type { ModelPickerTarget } from './model-picker.ts';
 import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import type { SubscriptionManager } from '@pellux/goodvibes-sdk/platform/config';
 import type { ServiceInspectionQuery } from '../runtime/ui-service-queries.ts';
-import { isSecretConfigKey } from '../config/secret-config.ts';
-import {
-  setSecretBackedSettingValue,
-  type SettingsSecretsManager,
-} from './settings-modal-secrets.ts';
+import type { SettingsSecretsManager } from './settings-modal-secrets.ts';
+import { CVV_PROMPT_TRADEOFF_WARNING } from '@pellux/goodvibes-sdk/platform/payments';
+import { PAYMENTS_CVV_HANDLING_CONFIG_KEY } from './payments-config.ts';
 import type { FeatureFlagManager } from '@/runtime/index.ts';
 import type { McpRegistry } from '@pellux/goodvibes-sdk/platform/mcp';
 import type { GatewayMethodCatalog } from '@pellux/goodvibes-sdk/platform/control-plane';
 import type { ConnectionStatus } from './commands/connection-status.ts';
 import { initialConnectionEntries, refreshConnectionEntries } from './settings-modal-connections.ts';
-import { isWorktreeSetupListConfigKey, parseWorktreeSetupListInput } from './worktree-setup-config.ts';
-import { isSandboxExecListConfigKey, parseSandboxExecListInput } from './sandbox-exec-config.ts';
-import { isExecEnvScrubAllowlistConfigKey, parseExecEnvScrubAllowlistInput } from './exec-env-scrub-config.ts';
 
 import {
   SETTINGS_CATEGORIES,
@@ -74,6 +69,7 @@ import {
   handleResetConfirmKey as _handleResetConfirmKey,
   type ResetConfirmKeyResult,
 } from './settings-modal-reset.ts';
+import { commitEditValue as _commitEditValue } from './settings-modal-commit.ts';
 
 export interface SettingsModalChange {
   readonly key: ConfigKey;
@@ -555,105 +551,22 @@ export class SettingsModal {
    * Returns true on success, false if validation failed.
    */
   commitEdit(): boolean {
-    if (!this.editingMode) return false;
-
-    if (this.currentCategory === 'mcp') {
-      const entry = this.getSelectedMcp();
-      if (!entry || !this.mcpRegistry) return false;
-      if (this.mcpAllowAllConfirmationTarget) {
-        const expected = `ALLOW ALL ${this.mcpAllowAllConfirmationTarget}`;
-        if (this.editBuffer.trim() !== expected) {
-          return false;
-        }
-        this.mcpRegistry.setServerTrustMode(entry.name, 'allow-all');
-        this.mcpEntries = buildMcpEntries(this.mcpRegistry);
-        this.editingMode = false;
-        this.editBuffer = '';
-        this.mcpAllowAllConfirmationTarget = null;
-        return true;
-      }
-
-      const nextMode = this.editBuffer.trim() as McpEntry['trustMode'];
-      const validModes: McpEntry['trustMode'][] = ['constrained', 'ask-on-risk', 'allow-all', 'blocked'];
-      if (!validModes.includes(nextMode)) {
-        this.editingMode = false;
-        this.editBuffer = '';
-        this.mcpAllowAllConfirmationTarget = null;
-        return false;
-      }
-      if (nextMode === 'allow-all' && entry.trustMode !== 'allow-all') {
-        this.mcpAllowAllConfirmationTarget = entry.name;
-        this.editBuffer = '';
-        return false;
-      }
-      this.mcpRegistry.setServerTrustMode(entry.name, nextMode);
-      this.mcpEntries = buildMcpEntries(this.mcpRegistry);
-      this.editingMode = false;
-      this.editBuffer = '';
-      this.mcpAllowAllConfirmationTarget = null;
-      return true;
-    }
-
-    const entry = this.getSelected();
-    if (!entry || !this.configManager) return false;
-
-    const { setting } = entry;
-    let parsed: unknown = this.editBuffer;
-
-    if (setting.type === 'number') {
-      parsed = Number(this.editBuffer);
-      if (isNaN(parsed as number)) {
-        this.editingMode = false;
-        this.editBuffer = '';
-        return false;
-      }
-    }
-
-    if (setting.type === 'object') {
-      // Object-typed keys (e.g. pricing.modelPrices) edit as JSON; the
-      // schema's validate() below still rules on the parsed shape.
-      try {
-        parsed = JSON.parse(this.editBuffer);
-      } catch {
-        this.editingMode = false;
-        this.editBuffer = '';
-        return false;
-      }
-    }
-
-    if (setting.validate && !setting.validate(parsed)) {
-      this.editingMode = false;
-      this.editBuffer = '';
-      return false;
-    }
-
-    if (isWorktreeSetupListConfigKey(setting.key)) {
-      // Comma-separated display/edit convention for the array-backed
-      // worktree.setup.* keys — see worktree-setup-config.ts.
-      this._setValue(setting.key, parseWorktreeSetupListInput(this.editBuffer));
-    } else if (isSandboxExecListConfigKey(setting.key)) {
-      // Same comma-separated convention for the array-backed
-      // sandbox.egressAllowlist / sandbox.workspaceWritable keys — see
-      // sandbox-exec-config.ts.
-      this._setValue(setting.key, parseSandboxExecListInput(this.editBuffer));
-    } else if (isExecEnvScrubAllowlistConfigKey(setting.key)) {
-      // Same comma-separated convention for permissions.execEnvScrubAllowlist
-      // — see exec-env-scrub-config.ts.
-      this._setValue(setting.key, parseExecEnvScrubAllowlistInput(this.editBuffer));
-    } else if (setting.type === 'string' && isSecretConfigKey(setting.key)) {
-      setSecretBackedSettingValue({
-        key: setting.key,
-        value: String(parsed ?? ''),
-        configManager: this.configManager,
-        secretsManager: this.secretsManager,
-        setConfigValue: (key, value) => this._setValue(key, value),
-      });
-    } else {
-      this._setValue(setting.key as ConfigKey, parsed);
-    }
-    this.editingMode = false;
-    this.editBuffer = '';
-    return true;
+    return _commitEditValue({
+      editingMode: this.editingMode,
+      currentCategory: this.currentCategory,
+      editBuffer: this.editBuffer,
+      configManager: this.configManager,
+      secretsManager: this.secretsManager,
+      mcpRegistry: this.mcpRegistry,
+      mcpAllowAllConfirmationTarget: this.mcpAllowAllConfirmationTarget,
+      getSelectedMcp: () => this.getSelectedMcp(),
+      getSelected: () => this.getSelected(),
+      setValue: (key, value) => this._setValue(key, value),
+      setEditingMode: (v) => { this.editingMode = v; },
+      setEditBuffer: (v) => { this.editBuffer = v; },
+      setMcpEntries: (entries) => { this.mcpEntries = entries; },
+      setMcpAllowAllConfirmationTarget: (v) => { this.mcpAllowAllConfirmationTarget = v; },
+    });
   }
 
   /** Cancel inline edit without saving. */
@@ -781,6 +694,13 @@ export class SettingsModal {
       this.lastSettingEffectMessage = result.effectMessage;
     }
     // No-op (result.changed === false, effectMessage === null): leave lastSettingEffectMessage untouched.
+
+    // Selecting 'prompt' for payments.cvvHandling states the tradeoff at the
+    // moment of selection, not just in the documentation pane — see the
+    // SDK's own CVV_PROMPT_TRADEOFF_WARNING (platform/payments).
+    if (key === PAYMENTS_CVV_HANDLING_CONFIG_KEY && value === 'prompt') {
+      this.lastSettingEffectMessage = CVV_PROMPT_TRADEOFF_WARNING;
+    }
   }
 
   /** Refresh live/persisted/pending state for every feature header bound to `key`. */
