@@ -1,6 +1,56 @@
 export const REDACTED_VALUE = '<redacted>';
 
+// Matches a config path whose LAST SEGMENT is exactly one of these words. That
+// is the whole reach of this pattern, and it is why the declared list below
+// exists: `surfaces.calendar.caldavPassword` does not end in a `.password`
+// segment, it ends in a `caldavPassword` segment, so this pattern answers false
+// for it — as it does for `imapPassword`, `appPassword` and `authToken`.
 const SENSITIVE_PATH_PATTERN = /(^|\.)(apiKey|accessToken|botToken|appToken|signingSecret|webhookSecret|verifyToken|verificationToken|secret|password|token|keyFile)$/i;
+
+// Credential-bearing config keys that are sensitive by NAME rather than by the
+// generic trailing-word list above. Every one of these was carried in the clear
+// by a support bundle before it was listed here, because the pattern matches a
+// trailing WORD and these names carry the credential word in the middle or
+// prefixed by a protocol ("caldavPassword", "imapPassword", "appPassword",
+// "authToken").
+//
+// The `*Ref` Cloudflare keys normally hold a `goodvibes://secrets/...`
+// reference, which shouldRedactValue already lets through as safe. They are
+// listed as a BACKSTOP, for the same reason the mail keys are worth listing
+// twice over: it costs nothing, and it is what stands between a future code
+// path that writes a literal token there and that token reaching a file the
+// owner emails to someone for support.
+const SENSITIVE_CONFIG_KEYS: ReadonlySet<string> = new Set([
+  // Mailbox / CalDAV — the credentials the daemon polls mail and calendar with.
+  'surfaces.email.password',
+  'surfaces.email.imapPassword',
+  'surfaces.email.imap.password',
+  'surfaces.email.smtp.password',
+  'surfaces.calendar.caldavPassword',
+  // Telephony.
+  'surfaces.telephony.authToken',
+  'surfaces.msteams.appPassword',
+  // Cloudflare token references.
+  'cloudflare.apiTokenRef',
+  'cloudflare.tunnelTokenRef',
+  'cloudflare.accessServiceTokenRef',
+  'cloudflare.workerTokenRef',
+  'cloudflare.workerClientTokenRef',
+  // Cluster shared phrase.
+  'cluster.secret',
+  // Payment card material. ADDED to this set, never substituted for it: this
+  // set is a hardcoded list with no delegation, so replacing it wholesale with
+  // another product's would silently stop redacting whatever that one omits.
+  // The four names below end in no word the suffix pattern knows —
+  // "cardNumber", "cardExpiry" and "cardholderName" match none of them — which
+  // is the whole reason a declared list exists rather than a naming habit.
+  // (The `.map` below lowercases every entry; the lookup lowercases too.)
+  'payments.cardNumber',
+  'payments.cardExpiry',
+  'payments.cardCvv',
+  'payments.cardholderName',
+].map((key) => key.toLowerCase()));
+
 const SECRET_LIKE_TEXT_PATTERNS: readonly RegExp[] = [
   /\bsk-[A-Za-z0-9_-]{16,}\b/g,
   /\bghp_[A-Za-z0-9_]{16,}\b/g,
@@ -13,7 +63,7 @@ const SECRET_LIKE_TEXT_PATTERNS: readonly RegExp[] = [
 ];
 
 export function isSensitiveConfigPath(path: string): boolean {
-  return SENSITIVE_PATH_PATTERN.test(path);
+  return SENSITIVE_PATH_PATTERN.test(path) || SENSITIVE_CONFIG_KEYS.has(path.toLowerCase());
 }
 
 export function isRedactedValue(value: unknown): boolean {
@@ -25,9 +75,14 @@ export interface RedactedConfigResult<T> {
   readonly redactedPaths: readonly string[];
 }
 
+// Redaction rule for sensitive config paths:
+// - Non-string values: redact if truthy (i.e. non-null, non-undefined, non-zero, non-false).
+//   Rationale: zero and false are never meaningful secrets; null/undefined mean absent.
+// - String values: redact non-empty strings that are not goodvibes:// secret refs.
+//   Rationale: empty string means unset; secret refs are safe placeholders, not raw values.
 function shouldRedactValue(path: string, value: unknown): boolean {
   if (!isSensitiveConfigPath(path)) return false;
-  if (typeof value !== 'string') return value !== undefined && value !== null;
+  if (typeof value !== 'string') return value !== null && value !== undefined && Boolean(value);
   if (value.trim().length === 0) return false;
   if (value.startsWith('goodvibes://secrets/')) return false;
   return true;
@@ -64,7 +119,17 @@ export function redactConfig<T>(config: T): RedactedConfigResult<T> {
 }
 
 export function redactText(input: string): string {
-  let output = input;
+  // Assignment form: keyword=value — anchored so 'monkey=' and 'donkey=' do NOT match.
+  // Matches: token=, access_token=, api_key=, api-key=, secret=, password= and colon form token: value
+  let output = input
+    .replace(
+      /(?<![A-Za-z])(?:access_token|api[_-]?key|secret|password|token)\s*=\s*([^ \t\r\n"'`]+)/gi,
+      (m, val) => m.slice(0, m.length - val.length) + REDACTED_VALUE,
+    )
+    .replace(
+      /(?<![A-Za-z])(?:access_token|api[_-]?key|secret|password|token)\s*:\s*([^ \t\r\n"'`]+)/gi,
+      (m, val) => m.slice(0, m.length - val.length) + REDACTED_VALUE,
+    );
   for (const pattern of SECRET_LIKE_TEXT_PATTERNS) {
     output = output.replace(pattern, REDACTED_VALUE);
   }
