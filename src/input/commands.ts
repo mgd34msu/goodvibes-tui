@@ -82,6 +82,7 @@ import { registerCheckinRuntimeCommands } from './commands/checkin-runtime.ts';
 import { registerMailRuntimeCommands } from './commands/mail-runtime.ts';
 import { registerCalendarRuntimeCommands } from './commands/calendar-runtime.ts';
 import { registerPrincipalsRuntimeCommands } from './commands/principals-runtime.ts';
+import { registerProfileRuntimeCommands } from './commands/profile-runtime.ts';
 
 /**
  * A named group of built-in commands. The `category` label is the single
@@ -178,6 +179,10 @@ export const BUILTIN_COMMAND_GROUPS: readonly BuiltinCommandGroup[] = [
   { category: 'Mail & Calendar', register: registerMailRuntimeCommands },
   { category: 'Mail & Calendar', register: registerCalendarRuntimeCommands },
   { category: 'Principals', register: registerPrincipalsRuntimeCommands },
+  // "Owner Profile", not "Profiles": the Profiles category above is
+  // /profile-sync's named-config-preset bundles, which have nothing to do with
+  // what the platform knows about the person who owns it.
+  { category: 'Owner Profile', register: registerProfileRuntimeCommands },
   { category: 'Policy', register: (registry) => registry.register(policyCommand) },
   { category: 'Providers', register: (registry) => registry.register(providerCommand) },
   { category: 'Eval', register: (registry) => registry.register(evalCommand) },
