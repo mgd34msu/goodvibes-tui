@@ -18,8 +18,7 @@
 // ---------------------------------------------------------------------------
 
 import { describe, test, expect, afterEach } from 'bun:test';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { AdaptivePlanner } from '@pellux/goodvibes-sdk/platform/core';
 import type { PhaseRunnerAgentManagerLike } from '@pellux/goodvibes-sdk/platform/orchestration';
@@ -28,6 +27,7 @@ import { RuntimeEventBus, createEventEnvelope } from '@/runtime/index.ts';
 import type { ConfigManager } from '../../config/index.ts';
 import { configGetStub, configGetCategoryStub } from '../helpers/config-manager-stub.ts';
 import { createWorkstreamServices } from '../../runtime/workstream-services.ts';
+import { makeProjectTempDir } from '../helpers/project-temp.ts';
 
 /**
  * Drains BOTH the microtask queue and at least one real event-loop turn.
@@ -198,7 +198,7 @@ describe('createWorkstreamServices — real engine wiring', () => {
   });
 
   function makeScratchProjectRoot(): string {
-    const dir = mkdtempSync(join(tmpdir(), 'gv-workstream-services-'));
+    const dir = makeProjectTempDir('gv-workstream-services');
     tempDirs.push(dir);
     mkdirSync(join(dir, 'src'), { recursive: true });
     writeFileSync(join(dir, 'src', 'demo.ts'), 'export const demo = true;\n');

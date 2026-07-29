@@ -37,7 +37,7 @@
  *   )" bun run scripts/release.ts --minor
  */
 import { execFileSync, execSync } from 'node:child_process';
-import { mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -92,6 +92,10 @@ const bodyLines = notesContent ? bulletsFromNotesContent(notesContent) : bullets
 if (!notesContent) {
   console.warn('[release] GOODVIBES_TUI_RELEASE_NOTES not set — falling back to the git log for the CHANGELOG body.');
 }
+// A one-off release-time script (not part of the test suite), so it stays
+// rooted at the real OS temp dir rather than the test-only
+// makeProjectTempDir helper. Removed explicitly below on both the success
+// and failure paths.
 const notesDir = mkdtempSync(join(tmpdir(), 'gv-release-notes-'));
 const notesFile = join(notesDir, 'notes.txt');
 writeFileSync(notesFile, `${bodyLines.join('\n')}\n`);
@@ -100,5 +104,7 @@ const releaseCutBin = join(root, 'node_modules', '.bin', 'goodvibes-release-cut'
 try {
   execFileSync(releaseCutBin, ['--notes-file', notesFile, ...passthrough], { cwd: root, stdio: 'inherit' });
 } catch {
+  rmSync(notesDir, { recursive: true, force: true });
   process.exit(1);
 }
+rmSync(notesDir, { recursive: true, force: true });

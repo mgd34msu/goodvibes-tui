@@ -1,12 +1,12 @@
 import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
-import { tmpdir } from 'os';
 import { join } from 'path';
-import { mkdtempSync, existsSync } from 'fs';
+import { existsSync } from 'fs';
 import { SessionTaskGraph } from '@pellux/goodvibes-sdk/platform/sessions';
 import {
   CrossSessionTaskRegistry,
 } from '@pellux/goodvibes-sdk/platform/sessions';
 import type { CrossSessionTaskRef, SessionTaskGraphSnapshot } from '@pellux/goodvibes-sdk/platform/sessions';
+import { makeProjectTempDir } from '../helpers/project-temp.ts';
 
 function graphPath(root: string): string {
   return join(root, '.goodvibes', 'tui', 'sessions', 'task-graph.json');
@@ -305,7 +305,7 @@ describe('CrossSessionTaskRegistry', () => {
   let registry: CrossSessionTaskRegistry;
 
   beforeEach(() => {
-    dir = mkdtempSync(join(tmpdir(), 'gv-session-orch-'));
+    dir = makeProjectTempDir('gv-session-orch');
     registry = new CrossSessionTaskRegistry(graphPath(dir));
   });
 
@@ -332,7 +332,7 @@ describe('CrossSessionTaskRegistry lifecycle', () => {
   });
 
   test('dispose removes the process exit listener it installs', () => {
-    const root = mkdtempSync(join(tmpdir(), 'gv-orchestration-listener-'));
+    const root = makeProjectTempDir('gv-orchestration-listener');
     const registry = new CrossSessionTaskRegistry(graphPath(root));
     expect(process.listenerCount('exit')).toBe(baseExitListeners + 1);
 
@@ -342,8 +342,8 @@ describe('CrossSessionTaskRegistry lifecycle', () => {
   });
 
   test('separate instances each install and remove their own exit listeners', () => {
-    const first = new CrossSessionTaskRegistry(graphPath(mkdtempSync(join(tmpdir(), 'gv-orchestration-listener-a-'))));
-    const second = new CrossSessionTaskRegistry(graphPath(mkdtempSync(join(tmpdir(), 'gv-orchestration-listener-b-'))));
+    const first = new CrossSessionTaskRegistry(graphPath(makeProjectTempDir('gv-orchestration-listener-a')));
+    const second = new CrossSessionTaskRegistry(graphPath(makeProjectTempDir('gv-orchestration-listener-b')));
     expect(process.listenerCount('exit')).toBe(baseExitListeners + 2);
 
     first.dispose();
@@ -360,7 +360,7 @@ describe('CrossSessionTaskRegistry persistence', () => {
   let registry: CrossSessionTaskRegistry;
 
   beforeEach(() => {
-    tmpDir = mkdtempSync(join(tmpdir(), 'orch-test-'));
+    tmpDir = makeProjectTempDir('orch-test');
     registry = new CrossSessionTaskRegistry(graphPath(tmpDir));
   });
 

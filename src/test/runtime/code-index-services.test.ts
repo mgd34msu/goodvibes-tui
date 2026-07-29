@@ -13,8 +13,7 @@
 // ---------------------------------------------------------------------------
 
 import { describe, test, expect, afterEach } from 'bun:test';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync, existsSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { mkdirSync, rmSync, writeFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import type { ConfigKey } from '@pellux/goodvibes-sdk/platform/config';
@@ -25,6 +24,7 @@ import {
   createCodeIndexServices,
   isCodeIndexAutoStartEnabled,
 } from '../../runtime/code-index-services.ts';
+import { makeProjectTempDir } from '../helpers/project-temp.ts';
 
 const tempDirs: string[] = [];
 
@@ -33,7 +33,7 @@ afterEach(() => {
 });
 
 function makeScratchWorkingDirectory(): string {
-  const dir = mkdtempSync(join(tmpdir(), 'gv-code-index-services-'));
+  const dir = makeProjectTempDir('gv-code-index-services');
   tempDirs.push(dir);
   mkdirSync(join(dir, 'src'), { recursive: true });
   writeFileSync(

@@ -1,6 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { CommandRegistry } from '../../input/command-registry.ts';
 import type { CommandContext } from '../../input/command-registry.ts';
@@ -13,13 +12,14 @@ import {
   getTestHookDispatcher,
   disposeTestRuntimeServicesAfterAll,
 } from '../helpers/runtime-services.ts';
+import { makeProjectTempDir } from '../helpers/project-temp.ts';
 
 // Stop the shared test runtime graph when this file ends. Called here, not
 // registered inside the helper, for the reason its doc comment gives.
 disposeTestRuntimeServicesAfterAll();
 
 const configManager = new ConfigManager({ surfaceRoot: 'tui',
-  configDir: join(tmpdir(), `gv-hooks-config-${Date.now()}-${Math.random().toString(36).slice(2)}`),
+  configDir: makeProjectTempDir('gv-hooks-config'),
 });
 
 function makeHookCommandContext(
@@ -78,7 +78,7 @@ describe('hooks command', () => {
 
   beforeEach(() => {
     originalHooksFile = configManager.get('tools.hooksFile') as string;
-    tempDir = mkdtempSync(join(tmpdir(), 'gv-hooks-command-'));
+    tempDir = makeProjectTempDir('gv-hooks-command');
     configManager.set('tools.hooksFile', join(tempDir, 'hooks.json'));
     getTestHookDispatcher().clear();
     hookWorkbench = new HookWorkbench(

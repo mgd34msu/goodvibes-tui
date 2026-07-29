@@ -1,5 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, test, beforeEach, afterEach } from 'bun:test';
 import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
@@ -15,6 +14,7 @@ import { ProviderCapabilityRegistry } from '@pellux/goodvibes-sdk/platform/provi
 import { FavoritesStore } from '@pellux/goodvibes-sdk/platform/providers';
 import { BenchmarkStore } from '@pellux/goodvibes-sdk/platform/providers';
 import { ProviderRegistry } from '@pellux/goodvibes-sdk/platform/providers';
+import { makeProjectTempDir } from '../helpers/project-temp.ts';
 
 interface PickerHarness {
   readonly favoritesStore: FavoritesStore;
@@ -24,7 +24,7 @@ interface PickerHarness {
 }
 
 function createPickerHarness(): PickerHarness {
-  const rootDir = mkdtempSync(join(tmpdir(), 'gv-modal-search-focus-'));
+  const rootDir = makeProjectTempDir('gv-modal-search-focus');
   const configDir = join(rootDir, 'config');
   const dataDir = join(rootDir, 'provider-data');
   const subscriptionsPath = join(rootDir, 'subscriptions.json');

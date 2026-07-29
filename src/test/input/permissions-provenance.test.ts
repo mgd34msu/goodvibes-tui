@@ -1,10 +1,9 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { join } from 'node:path';
-import { tmpdir } from 'node:os';
+import { rmSync } from 'node:fs';
 import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import { applyRuntimeConfigValue } from '../../cli/config-overrides.ts';
 import { buildPermissionProvenance, renderPermissionProvenance } from '../../input/commands/permissions-provenance.ts';
+import { makeProjectTempDir } from '../helpers/project-temp.ts';
 
 function findRow(prov: ReturnType<typeof buildPermissionProvenance>, key: string) {
   const row = prov.rows.find((r) => r.key === key);
@@ -14,7 +13,7 @@ function findRow(prov: ReturnType<typeof buildPermissionProvenance>, key: string
 
 describe('permission provenance', () => {
   let root = '';
-  beforeEach(() => { root = mkdtempSync(join(tmpdir(), 'gv-prov-')); });
+  beforeEach(() => { root = makeProjectTempDir('gv-prov'); });
   afterEach(() => { rmSync(root, { recursive: true, force: true }); });
 
   test('an unset value reports the built-in default and the session mode', () => {

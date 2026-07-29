@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { resolveDaemonCompanionToken, workspaceOperatorTokenCandidates } from '../../runtime/operator-token-cleanup.ts';
+import { makeProjectTempDir } from '../helpers/project-temp.ts';
 
 describe('workspaceOperatorTokenCandidates', () => {
   test('returns the two legacy workspace-scoped operator-tokens.json paths', () => {
@@ -25,7 +25,7 @@ describe('resolveDaemonCompanionToken', () => {
   let daemonHomeDir = '';
 
   beforeEach(() => {
-    root = mkdtempSync(join(tmpdir(), 'gv-operator-token-'));
+    root = makeProjectTempDir('gv-operator-token');
     daemonHomeDir = join(root, '.goodvibes', 'daemon');
     delete process.env.GOODVIBES_DAEMON_TOKEN;
   });

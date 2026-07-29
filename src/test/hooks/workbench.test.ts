@@ -1,6 +1,4 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { mkdtempSync } from 'node:fs';
-import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
   getTestHookDispatcher,
@@ -8,6 +6,7 @@ import {
   resetTestRuntimeServices,
   disposeTestRuntimeServicesAfterAll,
 } from '../helpers/runtime-services.ts';
+import { makeProjectTempDir } from '../helpers/project-temp.ts';
 
 // Stop the shared test runtime graph when this file ends. Called here, not
 // registered inside the helper, for the reason its doc comment gives.
@@ -17,7 +16,7 @@ describe('HookWorkbench', () => {
   let dir: string;
 
   beforeEach(() => {
-    dir = mkdtempSync(join(tmpdir(), 'gv-hook-workbench-'));
+    dir = makeProjectTempDir('gv-hook-workbench');
     resetTestRuntimeServices();
     getTestHookDispatcher().clear();
   });

@@ -1,6 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { mkdirSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { CommandRegistry } from '../../input/command-registry.ts';
 import { KillRing } from '../../input/kill-ring.ts';
@@ -12,12 +11,18 @@ import { InputHandler } from '../../input/handler.ts';
 import { SelectionManager } from '../../input/selection.ts';
 import { InfiniteBuffer } from '../../core/history.ts';
 import { createDefaultUiRuntimeServices } from '../helpers/ui-services.ts';
+import { disposeTestRuntimeServicesAfterAll } from '../helpers/runtime-services.ts';
+import { makeProjectTempDir } from '../helpers/project-temp.ts';
 import { createShellPathService } from '@/runtime/index.ts';
 import { registerConfigCommand } from '../../input/commands/config.ts';
 import { createFeatureFlagManager } from '@/runtime/index.ts';
 import { ServiceRegistry } from '@pellux/goodvibes-sdk/platform/config';
 import { SubscriptionManager } from '@pellux/goodvibes-sdk/platform/config';
 import { SecretsManager } from '../../config/secrets.ts';
+
+// Stop the shared test runtime graph when this file ends. Called here, not
+// registered inside the helper, for the reason its doc comment gives.
+disposeTestRuntimeServicesAfterAll();
 
 
 function makeCommandContext(overrides: Partial<CommandContext> = {}): CommandContext {
@@ -546,8 +551,7 @@ describe('command modal handoff', () => {
   });
 
   test('input handler clears command mode after a slash command opens a selection modal', async () => {
-    const dir = join(tmpdir(), `gv-command-modal-${Date.now()}-${Math.random().toString(36).slice(2)}`);
-    mkdirSync(dir, { recursive: true });
+    const dir = makeProjectTempDir('gv-command-modal');
     try {
       const history = new InfiniteBuffer();
       const input = new InputHandler(

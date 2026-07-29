@@ -1,13 +1,12 @@
 import { describe, expect, test } from 'bun:test';
-import { mkdtempSync } from 'node:fs';
 import { join } from 'node:path';
-import { tmpdir } from 'node:os';
 import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import { SandboxSessionRegistry } from '@/runtime/index.ts';
 import { createLocalAuthModalSurface } from '../../panels/modals/local-auth-modal.ts';
 import { createSandboxModalSurface } from '../../panels/modals/sandbox-modal.ts';
 import type { LocalAuthInspectionQuery } from '../../runtime/ui-service-queries.ts';
 import type { ConfigModalActionContext, ConfigModalRow } from '../../input/config-modal-types.ts';
+import { makeProjectTempDir } from '../helpers/project-temp.ts';
 
 function ctx(row: ConfigModalRow | null, extra: Partial<ConfigModalActionContext> = {}): ConfigModalActionContext {
   return {
@@ -189,7 +188,7 @@ describe('sandbox modal surface', () => {
   }
 
   function makeConfig(): ConfigManager {
-    const root = mkdtempSync(join(tmpdir(), 'gv-sandbox-modal-'));
+    const root = makeProjectTempDir('gv-sandbox-modal');
     const config = new ConfigManager({
       surfaceRoot: 'tui',
       configDir: join(root, '.goodvibes', 'tui'),

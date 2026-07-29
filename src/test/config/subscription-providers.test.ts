@@ -1,16 +1,16 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
-import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
+import { mkdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
-import { tmpdir } from 'node:os';
 import { getBuiltinSubscriptionProvider } from '@pellux/goodvibes-sdk/platform/config';
 import { SubscriptionManager } from '@pellux/goodvibes-sdk/platform/config';
+import { makeProjectTempDir } from '../helpers/project-temp.ts';
 
 describe('subscription providers', () => {
   const originalCwd = process.cwd();
   let root: string;
 
   beforeEach(() => {
-    root = mkdtempSync(join(tmpdir(), 'gv-subscription-provider-'));
+    root = makeProjectTempDir('gv-subscription-provider');
     process.chdir(root);
     mkdirSync(join(root, '.goodvibes', 'tui'), { recursive: true });
   });

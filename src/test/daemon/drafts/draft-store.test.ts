@@ -1,7 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { rmSync } from 'node:fs';
 import type { AtRestCipher } from '../../../daemon/handlers/credentials.ts';
 import {
   DRAFT_MESSAGE_DIGEST_HEX,
@@ -9,6 +7,7 @@ import {
   MAX_DRAFT_LIST_LIMIT,
   sha256First,
 } from '../../../daemon/handlers/drafts/draft-store.ts';
+import { makeProjectTempDir } from '../../helpers/project-temp.ts';
 
 // Deterministic reversible cipher: NOT real crypto, but exercises the
 // encrypt-at-rest contract (store persists ciphertext, never plaintext).
@@ -50,7 +49,7 @@ describe('DraftSyncStore', () => {
   let store: DraftSyncStore;
 
   beforeEach(async () => {
-    dir = mkdtempSync(join(tmpdir(), 'gv-drafts-'));
+    dir = makeProjectTempDir('gv-drafts');
     cipher = makeFakeCipher();
     store = makeStore(dir, cipher);
     await store.init();

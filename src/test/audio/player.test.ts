@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, test } from 'bun:test';
-import { chmodSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { chmodSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { resolveStreamingAudioPlayerCommand } from '../../audio/player.ts';
+import { makeProjectTempDir } from '../helpers/project-temp.ts';
 
 const cleanupPaths: string[] = [];
 
@@ -14,7 +14,7 @@ afterEach(() => {
 
 describe('streaming audio player discovery', () => {
   test('prefers mpv over ffplay', () => {
-    const binDir = mkdtempSync(join(tmpdir(), 'goodvibes-audio-'));
+    const binDir = makeProjectTempDir('goodvibes-audio');
     cleanupPaths.push(binDir);
     const mpv = join(binDir, 'mpv');
     const ffplay = join(binDir, 'ffplay');
@@ -30,7 +30,7 @@ describe('streaming audio player discovery', () => {
   });
 
   test('falls back to ffplay when mpv is not present', () => {
-    const binDir = mkdtempSync(join(tmpdir(), 'goodvibes-audio-'));
+    const binDir = makeProjectTempDir('goodvibes-audio');
     cleanupPaths.push(binDir);
     const ffplay = join(binDir, 'ffplay');
     writeFileSync(ffplay, '#!/bin/sh\n');

@@ -1,13 +1,13 @@
 import { describe, expect, test } from 'bun:test';
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
-import { tmpdir } from 'node:os';
 import {
   applySandboxQemuSetupManifest,
   inspectSandboxQemuSetupManifest,
   loadSandboxQemuSetupManifest,
   scaffoldSandboxQemuSetupBundle,
 } from '@/runtime/index.ts';
+import { makeProjectTempDir } from '../../helpers/project-temp.ts';
 
 function makeManager(overrides: Partial<Record<string, unknown>> = {}) {
   const values = new Map<string, unknown>([
@@ -34,7 +34,7 @@ function makeManager(overrides: Partial<Record<string, unknown>> = {}) {
 
 describe('sandbox provisioning', () => {
   test('scaffolded setup bundle includes an inspectable/applyable manifest', () => {
-    const cwd = mkdtempSync(join(tmpdir(), 'gv-sandbox-provision-'));
+    const cwd = makeProjectTempDir('gv-sandbox-provision');
     try {
       const manager = makeManager();
       const bundle = scaffoldSandboxQemuSetupBundle(manager as never, cwd, '.goodvibes/tui/sandbox', { surfaceRoot: 'tui' });
@@ -81,8 +81,8 @@ describe('sandbox provisioning', () => {
   });
 
   test('scaffolded setup bundle can target an absolute user GoodVibes directory', () => {
-    const cwd = mkdtempSync(join(tmpdir(), 'gv-sandbox-provision-workspace-'));
-    const home = mkdtempSync(join(tmpdir(), 'gv-sandbox-provision-home-'));
+    const cwd = makeProjectTempDir('gv-sandbox-provision-workspace');
+    const home = makeProjectTempDir('gv-sandbox-provision-home');
     try {
       const manager = makeManager();
       const targetDir = join(home, '.goodvibes', 'tui', 'sandbox');

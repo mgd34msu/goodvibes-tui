@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, test } from 'bun:test';
-import { mkdtempSync, readFileSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { tmpdir } from 'node:os';
 import { UserAuthManager } from '@pellux/goodvibes-sdk/platform/security';
+import { makeProjectTempDir } from '../helpers/project-temp.ts';
 
 describe('UserAuthManager local admin management', () => {
   let dir: string;
@@ -10,7 +10,7 @@ describe('UserAuthManager local admin management', () => {
   let bootstrapPath: string;
 
   beforeEach(() => {
-    dir = mkdtempSync(join(tmpdir(), 'gv-auth-'));
+    dir = makeProjectTempDir('gv-auth');
     usersPath = join(dir, 'auth-users.json');
     bootstrapPath = join(dir, 'auth-bootstrap.txt');
   });

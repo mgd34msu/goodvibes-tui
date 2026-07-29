@@ -1,6 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { existsSync, mkdtempSync, readFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { createTaskTool } from '@pellux/goodvibes-sdk/platform/tools';
 import { createTeamTool } from '@pellux/goodvibes-sdk/platform/tools';
@@ -12,6 +11,7 @@ import { controlTool } from '@pellux/goodvibes-sdk/platform/tools';
 import { CrossSessionTaskRegistry } from '@pellux/goodvibes-sdk/platform/sessions';
 import { trackDisposables } from '../helpers/disposables.ts';
 import { RemoteRunnerRegistry } from '@/runtime/index.ts';
+import { makeProjectTempDir } from '../helpers/project-temp.ts';
 
 // CrossSessionTaskRegistry starts an hourly sweep in its constructor;
 // dispose() clears it.
@@ -25,7 +25,7 @@ describe('tool breadth additions', () => {
   // session's refs a list/show reads. Standing in as the host, this suite owns
   // 'sess-a', so its writes and its reads agree.
   let taskTool = createTaskTool(
-    disposables.add(new CrossSessionTaskRegistry(mkdtempSync(join(tmpdir(), 'gv-tool-breadth-init-')))),
+    disposables.add(new CrossSessionTaskRegistry(makeProjectTempDir('gv-tool-breadth-init'))),
     { resolveSessionId: () => 'sess-a' },
   );
   const teamTool = createTeamTool({ surfaceRoot: 'tui' });
@@ -36,7 +36,7 @@ describe('tool breadth additions', () => {
   }
 
   beforeEach(() => {
-    root = mkdtempSync(join(tmpdir(), 'gv-tool-breadth-'));
+    root = makeProjectTempDir('gv-tool-breadth');
     process.chdir(root);
     taskTool = createTaskTool(disposables.add(new CrossSessionTaskRegistry(taskGraphPath(root))), { resolveSessionId: () => 'sess-a' });
   });

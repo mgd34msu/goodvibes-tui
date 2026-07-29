@@ -3,9 +3,7 @@
  * adapters, resilience to a rejecting adapter, and 'unavailable' state capture.
  */
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { mkdtemp, rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { rm } from 'node:fs/promises';
 import { InboxCursorStore } from '../../../daemon/handlers/inbox/cursor-store.ts';
 import { InboundPoller } from '../../../daemon/handlers/inbox/poller.ts';
 import type {
@@ -14,6 +12,7 @@ import type {
   ProviderPollOptions,
   ProviderPollResult,
 } from '../../../daemon/handlers/inbox/provider-adapter.ts';
+import { makeProjectTempDir } from '../../helpers/project-temp.ts';
 
 const logger = {
   info() {},
@@ -58,7 +57,7 @@ let dir: string;
 let store: InboxCursorStore;
 
 beforeEach(async () => {
-  dir = await mkdtemp(join(tmpdir(), 'inbox-poller-'));
+  dir = await makeProjectTempDir('inbox-poller');
   store = new InboxCursorStore(dir);
   await store.init();
 });

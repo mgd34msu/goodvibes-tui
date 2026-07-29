@@ -1,12 +1,12 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { tmpdir } from 'node:os';
 import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import { parseGoodVibesCli } from '../../cli/parser.ts';
 import { handleHooksCommand } from '../../cli/hooks-command.ts';
 import { handlePluginCommand } from '../../cli/plugin-command.ts';
 import type { CliCommandRuntime } from '../../cli/types.ts';
+import { makeProjectTempDir } from '../helpers/project-temp.ts';
 
 function makeRuntime(root: string, args: readonly string[]): CliCommandRuntime {
   const configManager = new ConfigManager({ workingDir: root, homeDir: root, surfaceRoot: 'tui' });
@@ -20,7 +20,7 @@ function makeRuntime(root: string, args: readonly string[]): CliCommandRuntime {
 
 describe('goodvibes hooks validate', () => {
   let root = '';
-  beforeEach(() => { root = mkdtempSync(join(tmpdir(), 'goodvibes-hooks-')); });
+  beforeEach(() => { root = makeProjectTempDir('goodvibes-hooks'); });
   afterEach(() => { rmSync(root, { recursive: true, force: true }); });
 
   test('passes with exit 0 for a valid hooks.json', async () => {
@@ -69,7 +69,7 @@ describe('goodvibes hooks validate', () => {
 
 describe('goodvibes plugin init / validate', () => {
   let root = '';
-  beforeEach(() => { root = mkdtempSync(join(tmpdir(), 'goodvibes-plugin-')); });
+  beforeEach(() => { root = makeProjectTempDir('goodvibes-plugin'); });
   afterEach(() => { rmSync(root, { recursive: true, force: true }); });
 
   test('init scaffolds a plugin that its own validate accepts (round-trip)', async () => {

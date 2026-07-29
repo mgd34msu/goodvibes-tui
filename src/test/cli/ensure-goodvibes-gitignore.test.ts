@@ -10,10 +10,10 @@
 // ---------------------------------------------------------------------------
 
 import { describe, expect, test, afterEach } from 'bun:test';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync, existsSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { mkdirSync, readFileSync, rmSync, writeFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { ensureGoodvibesGitignore } from '../../cli/ensure-goodvibes-gitignore.ts';
+import { makeProjectTempDir } from '../helpers/project-temp.ts';
 
 describe('entrypoint wiring', () => {
   test('the shell entrypoint calls ensureGoodvibesGitignore during bootstrap', () => {
@@ -31,7 +31,7 @@ describe('entrypoint wiring', () => {
 
 const dirs: string[] = [];
 function makeProjectDir(withGit = true): string {
-  const dir = mkdtempSync(join(tmpdir(), 'gv-gitignore-'));
+  const dir = makeProjectTempDir('gv-gitignore');
   dirs.push(dir);
   if (withGit) mkdirSync(join(dir, '.git'));
   return dir;

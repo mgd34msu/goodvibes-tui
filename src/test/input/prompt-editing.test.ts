@@ -5,8 +5,13 @@ import { CommandRegistry } from '../../input/command-registry.ts';
 import { AutocompleteEngine } from '../../input/autocomplete.ts';
 import { InfiniteBuffer } from '../../core/history.ts';
 import { createDefaultUiRuntimeServices } from '../helpers/ui-services.ts';
+import { disposeTestRuntimeServicesAfterAll } from '../helpers/runtime-services.ts';
 import type { UndoState } from '../../input/handler-prompt-buffer.ts';
 import { InputHistory } from '../../input/input-history.ts';
+
+// Stop the shared test runtime graph when this file ends. Called here, not
+// registered inside the helper, for the reason its doc comment gives.
+disposeTestRuntimeServicesAfterAll();
 
 type InputHandlerTestAccess = {
   undoStack: UndoState[];

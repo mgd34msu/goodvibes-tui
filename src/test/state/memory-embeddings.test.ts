@@ -1,6 +1,4 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { mkdtempSync } from 'node:fs';
-import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
   DEFAULT_MEMORY_EMBEDDING_DIMS,
@@ -8,6 +6,7 @@ import {
   MemoryEmbeddingProviderRegistry,
 } from '@pellux/goodvibes-sdk/platform/state';
 import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
+import { makeProjectTempDir } from '../helpers/project-temp.ts';
 
 describe('MemoryEmbeddingProviderRegistry', () => {
   let previousHome: string | undefined;
@@ -16,7 +15,7 @@ describe('MemoryEmbeddingProviderRegistry', () => {
 
   beforeEach(() => {
     previousHome = process.env.HOME;
-    tempRoot = mkdtempSync(join(tmpdir(), 'gv-memory-embeddings-'));
+    tempRoot = makeProjectTempDir('gv-memory-embeddings');
     process.env.HOME = tempRoot;
     configManager = new ConfigManager({ surfaceRoot: 'tui',  configDir: join(tempRoot, '.goodvibes', 'tui') });
   });

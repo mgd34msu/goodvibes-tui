@@ -1,6 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { CommandRegistry, type CommandContext } from '../../input/command-registry.ts';
 import { registerMcpRuntimeCommands } from '../../input/commands/mcp-runtime.ts';
@@ -9,6 +8,7 @@ import {
   removeMcpServerConfig,
   upsertMcpServerConfig,
 } from '@pellux/goodvibes-sdk/platform/mcp';
+import { makeProjectTempDir } from '../helpers/project-temp.ts';
 
 function makeShellPaths(root: string) {
   return {
@@ -82,7 +82,7 @@ function makeContext(root: string, out: string[]): CommandContext {
 
 describe('/mcp runtime config commands', () => {
   test('adds project-local MCP server and reloads runtime registry', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'gv-mcp-command-'));
+    const root = makeProjectTempDir('gv-mcp-command');
     try {
       const registry = new CommandRegistry();
       registerMcpRuntimeCommands(registry);
@@ -123,7 +123,7 @@ describe('/mcp runtime config commands', () => {
   });
 
   test('removes project-local MCP server and reloads runtime registry', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'gv-mcp-command-'));
+    const root = makeProjectTempDir('gv-mcp-command');
     try {
       const registry = new CommandRegistry();
       registerMcpRuntimeCommands(registry);
@@ -142,7 +142,7 @@ describe('/mcp runtime config commands', () => {
   });
 
   test('adds global MCP server when scope is selected', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'gv-mcp-command-'));
+    const root = makeProjectTempDir('gv-mcp-command');
     try {
       const registry = new CommandRegistry();
       registerMcpRuntimeCommands(registry);
