@@ -3,6 +3,21 @@
 All notable changes to GoodVibes TUI.
 
 ---
+
+## [1.26.0] - 2026-07-29
+
+### Changes
+
+- Added: a payment card on file for daemon-initiated purchases, entered through /payments card with concealed input. Card material is secret-tier and never rendered or written in plaintext, and the CVV can be stored or requested at purchase time.
+- Added: /profile — what the platform knows about you, kept as one Markdown file you can open and edit by hand at any time. Read the whole thing, trace where any recorded line came from, or forget a single field.
+- Added: goodvibes-daemon send — put a message on a channel straight from the daemon, including --channel telegram, with the message taken from an argument or from stdin.
+- Added: the installer now proves the install you get is the install you reach, and says so when something earlier on your PATH would shadow it.
+- Fixed: a credential configured on a surface now goes to the tier the daemon actually reads. Pairing a Slack bot token or entering a payment card used to report success while the value sat where the daemon never looks.
+- Fixed: inbound webhook surfaces authenticate again. A credential moved into the secret store left a reference behind that the ingress path compared literally, so a correctly configured surface refused every incoming request.
+- Fixed: support bundles no longer carry card material or mailbox passwords in the clear.
+- Fixed: a desktop notification about stopped work now says what stopped and why, in words, instead of naming internal machinery and an identifier you cannot act on.
+- Fixed: test scratch directories no longer accumulate in the system temp directory. The cleanup they relied on never ran at all, which quietly exhausted one host's free inodes.
+
 ## [1.25.0] - 2026-07-27
 
 ### Changes
