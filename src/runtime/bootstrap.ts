@@ -41,7 +41,7 @@ import { initializeBootstrapCore } from './bootstrap-core.ts';
 import { ensureBootModelResolvable } from './provider-fallback.ts';
 import { createBootstrapShell } from './bootstrap-shell.ts';
 import { announceResumeState } from './resume-notice.ts';
-import { announceInstallSelfCheck } from './install-self-check-startup.ts';
+import { announceInstallHealth } from './install-self-check-startup.ts';
 import { buildSharedOrchestratorCoreServices, refreshMemoryRecallSnapshot } from './orchestrator-core-services.ts';
 import { consumeDaemonAttachNotices, consumeExternalDaemonAttachNotices } from './daemon-attach-notices.ts';
 import { wireContextAccountingSource } from './context-accounting-source.ts';
@@ -322,7 +322,7 @@ export async function bootstrapRuntime(
   }).catch(() => {
     // Best-effort — never let the resume notice block or crash boot.
   });
-  announceInstallSelfCheck(systemMessageRouter);
+  announceInstallHealth(systemMessageRouter);
   const { gitStatusProvider, inputHistory, lastGitInfoRef } = shell;
   // FIX 2: dispose the header's live-repo-state poll (git-status.ts
   // startPolling) on shutdown, same pattern as acpTaskSyncInterval above.
