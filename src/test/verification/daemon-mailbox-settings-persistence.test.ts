@@ -22,11 +22,14 @@
  * resolve every one of them when the daemon serves `email.*` and `calendar.*`.
  * The evidence list beside DAEMON_MAILBOX_LOCAL_SETTINGS records that.
  *
- * A note on the three password keys. They are declared so the settings surface
+ * A note on the five password keys. They are declared so the settings surface
  * can offer them, but a secret VALUE never lives in config: each resolves
  * through the daemon secret tier by the platform name derivation. The
  * round-trip below therefore stores an ordinary string, which is exactly what
- * the key holds — a reference, not a credential.
+ * the key holds — a reference, not a credential. The write side is enforced in
+ * src/test/security/daemon-credential-scope.test.ts: all five are in
+ * SECRET_CONFIG_KEYS, so an entered value goes to the secret store and only the
+ * reference reaches a settings file.
  */
 import { describe, test, expect, beforeEach } from 'bun:test';
 import { join } from 'node:path';

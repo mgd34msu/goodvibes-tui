@@ -1,8 +1,27 @@
-import { isSecretRefInput } from '@pellux/goodvibes-sdk/platform/config';
+import { isSecretRefInput, isDaemonOwnedConfigKey } from '@pellux/goodvibes-sdk/platform/config';
 import type { ConfigKey } from './index.ts';
 import type { SecretScope, SecretStorageMedium } from './secrets.ts';
 
 export const SECRET_CONFIG_KEYS = new Set<ConfigKey>([
+  // Mailbox and CalDAV credentials. Their own CONFIG_SCHEMA descriptions read
+  // "Stored in the daemon secret tier, never in config" — and until they were
+  // listed here that sentence was aspirational: the settings modal wrote them
+  // as plain strings into a config JSON file, because membership in this set is
+  // the thing that routes an edit through the secret manager instead.
+  //
+  // The daemon reads each of these back with
+  // resolveConfigSecret('<key>') → GOODVIBES_<KEY>, which is exactly the store
+  // key buildGoodVibesSecretKey() writes — see
+  // daemon/handlers/inbox/providers/email.ts.
+  'surfaces.email.password',
+  'surfaces.email.imapPassword',
+  'surfaces.email.imap.password',
+  'surfaces.email.smtp.password',
+  'surfaces.calendar.caldavPassword',
+  // Telephony delivery credentials — same shape, same file, same gap.
+  'surfaces.telephony.authToken',
+  'surfaces.telephony.token',
+  'surfaces.telephony.webhookSecret',
   'surfaces.slack.signingSecret',
   'surfaces.slack.botToken',
   'surfaces.slack.appToken',
@@ -96,6 +115,27 @@ export function buildSecretBackedConfigUpdate(configKey: ConfigKey, rawValue: st
   };
 }
 
+/**
+ * Where a secret-backed write lands when the caller did not name a scope.
+ *
+ * A daemon-owned config key (`surfaces.*`, `controlPlane.*`, ...) names a
+ * credential the DAEMON executes with, not this interactive client, so its
+ * secret material belongs in the daemon-scoped tier the daemon actually
+ * reads — the same rule the SDK's config-ownership.ts already applies to the
+ * `goodvibes://` reference that points at it.
+ *
+ * Defaulting these to 'user' (the historical behavior here) split the pair: the
+ * reference landed in the daemon's own settings file, because ConfigManager
+ * routes daemon-owned keys there, while the value it pointed at sat in a tier
+ * the daemon never resolves. The surface reported success and the daemon found
+ * nothing. For the mailbox password that is the whole feature failing silently —
+ * the daemon is the process that polls IMAP and answers over Telegram, and it
+ * does so with every surface closed.
+ */
+export function defaultSecretBackedScope(configKey: ConfigKey): SecretScope {
+  return isDaemonOwnedConfigKey(configKey) ? 'daemon' : 'user';
+}
+
 export async function persistSecretBackedConfigValue(
   configManager: SecretBackedConfigManager,
   secretsManager: SecretBackedSecretStore | null | undefined,
@@ -104,16 +144,21 @@ export async function persistSecretBackedConfigValue(
   options: { readonly scope?: SecretScope } = {},
 ): Promise<string> {
   const update = buildSecretBackedConfigUpdate(configKey, rawValue);
-  const scope = options.scope ?? 'user';
-  if (update.secretKey && update.secretValue !== undefined && secretsManager) {
-    await secretsManager.set(update.secretKey, update.secretValue, {
-      scope,
-      medium: getSecretWriteMedium(configManager.get('storage.secretPolicy')),
-    });
-  }
-  if (update.clearSecretKey && secretsManager?.delete) {
-    await secretsManager.delete(update.clearSecretKey, { scope });
-  }
+  const scope = options.scope ?? defaultSecretBackedScope(configKey);
+  const medium = getSecretWriteMedium(configManager.get('storage.secretPolicy'));
+
+  // 1. Validate config write first. If setDynamic throws, no secret is written (avoids orphans).
   configManager.setDynamic(configKey, update.configValue);
+
+  // 2. Write new secret only after config accepted it.
+  if (update.secretKey && update.secretValue !== undefined && secretsManager) {
+    await secretsManager.set(update.secretKey, update.secretValue, { scope, medium });
+  }
+
+  // 3. Clear old secret — pass the same medium so plaintext-medium secrets are found for deletion.
+  if (update.clearSecretKey && secretsManager?.delete) {
+    await secretsManager.delete(update.clearSecretKey, { scope, medium });
+  }
+
   return update.configValue;
 }

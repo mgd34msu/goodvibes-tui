@@ -1,5 +1,5 @@
 import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto';
-import type { SecretsManager } from '../../config/secrets.ts';
+import type { SecretsManager, SecretScope } from '../../config/secrets.ts';
 import {
   buildGoodVibesSecretKey,
   isSecretReferenceValue,
@@ -16,11 +16,21 @@ export interface DaemonCredentialStore {
    * (e.g. 'surfaces.slack.botToken' → GOODVIBES_SURFACES_SLACK_BOT_TOKEN).
    */
   resolveConfigSecret(configKey: string): Promise<string | null>;
-  /** Store a daemon-owned credential. scope defaults 'user'. */
+  /**
+   * Store a daemon-owned credential. scope defaults 'daemon'.
+   *
+   * This is the DAEMON's own credential store: every caller is daemon code, and
+   * every value written through it is one the daemon itself has to read back —
+   * including its own generated draft encryption key (createAtRestCipher below,
+   * which calls put() with no scope at all). Defaulting to 'user' filed those
+   * in a surface-scoped tier, so the daemon's own material lived somewhere it
+   * only found by accident, and a value written on one surface's behalf was
+   * invisible to the next.
+   */
   put(
     secretKey: string,
     value: string,
-    opts?: { scope?: 'user' | 'project'; medium?: 'plaintext' | 'secure' },
+    opts?: { scope?: SecretScope; medium?: 'plaintext' | 'secure' },
   ): Promise<void>;
   has(secretKey: string): Promise<boolean>;
 }
@@ -45,10 +55,10 @@ export function createDaemonCredentialStore(secrets: SecretsManager): DaemonCred
     async put(
       secretKey: string,
       value: string,
-      opts?: { scope?: 'user' | 'project'; medium?: 'plaintext' | 'secure' },
+      opts?: { scope?: SecretScope; medium?: 'plaintext' | 'secure' },
     ): Promise<void> {
       await secrets.set(secretKey, value, {
-        scope: opts?.scope ?? 'user',
+        scope: opts?.scope ?? 'daemon',
         medium: opts?.medium ?? 'secure',
       });
     },
