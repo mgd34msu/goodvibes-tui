@@ -21,20 +21,20 @@ import { createProviderCacheFixture, writeModelCatalogCache } from '../helpers/p
 
 const FIXTURE_MODELS: CatalogModel[] = [
   // Free tier
-  { id: 'gpt-oss-120b', name: 'GPT OSS 120B', provider: 'OpenAI', providerId: 'openai', providerEnvVars: ['OPENAI_API_KEY'], pricing: { input: 0, output: 0 }, tier: 'free' },
+  { id: 'gpt-oss-120b', name: 'GPT OSS 120B', provider: 'OpenAI', providerId: 'openai', providerEnvVars: ['OPENAI_API_KEY'], pricing: { input: 0, output: 0 }, tier: 'free', inputModalities: ['text'] },
 
   // Paid - Anthropic (premium)
-  { id: 'claude-opus-4-6', name: 'Claude Opus 4.6', provider: 'Anthropic', providerId: 'anthropic', providerEnvVars: ['ANTHROPIC_API_KEY'], pricing: { input: 15, output: 75 }, tier: 'paid', contextWindow: 200_000 },
-  { id: 'claude-sonnet-4-6', name: 'Claude Sonnet 4.6', provider: 'Anthropic', providerId: 'anthropic', providerEnvVars: ['ANTHROPIC_API_KEY'], pricing: { input: 3, output: 15 }, tier: 'paid', contextWindow: 200_000 },
-  { id: 'claude-haiku-4-5', name: 'Claude Haiku 4.5', provider: 'Anthropic', providerId: 'anthropic', providerEnvVars: ['ANTHROPIC_API_KEY'], pricing: { input: 0.80, output: 4 }, tier: 'paid', contextWindow: 200_000 },
+  { id: 'claude-opus-4-6', name: 'Claude Opus 4.6', provider: 'Anthropic', providerId: 'anthropic', providerEnvVars: ['ANTHROPIC_API_KEY'], pricing: { input: 15, output: 75 }, tier: 'paid', contextWindow: 200_000, inputModalities: ['text', 'image'] },
+  { id: 'claude-sonnet-4-6', name: 'Claude Sonnet 4.6', provider: 'Anthropic', providerId: 'anthropic', providerEnvVars: ['ANTHROPIC_API_KEY'], pricing: { input: 3, output: 15 }, tier: 'paid', contextWindow: 200_000, inputModalities: ['text', 'image'] },
+  { id: 'claude-haiku-4-5', name: 'Claude Haiku 4.5', provider: 'Anthropic', providerId: 'anthropic', providerEnvVars: ['ANTHROPIC_API_KEY'], pricing: { input: 0.80, output: 4 }, tier: 'paid', contextWindow: 200_000, inputModalities: ['text', 'image'] },
 
   // Paid - Google (premium)
-  { id: 'gemini-2.5-pro', name: 'Gemini 2.5 Pro', provider: 'Google', providerId: 'gemini', providerEnvVars: ['GOOGLE_API_KEY'], pricing: { input: 1.25, output: 5 }, tier: 'paid', contextWindow: 1_000_000 },
-  { id: 'gemini-3-flash', name: 'Gemini 3 Flash', provider: 'Google', providerId: 'gemini', providerEnvVars: ['GOOGLE_API_KEY'], pricing: { input: 0.075, output: 0.30 }, tier: 'paid', contextWindow: 1_000_000 },
+  { id: 'gemini-2.5-pro', name: 'Gemini 2.5 Pro', provider: 'Google', providerId: 'gemini', providerEnvVars: ['GOOGLE_API_KEY'], pricing: { input: 1.25, output: 5 }, tier: 'paid', contextWindow: 1_000_000, inputModalities: ['text', 'image'] },
+  { id: 'gemini-3-flash', name: 'Gemini 3 Flash', provider: 'Google', providerId: 'gemini', providerEnvVars: ['GOOGLE_API_KEY'], pricing: { input: 0.075, output: 0.30 }, tier: 'paid', contextWindow: 1_000_000, inputModalities: ['text', 'image'] },
 
   // Paid - OpenAI
-  { id: 'gpt-5.4', name: 'GPT-5.4', provider: 'OpenAI', providerId: 'openai', providerEnvVars: ['OPENAI_API_KEY'], pricing: { input: 5, output: 15 }, tier: 'paid', contextWindow: 400_000 },
-  { id: 'gpt-5-mini', name: 'GPT-5 Mini', provider: 'OpenAI', providerId: 'openai', providerEnvVars: ['OPENAI_API_KEY'], pricing: { input: 0.15, output: 0.60 }, tier: 'paid', contextWindow: 128_000 },
+  { id: 'gpt-5.4', name: 'GPT-5.4', provider: 'OpenAI', providerId: 'openai', providerEnvVars: ['OPENAI_API_KEY'], pricing: { input: 5, output: 15 }, tier: 'paid', contextWindow: 400_000, inputModalities: ['text', 'image'] },
+  { id: 'gpt-5-mini', name: 'GPT-5 Mini', provider: 'OpenAI', providerId: 'openai', providerEnvVars: ['OPENAI_API_KEY'], pricing: { input: 0.15, output: 0.60 }, tier: 'paid', contextWindow: 128_000, inputModalities: ['text', 'image'] },
 ];
 
 const FIXTURE_CATALOG: PricingCatalog = {
@@ -127,15 +127,21 @@ describe('getCatalogModelDefinitions', () => {
     expect(ids.has('gemini-2.5-pro')).toBe(true);
   });
 
-  it('Google models have multimodal: true', () => {
+  it('image support comes from the catalog entry, not from the vendor', () => {
     const defs = getCatalogModelDefinitions();
     // provider field is the providerId (lowercase); the registry's canonical
-    // id for Google models is 'gemini'.
+    // id for Google models is 'gemini'. Both fixture Google entries declare
+    // image input, so both read multimodal.
     const googleModels = defs.filter((d) => d.provider === 'gemini');
     expect(googleModels.length).toBeGreaterThan(0);
     for (const model of googleModels) {
       expect(model.capabilities.multimodal).toBe(true);
     }
+    // The negative half, and the reason this is no longer a vendor rule: the
+    // fixture's two OpenAI entries disagree with each other, so a check that
+    // answered by provider would have to be wrong about one of them.
+    expect(defs.find((d) => d.id === 'gpt-5.4')?.capabilities.multimodal).toBe(true);
+    expect(defs.find((d) => d.id === 'gpt-oss-120b')?.capabilities.multimodal).toBe(false);
   });
 
   it('Google models have large context windows (>=1M)', () => {

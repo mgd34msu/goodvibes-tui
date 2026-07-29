@@ -23,9 +23,8 @@
  * src/test/security/payments-cvv-containment.test.ts.
  */
 import { describe, test, expect } from 'bun:test';
-import { mkdtempSync } from 'node:fs';
 import { join } from 'node:path';
-import { tmpdir } from 'node:os';
+import { makeProjectTempDir } from '../helpers/project-temp.ts';
 import { ConfigManager, CONFIG_SCHEMA } from '../../config/index.ts';
 import type { ConfigKey } from '../../config/index.ts';
 import { PAYMENTS_LOCAL_SETTINGS } from '../../verification/verification-ledger.ts';
@@ -65,13 +64,17 @@ const ALTERNATE_VALUE: Record<string, unknown> = {
   'payments.shippingAddress.country': 'US',
   'payments.windows.vetoMinutes': 15,
   'payments.windows.approvalMinutes': 90,
+  'payments.majorRetailersAdditional': 'example-retailer.com,another-shop.co.uk',
+  'payments.majorRetailersExcluded': 'blocked-shop.example',
+  'payments.ebayMinSellerFeedbackCount': 250,
+  'payments.ebayMinSellerPositivePercent': 99,
   'payments.notifyChannels': 'tui,telegram',
 };
 
 const schemaByKey = new Map(CONFIG_SCHEMA.map((s) => [s.key, s]));
 
 function freshManager(): { manager: ConfigManager; root: string; configDir: string } {
-  const root = mkdtempSync(join(tmpdir(), 'goodvibes-payments-settings-'));
+  const root = makeProjectTempDir('goodvibes-payments-settings');
   const configDir = join(root, '.config-override');
   const manager = new ConfigManager({ surfaceRoot: 'tui', workingDir: root, configDir });
   return { manager, root, configDir };

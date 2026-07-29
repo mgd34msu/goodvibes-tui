@@ -18,8 +18,8 @@
  */
 
 import { afterEach, describe, expect, test } from 'bun:test';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs';
+import { makeProjectTempDir } from '../helpers/project-temp.ts';
 import { join } from 'node:path';
 import { ConfigManager, daemonConfigPath } from '@pellux/goodvibes-sdk/platform/config';
 import { SecretsManager } from '../../config/secrets.ts';
@@ -49,7 +49,7 @@ const roots: string[] = [];
  * decidable. Siblings keep the three tiers genuinely distinct on disk.
  */
 function makeHome(): string {
-  const root = mkdtempSync(join(tmpdir(), 'gv-cred-scope-'));
+  const root = makeProjectTempDir('gv-cred-scope');
   roots.push(root);
   const home = join(root, 'home');
   mkdirSync(home, { recursive: true });

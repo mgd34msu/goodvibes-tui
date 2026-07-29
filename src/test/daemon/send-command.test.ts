@@ -9,9 +9,9 @@
  * bytes that would go on the wire.
  */
 import { afterEach, describe, expect, test } from 'bun:test';
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { makeProjectTempDir } from '../helpers/project-temp.ts';
 import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import type { ChannelDeliveryRequest } from '@pellux/goodvibes-sdk/platform/channels';
 import { runSendCommand, type SendCommandDeps } from '../../daemon/send/command.ts';
@@ -33,7 +33,7 @@ afterEach(() => {
  * command that could not read a real machine's credentials.
  */
 function configWithDaemonTier(settings: Record<string, unknown>): ConfigManager {
-  const root = mkdtempSync(join(tmpdir(), 'gv-send-'));
+  const root = makeProjectTempDir('gv-send');
   roots.push(root);
   mkdirSync(join(root, '.goodvibes', 'daemon'), { recursive: true });
   writeFileSync(join(root, '.goodvibes', 'daemon', 'settings.json'), JSON.stringify(settings), 'utf-8');
