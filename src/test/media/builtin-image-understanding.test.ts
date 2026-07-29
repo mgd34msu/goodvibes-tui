@@ -1,7 +1,5 @@
 import { afterEach, describe, expect, test } from 'bun:test';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { rmSync } from 'node:fs';
 import { ArtifactStore } from '@pellux/goodvibes-sdk/platform/artifacts';
 import {
   createBuiltinImageUnderstandingProvider,
@@ -10,6 +8,7 @@ import {
 } from '@pellux/goodvibes-sdk/platform/media';
 import type { LLMProvider, ProviderMessage, ProviderRuntimeMetadataDeps } from '@pellux/goodvibes-sdk/platform/providers';
 import type { ModelDefinition, ProviderRegistry } from '@pellux/goodvibes-sdk/platform/providers';
+import { makeProjectTempDir } from '../helpers/project-temp.ts';
 
 type ImageModelRegistry = Pick<ProviderRegistry, 'describeRuntime' | 'getCurrentModel' | 'getForModel' | 'listModels'>;
 
@@ -64,7 +63,7 @@ describe('builtin image understanding provider', () => {
   });
 
   test('analyzes artifact-backed images through the existing multimodal provider contract', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'gv-media-artifacts-'));
+    const root = makeProjectTempDir('gv-media-artifacts');
     roots.push(root);
     const store = new ArtifactStore({ rootDir: root });
     const created = await store.create({
@@ -120,7 +119,7 @@ describe('builtin image understanding provider', () => {
   });
 
   test('provider-scoped image understanding selects the matching provider family', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'gv-media-artifacts-'));
+    const root = makeProjectTempDir('gv-media-artifacts');
     roots.push(root);
     const store = new ArtifactStore({ rootDir: root });
     const created = await store.create({

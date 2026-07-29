@@ -65,7 +65,12 @@ export function registerOperatorRuntimeCommands(registry: CommandRegistry): void
 
   registry.register({
     name: 'profiles',
-    aliases: ['profile'],
+    // The singular `profile` alias was given up to /profile, the owner profile
+    // (docs/owner-profile.md). These are two unrelated things — this command
+    // loads saved display/provider settings presets, and the other one is what
+    // the platform knows about the person who owns it — and the singular word
+    // now belongs to the second. `/profiles` is unchanged; only the abbreviation
+    // moved. See the naming note in docs/owner-profile.md §3.
     description: 'Browse and load config profiles',
     handler(_args, ctx) {
       if (ctx.openProfilePicker) {

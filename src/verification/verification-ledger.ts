@@ -74,8 +74,14 @@ const SETTINGS_BEHAVIOR_BASELINE = 184;
  * declared at all: the SDK's mail and calendar gateway compositions
  * (platform/email/surface-config.ts and platform/calendar/caldav-gateway-config.ts)
  * resolve every one of them when the daemon serves `email.*` and `calendar.*`.
- * The three password keys additionally resolve through the daemon secret tier
- * rather than from config, and carry no secret value in config themselves.
+ * The five password keys (email.password, email.imapPassword,
+ * email.imap.password, email.smtp.password, calendar.caldavPassword)
+ * additionally resolve through the daemon secret tier rather than from config,
+ * and carry no secret value in config themselves. That is now enforced on the
+ * write side too: all five are in `config/secret-config.ts`'s
+ * SECRET_CONFIG_KEYS, so the settings modal and `/config set` route an entered
+ * value into the secret store and leave only a `goodvibes://` reference in
+ * config, rather than writing the password itself into a settings file.
  */
 export const DAEMON_MAILBOX_LOCAL_SETTINGS = [
   'surfaces.email.host',

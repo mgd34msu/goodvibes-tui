@@ -49,7 +49,7 @@ GoodVibes ships **154** built-in slash commands across **74** categories. Every 
 - [Notifications](#notifications) — 1
 - [Onboarding](#onboarding) — 1
 - [Operator](#operator) — 10
-- [Payments](#payments) — 1
+- [Owner Profile](#owner-profile) — 1
 - [Permissions](#permissions) — 1
 - [Planning](#planning) — 2
 - [Platform](#platform) — 1
@@ -355,15 +355,15 @@ GoodVibes ships **154** built-in slash commands across **74** categories. Every 
 | `/ops` | — | `view \| task <cancel\|pause\|resume\|retry> <id> [note] \| agent cancel <id> [note]` | Operator Control Plane: view audit log, cancel/pause/resume/retry tasks and agents |
 | `/panel` | `/panels` | `[open <id> [top\|bottom] [--target <id>[:<kind>]]\|close <id>\|list\|toggle\|move <top\|bottom\|other> [id]\|focus <top\|bottom\|toggle>\|split [show\|hide\|toggle]\|width <left\|right\|reset>\|height <up\|down\|reset>]` | Open, place, resize, or list panels. Usage: /panel [open <id> [top\|bottom]\|close <id>\|list\|toggle\|move\|focus\|split\|width\|height] |
 | `/prev-error` | `/pe` | — | Jump to the previous error message in the conversation |
-| `/profiles` | `/profile` | — | Browse and load config profiles |
+| `/profiles` | — | — | Browse and load config profiles |
 | `/settings` | `/cfg-ui` | — | Open the fullscreen configuration workspace |
 | `/tool` | — | `verify <name> \| verify-all \| contract show <name>` | Tool contract verification — verify registered tool contracts |
 
-## Payments
+## Owner Profile
 
 | Command | Aliases | Usage | Description |
 | --- | --- | --- | --- |
-| `/payments` | — | `/payments [card]` | Payment card on file for daemon-initiated purchases (card entry is masked input) |
+| `/profile` | — | `[show\|where <field>\|set <field> <value>\|note [--section <name>] <text>\|forget <field>\|forget --section <name> <text>\|undo <field>\|status]` | What the platform knows about you: read it, correct it, trace where a fact came from, or forget one |
 
 ## Permissions
 

@@ -1,12 +1,11 @@
 import { beforeEach, describe, expect, test } from 'bun:test';
-import { mkdtempSync } from 'node:fs';
-import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { RouteBindingManager } from '@pellux/goodvibes-sdk/platform/channels';
 import { SharedSessionBroker } from '@pellux/goodvibes-sdk/platform/control-plane';
 import { trackDisposables } from '../helpers/disposables.ts';
 import { AutomationRouteStore } from '@pellux/goodvibes-sdk/platform/automation';
 import { PersistentStore } from '@pellux/goodvibes-sdk/platform/state';
+import { makeProjectTempDir } from '../helpers/project-temp.ts';
 
 // A broker starts a 60s GC sweep once started; stop() clears it.
 const disposables = trackDisposables();
@@ -15,7 +14,7 @@ describe('SharedSessionBroker explicit intents', () => {
   let root = '';
 
   beforeEach(() => {
-    root = mkdtempSync(join(tmpdir(), 'gv-session-intents-'));
+    root = makeProjectTempDir('gv-session-intents');
   });
 
   function buildBroker() {

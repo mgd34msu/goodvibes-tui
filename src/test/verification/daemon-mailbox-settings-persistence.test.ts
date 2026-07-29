@@ -22,16 +22,17 @@
  * resolve every one of them when the daemon serves `email.*` and `calendar.*`.
  * The evidence list beside DAEMON_MAILBOX_LOCAL_SETTINGS records that.
  *
- * A note on the three password keys. They are declared so the settings surface
+ * A note on the five password keys. They are declared so the settings surface
  * can offer them, but a secret VALUE never lives in config: each resolves
  * through the daemon secret tier by the platform name derivation. The
  * round-trip below therefore stores an ordinary string, which is exactly what
- * the key holds — a reference, not a credential.
+ * the key holds — a reference, not a credential. The write side is enforced in
+ * src/test/security/daemon-credential-scope.test.ts: all five are in
+ * SECRET_CONFIG_KEYS, so an entered value goes to the secret store and only the
+ * reference reaches a settings file.
  */
 import { describe, test, expect, beforeEach } from 'bun:test';
-import { mkdtempSync } from 'node:fs';
 import { join } from 'node:path';
-import { tmpdir } from 'node:os';
 import { ConfigManager, CONFIG_SCHEMA } from '../../config/index.ts';
 import type { ConfigKey } from '../../config/index.ts';
 import { FEATURE_SETTINGS } from '@pellux/goodvibes-sdk/platform/runtime/state';
@@ -40,6 +41,7 @@ import {
   DEVICE_AND_TRIGGER_LOCAL_SETTINGS,
   FEATURE_KNOB_LOCAL_SETTINGS,
 } from '../../verification/verification-ledger.ts';
+import { makeProjectTempDir } from '../helpers/project-temp.ts';
 
 /**
  * A valid alternate value (distinct from the schema default) for each key.
@@ -77,7 +79,7 @@ const ALTERNATE_VALUE: Record<string, unknown> = {
 const schemaByKey = new Map(CONFIG_SCHEMA.map((setting) => [setting.key as string, setting]));
 
 function freshManager(): { manager: ConfigManager; root: string; configDir: string } {
-  const root = mkdtempSync(join(tmpdir(), 'gv-daemon-mailbox-settings-'));
+  const root = makeProjectTempDir('gv-daemon-mailbox-settings');
   const configDir = join(root, 'config');
   const manager = new ConfigManager({ surfaceRoot: 'tui', workingDir: root, configDir });
   manager.load();

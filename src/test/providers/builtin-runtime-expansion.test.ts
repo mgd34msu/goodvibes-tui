@@ -1,6 +1,4 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { mkdtempSync } from 'node:fs';
-import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import { FavoritesStore } from '@pellux/goodvibes-sdk/platform/providers';
@@ -11,6 +9,7 @@ import { BenchmarkStore } from '@pellux/goodvibes-sdk/platform/providers';
 import { ProviderCapabilityRegistry } from '@pellux/goodvibes-sdk/platform/providers';
 import { CacheHitTracker } from '@pellux/goodvibes-sdk/platform/providers';
 import { ProviderRegistry } from '@pellux/goodvibes-sdk/platform/providers';
+import { makeProjectTempDir } from '../helpers/project-temp.ts';
 
 const CLEAN_ENV_KEYS = [
   'AWS_BEARER_TOKEN_BEDROCK',
@@ -35,7 +34,7 @@ describe('provider runtime expansion', () => {
   let providerRegistry: ProviderRegistry;
 
   beforeEach(() => {
-    tempHome = mkdtempSync(join(tmpdir(), 'gv-provider-expansion-'));
+    tempHome = makeProjectTempDir('gv-provider-expansion');
     process.env.HOME = tempHome;
     for (const key of CLEAN_ENV_KEYS) {
       originalEnv.set(key, process.env[key]);

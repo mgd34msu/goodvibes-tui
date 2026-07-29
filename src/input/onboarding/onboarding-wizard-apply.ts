@@ -52,6 +52,18 @@ export function buildOnboardingApplyRequest(controller: OnboardingWizardControll
         acknowledged: controller.getBooleanFieldValue(fieldId, false),
       });
     };
+    // Every credential the first-run wizard captures is one the DAEMON executes
+    // with: model provider API keys (the daemon runs the model), the Cloudflare
+    // API token, and the masked fields of the external surfaces — all of which
+    // live under daemon-owned `surfaces.*` config paths. So they all go to the
+    // daemon tier, which is the one tier every surface AND the daemon read.
+    //
+    // 'project' — what this used to pass — filed them under whatever directory
+    // the wizard happened to be run from. Run the wizard in ~/code/foo and the
+    // daemon, which has no idea that directory exists, found nothing; run it
+    // again elsewhere and the first setup silently stopped applying. First-run
+    // setup is exactly the moment where "configure once, works everywhere" has
+    // to hold.
     const setSecret = (key: string, value: string): void => {
       if (value.length === 0) return;
       const medium = controller.getSelectedSecretMedium();
@@ -59,7 +71,7 @@ export function buildOnboardingApplyRequest(controller: OnboardingWizardControll
         kind: 'set-secret',
         key,
         value,
-        scope: 'project',
+        scope: 'daemon',
         medium,
       });
     };

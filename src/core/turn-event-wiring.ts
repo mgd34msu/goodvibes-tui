@@ -1,7 +1,7 @@
 import type { UiRuntimeEvents, RuntimeEventBus } from '@/runtime/index.ts';
 import { buildPersistedSessionContext, persistConversation } from '@/runtime/index.ts';
 import { buildCompactionReceiptBlock } from './compaction-receipt.ts';
-import { formatTurnBudgetOutcome } from './turn-budget-outcome.ts';
+import { workstreamFailureNotification } from './workstream-notification.ts';
 import { persistTurnAnchors, recordTurnAnchor, summarizeTurnLabel } from './rewind-turn-anchors.ts';
 import { logger } from '@pellux/goodvibes-sdk/platform/utils';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
@@ -328,21 +328,12 @@ export function wireTurnEventHandlers(
     unsubs.push(events.workflows.on('WORKFLOW_CHAIN_FAILED', (payload) => {
       if (!shouldFireAlert(focusTracker, configGet, 'behavior.notifyOnChainFailure')) return;
       try {
-        // An operator cancellation is an intended stop, not a failure — narrate it
-        // as cancelled (the reason already carries the landed-work count from the
-        // chain's edit ledger), so the notification never contradicts the cancelled
-        // chain/owner/cohort surfaces.
-        if (payload.failureKind === 'cancelled') {
-          notifyCompletion('GoodVibes — WRFC chain cancelled', `chain ${payload.chainId.slice(0, 12)} cancelled: ${payload.reason}`, FORCE_NOTIFY_DURATION_MS);
-        } else if (payload.failureKind === 'max_turns') {
-          // A turn-budget exhaustion is a spent ceiling, not an infrastructure
-          // failure — narrate the limit and where it came from, from the typed
-          // event fields, never a regex of the prose reason.
-          notifyCompletion('GoodVibes — WRFC chain hit its turn budget', `chain ${payload.chainId.slice(0, 12)} ${formatTurnBudgetOutcome({ limit: payload.turnLimit, source: payload.turnLimitSource })}`, FORCE_NOTIFY_DURATION_MS);
-        } else {
-          const kindLabel = payload.failureKind === 'transport' ? 'transient transport error' : payload.reason;
-          notifyCompletion('GoodVibes — WRFC chain failed', `chain ${payload.chainId.slice(0, 12)} failed: ${kindLabel}`, FORCE_NOTIFY_DURATION_MS);
-        }
+        // Title and body come from workstream-notification.ts, which is where
+        // the three branches (cancelled / turn budget / failed) are narrated and
+        // tested. A notification is a message to a person, so it carries neither
+        // the internal name for the machinery nor the chain id.
+        const notice = workstreamFailureNotification(payload);
+        notifyCompletion(notice.title, notice.body, FORCE_NOTIFY_DURATION_MS);
       } catch (err) {
         logger.debug('turn-event-wiring: chain-failure notify error', { error: String(err) });
       }

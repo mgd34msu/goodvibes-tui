@@ -1,17 +1,16 @@
 import { describe, test, expect, afterEach } from 'bun:test';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { rmSync } from 'node:fs';
 import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import type { ConfigKey } from '@pellux/goodvibes-sdk/platform/config';
 import { buildSettingGroups } from '../../input/settings-modal-data.ts';
 import { getSettingLabel } from '../../renderer/settings-modal-helpers.ts';
+import { makeProjectTempDir } from '../helpers/project-temp.ts';
 
 const roots: string[] = [];
 afterEach(() => { for (const r of roots.splice(0)) { try { rmSync(r, { recursive: true, force: true }); } catch { /* best effort */ } } });
 
 function makeConfig(): ConfigManager {
-  const dir = mkdtempSync(join(tmpdir(), 'gv-blocked-esc-'));
+  const dir = makeProjectTempDir('gv-blocked-esc');
   roots.push(dir);
   return new ConfigManager({ workingDir: dir, homeDir: dir, surfaceRoot: 'tui' });
 }

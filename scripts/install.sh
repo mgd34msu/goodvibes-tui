@@ -37,6 +37,22 @@
 #   GOODVIBES_DAEMON_SERVICE  set to 0 to skip first-run daemon service setup (default: 1)
 #   GOODVIBES_UNINSTALL       set to 1 to remove installer-managed files and stop
 #                             the daemon/agent, then exit — no downloads (default: 0)
+#   GOODVIBES_SHADOW_REMOVE   what to do about another copy of an installed command
+#                             that sits earlier on PATH: ask (default, prompts on a
+#                             terminal), 1 (remove recognised copies without asking),
+#                             0 (report only, never remove)
+#
+# PATH shadowing check: installing a file is not the same as making it
+# reachable. After everything is placed, the installer enumerates every copy of
+# goodvibes / goodvibes-daemon / goodvibes-agent on PATH and checks that the
+# copy it maintains is the one the shell would run. When an earlier PATH entry
+# provides the same command — a leftover `bun add -g` link, an npm global, an
+# older standalone install — it says which path wins and what version each is,
+# offers to remove the shadowing copy when that copy is recognisably one of our
+# own programs and lives inside the user's home directory, and exits non-zero
+# if a shadow remains. An install nobody can reach is a failed install: it is
+# how two successful installs in a row can leave an old build answering while
+# the version number reports itself current.
 #
 # First-run daemon service setup (GOODVIBES_DAEMON_SERVICE=1): when no daemon is
 # running and no service unit exists yet, the installer registers the daemon as a
@@ -1645,6 +1661,380 @@ install_browser_driver() {
   say "  installed  $driver_target"
 }
 
+# --- PATH shadowing: is the install we just wrote the one the shell runs? ---
+#
+# Installing a file is not the same as making it reachable. If any directory
+# EARLIER on PATH than $INSTALL_DIR also provides `goodvibes`,
+# `goodvibes-daemon`, or `goodvibes-agent`, then typing the bare command runs
+# that other copy, and this installer — and the auto-updater after it — keeps
+# maintaining a file the user never reaches. That is exactly how a leftover
+# `~/.bun/bin/goodvibes-agent` (a `bun add -g` link, 1.18.1) at PATH position 2
+# beat `~/.local/bin/goodvibes-agent` (1.21.0) at position 21: two successful
+# installs in a row, an old build answering, and a version number that
+# reported itself current the whole time.
+#
+# So after installing, enumerate every copy on PATH, name the one that wins and
+# what version each is, and offer to remove the shadowing one when it is
+# recognisably ours. An install that cannot be reached is a failed install, so
+# an unresolved shadow exits non-zero.
+#
+# The same rules live in the SDK as platform/runtime/path-shadow for the
+# clients' startup check; this is their POSIX sh statement, because an
+# installer cannot import TypeScript.
+#
+#   GOODVIBES_SHADOW_REMOVE=ask   prompt on a terminal (default)
+#   GOODVIBES_SHADOW_REMOVE=1     remove recognised copies without asking
+#   GOODVIBES_SHADOW_REMOVE=0     never remove; report only
+SHADOW_REMOVE="${GOODVIBES_SHADOW_REMOVE:-ask}"
+
+# Set to 1 when a shadow was found and is still in place at the end of main().
+PATH_SHADOW_UNRESOLVED=0
+
+# The PATH the check reasons about. Defaults to this process's PATH and is
+# recomputed by shadow_effective_path() before the scan; the tests set it
+# directly to drive a scenario without touching the real environment.
+SHADOW_PATH="${PATH:-}"
+
+# The PATH the user will actually have, which is not always this process's.
+#
+# When $INSTALL_DIR is missing from PATH, the installer writes a PATH line into
+# the user's shell rc that PREPENDS it (ensure_path_on_shell_rc). That line is
+# appended to the end of the rc file, so it runs after anything else in there
+# and $INSTALL_DIR ends up first — nothing can shadow it once a new shell
+# starts. Checking this process's PATH instead would report "not on your PATH"
+# for the very install that just fixed that, which is a false alarm on a fresh
+# machine. So model the shell the user is about to open: prepend $INSTALL_DIR
+# whenever the rc file carries our line, whether this run wrote it or an
+# earlier one did.
+shadow_effective_path() {
+  shadow_effective_dir=$(shadow_trim_dir "$INSTALL_DIR")
+  case ":${PATH:-}:" in
+    *":$shadow_effective_dir:"*)
+      printf '%s' "${PATH:-}"
+      return 0
+      ;;
+  esac
+  if [ "$PATH_LINE_ADDED" = "1" ]; then
+    printf '%s:%s' "$shadow_effective_dir" "${PATH:-}"
+    return 0
+  fi
+  shadow_effective_rc=$(resolve_shell_rc)
+  if [ -f "$shadow_effective_rc" ] && grep -qF "$INSTALLER_MARKER" "$shadow_effective_rc" 2>/dev/null; then
+    printf '%s:%s' "$shadow_effective_dir" "${PATH:-}"
+    return 0
+  fi
+  printf '%s' "${PATH:-}"
+}
+
+# Every PATH directory in search order: trailing slashes trimmed, empty entries
+# dropped (an empty PATH element means the current directory, which is not a
+# stable install anyone can reason about), duplicates collapsed to their first
+# occurrence — the only position that can ever win.
+shadow_path_entries() {
+  printf '%s' "${SHADOW_PATH:-}" | awk -v RS=: '
+    {
+      d = $0
+      while (length(d) > 1 && substr(d, length(d), 1) == "/") d = substr(d, 1, length(d) - 1)
+      if (d == "") next
+      if (!(d in seen)) { seen[d] = 1; print d }
+    }'
+}
+
+# Trailing slashes trimmed the same way, so "$HOME/.local/bin/" and
+# "$HOME/.local/bin" are one directory on both sides of every comparison.
+shadow_trim_dir() {
+  printf '%s' "$1" | awk '{
+    d = $0
+    while (length(d) > 1 && substr(d, length(d), 1) == "/") d = substr(d, 1, length(d) - 1)
+    print d
+  }'
+}
+
+# Follows a symlink chain to the file it really names. Uses readlink -f where
+# it exists (GNU and modern BSD), and otherwise chases up to 16 links by hand
+# so macOS without coreutils gets the same answer. Prints the input unchanged
+# when it is not a link or cannot be resolved.
+shadow_real_path() {
+  if readlink -f "$1" 2>/dev/null; then
+    return 0
+  fi
+  current=$1
+  hops=0
+  while [ -L "$current" ] && [ "$hops" -lt 16 ]; do
+    target=$(readlink "$current" 2>/dev/null) || break
+    case "$target" in
+      /*) current=$target ;;
+      *) current="$(dirname "$current")/$target" ;;
+    esac
+    hops=$((hops + 1))
+  done
+  printf '%s\n' "$current"
+}
+
+# The owning @pellux/goodvibes-* package for a resolved path, or nothing.
+# The LAST node_modules segment is the one that owns the file: a nested
+# node_modules/a/node_modules/b/bin/x belongs to b, not a. Another publisher's
+# scope, or another package inside ours, is deliberately not ours.
+shadow_owning_package() {
+  printf '%s\n' "$1" | awk -F/ '{
+    pkg = ""
+    for (i = 1; i <= NF; i++) {
+      if ($i != "node_modules") continue
+      if ($(i + 1) == "@pellux" && index($(i + 2), "goodvibes-") == 1) pkg = $(i + 1) "/" $(i + 2)
+      else pkg = ""
+    }
+    print pkg
+  }'
+}
+
+# What `<path> --version` reports, but ONLY when the output is the exact shape
+# every goodvibes command prints: "<command> <dotted numbers>". An unrelated
+# program that happens to share the name, a wrapper script, or a --version that
+# errors all yield nothing, which keeps that copy unidentified and therefore
+# never a removal candidate.
+shadow_version_of() {
+  shadow_version_line=$(shadow_run_version "$1")
+  printf '%s\n' "$shadow_version_line" | awk -v cmd="$2" '
+    NF == 2 && $1 == cmd {
+      v = $2
+      sub(/^v/, "", v)
+      if (v ~ /^[0-9]+(\.[0-9]+)*([-+][0-9A-Za-z.-]+)?$/) print v
+    }'
+}
+
+# Runs the candidate with --version, bounded by `timeout` when the host has it
+# so a hung or interactive binary cannot stall the install. This runs the same
+# file the user's very next bare command would run, with the most harmless
+# argument there is.
+shadow_run_version() {
+  if command -v timeout >/dev/null 2>&1; then
+    timeout 10 "$1" --version 2>/dev/null | head -1
+  else
+    "$1" --version 2>/dev/null | head -1
+  fi
+}
+
+# True when $1 is inside $2 (or is $2 itself). Nothing outside the user's own
+# home is ever a removal candidate, however confidently we recognise it.
+shadow_is_within() {
+  shadow_within_root=$(shadow_trim_dir "$2")
+  [ -n "$shadow_within_root" ] || return 1
+  shadow_within_path=$(shadow_trim_dir "$1")
+  [ "$shadow_within_path" = "$shadow_within_root" ] && return 0
+  case "$shadow_within_path" in
+    "$shadow_within_root"/*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+# The removal plan for a shadowing copy, as "<kind>\t<detail>", or nothing when
+# the copy is not recognisably one of our programs. Two recognised kinds:
+#   package <pkg>   an entry resolving into an installed @pellux/goodvibes-*
+#                   package (a bun/npm global link or a dependency link)
+#   file <path>     a standalone file that answers --version as this command,
+#                   i.e. an earlier standalone install of the same program
+shadow_removal_plan() {
+  shadow_plan_path=$1
+  shadow_plan_command=$2
+  shadow_plan_resolved=$(shadow_real_path "$shadow_plan_path")
+
+  shadow_is_within "$shadow_plan_path" "$HOME" || return 0
+  shadow_is_within "$shadow_plan_resolved" "$HOME" || return 0
+
+  shadow_plan_package=$(shadow_owning_package "$shadow_plan_resolved")
+  if [ -n "$shadow_plan_package" ]; then
+    printf 'package\t%s\n' "$shadow_plan_package"
+    return 0
+  fi
+
+  if [ -n "$(shadow_version_of "$shadow_plan_path" "$shadow_plan_command")" ]; then
+    printf 'file\t%s\n' "$shadow_plan_path"
+  fi
+}
+
+# The exact command that removes a recognised copy. A package link is removed
+# by uninstalling the package that provides it — with the manager that owns it,
+# read from where the package actually lives — never by deleting the link,
+# which the next command of that package manager would put straight back.
+shadow_removal_command() {
+  case "$1" in
+    package)
+      shadow_cmd_resolved=$(shadow_real_path "$3")
+      case "$shadow_cmd_resolved" in
+        */.bun/install/global/*|"$HOME"/.bun/*) printf 'bun remove -g %s\n' "$2" ;;
+        *) printf 'npm rm -g %s\n' "$2" ;;
+      esac
+      ;;
+    file) printf 'rm %s\n' "$2" ;;
+  esac
+}
+
+# Asks on the terminal, when there is one. `curl … | sh` leaves stdin pointing
+# at the script itself, so the question and the answer both go through
+# /dev/tty; with no terminal (CI, a pipeline) the default is to remove nothing
+# and report, which is what leaves the exit code non-zero.
+shadow_confirm() {
+  case "$SHADOW_REMOVE" in
+    1) return 0 ;;
+    0) return 1 ;;
+  esac
+  [ -r /dev/tty ] && [ -w /dev/tty ] || return 1
+  printf '%s [y/N] ' "$1" > /dev/tty
+  read -r shadow_answer < /dev/tty || return 1
+  case "$shadow_answer" in
+    y|Y|yes|YES|Yes) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+# Zero-based PATH position of a directory, or nothing when it is not on PATH.
+shadow_path_index() {
+  shadow_path_entries | awk -v want="$1" '{ if ($0 == want) { print NR - 1; exit } }'
+}
+
+# Every copy of $1 on PATH, as "<index>\t<path>", in search order.
+shadow_copies_of() {
+  shadow_copies_command=$1
+  shadow_path_entries | awk -v cmd="$shadow_copies_command" '{ print (NR - 1) "\t" $0 "/" cmd }' \
+    | while IFS='	' read -r shadow_copy_index shadow_copy_path; do
+        if [ -f "$shadow_copy_path" ] && [ -x "$shadow_copy_path" ]; then
+          printf '%s\t%s\n' "$shadow_copy_index" "$shadow_copy_path"
+        fi
+      done
+}
+
+# Reports and, where recognised and allowed, resolves shadowing copies of one
+# command. Returns 0 when the maintained copy is reachable afterwards, 1 when a
+# shadow remains.
+check_command_shadowing() {
+  shadow_command=$1
+  shadow_install_dir=$(shadow_trim_dir "$INSTALL_DIR")
+  shadow_target="$shadow_install_dir/$shadow_command"
+
+  # Nothing installed under this name here: not ours to have an opinion about.
+  [ -f "$shadow_target" ] && [ -x "$shadow_target" ] || return 0
+
+  shadow_install_index=$(shadow_path_index "$shadow_install_dir")
+  if [ -z "$shadow_install_index" ]; then
+    say ""
+    say "PROBLEM: $shadow_target is installed, but $shadow_install_dir is not on your PATH,"
+    say "         so typing \"$shadow_command\" does not reach it."
+    say "         Add it to your PATH, or run it by full path: $shadow_target"
+    return 1
+  fi
+
+  shadow_found=0
+  shadow_remaining=0
+  shadow_copies=$(shadow_copies_of "$shadow_command")
+
+  # Nothing to say while the maintained copy is the first one on PATH.
+  shadow_earlier=$(printf '%s\n' "$shadow_copies" | awk -F'\t' -v limit="$shadow_install_index" '
+    NF == 2 && $1 + 0 < limit + 0 { print $2 }')
+  [ -n "$shadow_earlier" ] || return 0
+
+  shadow_installed_version=$(shadow_version_of "$shadow_target" "$shadow_command")
+  [ -n "$shadow_installed_version" ] || shadow_installed_version="unknown"
+
+  shadow_winner=$(printf '%s\n' "$shadow_earlier" | head -1)
+  shadow_winner_version=$(shadow_version_of "$shadow_winner" "$shadow_command")
+  [ -n "$shadow_winner_version" ] || shadow_winner_version="unknown"
+
+  say ""
+  say "PROBLEM: typing \"$shadow_command\" does not run the copy this installer maintains."
+  say "         wins on PATH: $shadow_winner (version $shadow_winner_version)"
+  say "         installed here: $shadow_target (version $shadow_installed_version)"
+
+  # One newline-separated list, one pass, no subshell — so the counters below
+  # survive the loop in a POSIX shell.
+  shadow_ifs_backup=$IFS
+  IFS='
+'
+  for shadow_copy in $shadow_earlier; do
+    IFS=$shadow_ifs_backup
+    shadow_found=1
+    shadow_copy_version=$(shadow_version_of "$shadow_copy" "$shadow_command")
+    [ -n "$shadow_copy_version" ] || shadow_copy_version="unknown"
+    shadow_plan=$(shadow_removal_plan "$shadow_copy" "$shadow_command")
+    if [ -z "$shadow_plan" ]; then
+      say ""
+      say "  $shadow_copy (version $shadow_copy_version) is not something we can identify as"
+      say "  one of our programs, so it will not be touched. Remove it yourself, or put"
+      say "  $shadow_install_dir earlier on your PATH."
+      shadow_remaining=1
+      IFS='
+'
+      continue
+    fi
+
+    shadow_kind=$(printf '%s' "$shadow_plan" | cut -f1)
+    shadow_detail=$(printf '%s' "$shadow_plan" | cut -f2)
+    shadow_fix=$(shadow_removal_command "$shadow_kind" "$shadow_detail" "$shadow_copy")
+    say ""
+    say "  $shadow_copy (version $shadow_copy_version) is a copy of our own program."
+    say "  Remove it with: $shadow_fix"
+
+    if shadow_confirm "  Remove it now?"; then
+      if run_shadow_removal "$shadow_kind" "$shadow_detail" "$shadow_fix"; then
+        say "  removed     $shadow_copy"
+      else
+        say "  could not run: $shadow_fix"
+        shadow_remaining=1
+      fi
+    else
+      shadow_remaining=1
+    fi
+    IFS='
+'
+  done
+  IFS=$shadow_ifs_backup
+
+  [ "$shadow_found" = "1" ] || return 0
+
+  # Re-check rather than trusting the removal: the only thing that settles this
+  # is whether an earlier copy is still there.
+  shadow_still=$(shadow_copies_of "$shadow_command" | awk -F'\t' -v limit="$shadow_install_index" '
+    NF == 2 && $1 + 0 < limit + 0 { print $2 }')
+  if [ -n "$shadow_still" ]; then
+    return 1
+  fi
+  if [ "$shadow_remaining" = "1" ]; then
+    return 1
+  fi
+  say "  \"$shadow_command\" now runs $shadow_target"
+  return 0
+}
+
+# Runs one removal. A package link is removed through its package manager; a
+# standalone file is deleted, and only after re-checking that it is still
+# inside the user's home directory.
+run_shadow_removal() {
+  case "$1" in
+    package)
+      shadow_manager=$(printf '%s' "$3" | awk '{ print $1 }')
+      command -v "$shadow_manager" >/dev/null 2>&1 || return 1
+      # shellcheck disable=SC2086
+      $3 >/dev/null 2>&1 || return 1
+      return 0
+      ;;
+    file)
+      shadow_is_within "$2" "$HOME" || return 1
+      rm -f "$2" || return 1
+      return 0
+      ;;
+  esac
+  return 1
+}
+
+# The whole-install verdict, run after everything is placed.
+resolve_path_shadows() {
+  SHADOW_PATH=$(shadow_effective_path)
+  for shadow_each in goodvibes goodvibes-daemon goodvibes-agent; do
+    if ! check_command_shadowing "$shadow_each"; then
+      PATH_SHADOW_UNRESOLVED=1
+    fi
+  done
+}
+
 # --- uninstall mode (GOODVIBES_UNINSTALL=1) ---
 # Stops the running daemon/agent and removes ONLY what this installer manages:
 # the three binaries, the sqlite-vec addon dirs, and the service unit/plist when
@@ -1924,6 +2314,20 @@ main() {
   # so the host never runs two competing daemon units. A hand-written legacy
   # unit is left alone and only reported.
   migrate_legacy_installer_unit
+
+  # Everything is placed; now find out whether any of it is reachable. This
+  # runs last on purpose — it inspects the files that were just installed,
+  # including the agent — and it is the last word on whether the install
+  # succeeded, because a copy the shell never runs is not an install.
+  resolve_path_shadows
+  if [ "$PATH_SHADOW_UNRESOLVED" = "1" ]; then
+    say ""
+    say "Install FAILED to become reachable: another copy earlier on your PATH still"
+    say "answers one or more of these commands. Until that is resolved, upgrading here"
+    say "changes nothing you can run. Fix the copies named above, then re-run this"
+    say "installer. To run this install directly in the meantime: $INSTALL_DIR/goodvibes"
+    exit 3
+  fi
 
   say ""
   if [ "$PATH_LINE_ADDED" = "1" ]; then

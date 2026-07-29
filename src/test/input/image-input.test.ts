@@ -1,6 +1,4 @@
 import { describe, test, expect, beforeEach } from 'bun:test';
-import { mkdtempSync } from 'node:fs';
-import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { InputHandler } from '../../input/handler.ts';
 import { SelectionManager } from '../../input/selection.ts';
@@ -13,6 +11,7 @@ import { getTestProviderRegistry, disposeTestRuntimeServicesAfterAll } from '../
 import type { ContentPart } from '@pellux/goodvibes-sdk/platform/providers';
 import { AgentManager } from '@pellux/goodvibes-sdk/platform/tools';
 import { handleClipboardPaste } from '../../input/handler-content-actions.ts';
+import { makeProjectTempDir } from '../helpers/project-temp.ts';
 
 // Stop the shared test runtime graph when this file ends. Called here, not
 // registered inside the helper, for the reason its doc comment gives.
@@ -34,7 +33,7 @@ function makeInput(): InputHandler {
 }
 
 function createConfigManager(): ConfigManager {
-  const root = mkdtempSync(join(tmpdir(), 'gv-image-input-'));
+  const root = makeProjectTempDir('gv-image-input');
   return new ConfigManager({ surfaceRoot: 'tui',
     workingDir: root,
     homeDir: root,

@@ -113,6 +113,7 @@ export const CATEGORY_INFO: Record<SettingsCategory, string> = {
   relay: 'Outbound zero-knowledge relay reachability, for reaching this daemon from outside the LAN without opening an inbound port. Off by default — relay.enabled is the switch. The relay operator sees only ciphertext and connection metadata — self-host your own relay for full control.',
   learning: 'Idle-time memory consolidation: merging duplicate standing memory records and decaying/archiving stale ones. Off by default — nothing runs until enabled.',
   payments: 'Payment card on file for daemon-initiated purchases: card number, expiry, CVV, cardholder name, billing and shipping address, and whether the CVV is stored or requested at purchase time. Card fields are entered through /payments card (concealed input) and are secret-tier — never rendered in plaintext.',
+  profile: 'What the platform knows about you — your name, how to reach you, where you are, how you like answers written, the people and places you mention — kept as one Markdown file at daemon scope that you can open and edit by hand at any time; your edits win and are never rewritten. These rows decide whether it is loaded at all, whether the assistant records facts it learns from things you say directly to it, whether it tells you in one line each time it does, whether the harmless part (how you are addressed, your city, your timezone, your formatting preferences, your style) is put in the model\'s context so it stops guessing, whether using a private detail such as your address is announced in the reply, whether settings left unset read their value from the profile, and where the file lives. Everything private — your name, contact details, home address, billing and shipping details, quiet hours, and the People, Places, Work and Notes sections — is never put in context in bulk and is reachable only by a named lookup that is disclosed when it happens. Run /profile to read the whole thing, /profile where <field> to see the surface, date and your exact words behind any recorded line, and /profile forget <field> to delete one.',
 };
 
 export const CATEGORY_LABELS: Record<(typeof SETTINGS_CATEGORIES)[number], string> = {
@@ -167,6 +168,7 @@ export const CATEGORY_LABELS: Record<(typeof SETTINGS_CATEGORIES)[number], strin
   policy: 'Policy-as-Code',
   notifications: 'Notifications',
   payments: 'Payments',
+  profile: 'Owner Profile',
 };
 
 const SETTING_LABELS: Partial<Record<string, string>> = {

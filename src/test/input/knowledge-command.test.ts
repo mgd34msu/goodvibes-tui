@@ -1,6 +1,4 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { ArtifactStore } from '@pellux/goodvibes-sdk/platform/artifacts';
 import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
@@ -9,6 +7,7 @@ import { knowledgeCommand } from '../../input/commands/knowledge.ts';
 import { createKnowledgeApi, KnowledgeService, KnowledgeStore } from '@pellux/goodvibes-sdk/platform/knowledge';
 import { MemoryRegistry, MemoryStore } from '@pellux/goodvibes-sdk/platform/state';
 import { MemoryEmbeddingProviderRegistry } from '@pellux/goodvibes-sdk/platform/state';
+import { makeProjectTempDir } from '../helpers/project-temp.ts';
 
 let server: ReturnType<typeof Bun.serve>;
 let baseUrl = '';
@@ -123,7 +122,7 @@ describe('knowledgeCommand', () => {
 
   beforeEach(() => {
     printed = [];
-    root = mkdtempSync(join(tmpdir(), 'gv-knowledge-command-'));
+    root = makeProjectTempDir('gv-knowledge-command');
     configManager = new ConfigManager({ surfaceRoot: 'tui',  configDir: join(root, '.goodvibes', 'tui'), workingDir: root });
     memoryStore = new MemoryStore(join(root, 'memory.sqlite'), {
       embeddingRegistry: new MemoryEmbeddingProviderRegistry({ configManager }),

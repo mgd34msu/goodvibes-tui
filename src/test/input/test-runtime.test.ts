@@ -24,8 +24,7 @@
 // ---------------------------------------------------------------------------
 
 import { describe, expect, test } from 'bun:test';
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { CommandContext } from '../../input/command-registry.ts';
 import { CommandRegistry } from '../../input/command-registry.ts';
@@ -36,6 +35,7 @@ import {
   shQuote,
 } from '../../input/commands/test-runtime.ts';
 import { createShellPathService } from '@/runtime/index.ts';
+import { makeProjectTempDir } from '../helpers/project-temp.ts';
 
 /**
  * Every `Bun.spawn(` call site's option object must include `stderr:` — a
@@ -132,7 +132,7 @@ function writePackageJson(dir: string, testScript: string | undefined): void {
 
 function withTmpDir(fn: (dir: string) => Promise<void>): () => Promise<void> {
   return async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'gv-test-runtime-'));
+    const dir = makeProjectTempDir('gv-test-runtime');
     try {
       await fn(dir);
     } finally {

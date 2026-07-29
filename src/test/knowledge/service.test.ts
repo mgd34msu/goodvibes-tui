@@ -1,6 +1,5 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { ArtifactStore } from '@pellux/goodvibes-sdk/platform/artifacts';
 import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
@@ -9,6 +8,7 @@ import { RuntimeEventBus } from '@/runtime/index.ts';
 import { MemoryRegistry, MemoryStore } from '@pellux/goodvibes-sdk/platform/state';
 import { MemoryEmbeddingProviderRegistry } from '@pellux/goodvibes-sdk/platform/state';
 import { trackDisposables } from '../helpers/disposables.ts';
+import { makeProjectTempDir } from '../helpers/project-temp.ts';
 
 // A KnowledgeService arms its bootstrap reconcile timers fire-and-forget in
 // the constructor, out to a 24h horizon; dispose() releases them.
@@ -54,7 +54,7 @@ describe('KnowledgeService', () => {
   let configManager: ConfigManager;
 
   beforeEach(async () => {
-    root = mkdtempSync(join(tmpdir(), 'gv-knowledge-'));
+    root = makeProjectTempDir('gv-knowledge');
     configManager = new ConfigManager({ surfaceRoot: 'tui',  configDir: join(root, '.goodvibes', 'tui'), workingDir: root });
     configManager.set('network.remoteFetch.allowPrivateHosts', true);
     artifactStore = new ArtifactStore({

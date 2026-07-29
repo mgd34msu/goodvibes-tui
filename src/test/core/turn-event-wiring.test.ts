@@ -573,3 +573,85 @@ describe('wireTurnEventHandlers — transcript journal rebinds on session switch
     expect(contentX).not.toContain('marker-y');
   });
 });
+
+describe('a desktop notification carries no chain identifier', () => {
+  /**
+   * Asserted against the source rather than by intercepting the notification.
+   *
+   * `notifyCompletion` is an SDK import and this file already records why the
+   * title cannot be read here: reading it needs process-global module mocking,
+   * which is disallowed in this suite. So the check is made where the defect
+   * actually lives — the call site. Every `notifyCompletion` in this module must
+   * be free of the chain id, and that is a property of the text being built, not
+   * of the notifier being called.
+   *
+   * The rule: no wave, work-order or register ids in outward-facing text. A
+   * desktop popup is read by the person, not by an operator console, and
+   * `chain 7f3a91c02b4e` is nothing they can act on. The id stays on the event
+   * for correlation and stays in the operator feed.
+   *
+   * The workstream narration itself now lives in core/workstream-notification.ts
+   * as a pure function, and src/test/core/workstream-notification.test.ts calls
+   * it and asserts the actual title and body. What is left for this file is the
+   * call-site half: no notifyCompletion in the wiring may assemble text out of
+   * the chain id or the internal name for the machinery, and the workstream
+   * branch must keep delegating to that narration rather than growing its own
+   * inline copy again.
+   */
+  const SOURCE = readFileSync(new URL('../../core/turn-event-wiring.ts', import.meta.url), 'utf-8');
+
+  /** Every `notifyCompletion(...)` call in the module, argument text included. */
+  function notifyCalls(): string[] {
+    const calls: string[] = [];
+    const pattern = /notifyCompletion\(/g;
+    let match: RegExpExecArray | null;
+    while ((match = pattern.exec(SOURCE)) !== null) {
+      const open = SOURCE.indexOf('(', match.index);
+      let depth = 0;
+      for (let i = open; i < SOURCE.length; i += 1) {
+        if (SOURCE[i] === '(') depth += 1;
+        else if (SOURCE[i] === ')') {
+          depth -= 1;
+          if (depth === 0) { calls.push(SOURCE.slice(open, i + 1)); break; }
+        }
+      }
+    }
+    return calls;
+  }
+
+  test('the module actually notifies, so this test cannot pass vacuously', () => {
+    expect(notifyCalls().length).toBeGreaterThanOrEqual(2);
+  });
+
+  test('the scraper actually finds argument text, not just bare call sites', () => {
+    // Without this the three checks below would pass on a parser that returned
+    // "()" for every call. Every captured call must carry its arguments.
+    for (const call of notifyCalls()) {
+      expect(call).toContain('FORCE_NOTIFY_DURATION_MS');
+    }
+  });
+
+  test('no notification body interpolates the chain id', () => {
+    for (const call of notifyCalls()) {
+      expect(call).not.toContain('chainId');
+    }
+  });
+
+  test('no notification names the internal machinery', () => {
+    for (const call of notifyCalls()) {
+      expect(call).not.toContain('WRFC');
+    }
+  });
+
+  test('the workstream branch delegates its words — this is not a suppression fix', () => {
+    // The three narrated outcomes (cancelled / spent turn budget / failed) moved
+    // into workstream-notification.ts, where they are asserted by calling the
+    // function. The guard that belongs here is that the wiring still routes
+    // through it: a branch that stopped notifying, or that rebuilt the text
+    // inline, would both show up as this import disappearing.
+    expect(SOURCE).toContain('workstreamFailureNotification');
+    const workstreamCall = notifyCalls().find((call) => call.includes('notice.title'));
+    expect(workstreamCall).toBeDefined();
+    expect(workstreamCall).toContain('notice.body');
+  });
+});

@@ -66,6 +66,10 @@ export function openComposerInEditor(deps: ComposerEditorDeps): void {
     return;
   }
   const draft = deps.readDraft();
+  // Real production scratch (runs on the end user's machine, not test
+  // infrastructure), so this stays rooted at the real OS temp dir rather
+  // than the test-only makeProjectTempDir helper. Cleaned up in the
+  // `finally` below on every exit path.
   const dir = mkdtempSync(join(tmpdir(), 'goodvibes-composer-'));
   const file = join(dir, 'COMPOSER.md');
   const spawn = deps.spawn ?? defaultSpawn;

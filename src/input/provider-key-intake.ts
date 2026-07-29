@@ -12,6 +12,7 @@
  */
 
 import type { LLMProvider } from '@pellux/goodvibes-sdk/platform/providers';
+import type { SecretScope } from '../config/secrets.ts';
 import type { ConcealedInputRequest } from './concealed-input.ts';
 import type { CommandContext } from './command-registry.ts';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
@@ -58,7 +59,7 @@ export interface ProviderKeyIntakeDeps {
   readonly provider: LLMProvider | undefined;
   /** Canonical secret store — the same path /secrets set writes through. */
   readonly secretsManager?: {
-    set(key: string, value: string, options?: { scope?: 'project' | 'user'; medium?: 'secure' | 'plaintext' }): Promise<void>;
+    set(key: string, value: string, options?: { scope?: SecretScope; medium?: 'secure' | 'plaintext' }): Promise<void>;
   } | undefined;
   /** Re-resolves credentials and re-registers providers live (no restart). */
   readonly refreshProviderCredentials?: (() => Promise<void>) | undefined;
@@ -112,7 +113,14 @@ export function runProviderKeyIntake(
       }
       void (async () => {
         try {
-          await secretsManager.set(secretKey, value, { scope: 'user', medium: 'secure' });
+          // Daemon scope, not user scope. The DAEMON is the process that runs
+          // the model — it answers Telegram, ntfy, mail and every scheduled
+          // run with this TUI closed. A model key filed in this surface's own
+          // tier is readable only while the TUI is open, so the daemon has no
+          // provider to call and cannot answer at all. Daemon tier is the one
+          // home every surface and the daemon read, so a key entered here works
+          // everywhere, which is the point of configuring it once.
+          await secretsManager.set(secretKey, value, { scope: 'daemon', medium: 'secure' });
           await deps.refreshProviderCredentials?.();
           deps.print(`Stored the API key for ${label} and registered it live (value hidden). No restart needed.`);
         } catch (error) {

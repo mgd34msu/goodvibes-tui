@@ -1,7 +1,7 @@
 import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
-import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync } from 'fs';
-import { join, resolve } from 'path';
-import { tmpdir } from 'os';
+import { existsSync, mkdirSync, readFileSync, rmSync } from 'fs';
+import { join } from 'path';
+import { makeProjectTempDir } from '../helpers/project-temp.ts';
 import { SecretsManager, type SecretsManagerOptions } from '../../config/secrets.ts';
 
 // ---------------------------------------------------------------------------
@@ -9,7 +9,7 @@ import { SecretsManager, type SecretsManagerOptions } from '../../config/secrets
 // ---------------------------------------------------------------------------
 
 function makeTmpDir(): string {
-  return mkdtempSync(join(resolve(process.cwd(), '..'), 'gv-secrets-test-'));
+  return makeProjectTempDir('gv-secrets-test');
 }
 
 // ---------------------------------------------------------------------------

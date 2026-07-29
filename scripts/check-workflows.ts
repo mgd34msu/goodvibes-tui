@@ -12,15 +12,20 @@
  *   - the release workflow carries the publish jobs we expect, and every job that
  *     publishes to GitHub Packages elevates `permissions.packages: write`.
  *
- * Exit code 0 = green (0 problems), non-zero = the count of structural problems.
+ * Exit code 0 = green (0 problems), non-zero = the check found problems.
+ *
+ * The first CLI argument overrides the directory to validate; it exists so the
+ * gate's own test can point it at fixture workflows and prove each rule still
+ * reports a problem when the workflow is actually broken.
  */
 import { readdirSync, readFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = join(__dirname, '..');
-const workflowsDir = join(root, '.github', 'workflows');
+const dirArg = process.argv[2];
+const workflowsDir = dirArg ? resolve(dirArg) : join(root, '.github', 'workflows');
 
 type Json = Record<string, unknown>;
 
@@ -63,8 +68,11 @@ for (const file of files) {
   if (typeof doc.name !== 'string' || doc.name.trim().length === 0) {
     fail(file, 'missing a non-empty `name`');
   }
-  // YAML parses the `on:` key as the boolean true, so accept either spelling.
-  if (!('on' in doc) && !(true in (doc as Record<string | number, unknown>))) {
+  // Bun.YAML.parse keeps `on:` as the string key "on" — verified, not assumed.
+  // Some YAML 1.1 parsers fold it to the boolean true, which lands as the string
+  // key "true" on a JS object, so accept that spelling too rather than silently
+  // passing a workflow whose trigger block went missing.
+  if (!('on' in doc) && !('true' in doc)) {
     fail(file, 'missing an `on` trigger block');
   }
   const jobs = doc.jobs;

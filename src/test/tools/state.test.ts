@@ -5,7 +5,7 @@
  * KVState instances use temp directories to avoid polluting real session files.
  */
 import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
-import { mkdirSync, existsSync, rmSync, mkdtempSync, readFileSync } from 'node:fs';
+import { mkdirSync, existsSync, rmSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { KVState } from '@pellux/goodvibes-sdk/platform/state';
 import { ProjectIndex } from '@pellux/goodvibes-sdk/platform/state';
@@ -14,6 +14,7 @@ import { HookDispatcher } from '@pellux/goodvibes-sdk/platform/hooks';
 import { createStateTool } from '@pellux/goodvibes-sdk/platform/tools';
 import { getTestProjectIndex, resetTestProjectIndexes, disposeTestRuntimeServicesAfterAll } from '../helpers/runtime-services.ts';
 import { trackDisposables } from '../helpers/disposables.ts';
+import { makeProjectTempDir } from '../helpers/project-temp.ts';
 
 // Stop the shared test runtime graph when this file ends. Called here, not
 // registered inside the helper, for the reason its doc comment gives.
@@ -31,9 +32,11 @@ const PROJECT_ROOT = process.cwd();
 
 /** Make an isolated temp directory inside the project root. */
 function makeTmpDir(): string {
-  const base = join(PROJECT_ROOT, '.test-tmp');
-  if (!existsSync(base)) mkdirSync(base, { recursive: true });
-  return mkdtempSync(join(base, 'state-'));
+  // makeProjectTempDir registers the directory with the shared cleanup registry,
+  // so the test process removes it before it ends. The hand-rolled creation this
+  // replaced was tracked by nothing and left directories under .test-tmp behind
+  // after a fully green run.
+  return makeProjectTempDir('state');
 }
 
 type StateToolParsedResult = Omit<Awaited<ReturnType<ReturnType<typeof createStateTool>['execute']>>, 'callId'> & {

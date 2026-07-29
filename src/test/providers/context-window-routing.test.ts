@@ -5,12 +5,12 @@
  * with correct priority: provider_api > OpenRouter cache > static registry.
  */
 import { afterEach, describe, test, expect } from 'bun:test';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { rmSync } from 'node:fs';
 import { join } from 'node:path';
 import type { ModelDefinition } from '@pellux/goodvibes-sdk/platform/providers';
 import { ModelLimitsService } from '@pellux/goodvibes-sdk/platform/providers';
 import { resolveContextWindow } from '@pellux/goodvibes-sdk/platform/providers';
+import { makeProjectTempDir } from '../helpers/project-temp.ts';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -38,7 +38,7 @@ function makeModel(overrides: Partial<ModelDefinition> = {}): ModelDefinition {
 }
 
 function makeModelLimitsService(): ModelLimitsService {
-  const root = mkdtempSync(join(tmpdir(), 'gv-model-limits-'));
+  const root = makeProjectTempDir('gv-model-limits');
   tempRoots.push(root);
   return new ModelLimitsService({
     cachePath: join(root, 'model-limits.json'),

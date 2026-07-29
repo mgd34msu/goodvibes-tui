@@ -1,10 +1,10 @@
 import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
 import { randomUUID } from 'crypto';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { tmpdir } from 'node:os';
 import { FileUndoManager } from '@pellux/goodvibes-sdk/platform/state';
 import { getTestFileUndoManager, resetTestRuntimeServices, disposeTestRuntimeServicesAfterAll } from '../helpers/runtime-services.ts';
+import { makeProjectTempDir } from '../helpers/project-temp.ts';
 
 // Stop the shared test runtime graph when this file ends. Called here, not
 // registered inside the helper, for the reason its doc comment gives.
@@ -42,7 +42,7 @@ describe('FileUndoManager', () => {
   beforeEach(() => {
     resetTestRuntimeServices();
     manager = getTestFileUndoManager();
-    tempDir = mkdtempSync(join(tmpdir(), `gv-file-undo-${randomUUID()}-`));
+    tempDir = makeProjectTempDir(`gv-file-undo-${randomUUID()}`);
     testFilePath = join(tempDir, 'test-file.ts');
     mkdirSync(tempDir, { recursive: true });
   });

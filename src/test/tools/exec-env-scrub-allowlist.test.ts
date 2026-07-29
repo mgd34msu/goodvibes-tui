@@ -6,12 +6,10 @@
  * covers the config-storage side (permissions.execEnvScrubAllowlist).
  */
 import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
-import { mkdtempSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 import { createExecTool } from '@pellux/goodvibes-sdk/platform/tools';
 import { ProcessManager } from '@pellux/goodvibes-sdk/platform/tools';
 import { OverflowHandler } from '@pellux/goodvibes-sdk/platform/tools';
+import { makeProjectTempDir } from '../helpers/project-temp.ts';
 
 function parseOutput(output: string | undefined): Record<string, unknown> {
   if (!output) throw new Error('No output');
@@ -24,7 +22,7 @@ describe('exec tool — credentialEnvScrub allowlist wiring', () => {
   const UNLISTED_NAME = 'GV_TEST_OTHER_SECRET_TOKEN';
 
   beforeEach(() => {
-    execRoot = mkdtempSync(join(tmpdir(), 'exec-scrub-allowlist-test-'));
+    execRoot = makeProjectTempDir('exec-scrub-allowlist-test');
     process.env[ALLOWED_NAME] = 'allowed-value';
     process.env[UNLISTED_NAME] = 'other-value';
   });

@@ -1,9 +1,9 @@
 import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync, existsSync } from 'fs';
+import { rmSync, writeFileSync, existsSync } from 'fs';
 import { execSync } from 'child_process';
 import { join } from 'path';
-import { tmpdir } from 'os';
 import { AgentWorktree } from '@pellux/goodvibes-sdk/platform/agents';
+import { makeProjectTempDir } from '../helpers/project-temp.ts';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -11,7 +11,7 @@ import { AgentWorktree } from '@pellux/goodvibes-sdk/platform/agents';
 
 /** Create an isolated temp git repo and return its path. */
 function makeTempRepo(): string {
-  const tmpDir = mkdtempSync(join(tmpdir(), 'gv-worktree-test-'));
+  const tmpDir = makeProjectTempDir('gv-worktree-test');
   execSync('git init', { cwd: tmpDir });
   execSync('git config user.email "test@test.com"', { cwd: tmpDir });
   execSync('git config user.name "Test"', { cwd: tmpDir });

@@ -55,3 +55,8 @@ docs/goodvibes-ecosystem-deep-dive-2026-07-09.md
 
 # Local test scratch (never committed)
 .test-tmp-scratch/
+
+# Probe file written and removed by src/test/scripts/typecheck-coverage.test.ts.
+# Ignored so a crashed run cannot leave the repo dirty, or make the coverage gate
+# report its own probe as an uncovered source file.
+.typecheck-coverage-probe.ts

@@ -1,6 +1,6 @@
 {
   "name": "@pellux/goodvibes-tui",
-  "version": "1.24.2",
+  "version": "1.25.0",
   "description": "Terminal-native GoodVibes product for coding, operations, automation, knowledge, channels, and daemon-backed control-plane workflows.",
   "type": "module",
   "main": "src/main.ts",
@@ -43,6 +43,7 @@
     "build:all-shell": "bun run build:linux-x64 && bun run build:linux-arm64 && bun run build:macos-x64 && bun run build:macos-arm64 && bun run build:windows",
     "typecheck": "bunx tsc --noEmit",
     "typecheck:test": "bunx tsc --noEmit -p tsconfig.test.json",
+    "typecheck:coverage": "bun run scripts/typecheck-coverage-rule.ts",
     "test": "bun run scripts/run-tests.ts",
     "test:coverage": "bun run scripts/coverage-gate.ts",
     "version": "bun run scripts/prebuild.ts",
@@ -106,8 +107,8 @@
     "@anthropic-ai/vertex-sdk": "^0.16.0",
     "@ast-grep/napi": "^0.42.0",
     "@aws/bedrock-token-generator": "^1.1.0",
-    "@pellux/goodvibes-sdk": "1.18.0",
-    "@pellux/goodvibes-terminal-shell": "1.18.0",
+    "@pellux/goodvibes-sdk": "1.18.1",
+    "@pellux/goodvibes-terminal-shell": "1.18.1",
     "bash-language-server": "^5.6.0",
     "fuse.js": "^7.1.0",
     "graphql": "^16.13.2",
@@ -133,10 +134,10 @@
     "typescript": "^5.9.3"
   },
   "optionalDependencies": {
-    "@pellux/goodvibes-tui-linux-x64": "1.24.2",
-    "@pellux/goodvibes-tui-linux-arm64": "1.24.2",
-    "@pellux/goodvibes-tui-darwin-x64": "1.24.2",
-    "@pellux/goodvibes-tui-darwin-arm64": "1.24.2"
+    "@pellux/goodvibes-tui-linux-x64": "1.25.0",
+    "@pellux/goodvibes-tui-linux-arm64": "1.25.0",
+    "@pellux/goodvibes-tui-darwin-x64": "1.25.0",
+    "@pellux/goodvibes-tui-darwin-arm64": "1.25.0"
   },
   "trustedDependencies": [],
   "overrides": {

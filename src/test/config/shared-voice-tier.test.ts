@@ -16,14 +16,14 @@
  */
 
 import { afterEach, describe, expect, test } from 'bun:test';
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { existsSync, readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
+import { makeProjectTempDir } from '../helpers/project-temp.ts';
 
 const roots: string[] = [];
 function home(): string {
-  const dir = mkdtempSync(join(tmpdir(), 'gv-tui-shared-voice-'));
+  const dir = makeProjectTempDir('gv-tui-shared-voice');
   roots.push(dir);
   return dir;
 }
