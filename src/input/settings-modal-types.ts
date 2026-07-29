@@ -63,6 +63,14 @@ export type SettingsCategory =
   // and reachable only by hand-editing a settings file — see the push.* and
   // cluster.* comments in settings-modal-data.ts for the two times that happened.
   | 'profile'
+  // occasions.* — the proactive occasions/plans loop (docs/occasions.md §8):
+  // lead time, active hours, nudge channel and cadence, away-date adjustment,
+  // calendar mirroring, interview length, gift-history retention, and the
+  // sweep interval. Same mandatory-dual-membership rule as profile above, or
+  // all twelve keys are dropped from the workspace and reachable only by
+  // hand-editing a settings file — a third occurrence of the push.*/cluster.*
+  // class the profile comment already names two of.
+  | 'occasions'
   | 'danger';
 
 export type SettingsFocusPane = 'categories' | 'settings';
@@ -75,7 +83,12 @@ export const SETTINGS_CATEGORY_GROUPS: ReadonlyArray<{
   { label: 'AI Routing', categories: ['provider', 'pricing', 'subscriptions', 'helper', 'tools', 'tts', 'voice'] },
   { label: 'Service & Network', categories: ['service', 'daemon', 'network', 'controlPlane', 'httpListener', 'web', 'relay'] },
   { label: 'Surfaces & Cloud', categories: ['surfaces', 'device', 'conversationGate', 'integrations', 'connections', 'mcp', 'cloudflare'] },
-  { label: 'Automation', categories: ['batch', 'automation', 'checkin', 'watchers', 'orchestration', 'planner', 'wrfc', 'payments'] },
+  // 'occasions' sits beside 'checkin': both are proactive background loops
+  // (a cadence, a judgment pass, a conditional channel delivery) rather than
+  // facts held about the owner — the data occasions/plans declare lives in
+  // the owner profile file itself (docs/occasions.md §3), but these SETTINGS
+  // rows tune the loop, exactly like checkin's.
+  { label: 'Automation', categories: ['batch', 'automation', 'checkin', 'occasions', 'watchers', 'orchestration', 'planner', 'wrfc', 'payments'] },
   // 'profile' sits beside 'memory' and 'learning': all three are what the
   // platform retains about the person using it, and this is the group a reader
   // looking for "what does it know about me" already scans — Interface is
