@@ -8,7 +8,8 @@
  *   BEFORE  — every request runs a synchronous Compositor.composite() the instant
  *             it is called (the pre-coalescing behavior). K composites per tick.
  *   AFTER   — the same requests route through the same-tick microtask coalescer
- *             (src/runtime/render-scheduler.ts); each tick composites exactly once.
+ *             (createRenderScheduler from @pellux/goodvibes-terminal-shell, the same
+ *             one main.ts wires up); each tick composites exactly once.
  *
  * Reports composites-per-burst (an exact count) and wall time for both. The frame
  * content is fixed WITHIN a tick and changes BETWEEN ticks, so — exactly as in
@@ -25,7 +26,7 @@
 import { performance } from 'node:perf_hooks';
 import { Compositor } from '../src/renderer/compositor.ts';
 import { createEmptyLine } from '../src/types/grid.ts';
-import { createRenderScheduler } from '../src/runtime/render-scheduler.ts';
+import { createRenderScheduler } from '@pellux/goodvibes-terminal-shell';
 import type { Line } from '../src/types/grid.ts';
 
 const WIDTH = 80;
