@@ -12,6 +12,7 @@ import { RuntimeEventBus, GlobalNetworkTransportInstaller } from '@/runtime/inde
 import { bindFeatureSettingsBridge, createFeatureFlagManager, deriveFeatureStates } from '@/runtime/index.ts';
 import { createRuntimeStore } from '../runtime/store/index.ts';
 import { createRuntimeServices } from '../runtime/services.ts';
+import { startDeviceHousekeeping } from '../runtime/device-posture-composition.ts';
 import { DaemonServer, HttpListener } from '@pellux/goodvibes-sdk/platform/daemon';
 import { createHostPowerSeam } from '@pellux/goodvibes-sdk/platform/power';
 import { flushActivityLogSync, logger } from '@pellux/goodvibes-sdk/platform/utils';
@@ -459,6 +460,12 @@ async function main(): Promise<void> {
   // coordinates over, and it announces this machine's return to the group so a
   // box that has been off for months re-keys itself with no operator action.
   await runtimeServices.startCluster();
+
+  // Grants and captures from paired phones outlive a restart, so the recovery
+  // sweep runs before this daemon serves its first request and the periodic one
+  // keeps a long-running daemon from going days without a sweep. The stop is
+  // registered with the disposal scope, so shutdown clears the timer.
+  startDeviceHousekeeping(runtimeServices.devicePosture);
 
   await Promise.all([
     daemon.start(),

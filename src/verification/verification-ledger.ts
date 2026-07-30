@@ -209,16 +209,16 @@ export const FEATURE_KNOB_LOCAL_SETTINGS = [
  *   watchers.triggers.onExitMaxDurationMs    persistence · live (on-exit trigger duration cap)
  *   watchers.triggers.onExitStdin            persistence · live (on-exit stdin posture)
  *   watchers.triggers.outputTailBytes        persistence · live (captured output tail)
- *   device.capabilities.allowAlwaysOffer     persistence · settings surface only in this build
- *   device.capabilities.requestTimeoutSeconds persistence · settings surface only in this build
- *   device.location.precision                persistence · settings surface only in this build
- *   device.clipboard.readMode                persistence · settings surface only in this build
- *   device.capture.retentionHours            persistence · settings surface only in this build
- *   device.capture.maxArtifacts              persistence · settings surface only in this build
- *   device.capture.sweepIntervalMinutes      persistence · settings surface only in this build
- *   device.grants.expiryDays                 persistence · settings surface only in this build
- *   device.grants.maxPerNode                 persistence · settings surface only in this build
- *   device.grants.auditRetentionDays         persistence · settings surface only in this build
+ *   device.capabilities.allowAlwaysOffer     persistence · behavior (durable-grant offer by sensitivity)
+ *   device.capabilities.requestTimeoutSeconds persistence · behavior (dispatch, wire payload and prompt deadline)
+ *   device.location.precision                persistence · behavior (precise fix refused / never granted)
+ *   device.clipboard.readMode                persistence · behavior (clipboard read refused / never granted)
+ *   device.capture.retentionHours            persistence · behavior (capture TTL, swept off disk at expiry)
+ *   device.capture.maxArtifacts              persistence · behavior (capture count cap at the sweep)
+ *   device.capture.sweepIntervalMinutes      persistence · behavior (period of the sweep that reaps)
+ *   device.grants.expiryDays                 persistence · behavior (grant TTL, then asks again)
+ *   device.grants.maxPerNode                 persistence · behavior (per-node grant cap at the sweep)
+ *   device.grants.auditRetentionDays         persistence · behavior (grant ledger retention)
  *   device.nodes.maxPaired                   persistence · live (enforced at the pairing path)
  *
  * On `device.nodes.maxPaired`: the SDK enforces it where a device pairs —
@@ -235,12 +235,27 @@ export const FEATURE_KNOB_LOCAL_SETTINGS = [
  * in this column so the "how live is it" audit stays accurate, not to claim
  * coverage this repo did not write.
  *
- * On the other ten `device.*` rows: DeviceCapabilityService carries its own
- * policy struct whose defaults match those keys one for one, and names them in
- * its field comments and refusal messages, but no code path in either tree maps
- * configuration into that struct. Persistence is therefore the whole of what is
- * verified for them, and the settings-workspace description for the `device`
- * category says exactly that to the user rather than implying live knobs.
+ * On the other ten `device.*` rows: they are live now. This app composes the
+ * platform's device posture runtime (src/runtime/device-posture-composition.ts)
+ * on the same distributed runtime phones pair onto and the same approval broker
+ * every other confirmation rides, registers the `phone` tool on it, and binds the
+ * devices.* verbs to it — so each of these keys is read, per request and per
+ * sweep, by the DeviceCapabilityService / DeviceGrantStore /
+ * DeviceCaptureArtifactStore / DeviceHousekeeper that serve them. They were dark
+ * before that: the policy struct carried matching defaults and named the keys in
+ * its refusal messages, but nothing mapped configuration into it in either tree.
+ * The mapping now lives in the SDK, so every daemon host honours it rather than
+ * only whichever consumer had written its own.
+ *
+ * The second column above is upgraded to "behavior" on the strength of
+ * `src/test/verification/device-posture-behavior.test.ts`, which drives THIS
+ * app's composition with a real ConfigManager over a temp home and the platform's
+ * real stores, stubs only the peer transport and the approval bridge, and asserts
+ * per key at two values that the observable outcome differs — refusal code, how
+ * authority was established, what reached the transport, what the prompt was
+ * given, and what survives on disk after a sweep. It also invokes the `phone`
+ * tool and the devices.* verbs off the composed runtime graph, because a mapping
+ * nothing composes is the same defect in a different place.
  *
  * DELIBERATELY NOT COUNTED: the 24 non-enablement `voice.wake.*` keys from the
  * same release. `wake-word-detection` is declared `notOperable` — no surface

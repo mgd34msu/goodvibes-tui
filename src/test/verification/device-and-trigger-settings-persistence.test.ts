@@ -15,12 +15,15 @@
  * through the validator to disk, reload into a fresh ConfigManager, read-back
  * equality, and reset-to-default — through the actual ConfigManager, not a mock.
  *
- * What this does NOT claim: that every one of these keys changes runtime
- * behavior today. See the per-key evidence list beside
- * DEVICE_AND_TRIGGER_LOCAL_SETTINGS in verification-ledger.ts, which records
- * which keys have a live consumer and which are settings-surface-only in this
- * build. Persistence is the behavior verified here, and it is the behavior
- * counted there.
+ * What this file covers is persistence and nothing else: that each key is
+ * exposed at its schema default, survives `set()` through its own validator to
+ * disk, reloads equal, and resets. It deliberately does NOT assert that a key
+ * changes what the app does — a test like that belongs where the consuming code
+ * is. For the `device.*` keys that is
+ * `src/test/verification/device-posture-behavior.test.ts`, which drives this
+ * app's composed device posture runtime per key at two values; the per-key
+ * evidence list beside DEVICE_AND_TRIGGER_LOCAL_SETTINGS in
+ * verification-ledger.ts records which coverage each key has.
  *
  * The `voice.wake.*` keys added in the same release are deliberately NOT covered
  * or counted: the `wake-word-detection` capability is declared `notOperable`, so
