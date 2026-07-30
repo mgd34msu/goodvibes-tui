@@ -235,7 +235,9 @@ export function registerExperienceRuntimeCommands(registry: CommandRegistry): vo
       if (sub === 'wake') {
         // The wake models are provisioned locally by the SDK (checksum-pinned
         // download), not through a daemon verb, so this path needs no gateway.
-        // Nothing downloads unless the user typed `setup` — see wake-provision-runner.ts.
+        // Installation already provisions them and a daemon retries at boot;
+        // `setup` here is the recovery act, and nothing downloads unless the user
+        // typed it — see wake-provision-runner.ts.
         const wakeSub = (args[1] ?? 'status').toLowerCase();
         const runner = {
           managedRoot: shellPaths.resolveUserPath('voice'),

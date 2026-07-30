@@ -204,3 +204,101 @@ describe('install.sh — browser driver companion asset', () => {
     expect(uninstall).toContain('$INSTALL_DIR/playwright-core.previous');
   });
 });
+
+/**
+ * Shell-level coverage for install_wake_word_model.
+ *
+ * The model ships with the installation now, and the rule that makes that
+ * acceptable is that the installer cannot be failed by it. A stub
+ * `goodvibes-daemon` stands in for the real binary.
+ *
+ * $INSTALL_DIR is assigned INSIDE the sourced script rather than through the
+ * environment, and that is not a style choice: install.sh assigns
+ * `INSTALL_DIR="${GOODVIBES_INSTALL_DIR:-$HOME/.local/bin}"` when it is sourced,
+ * so an `INSTALL_DIR` handed in through env is overwritten and the function would
+ * run the developer's REAL installed daemon binary.
+ */
+describe('install_wake_word_model', () => {
+  /** An $INSTALL_DIR holding a stub goodvibes-daemon with the given behaviour. */
+  function stubDaemon(prefix: string, body: string): string {
+    const installDir = join(scratch(prefix), 'bin');
+    mkdirSync(installDir, { recursive: true });
+    const binary = join(installDir, 'goodvibes-daemon');
+    writeFileSync(binary, `#!/bin/sh\n${body}\n`, { mode: 0o755 });
+    return installDir;
+  }
+
+  /** Run install_wake_word_model against a stub binary, never the real one. */
+  function runWakeStep(installDir: string, wakeModel: string) {
+    return runLib(`INSTALL_DIR="${installDir}"\nWITH_WAKE_MODEL="${wakeModel}"\ninstall_wake_word_model`, {});
+  }
+
+  test('it runs the installed binary and reports what the binary said', () => {
+    const installDir = stubDaemon(
+      'wake-sh-ok',
+      'echo "wake-word model: Wake-word model installed and verified: hey goodvibes 1.0.0 (6.1 MB)."',
+    );
+    const result = runWakeStep(installDir, '1');
+    expect(result.code).toBe(0);
+    expect(result.stdout).toContain('Installing the wake-word model');
+    expect(result.stdout).toContain('installed and verified');
+  });
+
+  test('a FAILED download does not fail the install, and the reason still reaches the user', () => {
+    // The whole point: an installer must not abort over an optional model.
+    const installDir = stubDaemon(
+      'wake-sh-degraded',
+      'echo "wake-word model: The wake-word model could not be downloaded (DNS lookup failed); installation continues. Run /voice wake setup to retry."',
+    );
+    const result = runWakeStep(installDir, '1');
+    expect(result.code).toBe(0);
+    expect(result.stdout).toContain('installation continues');
+    expect(result.stdout).toContain('/voice wake setup');
+  });
+
+  test('a binary that exits NON-ZERO still does not fail the install', () => {
+    const installDir = stubDaemon('wake-sh-nonzero', 'echo "wake-word model: exploded"; exit 3');
+    const result = runWakeStep(installDir, '1');
+    expect(result.code).toBe(0);
+    expect(result.stdout).toContain('exploded');
+  });
+
+  test('an older binary WITHOUT the subcommand is a note naming both recovery paths', () => {
+    // Silence from the binary is how "this build predates the subcommand" looks.
+    const installDir = stubDaemon('wake-sh-old', 'exit 2');
+    const result = runWakeStep(installDir, '1');
+    expect(result.code).toBe(0);
+    expect(result.stdout).toContain('no provision-wake-model command');
+    expect(result.stdout).toContain('next daemon start');
+    expect(result.stdout).toContain('/voice wake setup');
+  });
+
+  test('GOODVIBES_WAKE_MODEL=0 skips it and says how to get the model later', () => {
+    const installDir = stubDaemon('wake-sh-optout', 'echo "SHOULD NOT RUN"');
+    const result = runWakeStep(installDir, '0');
+    expect(result.code).toBe(0);
+    expect(result.stdout).not.toContain('SHOULD NOT RUN');
+    expect(result.stdout).toContain('GOODVIBES_WAKE_MODEL=0');
+    expect(result.stdout).toContain('/voice wake setup');
+  });
+
+  test('install.sh carries no wake-artifact pin of its own', () => {
+    // A second copy of a URL or checksum in shell would drift the first time the
+    // model is retrained, which is why this runs the binary instead of fetching.
+    const source = readFileSync(INSTALL_SH, 'utf8');
+    expect(source).not.toContain('voice-runtimes-v1');
+    expect(source).toContain('provision-wake-model');
+  });
+
+  test('the model is placed BEFORE the daemon is restarted, so the restarted process sees it', () => {
+    const source = readFileSync(INSTALL_SH, 'utf8');
+    const main = source.slice(source.lastIndexOf('\nmain() {'));
+    expect(main.indexOf('install_wake_word_model')).toBeGreaterThan(-1);
+    expect(main.indexOf('install_wake_word_model')).toBeLessThan(main.indexOf('restart_running_daemon'));
+  });
+
+  test('the opt-in flag reads GOODVIBES_WAKE_MODEL and defaults to on', () => {
+    const source = readFileSync(INSTALL_SH, 'utf8');
+    expect(source).toContain('WITH_WAKE_MODEL="${GOODVIBES_WAKE_MODEL:-1}"');
+  });
+});

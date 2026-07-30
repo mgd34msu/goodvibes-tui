@@ -249,9 +249,9 @@ export async function initializeBootstrapCore(
     runtimeStore: store,
     getConversationTitle: () => getConversationTitle(),
     workingDir, homeDirectory, ...(options.daemonHomeDirectory === undefined ? {} : { daemonHomeDirectory: options.daemonHomeDirectory }),
-    // Embedded topology: the in-process runtime IS the daemon and holds its own OS
-    // inhibitor, so opt into the real host seam (fork default is non-spawning). See services.ts.
-    powerSeam: createHostPowerSeam(),
+    // Embedded topology: the in-process runtime IS the daemon, so it holds its own OS inhibitor (fork
+    // default is non-spawning) and owns the wake-model boot retry a standalone daemon would. See services.ts.
+    powerSeam: createHostPowerSeam(), provisionWakeModelsAtBoot: true,
   });
   await services.workspaceTrustManager.load(); // settle any already-persisted trust decision before any tool runs
   const providerRegistry = services.providerRegistry;

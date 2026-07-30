@@ -230,9 +230,65 @@ function deployBundledFiles() {
   }
 }
 
+/**
+ * Put the wake-word model on the machine as part of installing.
+ *
+ * Everything needed to detect "hey goodvibes" already shipped, and provisioning
+ * was reachable only by typing `/voice wake setup` — so the ordinary outcome of
+ * installing was a wake word that could not start. The pins (URLs, byte counts,
+ * checksums) live in the SDK's wake-word manifest and stay there; this calls the
+ * SDK's install policy, which:
+ *
+ *   - never throws (an absent network, DNS, a proxy serving HTML, an unwritable
+ *     home directory and a provisioner that itself threw all come back as an
+ *     outcome), so a failed download CANNOT fail this install;
+ *   - reaps a torn artifact before retrying, so a killed attempt converges;
+ *   - reports one plain line, printed below either way.
+ *
+ * A failure degrades to exactly the previous behaviour: the feature reports
+ * not-provisioned by content, `/voice wake setup` fetches it, and a running
+ * daemon retries at every boot.
+ *
+ * It honours the same skip switches as the binary install (`--no-download`,
+ * GOODVIBES_SKIP_BINARY_DOWNLOAD) plus its own
+ * GOODVIBES_SKIP_WAKE_MODEL_DOWNLOAD, and it stays out of a source checkout for
+ * the same reason the binary install does — a repo clone is a development tree,
+ * not an installation.
+ */
+async function installWakeWordModel() {
+  if (noDownload) {
+    console.log('postinstall: skipping the wake-word model (--no-download)');
+    return;
+  }
+  if (isSourceCheckout()) {
+    console.log('postinstall: source checkout detected; skipping the wake-word model install');
+    return;
+  }
+  try {
+    const { provisionWakeWordModelsAtInstall, resolveManagedVoiceRoot } =
+      await import('@pellux/goodvibes-sdk/platform/voice');
+    const outcome = await provisionWakeWordModelsAtInstall({
+      managedRoot: resolveManagedVoiceRoot(home),
+      recoveryHint: '/voice wake setup',
+    });
+    console.log(`postinstall: ${outcome.message}`);
+  } catch (error) {
+    // The policy is contracted not to throw, so reaching here means the import
+    // itself failed (a partially installed dependency tree, most likely). Even
+    // that is not a reason to fail the install of everything else.
+    console.log(
+      'postinstall: the wake-word model could not be installed '
+      + `(${error instanceof Error ? error.message : String(error)}); everything else installed normally. `
+      + 'Run /voice wake setup to fetch it, or leave it and the next daemon start tries again.',
+    );
+  }
+}
+
 async function main() {
   await installPlatformBinaries();
   deployBundledFiles();
+  // Last, and never fatal: a wake-word model is not worth failing an install over.
+  await installWakeWordModel();
 }
 
 // Guarded so this module can be imported by tests (to exercise
@@ -242,4 +298,4 @@ if (import.meta.main) {
   await main();
 }
 
-export { verifyChecksum, parseChecksumFile, sha256, resolveArtifactNames, CHECKSUM_MANIFEST_NAME };
+export { verifyChecksum, parseChecksumFile, sha256, resolveArtifactNames, CHECKSUM_MANIFEST_NAME, installWakeWordModel };

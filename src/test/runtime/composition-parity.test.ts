@@ -184,3 +184,45 @@ describe('composition parity — host power seam is opt-in (non-spawning default
     expect(args).toContain('powerSeam: createHostPowerSeam()');
   });
 });
+
+describe('composition parity — wake-model boot provisioning is opt-in, like the power seam', () => {
+  // The wake-word model arrives with the installation, and the daemon retries at
+  // boot for whatever the install could not get. That retry does network I/O and
+  // starts an hourly recovery sweep, so it must be an explicit opt-in — the same
+  // treatment the host power seam gets, for the same reason: a test composing this
+  // graph, and a one-shot CLI command, must fetch nothing and start no timer.
+  test('the standalone daemon opts in', () => {
+    expect(createRuntimeServicesCallArgs(read('src/daemon/cli.ts'))).toContain('provisionWakeModelsAtBoot: true');
+  });
+
+  test('the embedded interactive runtime opts in — it IS the daemon in that topology', () => {
+    expect(createRuntimeServicesCallArgs(read('src/runtime/bootstrap-core.ts'))).toContain('provisionWakeModelsAtBoot: true');
+  });
+
+  test('the one-shot CLI commands do NOT opt in', () => {
+    // `goodvibes bundle …` and the management commands compose a graph to answer
+    // one question and exit; starting an hourly sweep and a 6 MB download there
+    // would be work nobody asked for.
+    expect(createRuntimeServicesCallArgs(read('src/cli/bundle-command.ts'))).not.toContain('provisionWakeModelsAtBoot');
+    expect(createRuntimeServicesCallArgs(read('src/cli/management-utils.ts'))).not.toContain('provisionWakeModelsAtBoot');
+  });
+
+  test('the sweep and the pending attempt are on the disposal list, opted in or not', () => {
+    // An hourly timer nothing stops is a poller this surface leaked. It is
+    // registered unconditionally, because "the graph did not start it this time"
+    // is not a reason for teardown to have no way to stop it.
+    const disposal = read('src/runtime/disposal-wiring.ts');
+    expect(disposal).toContain("registry.add('wake-word housekeeping', services.stopWakeHousekeeping)");
+    expect(read('src/runtime/services.ts')).toContain('stopWakeHousekeeping');
+  });
+
+  test('the boot attempt joins the setup service single flight and names the terminal recovery command', () => {
+    const helper = read('src/runtime/voice-setup-services.ts');
+    // Through the service, not the provisioner directly: a boot attempt racing a
+    // user typing /voice wake setup would otherwise be two downloads of the same
+    // 6 MB. And the SDK would name the control-plane verb, which is right
+    // everywhere and useless to someone sitting in a terminal.
+    expect(helper).toContain('voiceSetup.wakeEnsureProvisioned({ recoveryHint: WAKE_RECOVERY_COMMAND })');
+    expect(helper).toContain("export const WAKE_RECOVERY_COMMAND = '/voice wake setup'");
+  });
+});
