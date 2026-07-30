@@ -84,6 +84,7 @@ REQUESTED_AGENT_VERSION="${GOODVIBES_AGENT_VERSION:-latest}"
 WITH_AGENT="${GOODVIBES_AGENT:-1}"
 RESTART_DAEMON="${GOODVIBES_RESTART_DAEMON:-1}"
 WITH_VECTOR="${GOODVIBES_VECTOR:-1}"
+WITH_WAKE_MODEL="${GOODVIBES_WAKE_MODEL:-1}"
 DAEMON_SERVICE="${GOODVIBES_DAEMON_SERVICE:-1}"
 UNINSTALL="${GOODVIBES_UNINSTALL:-0}"
 
@@ -1570,6 +1571,51 @@ install_sqlite_vec() {
   say "  installed  $addon_target"
 }
 
+# --- wake-word model: makes "hey goodvibes" work on a fresh machine ---
+#
+# Everything needed to detect the phrase already shipped inside the binary, and
+# the model itself was reachable only by typing `/voice wake setup` — so the
+# ordinary outcome of installing goodvibes was a wake word that could not start,
+# waiting on a download nobody had been told about.
+#
+# This runs the daemon binary that was just installed and verified, rather than
+# fetching the artifacts here, for one reason: the pinned URLs, byte counts and
+# checksums live in the SDK's wake-word manifest, and a second copy of a pin in
+# shell would drift silently the first time the model is retrained. The binary
+# reaches the one manifest. (This is also why there is no SHA256SUMS entry to
+# look up: these artifacts are hosted on the SDK's own append-only release tag,
+# not this repository's release.)
+#
+# NEVER FATAL. A wake-word model is not a reason to fail installing a coding
+# tool, and an installer that aborts half-way is worse than one that finishes
+# without a wake word. The subcommand exits 0 whatever happens and prints one
+# plain line; if it is missing entirely (an older binary than this installer) the
+# `|| true` covers that too. A running daemon retries at every boot, and
+# `/voice wake setup` fetches it on demand.
+#
+# GOODVIBES_WAKE_MODEL=0 skips it, for an air-gapped host or a user who does not
+# want the feature.
+install_wake_word_model() {
+  [ "$WITH_WAKE_MODEL" = "1" ] || {
+    say ""
+    say "  note: skipping the wake-word model (GOODVIBES_WAKE_MODEL=0). Wake-word"
+    say "  detection will report not-provisioned until you run: goodvibes /voice wake setup"
+    return 0
+  }
+
+  say ""
+  say "Installing the wake-word model ..."
+  wake_output=$("$INSTALL_DIR/goodvibes-daemon" provision-wake-model 2>&1) || true
+  if [ -n "$wake_output" ]; then
+    printf '%s\n' "$wake_output" | while IFS= read -r wake_line; do
+      say "  $wake_line"
+    done
+  else
+    say "  note: this build has no provision-wake-model command — wake-word detection"
+    say "  will fetch its model at the next daemon start, or run: goodvibes /voice wake setup"
+  fi
+}
+
 # --- goodvibes-agent: compiled binary from its own repository's release ---
 install_agent() {
   say ""
@@ -2292,6 +2338,13 @@ main() {
   # Install the sqlite-vec addon before restarting the daemon so the restarted
   # process picks it up and semantic vector search is live immediately.
   install_sqlite_vec
+
+  # Same ordering reason: put the wake-word model on disk before the daemon is
+  # (re)started, so the started process finds it verified and the feature is
+  # usable the moment voice.wake.enabled is turned on. A daemon that starts
+  # first would fetch it itself at boot; doing it here means the install's own
+  # output says whether it worked.
+  install_wake_word_model
 
   # Bring a platform-managed canonical unit up to the current (config-derived)
   # launch shape BEFORE the restart below, so the restart applies it.

@@ -1,4 +1,7 @@
 import { describe, expect, test } from 'bun:test';
+import { rmSync, writeFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { makeProjectTempDir } from '../helpers/project-temp.ts';
 import { GoodVibesSdkError } from '@pellux/goodvibes-sdk';
 import {
   classifyVoiceProvisionError,
@@ -15,6 +18,7 @@ import { printWakeStatus, runWakeProvision } from '../../core/wake-provision-run
 import { CommandRegistry } from '../../input/command-registry.ts';
 import { registerExperienceRuntimeCommands } from '../../input/commands/experience-runtime.ts';
 import type { CommandContext } from '../../input/command-registry.ts';
+import { wireVoiceSetup, WAKE_RECOVERY_COMMAND } from '../../runtime/voice-setup-services.ts';
 
 const STATUS: VoiceRuntimeStatusResult = {
   platform: 'linux-x64',
@@ -301,6 +305,7 @@ describe('wake provisioning — status projection and the explicit setup act', (
         ready: false,
         reason: 'checksum-mismatch',
         classifier: { path: '/managed/wake/models/c.onnx', verified: false, corrupt: true, bytes: 1_200_000 },
+        mobileClassifier: { path: '/managed/wake/models/c.tflite', verified: true, corrupt: false, bytes: 2_369_264 },
         notice: { path: '/managed/wake/models/NOTICE', verified: true, corrupt: false, bytes: 900 },
         embedding: { path: '/managed/wake/front-end/e.onnx', verified: true, corrupt: false, bytes: 1_319_365 },
         downloadBytes: 3_687_009,
@@ -328,6 +333,7 @@ describe('wake provisioning — status projection and the explicit setup act', (
         onProgress({ component: 'classifier', phase: 'done' });
         return {
           ready: true,
+          mobileFormatReady: true,
           modelVersion: '1.0.0',
           outcomes: [
             { component: 'classifier', state: 'installed', path: '/managed/wake/models/c.onnx', bytes: 2_367_644 },
@@ -355,6 +361,7 @@ describe('wake provisioning — status projection and the explicit setup act', (
       print: (block) => printed.push(block),
       provision: async () => ({
         ready: false,
+        mobileFormatReady: false,
         modelVersion: '1.0.0',
         outcomes: [{ component: 'classifier', state: 'failed', path: '/managed/wake/models/c.onnx', error: 'sha256 got abc, want def' }],
         noticePath: null,
@@ -381,5 +388,74 @@ describe('wake provisioning — status projection and the explicit setup act', (
   test('WAKE_SETUP_ANNOUNCEMENT states the downloads are verified and resumable', () => {
     expect(WAKE_SETUP_ANNOUNCEMENT).toContain('checksum-verified');
     expect(WAKE_SETUP_ANNOUNCEMENT).toContain('resumable');
+  });
+});
+
+/**
+ * The boot half of "the model ships with the installation": a daemon retries at
+ * every start for whatever the install could not download, and it sweeps the wake
+ * tree while it is there. Both are opt-in, because both do work — network I/O and
+ * an hourly timer — that a test-composed graph or a one-shot CLI command must not
+ * inherit.
+ */
+describe('wake-model boot provisioning inside wireVoiceSetup', () => {
+  function deps(overrides: Partial<Parameters<typeof wireVoiceSetup>[0]> = {}) {
+    return {
+      configManager: { get: () => '', setDynamic: () => {} } as unknown as Parameters<typeof wireVoiceSetup>[0]['configManager'],
+      shellPaths: { resolveUserPath: (...segments: string[]) => `/managed/${segments.join('/')}` },
+      voiceProviders: { get: () => undefined } as unknown as Parameters<typeof wireVoiceSetup>[0]['voiceProviders'],
+      admitExpensiveWork: () => ({ allowed: true }),
+      ...overrides,
+    };
+  }
+
+  test('without the opt-in nothing is started, and the stop is still callable', () => {
+    let starts = 0;
+    const { stopWakeHousekeeping } = wireVoiceSetup(deps({
+      startBootProvisioning: () => { starts += 1; return { sweeper: { sweepNow: () => { throw new Error('unused'); }, stop: () => {} }, stop: () => {} }; },
+    }));
+    expect(starts).toBe(0);
+    // A no-op, not an absent field: the disposal list registers it unconditionally,
+    // and a missing function there would be a teardown that throws.
+    expect(() => stopWakeHousekeeping()).not.toThrow();
+  });
+
+  test('with the opt-in it starts against the managed voice root and stop() reaches it', () => {
+    const roots: string[] = [];
+    let stops = 0;
+    const { stopWakeHousekeeping } = wireVoiceSetup(deps({
+      provisionWakeModelsAtBoot: true,
+      startBootProvisioning: (options) => {
+        roots.push(options.managedRoot);
+        return { sweeper: { sweepNow: () => { throw new Error('unused'); }, stop: () => {} }, stop: () => { stops += 1; } };
+      },
+    }));
+    // The same directory the setup service and the detector use — resolveUserPath('voice').
+    expect(roots).toEqual(['/managed/voice']);
+    stopWakeHousekeeping();
+    expect(stops).toBe(1);
+  });
+
+  test('the attempt it hands over is the service one, which never throws and names the terminal command', async () => {
+    // A user root that is a FILE, not a directory. Deterministic on every host and
+    // every uid — creating the managed tree under it fails with ENOTDIR before any
+    // network call, so this exercises the degraded path for real without a test
+    // that could reach for 6 MB when it happens to run somewhere writable.
+    const blocked = join(makeProjectTempDir('wake-boot-degraded'), 'not-a-directory');
+    writeFileSync(blocked, 'this is a file');
+    let attempt: (() => Promise<{ state: string; message: string }>) | null = null;
+    wireVoiceSetup(deps({
+      provisionWakeModelsAtBoot: true,
+      shellPaths: { resolveUserPath: (...segments: string[]) => join(blocked, ...segments) },
+      startBootProvisioning: (options) => {
+        attempt = options.ensureProvisioned as typeof attempt;
+        return { sweeper: { sweepNow: () => { throw new Error('unused'); }, stop: () => {} }, stop: () => {} };
+      },
+    }));
+    expect(attempt).not.toBeNull();
+    const outcome = await attempt!();
+    expect(outcome.state).toBe('degraded');
+    expect(outcome.message).toContain(WAKE_RECOVERY_COMMAND);
+    rmSync(dirname(blocked), { recursive: true, force: true });
   });
 });

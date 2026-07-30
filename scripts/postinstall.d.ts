@@ -17,3 +17,14 @@ export {
   sha256,
   verifyChecksum,
 } from '../src/runtime/release-artifacts.ts';
+
+/**
+ * Provision the wake-word model as part of installing. Declared here rather than
+ * re-exported from elsewhere because it is the script's own step: the SDK owns
+ * the policy, this owns deciding whether an npm install should run it (a source
+ * checkout and the --no-download switch both decline).
+ *
+ * Resolves for every outcome and never rejects — a wake-word model is not a
+ * reason to fail an installation.
+ */
+export function installWakeWordModel(): Promise<void>;
