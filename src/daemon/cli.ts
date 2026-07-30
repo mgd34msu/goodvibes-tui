@@ -1,4 +1,5 @@
 import { homedir } from 'node:os';
+import { join } from 'node:path';
 import {
   ConfigManager,
   deriveControlPlaneBaseUrl,
@@ -15,8 +16,9 @@ import { createRuntimeServices } from '../runtime/services.ts';
 import { startDeviceHousekeeping } from '../runtime/device-posture-composition.ts';
 import { DaemonServer, HttpListener } from '@pellux/goodvibes-sdk/platform/daemon';
 import { createHostPowerSeam } from '@pellux/goodvibes-sdk/platform/power';
-import { flushActivityLogSync, logger } from '@pellux/goodvibes-sdk/platform/utils';
+import { configureActivityLogger, flushActivityLogSync, logger } from '@pellux/goodvibes-sdk/platform/utils';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
+import { reportFatalBootFailure, writeExitingStdoutLine, writeFatalLine } from './fatal-boot-report.ts';
 import {
   getOrCreateCompanionToken,
   pruneStaleOperatorTokens,
@@ -136,11 +138,15 @@ async function main(): Promise<void> {
       configManager: clusterConfig,
       daemonHomeDir: ownership.daemonHomeDirectory,
     });
-    if (result.rawOutput) process.stdout.write(`\u001b${result.rawOutput}`);
+    // Every write below is immediately followed by process.exit, so all of them
+    // go to the descriptor synchronously rather than through a stream that can
+    // still be in flight when the process stops existing — see
+    // fatal-boot-report.ts. (The OSC 52 clipboard sequence is unterminated
+    // either way; the line terminator this adds after it is inert.)
+    if (result.rawOutput) writeExitingStdoutLine(`\u001b${result.rawOutput}`);
     for (const line of result.lines) {
-      // eslint-disable-next-line no-console
-      if (result.exitCode === 0) console.log(line);
-      else console.error(line);
+      if (result.exitCode === 0) writeExitingStdoutLine(line);
+      else writeFatalLine(line);
     }
     process.exit(result.exitCode);
   }
@@ -160,6 +166,10 @@ async function main(): Promise<void> {
   // reason to message the owner is usually that something stopped.
   if (rawArgs[0] === 'send') {
     const ownership = resolveDaemonCliOwnership();
+    // Named before the delivery runs, because the flushActivityLogSync() below
+    // is what preserves this send's OUTBOUND_HTTP record — and a logger with no
+    // destination has nothing to flush, so that record was never written.
+    configureActivityLogger(join(ownership.workingDirectory, '.goodvibes', 'logs'));
     runDaemonConfigMigration(ownership.homeDirectory);
     const stack = createSendStack({
       workingDirectory: ownership.workingDirectory,
@@ -172,10 +182,12 @@ async function main(): Promise<void> {
       readStdin: readAllStdin,
       stdinIsTty: process.stdin.isTTY === true,
     });
+    // Descriptor writes, not stream writes: the exit two lines below can leave
+    // a `console.log` still in flight, and `send` is most often run precisely
+    // because something has already stopped. See fatal-boot-report.ts.
     for (const line of result.lines) {
-      // eslint-disable-next-line no-console
-      if (result.exitCode === 0) console.log(line);
-      else console.error(line);
+      if (result.exitCode === 0) writeExitingStdoutLine(line);
+      else writeFatalLine(line);
     }
     // The activity log holds the OUTBOUND_HTTP record for the send that just
     // happened (or did not); a process exiting this promptly would drop it.
@@ -195,9 +207,10 @@ async function main(): Promise<void> {
     const result = await runProvisionWakeModelCommand(rawArgs.slice(1), {
       homeDirectory: ownership.homeDirectory,
     });
+    // The curl installer runs this on a binary it has just placed and reads the
+    // result; an exit that discards the receipt would report nothing at all.
     for (const line of result.lines) {
-      // eslint-disable-next-line no-console
-      console.log(line);
+      writeExitingStdoutLine(line);
     }
     process.exit(result.exitCode);
   }
@@ -206,9 +219,12 @@ async function main(): Promise<void> {
   // before resolveDaemonCliOwnership() reads them.
   const cli = parseGoodVibesCli(process.argv.slice(2), 'goodvibes-daemon');
   if (cli.errors.length > 0) {
-    console.error(cli.errors.join('\n'));
-    console.error('');
-    console.error(renderGoodVibesDaemonHelp('goodvibes-daemon'));
+    // A parse refusal is the most common reason a service unit's daemon never
+    // starts, so it goes on the descriptor the journal is attached to rather
+    // than through a stream that exits out from under it.
+    writeFatalLine(cli.errors.join('\n'));
+    writeFatalLine('');
+    writeFatalLine(renderGoodVibesDaemonHelp('goodvibes-daemon'));
     process.exit(2);
   }
   if (cli.warnings.length > 0) {
@@ -217,11 +233,11 @@ async function main(): Promise<void> {
     }
   }
   if (cli.flags.help || cli.command === 'help') {
-    console.log(renderGoodVibesDaemonHelp('goodvibes-daemon'));
+    writeExitingStdoutLine(renderGoodVibesDaemonHelp('goodvibes-daemon'));
     process.exit(0);
   }
   if (cli.flags.version || cli.command === 'version') {
-    console.log(renderGoodVibesVersion('goodvibes-daemon'));
+    writeExitingStdoutLine(renderGoodVibesVersion('goodvibes-daemon'));
     process.exit(0);
   }
   const cliFlags = cli.flags;
@@ -235,13 +251,22 @@ async function main(): Promise<void> {
   }
 
   const { workingDirectory: workingDir, homeDirectory, daemonHomeDirectory, isOverridden: hasOverriddenHome } = resolveDaemonCliOwnership();
+  // Give the shared logger a destination before anything else runs. It never
+  // had one in this entrypoint: `logger` only writes to a file once
+  // `configureActivityLogger()` has named one, so every logger.info/warn/error
+  // in the standalone daemon — including the fatal handler at the bottom of
+  // this file and every flushActivityLogSync() call — went nowhere at all.
+  // That is why a crash-looping daemon left an empty activity log next to a
+  // silent console. src/cli/entrypoint.ts does the same for the interactive
+  // process; this is the daemon finally matching it.
+  configureActivityLogger(join(workingDir, '.goodvibes', 'logs'));
   runDaemonConfigMigration(homeDirectory);
   const config = new ConfigManager({ workingDir, homeDir: homeDirectory, surfaceRoot: 'tui' });
   new GlobalNetworkTransportInstaller().install(config);
 
   const overrideErrors = applyRuntimeConfigOverrides(config, cliFlags.configOverrides);
   if (overrideErrors.length > 0) {
-    console.error(overrideErrors.join('\n'));
+    writeFatalLine(overrideErrors.join('\n'));
     process.exit(2);
   }
   applyRuntimeFeatureFlagOverrides(config, {
@@ -261,7 +286,7 @@ async function main(): Promise<void> {
   }
   const endpointOverrideErrors = applyRuntimeEndpointFlagOverrides(config, 'controlPlane', cliFlags);
   if (endpointOverrideErrors.length > 0) {
-    console.error(endpointOverrideErrors.join('\n'));
+    writeFatalLine(endpointOverrideErrors.join('\n'));
     process.exit(2);
   }
   if (cliFlags.port !== undefined) logger.info('daemon: --port flag applied', { port: cliFlags.port });
@@ -301,9 +326,11 @@ async function main(): Promise<void> {
       // consent as any other non-interactive destructive confirmation.
       confirmMigration: cliFlags.yes,
     });
+    // install-service / uninstall-service / service-status print the unit path,
+    // the follow-up commands and the honest result, then exit immediately —
+    // exactly the race a stream write loses. Descriptor writes instead.
     for (const line of result.lines) {
-      // eslint-disable-next-line no-console
-      console.log(line);
+      writeExitingStdoutLine(line);
     }
     process.exit(result.exitCode);
   }
@@ -629,13 +656,16 @@ async function main(): Promise<void> {
   console.log(bannerLines.join('\n'));
 }
 
-void main().catch(async (error) => {
-  logger.error('goodvibes daemon host failed', {
-    error: summarizeError(error),
-  });
-  // The daemon never came up. Without this the reason is buffered in a process
-  // that is about to stop existing, and the failure reads as a daemon that
-  // never logged anything at all.
-  flushActivityLogSync();
+void main().catch((error) => {
+  // A daemon that dies during startup must leave the reason where an operator
+  // will actually find it: on the file descriptor the service journal is
+  // attached to, written synchronously, BEFORE the activity log is attempted.
+  //
+  // Doing it the other way round is what shipped mute. This handler used to
+  // call logger.error and flushActivityLogSync and nothing else, and the
+  // logger had no destination this early in boot — so the released 1.27.0
+  // binary crash-looped 77 times with exit 1, zero bytes on stdout, zero bytes
+  // on stderr and an empty activity log. See fatal-boot-report.ts.
+  reportFatalBootFailure(error);
   process.exit(1);
 });
