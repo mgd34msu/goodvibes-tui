@@ -17,7 +17,7 @@
 import { logger } from '@pellux/goodvibes-sdk/platform/utils';
 import type { ConfigKey, ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import type { VoiceCaptureIndicatorState } from '../core/voice-capture-status.ts';
-import { createTuiCaptureOpener, SURFACE_APPLIES_SPEEX_SUPPRESSION } from './capture.ts';
+import { createTuiCaptureOpener } from './capture.ts';
 import { playActivationSound } from './activation-sound.ts';
 import { LocalStreamingAudioPlayer } from './player.ts';
 import type { StreamingAudioPlayer } from './player.ts';
@@ -26,6 +26,7 @@ import { wireVoiceInputRuntime } from './voice-input-session.ts';
 import { startWakeRuntime, wireWakeRuntime } from './wake-runtime.ts';
 import { terminalWakeCapabilities } from '../core/wake-provision-status.ts';
 import { resolveWakeRuntimeSettings } from '@pellux/goodvibes-sdk/platform/voice/wake/runtime';
+import { wakeProvisionStatus } from '@pellux/goodvibes-sdk/platform/voice';
 
 export interface VoiceCaptureWiringDeps {
   readonly configManager: ConfigManager;
@@ -65,18 +66,23 @@ export function wireVoiceCapture(deps: VoiceCaptureWiringDeps): VoiceCaptureWiri
   const warn = (message: string, meta?: Readonly<Record<string, unknown>>): void => {
     logger.debug(`voice capture: ${message}`, meta ?? {});
   };
-  // Not a probe: this surface does not apply speex suppression, so `speex` is
-  // refused with its reason rather than being silently skipped (see capture.ts).
-  const speexAvailable = SURFACE_APPLIES_SPEEX_SUPPRESSION;
-  // ONE opener, both consumers.
-  const openCapture = createTuiCaptureOpener({ speexAvailable, warn });
+  // ONE opener, both consumers. The suppression stage is inside it, so `speex`
+  // is applied rather than refused (see capture.ts).
+  const openCapture = createTuiCaptureOpener({ warn });
   const resolveTranscriber = () => {
     const resolution = createVoiceSttGateway({ configManager: deps.configManager, homeDirectory: deps.homeDirectory });
     return resolution.available
       ? { available: true as const, gateway: resolution.gateway }
       : { available: false as const, reason: resolution.reason };
   };
-  const readSettings = () => resolveWakeRuntimeSettings(readConfig, 'tui', terminalWakeCapabilities(speexAvailable));
+  // Capabilities are re-read per resolve rather than captured once: provisioning
+  // the speech gate is something a user does WHILE the session is running, and a
+  // capability snapshot taken at startup would keep reporting it unavailable.
+  const readSettings = () => resolveWakeRuntimeSettings(
+    readConfig,
+    'tui',
+    terminalWakeCapabilities(wakeProvisionStatus({ managedRoot: deps.managedVoiceRoot })),
+  );
   const subscribeConfig = (key: string, listener: () => void): (() => void) => deps.configManager.subscribe(key as ConfigKey, listener);
   const player = deps.player ?? new LocalStreamingAudioPlayer();
 
@@ -95,7 +101,6 @@ export function wireVoiceCapture(deps: VoiceCaptureWiringDeps): VoiceCaptureWiri
     openCapture,
     managedRoot: deps.managedVoiceRoot,
     assetDirectory: deps.assetDirectory,
-    speexAvailable,
     resolveTranscriber,
     playActivationSound: (sound) => playActivationSound(sound, { player, notify: deps.notify }),
     submitTurn: deps.submitTurn,

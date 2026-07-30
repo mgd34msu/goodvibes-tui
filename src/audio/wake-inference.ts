@@ -134,7 +134,14 @@ export interface WakeEngineFactoryOptions {
   readonly embeddingPath: string;
   /** The provisioned classifiers, in configuration order. */
   readonly models: readonly { readonly id: string; readonly path: string }[];
-  readonly settings: Pick<WakeRuntimeSettings, 'tuning' | 'preRollMs'>;
+  readonly settings: Pick<WakeRuntimeSettings, 'tuning' | 'preRollMs' | 'vadThreshold'>;
+  /**
+   * The provisioned speech gate, present only when `voice.wake.vadThreshold` asks
+   * for one. Absent means the engine scores every frame, which is what the
+   * shipped default of 0 asks for — not a gate that failed to load, because that
+   * case is a startup blocker upstream of here.
+   */
+  readonly vadPath?: string;
   /** Where a classifier that fails to run is reported (the engine skips it rather than dying). */
   readonly warn: (message: string, meta?: Readonly<Record<string, unknown>>) => void;
   /** Injected in tests: a stub session per path, so no real model file is read. */
@@ -157,11 +164,18 @@ export function createWakeEngineFactory(options: WakeEngineFactoryOptions): () =
     for (const model of options.models) {
       models.push({ id: model.id, session: await load(model.path) });
     }
+    // Loaded per start, like every other session here: a restart exists to
+    // recover from a runtime that died, and a gate session carried over from the
+    // dead run would be the one piece that did not recover.
+    const vad = options.vadPath !== undefined && options.settings.vadThreshold > 0
+      ? { session: await load(options.vadPath), threshold: options.settings.vadThreshold }
+      : undefined;
     return new WakeWordEngine({
       embedding,
       models,
       tuning: options.settings.tuning,
       preRollMs: options.settings.preRollMs,
+      ...(vad !== undefined ? { vad } : {}),
       warn: options.warn,
     });
   };

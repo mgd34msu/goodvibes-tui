@@ -22,6 +22,7 @@ import type {
   WakeRuntimeSettings,
   WakeSurfaceCapabilities,
 } from '@pellux/goodvibes-sdk/platform/voice';
+import { noiseSuppressionSupport } from '@pellux/goodvibes-sdk/platform/voice/capture';
 import { formatVoiceBytes } from './voice-provision-status.ts';
 
 /**
@@ -30,13 +31,18 @@ import { formatVoiceBytes } from './voice-provision-status.ts';
  * inference runtime — so the command layer can resolve settings without pulling
  * onnxruntime into a `/voice wake status` call.
  */
-export function terminalWakeCapabilities(speexAvailable: boolean): WakeSurfaceCapabilities {
+export function terminalWakeCapabilities(status?: Pick<WakeProvisionStatus, 'vadReady'>): WakeSurfaceCapabilities {
   return {
-    speexAvailable,
-    // No VAD model is pinned by the platform manifest, on ANY surface. A
-    // `voice.wake.vadThreshold` above 0 therefore BLOCKS startup rather than being
-    // silently skipped, and the reason is shown wherever status is shown.
-    vadAvailable: false,
+    // Asked of the SDK rather than declared here. The filter is a WebAssembly
+    // module carried in the package, so the only question is whether this runtime
+    // has WebAssembly at all — which the SDK answers, with a reason a settings
+    // surface can show. A host constant would go stale the moment the stage
+    // shipped, which is exactly what happened to the previous one.
+    speexAvailable: noiseSuppressionSupport().supported,
+    // The speech gate needs its own provisioned model, so this follows what is
+    // VERIFIED ON DISK rather than what the build is capable of: with the artifact
+    // missing, `voice.wake.vadThreshold` above 0 still blocks startup and says so.
+    vadAvailable: status?.vadReady === true,
     // A terminal has a filesystem (retainAudio) and an audio player (a custom
     // activation sound file).
     canRetainAudio: true,

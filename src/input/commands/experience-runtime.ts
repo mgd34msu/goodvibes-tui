@@ -6,7 +6,7 @@ import { createVoiceProvisionGateway, renderVoiceProvision, runVoiceSetupWithPro
 import { resolveWakeRuntimeSettings } from '@pellux/goodvibes-sdk/platform/voice/wake/runtime';
 import { terminalWakeCapabilities } from '../../core/wake-provision-status.ts';
 import { printWakeStatus, runWakeProvision } from '../../core/wake-provision-runner.ts';
-import { SURFACE_APPLIES_SPEEX_SUPPRESSION } from '../../audio/capture.ts';
+import { wakeProvisionStatus } from '@pellux/goodvibes-sdk/platform/voice';
 
 interface VoiceBundle {
   readonly version: 1;
@@ -237,12 +237,15 @@ export function registerExperienceRuntimeCommands(registry: CommandRegistry): vo
         // download), not through a daemon verb, so this path needs no gateway.
         // Nothing downloads unless the user typed `setup` — see wake-provision-runner.ts.
         const wakeSub = (args[1] ?? 'status').toLowerCase();
+        const managedRoot = shellPaths.resolveUserPath('voice');
         const runner = {
-          managedRoot: shellPaths.resolveUserPath('voice'),
+          managedRoot,
           settings: resolveWakeRuntimeSettings(
             (key: string) => ctx.platform.configManager.get(key as Parameters<typeof ctx.platform.configManager.get>[0]),
             'tui',
-            terminalWakeCapabilities(SURFACE_APPLIES_SPEEX_SUPPRESSION),
+            // Read from disk, so `/voice wake status` reports the speech gate as
+            // available exactly when its artifact is there and verified.
+            terminalWakeCapabilities(wakeProvisionStatus({ managedRoot })),
           ),
           print: (block: string) => ctx.print(block),
         };

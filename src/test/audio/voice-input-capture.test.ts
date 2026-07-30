@@ -5,7 +5,7 @@ import type {
   UtteranceAudioArtifact,
   WakeRuntimeSettings,
 } from '@pellux/goodvibes-sdk/platform/voice';
-import { createTuiCaptureOpener, isExecutableOnPath, SURFACE_APPLIES_SPEEX_SUPPRESSION } from '../../audio/capture.ts';
+import { createTuiCaptureOpener, isExecutableOnPath } from '../../audio/capture.ts';
 import { wireVoiceInputRuntime } from '../../audio/voice-input-session.ts';
 
 /**
@@ -117,7 +117,6 @@ function makeVoiceInputHarness(options: {
       spawn: spawns.spawn,
       isInstalled: options.installed ?? (() => true),
       platform: 'linux',
-      speexAvailable: false,
     }),
     readSettings: () => ({
       ...CAPTURE_SETTINGS,
@@ -304,12 +303,11 @@ describe('the recorder command line is what the real tools accept', () => {
     await stream.stop();
   });
 
-  test('speex noise suppression is refused by DEFAULT, because this surface does not apply it', async () => {
+  test('speex reaching the RECORDER unwrapped is refused, and says which layer filters', async () => {
     // No speexAvailable passed: the default is what a real launch uses, and it must
     // refuse rather than capture unfiltered audio through a stage the user believes
     // is running. The flag means "this surface applies suppression", not "the box
     // has the library" — nothing in the platform applies speex today.
-    expect(SURFACE_APPLIES_SPEEX_SUPPRESSION).toBe(false);
     const spawns = recordingSpawn();
     const open = createTuiCaptureOpener({ spawn: spawns.spawn, isInstalled: () => true, platform: 'linux' });
 
@@ -319,7 +317,12 @@ describe('the recorder command line is what the real tools accept', () => {
     }).then(() => null, (error: unknown) => error as AudioCaptureError);
 
     expect(failure?.reason).toBe('noise-suppression-unavailable');
-    expect(failure?.message).toContain('libspeexdsp');
+    // The recorder subprocess produces raw PCM; the speexdsp stage runs one layer
+    // up, inside the wake listener and the push-to-talk session. A request that
+    // reaches the bare opener is therefore refused with the layering named,
+    // rather than passed through unfiltered.
+    expect(failure?.message).toContain('does not filter it');
+    expect(failure?.message).toContain('createNoiseSuppressingOpener');
     // Audio never flowed unfiltered through a stage the user configured.
     expect(spawns.calls.length).toBe(0);
   });
