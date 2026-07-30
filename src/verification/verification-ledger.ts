@@ -242,10 +242,30 @@ export const FEATURE_KNOB_LOCAL_SETTINGS = [
  * verified for them, and the settings-workspace description for the `device`
  * category says exactly that to the user rather than implying live knobs.
  *
- * DELIBERATELY NOT COUNTED: the 24 non-enablement `voice.wake.*` keys from the
- * same release. `wake-word-detection` is declared `notOperable` — no surface
- * captures audio — so its rows stay in `total` and out of the numerator. That is
- * the honest reading, and it is why this list raises coverage by 29 and not 53.
+ * STILL NOT COUNTED, FOR A DIFFERENT REASON NOW: the 24 non-enablement
+ * `voice.wake.*` keys from the same release. When this list was written they were
+ * excluded because nothing captured audio at all. That is no longer true — this
+ * terminal opens a recorder subprocess (src/audio/capture.ts), runs the SDK
+ * detector over it through onnxruntime-web (src/audio/wake-inference.ts), and
+ * hands both a confirmed wake's utterance and a push-to-talk recording to the
+ * daemon's `voice.stt` verb. Every one of those rows is read by
+ * resolveWakeRuntimeSettings and reaches this surface's runtime.
+ *
+ * They stay out of the NUMERATOR here because this constant counts exactly one
+ * thing — keys whose four-part PERSISTENCE contract is exercised by
+ * device-and-trigger-settings-persistence.test.ts — and that test does not cover
+ * them. The behaviour they now drive is covered instead by the capture and wake
+ * tests under src/test/audio/, which assert the frame path, the detection
+ * chain, the disabled-means-no-capture rule, the supervisor's restart and latch,
+ * and the recorder argv. Counting them in both places would double-count; adding
+ * them here without writing their persistence round-trip would overclaim. So the
+ * number this list raises coverage by is unchanged, and the reason it excludes
+ * them is recorded above rather than left reading as "the feature does nothing".
+ *
+ * Two rows are genuinely not in force on this surface and say so at every
+ * surfacing: `voice.wake.vadThreshold` above 0 BLOCKS startup (no VAD model is
+ * pinned by the platform manifest), and `voice.wake.surfaces.agent` has no
+ * capture host.
  */
 export const DEVICE_AND_TRIGGER_LOCAL_SETTINGS = [
   'watchers.triggers.backoffLadderMs',

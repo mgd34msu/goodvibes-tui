@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { buildShellFooter, estimateShellFooterHeight } from '../../renderer/shell-surface.ts';
+import type { VoiceCaptureIndicatorState } from '../../core/voice-capture-status.ts';
 import { lineToString } from '../setup.ts';
 
 describe('shell surface', () => {
@@ -358,5 +359,88 @@ describe('shell surface', () => {
     expect(bottomBorderCells.length).toBeGreaterThan(0);
     expect(topBorderCells.every((cell) => cell.fg === '#1f2430')).toBe(true);
     expect(bottomBorderCells.every((cell) => cell.fg === '#1f2430')).toBe(true);
+  });
+});
+
+/**
+ * The live-microphone row. It is the only thing on screen that tells a user a
+ * capture device is open, so its presence, its wording and its absence when the
+ * feature is off are all asserted rather than assumed.
+ */
+describe('shell surface — the live microphone row', () => {
+  function footerWith(voiceCapture: VoiceCaptureIndicatorState | null): ReturnType<typeof buildShellFooter> {
+    return buildShellFooter({
+      width: 100,
+      promptText: 'hello',
+      promptLineCount: 1,
+      usage: { up: 0, down: 0 },
+      showExitNotice: false,
+      lastCopyTime: 0,
+      model: 'gpt-test',
+      toolCount: 3,
+      workingDir: '/tmp/demo',
+      provider: 'openai',
+      contextWindow: 0,
+      runningAgentCount: 0,
+      runningProcessCount: 0,
+      indicatorFocused: false,
+      voiceCapture,
+    });
+  }
+
+  test('no row at all when nothing is captured', () => {
+    const withRow = footerWith({ kind: 'wake-listening', deviceLabel: 'parecord', indicator: 'statusline' });
+    const without = footerWith(null);
+    expect(without.height).toBe(withRow.height - 1);
+    expect(without.lines.map(lineToString).join('\n')).not.toContain('Voice:');
+  });
+
+  test('the wake row sits directly below the prompt box, above the process indicator', () => {
+    const result = footerWith({ kind: 'wake-listening', deviceLabel: 'parecord', indicator: 'statusline' });
+    // Rows 0..2 are the prompt box (top border, prompt, bottom border).
+    expect(lineToString(result.lines[3]!)).toContain('Voice: listening for the wake phrase');
+    expect(lineToString(result.lines[3]!)).toContain('parecord');
+    expect(lineToString(result.lines[4]!)).toContain('No background processes');
+  });
+
+  test('voice.wake.indicator off suppresses the wake row entirely', () => {
+    const result = footerWith({ kind: 'wake-listening', deviceLabel: 'parecord', indicator: 'off' });
+    expect(result.lines.map(lineToString).join('\n')).not.toContain('Voice:');
+    expect(result.height).toBe(estimateShellFooterHeight(1, 0, false, null));
+  });
+
+  test('a push-to-talk recording renders even when the wake indicator is off — the user just pressed the key', () => {
+    const result = footerWith({ kind: 'recording', deviceLabel: 'pw-record', indicator: 'off', detail: '3s' });
+    const text = result.lines.map(lineToString).join('\n');
+    expect(text).toContain('Voice: recording — press the voice-input key again to stop');
+    expect(text).toContain('3s');
+  });
+
+  test('the banner variant fills the row width so it reads as a standing condition', () => {
+    const statusline = footerWith({ kind: 'wake-listening', deviceLabel: 'parecord', indicator: 'statusline' });
+    const banner = footerWith({ kind: 'wake-listening', deviceLabel: 'parecord', indicator: 'banner' });
+    // Same one row either way; the difference is the painted background.
+    expect(banner.height).toBe(statusline.height);
+    const bannerBg = banner.lines[3]!.filter((cell) => cell.bg !== '' && cell.bg !== undefined);
+    const statuslineBg = statusline.lines[3]!.filter((cell) => cell.bg !== '' && cell.bg !== undefined);
+    expect(bannerBg.length).toBeGreaterThan(statuslineBg.length);
+    expect(lineToString(banner.lines[3]!)).toContain('listening for the wake phrase');
+  });
+
+  test('a latched detector says it stopped, and carries the reason', () => {
+    const result = footerWith({
+      kind: 'wake-latched',
+      deviceLabel: null,
+      indicator: 'statusline',
+      detail: 'crashed 2 times within 60s',
+    });
+    const text = lineToString(result.lines[3]!);
+    expect(text).toContain('Voice: wake detection stopped');
+    expect(text).toContain('crashed 2 times within 60s');
+  });
+
+  test('the estimate accounts for the row on the cold-start path', () => {
+    const state: VoiceCaptureIndicatorState = { kind: 'wake-listening', deviceLabel: 'parecord', indicator: 'statusline' };
+    expect(footerWith(state).height).toBe(estimateShellFooterHeight(1, 0, false, state));
   });
 });

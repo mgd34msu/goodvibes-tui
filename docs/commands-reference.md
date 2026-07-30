@@ -208,7 +208,7 @@ GoodVibes ships **155** built-in slash commands across **75** categories. Every 
 | `/remote-setup` | — | `[review\|export <path>]` | Dedicated front-door for remote setup review and portable setup bundles |
 | `/runner-pool` | `/pool` | `[list\|show <id>\|create <id> <label...>\|assign <pool> <runner>\|unassign <pool> <runner>]` | Dedicated front-door for remote runner pool review and assignment flows |
 | `/tunnel` | — | `[review\|export <path>]` | Dedicated front-door for remote tunnel review and export flows |
-| `/voice` | — | `[review\|status\|setup\|enable\|disable\|bundle export <path>\|bundle inspect <path>]` | Review or toggle always-speak mode, provision the managed local voice runtime (setup/status), and package portable voice metadata |
+| `/voice` | — | `[review\|status\|setup\|enable\|disable\|wake status\|wake setup\|bundle export <path>\|bundle inspect <path>]` | Review or toggle always-speak mode, provision the managed local voice runtime and the wake-word models (setup/status), and package portable voice metadata |
 
 ## Fleet
 

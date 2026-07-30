@@ -613,3 +613,58 @@ describe('Shift+Tab cycles the session permission mode', () => {
     expect(setCalls).toEqual([]);
   });
 });
+
+describe('voice input (Alt+V)', () => {
+  function voiceState(overrides: Partial<GlobalShortcutRouteState> = {}): {
+    state: GlobalShortcutRouteState;
+    toggleVoiceInput: ReturnType<typeof mock>;
+  } {
+    const toggleVoiceInput = mock(() => {});
+    const state = buildState({
+      keybindingsManager: {
+        lookup: (token: { logicalName?: string; alt?: boolean; meta?: boolean }) =>
+          token.logicalName === 'v' && (token.alt === true || token.meta === true) ? 'voice-input' : null,
+      } as unknown as GlobalShortcutRouteState['keybindingsManager'],
+      commandContext: { toggleVoiceInput } as unknown as NonNullable<GlobalShortcutRouteState['commandContext']>,
+      ...overrides,
+    });
+    return { state, toggleVoiceInput };
+  }
+
+  test('Alt+V starts or stops the recording through the command-context seam', () => {
+    const { state, toggleVoiceInput } = voiceState();
+    const handled = handleGlobalShortcutToken(
+      state,
+      { type: 'key', name: 'v', logicalName: 'v', ctrl: false, shift: false, meta: true },
+      24,
+    );
+    expect(handled).toBe(true);
+    expect(toggleVoiceInput).toHaveBeenCalledTimes(1);
+  });
+
+  test('it works with the panel workspace focused — dictation is not composer-only', () => {
+    const { state, toggleVoiceInput } = voiceState({ panelFocused: true });
+    expect(handleGlobalShortcutToken(
+      state,
+      { type: 'key', name: 'v', logicalName: 'v', ctrl: false, shift: false, meta: true },
+      24,
+    )).toBe(true);
+    expect(toggleVoiceInput).toHaveBeenCalledTimes(1);
+  });
+
+  test('the key is still consumed when voice capture is not wired, so Alt+V never types a "v"', () => {
+    const state = buildState({
+      keybindingsManager: {
+        lookup: (token: { logicalName?: string; meta?: boolean }) =>
+          token.logicalName === 'v' && token.meta === true ? 'voice-input' : null,
+      } as unknown as GlobalShortcutRouteState['keybindingsManager'],
+      commandContext: {} as unknown as NonNullable<GlobalShortcutRouteState['commandContext']>,
+    });
+    expect(handleGlobalShortcutToken(
+      state,
+      { type: 'key', name: 'v', logicalName: 'v', ctrl: false, shift: false, meta: true },
+      24,
+    )).toBe(true);
+    expect(state.prompt).toBe('');
+  });
+});

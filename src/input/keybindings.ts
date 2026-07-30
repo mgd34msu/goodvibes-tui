@@ -71,7 +71,8 @@ export type KeyAction =
   | 'yank-pop'
   | 'cancel-tool-call'
   | 'toggle-keep-awake'
-  | 'toggle-memory-provenance';
+  | 'toggle-memory-provenance'
+  | 'voice-input';
 
 /** Human-readable description for each action (used in /keybindings display). */
 export const ACTION_DESCRIPTIONS: Record<KeyAction, string> = {
@@ -117,6 +118,10 @@ export const ACTION_DESCRIPTIONS: Record<KeyAction, string> = {
   'cancel-tool-call':      'Cancel the running tool call (the turn continues)',
   'toggle-keep-awake':     'Toggle keep-awake (the "sleep disabled" chip)',
   'toggle-memory-provenance': 'List/hide the memories a turn used (provenance chip drill-in)',
+  // Named for what it actually does. A terminal delivers key EVENTS, not held-key
+  // state — there is no release event to watch — so this is two discrete presses,
+  // and the description says so instead of implying a hold that cannot exist.
+  'voice-input':           'Voice input: press to start recording, press again to stop and transcribe into the composer',
 };
 
 /** Default key bindings for all actions. */
@@ -207,6 +212,10 @@ export const DEFAULT_KEYBINDINGS: Record<KeyAction, KeyCombo[]> = {
   // Alt+M: expand/collapse the "used N memories" provenance chip's drill-in.
   // Alt+M is unused by any other default. A no-op when the chip is not showing.
   'toggle-memory-provenance': [{ key: 'm', alt: true }],
+  // Alt+V: start/stop voice input. Alt+V is unused by any other default (Ctrl+V
+  // is paste and stays paste). Two presses rather than a hold: see the action's
+  // description — a terminal has no key-release event to hold against.
+  'voice-input':           [{ key: 'v', alt: true }],
 };
 
 /** Resolved overrides type: each key can be a single combo or array. */
