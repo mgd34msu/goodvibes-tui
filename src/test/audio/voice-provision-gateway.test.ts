@@ -308,6 +308,7 @@ describe('wake provisioning — status projection and the explicit setup act', (
         mobileClassifier: { path: '/managed/wake/models/c.tflite', verified: true, corrupt: false, bytes: 2_369_264 },
         notice: { path: '/managed/wake/models/NOTICE', verified: true, corrupt: false, bytes: 900 },
         embedding: { path: '/managed/wake/front-end/e.onnx', verified: true, corrupt: false, bytes: 1_319_365 },
+        embeddingNotice: { path: '/managed/wake/front-end/e.NOTICE.txt', verified: true, corrupt: false, bytes: 3_434 },
         downloadBytes: 3_687_009,
         modelVersion: '1.0.0',
         recallIsSyntheticOnly: true,
@@ -318,6 +319,37 @@ describe('wake provisioning — status projection and the explicit setup act', (
     expect(block).toContain('torn, truncated, or the wrong asset');
     expect(block).toContain('models provisioned: no (checksum-mismatch)');
     expect(block).toContain('speech-embedding front end: verified');
+    // Both attribution NOTICEs are named, and named distinguishably: a reader
+    // chasing a missing one has to know whether it is ours or Google's.
+    expect(block).toContain('attribution NOTICE (classifier): verified');
+    expect(block).toContain('attribution NOTICE (front end): verified');
+  });
+
+  test('a missing FRONT-END NOTICE is reported as its own missing artifact', () => {
+    const printed: string[] = [];
+    printWakeStatus({
+      managedRoot: '/managed',
+      settings: SETTINGS,
+      print: (block) => printed.push(block),
+      readStatus: () => ({
+        ready: false,
+        reason: 'not-provisioned',
+        classifier: { path: '/managed/wake/models/c.onnx', verified: true, corrupt: false, bytes: 2_367_644 },
+        mobileClassifier: { path: '/managed/wake/models/c.tflite', verified: true, corrupt: false, bytes: 2_369_264 },
+        notice: { path: '/managed/wake/models/NOTICE', verified: true, corrupt: false, bytes: 5_574 },
+        embedding: { path: '/managed/wake/front-end/e.onnx', verified: true, corrupt: false, bytes: 1_319_365 },
+        // Everything else landed; only Google's attribution file did not. That is
+        // still not ready, because bytes this daemon serves cannot go out without it.
+        embeddingNotice: { path: '/managed/wake/front-end/e.NOTICE.txt', verified: false, corrupt: false, bytes: 0 },
+        downloadBytes: 6_065_281,
+        modelVersion: '1.0.0',
+        recallIsSyntheticOnly: true,
+      }),
+    });
+    const block = printed.join('\n');
+    expect(block).toContain('attribution NOTICE (front end): missing');
+    expect(block).toContain('attribution NOTICE (classifier): verified');
+    expect(block).toContain('models provisioned: no (not-provisioned)');
   });
 
   test('setup narrates each component once per phase change and prints the receipt', async () => {
@@ -340,6 +372,7 @@ describe('wake provisioning — status projection and the explicit setup act', (
             { component: 'embedding', state: 'skipped', path: '/managed/wake/front-end/e.onnx' },
           ],
           noticePath: '/managed/wake/models/NOTICE',
+          embeddingNoticePath: '/managed/wake/front-end/NOTICE',
           recallIsSyntheticOnly: true,
         };
       },
@@ -350,7 +383,10 @@ describe('wake provisioning — status projection and the explicit setup act', (
     expect(block).toContain('classifier: verify');
     expect(block).toContain('Wake-Word Setup — receipt');
     expect(block).toContain('ready: yes');
+    // Each NOTICE's own path, so a deployment carrying the artifacts knows both
+    // files it has to carry with them.
     expect(block).toContain('attribution NOTICE (travels with the classifier)');
+    expect(block).toContain('attribution NOTICE (travels with the front end)');
   });
 
   test('a failed component is named with its reason instead of folded into a generic failure', async () => {
@@ -365,6 +401,7 @@ describe('wake provisioning — status projection and the explicit setup act', (
         modelVersion: '1.0.0',
         outcomes: [{ component: 'classifier', state: 'failed', path: '/managed/wake/models/c.onnx', error: 'sha256 got abc, want def' }],
         noticePath: null,
+        embeddingNoticePath: null,
         recallIsSyntheticOnly: true,
       }),
     });

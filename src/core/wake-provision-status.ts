@@ -83,7 +83,11 @@ export function wakeStatusLines(
     `  model version: ${status.modelVersion ?? 'unpinned'}`,
     wakeArtifactLine('classifier', status.classifier),
     wakeArtifactLine('speech-embedding front end', status.embedding),
-    wakeArtifactLine('attribution NOTICE', status.notice),
+    // One NOTICE per redistributable artifact, named so it is obvious which is
+    // which: both are required, and a reader chasing a missing one needs to know
+    // whether it is ours or Google's.
+    wakeArtifactLine('attribution NOTICE (classifier)', status.notice),
+    wakeArtifactLine('attribution NOTICE (front end)', status.embeddingNotice),
     // Reported but never presented as a problem: nothing on this terminal loads
     // it, and it is here so a surface can see whether the daemon could serve it.
     `${wakeArtifactLine('classifier, tflite form (served to other runtimes; unused here)', status.mobileClassifier)}`,
@@ -129,6 +133,9 @@ export function wakeProvisionReceiptLines(result: WakeProvisionResult): string[]
   }
   if (result.noticePath !== null) {
     lines.push(`  attribution NOTICE (travels with the classifier): ${result.noticePath}`);
+  }
+  if (result.embeddingNoticePath !== null) {
+    lines.push(`  attribution NOTICE (travels with the front end): ${result.embeddingNoticePath}`);
   }
   if (result.recallIsSyntheticOnly) {
     lines.push('  the published recall figures for this model are measured on synthesised speech only — no human recording of the phrase exists behind them.');
