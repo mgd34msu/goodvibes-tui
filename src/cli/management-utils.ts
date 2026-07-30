@@ -24,7 +24,7 @@ import { refreshMemoryRecallSnapshot } from '../runtime/orchestrator-core-servic
 import { createRuntimeServices } from '../runtime/services.ts';
 import { createRuntimeStore } from '../runtime/store/index.ts';
 import type { RuntimeServices } from '../runtime/services.ts';
-import { RuntimeEventBus, type TurnEvent, createShellPathService } from '@/runtime/index.ts';
+import { RuntimeEventBus, type TurnEvent, createShellPathService, configureRuntimeEventBusDefaults, runtimeEventBusOptionsFrom } from '@/runtime/index.ts';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 import { resolveRuntimeEndpointBinding } from './endpoints.ts';
 import { applyRuntimeEndpointFlagOverrides } from './config-overrides.ts';
@@ -225,6 +225,9 @@ export async function withRuntimeServices<T>(
   runtime: CliCommandRuntime,
   fn: (services: RuntimeServices) => Promise<T> | T,
 ): Promise<T> {
+  // Point the bus listener cap at runtime.eventBus.maxListeners before the
+  // first bus exists, so every bus this process builds later uses it.
+  configureRuntimeEventBusDefaults(runtimeEventBusOptionsFrom((key) => runtime.configManager.get(key)));
   const runtimeBus = new RuntimeEventBus();
   const runtimeStore = createRuntimeStore();
   const services = createRuntimeServices({
