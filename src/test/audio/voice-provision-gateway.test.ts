@@ -262,7 +262,10 @@ describe('/voice status|setup — command wire', () => {
     const block = ctx.printed.join('\n');
     expect(block).toContain('rows blocking startup');
     expect(block).toContain('voice.wake.vadThreshold');
-    expect(block).toContain('no voice-activity-detection model is available');
+    // The gate is a pinned artifact now, so an unprovisioned host is told THAT
+    // rather than that no such model exists.
+    expect(block).toContain('has not loaded the speech gate');
+    expect(block).toContain('goodvibes-vad');
     expect(block).toContain('listening on this terminal: no');
   });
 
@@ -288,7 +291,7 @@ describe('wake provisioning — status projection and the explicit setup act', (
   const SETTINGS = resolveWakeRuntimeSettings(
     (key) => (key === 'voice.wake.enabled' ? true : undefined),
     'tui',
-    terminalWakeCapabilities(false),
+    terminalWakeCapabilities(),
   );
 
   test('a corrupt artifact reads as corrupt, not as present', () => {
@@ -303,6 +306,9 @@ describe('wake provisioning — status projection and the explicit setup act', (
         classifier: { path: '/managed/wake/models/c.onnx', verified: false, corrupt: true, bytes: 1_200_000 },
         notice: { path: '/managed/wake/models/NOTICE', verified: true, corrupt: false, bytes: 900 },
         embedding: { path: '/managed/wake/front-end/e.onnx', verified: true, corrupt: false, bytes: 1_319_365 },
+        vad: { path: '/managed/wake/front-end/vad.onnx', verified: false, corrupt: false, bytes: 0 },
+        vadNotice: { path: '/managed/wake/front-end/vad.NOTICE', verified: false, corrupt: false, bytes: 0 },
+        vadReady: false,
         downloadBytes: 3_687_009,
         modelVersion: '1.0.0',
         recallIsSyntheticOnly: true,
@@ -335,6 +341,7 @@ describe('wake provisioning — status projection and the explicit setup act', (
           ],
           noticePath: '/managed/wake/models/NOTICE',
           recallIsSyntheticOnly: true,
+          vadReady: false,
         };
       },
     });
@@ -359,6 +366,7 @@ describe('wake provisioning — status projection and the explicit setup act', (
         outcomes: [{ component: 'classifier', state: 'failed', path: '/managed/wake/models/c.onnx', error: 'sha256 got abc, want def' }],
         noticePath: null,
         recallIsSyntheticOnly: true,
+        vadReady: false,
       }),
     });
     const block = printed.join('\n');

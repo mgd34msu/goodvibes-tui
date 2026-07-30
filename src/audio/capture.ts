@@ -57,23 +57,6 @@ export function isExecutableOnPath(
 }
 
 /**
- * Whether this surface APPLIES speex noise suppression. It does not, so this is
- * false, and it is a constant rather than a probe on purpose.
- *
- * The obvious implementation — scan the library directories for libspeexdsp and
- * report what is found — is wrong, and wrong in the direction that hurts. The
- * capability the SDK asks about is "does this surface run the suppression stage",
- * not "does the box have the library": nothing in the platform applies speex to
- * captured frames today. A host that reported true because libspeexdsp happened
- * to be installed would capture UNFILTERED audio through a filter the user
- * believes is running, and say nothing. False means `speex` is refused with the
- * row named and the reason written out (resolveWakeRuntimeSettings turns it into
- * a blocker), and `none` — the default, and the only value that runs today — is
- * unaffected.
- */
-export const SURFACE_APPLIES_SPEEX_SUPPRESSION = false;
-
-/**
  * Spawn a recorder with its stdout piped and stdin closed.
  *
  * `stdio: ['ignore', 'pipe', 'pipe']` is deliberate on all three: a recorder
@@ -106,8 +89,6 @@ export interface TuiCaptureOpenerOptions {
   /** Injected in tests; defaults to the PATH + X_OK scan above. */
   readonly isInstalled?: (command: string) => boolean;
   readonly platform?: string;
-  /** Whether this surface applies speex suppression. Defaults to false; see the constant. */
-  readonly speexAvailable?: boolean;
   readonly warn?: AudioCaptureWarn;
 }
 
@@ -120,7 +101,12 @@ export function createTuiCaptureOpener(options: TuiCaptureOpenerOptions = {}): A
     spawn: options.spawn ?? spawnRecorderProcess,
     isInstalled: options.isInstalled ?? ((command: string) => isExecutableOnPath(command)),
     platform: options.platform ?? process.platform,
-    speexAvailable: options.speexAvailable ?? SURFACE_APPLIES_SPEEX_SUPPRESSION,
+    // FALSE here, and correct: a recorder subprocess captures raw PCM and filters
+    // nothing. The suppression stage is applied by the SDK's own wrapper inside
+    // WakeListener and PushToTalkSession, which ask this opener for raw frames —
+    // so `speex` arriving at the RECORDER directly, unwrapped by either, is still
+    // refused rather than passed through unfiltered.
+    speexAvailable: false,
     ...(options.warn !== undefined ? { warn: options.warn } : {}),
   });
 }

@@ -262,10 +262,14 @@ export const FEATURE_KNOB_LOCAL_SETTINGS = [
  * number this list raises coverage by is unchanged, and the reason it excludes
  * them is recorded above rather than left reading as "the feature does nothing".
  *
- * Two rows are genuinely not in force on this surface and say so at every
- * surfacing: `voice.wake.vadThreshold` above 0 BLOCKS startup (no VAD model is
- * pinned by the platform manifest), and `voice.wake.surfaces.agent` has no
- * capture host.
+ * Every wake row is now in force on this surface, with one condition stated at
+ * every surfacing: `voice.wake.vadThreshold` above 0 needs the speech gate's own
+ * pinned artifact provisioned (`/voice wake setup` fetches it with the models),
+ * and until it is, startup BLOCKS with that reason rather than scoring frames
+ * ungated behind a row that says they are screened. `voice.wake.noiseSuppression:
+ * speex` runs here: the filter is a WebAssembly module the SDK carries, applied
+ * by the wrapper the listener and the push-to-talk session put around this
+ * surface's capture opener.
  */
 export const DEVICE_AND_TRIGGER_LOCAL_SETTINGS = [
   'watchers.triggers.backoffLadderMs',

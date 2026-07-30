@@ -7,6 +7,7 @@ import type {
   UtteranceAudioArtifact,
   WakeInferenceSession,
   WakeTensor,
+  NoiseSuppressionFactory,
 } from '@pellux/goodvibes-sdk/platform/voice';
 import { resolveManagedWakePaths, retainedClipFileName } from '@pellux/goodvibes-sdk/platform/voice';
 import { createTuiCaptureOpener } from '../../audio/capture.ts';
@@ -165,6 +166,62 @@ function scriptedClassifierSession(scores: readonly number[]): { session: WakeIn
   return { session, calls: () => index };
 }
 
+/**
+ * A stand-in for the speexdsp filter. The SDK owns whether the filter's numbers
+ * are right; what a host test can only get wrong is whether captured frames reach
+ * a stage at all, so this counts and marks instead of filtering.
+ */
+function countingSuppression(fail?: string): {
+  readonly create: NoiseSuppressionFactory;
+  readonly created: () => number;
+  readonly processed: () => number;
+  readonly closed: () => number;
+  readonly requests: Array<{ frameSamples: number; sampleRate: number }>;
+} {
+  let created = 0;
+  let processed = 0;
+  let closed = 0;
+  const requests: Array<{ frameSamples: number; sampleRate: number }> = [];
+  return {
+    created: () => created,
+    processed: () => processed,
+    closed: () => closed,
+    requests,
+    create: async (request) => {
+      requests.push({ frameSamples: request.frameSamples, sampleRate: request.sampleRate });
+      if (fail !== undefined) throw new Error(fail);
+      created += 1;
+      return {
+        label: 'test-filter',
+        blockSamples: 320,
+        suppressionDb: -15,
+        process: (frame) => {
+          processed += 1;
+          // A NEW frame, as the contract requires: a consumer may hold the input.
+          return new Float32Array(frame);
+        },
+        close: () => { closed += 1; },
+      };
+    },
+  };
+}
+
+/** A stand-in speech gate that reports one probability and counts consultations. */
+function countingVadSession(probability: number): { session: WakeInferenceSession; calls: () => number } {
+  let calls = 0;
+  return {
+    calls: () => calls,
+    session: {
+      inputNames: ['input'],
+      outputNames: ['output'],
+      run: async (): Promise<Readonly<Record<string, WakeTensor>>> => {
+        calls += 1;
+        return { output: { data: new Float32Array([probability]), dims: [1, 1] } };
+      },
+    },
+  };
+}
+
 /** A config source backed by a plain map, with the subscription the runtime uses. */
 function configSource(overrides: Readonly<Record<string, unknown>>): {
   readonly read: (key: string) => unknown;
@@ -201,6 +258,8 @@ interface WakeHarness {
   readonly classifierCalls: () => number;
   /** Every model file the engine factory was asked to load, in order. */
   readonly loadedModelPaths: string[];
+  readonly suppression: ReturnType<typeof countingSuppression>;
+  readonly vad: ReturnType<typeof countingVadSession>;
   now: number;
 }
 
@@ -212,6 +271,12 @@ interface WakeHarnessOptions {
   readonly transcribeError?: string;
   /** Reports the models as absent, the way a fresh host does. */
   readonly notProvisioned?: boolean;
+  /** Reports the SPEECH GATE's artifact as verified on disk (its own download). */
+  readonly vadProvisioned?: boolean;
+  /** Speech probability the stubbed gate reports for every frame. */
+  readonly vadProbability?: number;
+  /** Makes the suppression stage fail to start, the way a broken filter would. */
+  readonly suppressionFails?: string;
   /** No daemon reachable — the honest refusal path. */
   readonly noTranscriber?: string;
   readonly managedRoot?: string;
@@ -247,6 +312,8 @@ function makeWakeHarness(options: WakeHarnessOptions = {}): WakeHarness {
   const loadedModelPaths: string[] = [];
   const classifier = scriptedClassifierSession(options.scores ?? [0]);
   const embedding = stubEmbeddingSession();
+  const suppression = countingSuppression(options.suppressionFails);
+  const vad = countingVadSession(options.vadProbability ?? 1);
   const harness: Partial<WakeHarness> & { now: number } = { now: 1_000_000 };
 
   const deps: WakeRuntimeDeps = {
@@ -254,10 +321,10 @@ function makeWakeHarness(options: WakeHarnessOptions = {}): WakeHarness {
     subscribeConfig: config.subscribe,
     // The REAL capture opener, over an injected spawn: the framing, the argv and
     // the exit handling under test are the shipped ones.
-    openCapture: createTuiCaptureOpener({ spawn: spawns.spawn, isInstalled: () => true, platform: 'linux', speexAvailable: false }),
+    openCapture: createTuiCaptureOpener({ spawn: spawns.spawn, isInstalled: () => true, platform: 'linux' }),
+    createNoiseSuppression: suppression.create,
     managedRoot: options.managedRoot ?? '/nonexistent-managed-root',
     assetDirectory: '/nonexistent-asset-dir',
-    speexAvailable: false,
     resolveTranscriber: () => (options.noTranscriber !== undefined
       ? { available: false as const, reason: options.noTranscriber }
       : {
@@ -279,11 +346,14 @@ function makeWakeHarness(options: WakeHarnessOptions = {}): WakeHarness {
     warn: () => { /* warnings are not the subject here */ },
     loadSession: async (modelPath: string) => {
       loadedModelPaths.push(modelPath);
+      if (modelPath.includes('goodvibes-vad')) return vad.session;
       return modelPath.includes('speech-embedding') ? embedding : classifier.session;
     },
     provisionStatus: () => (options.notProvisioned === true
-      ? { ready: false, reason: 'not-provisioned' }
-      : { ready: true, reason: null }),
+      ? { ready: false, reason: 'not-provisioned', vadReady: false }
+      // The speech gate is its own artifact, so a harness says whether it is
+      // there independently of the wake models being ready.
+      : { ready: true, reason: null, vadReady: options.vadProvisioned === true }),
     now: () => harness.now,
     setTimeout: (handler, ms) => { timers.push({ handler, ms }); return timers.length; },
     clearTimeout: () => { /* fired manually */ },
@@ -301,6 +371,8 @@ function makeWakeHarness(options: WakeHarnessOptions = {}): WakeHarness {
     timers,
     classifierCalls: classifier.calls,
     loadedModelPaths,
+    suppression,
+    vad,
   }) as WakeHarness;
 }
 
@@ -561,7 +633,10 @@ describe('disabled means no capture at all', () => {
     expect(harness.spawns.calls.length).toBe(0);
     const blocked = harness.notices.join('\n');
     expect(blocked).toContain('voice.wake.vadThreshold');
-    expect(blocked).toContain('no voice-activity-detection model is available');
+    // The gate is pinned now, so the refusal is no longer "no model exists" — it
+    // is "this surface has not loaded it", which is what an unprovisioned host is.
+    expect(blocked).toContain('has not loaded the speech gate');
+    expect(blocked).toContain('goodvibes-vad');
   });
 });
 
@@ -655,5 +730,108 @@ describe('a recorder that keeps dying is restarted, then latched', () => {
 
     expect(harness.runtime.status()?.kind).toBe('wake-restarting');
     expect(harness.timers.length).toBe(2);
+  });
+});
+
+describe('the two rows that used to be refused now run a real stage', () => {
+  test('speex captures THROUGH the filter: the stage is built for the frame size and fed every frame', async () => {
+    const harness = makeWakeHarness({
+      config: { ...ACTIVE_CONFIG, 'voice.wake.noiseSuppression': 'speex' },
+      scores: [0],
+    });
+    await harness.runtime.refresh();
+    expect(harness.suppression.created()).toBe(1);
+    // Built for the detector's frame, at the rate the models were trained on.
+    expect(harness.suppression.requests).toEqual([{ frameSamples: SAMPLES_PER_FRAME, sampleRate: 16_000 }]);
+
+    const recorder = harness.spawns.processes[0]!;
+    for (let i = 0; i < 3; i += 1) {
+      recorder.emitBytes(pcmBytes(loudSamples(SAMPLES_PER_FRAME, i)));
+      await flush(2);
+    }
+    // Every captured frame went through the filter before anything scored it.
+    expect(harness.suppression.processed()).toBe(3);
+
+    await harness.runtime.stop();
+    // The filter's memory is released with the stream rather than left to the
+    // collector. Counted as "at least once" on purpose: the SDK declares close()
+    // idempotent and calls it on both the stop and the stream-ended paths, so a
+    // count of exactly one would pin an implementation detail instead of the
+    // property that matters.
+    expect(harness.suppression.closed()).toBeGreaterThanOrEqual(1);
+  });
+
+  test('none still captures with no stage at all, byte-identical to having no filter', async () => {
+    const harness = makeWakeHarness({ config: ACTIVE_CONFIG, scores: [0] });
+    await harness.runtime.refresh();
+    harness.spawns.processes[0]!.emitBytes(pcmBytes(loudSamples(SAMPLES_PER_FRAME)));
+    await flush(2);
+    expect(harness.suppression.created()).toBe(0);
+    expect(harness.suppression.processed()).toBe(0);
+    await harness.runtime.stop();
+  });
+
+  test('a filter that cannot start refuses capture instead of running unfiltered', async () => {
+    const harness = makeWakeHarness({
+      config: { ...ACTIVE_CONFIG, 'voice.wake.noiseSuppression': 'speex' },
+      suppressionFails: 'wasm compile failed under test',
+    });
+    await harness.runtime.refresh();
+    expect(harness.suppression.processed()).toBe(0);
+    expect(harness.notices.some((line) => line.includes('speex'))).toBe(true);
+    expect(harness.runtime.status()).toBeNull();
+  });
+
+  test('vadThreshold above 0 loads the speech gate and consults it for every frame', async () => {
+    const harness = makeWakeHarness({
+      config: { ...ACTIVE_CONFIG, 'voice.wake.vadThreshold': 0.5 },
+      vadProvisioned: true,
+      vadProbability: 0.9,
+      scores: [0],
+    });
+    await harness.runtime.refresh();
+    // The gate's own provisioned artifact, loaded beside the front end.
+    expect(harness.loadedModelPaths.some((path) => path.includes('goodvibes-vad'))).toBe(true);
+
+    await primeFrontEnd(harness.spawns.processes[0]!);
+    expect(harness.vad.calls()).toBeGreaterThan(0);
+    await harness.runtime.stop();
+  });
+
+  test('a frame below the speech floor is withheld: the gate ran, the classifier did not', async () => {
+    const harness = makeWakeHarness({
+      config: { ...ACTIVE_CONFIG, 'voice.wake.vadThreshold': 0.8 },
+      vadProvisioned: true,
+      // Well under the floor: this is silence as far as the gate is concerned.
+      vadProbability: 0.05,
+      scores: [0.99, 0.99, 0.99],
+    });
+    await harness.runtime.refresh();
+    await primeFrontEnd(harness.spawns.processes[0]!);
+    expect(harness.vad.calls()).toBeGreaterThan(0);
+    // Scores of 0.99 would have fired a wake had they been scored at all.
+    expect(harness.classifierCalls()).toBe(0);
+    expect(harness.sounds).toEqual([]);
+    await harness.runtime.stop();
+  });
+
+  test('the shipped default of 0 loads no gate and consults none', async () => {
+    const harness = makeWakeHarness({ config: ACTIVE_CONFIG, vadProvisioned: true, scores: [0] });
+    await harness.runtime.refresh();
+    expect(harness.loadedModelPaths.some((path) => path.includes('goodvibes-vad'))).toBe(false);
+    await primeFrontEnd(harness.spawns.processes[0]!);
+    expect(harness.vad.calls()).toBe(0);
+    await harness.runtime.stop();
+  });
+
+  test('vadThreshold above 0 with the gate NOT provisioned still refuses to start', async () => {
+    // The artifact is its own download, so asking for a gate that is not on disk
+    // is a blocker with the row named — never a detector running ungated while
+    // the setting says otherwise.
+    const harness = makeWakeHarness({ config: { ...ACTIVE_CONFIG, 'voice.wake.vadThreshold': 0.5 } });
+    await harness.runtime.refresh();
+    expect(harness.spawns.calls.length).toBe(0);
+    expect(harness.vad.calls()).toBe(0);
+    expect(harness.notices.some((line) => line.includes('voice.wake.vadThreshold'))).toBe(true);
   });
 });

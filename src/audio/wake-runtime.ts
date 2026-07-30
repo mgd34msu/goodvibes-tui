@@ -37,6 +37,8 @@ import {
   type CapturedUtterance,
   type WakeListenerState,
   type WakeRuntimeSettings,
+  type WakeProvisionStatus,
+  type WakeListenerOptions,
 } from '@pellux/goodvibes-sdk/platform/voice';
 import type { VoiceCaptureIndicatorState } from '../core/voice-capture-status.ts';
 import { describeWakeBlockers, describeWakeLimitations, terminalWakeCapabilities } from '../core/wake-provision-status.ts';
@@ -63,8 +65,7 @@ export interface WakeRuntimeDeps {
   readonly managedRoot: string;
   /** Directory this surface owns for the extracted onnxruntime assets. */
   readonly assetDirectory: string;
-  /** True when libspeexdsp is present, so `speex` is honoured or refused, never skipped. */
-  readonly speexAvailable: boolean;
+  /** Resolves the speech-to-text gateway, or explains why there is none. */
   readonly resolveTranscriber: () => { readonly available: true; readonly gateway: VoiceSttGateway } | { readonly available: false; readonly reason: string };
   /** Plays the resolved activation sound at the moment of a wake. */
   readonly playActivationSound: (sound: WakeRuntimeSettings['activationSound']) => void;
@@ -81,15 +82,36 @@ export interface WakeRuntimeDeps {
   readonly loadSession?: WakeRuntimeTestSeams['loadSession'];
   /** Injected in tests: skips the on-disk provisioning check. */
   readonly provisionStatus?: WakeRuntimeTestSeams['provisionStatus'];
+  /** Injected in tests: the suppression stage, without real WebAssembly. */
+  readonly createNoiseSuppression?: WakeRuntimeTestSeams['createNoiseSuppression'];
   readonly now?: () => number;
   readonly setTimeout?: (handler: () => void, ms: number) => unknown;
   readonly clearTimeout?: (handle: unknown) => void;
 }
 
+/**
+ * What this runtime reads out of provisioning: whether the wake models are usable
+ * at all, and whether the SPEECH GATE's own artifact is there — they are separate
+ * answers, because `voice.wake.vadThreshold` defaults to 0 and a detector runs
+ * perfectly well with no gate provisioned.
+ */
+export interface WakeProvisionSnapshot {
+  readonly ready: boolean;
+  readonly reason: string | null;
+  readonly vadReady: boolean;
+}
+
 /** The two seams a test replaces so no model file and no runtime are needed. */
 export interface WakeRuntimeTestSeams {
   readonly loadSession: Parameters<typeof createWakeEngineFactory>[0]['loadSession'];
-  readonly provisionStatus: (managedRoot: string) => { readonly ready: boolean; readonly reason: string | null };
+  /**
+   * Builds the suppression stage. The SDK's listener wraps the opener and defaults
+   * to the embedded speexdsp filter; a test replaces it so the WIRING is checkable
+   * without compiling WebAssembly, while the filter's numbers stay the SDK's to
+   * assert.
+   */
+  readonly createNoiseSuppression: NonNullable<WakeListenerOptions['createNoiseSuppression']>;
+  readonly provisionStatus: (managedRoot: string) => WakeProvisionSnapshot;
 }
 
 export interface WakeRuntime {
@@ -108,6 +130,16 @@ export interface WakeRuntime {
 }
 
 /** Wire wake detection. Nothing is opened until `refresh()` finds it active. */
+/**
+ * Provisioning state for the capability read. Shares the injected seam `start`
+ * uses, so a test drives both from one stub, and is read per call rather than
+ * cached: a user provisions the speech gate while the session is running, and a
+ * snapshot taken at startup would keep reporting it unavailable afterwards.
+ */
+function provisionStatusFor(deps: WakeRuntimeDeps): WakeProvisionSnapshot {
+  return (deps.provisionStatus ?? ((root: string) => wakeProvisionStatus({ managedRoot: root })))(deps.managedRoot);
+}
+
 export function wireWakeRuntime(deps: WakeRuntimeDeps): WakeRuntime {
   let listener: WakeListener | null = null;
   let phase: WakeListenerState['phase'] = 'idle';
@@ -117,7 +149,7 @@ export function wireWakeRuntime(deps: WakeRuntimeDeps): WakeRuntime {
   const resolve = (): WakeRuntimeSettings => resolveWakeRuntimeSettings(
     deps.readConfig,
     'tui',
-    terminalWakeCapabilities(deps.speexAvailable),
+    terminalWakeCapabilities(provisionStatusFor(deps)),
   );
 
   const status = (): VoiceCaptureIndicatorState | null => {
@@ -174,7 +206,7 @@ export function wireWakeRuntime(deps: WakeRuntimeDeps): WakeRuntime {
   };
 
   const start = async (settings: WakeRuntimeSettings): Promise<void> => {
-    const provision = (deps.provisionStatus ?? ((root: string) => wakeProvisionStatus({ managedRoot: root })))(deps.managedRoot);
+    const provision = provisionStatusFor(deps);
     if (!provision.ready) {
       deps.notify(
         `[Wake] voice.wake.enabled is on, but the wake models are not provisioned (${provision.reason ?? 'not-provisioned'}), `
@@ -201,11 +233,17 @@ export function wireWakeRuntime(deps: WakeRuntimeDeps): WakeRuntime {
     const active = new WakeListener({
       settings,
       openCapture: deps.openCapture,
+      ...(deps.createNoiseSuppression !== undefined ? { createNoiseSuppression: deps.createNoiseSuppression } : {}),
       createEngine: createWakeEngineFactory({
         assetDirectory: deps.assetDirectory,
         embeddingPath: paths.embeddingPath,
         models: modelFiles.map((model) => ({ id: model.id, path: model.path })),
         settings,
+        // The speech gate, when the row asks for one. `voice.wake.vadThreshold`
+        // above 0 with the artifact missing never reaches here — it is a blocker
+        // from resolveWakeRuntimeSettings, so the detector does not start at all
+        // rather than starting with the gate quietly absent.
+        ...(settings.vadThreshold > 0 ? { vadPath: paths.vadPath } : {}),
         warn: deps.warn,
         ...(deps.loadSession !== undefined ? { loadSession: deps.loadSession } : {}),
       }),
