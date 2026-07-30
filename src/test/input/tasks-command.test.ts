@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test';
+import { join } from 'node:path';
 import { CommandRegistry } from '../../input/command-registry.ts';
 import type { CommandContext } from '../../input/command-registry.ts';
 import { registerBuiltinCommands } from '../../input/commands.ts';
@@ -8,8 +9,11 @@ import { createRuntimeOpsApi } from '@/runtime/index.ts';
 import { createTaskManager } from '@/runtime/index.ts';
 import { OpsControlPlane } from '@/runtime/index.ts';
 import { createShellPathService } from '@/runtime/index.ts';
+import { createFeatureFlagManager, deriveFeatureStates, type FeatureFlagManager } from '@/runtime/index.ts';
+import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import { createTasksReadModel } from '../helpers/ui-read-models.ts';
 import type { OperatorClient } from '@/runtime/index.ts';
+import { makeProjectTempDir } from '../helpers/project-temp.ts';
 
 const shellPaths = createShellPathService({
   workingDirectory: '/tmp/goodvibes-test',
@@ -238,5 +242,109 @@ describe('tasks command', () => {
     await tasksCommand!.handler(['fail', failedTask.id, 'lint', 'failed'], ctx);
     expect(out.join('\n')).toContain(`Failed task ${failedTask.id}.`);
     expect(taskManager.getTask(failedTask.id)?.status).toBe('failed');
+  });
+
+  // ---------------------------------------------------------------------------
+  // runtime.unifiedTasks, driven to BOTH values through the real gate, via the
+  // actual /tasks create command path.
+  //
+  // This setting used to configure nothing: bootstrap.ts built its
+  // opsTaskManager with createTaskManager's 3-arg form (no featureFlags), and
+  // isFeatureGateEnabled is permissive when no manager is wired, so omitting
+  // it did not disable task tracking when runtime.unifiedTasks was turned
+  // off. Unlike the other five classes in this sweep, this key's schema
+  // default was ALSO wrong (recorded false while every install always
+  // shipped enabled, because of this exact gap) — the SDK has corrected the
+  // default to true/enabled, and bootstrap.ts now threads featureFlags, the
+  // same shape as the other five fixes.
+  //
+  // The mutation check for this row: remove that argument and the "off" half
+  // of the first test below fails, because the manager falls back to
+  // permissive and creates the task anyway.
+  // ---------------------------------------------------------------------------
+
+  function featureFlagsFor(root: string, unifiedTasks: boolean): FeatureFlagManager {
+    const configManager = new ConfigManager({ surfaceRoot: 'tui', workingDir: root, homeDir: root, configDir: join(root, '.goodvibes', 'tui') });
+    configManager.set('runtime.unifiedTasks', unifiedTasks);
+    const featureFlags = createFeatureFlagManager();
+    featureFlags.loadFromConfig({ flags: deriveFeatureStates(configManager) });
+    return featureFlags;
+  }
+
+  test('runtime.unifiedTasks false turns off /tasks create, and it refuses', async () => {
+    const root = makeProjectTempDir('gv-unified-tasks-gate');
+    const registry = new CommandRegistry();
+    registerBuiltinCommands(registry);
+    const tasksCommand = registry.get('tasks');
+    expect(tasksCommand).toBeDefined();
+
+    const store = createRuntimeStore();
+    const bus = new RuntimeEventBus();
+    // Constructed exactly as runtime/bootstrap.ts constructs it.
+    const taskManager = createTaskManager(store, bus, 'sess-tasks-gate-off', featureFlagsFor(root, false));
+    const opsApi = createRuntimeOpsApi({
+      tasksReadModel: createTasksReadModel(store),
+      taskManager,
+      opsControlPlane: new OpsControlPlane(taskManager, bus, store, 'sess-tasks-gate-off'),
+    });
+    const readModels = { tasks: createTasksReadModel(store) } as never;
+    const out: string[] = [];
+    const ctx = makeTaskCommandContext(out, readModels, {}, {
+      operator: createOperatorTaskClient(readModels),
+      opsApi,
+    });
+    ctx.session.runtime.sessionId = 'sess-tasks-gate-off';
+
+    let refusal = '';
+    try {
+      await tasksCommand!.handler(['create', 'integration', 'release-bot', 'Prepare', 'release', 'bundle'], ctx);
+    } catch (error) {
+      refusal = error instanceof Error ? error.message : String(error);
+    }
+    expect(refusal).toContain('runtime.unifiedTasks');
+    expect(taskManager.getTasksByKind('integration')).toEqual([]);
+  });
+
+  test('runtime.unifiedTasks true allows /tasks create, and is the shipped default', async () => {
+    const root = makeProjectTempDir('gv-unified-tasks-gate');
+    const registry = new CommandRegistry();
+    registerBuiltinCommands(registry);
+    const tasksCommand = registry.get('tasks');
+
+    const store = createRuntimeStore();
+    const bus = new RuntimeEventBus();
+    const taskManager = createTaskManager(store, bus, 'sess-tasks-gate-on', featureFlagsFor(root, true));
+    const opsApi = createRuntimeOpsApi({
+      tasksReadModel: createTasksReadModel(store),
+      taskManager,
+      opsControlPlane: new OpsControlPlane(taskManager, bus, store, 'sess-tasks-gate-on'),
+    });
+    const readModels = { tasks: createTasksReadModel(store) } as never;
+    const out: string[] = [];
+    const ctx = makeTaskCommandContext(out, readModels, {}, {
+      operator: createOperatorTaskClient(readModels),
+      opsApi,
+    });
+    ctx.session.runtime.sessionId = 'sess-tasks-gate-on';
+
+    await tasksCommand!.handler(['create', 'integration', 'release-bot', 'Prepare', 'release', 'bundle'], ctx);
+    expect(out.join('\n')).toContain('Created task');
+
+    // The default half: with the key never written, effective behaviour
+    // matches true. This is what makes threading featureFlags a fix that
+    // changes only whether the switch WORKS, not what an existing install does.
+    // A genuinely fresh root (not `root`, which already has runtime.unifiedTasks
+    // written under it) — ConfigManager's project tier is keyed by
+    // workingDir/surfaceRoot regardless of configDir, so reusing `root` here
+    // would read back the write above instead of the real default.
+    const unsetRoot = makeProjectTempDir('gv-unified-tasks-gate-unset');
+    const unsetConfig = new ConfigManager({ surfaceRoot: 'tui', workingDir: unsetRoot, homeDir: unsetRoot, configDir: join(unsetRoot, '.goodvibes', 'unset') });
+    expect(unsetConfig.get('runtime.unifiedTasks')).toBe(true);
+    const flags = createFeatureFlagManager();
+    flags.loadFromConfig({ flags: deriveFeatureStates(unsetConfig) });
+    const unsetStore = createRuntimeStore();
+    const unsetManager = createTaskManager(unsetStore, new RuntimeEventBus(), 'sess-tasks-gate-unset', flags);
+    const unsetTask = unsetManager.createTask({ kind: 'exec', title: 'Unset default check', owner: 'test' });
+    expect(unsetTask.status).toBe('queued');
   });
 });

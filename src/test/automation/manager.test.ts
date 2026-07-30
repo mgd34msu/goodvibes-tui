@@ -523,8 +523,12 @@ describe('AutomationManager', () => {
       manager.stop();
 
       // The default half: with the key never written, effective behaviour
-      // matches true.
-      const unsetConfig = new ConfigManager({ surfaceRoot: 'tui', workingDir: root, configDir: join(root, '.goodvibes', 'unset') });
+      // matches true. A genuinely fresh root (not `root`, which already has
+      // automation.enabled written under it) — ConfigManager's project tier
+      // is keyed by workingDir/surfaceRoot regardless of configDir, so reusing
+      // `root` here would read back the write above instead of the real default.
+      const unsetRoot = makeProjectTempDir('gv-automation-manager-unset');
+      const unsetConfig = new ConfigManager({ surfaceRoot: 'tui', workingDir: unsetRoot, configDir: join(unsetRoot, '.goodvibes', 'unset') });
       expect(unsetConfig.get('automation.enabled')).toBe(true);
       const flags = createFeatureFlagManager();
       flags.loadFromConfig({ flags: deriveFeatureStates(unsetConfig) });
