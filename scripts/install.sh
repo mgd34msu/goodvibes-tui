@@ -122,6 +122,13 @@ LEGACY_SYSTEMD_DAEMON_UNIT="goodvibes-daemon.service"
 # constants here is what silently re-pinned custom-configured hosts back to
 # loopback:3421 behind a success receipt. Only --daemon-home is baked: it names
 # where the settings live, not what they say.
+#
+# --daemon-home takes the daemon's own STATE directory ($HOME/.goodvibes/daemon)
+# — the one holding operator-tokens.json, auth-users.json and
+# daemon-settings.json — not $HOME. Both writers baked $HOME, so a serviced
+# daemon filed its identity a level above where every reader looks and the
+# client that talks to it kept reading an empty operator-tokens.json under
+# .goodvibes/daemon.
 
 # Verify settle used by the supervised transfer: seconds between the two
 # post-start probes (a Type=simple unit reports 'active' from fork onward, so a
@@ -1026,7 +1033,7 @@ StartLimitIntervalSec=0
 
 [Service]
 Type=simple
-ExecStart="$INSTALL_DIR/goodvibes-daemon" --daemon-home "$HOME"
+ExecStart="$INSTALL_DIR/goodvibes-daemon" --daemon-home "$HOME/.goodvibes/daemon"
 Restart=on-failure
 RestartSec=2$_restart_escalation
 
@@ -1058,7 +1065,7 @@ write_launchd_plist() {
   <array>
     <string>$INSTALL_DIR/goodvibes-daemon</string>
     <string>--daemon-home</string>
-    <string>$HOME</string>
+    <string>$HOME/.goodvibes/daemon</string>
   </array>
   <key>RunAtLoad</key>
   <true/>

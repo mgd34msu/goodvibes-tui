@@ -459,7 +459,12 @@ describe('install.sh — systemd unit generation', () => {
     // configured endpoint is never silently re-pinned by an upgrade. The
     // path-valued words are systemd-quoted so a HOME/INSTALL_DIR containing a
     // space cannot silently split into stray arguments.
-    expect(unit).toContain(`ExecStart="${installDir}/goodvibes-daemon" --daemon-home "${home}"`);
+    //
+    // The flag's value is the daemon's STATE directory under the home, not the
+    // home itself — that is the directory holding operator-tokens.json,
+    // auth-users.json and daemon-settings.json, and what
+    // config/goodvibes-home.ts resolves the flag as.
+    expect(unit).toContain(`ExecStart="${installDir}/goodvibes-daemon" --daemon-home "${home}/.goodvibes/daemon"`);
     expect(unit).not.toContain('--hostname');
     expect(unit).not.toContain('--port');
     expect(unit).toContain('Restart=on-failure');
@@ -522,7 +527,7 @@ describe('install.sh — systemd unit generation', () => {
     expect(out.code).toBe(0);
 
     const unit = readFileSync(unitPath, 'utf-8');
-    expect(unit).toContain(`ExecStart="${installDir}/goodvibes-daemon" --daemon-home "${home}"`);
+    expect(unit).toContain(`ExecStart="${installDir}/goodvibes-daemon" --daemon-home "${home}/.goodvibes/daemon"`);
 
     // When systemd-analyze is present, prove systemd parses the quoted words
     // as single tokens (the unquoted form failed verify with a truncated path).
@@ -700,7 +705,7 @@ describe('install.sh — canonical unit name + legacy-unit unification', () => {
 
     const unit = readFileSync(join(unitDir, 'goodvibes.service'), 'utf-8');
     expect(unit).toContain(MARKER);
-    expect(unit).toContain(`ExecStart="${installDir}/goodvibes-daemon" --daemon-home "${home}"`);
+    expect(unit).toContain(`ExecStart="${installDir}/goodvibes-daemon" --daemon-home "${home}/.goodvibes/daemon"`);
     expect(unit).not.toContain('--hostname');
     expect(unit).not.toContain('--port');
     // Nothing to migrate: no legacy retirement/transfer lines printed.
@@ -874,7 +879,7 @@ describe('install.sh — supervised transfer from an ACTIVE legacy unit (the dom
         expect(existsSync(t.canonicalPath)).toBe(true);
         const unit = readFileSync(t.canonicalPath, 'utf-8');
         expect(unit).toContain(MARKER);
-        expect(unit).toContain(`ExecStart="${t.installDir}/goodvibes-daemon" --daemon-home "${t.home}"`);
+        expect(unit).toContain(`ExecStart="${t.installDir}/goodvibes-daemon" --daemon-home "${t.home}/.goodvibes/daemon"`);
         expect(existsSync(t.legacyPath)).toBe(false);
         // End state per the stub: canonical active, legacy inactive.
         expect(readFileSync(t.canonState, 'utf-8')).toContain('active');
@@ -1510,7 +1515,7 @@ describe('install.sh — supervised transfer from an ACTIVE legacy unit (the dom
     const unit = readFileSync(t.canonicalPath, 'utf-8');
     expect(unit).not.toContain('--hostname');
     expect(unit).not.toContain('--port');
-    expect(unit).toContain(`ExecStart="${t.installDir}/goodvibes-daemon" --daemon-home "${t.home}"`);
+    expect(unit).toContain(`ExecStart="${t.installDir}/goodvibes-daemon" --daemon-home "${t.home}/.goodvibes/daemon"`);
     expect(existsSync(t.legacyPath)).toBe(false);
   });
 
@@ -1662,7 +1667,7 @@ describe('install.sh — pinned-endpoint canonical units are re-derived on upgra
     const unit = readFileSync(t.canonicalPath, 'utf-8');
     expect(unit).not.toContain('--hostname');
     expect(unit).not.toContain('--port');
-    expect(unit).toContain(`ExecStart="${t.installDir}/goodvibes-daemon" --daemon-home "${t.home}"`);
+    expect(unit).toContain(`ExecStart="${t.installDir}/goodvibes-daemon" --daemon-home "${t.home}/.goodvibes/daemon"`);
   });
 
   test('a product-written unit (v1.18.0 in-app install-service shape: fingerprint, no marker) pinning the endpoint is regenerated too', () => {
@@ -1779,7 +1784,7 @@ describe('install.sh — launchd migration analog (macOS upgrades get the args-d
     const plist = readFileSync(plistPath, 'utf-8');
     expect(plist).toContain(MARKER); // still installer-managed
     expect(plist).toContain('<string>--daemon-home</string>');
-    expect(plist).toContain(`<string>${home}</string>`);
+    expect(plist).toContain(`<string>${home}/.goodvibes/daemon</string>`);
     // No endpoint flags: the daemon resolves controlPlane settings at boot,
     // so a configured endpoint survives the plist regeneration.
     expect(plist).not.toContain('--hostname');
@@ -2224,9 +2229,17 @@ describe('install.sh ↔ product — canonical unit content parity on a non-defa
     const installerTokens = tokens(installerExec);
 
     // PARITY: identical launch shape — the daemon binary, then --daemon-home
-    // with the home dir. Nothing else.
-    expect(productTokens).toEqual([join(installDir, 'goodvibes-daemon'), '--daemon-home', home]);
-    expect(installerTokens).toEqual([join(installDir, 'goodvibes-daemon'), '--daemon-home', home]);
+    // with the daemon's STATE directory. Nothing else.
+    //
+    // The state directory, not the home above it: the flag names the directory
+    // holding operator-tokens.json, auth-users.json and daemon-settings.json,
+    // which is what config/goodvibes-home.ts resolves it as and what
+    // cli/service-posture.ts already writes into GOODVIBES_DAEMON_HOME. Both
+    // writers baked $HOME, so a serviced daemon filed its identity a level
+    // above where every reader looks.
+    const stateDir = join(home, '.goodvibes', 'daemon');
+    expect(productTokens).toEqual([join(installDir, 'goodvibes-daemon'), '--daemon-home', stateDir]);
+    expect(installerTokens).toEqual([join(installDir, 'goodvibes-daemon'), '--daemon-home', stateDir]);
 
     // Neither writer baked the configured endpoint (flags OR values).
     for (const unit of [productUnit, installerUnit]) {
@@ -2294,7 +2307,7 @@ describe('install.sh — restart path validates the target before restarting/rel
     expect(existsSync(unitPath)).toBe(true);
     const newUnit = readFileSync(unitPath, 'utf-8');
     expect(newUnit).toContain('# managed by goodvibes install.sh');
-    expect(newUnit).toContain(`ExecStart="${installDir}/goodvibes-daemon" --daemon-home "${home}"`);
+    expect(newUnit).toContain(`ExecStart="${installDir}/goodvibes-daemon" --daemon-home "${home}/.goodvibes/daemon"`);
     expect(out.stdout).toContain('Setting up the goodvibes daemon as a systemd user service');
     expect(out.stdout).toContain('started    goodvibes.service (active)');
   });
