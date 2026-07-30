@@ -135,7 +135,18 @@ export function buildManagedDaemonServiceManager(params: BuildManagedDaemonServi
     description: MANAGED_SERVICE_DESCRIPTION,
     workingDirectory,
     command: params.binaryPath,
-    args: ['--daemon-home', params.homeDir],
+    // `--daemon-home` names the daemon's own STATE directory — the one holding
+    // operator-tokens.json, auth-users.json and daemon-settings.json — which is
+    // `<home>/.goodvibes/daemon`. This baked the USER HOME, so a serviced
+    // daemon filed its identity a level above where every reader in this
+    // repository looks: config/goodvibes-home.ts resolves the flag AS the state
+    // directory, cli/service-posture.ts already writes the state directory into
+    // GOODVIBES_DAEMON_HOME for the unit it installs, and runtime/bootstrap.ts
+    // reads the companion token from the state directory. On a normal machine
+    // the mismatch is invisible from the outside — the daemon simply mints a
+    // second operator-tokens.json in the home directory and the client keeps
+    // reading the empty one under .goodvibes/daemon.
+    args: ['--daemon-home', join(params.homeDir, '.goodvibes', 'daemon')],
     env: {},
     restartOnFailure: true,
   };
