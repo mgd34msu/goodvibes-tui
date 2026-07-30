@@ -2,6 +2,7 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 import {
   ConfigManager,
+  daemonConfigPathForHome,
   deriveControlPlaneBaseUrl,
   readControlPlaneBinding,
   resolveDaemonEnabled,
@@ -132,6 +133,11 @@ async function main(): Promise<void> {
       workingDir: ownership.workingDirectory,
       homeDir: ownership.homeDirectory,
       surfaceRoot: 'tui',
+      // Named explicitly rather than left to ConfigManager's own
+      // `<homeDir>/.goodvibes/daemon/settings.json` derivation, so the daemon
+      // tier this reads/writes agrees with `ownership.daemonHomeDirectory`
+      // even when `GOODVIBES_DAEMON_HOME` moved it away from the plain home.
+      daemonTierPath: daemonConfigPathForHome(ownership.daemonHomeDirectory),
     });
     const result = await runClusterCommand({
       argv: rawArgs.slice(1),
@@ -261,7 +267,18 @@ async function main(): Promise<void> {
   // process; this is the daemon finally matching it.
   configureActivityLogger(join(workingDir, '.goodvibes', 'logs'));
   runDaemonConfigMigration(homeDirectory);
-  const config = new ConfigManager({ workingDir, homeDir: homeDirectory, surfaceRoot: 'tui' });
+  // `daemonTierPath` named explicitly (SDK 1.21.0) rather than left to
+  // ConfigManager's own `<homeDir>/.goodvibes/daemon/settings.json`
+  // derivation: `daemonHomeDirectory` is this process's own resolution of
+  // `--daemon-home`/`GOODVIBES_DAEMON_HOME`, and the two must agree so the
+  // daemon's config reads and writes the same file its identity state
+  // (operator-tokens.json, auth-users.json) already lives beside.
+  const config = new ConfigManager({
+    workingDir,
+    homeDir: homeDirectory,
+    surfaceRoot: 'tui',
+    daemonTierPath: daemonConfigPathForHome(daemonHomeDirectory),
+  });
   new GlobalNetworkTransportInstaller().install(config);
 
   const overrideErrors = applyRuntimeConfigOverrides(config, cliFlags.configOverrides);
@@ -600,7 +617,12 @@ async function main(): Promise<void> {
   // that is what clients resolve when they look for the daemon.
   try {
     runDaemonConfigMigration(homeDirectory);
-    const clientViewConfig = new ConfigManager({ workingDir, homeDir: homeDirectory, surfaceRoot: 'tui' });
+    const clientViewConfig = new ConfigManager({
+      workingDir,
+      homeDir: homeDirectory,
+      surfaceRoot: 'tui',
+      daemonTierPath: daemonConfigPathForHome(daemonHomeDirectory),
+    });
     const clientEndpoint = resolveRuntimeEndpointBinding(clientViewConfig, 'controlPlane');
     const reconcile = await reconcileRedundantLegacyUnit({
       homeDir: homedir(),

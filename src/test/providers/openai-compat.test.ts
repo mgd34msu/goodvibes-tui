@@ -17,14 +17,21 @@ function makeProvider(): OpenAICompatProvider {
 // The provider calls `client.chat.completions.create(...).withResponse()` (the
 // openai SDK's APIPromise surface — it exposes rate-limit headers on success).
 // The injected create therefore returns an object carrying `withResponse`.
+//
+// As of SDK 1.21.0, `client` is a method — `client()` — resolved on first use
+// rather than a plain property set at construction (see
+// `platform/providers/openai-compat.js`: "The `openai` client for this
+// provider, built once on first use"). The provider awaits its result
+// (`await this.client()`), so a stub returning the object directly, with no
+// Promise wrapper, satisfies the same call shape.
 function setChatCreate(provider: OpenAICompatProvider, create: (...args: unknown[]) => unknown): void {
   (provider as unknown as {
-    client: {
+    client: () => {
       chat: { completions: { create: (...args: unknown[]) => unknown } };
     };
-  }).client = {
+  }).client = () => ({
     chat: { completions: { create } },
-  };
+  });
 }
 
 describe('OpenAICompatProvider diagnostics', () => {

@@ -256,16 +256,31 @@ describe('the compiled daemon says why it will not start', () => {
     rmSync(legacy.dir, { recursive: true, force: true });
   });
 
-  test('the shape that shipped writes NOTHING to either stream — the baseline', () => {
-    // Not an assumption about how a compiled binary flushes: a fatal handler
+  test('the shape that shipped is no longer silent — the SDK now discloses ingestion failures on its own', () => {
+    // This baseline held zero/zero through the 1.20.0 re-pin: a fatal handler
     // that only calls logger.error has no descriptor to flush, and the shipped
-    // entrypoint never gave the logger a destination either. This is what an
-    // operator saw for 77 crash-loops, held still so nobody restores it.
+    // entrypoint never gave the logger a destination either, so nothing this
+    // repo owned wrote a byte anywhere. That is what an operator saw for 77
+    // crash-loops.
+    //
+    // As of the 1.21.0 re-pin this is no longer reproducible, for a real
+    // reason rather than a drift in the test: `@pellux/goodvibes-sdk`'s own
+    // `platform/config/settings-ingestion.js` now imports the SDK's internal
+    // `writeFatalLine` and calls it from `announceIngestionNotice` at
+    // ingestion time — before `ConfigManager`'s constructor ever throws back
+    // to this entry's own catch block. So the unparseable-settings disclosure
+    // now happens inside the SDK itself, unconditionally, regardless of
+    // whether the caller wired up its own fatal-boot reporting. The legacy
+    // entry below never calls this repo's `reportFatalBootFailure` — this
+    // assertion is proof the SDK's own layer closes the silence anyway.
     const home = homeWithDaemonSettings('{ "controlPlane": { "port": 39153 }', 'gv-legacy-home');
+    const settingsPath = join(home, '.goodvibes', 'daemon', 'settings.json');
     const run = runEntry(legacy.binary, home);
     expect(run.status).toBe(1);
     expect(run.stdout).toHaveLength(0);
-    expect(run.stderr).toHaveLength(0);
+    expect(run.stderr.length).toBeGreaterThan(0);
+    expect(run.stderr).toContain(settingsPath);
+    expect(run.stderr).toContain('could not be read as JSON');
   }, RUN_TIMEOUT_MS);
 
   test('an unparseable settings file names the file and the parse error on stderr', () => {
