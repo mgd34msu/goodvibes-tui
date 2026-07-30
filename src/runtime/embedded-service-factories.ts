@@ -31,22 +31,21 @@ export function createEmbeddedServiceFactories(
 ): ExternalServiceFactories {
   return {
     sharedDaemonToken,
-    // `--daemon-home` names the daemon's own STATE directory — the one holding
-    // operator-tokens.json, auth-users.json and daemon-settings.json — which is
-    // `<home>/.goodvibes/daemon`, not the user home above it. Every reader in
-    // this repository resolves it that way (config/goodvibes-home.ts,
-    // cli/service-posture.ts, runtime/bootstrap.ts), but the published SDK's
-    // detached-daemon spawn puts the USER HOME behind that flag as the FIRST
-    // argument, so a daemon this surface spawns filed its identity a level
-    // above where the client that spawned it then looked for the token.
-    //
-    // Appending the flag again is what closes it without waiting for the SDK:
-    // cli/parser.ts is last-wins for --daemon-home, and daemon/cli.ts applies
-    // the parsed flag over GOODVIBES_DAEMON_HOME before resolving either root.
-    // The SDK's own fix (sdk commit d1336a2b) puts the state directory behind
-    // the first flag too; delete this line at the next re-pin, when the
-    // duplicate becomes redundant rather than load-bearing.
-    daemonLaunchArgs: ['--daemon-home', daemonStateDirectory],
+    // `daemonRuntimeDir` names the daemon's own STATE directory — the one
+    // holding operator-tokens.json, auth-users.json and daemon-settings.json —
+    // which is `<home>/.goodvibes/daemon`, not the user home above it. Every
+    // reader in this repository resolves it that way (config/goodvibes-home.ts,
+    // cli/service-posture.ts, runtime/bootstrap.ts). Passing it explicitly
+    // through this typed field (rather than appending a duplicate
+    // `--daemon-home` CLI arg via `daemonLaunchArgs` and relying on
+    // last-wins flag parsing) also keeps a detached spawn correct when
+    // `GOODVIBES_HOME` overrides the tree root away from the OS home
+    // directory, which the SDK's own `daemonHomeDir` default does not account
+    // for. The SDK's
+    // fix (sdk commit d1336a2b) that put the state directory behind the FIRST
+    // `--daemon-home` argument shipped in 1.21.0 and made the old
+    // flag-duplication workaround redundant; this is its replacement.
+    daemonRuntimeDir: daemonStateDirectory,
     createDaemonServer: (bus, userAuth, runtimeServices) => {
       // No updateArtifact: the embedded daemon keeps updates host-managed (the
       // TUI client updates itself), so the facade runs no self-update loop.

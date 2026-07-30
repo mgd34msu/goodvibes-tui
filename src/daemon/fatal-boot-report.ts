@@ -9,7 +9,16 @@
  * because the published `@pellux/goodvibes-sdk` this repository compiles
  * against predates that export — importing it would not typecheck and CI
  * builds against the published package regardless. Delete this file and switch
- * every importer to the SDK's copy at the next re-pin.
+ * every importer to the SDK's copy at the next re-pin — but check the SDK's
+ * `package.json` "exports" map first: as of the 1.21.0 re-pin (2026-07-30),
+ * the compiled `dist/platform/daemon/fatal-boot-report.js` still exists
+ * inside the published tarball and `cli.js` still imports it internally, but
+ * there is no `./platform/daemon/fatal-boot-report` (or any other) entry in
+ * "exports" that makes it importable from outside the package — confirmed by
+ * attempting `import { reportFatalBootFailure } from
+ * '@pellux/goodvibes-sdk/platform/daemon/fatal-boot-report'`, which Bun
+ * refuses to resolve. This file stays load-bearing until a future SDK release
+ * adds that subpath export.
  *
  * ── The failure this exists to close ──────────────────────────────────────
  *
