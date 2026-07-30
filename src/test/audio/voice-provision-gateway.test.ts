@@ -9,6 +9,9 @@ import {
   type VoiceProvisionGatewayResolution,
 } from '../../core/voice-provision-gateway.ts';
 import type { VoiceRuntimeStatusResult, VoiceLocalInstallResult } from '../../core/voice-provision-status.ts';
+import { resolveWakeRuntimeSettings } from '@pellux/goodvibes-sdk/platform/voice/wake/runtime';
+import { terminalWakeCapabilities, WAKE_SETUP_ANNOUNCEMENT } from '../../core/wake-provision-status.ts';
+import { printWakeStatus, runWakeProvision } from '../../core/wake-provision-runner.ts';
 import { CommandRegistry } from '../../input/command-registry.ts';
 import { registerExperienceRuntimeCommands } from '../../input/commands/experience-runtime.ts';
 import type { CommandContext } from '../../input/command-registry.ts';
@@ -233,5 +236,150 @@ describe('/voice status|setup — command wire', () => {
 
   test('VOICE_SETUP_ANNOUNCEMENT states downloads are checksum-verified and resumable', () => {
     expect(VOICE_SETUP_ANNOUNCEMENT).toContain('checksum-verified and resumable');
+  });
+
+  test('/voice wake status reports the honest on-disk state and never downloads', async () => {
+    const ctx = makeCtx((key) => (key === 'voice.wake.enabled' ? true : undefined));
+    await registry().get('voice')!.handler(['wake', 'status'], ctx);
+    const block = ctx.printed.join('\n');
+    expect(block).toContain('Wake-Word Detection');
+    // A fresh host has no artifacts, and the status says so rather than erroring.
+    expect(block).toContain('models provisioned: no');
+    expect(block).toContain('classifier: missing');
+    expect(block).toContain('/voice wake setup');
+    // The synthetic-recall qualification travels with every surfacing of the model.
+    expect(block).toContain('synthesised speech only');
+  });
+
+  test('/voice wake status names a row that blocks startup, with the reason', async () => {
+    const ctx = makeCtx((key) => {
+      if (key === 'voice.wake.enabled') return true;
+      // No VAD model is pinned anywhere, so any floor above 0 blocks the detector.
+      if (key === 'voice.wake.vadThreshold') return 0.5;
+      return undefined;
+    });
+    await registry().get('voice')!.handler(['wake', 'status'], ctx);
+    const block = ctx.printed.join('\n');
+    expect(block).toContain('rows blocking startup');
+    expect(block).toContain('voice.wake.vadThreshold');
+    expect(block).toContain('no voice-activity-detection model is available');
+    expect(block).toContain('listening on this terminal: no');
+  });
+
+  test('/voice wake with no subcommand defaults to status, and an unknown one prints usage', async () => {
+    const bare = makeCtx();
+    await registry().get('voice')!.handler(['wake'], bare);
+    expect(bare.printed.join('\n')).toContain('Wake-Word Detection');
+
+    const bogus = makeCtx();
+    await registry().get('voice')!.handler(['wake', 'nonsense'], bogus);
+    expect(bogus.printed.join('\n')).toBe('Usage: /voice wake [status|setup]');
+  });
+
+  test('the usage line advertises the wake subcommands', async () => {
+    const ctx = makeCtx();
+    await registry().get('voice')!.handler(['bogus-subcommand'], ctx);
+    expect(ctx.printed.join('\n')).toContain('wake status');
+    expect(ctx.printed.join('\n')).toContain('wake setup');
+  });
+});
+
+describe('wake provisioning — status projection and the explicit setup act', () => {
+  const SETTINGS = resolveWakeRuntimeSettings(
+    (key) => (key === 'voice.wake.enabled' ? true : undefined),
+    'tui',
+    terminalWakeCapabilities(false),
+  );
+
+  test('a corrupt artifact reads as corrupt, not as present', () => {
+    const printed: string[] = [];
+    printWakeStatus({
+      managedRoot: '/managed',
+      settings: SETTINGS,
+      print: (block) => printed.push(block),
+      readStatus: () => ({
+        ready: false,
+        reason: 'checksum-mismatch',
+        classifier: { path: '/managed/wake/models/c.onnx', verified: false, corrupt: true, bytes: 1_200_000 },
+        notice: { path: '/managed/wake/models/NOTICE', verified: true, corrupt: false, bytes: 900 },
+        embedding: { path: '/managed/wake/front-end/e.onnx', verified: true, corrupt: false, bytes: 1_319_365 },
+        downloadBytes: 3_687_009,
+        modelVersion: '1.0.0',
+        recallIsSyntheticOnly: true,
+      }),
+    });
+    const block = printed.join('\n');
+    expect(block).toContain('classifier: PRESENT BUT FAILS VERIFICATION');
+    expect(block).toContain('torn, truncated, or the wrong asset');
+    expect(block).toContain('models provisioned: no (checksum-mismatch)');
+    expect(block).toContain('speech-embedding front end: verified');
+  });
+
+  test('setup narrates each component once per phase change and prints the receipt', async () => {
+    const printed: string[] = [];
+    await runWakeProvision({
+      managedRoot: '/managed',
+      settings: SETTINGS,
+      print: (block) => printed.push(block),
+      provision: async (_root, onProgress) => {
+        onProgress({ component: 'classifier', phase: 'download', bytesTotal: 2_367_644 });
+        onProgress({ component: 'classifier', phase: 'download', bytesTotal: 2_367_644 }); // repeat: must not reprint
+        onProgress({ component: 'classifier', phase: 'verify' });
+        onProgress({ component: 'classifier', phase: 'done' });
+        return {
+          ready: true,
+          modelVersion: '1.0.0',
+          outcomes: [
+            { component: 'classifier', state: 'installed', path: '/managed/wake/models/c.onnx', bytes: 2_367_644 },
+            { component: 'embedding', state: 'skipped', path: '/managed/wake/front-end/e.onnx' },
+          ],
+          noticePath: '/managed/wake/models/NOTICE',
+          recallIsSyntheticOnly: true,
+        };
+      },
+    });
+    const block = printed.join('\n');
+    expect(block).toContain('Wake-Word Setup');
+    expect((block.match(/classifier: download/g) ?? []).length).toBe(1);
+    expect(block).toContain('classifier: verify');
+    expect(block).toContain('Wake-Word Setup — receipt');
+    expect(block).toContain('ready: yes');
+    expect(block).toContain('attribution NOTICE (travels with the classifier)');
+  });
+
+  test('a failed component is named with its reason instead of folded into a generic failure', async () => {
+    const printed: string[] = [];
+    await runWakeProvision({
+      managedRoot: '/managed',
+      settings: SETTINGS,
+      print: (block) => printed.push(block),
+      provision: async () => ({
+        ready: false,
+        modelVersion: '1.0.0',
+        outcomes: [{ component: 'classifier', state: 'failed', path: '/managed/wake/models/c.onnx', error: 'sha256 got abc, want def' }],
+        noticePath: null,
+        recallIsSyntheticOnly: true,
+      }),
+    });
+    const block = printed.join('\n');
+    expect(block).toContain('ready: no');
+    expect(block).toContain('classifier: failed — sha256 got abc, want def');
+  });
+
+  test('a provisioning throw is reported honestly, not as a receipt', async () => {
+    const printed: string[] = [];
+    await runWakeProvision({
+      managedRoot: '/managed',
+      settings: SETTINGS,
+      print: (block) => printed.push(block),
+      provision: async () => { throw new Error('network unreachable'); },
+    });
+    expect(printed.join('\n')).toContain('provisioning failed: network unreachable');
+    expect(printed.join('\n')).not.toContain('receipt');
+  });
+
+  test('WAKE_SETUP_ANNOUNCEMENT states the downloads are verified and resumable', () => {
+    expect(WAKE_SETUP_ANNOUNCEMENT).toContain('checksum-verified');
+    expect(WAKE_SETUP_ANNOUNCEMENT).toContain('resumable');
   });
 });

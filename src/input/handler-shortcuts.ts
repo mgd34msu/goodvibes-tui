@@ -132,6 +132,14 @@ export function handleGlobalShortcutToken(
       state.commandContext?.toggleMemoryProvenance?.();
       return true;
 
+    case 'voice-input':
+      // Start recording, or stop the recording already running. Routed globally so
+      // the key works whether focus is on the composer or the panel workspace —
+      // dictation is not a composer-only act. Still consumed when voice input is
+      // not wired, so a stray Alt+V never lands in the prompt as text.
+      state.commandContext?.toggleVoiceInput?.();
+      return true;
+
     case 'toggle-keep-awake': {
       // Flip the daemon-held keep-awake toggle; the always-visible "sleep
       // disabled" chip is the confirmation. Fire-and-forget (the seam renders on

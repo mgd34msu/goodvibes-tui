@@ -4,6 +4,7 @@ import { truncateDisplay } from '../utils/terminal-width.ts';
 import { GLYPHS, UI_TONES } from './ui-primitives.ts';
 import { activeUiTones } from './theme.ts';
 import { formatHints } from './hint-grammar.ts';
+import { voiceCaptureRowVisible, type VoiceCaptureIndicatorState } from '../core/voice-capture-status.ts';
 
 /**
  * renderProcessIndicator — shows a one-line summary of active background
@@ -94,4 +95,69 @@ export function renderProcessIndicator(
   const label = `${parts.join(` ${GLYPHS.navigation.pipeSeparator} `)}${progressSuffix}`;
   const hint = `  ${formatHints([{ key: 'Enter', verb: 'View' }])}`;
   return renderPlainStatus(`${label}${hint}`, { fg: activeUiTones().accent.brand, bold: true });
+}
+
+/**
+ * Sentence each capture state renders as. Written out per state rather than
+ * assembled from fragments because these are the words that tell a user whether
+ * their microphone is open — "listening" and "recording" mean different things
+ * and a row that blurred them would be worse than no row.
+ */
+const VOICE_CAPTURE_LABELS: Record<VoiceCaptureIndicatorState['kind'], string> = {
+  requesting: 'opening the microphone',
+  recording: 'recording — press the voice-input key again to stop',
+  transcribing: 'transcribing what you said',
+  'wake-listening': 'listening for the wake phrase',
+  'wake-capturing': 'wake heard — recording what follows',
+  'wake-restarting': 'capture stream ended — restarting',
+  'wake-latched': 'wake detection stopped',
+};
+
+/**
+ * renderVoiceCaptureIndicator — the persistent row shown while a microphone is
+ * open, below the input area beside the process indicator.
+ *
+ * It exists because a held-open capture device is otherwise invisible: wake
+ * detection runs for as long as the feature is on, and nothing else on screen
+ * would say so. `voice.wake.indicator` chooses between `statusline` (one dim
+ * row), `banner` (a highlighted row that is hard to miss) and `off`; a
+ * push-to-talk recording always renders, because the user pressed a key one
+ * moment ago and is waiting on it.
+ *
+ * Returns no lines when nothing is captured, or when the wake rows are turned
+ * off — the caller splices whatever comes back, so an empty array is "no row".
+ */
+export function renderVoiceCaptureIndicator(
+  width: number,
+  state: VoiceCaptureIndicatorState | null,
+): Line[] {
+  if (!voiceCaptureRowVisible(state) || state === null) return [];
+  const tones = activeUiTones();
+  const marker = state.kind === 'wake-latched' ? GLYPHS.status.blocked : GLYPHS.status.active;
+  const device = state.deviceLabel !== null ? ` ${GLYPHS.navigation.pipeSeparator} ${state.deviceLabel}` : '';
+  const extra = state.detail !== undefined && state.detail.length > 0
+    ? ` ${GLYPHS.navigation.pipeSeparator} ${state.detail}`
+    : '';
+  const body = `${marker} Voice: ${VOICE_CAPTURE_LABELS[state.kind]}${device}${extra}`;
+  const isWakeRow = state.kind.startsWith('wake-');
+  const fg = state.kind === 'wake-latched' || state.kind === 'wake-restarting'
+    ? tones.chrome.warn
+    : tones.accent.control;
+
+  if (isWakeRow && state.indicator === 'banner') {
+    // The prominent variant: the row is filled to the terminal width on the
+    // footer background so it reads as a standing condition, not a passing note.
+    const line = UIFactory.stringToLine(' '.repeat(width), width, { fg: tones.chrome.faint });
+    const text = ` ${truncateDisplay(body, Math.max(0, width - 4), '…')} `;
+    for (let i = 0; i < text.length && 1 + i < width - 1; i++) {
+      const cell = line[1 + i]!;
+      cell.char = text[i]!;
+      cell.fg = fg;
+      cell.bg = tones.bg.footer;
+      cell.bold = true;
+      cell.dim = false;
+    }
+    return [line];
+  }
+  return [UIFactory.stringToLine(`   ${truncateDisplay(body, Math.max(0, width - 4), '…')}`, width, { fg, bold: true })];
 }

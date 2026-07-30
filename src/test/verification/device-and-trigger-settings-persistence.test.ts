@@ -23,9 +23,12 @@
  * counted there.
  *
  * The `voice.wake.*` keys added in the same release are deliberately NOT covered
- * or counted: the `wake-word-detection` capability is declared `notOperable`, so
- * claiming behavior coverage for its rows would be the exact overclaim this
- * ledger exists to prevent.
+ * or counted here. That is now a scope statement, not a capability one: those rows
+ * DO drive behaviour on this terminal (see src/test/audio/wake-capture.test.ts for
+ * the frame path, the detection chain, the disabled-means-no-capture rule and the
+ * supervisor), and their persistence round-trip is simply not what this file
+ * exercises. Counting them in both places would double-count; see the note beside
+ * DEVICE_AND_TRIGGER_LOCAL_SETTINGS in verification-ledger.ts.
  */
 import { describe, test, expect, beforeEach } from 'bun:test';
 import { join } from 'node:path';

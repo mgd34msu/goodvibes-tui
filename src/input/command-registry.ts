@@ -108,6 +108,12 @@ export interface CommandUiActions {
   deleteQueuedMessage?: (id: string) => boolean;
   /** Toggle the drill-in of the "used N memories" provenance chip (memory.showProvenance). */
   toggleMemoryProvenance?: () => void;
+  /**
+   * Start voice input, or stop the recording already running and transcribe it
+   * into the composer. Two discrete presses rather than a hold, because a
+   * terminal delivers key events and never key-release state.
+   */
+  toggleVoiceInput?: () => void;
   /** The current host sleep-ownership projection (power.status.get, flattened) — chip, held-because, lid-split. */
   getPowerState?: () => import('../core/power-status.ts').PowerSurfaceState;
   /** Set the daemon-held keep-awake toggle (power.keepAwake.set), acquiring/releasing the inhibitor live; returns the new state. */

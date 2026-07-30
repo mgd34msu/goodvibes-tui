@@ -179,11 +179,13 @@ describe('settings workspace — in-product feature documentation', () => {
   });
 
   test('a capability declared not operable states that, in full, where the user meets it (80×24)', () => {
-    // The registry marks a capability whose platform half ships but whose
-    // surface half does not (today: wake-word detection — nothing captures
-    // audio). Such a row reads as disabled even with its settings key set to
-    // true, and the written reason for that MUST render, or the user sees a
-    // switch that flipped and a state that did not, with no explanation.
+    // A capability whose platform half ships but whose surface half does not reads
+    // as disabled even with its settings key set to true, and the written reason
+    // for that MUST render, or the user sees a switch that flipped and a state
+    // that did not, with no explanation. The set is empty today — wake-word
+    // detection was the last such capability and lost the marker when this
+    // terminal started capturing audio — and the loop is what keeps the rule in
+    // force for the next one.
     const inoperable = FEATURE_SETTINGS.filter((candidate) => candidate.operable === false);
     for (const feature of inoperable) {
       selectFeatureHeader(feature);
