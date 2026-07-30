@@ -55,6 +55,10 @@ import { createWorkstreamServices } from './workstream-services.ts';
 import { wireFleetNeedsInputPush } from './fleet-needs-input-push.ts';
 import { codeIndexDbPath, createCodeIndexServices, createStoreRerooter, isCodeInjectionSettingEnabled } from './code-index-services.ts';
 import { createDaemonHandlerComposition } from './daemon-handler-composition.ts';
+import { createDevicePostureServices } from './device-posture-composition.ts';
+// Re-exported so the shell's bootstrap reaches the install through the same
+// module it already imports the runtime graph from.
+export { installDevicePosture } from './device-posture-composition.ts';
 import { createClusterServices, startClusterServices } from './cluster-group-composition.ts';
 import { WorkspaceTrustManager } from './trust/workspace-trust.ts';
 import { ensureConfiguredModelIsRoutable } from './provider-fallback.ts';
@@ -348,6 +352,16 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
     approvalBridge: approvalBroker,
     automationBridge: automationManager,
   });
+  // The paired-phone feature for this host, on the SAME runtime phones pair onto
+  // and the SAME approval broker every other confirmation rides. Every `device.*`
+  // setting is read live through this; see device-posture-composition.ts.
+  const { devicePosture } = createDevicePostureServices({
+    configManager,
+    distributedRuntime,
+    approvals: approvalBroker,
+    stateDirectory: shellPaths.resolveProjectPath('tui', 'devices'),
+    gatewayMethods,
+  });
 
   // Which machines on this network are "us", and which of them reads the
   // shared inbox. Both inert until startCluster() — no socket, no key material
@@ -610,6 +624,7 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
     providerRegistry,
     toolLLM,
     distributedRuntime,
+    devicePosture,
     daemonHandlers,
     clusterCoordinator,
     clusterGroup,

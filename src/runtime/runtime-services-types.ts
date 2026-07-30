@@ -38,6 +38,7 @@ import type { createDurabilityServices } from './durability-services.ts';
 import type { MemorySpineClient } from '@pellux/goodvibes-sdk/platform/runtime/memory-spine';
 import type { WorkspaceCheckpointManager } from '@pellux/goodvibes-sdk/platform/workspace';
 import type { DomainDispatch, RuntimeStore } from './store/index.ts';
+import type { DevicePostureRuntime } from '@pellux/goodvibes-sdk/platform/devices';
 import type { RuntimeEventBus, DistributedRuntimeManager, RemoteRunnerRegistry, RemoteSupervisor, IntegrationHelperService, IdempotencyStore, ComponentHealthMonitor, WorktreeRegistry, SandboxSessionRegistry, ShellPathService, FeatureFlagManager, PolicyRuntimeState, SessionSurface } from '@/runtime/index.ts';
 import type { VoiceProviderRegistry, VoiceService } from '@pellux/goodvibes-sdk/platform/voice';
 import type { CacheRegistry, PauseController, MemoryGovernor } from '@pellux/goodvibes-sdk/platform/runtime/memory';
@@ -176,6 +177,13 @@ export interface RuntimeServices {
   readonly providerRegistry: ProviderRegistry;
   readonly toolLLM: ToolLLM;
   readonly distributedRuntime: DistributedRuntimeManager;
+  /**
+   * The paired-phone feature for this host: the grants ledger, the capture
+   * store, the housekeeping sweeps, and the capability service every `device.*`
+   * setting governs. Bound to the `devices.*` verbs at composition; the `phone`
+   * tool is registered on it in the bootstrap tail.
+   */
+  readonly devicePosture: DevicePostureRuntime;
   readonly daemonHandlers: DaemonHandlerSurfaces;
   /** Elects the one node on this network that consumes inbound messages; hand it to the DaemonServer so its consumers share this leadership instead of holding a second election. */
   readonly clusterCoordinator: ClusterCoordinator;
