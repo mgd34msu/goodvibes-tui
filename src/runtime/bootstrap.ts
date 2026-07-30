@@ -264,7 +264,7 @@ export async function bootstrapRuntime(
   }, ACP_TASK_SYNC_INTERVAL_MS);
   bootstrapUnsubs.push(() => clearInterval(acpTaskSyncInterval));
   orchestrator.registerDelegateTool(acpManager);
-  const opsTaskManager = createTaskManager(store, runtimeBus, userSessionId);
+  const opsTaskManager = createTaskManager(store, runtimeBus, userSessionId, services.featureFlags); // featureFlags required: without it runtime.unifiedTasks configured nothing (permissive fallback); SDK default matches shipped behaviour, so this is a no-op for existing installs.
   // Operator interventions ride the control-plane gateway capability
   // (controlPlane.gateway, on by default; the old never-registered gate id shipped this dead).
   const opsControlPlane = services.featureFlags.isEnabled('control-plane-gateway')

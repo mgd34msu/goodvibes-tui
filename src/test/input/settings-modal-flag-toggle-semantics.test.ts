@@ -30,7 +30,7 @@ import { SettingsModal } from '../../input/settings-modal.ts';
 // A feature that flips live, and one gated to startup — both default OFF so
 // the toggle direction is unambiguous.
 const RUNTIME_FEATURE = 'adaptive-execution-planner'; // planner.adaptive, live, default off
-const STARTUP_FEATURE = 'unified-runtime-task'; // runtime.unifiedTasks, startup-gated, default off
+const STARTUP_FEATURE = 'mcp-lifecycle'; // runtime.mcpLifecycle, startup-gated, default off
 const STARTUP_ENUM_FEATURE = 'permissions-policy-engine'; // permissions.engine, startup-gated enum
 
 describe('feature-toggle semantics — domain settings writes + gate bridge', () => {
@@ -80,7 +80,7 @@ describe('feature-toggle semantics — domain settings writes + gate bridge', ()
   test('startup-gated feature: persisted + pendingRestart, effective state unchanged', () => {
     expect(manager.getState(STARTUP_FEATURE)).toBe('disabled');
 
-    cm.setDynamic('runtime.unifiedTasks', true);
+    cm.setDynamic('runtime.mcpLifecycle', true);
 
     // Effective state is NOT faked live — still disabled until restart.
     expect(manager.getState(STARTUP_FEATURE)).toBe('disabled');
@@ -92,7 +92,7 @@ describe('feature-toggle semantics — domain settings writes + gate bridge', ()
 
     // And the domain key is persisted so the next launch picks it up cleanly.
     const reloaded = newConfigManager();
-    expect(reloaded.get('runtime.unifiedTasks')).toBe(true);
+    expect(reloaded.get('runtime.mcpLifecycle')).toBe(true);
     const nextManager = createFeatureFlagManager();
     nextManager.loadFromConfig({ flags: deriveFeatureStates(reloaded) });
     expect(nextManager.getState(STARTUP_FEATURE)).toBe('enabled');
@@ -158,10 +158,10 @@ describe('feature-toggle semantics — domain settings writes + gate bridge', ()
     });
 
     test('toggleSelectedFlag on a startup-gated feature shows the pending-restart marker at the point of change', () => {
-      selectHeader('runtime.unifiedTasks', STARTUP_FEATURE);
+      selectHeader('runtime.mcpLifecycle', STARTUP_FEATURE);
       modal.toggleSelectedFlag();
 
-      expect(cm.get('runtime.unifiedTasks')).toBe(true);
+      expect(cm.get('runtime.mcpLifecycle')).toBe(true);
       const entry = modal.getSelected()!;
       // The row's saved value changed; the effective state honestly did not.
       expect(entry.currentValue).toBe(true);
