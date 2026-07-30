@@ -66,6 +66,10 @@ describe('ChannelDeliveryRouter', () => {
       'channel-delivery:bluebubbles',
       'channel-delivery:mattermost',
       'channel-delivery:matrix',
+      // Router-owned rather than a builtin transport: the agent is a delivery
+      // DESTINATION the platform defines and the agent product implements, so the
+      // strategy that reads its registry is appended to every strategy list.
+      'channel-delivery:agent',
     ]);
   });
 
@@ -73,7 +77,11 @@ describe('ChannelDeliveryRouter', () => {
     const router = new ChannelDeliveryRouter({ strategies: [] });
     const delivered: ChannelDeliveryRequest[] = [];
 
-    expect(router.listStrategies()).toHaveLength(0);
+    // Not empty even though no strategies were supplied: `agent` being
+    // deliverable is a property of the router, so its strategy is appended to a
+    // hand-picked list too. An embed that chooses its transports does not lose
+    // the one surface that is not a transport.
+    expect(router.listStrategies().map((strategy) => strategy.id)).toEqual(['channel-delivery:agent']);
     await expect(router.deliver(serviceRequest())).rejects.toThrow('Unsupported channel delivery target: surface:service');
 
     router.registerStrategy({
@@ -106,7 +114,10 @@ describe('ChannelDeliveryRouter', () => {
 
     expect(() => router.registerStrategy(strategy)).toThrow('Channel delivery strategy already registered');
     expect(() => router.registerStrategy({ ...strategy, canHandle: () => true }, { replace: true })).not.toThrow();
-    expect(router.listStrategies()).toHaveLength(1);
+    // One registered strategy plus the router-owned agent destination: replacing
+    // by id replaced exactly one entry rather than appending a second.
+    expect(router.listStrategies()).toHaveLength(2);
+    expect(router.listStrategies().filter((entry) => entry.id === 'channel-delivery:test')).toHaveLength(1);
   });
 
   test('rejects unsafe webhook delivery targets before dispatch', async () => {
