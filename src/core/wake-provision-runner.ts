@@ -1,12 +1,24 @@
 // ---------------------------------------------------------------------------
 // wake-provision-runner.ts — what `/voice wake status` and `/voice wake setup` do.
 //
-// Provisioning the wake models is an EXPLICIT ACT and nothing else. There is no
-// automatic download anywhere in this path: status only reads what is on disk
-// (verifying by content, never by existence), and the download runs only when a
-// user types the setup subcommand. That is the same posture the managed local
-// voice runtime already has — an always-listening feature that fetched a
-// classifier the moment it was switched on would be the opposite of it.
+// `/voice wake setup` IS NO LONGER HOW THE MODEL ARRIVES. It used to be the only
+// way, and the result was that installing goodvibes produced a wake-word feature
+// that could not start until the user went and found a command nobody had told
+// them about. The installer and the npm postinstall provision the model now, and
+// a daemon retries at boot whatever the install could not fetch (the SDK's
+// voice/wake/install-provision.ts owns that policy).
+//
+// So what this command is FOR, on a normal machine, is recovery and
+// re-provisioning: an install that was offline, an artifact that stopped
+// verifying, or a re-fetch after the pinned model changes. It still works
+// exactly as it did, which is the point — the degraded path an offline install
+// falls back to is this one.
+//
+// What has NOT changed is the runtime rule. Nothing in this path downloads on its
+// own: `/voice wake status` only reads what is on disk (verifying by content,
+// never by existence), and a download happens only because the user typed
+// `setup`. Turning `voice.wake.enabled` on never fetches anything either — see
+// audio/wake-runtime.ts, which reports what is missing and names this command.
 //
 // Both SDK calls are injectable so a wire test drives the whole flow — a fresh
 // host, a corrupt artifact, a failed component — with no network and no files.

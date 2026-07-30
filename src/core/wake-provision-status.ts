@@ -2,13 +2,17 @@
 // wake-provision-status.ts — the surface-facing projection of wake-word
 // provisioning and of the rows that are or are not in force.
 //
-// The wake models are checksum-pinned and provisioned ONLY by an explicit act
-// (/voice wake setup). This module is the read-only projection the /voice wake
-// surfaces render from: per-artifact present / verified / corrupt / bytes taken
-// straight from the SDK's wakeProvisionStatus, which verifies by CONTENT rather
-// than by existence — a truncated or wrong-asset file reports corrupt instead of
-// present, because a detector loading it would fail in a way the user could not
-// diagnose.
+// The wake models are checksum-pinned and arrive WITH THE INSTALLATION: the
+// installer and the npm postinstall provision them, and a daemon retries at boot
+// whatever the install could not fetch. `/voice wake setup` is the recovery act
+// for the case where that did not land, not the normal way in — so the lines
+// below name it where it helps and do not imply it is a required step.
+//
+// This module is the read-only projection the /voice wake surfaces render from:
+// per-artifact present / verified / corrupt / bytes taken straight from the SDK's
+// wakeProvisionStatus, which verifies by CONTENT rather than by existence — a
+// truncated or wrong-asset file reports corrupt instead of present, because a
+// detector loading it would fail in a way the user could not diagnose.
 //
 // Pure formatting only (no I/O), mirroring voice-provision-status.ts: the command
 // layer fetches the status and hands it here, so these builders are testable
@@ -85,10 +89,28 @@ export function wakeStatusLines(
     `  model version: ${status.modelVersion ?? 'unpinned'}`,
     wakeArtifactLine('classifier', status.classifier),
     wakeArtifactLine('speech-embedding front end', status.embedding),
-    wakeArtifactLine('attribution NOTICE', status.notice),
+    // One NOTICE per redistributable artifact, named so it is obvious which is
+    // which: both are required, and a reader chasing a missing one needs to know
+    // whether it is ours or Google's.
+    wakeArtifactLine('attribution NOTICE (classifier)', status.notice),
+    wakeArtifactLine('attribution NOTICE (front end)', status.embeddingNotice),
+    // Reported but never presented as a problem: nothing on this terminal loads
+    // it, and it is here so a surface can see whether the daemon could serve it.
+    `${wakeArtifactLine('classifier, tflite form (served to other runtimes; unused here)', status.mobileClassifier)}`,
+    // The speech gate reports separately from `models provisioned` for the same
+    // reason it is outside the SDK's `ready`: voice.wake.vadThreshold is 0 unless
+    // someone turns it on, so a missing gate is not a broken detector. It is
+    // printed rather than left out because vadThreshold above 0 refuses to start
+    // when the gate is absent, and a reader needs to see why.
+    `  speech gate provisioned: ${status.vadReady ? 'yes' : 'no — voice.wake.vadThreshold above 0 will refuse to start'}`,
+    wakeArtifactLine('speech gate', status.vad),
+    wakeArtifactLine('attribution NOTICE (speech gate)', status.vadNotice),
   ];
   if (!status.ready) {
-    lines.push(`  a fresh provision would download ${formatVoiceBytes(status.downloadBytes)} — run /voice wake setup (nothing downloads on its own)`);
+    lines.push(
+      `  a fresh provision would download ${formatVoiceBytes(status.downloadBytes)}. Installing goodvibes normally does this,`,
+      '  and a running daemon retries at boot — run /voice wake setup to fetch it now (nothing downloads on its own).',
+    );
   }
   lines.push(
     `  wake models configured: ${settings.modelIds.length > 0 ? settings.modelIds.join(', ') : 'none (voice.wake.models is empty, so nothing is scored)'}`,
@@ -112,6 +134,13 @@ export function wakeProvisionReceiptLines(result: WakeProvisionResult): string[]
   const lines = [
     `  ready: ${result.ready ? 'yes' : 'no'}`,
     `  model version: ${result.modelVersion ?? 'unpinned'}`,
+    // Separate from `ready` on purpose: this terminal loads the onnx build, so a
+    // missing tflite twin is not a detector that cannot run.
+    `  tflite form (for runtimes that cannot load onnx): ${result.mobileFormatReady ? 'installed' : 'not installed — nothing on this terminal needs it'}`,
+    // Separate from `ready` for its own reason: voice.wake.vadThreshold ships at
+    // 0, so the detector runs without the gate — but a value above 0 refuses to
+    // start without it, which is what this line lets a reader act on.
+    `  speech gate (voice.wake.vadThreshold): ${result.vadReady ? 'installed' : 'not installed — voice.wake.vadThreshold above 0 will refuse to start'}`,
   ];
   for (const outcome of result.outcomes) {
     const detail = outcome.state === 'failed'
@@ -123,6 +152,9 @@ export function wakeProvisionReceiptLines(result: WakeProvisionResult): string[]
   if (result.noticePath !== null) {
     lines.push(`  attribution NOTICE (travels with the classifier): ${result.noticePath}`);
   }
+  if (result.embeddingNoticePath !== null) {
+    lines.push(`  attribution NOTICE (travels with the front end): ${result.embeddingNoticePath}`);
+  }
   if (result.recallIsSyntheticOnly) {
     lines.push('  the published recall figures for this model are measured on synthesised speech only — no human recording of the phrase exists behind them.');
   }
@@ -132,6 +164,7 @@ export function wakeProvisionReceiptLines(result: WakeProvisionResult): string[]
 /** The one-line announcement printed before a (multi-megabyte) provision runs. */
 export const WAKE_SETUP_ANNOUNCEMENT = [
   'Wake-Word Setup',
-  '  downloading the pinned "hey goodvibes" classifier and the shared speech-embedding front end…',
-  '  both are checksum-verified and the download is resumable — re-run /voice wake setup to retry any failed component.',
+  '  downloading the pinned "hey goodvibes" classifier (both runtime formats), the shared speech-embedding front end, and the speech gate voice.wake.vadThreshold runs…',
+  '  every artifact is checksum-verified and the download is resumable — one that already matches is skipped, so re-running this only fetches what is missing.',
+  '  installing goodvibes normally does this for you; running it by hand is how you recover an install that could not reach the network.',
 ].join('\n');

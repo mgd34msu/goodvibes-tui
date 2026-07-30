@@ -12,10 +12,13 @@
  *
  * TWO THINGS ARE DELIBERATELY NOT AUTOMATIC
  *
- *  - **Nothing downloads.** The classifier and the speech-embedding front end are
- *    provisioned only by an explicit `/voice wake setup`. If the feature is on and
- *    the models are absent, this says exactly that instead of starting a detector
- *    that could never score anything.
+ *  - **ENABLING NEVER DOWNLOADS.** The model ships with the installation, so on a
+ *    normal machine `start()` below finds the artifacts already there and needs
+ *    nothing else — that is the whole point of provisioning at install time. What
+ *    it must never do is FETCH: the check here is read-only and content-verified,
+ *    and a host whose artifacts are missing or torn gets told which and gets the
+ *    recovery command named, instead of a switch that silently pulls 6 MB. A
+ *    download is an install-time or boot-time act with a receipt; a toggle is not.
  *  - **Disabled means no device is opened at all.** `settings.active` is the only
  *    thing consulted before opening a microphone, and the SDK listener re-checks
  *    it and refuses without touching the capture opener. A configuration that is
@@ -210,7 +213,8 @@ export function wireWakeRuntime(deps: WakeRuntimeDeps): WakeRuntime {
     if (!provision.ready) {
       deps.notify(
         `[Wake] voice.wake.enabled is on, but the wake models are not provisioned (${provision.reason ?? 'not-provisioned'}), `
-        + 'so nothing is listening. Run /voice wake setup to download and verify them.',
+        + 'so nothing is listening. Installing goodvibes provisions them and a running daemon retries at boot, so this '
+        + 'means the download has not succeeded yet — run /voice wake setup to fetch and verify them now.',
       );
       deps.render();
       return;
