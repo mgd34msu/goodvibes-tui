@@ -2433,6 +2433,112 @@ describe('install.sh — restart path validates the target before restarting/rel
   );
 });
 
+describe('install.sh — bare-process relaunch is canonical, never replayed from a found process', () => {
+  test(
+    'goodvibes-daemon is relaunched with ONLY "--daemon-home $HOME", even while a decoy process merely matching the pgrep pattern is running',
+    async () => {
+      // Live incident: a stray, non-service goodvibes-daemon process was
+      // alive when the installer ran an upgrade. The OLD restart_bare_processes
+      // captured THAT process's raw /proc/<pid>/cmdline and replayed it
+      // verbatim on relaunch — producing a daemon started with
+      // "/$bunfs/root/goodvibes-daemon-linux-x64 --daemon-home ./fresh-home
+      // --port 3499" (a diagnostic process's own argv, including the
+      // bun-compiled binary's internal argv[1]), from whatever directory the
+      // installer happened to be run in, with whatever environment it
+      // inherited. This pins the fix: goodvibes-daemon is ALWAYS relaunched
+      // as "$INSTALL_DIR/goodvibes-daemon" --daemon-home "$HOME" —
+      // write_systemd_unit's own canonical shape — regardless of what the
+      // process being replaced was invoked with.
+      const root = scratch('gv-bare-canonical');
+      const home = join(root, 'home');
+      const installDir = join(root, 'bin');
+      mkdirSync(installDir, { recursive: true });
+      mkdirSync(home, { recursive: true });
+
+      // The relaunch target: a script that stays alive and can be inspected
+      // live via ps, so the canonical shape is verified from the OS's own
+      // view of the process, not just the installer's log line.
+      const daemonBin = join(installDir, 'goodvibes-daemon');
+      writeFileSync(daemonBin, '#!/bin/sh\nsleep 300\n');
+      chmodSync(daemonBin, 0o755);
+
+      // The decoy: a DIFFERENT file under $INSTALL_DIR (so
+      // proc_belongs_to_install_dir sees it as owned by this install) whose
+      // name alone makes it match the '[g]oodvibes-daemon' pgrep pattern —
+      // standing in for the live incident's diagnostic process, whose
+      // cmdline happened to mention "goodvibes-daemon" without being the
+      // real, canonical launch.
+      const decoyBin = join(installDir, 'goodvibes-daemon-old-diagnostic');
+      copyFileSync('/bin/sleep', decoyBin);
+      chmodSync(decoyBin, 0o755);
+      // Spawned detached (backgrounded inside an immediately-exiting shell)
+      // rather than via Bun.spawn directly: a plain Bun.spawn child stays a
+      // child of THIS test process, and runLib below blocks the whole event
+      // loop inside one synchronous Bun.spawnSync call — so once
+      // restart_bare_processes signals it, it cannot be reaped until
+      // spawnSync returns, and it reports as a zombie ("still exists") to
+      // `kill -0` for that whole window, which is a test-harness artifact,
+      // not real install.sh behaviour. Detaching it here reparents it away
+      // from this process (to the nearest subreaper/init) so its death is
+      // observed normally the instant it actually happens.
+      const decoySpawn = Bun.spawnSync(['sh', '-c', `${decoyBin} 300 & echo $!`], {
+        stdio: ['ignore', 'pipe', 'ignore'],
+      });
+      const decoyPid = Number.parseInt(decoySpawn.stdout.toString().trim(), 10);
+      const decoyAlive = () => {
+        try {
+          process.kill(decoyPid, 0);
+          return true;
+        } catch {
+          return false;
+        }
+      };
+
+      try {
+        await waitForSpawnedBinary(decoyPid, decoyBin);
+        const out = runLib('restart_running_daemon', {
+          HOME: home,
+          GOODVIBES_INSTALL_DIR: installDir,
+          PATH: `${stubServiceBin(root)}:${process.env.PATH ?? ''}`,
+        });
+        expect(out.code).toBe(0);
+        expect(out.stdout).toContain('Restarting running goodvibes-daemon');
+        // The installer's own log line names the canonical relaunch args.
+        expect(out.stdout).toContain(`(args: --daemon-home ${home})`);
+        // Never the decoy's own captured argv/path.
+        expect(out.stdout).not.toContain('old-diagnostic');
+        expect(out.stdout).not.toContain('bunfs');
+
+        // The decoy was actually stopped (not left running under a borrowed
+        // identity).
+        let waited = 0;
+        while (decoyAlive() && waited < 5000) {
+          await new Promise((r) => setTimeout(r, 100));
+          waited += 100;
+        }
+        expect(decoyAlive()).toBe(false);
+
+        // And the LIVE relaunched process's own argv — read straight from
+        // the OS, not the installer's log — carries ONLY the canonical
+        // invocation.
+        await new Promise((r) => setTimeout(r, 300));
+        const psOut = Bun.spawnSync(['pgrep', '-af', daemonBin]).stdout.toString();
+        expect(psOut).toContain(`--daemon-home ${home}`);
+      } finally {
+        const leftover = Bun.spawnSync(['pgrep', '-f', installDir]).stdout.toString().trim();
+        for (const p of leftover.split('\n').filter(Boolean)) {
+          try {
+            process.kill(Number(p), 'SIGKILL');
+          } catch {
+            /* already gone */
+          }
+        }
+      }
+    },
+    PROCESS_TEST_BUDGET_MS,
+  );
+});
+
 describe('install.sh — uninstall mode', () => {
   test('removes installer-managed files, preserves hand-written units and ~/.goodvibes, prints a summary', () => {
     const root = scratch('gv-uninstall');
