@@ -784,8 +784,31 @@ restart_systemd_unit() {
 
 restart_bare_processes() {
   # restart_bare_processes <pgrep-pattern> <new-binary>
+  #
+  # The RELAUNCH INVOCATION is canonical for goodvibes-daemon, never read off
+  # the process being replaced. An earlier version captured the outgoing
+  # process's raw /proc/<pid>/cmdline and replayed it verbatim on relaunch —
+  # so ANY process merely matching the pgrep pattern (a manually launched
+  # diagnostic copy, a bun-compiled binary whose cmdline carries its own
+  # internal argv[1], leftover --hostname/--port flags from an old pinned
+  # unit) had its exact argv, and — via plain `nohup` — this shell's own
+  # current working directory, relaunched as if it were this install's real
+  # daemon. Live incident: a stray goodvibes-daemon process running from a
+  # scratch directory got killed and relaunched with its own captured
+  # `/$bunfs/root/goodvibes-daemon-linux-x64 --daemon-home ./fresh-home
+  # --port 3499`, in whatever directory the installer happened to be run
+  # from. write_systemd_unit's canonical shape
+  # ("$INSTALL_DIR/goodvibes-daemon" --daemon-home "$HOME") is used instead
+  # for the daemon: it resolves everything else (host/port, etc.) from
+  # settings at startup, so nothing is lost by not replaying old flags, and
+  # the relaunch runs from $HOME rather than the installer's own (possibly
+  # scratch/temp) cwd. goodvibes-agent has no canonical invocation known to
+  # this installer (it is not a unit this script writes), so its original
+  # arguments are still recovered from the process being replaced.
   pattern="$1"
   new_bin="$2"
+  _is_daemon=0
+  [ "${new_bin##*/}" = "goodvibes-daemon" ] && _is_daemon=1
   # Only ever this install's own processes; anything else is named and left
   # running. See pids_owned_by_install.
   report_foreign_processes "$pattern" "${new_bin##*/}"
@@ -817,13 +840,23 @@ restart_bare_processes() {
     if ! proc_belongs_to_install_dir "$pid"; then
       continue
     fi
-    # Recover the original arguments so flags (port, host, home dir) survive.
-    if [ -r "/proc/$pid/cmdline" ]; then
-      args=$(tr '\0' '\n' < "/proc/$pid/cmdline" | tail -n +2 | tr '\n' ' ')
+
+    if [ "$_is_daemon" = "1" ]; then
+      # Canonical only — never derived from the process being replaced.
+      # display_args is for the human-readable notices below only.
+      display_args="--daemon-home $HOME"
     else
-      args=$(ps -o args= -p "$pid" 2>/dev/null | sed 's/^[^ ]* *//')
+      # No canonical shape known for this binary — recover the original
+      # arguments so flags survive.
+      if [ -r "/proc/$pid/cmdline" ]; then
+        args=$(tr '\0' '\n' < "/proc/$pid/cmdline" | tail -n +2 | tr '\n' ' ')
+      else
+        args=$(ps -o args= -p "$pid" 2>/dev/null | sed 's/^[^ ]* *//')
+      fi
+      args=$(printf '%s' "${args:-}" | sed 's/[[:space:]]*$//')
+      display_args="${args:-}"
     fi
-    args=$(printf '%s' "${args:-}" | sed 's/[[:space:]]*$//')
+
     say ""
     say "Restarting running ${new_bin##*/} (pid $pid) ..."
     kill "$pid" 2>/dev/null || continue
@@ -834,18 +867,30 @@ restart_bare_processes() {
     done
     if kill -0 "$pid" 2>/dev/null; then
       say "  NOTE: pid $pid did not exit within 10s — not starting a second instance."
-      say "  Stop it, then start the new one: $new_bin ${args:-}"
+      say "  Stop it, then start the new one: $new_bin ${display_args:-}"
       continue
     fi
-    # shellcheck disable=SC2086  # args is intentionally word-split
-    nohup "$new_bin" ${args:-} >/dev/null 2>&1 &
-    newpid=$!
+
+    if [ "$_is_daemon" = "1" ]; then
+      # Canonical relaunch: fixed binary + --daemon-home "$HOME" only, run
+      # from $HOME — never the installer's own (possibly scratch/temp) cwd,
+      # and never any argv carried over from the process just stopped.
+      (
+        cd "$HOME" 2>/dev/null || cd / 2>/dev/null || true
+        exec nohup "$new_bin" --daemon-home "$HOME" >/dev/null 2>&1
+      ) &
+      newpid=$!
+    else
+      # shellcheck disable=SC2086  # args is intentionally word-split
+      nohup "$new_bin" ${args:-} >/dev/null 2>&1 &
+      newpid=$!
+    fi
     sleep 1
     if kill -0 "$newpid" 2>/dev/null; then
-      say "  restarted  pid $newpid${args:+ (args: $args)}"
+      say "  restarted  pid $newpid${display_args:+ (args: $display_args)}"
     else
       say "  NOTE: the new process did not stay up — start it yourself and check its output:"
-      say "    $new_bin ${args:-}"
+      say "    $new_bin ${display_args:-}"
     fi
   done
 }
@@ -1733,6 +1778,11 @@ install_browser_driver() {
 #   GOODVIBES_SHADOW_REMOVE=0     never remove; report only
 SHADOW_REMOVE="${GOODVIBES_SHADOW_REMOVE:-ask}"
 
+# Set to 1 by shadow_confirm() when it could not ask (no controlling
+# terminal) rather than being genuinely declined — see shadow_confirm and
+# check_command_shadowing's use of it below.
+SHADOW_HEADLESS_UNCONFIRMED=0
+
 # Set to 1 when a shadow was found and is still in place at the end of main().
 PATH_SHADOW_UNRESOLVED=0
 
@@ -1772,18 +1822,44 @@ shadow_effective_path() {
   printf '%s' "${PATH:-}"
 }
 
-# Every PATH directory in search order: trailing slashes trimmed, empty entries
-# dropped (an empty PATH element means the current directory, which is not a
-# stable install anyone can reason about), duplicates collapsed to their first
-# occurrence — the only position that can ever win.
+# Every PATH directory in search order: NORMALIZED (see shadow_normalize_dir
+# below — trailing slashes trimmed, '.'/'..' segments collapsed, symlinks
+# resolved where the directory exists), empty entries dropped (an empty PATH
+# element means the current directory, which is not a stable install anyone
+# can reason about), duplicates collapsed to their first occurrence — the
+# only position that can ever win.
+#
+# Normalizing here (not just trimming trailing slashes) matters: without it,
+# "$HOME/.local/share/../bin" and "$HOME/.local/bin" — the SAME directory,
+# reached two different ways — compared as two DIFFERENT PATH entries. If the
+# '..' spelling happened to sit earlier on PATH than the plain one, the real
+# install looked shadowed by itself, and the recognizably-ours removal advice
+# would have deleted the very binary it just installed.
 shadow_path_entries() {
-  printf '%s' "${SHADOW_PATH:-}" | awk -v RS=: '
-    {
-      d = $0
-      while (length(d) > 1 && substr(d, length(d), 1) == "/") d = substr(d, 1, length(d) - 1)
-      if (d == "") next
-      if (!(d in seen)) { seen[d] = 1; print d }
-    }'
+  _spe_seen=''
+  _spe_old_ifs=$IFS
+  IFS=:
+  set -f
+  # shellcheck disable=SC2086  # intentional IFS=: word-splitting
+  set -- ${SHADOW_PATH:-}
+  set +f
+  IFS=$_spe_old_ifs
+  for _spe_raw in "$@"; do
+    [ -n "$_spe_raw" ] || continue
+    _spe_norm=$(shadow_normalize_dir "$_spe_raw")
+    [ -n "$_spe_norm" ] || continue
+    case "$_spe_seen" in
+      *"
+$_spe_norm
+"*)
+        continue
+        ;;
+    esac
+    _spe_seen="$_spe_seen
+$_spe_norm
+"
+    printf '%s\n' "$_spe_norm"
+  done
 }
 
 # Trailing slashes trimmed the same way, so "$HOME/.local/bin/" and
@@ -1815,6 +1891,57 @@ shadow_real_path() {
     hops=$((hops + 1))
   done
   printf '%s\n' "$current"
+}
+
+# Lexically collapses '.' and '..' path segments in an ABSOLUTE path —
+# realpath -m style: pure string manipulation, no filesystem access, so it
+# works whether or not the directory exists yet. A leading '..' cannot climb
+# above '/'. Only ever applied to absolute paths (every PATH entry and
+# $INSTALL_DIR are); a relative input is printed back unchanged.
+shadow_collapse_dots() {
+  case "$1" in
+    /*) : ;;
+    *) printf '%s' "$1"; return 0 ;;
+  esac
+  printf '%s\n' "$1" | awk -F/ '
+    {
+      n = 0
+      for (i = 1; i <= NF; i++) {
+        part = $i
+        if (part == "" && i == 1) { out[++n] = ""; continue }
+        if (part == "" || part == ".") continue
+        if (part == "..") {
+          if (n > 1) n--
+          continue
+        }
+        out[++n] = part
+      }
+      result = out[1]
+      for (i = 2; i <= n; i++) result = result "/" out[i]
+      if (result == "") result = "/"
+      print result
+    }'
+}
+
+# Canonicalizes a directory to the same string every equivalent spelling
+# resolves to, so "$HOME/.local/share/../bin" and "$HOME/.local/bin" compare
+# equal: trims trailing slashes, lexically collapses '.'/'..' segments (works
+# even when the directory does not exist), and — when the directory DOES
+# exist — additionally resolves any symlinks in it via shadow_real_path. Falls
+# back to the trimmed-and-collapsed literal when it cannot be resolved further
+# (does not exist, permission denied) rather than erroring: a PATH may
+# legitimately name a directory that isn't there yet.
+shadow_normalize_dir() {
+  _nd=$(shadow_trim_dir "$1")
+  [ -n "$_nd" ] || { printf '%s' ''; return 0; }
+  case "$_nd" in
+    /*) _nd=$(shadow_collapse_dots "$_nd") ;;
+  esac
+  if [ -d "$_nd" ]; then
+    _nd_real=$(shadow_real_path "$_nd")
+    [ -n "$_nd_real" ] && _nd=$(shadow_trim_dir "$_nd_real")
+  fi
+  printf '%s' "$_nd"
 }
 
 # The owning @pellux/goodvibes-* package for a resolved path, or nothing.
@@ -1917,16 +2044,41 @@ shadow_removal_command() {
 
 # Asks on the terminal, when there is one. `curl … | sh` leaves stdin pointing
 # at the script itself, so the question and the answer both go through
-# /dev/tty; with no terminal (CI, a pipeline) the default is to remove nothing
-# and report, which is what leaves the exit code non-zero.
+# /dev/tty; with no terminal at all (a headless/service-managed run, CI, a
+# detached `curl | sh`) the safe default is to remove nothing and report.
 shadow_confirm() {
   case "$SHADOW_REMOVE" in
     1) return 0 ;;
     0) return 1 ;;
   esac
-  [ -r /dev/tty ] && [ -w /dev/tty ] || return 1
-  printf '%s [y/N] ' "$1" > /dev/tty
-  read -r shadow_answer < /dev/tty || return 1
+  # A stat-based readable/writable check on /dev/tty is NOT sufficient proof
+  # that a controlling terminal exists: the device node's own permission bits
+  # (crw-rw-rw-, world read/write) pass that check even on a completely
+  # headless run — only actually OPENING it fails there, with ENXIO ("No such
+  # device or address"). Live incident: exactly that ENXIO surfaced on a
+  # headless run, and the failed write was not caught as the CONDITION of an
+  # `if` — it fell straight through to the read/prompt below and eventually
+  # to the installer's non-zero exit, well after the binaries were already
+  # correctly installed. Both directions are attempted as the condition of an
+  # `if` here, so a headless run takes the safe non-interactive default (leave
+  # the copy in place, say so) instead of failing the whole install over a
+  # step nobody could have answered.
+  #
+  # `true`, not `:` — `:` is a POSIX SPECIAL builtin, and a redirection
+  # failure on a special builtin is fatal to a non-interactive shell
+  # UNCONDITIONALLY, bypassing the usual set -e exemptions for an if-condition
+  # or a `!` negation entirely: `if ! { : > /dev/tty; }; then ...` still
+  # killed the whole script on the open failure. `true` is an ORDINARY
+  # builtin, so its redirection failure is just a normal command failure,
+  # properly exempted here.
+  if ! { true > /dev/tty; } 2>/dev/null || ! { true < /dev/tty; } 2>/dev/null; then
+    SHADOW_HEADLESS_UNCONFIRMED=1
+    say "  (no terminal available to ask — leaving this copy in place for now;"
+    say "   re-run this installer interactively, or set GOODVIBES_SHADOW_REMOVE=1, to remove it.)"
+    return 1
+  fi
+  printf '%s [y/N] ' "$1" > /dev/tty 2>/dev/null || return 1
+  read -r shadow_answer < /dev/tty 2>/dev/null || return 1
   case "$shadow_answer" in
     y|Y|yes|YES|Yes) return 0 ;;
     *) return 1 ;;
@@ -1960,7 +2112,11 @@ check_command_shadowing() {
   # Nothing installed under this name here: not ours to have an opinion about.
   [ -f "$shadow_target" ] && [ -x "$shadow_target" ] || return 0
 
-  shadow_install_index=$(shadow_path_index "$shadow_install_dir")
+  # shadow_path_entries now prints NORMALIZED directories (see
+  # shadow_normalize_dir), so the index lookup must query with the same
+  # normalized form — otherwise "$INSTALL_DIR" (unnormalized) could fail to
+  # match its own normalized entry and look absent from PATH entirely.
+  shadow_install_index=$(shadow_path_index "$(shadow_normalize_dir "$INSTALL_DIR")")
   if [ -z "$shadow_install_index" ]; then
     say ""
     say "PROBLEM: $shadow_target is installed, but $shadow_install_dir is not on your PATH,"
@@ -1997,6 +2153,21 @@ check_command_shadowing() {
 '
   for shadow_copy in $shadow_earlier; do
     IFS=$shadow_ifs_backup
+
+    # Belt and braces on top of shadow_path_entries' own normalization: even
+    # if some PATH shape slipped past directory-level normalization (a
+    # symlinked ancestor the no-readlink-f fallback cannot fully chase, etc.),
+    # a copy that resolves to the EXACT SAME real file as the one this
+    # installer maintains is not a shadow — it is the same binary reached
+    # through a different spelling — and must never be offered for deletion.
+    shadow_copy_real=$(shadow_real_path "$shadow_copy")
+    shadow_target_real=$(shadow_real_path "$shadow_target")
+    if [ -n "$shadow_copy_real" ] && [ "$shadow_copy_real" = "$shadow_target_real" ]; then
+      IFS='
+'
+      continue
+    fi
+
     shadow_found=1
     shadow_copy_version=$(shadow_version_of "$shadow_copy" "$shadow_command")
     [ -n "$shadow_copy_version" ] || shadow_copy_version="unknown"
@@ -2019,13 +2190,20 @@ check_command_shadowing() {
     say "  $shadow_copy (version $shadow_copy_version) is a copy of our own program."
     say "  Remove it with: $shadow_fix"
 
+    SHADOW_HEADLESS_UNCONFIRMED=0
     if shadow_confirm "  Remove it now?"; then
+      # shadow_confirm only ever returns true via SHADOW_REMOVE=1 or a real
+      # 'yes' typed at a real terminal, so SHADOW_HEADLESS_UNCONFIRMED is
+      # always 0 here — a failed removal in this branch is a genuine failure.
       if run_shadow_removal "$shadow_kind" "$shadow_detail" "$shadow_fix"; then
         say "  removed     $shadow_copy"
       else
         say "  could not run: $shadow_fix"
         shadow_remaining=1
       fi
+    elif [ "$SHADOW_HEADLESS_UNCONFIRMED" = "1" ]; then
+      : # already explained by shadow_confirm; left in place, but not a
+        # failure to blame on this (unattended) run — see the final gate below
     else
       shadow_remaining=1
     fi
@@ -2040,11 +2218,18 @@ check_command_shadowing() {
   # is whether an earlier copy is still there.
   shadow_still=$(shadow_copies_of "$shadow_command" | awk -F'\t' -v limit="$shadow_install_index" '
     NF == 2 && $1 + 0 < limit + 0 { print $2 }')
-  if [ -n "$shadow_still" ]; then
-    return 1
-  fi
   if [ "$shadow_remaining" = "1" ]; then
     return 1
+  fi
+  if [ -n "$shadow_still" ]; then
+    # Something is still there, but every reason it wasn't removed was "no
+    # terminal to ask" (never a decline, an unidentified copy, or a failed
+    # removal — those all set shadow_remaining above). A headless/unattended
+    # run cannot be blamed for skipping a step nobody could have answered:
+    # report it honestly (already done above) and let the install succeed.
+    say "  \"$shadow_command\" could not be fully resolved without a terminal to confirm removal —"
+    say "  re-run this installer interactively, or set GOODVIBES_SHADOW_REMOVE=1, to finish this."
+    return 0
   fi
   say "  \"$shadow_command\" now runs $shadow_target"
   return 0

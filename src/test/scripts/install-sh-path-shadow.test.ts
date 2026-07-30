@@ -64,19 +64,26 @@ function makeHost(prefix = 'gv-shadow'): Host {
  * reasons about — no test-only hook into the script — with the stub-tool
  * directory in front (it holds no goodvibes command, so it cannot change a
  * verdict) and /usr/bin:/bin behind it so `awk` and `rm` resolve.
+ *
+ * `detached`, when true, runs the whole thing under `setsid` — a genuinely
+ * new session with NO controlling terminal at all, so `/dev/tty` opens fail
+ * with ENXIO exactly as they do on a headless/service-managed run,
+ * regardless of whether the test runner itself happens to have one.
  */
 function runLib(options: {
   readonly host: Host;
   readonly body: string;
   readonly shadowPath: readonly string[];
   readonly env?: Record<string, string>;
+  readonly detached?: boolean;
 }): { stdout: string; stderr: string; code: number } {
   const script = [
     `. "${INSTALL_SH}"`,
     `INSTALL_DIR="${options.host.installDir}"`,
     options.body,
   ].join('\n');
-  const result = Bun.spawnSync(['sh', '-c', script], {
+  const command = options.detached ? ['setsid', 'sh', '-c', script] : ['sh', '-c', script];
+  const result = Bun.spawnSync(command, {
     env: {
       ...process.env,
       HOME: options.host.home,
@@ -132,6 +139,25 @@ describe('a shadowing install is detected and reported', () => {
       `installed here: ${join(host.installDir, 'goodvibes-agent')} (version 1.21.0)`,
     );
     expect(result.stdout).toContain('bun remove -g @pellux/goodvibes-agent');
+    expect(result.stdout).toMatch(/^verdict=1$/m);
+  });
+
+  test('a genuine second copy in a DIFFERENT real directory still reports — normalization never hides an actual shadow', () => {
+    // Companion to the "../ detour" non-shadow test above: normalizing PATH
+    // entries must not make a REAL, distinct earlier copy disappear too.
+    const host = makeHost();
+    const otherBin = join(host.home, 'other-bin');
+    writeFakeCommand(join(otherBin, 'goodvibes-agent'), 'goodvibes-agent 1.14.0');
+    writeFakeCommand(join(host.installDir, 'goodvibes-agent'), 'goodvibes-agent 1.21.0');
+
+    const result = runLib({
+      host,
+      shadowPath: [otherBin, '/usr/bin', host.installDir],
+      body: 'verdict=0; check_command_shadowing goodvibes-agent || verdict=$?; echo "verdict=$verdict"',
+    });
+
+    expect(result.stdout).toContain('PROBLEM');
+    expect(result.stdout).toContain('is a copy of our own program');
     expect(result.stdout).toMatch(/^verdict=1$/m);
   });
 
@@ -206,6 +232,32 @@ describe('a non-shadowing install is not falsely flagged', () => {
     });
 
     expect(result.stdout).toMatch(/^verdict=0$/m);
+  });
+
+  test('the SAME install directory reached through a different spelling (a "../" detour) is not a self-shadow', () => {
+    // Live incident: $INSTALL_DIR resolved as "<home>/.local/share/../bin" —
+    // the SAME directory as "<home>/.local/bin", just spelled with a '..'
+    // detour — was reported as an earlier, shadowing copy of goodvibes-agent,
+    // with advice to `rm` it. That path is the literal install; deleting it
+    // would have deleted the real binary. Normalizing PATH entries before
+    // comparing (shadow_normalize_dir) must recognize these as one directory.
+    const host = makeHost();
+    writeFakeCommand(join(host.installDir, 'goodvibes-agent'), 'goodvibes-agent 1.21.0');
+    const dotDotSpelling = join(host.home, '.local', 'share', '..', 'bin');
+
+    const result = runLib({
+      host,
+      // The '..' spelling sits EARLIER on PATH than the plain one — the exact
+      // shape that made the real install look shadowed by itself.
+      shadowPath: [dotDotSpelling, '/usr/bin', host.installDir],
+      body: 'verdict=0; check_command_shadowing goodvibes-agent || verdict=$?; echo "verdict=$verdict"',
+    });
+
+    expect(result.stdout).toMatch(/^verdict=0$/m);
+    expect(result.stdout).not.toContain('PROBLEM');
+    expect(result.stdout).not.toContain('rm ');
+    // The binary is provably still there and untouched.
+    expect(existsSync(join(host.installDir, 'goodvibes-agent'))).toBe(true);
   });
 
   test('a command this install does not provide is left alone entirely', () => {
@@ -427,5 +479,63 @@ describe('the pieces the verdict is built from', () => {
 
     expect(result.stdout).toMatch(/^unresolved=0$/m);
     expect(result.stdout).not.toContain('is not on your PATH');
+  });
+});
+
+describe('a headless run is never blamed for skipping a step it could not ask', () => {
+  test('a would-prompt (recognized, removable) shadow on a run with no controlling terminal takes the safe default and reports verdict=0, not a failure', () => {
+    // Live incident: shadow_confirm's readable/writable stat check on
+    // /dev/tty passed even with no controlling terminal at all (the device
+    // node's own permission bits allow it), so execution reached an actual
+    // `> /dev/tty` write, which failed with ENXIO ("No such device or
+    // address") — and that failure was not caught as the condition of an
+    // `if`, so it propagated to the installer's non-zero exit, well after
+    // the binaries were already correctly installed. `setsid` here gives the
+    // whole run a genuinely new session with NO controlling terminal, so
+    // /dev/tty opens fail exactly as they did live, regardless of whether
+    // the test runner itself has one.
+    const host = makeHost();
+    const otherBin = join(host.home, 'bin');
+    writeFakeCommand(join(otherBin, 'goodvibes-agent'), 'goodvibes-agent 1.14.0');
+    writeFakeCommand(join(host.installDir, 'goodvibes-agent'), 'goodvibes-agent 1.21.0');
+
+    const result = runLib({
+      host,
+      shadowPath: [otherBin, host.installDir],
+      env: { GOODVIBES_SHADOW_REMOVE: 'ask' },
+      detached: true,
+      body: 'verdict=0; check_command_shadowing goodvibes-agent || verdict=$?; echo "verdict=$verdict"',
+    });
+
+    // Nothing was removed (the safe default) ...
+    expect(existsSync(join(otherBin, 'goodvibes-agent'))).toBe(true);
+    // ... and it was reported honestly, naming the fix and the reason nothing
+    // was done automatically ...
+    expect(result.stdout).toContain('is a copy of our own program');
+    expect(result.stdout).toContain('no terminal available to ask');
+    // ... but the run itself is NOT failed over a step nobody could have
+    // answered: verdict is 0, so main()'s exit-3 gate never fires for this.
+    expect(result.stdout).toMatch(/^verdict=0$/m);
+  });
+
+  test('with a real terminal (or GOODVIBES_SHADOW_REMOVE=0), a declined/unresolved shadow still fails the verdict — the softening is headless-only', () => {
+    // Guards against over-correction: the new headless allowance must never
+    // swallow a genuine failure. GOODVIBES_SHADOW_REMOVE=0 (explicit
+    // report-only) never reaches the tty check at all, so it must still
+    // report verdict=1 exactly as before.
+    const host = makeHost();
+    const otherBin = join(host.home, 'bin');
+    writeFakeCommand(join(otherBin, 'goodvibes-agent'), 'goodvibes-agent 1.14.0');
+    writeFakeCommand(join(host.installDir, 'goodvibes-agent'), 'goodvibes-agent 1.21.0');
+
+    const result = runLib({
+      host,
+      shadowPath: [otherBin, host.installDir],
+      env: { GOODVIBES_SHADOW_REMOVE: '0' },
+      body: 'verdict=0; check_command_shadowing goodvibes-agent || verdict=$?; echo "verdict=$verdict"',
+    });
+
+    expect(result.stdout).toMatch(/^verdict=1$/m);
+    expect(existsSync(join(otherBin, 'goodvibes-agent'))).toBe(true);
   });
 });
