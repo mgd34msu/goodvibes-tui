@@ -165,7 +165,7 @@ describe('settings workspace — in-product feature documentation', () => {
   }
 
   test('a startup-gated change shows the complete pending-restart sentence at the point of change (80×24)', () => {
-    const feature = FEATURE_SETTINGS.find((candidate) => candidate.id === 'unified-runtime-task')!;
+    const feature = FEATURE_SETTINGS.find((candidate) => candidate.id === 'mcp-lifecycle')!;
     selectFeatureHeader(feature);
     modal.toggleSelectedFlag();
 

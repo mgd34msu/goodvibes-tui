@@ -1,10 +1,11 @@
 import { describe, expect, test } from 'bun:test';
 import { rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { RuntimeEventBus } from '@/runtime/index.ts';
+import { RuntimeEventBus, createFeatureFlagManager, deriveFeatureStates } from '@/runtime/index.ts';
 import { createRuntimeStore } from '../../runtime/store/index.ts';
 import { WatcherRegistry } from '@pellux/goodvibes-sdk/platform/watchers';
 import { loadWatcherSnapshotFromPath, resolveWatcherStorePath, saveWatcherSnapshotToPath } from '@pellux/goodvibes-sdk/platform/watchers';
+import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import { makeProjectTempDir } from '../helpers/project-temp.ts';
 
 function createTempWatcherStore(): { readonly root: string; readonly storePath: string } {
@@ -177,6 +178,107 @@ describe('WatcherRegistry', () => {
       expect(registry.list()).toHaveLength(0);
     } finally {
       registry?.stopWatcher('watcher-1', 'test-complete');
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  // -------------------------------------------------------------------------
+  // watchers.enabled, driven to BOTH values through the real gate.
+  //
+  // This setting used to configure nothing: services.ts built its
+  // WatcherRegistry without a featureFlags manager, and isFeatureGateEnabled
+  // is permissive when no manager is wired, so a composition root that
+  // omitted featureFlags did not disable the registry when watchers.enabled
+  // was turned off — registerWatcher/startWatcher/etc. kept working either
+  // way. services.ts now threads featureFlags, the same shape as the
+  // RouteBindingManager fix.
+  //
+  // The mutation check for this row: remove that argument and the "off" half
+  // of the first test below fails, because the registry falls back to
+  // permissive and registers the watcher anyway.
+  // -------------------------------------------------------------------------
+
+  function registryWithGate(root: string, storePath: string, enabled: boolean): WatcherRegistry {
+    const configManager = new ConfigManager({ surfaceRoot: 'tui', workingDir: root, homeDir: root, configDir: join(root, '.goodvibes', 'tui') });
+    configManager.set('watchers.enabled', enabled);
+    const featureFlags = createFeatureFlagManager();
+    featureFlags.loadFromConfig({ flags: deriveFeatureStates(configManager) });
+    // Constructed exactly as runtime/services.ts constructs it.
+    return new WatcherRegistry({ storePath, featureFlags });
+  }
+
+  test('watchers.enabled false turns the watcher registry off, and it says so', () => {
+    const { root, storePath } = createTempWatcherStore();
+    try {
+      const registry = registryWithGate(root, storePath, false);
+      registry.attachRuntime({ runtimeBus: new RuntimeEventBus(), runtimeStore: createRuntimeStore() });
+      expect(registry.list()).toEqual([]);
+      // A register call REFUSES rather than silently doing nothing, and the
+      // refusal names the setting so the reason is diagnosable from the
+      // message alone.
+      let refusal = '';
+      try {
+        registry.registerPollingWatcher({
+          id: 'watcher-gate',
+          label: 'gate-test',
+          source: {
+            id: 'source-gate', kind: 'watcher', label: 'gate-test', enabled: true, createdAt: 1, updatedAt: 1, metadata: {},
+          },
+          intervalMs: 60_000,
+          run: () => 'checkpoint',
+        });
+      } catch (error) {
+        refusal = error instanceof Error ? error.message : String(error);
+      }
+      expect(refusal).toContain('watchers.enabled');
+      expect(registry.list()).toEqual([]);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  test('watchers.enabled true registers a watcher, and is the shipped default', () => {
+    const { root, storePath } = createTempWatcherStore();
+    try {
+      const registry = registryWithGate(root, storePath, true);
+      registry.attachRuntime({ runtimeBus: new RuntimeEventBus(), runtimeStore: createRuntimeStore() });
+      registry.registerPollingWatcher({
+        id: 'watcher-gate',
+        label: 'gate-test',
+        source: {
+          id: 'source-gate', kind: 'watcher', label: 'gate-test', enabled: true, createdAt: 1, updatedAt: 1, metadata: {},
+        },
+        intervalMs: 60_000,
+        run: () => 'checkpoint',
+      });
+      expect(registry.list()).toHaveLength(1);
+      registry.stopWatcher('watcher-gate', 'test-complete');
+
+      // The default half: with the key never written, effective behaviour
+      // matches true. A genuinely fresh root — ConfigManager's project tier
+      // is keyed by workingDir/surfaceRoot regardless of configDir, so reusing
+      // `root` here would read back the write above instead of the real default.
+      const { root: unsetRoot } = createTempWatcherStore();
+      const unsetConfig = new ConfigManager({ surfaceRoot: 'tui', workingDir: unsetRoot, homeDir: unsetRoot, configDir: join(unsetRoot, '.goodvibes', 'unset') });
+      expect(unsetConfig.get('watchers.enabled')).toBe(true);
+      const flags = createFeatureFlagManager();
+      flags.loadFromConfig({ flags: deriveFeatureStates(unsetConfig) });
+      const unsetStorePath = join(unsetRoot, 'watchers-unset.json');
+      const unsetRegistry = new WatcherRegistry({ storePath: unsetStorePath, featureFlags: flags });
+      unsetRegistry.attachRuntime({ runtimeBus: new RuntimeEventBus(), runtimeStore: createRuntimeStore() });
+      unsetRegistry.registerPollingWatcher({
+        id: 'watcher-gate-unset',
+        label: 'gate-test-unset',
+        source: {
+          id: 'source-gate-unset', kind: 'watcher', label: 'gate-test-unset', enabled: true, createdAt: 1, updatedAt: 1, metadata: {},
+        },
+        intervalMs: 60_000,
+        run: () => 'checkpoint',
+      });
+      expect(unsetRegistry.list()).toHaveLength(1);
+      unsetRegistry.stopWatcher('watcher-gate-unset', 'test-complete');
+      rmSync(unsetRoot, { recursive: true, force: true });
+    } finally {
       rmSync(root, { recursive: true, force: true });
     }
   });

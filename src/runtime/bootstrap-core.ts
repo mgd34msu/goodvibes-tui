@@ -20,7 +20,7 @@ import { createRuntimeStore, createDomainDispatch, type RuntimeStore } from './s
 import {
   type MutableRuntimeState, type SessionEvent, bindFeatureSettingsBridge, createFeatureFlagManager, deriveFeatureStates, RuntimeEventBus, ForensicsCollector,
   ForensicsRegistry, generateUserSessionId, loadBootstrapSystemPrompt, syncConfiguredServices,
-  registerBootstrapHookBridge, registerBootstrapRuntimeEvents,
+  registerBootstrapHookBridge, registerBootstrapRuntimeEvents, configureRuntimeEventBusDefaults, runtimeEventBusOptionsFrom,
 } from '@/runtime/index.ts';
 import { readExecEnvScrubAllowlist } from '../input/exec-env-scrub-config.ts';
 import { createSandboxExecAsk, sandboxExecAskDepsFromRuntime } from '../permissions/sandbox-exec-gate.ts';
@@ -238,7 +238,7 @@ export async function initializeBootstrapCore(
   bindFeatureSettingsBridge(configManager, featureFlags);
 
   const userSessionId = `user-${generateUserSessionId()}`;
-  const runtimeBus = new RuntimeEventBus();
+  configureRuntimeEventBusDefaults(runtimeEventBusOptionsFrom((key) => configManager.get(key))); const runtimeBus = new RuntimeEventBus(); // cap from runtime.eventBus.maxListeners before the first bus exists
   const store = createRuntimeStore();
   const domainDispatch = createDomainDispatch(store);
   let getConversationTitle = (): string | undefined => undefined;

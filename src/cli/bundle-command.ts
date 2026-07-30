@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { RuntimeEventBus } from '@/runtime/index.ts';
+import { RuntimeEventBus, configureRuntimeEventBusDefaults, runtimeEventBusOptionsFrom } from '@/runtime/index.ts';
 import { createShellPathService } from '@/runtime/index.ts';
 import { listProviderRuntimeSnapshots } from '@pellux/goodvibes-sdk/platform/providers';
 import { createRuntimeServices } from '../runtime/services.ts';
@@ -83,6 +83,9 @@ function readAuthPosture(runtime: CliCommandRuntime) {
 }
 
 async function buildProviderReadiness(runtime: CliCommandRuntime) {
+  // Point the bus listener cap at runtime.eventBus.maxListeners before the
+  // first bus exists, so every bus this process builds later uses it.
+  configureRuntimeEventBusDefaults(runtimeEventBusOptionsFrom((key) => runtime.configManager.get(key)));
   const runtimeBus = new RuntimeEventBus();
   const runtimeStore = createRuntimeStore();
   const services = createRuntimeServices({

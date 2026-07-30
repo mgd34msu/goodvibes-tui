@@ -1,11 +1,14 @@
 import { describe, test, expect, beforeEach } from 'bun:test';
+import { join } from 'node:path';
 import {
   ApiTokenAuditor,
   DEFAULT_ROTATION_CADENCE_MS,
   DEFAULT_ROTATION_WARNING_THRESHOLD_MS,
 } from '@pellux/goodvibes-sdk/platform/security';
 import type { ApiTokenMetadata, TokenScopePolicy } from '@pellux/goodvibes-sdk/platform/security';
-import { SecurityPanel } from '@/runtime/index.ts';
+import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
+import { createFeatureFlagManager, deriveFeatureStates, SecurityPanel } from '@/runtime/index.ts';
+import { makeProjectTempDir } from '../helpers/project-temp.ts';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -427,6 +430,73 @@ describe('managed mode blocking', () => {
   test('isManaged reflects constructor config', () => {
     expect(new ApiTokenAuditor({ managed: true }).isManaged).toBe(true);
     expect(new ApiTokenAuditor({ managed: false }).isManaged).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// security.tokenAudit.enabled, driven to BOTH values through the real gate.
+//
+// This setting used to configure nothing in the TUI: services.ts built its
+// ApiTokenAuditor without a featureFlags manager, and isFeatureGateEnabled is
+// permissive when no manager is wired — a narrow embed with no flag manager
+// gets the capability rather than a silent off — so a composition root that
+// omitted featureFlags did not disable managed blocking when the key was
+// turned off. It made the switch inert. services.ts now threads featureFlags
+// into ApiTokenAuditor, the same shape as the RouteBindingManager fix.
+//
+// The mutation check for this row: remove that argument (or pass `undefined`)
+// and the "off" half of the first test below fails, because the auditor falls
+// back to permissive and blocks the token anyway.
+// ---------------------------------------------------------------------------
+
+describe('security.tokenAudit.enabled feature gate', () => {
+  function auditorWithGate(root: string, enabled: boolean): ApiTokenAuditor {
+    const configManager = new ConfigManager({ surfaceRoot: 'tui', workingDir: root, homeDir: root, configDir: join(root, '.goodvibes', 'tui') });
+    configManager.set('security.tokenAudit.enabled', enabled);
+    const featureFlags = createFeatureFlagManager();
+    featureFlags.loadFromConfig({ flags: deriveFeatureStates(configManager) });
+    // Constructed exactly as runtime/services.ts constructs it: managed mode
+    // is hardcoded true here (unlike services.ts's false) specifically so the
+    // gate this test targets is reachable at all.
+    const auditor = new ApiTokenAuditor({ managed: true, featureFlags });
+    auditor.registerPolicy(basePolicy);
+    return auditor;
+  }
+
+  test('security.tokenAudit.enabled false stops managed blocking even for an out-of-policy token', () => {
+    const root = makeProjectTempDir('gv-token-audit-gate');
+    const auditor = auditorWithGate(root, false);
+    const now = Date.now();
+    auditor.registerToken(makeToken({ grantedScopes: ['completions:write', 'admin:full'] }));
+    const report = auditor.auditAll(now);
+    // Still reported (advisory reporting is unaffected by this gate)...
+    expect(report.scopeViolations).toContain('tok-001');
+    // ...but NOT blocked, because the gate is off.
+    expect(report.blocked).not.toContain('tok-001');
+    expect(auditor.isBlocked('tok-001', now)).toBe(false);
+  });
+
+  test('security.tokenAudit.enabled true blocks an out-of-policy token in managed mode, and is the shipped default', () => {
+    const root = makeProjectTempDir('gv-token-audit-gate');
+    const auditor = auditorWithGate(root, true);
+    const now = Date.now();
+    auditor.registerToken(makeToken({ grantedScopes: ['completions:write', 'admin:full'] }));
+    const report = auditor.auditAll(now);
+    expect(report.blocked).toContain('tok-001');
+    expect(auditor.isBlocked('tok-001', now)).toBe(true);
+
+    // The default half: with the key never written, effective behaviour
+    // matches true. This is what makes threading featureFlags a fix that
+    // changes only whether the switch WORKS, not what an existing install does.
+    const unsetRoot = makeProjectTempDir('gv-token-audit-gate-unset');
+    const unsetConfig = new ConfigManager({ surfaceRoot: 'tui', workingDir: unsetRoot, homeDir: unsetRoot, configDir: join(unsetRoot, '.goodvibes', 'unset') });
+    expect(unsetConfig.get('security.tokenAudit.enabled')).toBe(true);
+    const flags = createFeatureFlagManager();
+    flags.loadFromConfig({ flags: deriveFeatureStates(unsetConfig) });
+    const unsetAuditor = new ApiTokenAuditor({ managed: true, featureFlags: flags });
+    unsetAuditor.registerPolicy(basePolicy);
+    unsetAuditor.registerToken(makeToken({ grantedScopes: ['completions:write', 'admin:full'] }));
+    expect(unsetAuditor.isBlocked('tok-001', now)).toBe(true);
   });
 });
 
