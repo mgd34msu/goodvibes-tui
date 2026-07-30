@@ -231,7 +231,7 @@ export const FEATURE_ONBOARDING_SECTIONS: readonly FeatureSection[] = [
       {
         flagId: 'otel-remote-export',
         label: 'OTLP remote export',
-        hint: 'Export spans over OTLP/gRPC to a collector. Enabling this also turns on the OpenTelemetry foundation.',
+        hint: 'Export spans over OTLP/HTTP JSON to a collector. Enabling this also turns on the OpenTelemetry foundation. Span export reads the OTEL_EXPORTER_OTLP_* environment variables; decision export reads telemetry.decisionOtlpEndpoint — this unit sets the latter.',
         requiresFlags: ['otel-foundation'],
         impliedConfig: [{ key: 'telemetry.decisionOtlpEnabled' as ConfigKey, value: true }],
         subOptions: [
@@ -239,10 +239,10 @@ export const FEATURE_ONBOARDING_SECTIONS: readonly FeatureSection[] = [
             key: 'endpoint',
             configKey: 'telemetry.decisionOtlpEndpoint' as ConfigKey,
             label: 'Collector endpoint',
-            hint: 'OTLP collector URL (e.g. http://localhost:4317). Leave blank to set it later in /settings.',
+            hint: 'OTLP collector URL (e.g. http://localhost:4318). Leave blank to set it later in /settings.',
             valueType: 'text',
             defaultValue: '',
-            placeholder: 'http://localhost:4317',
+            placeholder: 'http://localhost:4318',
           },
         ],
       },

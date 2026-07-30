@@ -8,6 +8,7 @@ import { AutomationJobStore } from '@pellux/goodvibes-sdk/platform/automation';
 import { AutomationRunStore } from '@pellux/goodvibes-sdk/platform/automation';
 import { RouteBindingManager } from '@pellux/goodvibes-sdk/platform/channels';
 import { SharedSessionBroker } from '@pellux/goodvibes-sdk/platform/control-plane';
+import { createFeatureFlagManager, deriveFeatureStates, type FeatureFlagManager } from '@/runtime/index.ts';
 import { trackDisposables } from '../helpers/disposables.ts';
 import {
   DEFAULT_TOP_OF_HOUR_STAGGER_MS,
@@ -40,6 +41,7 @@ describe('AutomationManager', () => {
     readonly cancelTask?: ConstructorParameters<typeof AutomationManager>[0]['cancelTask'];
     readonly agentStatusProvider?: ConstructorParameters<typeof AutomationManager>[0]['agentStatusProvider'];
     readonly configManager?: ConfigManager;
+    readonly featureFlags?: FeatureFlagManager;
   } = {}): AutomationManager {
     const routeBindings = new RouteBindingManager({
       store: new AutomationRouteStore(join(root, `routes-${Date.now()}-${Math.random().toString(16).slice(2)}.json`)),
@@ -74,6 +76,7 @@ describe('AutomationManager', () => {
       spawnTask,
       cancelTask,
       agentStatusProvider,
+      featureFlags: config.featureFlags,
     }));
   }
 
@@ -461,5 +464,83 @@ describe('AutomationManager', () => {
     expect(heartbeat.processed[0]?.jobId).toBe(job.id);
     expect(spawnCount).toBe(1);
     manager.stop();
+  });
+
+  // ---------------------------------------------------------------------------
+  // automation.enabled, driven to BOTH values through the real gate.
+  //
+  // This setting used to configure nothing: services.ts built its
+  // AutomationManager without a featureFlags manager, and isFeatureGateEnabled
+  // is permissive when no manager is wired, so a composition root that omitted
+  // featureFlags did not disable createJob/etc. when automation.enabled was
+  // turned off. bootstrap.ts's own `if (configManager.get('automation.enabled'))`
+  // check only ever prevented automationManager.start() from being SCHEDULED —
+  // it never reached the manager's create/update/run/list methods, which is
+  // the gap this fix closes. services.ts now threads featureFlags, the same
+  // shape as the RouteBindingManager fix.
+  //
+  // The mutation check for this row: remove that argument and the "off" half
+  // of the first test below fails, because the manager falls back to
+  // permissive and creates the job anyway.
+  // ---------------------------------------------------------------------------
+
+  describe('automation.enabled feature gate', () => {
+    function managerWithGate(enabled: boolean): AutomationManager {
+      const configManager = new ConfigManager({ surfaceRoot: 'tui', workingDir: root, configDir: join(root, '.goodvibes', 'tui') });
+      configManager.set('automation.enabled', enabled);
+      const featureFlags = createFeatureFlagManager();
+      featureFlags.loadFromConfig({ flags: deriveFeatureStates(configManager) });
+      return createManager({ configManager, featureFlags });
+    }
+
+    test('automation.enabled false turns AutomationManager off, and it refuses a create', async () => {
+      const manager = managerWithGate(false);
+      expect(manager.listJobs()).toEqual([]);
+      let refusal = '';
+      try {
+        await manager.createJob({
+          name: 'Gate test',
+          prompt: 'should be refused',
+          schedule: normalizeEverySchedule(60_000),
+          enabled: true,
+        });
+      } catch (error) {
+        refusal = error instanceof Error ? error.message : String(error);
+      }
+      expect(refusal).toContain('automation.enabled');
+      expect(manager.listJobs()).toEqual([]);
+    });
+
+    test('automation.enabled true allows a create, and is the shipped default', async () => {
+      const manager = managerWithGate(true);
+      const job = await manager.createJob({
+        name: 'Gate test',
+        prompt: 'should succeed',
+        schedule: normalizeEverySchedule(60_000),
+        enabled: true,
+      });
+      expect(job.name).toBe('Gate test');
+      manager.stop();
+
+      // The default half: with the key never written, effective behaviour
+      // matches true. A genuinely fresh root (not `root`, which already has
+      // automation.enabled written under it) — ConfigManager's project tier
+      // is keyed by workingDir/surfaceRoot regardless of configDir, so reusing
+      // `root` here would read back the write above instead of the real default.
+      const unsetRoot = makeProjectTempDir('gv-automation-manager-unset');
+      const unsetConfig = new ConfigManager({ surfaceRoot: 'tui', workingDir: unsetRoot, configDir: join(unsetRoot, '.goodvibes', 'unset') });
+      expect(unsetConfig.get('automation.enabled')).toBe(true);
+      const flags = createFeatureFlagManager();
+      flags.loadFromConfig({ flags: deriveFeatureStates(unsetConfig) });
+      const unsetManager = createManager({ configManager: unsetConfig, featureFlags: flags });
+      const unsetJob = await unsetManager.createJob({
+        name: 'Gate test unset',
+        prompt: 'should succeed by default',
+        schedule: normalizeEverySchedule(60_000),
+        enabled: true,
+      });
+      expect(unsetJob.name).toBe('Gate test unset');
+      unsetManager.stop();
+    });
   });
 });

@@ -8,7 +8,7 @@ import {
 import type { ConfigKey } from '@pellux/goodvibes-sdk/platform/config';
 import { formatProviderModel, getModelIdFromProviderModel, getProviderIdFromModel } from '../config/provider-model.ts';
 import { resolveGoodVibesHomeOwnership } from '../config/goodvibes-home.ts';
-import { RuntimeEventBus, GlobalNetworkTransportInstaller } from '@/runtime/index.ts';
+import { RuntimeEventBus, GlobalNetworkTransportInstaller, configureRuntimeEventBusDefaults, runtimeEventBusOptionsFrom } from '@/runtime/index.ts';
 import { bindFeatureSettingsBridge, createFeatureFlagManager, deriveFeatureStates } from '@/runtime/index.ts';
 import { createRuntimeStore } from '../runtime/store/index.ts';
 import { createRuntimeServices } from '../runtime/services.ts';
@@ -343,6 +343,9 @@ async function main(): Promise<void> {
     }
   }
 
+  // Point the bus listener cap at runtime.eventBus.maxListeners before the
+  // first bus exists, so every bus this process builds later uses it.
+  configureRuntimeEventBusDefaults(runtimeEventBusOptionsFrom((key) => config.get(key)));
   const runtimeBus = new RuntimeEventBus();
   const runtimeStore = createRuntimeStore();
   // Gate states derive from the domain settings keys; the bridge keeps live

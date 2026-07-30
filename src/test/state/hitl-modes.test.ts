@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach } from 'bun:test';
+import { join } from 'node:path';
 import {
   ModeManager,
   HITL_QUIET,
@@ -6,7 +7,10 @@ import {
   HITL_OPERATOR,
 } from '@pellux/goodvibes-sdk/platform/state';
 import type { HITLMode } from '@pellux/goodvibes-sdk/platform/state';
+import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
+import { createFeatureFlagManager, deriveFeatureStates } from '@/runtime/index.ts';
 import { getTestModeManager, resetTestRuntimeServices, disposeTestRuntimeServicesAfterAll } from '../helpers/runtime-services.ts';
+import { makeProjectTempDir } from '../helpers/project-temp.ts';
 
 // Stop the shared test runtime graph when this file ends. Called here, not
 // registered inside the helper, for the reason its doc comment gives.
@@ -171,5 +175,69 @@ describe('ModeManager — HITL UX modes', () => {
       setDomainVerbosity: (_d: string, _v: string) => {},
     };
     expect(() => mgr.applyToRouter(router)).not.toThrow();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// behavior.hitlMode, driven to BOTH values through the real gate.
+//
+// This setting used to configure nothing: services.ts built its ModeManager
+// with no arguments at all (no featureFlags), and isFeatureGateEnabled is
+// permissive when no manager is wired, so a composition root that omitted
+// featureFlags did not disable the HITL UX mode system when behavior.hitlMode
+// was set to 'off' — setHITLMode kept accepting writes either way.
+// services.ts now threads featureFlags, the same shape as the
+// RouteBindingManager fix.
+//
+// The mutation check for this row: remove that argument and the "off" half
+// of the first test below fails, because the manager falls back to
+// permissive and accepts the mode change anyway.
+// ---------------------------------------------------------------------------
+
+describe('ModeManager — behavior.hitlMode feature gate', () => {
+  function modeManagerWithGate(root: string, hitlMode: 'off' | 'balanced'): ModeManager {
+    const configManager = new ConfigManager({ surfaceRoot: 'tui', workingDir: root, homeDir: root, configDir: join(root, '.goodvibes', 'tui') });
+    configManager.set('behavior.hitlMode', hitlMode);
+    const featureFlags = createFeatureFlagManager();
+    featureFlags.loadFromConfig({ flags: deriveFeatureStates(configManager) });
+    // Constructed exactly as runtime/services.ts constructs it.
+    return new ModeManager({ featureFlags });
+  }
+
+  it('behavior.hitlMode "off" turns HITL UX modes off, and the manager refuses a mode change', () => {
+    const root = makeProjectTempDir('gv-hitl-gate');
+    const mgr = modeManagerWithGate(root, 'off');
+    // Askable: the mode reads as the baseline rather than throwing.
+    expect(mgr.getHITLMode()).toBe('balanced');
+    // A write REFUSES rather than silently doing nothing, and the refusal
+    // names the setting so the reason is diagnosable from the message alone.
+    let refusal = '';
+    try {
+      mgr.setHITLMode('quiet');
+    } catch (error) {
+      refusal = error instanceof Error ? error.message : String(error);
+    }
+    expect(refusal).toContain('behavior.hitlMode');
+    expect(mgr.getHITLMode()).toBe('balanced');
+  });
+
+  it('behavior.hitlMode "balanced" allows mode changes, and is the shipped default', () => {
+    const root = makeProjectTempDir('gv-hitl-gate');
+    const mgr = modeManagerWithGate(root, 'balanced');
+    mgr.setHITLMode('quiet');
+    expect(mgr.getHITLMode()).toBe('quiet');
+
+    // The default half: with the key never written, effective behaviour
+    // matches 'balanced' (on). This is what makes threading featureFlags a
+    // fix that changes only whether the switch WORKS, not what an existing
+    // install does.
+    const unsetRoot = makeProjectTempDir('gv-hitl-gate-unset');
+    const unsetConfig = new ConfigManager({ surfaceRoot: 'tui', workingDir: unsetRoot, homeDir: unsetRoot, configDir: join(unsetRoot, '.goodvibes', 'unset') });
+    expect(unsetConfig.get('behavior.hitlMode')).toBe('balanced');
+    const flags = createFeatureFlagManager();
+    flags.loadFromConfig({ flags: deriveFeatureStates(unsetConfig) });
+    const unsetMgr = new ModeManager({ featureFlags: flags });
+    unsetMgr.setHITLMode('operator');
+    expect(unsetMgr.getHITLMode()).toBe('operator');
   });
 });
