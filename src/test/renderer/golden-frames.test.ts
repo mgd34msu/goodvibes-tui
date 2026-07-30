@@ -1554,6 +1554,49 @@ describe('golden-frames — shell-footer (compact)', () => {
   });
 });
 
+// ─── 8b. Shell footer with a live microphone ────────────────────────────────
+//
+// The persistent capture row, in both prominences `voice.wake.indicator` offers.
+// It is pinned as a golden because it is the ONLY thing on screen that says a
+// microphone is open: a change that shortened, dimmed or dropped it would
+// otherwise pass every other test in this file.
+
+function renderShellFooterVoiceSurface(indicator: 'statusline' | 'banner'): Line[] {
+  return buildShellFooter({
+    width: W,
+    promptText: '> Ask me anything',
+    promptLineCount: 1,
+    usage: { up: 1024, down: 512 },
+    showExitNotice: false,
+    lastCopyTime: 0,
+    model: 'claude-opus-4',
+    toolCount: 7,
+    workingDir: '/workspace/my-project',
+    provider: 'anthropic',
+    contextWindow: 0,
+    runningAgentCount: 0,
+    runningProcessCount: 0,
+    indicatorFocused: false,
+    voiceCapture: { kind: 'wake-listening', deviceLabel: 'parecord', indicator },
+  }).lines;
+}
+
+for (const indicator of ['statusline', 'banner'] as const) {
+  describe(`golden-frames — shell-footer (voice ${indicator})`, () => {
+    const surface = `shell-footer-voice-${indicator}`;
+    test('matches committed golden snapshot', () => {
+      const lines = renderShellFooterVoiceSurface(indicator);
+      expect(lines.length).toBeGreaterThan(0);
+      assertGolden(surface, lines);
+    });
+    test('render is deterministic (two consecutive renders match)', () => {
+      const a = snapshotEncode(surface, renderShellFooterVoiceSurface(indicator));
+      const b = snapshotEncode(surface, renderShellFooterVoiceSurface(indicator));
+      expect(a).toBe(b);
+    });
+  });
+}
+
 // ─── 9. config-modal surfaces ──────────────────────────────────
 //
 // One normal+hostile golden pair per new MIGRATE-TO-MODAL surface. Each renders

@@ -3,6 +3,10 @@ import { dirname, resolve } from 'node:path';
 import type { CommandRegistry } from '../command-registry.ts';
 import { requirePanelManager, requireShellPaths } from './runtime-services.ts';
 import { createVoiceProvisionGateway, renderVoiceProvision, runVoiceSetupWithProgress, VOICE_SETUP_ANNOUNCEMENT } from '../../core/voice-provision-gateway.ts';
+import { resolveWakeRuntimeSettings } from '@pellux/goodvibes-sdk/platform/voice/wake/runtime';
+import { terminalWakeCapabilities } from '../../core/wake-provision-status.ts';
+import { printWakeStatus, runWakeProvision } from '../../core/wake-provision-runner.ts';
+import { wakeProvisionStatus } from '@pellux/goodvibes-sdk/platform/voice';
 
 interface VoiceBundle {
   readonly version: 1;
@@ -223,11 +227,39 @@ export function registerExperienceRuntimeCommands(registry: CommandRegistry): vo
 
   registry.register({
     name: 'voice',
-    description: 'Review or toggle always-speak mode, provision the managed local voice runtime (setup/status), and package portable voice metadata',
-    usage: '[review|status|setup|enable|disable|bundle export <path>|bundle inspect <path>]',
+    description: 'Review or toggle always-speak mode, provision the managed local voice runtime and the wake-word models (setup/status), and package portable voice metadata',
+    usage: '[review|status|setup|enable|disable|wake status|wake setup|bundle export <path>|bundle inspect <path>]',
     async handler(args, ctx) {
       const shellPaths = requireShellPaths(ctx);
       const sub = (args[0] ?? 'review').toLowerCase();
+      if (sub === 'wake') {
+        // The wake models are provisioned locally by the SDK (checksum-pinned
+        // download), not through a daemon verb, so this path needs no gateway.
+        // Nothing downloads unless the user typed `setup` — see wake-provision-runner.ts.
+        const wakeSub = (args[1] ?? 'status').toLowerCase();
+        const managedRoot = shellPaths.resolveUserPath('voice');
+        const runner = {
+          managedRoot,
+          settings: resolveWakeRuntimeSettings(
+            (key: string) => ctx.platform.configManager.get(key as Parameters<typeof ctx.platform.configManager.get>[0]),
+            'tui',
+            // Read from disk, so `/voice wake status` reports the speech gate as
+            // available exactly when its artifact is there and verified.
+            terminalWakeCapabilities(wakeProvisionStatus({ managedRoot })),
+          ),
+          print: (block: string) => ctx.print(block),
+        };
+        if (wakeSub === 'setup') {
+          await runWakeProvision(runner);
+          return;
+        }
+        if (wakeSub === 'status') {
+          printWakeStatus(runner);
+          return;
+        }
+        ctx.print('Usage: /voice wake [status|setup]');
+        return;
+      }
       if (sub === 'status' || sub === 'setup') {
         // The one-act managed install returns a final receipt (no per-phase
         // streaming over the verb), so the announcement block prints first and
@@ -294,7 +326,7 @@ export function registerExperienceRuntimeCommands(registry: CommandRegistry): vo
           return;
         }
       }
-      ctx.print('Usage: /voice [review|status|setup|enable|disable|bundle export <path>|bundle inspect <path>]');
+      ctx.print('Usage: /voice [review|status|setup|enable|disable|wake status|wake setup|bundle export <path>|bundle inspect <path>]');
     },
   });
 }
