@@ -2516,8 +2516,10 @@ describe('install.sh — bare-process relaunch is canonical, never replayed from
         });
         expect(out.code).toBe(0);
         expect(out.stdout).toContain('Restarting running goodvibes-daemon');
-        // The installer's own log line names the canonical relaunch args.
-        expect(out.stdout).toContain(`(args: --daemon-home ${home})`);
+        // The installer's own log line names the canonical relaunch args —
+        // the daemon's own state directory, the same one write_systemd_unit
+        // bakes into ExecStart, not the home directory above it.
+        expect(out.stdout).toContain(`(args: --daemon-home ${home}/.goodvibes/daemon)`);
         // Never the decoy's own captured argv/path.
         expect(out.stdout).not.toContain('old-diagnostic');
         expect(out.stdout).not.toContain('bunfs');
@@ -2536,7 +2538,7 @@ describe('install.sh — bare-process relaunch is canonical, never replayed from
         // invocation.
         await new Promise((r) => setTimeout(r, 300));
         const psOut = Bun.spawnSync(['pgrep', '-af', daemonBin]).stdout.toString();
-        expect(psOut).toContain(`--daemon-home ${home}`);
+        expect(psOut).toContain(`--daemon-home ${home}/.goodvibes/daemon`);
       } finally {
         const leftover = Bun.spawnSync(['pgrep', '-f', installDir]).stdout.toString().trim();
         for (const p of leftover.split('\n').filter(Boolean)) {

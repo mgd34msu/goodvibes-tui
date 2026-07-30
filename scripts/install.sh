@@ -805,7 +805,8 @@ restart_bare_processes() {
   # `/$bunfs/root/goodvibes-daemon-linux-x64 --daemon-home ./fresh-home
   # --port 3499`, in whatever directory the installer happened to be run
   # from. write_systemd_unit's canonical shape
-  # ("$INSTALL_DIR/goodvibes-daemon" --daemon-home "$HOME") is used instead
+  # ("$INSTALL_DIR/goodvibes-daemon" --daemon-home "$HOME/.goodvibes/daemon")
+  # is used instead
   # for the daemon: it resolves everything else (host/port, etc.) from
   # settings at startup, so nothing is lost by not replaying old flags, and
   # the relaunch runs from $HOME rather than the installer's own (possibly
@@ -851,7 +852,7 @@ restart_bare_processes() {
     if [ "$_is_daemon" = "1" ]; then
       # Canonical only — never derived from the process being replaced.
       # display_args is for the human-readable notices below only.
-      display_args="--daemon-home $HOME"
+      display_args="--daemon-home $HOME/.goodvibes/daemon"
     else
       # No canonical shape known for this binary — recover the original
       # arguments so flags survive.
@@ -879,12 +880,15 @@ restart_bare_processes() {
     fi
 
     if [ "$_is_daemon" = "1" ]; then
-      # Canonical relaunch: fixed binary + --daemon-home "$HOME" only, run
-      # from $HOME — never the installer's own (possibly scratch/temp) cwd,
-      # and never any argv carried over from the process just stopped.
+      # Canonical relaunch: fixed binary + the daemon's own state directory,
+      # matching write_systemd_unit's ExecStart exactly, run from $HOME —
+      # never the installer's own (possibly scratch/temp) cwd, and never any
+      # argv carried over from the process just stopped. The state directory
+      # ($HOME/.goodvibes/daemon) is what --daemon-home names; $HOME stays the
+      # working directory, which is what the unit gets from systemd by default.
       (
         cd "$HOME" 2>/dev/null || cd / 2>/dev/null || true
-        exec nohup "$new_bin" --daemon-home "$HOME" >/dev/null 2>&1
+        exec nohup "$new_bin" --daemon-home "$HOME/.goodvibes/daemon" >/dev/null 2>&1
       ) &
       newpid=$!
     else
