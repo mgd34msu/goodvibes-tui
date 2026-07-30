@@ -6,6 +6,7 @@ import { hasResumableWizardProgress, readOnboardingCheckMarker, readWizardProgre
 import { startOnboardingFastPath } from '../runtime/onboarding/fast-path.ts';
 import { checkRecoveryForSession, readLastSessionPointer, type SessionSurface } from '@/runtime/index.ts';
 import { logger } from '@pellux/goodvibes-sdk/platform/utils';
+import { writeFatalLine } from '../daemon/fatal-boot-report.ts';
 import { offerRecoverySnapshot } from '../runtime/recovery-prompt.ts';
 import { buildRecoveryOfferWiring } from '../runtime/recovery-offer-wiring.ts';
 import type { ConversationManager } from '../core/conversation.ts';
@@ -309,7 +310,15 @@ export function reportFatalStartupError(err: unknown): void {
     // Startup diagnostics must never hide the original launch failure.
   }
   try {
-    process.stderr.write(`goodvibes failed to start: ${message}\n${stack ? `${stack}\n` : ''}`);
+    // writeFatalLine, not process.stderr.write: this repository replaces
+    // process.stderr to keep the rendered screen clean
+    // (runtime/terminal-output-guard.ts), so a replaced writer that records
+    // instead of printing would swallow the one line explaining why the screen
+    // is blank — and a stream write issued immediately before the exit below
+    // can still be in flight when the process stops existing. The descriptor
+    // write is neither interceptable nor droppable. See
+    // daemon/fatal-boot-report.ts.
+    writeFatalLine(`goodvibes failed to start: ${message}${stack ? `\n${stack}` : ''}`);
   } catch {
     // Ignore secondary stderr failures during process teardown.
   }

@@ -482,9 +482,9 @@ export async function bootstrapRuntime(
   };
 
   // Embedded DaemonServer/HttpListener factories (incl. the facade auto-update
-  // suppression) — see embedded-service-factories.ts.
+  // suppression), plus the daemon STATE directory — see embedded-service-factories.ts.
   const createExternalServiceFactories = (token: string): ExternalServiceFactories =>
-    createEmbeddedServiceFactories(token, services.clusterCoordinator, services.clusterGroup.verbs);
+    createEmbeddedServiceFactories(token, services.clusterCoordinator, services.clusterGroup.verbs, join(services.homeDirectory, '.goodvibes', 'daemon'));
 
   let externalServices: ExternalServicesHandle = {
     daemonServer: null, httpListener: null,

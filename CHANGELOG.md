@@ -4,6 +4,15 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [1.27.0] - 2026-07-30
+
+### Fixes
+
+- Fixed: the daemon died without saying why. Measured against the released 1.27.0 daemon binary, in a throwaway home whose `.goodvibes/daemon/settings.json` could not be parsed: it exited 1 with zero bytes on stdout, zero bytes on stderr, and no activity log at all. It restarted and failed 77 times overnight and the only sign anything was wrong was that everything had stopped. The cause was not output buffering and not a handler that got skipped — the daemon reported the failure to the activity logger and exited, and the daemon had never given that logger a file to write to, so nothing reached a console, a journal or a log. Writing to a log object is not the same as writing to the terminal. Every place the daemon can exit before its screen is up now writes to the error stream directly, before anything else and before the exit: the startup failure itself, the flag-parse refusal, the config and endpoint override refusals, and the `cluster`, `send`, `provision-wake-model` and service subcommands. Written to the file descriptor rather than through `process.stderr`, because this program replaces `process.stderr` to keep the rendered screen clean, and because a stream write issued immediately before the process exits can still be in flight when the process stops existing. Proven the only way it can be proven — by compiling a binary and running it — against a control that pins the old shape at zero bytes, so nobody can put the silence back without a test failing.
+- Fixed: the daemon now writes an activity log. The standalone daemon never named a log file at boot, so every line it logged for its whole lifetime went nowhere, and the flushes it performs before exiting had nothing to flush.
+- Fixed: the interactive program's startup failure message goes to the error stream directly too, for the same reason: the guard that keeps the screen clean is exactly the thing that could swallow the one line explaining why the screen is blank.
+- Fixed: `--daemon-home` is given the daemon's own state directory — `~/.goodvibes/daemon`, where its operator tokens, its users and its daemon settings live — instead of the home directory above it. The installer's systemd unit, the installer's macOS launch agent, the in-app install-service, and a daemon started in the background by the interactive program all named the home directory, so a daemon filed its identity one level above where every reader of it looks, and the program that started it went on reading an empty file. An already-installed service unit that carries no pinned host or port is still left alone on upgrade, so an existing install keeps the old location until its unit is regenerated.
+
 ## [1.26.0] - 2026-07-29
 
 ### Changes
