@@ -11,7 +11,7 @@
 |    │ Mouse wheel           Scroll conversation or hovered panel                 │                  |
 |    │ Enter                 Submit message (composer empty: open the             │                  |
 |    │ block-actions menu)                                                        │                  |
-|    │ [1-10 of 73]                                                               │                  |
+|    │ [1-10 of 74]                                                               │                  |
 |    └─[Up/Down] Scroll · [Esc] Close─────────────────────────────────────────────┘                  |
 @STYLES
 0 4 fg=#475569

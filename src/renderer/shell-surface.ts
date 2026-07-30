@@ -1,6 +1,7 @@
 import type { Line } from '../types/grid.ts';
-import { renderProcessIndicator } from './process-indicator.ts';
+import { renderProcessIndicator, renderVoiceCaptureIndicator } from './process-indicator.ts';
 import { UIFactory } from './ui-factory.ts';
+import { voiceCaptureRowVisible, type VoiceCaptureIndicatorState } from '../core/voice-capture-status.ts';
 
 export interface ShellFooterBuildOptions {
   readonly width: number;
@@ -84,6 +85,14 @@ export interface ShellFooterBuildOptions {
   readonly webSurfaceUrl?: string;
   /** True while power.keepAwake holds — renders the always-visible "sleep disabled" chip. */
   readonly powerKeepAwake?: boolean;
+  /**
+   * Live microphone state — a push-to-talk recording, or the wake detector for
+   * as long as it runs. Rendered as a persistent row beside the process
+   * indicator, because a capture device held open with nothing on screen saying
+   * so is the one state a voice feature must never be in. Null (or a wake state
+   * with `voice.wake.indicator: off`) renders nothing.
+   */
+  readonly voiceCapture?: VoiceCaptureIndicatorState | null;
 }
 
 export interface ShellFooterBuildResult {
@@ -98,6 +107,8 @@ export interface ShellFooterBuildResult {
 const FOOTER_BASE_ROWS = 5;
 const CONTEXT_PROGRESS_ROWS = 1;
 const PROCESS_INDICATOR_ROWS = 1;
+/** The live-microphone row, when one is showing (see renderVoiceCaptureIndicator). */
+const VOICE_CAPTURE_ROWS = 1;
 // Compact posture drops the context-info line (and never shows the context
 // bar or process indicator), leaving just: prompt-box top border, bottom
 // border, token-usage line, and the help/exit line.
@@ -151,6 +162,7 @@ export function estimateShellFooterHeight(
   promptLineCount: number,
   contextWindow?: number,
   compact = false,
+  voiceCapture: VoiceCaptureIndicatorState | null = null,
 ): number {
   if (lastRenderedFooterHeight !== null && lastRenderedFooterHeight.compact === compact) {
     return lastRenderedFooterHeight.height;
@@ -160,7 +172,11 @@ export function estimateShellFooterHeight(
     return COMPACT_FOOTER_BASE_ROWS + safePromptLines;
   }
   const progressRows = contextWindow && contextWindow > 0 ? CONTEXT_PROGRESS_ROWS : 0;
-  return FOOTER_BASE_ROWS + safePromptLines + progressRows + PROCESS_INDICATOR_ROWS;
+  // Counted on the cold-start path too: a shell launched with the wake detector
+  // already listening renders that row in its very first frame, and a viewport
+  // sized one row too tall would draw the transcript's last line under it.
+  const voiceRows = voiceCaptureRowVisible(voiceCapture) ? VOICE_CAPTURE_ROWS : 0;
+  return FOOTER_BASE_ROWS + safePromptLines + progressRows + PROCESS_INDICATOR_ROWS + voiceRows;
 }
 
 export function buildShellFooter(
@@ -206,7 +222,10 @@ export function buildShellFooter(
       options.runningAgentProgress,
     );
     const inputBoxRows = Math.max(1, options.promptLineCount) + 2;
-    lines.splice(inputBoxRows, 0, ...processIndicator);
+    // The voice row sits directly under the prompt box, ABOVE the process
+    // indicator: an open microphone is a live condition the user is acting inside,
+    // while the process indicator is a background summary.
+    lines.splice(inputBoxRows, 0, ...renderVoiceCaptureIndicator(options.width, options.voiceCapture ?? null), ...processIndicator);
     // Scriptable status line — dim informational line above the prompt. Unshifted
     // before the context hint so the context hint (if any) sits above it.
     if (options.scriptableStatusLine) {

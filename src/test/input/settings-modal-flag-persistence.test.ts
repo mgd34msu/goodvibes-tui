@@ -107,9 +107,10 @@ describe('feature enablement writes — domain-key persistence', () => {
 
   test('a capability declared not operable keeps the written value but never reads as on', () => {
     const inoperable = FEATURE_SETTINGS.filter((feature) => feature.operable === false);
-    // The registry currently declares wake-word detection inoperable (no surface
-    // captures audio yet). If that list ever empties, this test still holds; the
-    // assertions below are what stops the marker being dropped silently.
+    // This list is EMPTY now: wake-word detection was the last entry and lost its
+    // marker in the change that wired capture up on this terminal. The test still
+    // holds — it is what stops the marker being dropped from some future
+    // capability silently, and what forces any new one to state its reason.
     for (const feature of inoperable) {
       expect(feature.inoperableDetail, `${feature.id} must state WHY it is unavailable`).toBeTruthy();
 

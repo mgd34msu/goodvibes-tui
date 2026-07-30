@@ -326,7 +326,7 @@ export const FEATURE_ONBOARDING_SECTIONS: readonly FeatureSection[] = [
     stepId: 'features-devices',
     title: 'Paired devices and voice input',
     shortLabel: 'Devices',
-    description: 'What a paired phone may be asked to do on your behalf, and whether GoodVibes listens for a spoken wake phrase. Every phone capability asks the person holding the phone before it runs; the wake word is off and states plainly that it is not wired up in this build.',
+    description: 'What a paired phone may be asked to do on your behalf, and whether GoodVibes listens for a spoken wake phrase. Every phone capability asks the person holding the phone before it runs; the wake word is off by default because holding a microphone open must be an explicit act, and turning it on does open one on this terminal.',
     units: [
       {
         flagId: 'paired-device-capabilities',
@@ -349,7 +349,7 @@ export const FEATURE_ONBOARDING_SECTIONS: readonly FeatureSection[] = [
         flagId: 'wake-word-detection',
         label: 'Wake-word detection',
         hint: 'Listen continuously on a capture device for the pinned "hey goodvibes" phrase and hand the utterance that follows to speech-to-text. Off by default because holding a microphone open must be an explicit act.',
-        note: 'NOT AVAILABLE IN THIS BUILD — turning this on does nothing yet. The detector is complete, but no surface captures microphone audio or supplies it an inference runtime, so nothing is listening. Your choice is remembered and takes effect in the release that adds capture.',
+        note: 'On this terminal, turning this on starts a recorder (pw-record, parecord, arecord, ffmpeg or sox — whichever is installed), scores every frame with the pinned classifier, plays a short chime the moment a wake confirms, and shows a persistent "listening" row in the footer for as long as it runs. What follows a wake goes to speech-to-text and lands in the composer, or is sent straight away if you turn voice.wake.autoSubmit on. One thing it will NOT do on its own: download the models — run /voice wake setup, and until then it says so instead of pretending to listen. That same setup fetches the speech gate, so voice.wake.vadThreshold above 0 screens frames once it has run and refuses to start before it has, rather than scoring frames it claims to be screening. voice.wake.noiseSuppression: speex runs here too — the filter travels with the platform, so there is nothing to install for it.',
       },
     ],
   },

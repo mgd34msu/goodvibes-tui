@@ -55,6 +55,7 @@ import { applyInitialTuiCliState, reportFatalStartupError } from './cli/tui-star
 import { applyConfiguredHitlMode, applyRuntimeConfigValue, applyTuiRuntimeConfigDefaults } from './cli/config-overrides.ts';
 import { renderToolCallBlock } from './renderer/tool-call.ts';
 import { wireSpokenTurnRuntime } from './audio/spoken-turn-wiring.ts';
+import { installVoiceCapture } from './shell/voice-capture-shell.ts';
 import { attachSpokenTurnModelRouting, createSpokenTurnInputOptions } from './audio/spoken-turn-model-routing.ts';
 import { allowTerminalWrite, installTuiTerminalOutputGuard } from './runtime/terminal-output-guard.ts';
 import { installProcessLifecycle } from './runtime/process-lifecycle.ts';
@@ -189,6 +190,8 @@ async function main() {
   const failoverState = createFailoverTurnState();
 
   const getPromptContentWidth = () => computePromptContentWidth(stdout.columns);
+  // Live-microphone footer row (push-to-talk or the wake detector); assigned once voice capture is wired below, null until then so pre-wiring frames size correctly.
+  let voiceCaptureStatus: () => import('./core/voice-capture-status.ts').VoiceCaptureIndicatorState | null = () => null;
 
   const getViewportHeight = (): number => {
     if (input.onboardingWizard.active) return stdout.rows || 24;
@@ -197,7 +200,7 @@ async function main() {
     const contextWindow = providerRegistry.getContextWindowForModel(currentModel);
     const rows = stdout.rows || 24;
     // Compact threshold must match buildShellFooter's `compact: height < 30` posture below, else estimateShellFooterHeight's cached-height fast path answers with the wrong mode.
-    return rows - 2 - estimateShellFooterHeight(promptLines, contextWindow, rows < 30);
+    return rows - 2 - estimateShellFooterHeight(promptLines, contextWindow, rows < 30, voiceCaptureStatus());
   };
 
   const scroll = (delta: number) => {
@@ -333,8 +336,7 @@ async function main() {
     render();
   };
 
-  commandContext.submitInput = submitInput;
-  commandContext.submitSpokenInput = (text, content) => submitInput(text, content, { spokenOutput: true });
+  commandContext.submitInput = submitInput; commandContext.submitSpokenInput = (text, content) => submitInput(text, content, { spokenOutput: true });
   commandContext.stopSpokenOutput = () => spokenTurns.stop(); commandContext.pasteFromClipboard = () => input.handlePaste();
   // Read-only view of pending [TEXT: pN, M lines] fold markers, so /pastes
   // can preview a folded paste's actual content before the user submits it.
@@ -418,19 +420,19 @@ async function main() {
     },
   );
 
-  orchestratorRefs.getViewportHeight = getViewportHeight;
-  orchestratorRefs.scrollToEnd = scrollToEnd;
+  orchestratorRefs.getViewportHeight = getViewportHeight; orchestratorRefs.scrollToEnd = scrollToEnd;
 
   input.setCommandRegistry(commandRegistry, commandContext);
   commandContext.openComposerEditor = makeComposerEditorOpener({ buffer: input, stdin, stdout, writeGuard: allowTerminalWrite, repaint: () => { compositor.resetDiff(); render(); }, cwd: workingDir, env: process.env, notify: (m) => systemMessageRouter.high(m) });
   input.setConversationManager(conversation);
-  input.setContentWidth(getPromptContentWidth());
-  input.filePicker.setOnUpdate(() => render());
+  input.setContentWidth(getPromptContentWidth()); input.filePicker.setOnUpdate(() => render());
   // retirement: agentDetailModal/processModal setOnRefresh wiring removed —
   // those modals were deleted (Fleet subsumes the live process tree via F2).
 
   // Model picker callback is handled in bootstrap.ts — do not duplicate here.
   input.setHistory(inputHistory);
+  // ONE microphone path, shared by push-to-talk voice input (Alt+V) and wake-word detection; opens no device by itself (shell/voice-capture-shell.ts).
+  voiceCaptureStatus = installVoiceCapture({ configManager, shellPaths: ctx.services.shellPaths, homeDirectory, sessionId: ctx.runtime.sessionId, commandContext, unsubs, buffer: input, submitInput, notify: (m) => { systemMessageRouter.high(m); render(); }, render: () => render() });
 
   const toolCount = toolRegistry.list().length;
   conversation.splashOptions = {
@@ -511,7 +513,7 @@ async function main() {
       composerMode: composerState.modeLabel,
       composerStatus: composerState.statusLabel,
       composerFlags: composerState.flags,
-      composerPendingRisk: composerState.pendingRisk, permissionMode: configManager.get('permissions.mode') as string,
+      composerPendingRisk: composerState.pendingRisk, permissionMode: configManager.get('permissions.mode') as string, voiceCapture: voiceCaptureStatus(),
     }).lines;
 
     const onboardingOwnsScreen = input.onboardingWizard.active;
@@ -735,9 +737,7 @@ async function main() {
   process.on('exit', exitListener);
 
   // --- Terminal setup ---
-  stdin.setRawMode(true);
-  stdin.resume();
-  stdin.setEncoding('utf8');
+  stdin.setRawMode(true); stdin.resume(); stdin.setEncoding('utf8');
   allowTerminalWrite(() => stdout.write((cli.flags.noAltScreen ? '' : ALT_SCREEN_ENTER) + CLEAR_SCREEN + CURSOR_HIDE + MOUSE_ENABLE + KEYBOARD_EXT_ENABLE + PASTE_ENABLE + FOCUS_ENABLE));
   // forced dark/light applies before first paint; auto (TTY only) fires the
   // OSC 11 probe and repaints once if light wins. filterInput strips the reply from stdin.
@@ -771,9 +771,7 @@ async function main() {
 
     input.feed(data);
   });
-  process.on('SIGINT', sigintHandler);
-  process.on('unhandledRejection', unhandledRejectionHandler);
-  stdout.on('resize', resizeHandler);
+  process.on('SIGINT', sigintHandler); process.on('unhandledRejection', unhandledRejectionHandler); stdout.on('resize', resizeHandler);
 
   // State restores happen ONLY when the user explicitly asks — a CLI flag
   // (--continue/--resume/--fork), a slash command (/session resume,

@@ -9,7 +9,7 @@
 |    │ bottom focuses the    |
 |    │ process indicator     |
 |    │ PageUp / PageDn       |
-|    │ [1-8 of 73]      │    |
+|    │ [1-8 of 74]      │    |
 |    └─[Up/Down] Scrol…─┘    |
 @STYLES
 0 4 fg=#475569
