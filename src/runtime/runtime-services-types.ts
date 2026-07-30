@@ -92,6 +92,13 @@ export interface RuntimeServicesOptions {
   readonly powerSeam?: Parameters<typeof wireIdlePowerAndLiveTurn>[0]['powerSeam'];
   /** Live session id, read per crash-residue sweep so the running session is exempt — see durability-services.ts. */
   readonly currentSessionId?: (() => string | null) | undefined;
+  /**
+   * Wake-word boot provisioning opt-in. Same shape as `powerSeam`: the real
+   * entrypoints (daemon/cli.ts, bootstrap-core.ts) ask for it, the one-shot CLI
+   * commands do not, and a test composing this graph gets neither a network fetch
+   * nor an hourly sweep it did not ask for. See voice-setup-services.ts.
+   */
+  readonly provisionWakeModelsAtBoot?: boolean | undefined;
 }
 
 export interface RuntimeServices {
@@ -219,6 +226,8 @@ export interface RuntimeServices {
   readonly appendOnlyRetentionScheduler: ReturnType<typeof createDurabilityServices>['appendOnlyRetentionScheduler']; // periodic append-only sweep; unref'd timers, stop() on teardown
   /** Stops the recurring crash-residue sweep; idempotent, unref'd timer (hosts that tear a runtime down call it). */
   readonly stopDurabilityHousekeeping: () => void;
+  /** Stops the wake-word recovery sweep and a pending boot provision; a no-op unless `provisionWakeModelsAtBoot` was set. */
+  readonly stopWakeHousekeeping: () => void;
   readonly memoryConsolidationScheduler: MemoryConsolidationScheduler;
   readonly powerManager: PowerManager;
   /** The daemon's memory governor (default ON). Backs ops.memory.get and defends the daemon's footprint by tier. */

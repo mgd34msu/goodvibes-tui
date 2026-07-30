@@ -39,6 +39,14 @@ export interface SurfaceRuntimePollerOwners extends Omit<RuntimePollerOwners, 's
   /** Fork-only: the repeating crash-residue sweep (durability-services.ts). */
   readonly stopDurabilityHousekeeping: () => void;
   /**
+   * Fork-only: the wake-word recovery sweep and a pending boot provision
+   * (voice-setup-services.ts). Started only when an entrypoint opted into boot
+   * provisioning, and a no-op otherwise — but it is on this list unconditionally,
+   * because "the graph did not start it this time" is not a reason for the
+   * teardown path to have no way to stop it.
+   */
+  readonly stopWakeHousekeeping: () => void;
+  /**
    * Fork-only: the daemon handler surfaces (daemon-handler-composition.ts).
    *
    * `unregister()` detaches the gateway handlers AND stops the two pollers this
@@ -79,6 +87,7 @@ export function registerSurfaceRuntimePollers(
   registerRuntimePollers(registry, { ...services, stopConfigWatch: extras.stopConfigWatch });
   registry.add('durability housekeeping', services.stopDurabilityHousekeeping);
   registry.add('device housekeeping', () => services.devicePosture.stopHousekeeping());
+  registry.add('wake-word housekeeping', services.stopWakeHousekeeping);
   // Registered LAST so it tears down FIRST (the scope unwinds in reverse), which
   // is the order daemon/cli.ts already used by hand: release the handler surfaces
   // — closing the inbox store and stopping its poll timers — before the pollers

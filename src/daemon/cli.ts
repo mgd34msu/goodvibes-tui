@@ -35,6 +35,7 @@ import {
   persistProviders,
 } from '@pellux/goodvibes-sdk/platform/discovery';
 import { createSafeHostServeFactory } from './safe-serve.ts';
+import { runProvisionWakeModelCommand } from './provision-wake-model.ts';
 import { runSendCommand } from './send/command.ts';
 import { createSendStack } from './send/composition.ts';
 import { readAllStdin } from './send/stdin.ts';
@@ -179,6 +180,25 @@ async function main(): Promise<void> {
     // The activity log holds the OUTBOUND_HTTP record for the send that just
     // happened (or did not); a process exiting this promptly would drop it.
     flushActivityLogSync();
+    process.exit(result.exitCode);
+  }
+
+  // `provision-wake-model …` is intercepted here for the same two reasons, plus
+  // its own: the curl installer runs it on the binary it has just placed, before
+  // any daemon exists, and it must reach the SDK's pinned manifest rather than
+  // have install.sh carry a second copy of the pins. It composes no runtime — it
+  // resolves a home directory, derives the managed voice root the running daemon
+  // uses, and calls one SDK function. See provision-wake-model.ts for why it
+  // exits 0 on a failed download.
+  if (rawArgs[0] === 'provision-wake-model') {
+    const ownership = resolveDaemonCliOwnership();
+    const result = await runProvisionWakeModelCommand(rawArgs.slice(1), {
+      homeDirectory: ownership.homeDirectory,
+    });
+    for (const line of result.lines) {
+      // eslint-disable-next-line no-console
+      console.log(line);
+    }
     process.exit(result.exitCode);
   }
 
@@ -378,6 +398,13 @@ async function main(): Promise<void> {
     // the non-spawning unavailable seam; only daemon compositions opt in. Mirrors
     // the SDK daemon cli's createHostPowerSeam() (sdk commit 3a5ea26d).
     powerSeam: createHostPowerSeam(),
+    // The wake-word model ships with the installation, and this is the retry: at
+    // every daemon start, sweep the managed wake tree and fetch whatever the
+    // install could not (an offline install, a killed download, a changed pin).
+    // It never blocks startup and never fails it — see the SDK's
+    // voice/wake/install-provision.ts. The webui reads the model bytes from THIS
+    // process, so a provisioned daemon is what makes the browser path work too.
+    provisionWakeModelsAtBoot: true,
   });
 
   // Load persisted providers from disk so the provider registry is pre-populated

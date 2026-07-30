@@ -486,7 +486,11 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
 
   // Managed local-voice provisioning (voice.local.status/install) — single-flight
   // one-act install + no-network status; see voice-setup-services.ts.
-  const { voiceSetup } = wireVoiceSetup({ configManager, shellPaths, voiceProviders, admitExpensiveWork });
+  const { voiceSetup, stopWakeHousekeeping } = wireVoiceSetup({ configManager, shellPaths, voiceProviders, admitExpensiveWork,
+    // Boot provisioning of the wake-word model + its recovery sweep, opted into
+    // by the real entrypoints only (same treatment as powerSeam) so a one-shot
+    // CLI command and a test composing this graph fetch nothing and start no timer.
+    provisionWakeModelsAtBoot: options.provisionWakeModelsAtBoot === true });
 
   // Terminal-shell wrapper over the SDK registerGatewayVerbGroups (gateway-verbs.ts); checkin.*/fleet-needs-input/pairing.* register only when their deps are present. memoryGovernor lights up ops.memory.get; voiceSetup lights up voice.local.status/install.
   // calendar.*/email.* are platform-served; these two let it register (mail-composition.ts).
@@ -650,7 +654,7 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
     workstreamCommands,
     codeIndexStore,
     codeIndexReindexScheduler,
-    storeSnapshotScheduler, appendOnlyRetentionScheduler, stopDurabilityHousekeeping,
+    storeSnapshotScheduler, appendOnlyRetentionScheduler, stopDurabilityHousekeeping, stopWakeHousekeeping,
     memoryConsolidationScheduler,
     powerManager,
     memoryGovernor,

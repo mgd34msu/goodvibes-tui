@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from 'bun:test';
-import { readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type {
   AudioCaptureHandlers,
@@ -9,7 +9,12 @@ import type {
   WakeTensor,
   NoiseSuppressionFactory,
 } from '@pellux/goodvibes-sdk/platform/voice';
-import { resolveManagedWakePaths, retainedClipFileName } from '@pellux/goodvibes-sdk/platform/voice';
+import {
+  provisionWakeWordModelsAtInstall,
+  resolveManagedWakePaths,
+  retainedClipFileName,
+  wakeProvisionStatus,
+} from '@pellux/goodvibes-sdk/platform/voice';
 import { createTuiCaptureOpener } from '../../audio/capture.ts';
 import { extractOnnxRuntimeAssets } from '../../audio/wake-inference.ts';
 import { wireWakeRuntime, type WakeRuntimeDeps } from '../../audio/wake-runtime.ts';
@@ -277,6 +282,12 @@ interface WakeHarnessOptions {
   readonly vadProbability?: number;
   /** Makes the suppression stage fail to start, the way a broken filter would. */
   readonly suppressionFails?: string;
+  /**
+   * Drop the provision-status seam entirely, so the runtime uses the SDK's REAL
+   * content-verifying read against `managedRoot`. Used by the install tests
+   * below, where stubbing the very check under test would prove nothing.
+   */
+  readonly realProvisionStatus?: boolean;
   /** No daemon reachable — the honest refusal path. */
   readonly noTranscriber?: string;
   readonly managedRoot?: string;
@@ -349,11 +360,13 @@ function makeWakeHarness(options: WakeHarnessOptions = {}): WakeHarness {
       if (modelPath.includes('goodvibes-vad')) return vad.session;
       return modelPath.includes('speech-embedding') ? embedding : classifier.session;
     },
-    provisionStatus: () => (options.notProvisioned === true
-      ? { ready: false, reason: 'not-provisioned', vadReady: false }
-      // The speech gate is its own artifact, so a harness says whether it is
-      // there independently of the wake models being ready.
-      : { ready: true, reason: null, vadReady: options.vadProvisioned === true }),
+    ...(options.realProvisionStatus === true ? {} : {
+      provisionStatus: () => (options.notProvisioned === true
+        ? { ready: false, reason: 'not-provisioned', vadReady: false }
+        // The speech gate is its own artifact, so a harness says whether it is
+        // there independently of the wake models being ready.
+        : { ready: true, reason: null, vadReady: options.vadProvisioned === true }),
+    }),
     now: () => harness.now,
     setTimeout: (handler, ms) => { timers.push({ handler, ms }); return timers.length; },
     clearTimeout: () => { /* fired manually */ },
@@ -833,5 +846,104 @@ describe('the two rows that used to be refused now run a real stage', () => {
     expect(harness.spawns.calls.length).toBe(0);
     expect(harness.vad.calls()).toBe(0);
     expect(harness.notices.some((line) => line.includes('voice.wake.vadThreshold'))).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The model ships with the installation, so turning the feature on must need
+// NOTHING else. These are the tests for that claim, and for the claim that
+// enabling still never downloads.
+// ---------------------------------------------------------------------------
+describe('enabling wake detection after the installation provisioned the model', () => {
+  test('the listener starts on the two enablement rows alone, loading the artifacts the installer wrote', async () => {
+    const managedRoot = makeProjectTempDir('wake-install');
+    // The paths the install policy writes to. Nothing here re-derives them: they
+    // come from the same SDK function the installer, the daemon and the detector
+    // all call, which is the whole point — an installer that wrote 6 MB into a
+    // directory the detector never reads would report success and detect nothing.
+    const paths = resolveManagedWakePaths(managedRoot);
+
+    const harness = makeWakeHarness({ managedRoot });
+    await harness.runtime.refresh();
+
+    // Started, with no setup command run and no config beyond the two rows.
+    expect(harness.spawns.processes.length).toBe(1);
+    expect(harness.runtime.status()?.kind).toBe('wake-listening');
+    expect(harness.notices.join('\n')).not.toContain('/voice wake setup');
+
+    // And it loaded EXACTLY the installed artifacts: the pinned classifier from
+    // the managed models directory and the shared front end from front-end/.
+    expect(harness.loadedModelPaths).toContain(paths.embeddingPath);
+    expect(harness.loadedModelPaths).toContain(paths.classifierPath);
+    // The tflite twin is provisioned for other runtimes; this one must not load it.
+    expect(harness.loadedModelPaths).not.toContain(paths.mobileClassifierPath);
+    rmSync(managedRoot, { recursive: true, force: true });
+  });
+
+  test('turning the feature on issues NO network request, however the artifacts look', async () => {
+    // The rule that survived making provisioning automatic: a switch is not a
+    // sanctioned download. Installing and booting are, each with a receipt.
+    const managedRoot = makeProjectTempDir('wake-enable-no-fetch');
+    const realFetch = globalThis.fetch;
+    const attempted: string[] = [];
+    globalThis.fetch = ((input: unknown) => {
+      attempted.push(String(input));
+      throw new Error('the enable path must never fetch');
+    }) as unknown as typeof fetch;
+    try {
+      // Both postures: artifacts absent, and artifacts present-but-torn.
+      const absent = makeWakeHarness({ managedRoot, realProvisionStatus: true });
+      await absent.runtime.refresh();
+      const paths = resolveManagedWakePaths(managedRoot);
+      mkdirSync(paths.modelsDir, { recursive: true });
+      writeFileSync(paths.classifierPath, Buffer.alloc(64));
+      const torn = makeWakeHarness({ managedRoot, realProvisionStatus: true });
+      await torn.runtime.refresh();
+      expect(attempted).toEqual([]);
+    } finally {
+      globalThis.fetch = realFetch;
+      rmSync(managedRoot, { recursive: true, force: true });
+    }
+  });
+
+  test('an install that could not download degrades to the recovery command, verified by content', async () => {
+    const managedRoot = makeProjectTempDir('wake-install-offline');
+    // The real install policy against a machine with no network. It must not
+    // throw, and must leave nothing behind.
+    const outcome = await provisionWakeWordModelsAtInstall({
+      managedRoot,
+      recoveryHint: '/voice wake setup',
+      env: {},
+      fetchImpl: (async () => { throw new Error('ENETUNREACH'); }) as unknown as typeof fetch,
+    });
+    expect(outcome.state).toBe('degraded');
+    expect(outcome.message).toContain('/voice wake setup');
+
+    // Now enable the feature, with the SDK's REAL content check — no stub, because
+    // the content check is the thing being trusted here.
+    const harness = makeWakeHarness({ managedRoot, realProvisionStatus: true });
+    await harness.runtime.refresh();
+    expect(harness.spawns.processes.length).toBe(0);
+    expect(harness.runtime.status()).toBeNull();
+    const notice = harness.notices.join('\n');
+    expect(notice).toContain('not provisioned');
+    expect(notice).toContain('/voice wake setup');
+    expect(wakeProvisionStatus({ managedRoot }).ready).toBe(false);
+    rmSync(managedRoot, { recursive: true, force: true });
+  });
+
+  test('a torn artifact left by a killed install reads as corrupt, not as present', async () => {
+    const managedRoot = makeProjectTempDir('wake-install-torn');
+    const paths = resolveManagedWakePaths(managedRoot);
+    mkdirSync(paths.modelsDir, { recursive: true });
+    // Full-size and zero-filled: the exact shape that once trained a model on zeros.
+    writeFileSync(paths.classifierPath, Buffer.alloc(2_367_644));
+    expect(wakeProvisionStatus({ managedRoot }).classifier.corrupt).toBe(true);
+
+    const harness = makeWakeHarness({ managedRoot, realProvisionStatus: true });
+    await harness.runtime.refresh();
+    expect(harness.spawns.processes.length).toBe(0);
+    expect(harness.notices.join('\n')).toContain('checksum-mismatch');
+    rmSync(managedRoot, { recursive: true, force: true });
   });
 });
