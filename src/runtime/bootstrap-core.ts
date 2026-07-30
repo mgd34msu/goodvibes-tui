@@ -24,7 +24,7 @@ import {
 } from '@/runtime/index.ts';
 import { readExecEnvScrubAllowlist } from '../input/exec-env-scrub-config.ts';
 import { createSandboxExecAsk, sandboxExecAskDepsFromRuntime } from '../permissions/sandbox-exec-gate.ts';
-import { createRuntimeServices, type RuntimeServices } from './services.ts';
+import { createRuntimeServices, installDevicePosture, type RuntimeServices } from './services.ts';
 import { createHostPowerSeam } from '@pellux/goodvibes-sdk/platform/power';
 import { runBootMemoryFold } from './memory-fold.ts';
 import { wireCostPricing } from '../export/cost-utils.ts';
@@ -381,7 +381,7 @@ export async function initializeBootstrapCore(
     contextAccountingHolder: services.contextAccountingHolder,
     // First contained (sandboxed) command run announces "commands now run contained" once — recorded and surfaced now.
     onSandboxedRun: createSandboxContainmentNotice({ configManager, notify: (text) => conversation.log(`[Sandbox] ${text}`, { fg: '135' }) }),
-  });
+  }); installDevicePosture(toolRegistry, services.devicePosture); // the `phone` tool is the only path that reaches the device capability service, so without this every `device.*` posture key governs nothing a session can observe; the housekeeping timer starts here (not at composition) so building a runtime in a test sweeps nothing
   // Note: installWrfcAgentToolGuard is called after routeOrBuffer is defined (further below) so the onTrace callback routes guard decisions through the pre-router buffer.
   services.agentOrchestrator.setDependencies({
     surfaceRoot: services.surface.surfaceRoot,
