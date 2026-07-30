@@ -2459,9 +2459,9 @@ describe('install.sh — bare-process relaunch is canonical, never replayed from
       // bun-compiled binary's internal argv[1]), from whatever directory the
       // installer happened to be run in, with whatever environment it
       // inherited. This pins the fix: goodvibes-daemon is ALWAYS relaunched
-      // as "$INSTALL_DIR/goodvibes-daemon" --daemon-home "$HOME" —
-      // write_systemd_unit's own canonical shape — regardless of what the
-      // process being replaced was invoked with.
+      // as "$INSTALL_DIR/goodvibes-daemon" --daemon-home
+      // "$HOME/.goodvibes/daemon" — write_systemd_unit's own canonical shape —
+      // regardless of what the process being replaced was invoked with.
       const root = scratch('gv-bare-canonical');
       const home = join(root, 'home');
       const installDir = join(root, 'bin');
