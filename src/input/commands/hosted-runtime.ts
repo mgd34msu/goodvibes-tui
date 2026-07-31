@@ -47,16 +47,8 @@ import { getOrCreateCompanionToken } from '@pellux/goodvibes-sdk/platform/pairin
 import { getSharedHostedSessionFeed, type HostedSessionFeed } from '../../panels/hosted-session-feed.ts';
 import { getSharedHostedSessionRoster } from '../../runtime/client/hosted-roster.ts';
 
-/** The live stream this terminal holds, so attaching twice never leaks the first. */
-let liveSubscription: HostedSessionSubscription | null = null;
-
 /** The last list this terminal printed, so `attach 2` means what the user just read. */
 let lastListedIds: readonly string[] = [];
-
-function closeLiveSubscription(): void {
-  liveSubscription?.close();
-  liveSubscription = null;
-}
 
 /** One row of `/hosted list`, in the record's own words. */
 export function renderHostedRecordLine(record: HostedSessionRecord, index: number): string {
@@ -159,7 +151,9 @@ async function openStream(
   sessionId: string,
   feed: HostedSessionFeed,
 ): Promise<void> {
-  closeLiveSubscription();
+  // The feed owns the subscription handle: the exit path has to be able to
+  // close it too, and it has no way to reach a variable in this module.
+  feed.closeStream();
   if (!seams.baseUrl) {
     feed.setStreaming(false, 'no control-plane base URL is configured, so nothing can be watched live');
     return;
@@ -169,7 +163,7 @@ async function openStream(
     return;
   }
   const token = seams.authToken;
-  liveSubscription = await watchHostedSession({
+  const subscription: HostedSessionSubscription | null = await watchHostedSession({
     baseUrl: seams.baseUrl,
     sessionId,
     getAuthToken: () => token,
@@ -179,9 +173,10 @@ async function openStream(
       feed.setStreaming(false, `the event stream ended: ${describeOperatorRpcError(error)}`);
     },
   });
+  feed.bindStream(subscription ? () => subscription.close() : null);
   feed.setStreaming(
-    liveSubscription !== null,
-    liveSubscription === null ? 'the daemon would not open an event stream' : null,
+    subscription !== null,
+    subscription === null ? 'the daemon would not open an event stream' : null,
   );
 }
 
@@ -301,7 +296,6 @@ export function registerHostedRuntimeCommands(registry: CommandRegistry): void {
           case 'detach': {
             if (!attachedId) { ctx.print('[hosted] no hosted session is attached.'); return; }
             const record = await seams.client.detach(attachedId);
-            closeLiveSubscription();
             feed.clear();
             ctx.print(record.status === 'terminated'
               ? `[hosted] detached — the session ended (${record.terminatedReason ?? 'no reason recorded'}), which is what its detach policy said would happen.`
@@ -312,7 +306,7 @@ export function registerHostedRuntimeCommands(registry: CommandRegistry): void {
             const target = args[1] ? resolveIdArgument(args[1]) : attachedId;
             if (!target) { ctx.print('Usage: /hosted kill <id> (or attach one first)'); return; }
             const record = await seams.client.kill(target);
-            if (target === attachedId) { closeLiveSubscription(); feed.clear(); }
+            if (target === attachedId) feed.clear();
             ctx.print(`[hosted] ended ${hostedSessionLabel(record)} — ${record.terminatedReason ?? 'no reason recorded'}.`);
             return;
           }
@@ -328,18 +322,9 @@ export function registerHostedRuntimeCommands(registry: CommandRegistry): void {
 }
 
 /**
- * Drop the live stream this terminal holds.
- *
- * Called on shutdown: the SESSION's fate is the daemon's business (the detach
- * policy decides that, and only an actual `detach` invokes it), but the socket
- * this process is holding open is this process's to close.
+ * Tests drive the module-level list memory (`/hosted attach 2`); this resets it
+ * between them. The live stream is the feed's, and is reset with the feed.
  */
-export function closeHostedSessionStream(): void {
-  closeLiveSubscription();
-}
-
-/** Tests drive the module-level list memory; this resets it between them. */
 export function resetHostedCommandState(): void {
-  closeLiveSubscription();
   lastListedIds = [];
 }

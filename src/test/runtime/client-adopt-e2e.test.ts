@@ -52,6 +52,7 @@ import { createHostedSessionsClient, terminalHostedClientId } from '../../runtim
 import { watchHostedSession } from '../../runtime/client/hosted-session-stream.ts';
 import { createTerminalApprovalUpdateSubscriber } from '../../runtime/client/approval-updates.ts';
 import { HostedSessionFeed } from '../../panels/hosted-session-feed.ts';
+import { leaveHostedSessionOnExit } from '../../runtime/client/hosted-exit.ts';
 
 /** A port well clear of the daemon's default 3421 and of anything an install uses. */
 const E2E_PORT = 39_471;
@@ -757,6 +758,41 @@ if (!binary) {
         subscription?.close();
         stubNextReply = { content: 'back to plain answers' };
       }, 90_000);
+
+      test('quitting the terminal detaches, so the kill default still means what it always meant', async () => {
+        // The exit path, driven exactly as bootstrap's shutdown drives it. A
+        // terminal that exits WITHOUT this leaves a kill-policy session alive
+        // and attached to a process that is gone, which is the familiar
+        // behavior silently changing — the thing the owner's default exists to
+        // prevent.
+        await createDaemonConfigClient(verbs).set('hostedSessions.detachPolicy', 'kill');
+        const client = createHostedSessionsClient(verbs);
+        const leaving = await client.create({ workspaceRoot: join(daemon.home, 'work') });
+        expect(leaving.effectiveDetachPolicy).toBe('kill');
+
+        const configManager = new ConfigManager({
+          surfaceRoot: GOODVIBES_TUI_SURFACE_ROOT,
+          configDir: join(daemon.home, 'client-config'),
+          workingDir: join(daemon.home, 'work'),
+          homeDir: daemon.home,
+        });
+        configManager.setDynamic('daemon.enabled' as never, true as never);
+        configManager.setDynamic('controlPlane.host' as never, '127.0.0.1' as never);
+        configManager.setDynamic('controlPlane.port' as never, E2E_PORT as never);
+        const feed = new HostedSessionFeed();
+        feed.attach(leaving, []);
+
+        expect(await leaveHostedSessionOnExit({ configManager, homeDirectory: daemon.home, feed })).toBe('detached');
+
+        const after = (await client.list({ includeTerminated: true })).find((entry) => entry.id === leaving.id);
+        expect(after?.status).toBe('terminated');
+        expect(after?.terminatedReason).toBe('detached');
+
+        // Nothing attached is not an error and must not delay an exit.
+        expect(await leaveHostedSessionOnExit({
+          configManager, homeDirectory: daemon.home, feed: new HostedSessionFeed(),
+        })).toBe('none');
+      }, 30_000);
 
       test('kill ends a session regardless of policy, and the record keeps its reason', async () => {
         const record = await createHostedSessionsClient(verbs).kill(survivorSessionId);

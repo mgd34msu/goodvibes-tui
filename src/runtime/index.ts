@@ -153,6 +153,10 @@ export const openContractRouteStream = transport.openContractRouteStream;
 export const requireContractRoute = transport.requireContractRoute;
 export const isAbortError = transport.isAbortError;
 export const openServerSentEventStream = transport.openServerSentEventStream;
+// Re-exported here because bootstrap.ts — the one place an exit can await
+// anything — sits on the 800-line per-file gate, so it reaches this through the
+// import block it already has rather than a second import line.
+export { leaveHostedSessionOnExit } from './client/hosted-exit.ts';
 export const createOperatorRemoteClient = transport.createOperatorRemoteClient;
 export const createPeerRemoteClient = transport.createPeerRemoteClient;
 export const buildEventSourceUrl = transport.buildEventSourceUrl;

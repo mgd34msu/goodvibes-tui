@@ -104,6 +104,15 @@ export class HostedSessionFeed {
   private readonly listeners = new Set<() => void>();
   /** The assistant row currently being streamed, by index into `rows`. */
   private streamingRowIndex: number | null = null;
+  /**
+   * How to close the live subscription feeding this session, when one is open.
+   *
+   * Held here rather than in whichever module opened it because two unrelated
+   * callers have to be able to close it: the `/hosted detach` command, and the
+   * app's own exit path, which must leave the session cleanly before the
+   * process goes away.
+   */
+  private streamCloser: (() => void) | null = null;
 
   getState(): HostedSessionFeedState {
     return this.state;
@@ -146,6 +155,18 @@ export class HostedSessionFeed {
     this.emit();
   }
 
+  /** Hand over the live subscription so any owner of this feed can close it. */
+  bindStream(close: (() => void) | null): void {
+    this.streamCloser = close;
+  }
+
+  /** Close the live subscription, if one is open. Idempotent. */
+  closeStream(): void {
+    const close = this.streamCloser;
+    this.streamCloser = null;
+    close?.();
+  }
+
   /** Append a note of this terminal's own — a detach, a refusal, a stream drop. */
   note(text: string, kind: HostedRowKind = 'system'): void {
     this.appendRow({ kind, text, at: Date.now(), streaming: false });
@@ -153,6 +174,7 @@ export class HostedSessionFeed {
 
   /** Forget the session entirely (detached, killed, or replaced). */
   clear(): void {
+    this.closeStream();
     this.streamingRowIndex = null;
     this.state = EMPTY_STATE;
     this.emit();
