@@ -57,6 +57,11 @@ describe('new runtime event domains', () => {
       'knowledge',
       'workspace', // SDK 0.21.20: added workspace domain
       'fleet', // SDK 1.6.1: added fleet domain
+      // SDK 1.21.0: a key-level config change published on the bus, so a
+      // consumer that used to poll a file (the wake runtime, the settings
+      // workspace) hears about an edit made anywhere — including one the
+      // daemon applied on the other side of config.set.
+      'config',
     ]);
     expect(isRuntimeEventDomain('agents')).toBe(true);
     expect(isRuntimeEventDomain('not-a-domain')).toBe(false);

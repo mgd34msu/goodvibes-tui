@@ -1,12 +1,11 @@
 {
   "name": "@pellux/goodvibes-tui",
   "version": "1.27.1",
-  "description": "Terminal-native GoodVibes product for coding, operations, automation, knowledge, channels, and daemon-backed control-plane workflows.",
+  "description": "Terminal-native GoodVibes client for coding, operations, knowledge and channel workflows \u2014 a pure client of the GoodVibes daemon.",
   "type": "module",
   "main": "src/main.ts",
   "bin": {
-    "goodvibes": "bin/goodvibes",
-    "goodvibes-daemon": "bin/goodvibes-daemon"
+    "goodvibes": "bin/goodvibes"
   },
   "files": [
     "bin",
@@ -25,7 +24,6 @@
   ],
   "scripts": {
     "dev": "bun run src/main.ts",
-    "daemon": "bun run src/daemon/cli.ts",
     "dev:watch": "bun --watch src/main.ts",
     "prebuild": "bun run scripts/prebuild.ts",
     "build": "bun build src/main.ts --compile --outfile dist/goodvibes",
@@ -33,11 +31,6 @@
     "build:linux-arm64": "bun build src/main.ts --compile --target=bun-linux-arm64 --outfile dist/goodvibes-linux-arm64",
     "build:macos-x64": "bun build src/main.ts --compile --target=bun-darwin-x64 --outfile dist/goodvibes-macos-x64",
     "build:macos-arm64": "bun build src/main.ts --compile --target=bun-darwin-arm64 --outfile dist/goodvibes-macos-arm64",
-    "build:daemon:linux-x64": "goodvibes-build-binaries --target daemon-linux-x64",
-    "build:daemon:linux-arm64": "goodvibes-build-binaries --target daemon-linux-arm64",
-    "build:daemon:macos-x64": "goodvibes-build-binaries --target daemon-macos-x64",
-    "build:daemon:macos-arm64": "goodvibes-build-binaries --target daemon-macos-arm64",
-    "smoke:daemon": "bun run scripts/post-build-smoke.ts",
     "smoke:tui": "goodvibes-post-build-smoke",
     "build:windows": "bun build src/main.ts --compile --target=bun-windows-x64 --outfile dist/goodvibes-windows.exe",
     "build:all-shell": "bun run build:linux-x64 && bun run build:linux-arm64 && bun run build:macos-x64 && bun run build:macos-arm64 && bun run build:windows",
@@ -88,9 +81,6 @@
     "goodvibes",
     "tui",
     "bun",
-    "daemon",
-    "control-plane",
-    "automation",
     "ai"
   ],
   "publishConfig": {

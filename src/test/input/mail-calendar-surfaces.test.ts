@@ -1,23 +1,28 @@
 /**
- * The mail/calendar terminal surfaces, exercised against the REAL handlers the
- * daemon serves, reached through this repo's own runtime composition.
+ * The mail/calendar terminal surfaces, and where their verbs are answered now.
  *
- * The point of going through the real composition rather than a stub gateway is
- * that the whole reason these surfaces exist is a wiring claim, and the claim
- * has now changed shape. It used to be "`GatewayMethodCatalog.invoke()` reaches
- * an `email.*` / `calendar.*` handler even though every one of those descriptors
- * carries `invokable: false`", because this repo registered its own CalDAV and
- * IMAP/SMTP handlers after the platform's gateway groups and was therefore the
- * thing answering.
+ * ── The claim that changed ────────────────────────────────────────────────
  *
- * Those copies are gone. The platform serves `email.*` and `calendar.*` itself,
- * the descriptors are `invokable: true`, and what has to stay true is that this
- * product's composition passes the deps that let the platform register — without
- * `homeDirectory` the calendar composition returns null, without
- * `emailServiceDeps` the mail one does, and either way the verbs stay
- * cataloged-but-unhandled and every surface below reports "unreachable" on a
- * daemon that is working perfectly. A test against a fake gateway would pass
- * while the product was dead, which is exactly what happened the last time.
+ * This file used to prove a WIRING claim: that this repository's own runtime
+ * composition handed the platform what it needed for `email.*` and `calendar.*`
+ * to have live handlers, because without `homeDirectory` the calendar
+ * composition returned null and without `emailServiceDeps` the mail one did,
+ * and either way the verbs stayed cataloged-but-unhandled while every surface
+ * below reported "unreachable" on a daemon that was working perfectly.
+ *
+ * That composition is the daemon's now. This app answers no verbs at all — its
+ * catalog is empty by construction — and mail and calendar reach the daemon
+ * over the wire like every other verb family. So the claim this file makes is
+ * the opposite one, and it is the honest one for a client: an empty catalog
+ * reports UNREACHABLE, plainly, rather than inventing "nothing is configured"
+ * for a daemon it never asked. The end-to-end proof that a real daemon answers
+ * these verbs is the adopt-against-a-real-daemon suite
+ * (src/test/runtime/client-adopt-e2e.test.ts) and the daemon repository's own
+ * conformance suites.
+ *
+ * Everything else here — the argument parsing, the rendering, the status
+ * derivation, the Connections category's behaviour — is surface work and is
+ * unchanged by the split.
  */
 
 import { describe, expect, test } from 'bun:test';
@@ -44,64 +49,29 @@ import { SETTINGS_CATEGORIES, SETTINGS_CATEGORY_GROUPS } from '../../input/setti
 // registered inside the helper, for the reason its doc comment gives.
 disposeTestRuntimeServicesAfterAll();
 
-describe('the wiring claim: the platform serves these, and this composition hands it what it needs', () => {
+describe('a client with no verbs of its own says so instead of guessing', () => {
   const services = getTestRuntimeServices();
 
-  // Sanity: the descriptors really are invokable now, so the tests below prove
-  // that a handler is attached rather than passing because the flag still says
-  // the verb is unreachable by design.
-  for (const methodId of ['email.inbox.list', 'email.inbox.read', 'email.draft.create', 'email.send'] as const) {
-    test(`${methodId} is advertised as invokable`, () => {
-      expect(services.gatewayMethods.get(methodId)?.invokable).toBe(true);
-    });
-  }
-
-  test('the mail verbs have real handlers attached by this repo\'s composition', () => {
-    // Descriptor-present-but-handler-absent is the 501 class that shipped in
-    // every daemon build for a release. Named individually so a failure says
-    // which verb went dark.
-    for (const methodId of ['email.inbox.list', 'email.inbox.read', 'email.draft.create', 'email.send']) {
-      expect(services.gatewayMethods.hasHandler(methodId), `${methodId} has no handler`).toBe(true);
+  test('this composition registers no mail or calendar handlers, because it registers none at all', () => {
+    // Not an omission: the catalog exists only to satisfy the SDK's
+    // startExternalServices parameter in adopt-only mode. Nothing is served off
+    // it, and a handler appearing here would mean a second implementation had
+    // come back into this process alongside the daemon's.
+    for (const methodId of ['email.inbox.list', 'email.send', 'calendar.events.list', 'calendar.events.create'] as const) {
+      expect(services.gatewayMethods.hasHandler(methodId), `${methodId} must not be answered in-process`).toBe(false);
     }
   });
 
-  test('the calendar verbs have real handlers attached by this repo\'s composition', () => {
-    for (const methodId of ['calendar.events.list', 'calendar.events.get', 'calendar.events.create']) {
-      expect(services.gatewayMethods.hasHandler(methodId), `${methodId} has no handler`).toBe(true);
+  test('an empty catalog is reported as unreachable, never as needs-setup', async () => {
+    // The distinction is the whole point. "needs-setup" tells the user to go
+    // configure an account; "unreachable" tells them the daemon is not
+    // answering. Reporting the first when the second is true sends someone to
+    // re-enter a password that was never the problem.
+    for (const surface of ['mail', 'calendar'] as const) {
+      const status = await probeConnection(new GatewayMethodCatalog(), surface);
+      expect(status.state).toBe('unreachable');
+      expect(status.nextActions.length).toBeGreaterThan(0);
     }
-  });
-
-  test('an unconfigured account reports needs-setup with the daemon\'s own next step', async () => {
-    // The test runtime has no mailbox configured, which is the state of every
-    // machine that has never set one up — and the state this surface has to
-    // describe well. It must reach the handler and come back with the real
-    // not-configured answer, NOT with "unreachable", which would mean the
-    // composition failed to register.
-    const status = await probeConnection(services.gatewayMethods, 'mail');
-    expect(status.state).toBe('needs-setup');
-    // The concrete keys the daemon actually reads — never a vague message, and
-    // never an `Invalid config path` exception leaking through as a 500.
-    expect(status.detail).not.toContain('Invalid config path');
-    const actions = status.nextActions.join('\n');
-    expect(actions).toContain('surfaces.email.host');
-    expect(actions).toContain('surfaces.email.user');
-  });
-
-  test('an unconfigured calendar reports needs-setup naming its own keys', async () => {
-    const status = await probeConnection(services.gatewayMethods, 'calendar');
-    expect(status.state).toBe('needs-setup');
-    expect(status.detail).not.toContain('Invalid config path');
-    expect(status.nextActions.join('\n')).toContain('surfaces.calendar.caldavUrl');
-  });
-
-  test('a catalog with no handlers attached is reported as unreachable, not as needs-setup', async () => {
-    // The control for the two above: a bare catalog holds the descriptors and
-    // no handler, which is the honest "this build does not serve it" case. If
-    // this ever stopped differing from the results above, the surface would be
-    // reporting a broken daemon as an unconfigured one.
-    const status = await probeConnection(new GatewayMethodCatalog(), 'calendar');
-    expect(status.state).toBe('unreachable');
-    expect(status.detail).toContain('calendar.events.list');
   });
 });
 
@@ -254,7 +224,7 @@ describe('the Connections category of the settings workspace', () => {
     }
   });
 
-  test('a refresh replaces the placeholders with the daemon\'s real answer and repaints', async () => {
+  test('a refresh replaces the placeholders with a settled answer and repaints', async () => {
     let painted = 0;
     const host = {
       active: true,
@@ -266,13 +236,14 @@ describe('the Connections category of the settings workspace', () => {
     };
     await refreshConnectionEntries(host);
     expect(painted).toBe(1);
-    // Both rows must leave 'checking' for a state the daemon actually
-    // established. On this runtime nothing is configured, so the honest answer
-    // is needs-setup for both — and critically NOT 'unreachable', which is what
-    // an unregistered handler would produce.
+    // Both rows must LEAVE 'checking' for a state something actually
+    // established, and carry a next step with it. Against this client's empty
+    // catalog that state is 'unreachable' — the honest answer when no daemon
+    // has been asked. What must never happen is a row left in 'checking'
+    // forever, or one that settles with no next step.
     for (const surface of ['mail', 'calendar']) {
       const entry = host.connectionEntries.find((e) => e.surface === surface);
-      expect(entry?.state, `${surface} row`).toBe('needs-setup');
+      expect(entry?.state, `${surface} row`).not.toBe('checking');
       expect(entry?.nextActions.length).toBeGreaterThan(0);
     }
   });

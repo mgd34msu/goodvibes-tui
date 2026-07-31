@@ -97,8 +97,12 @@ export async function prepareShellCliRuntime(
   }
 
   if (cli.command === 'serve') {
-    await import('../daemon/cli.ts');
-    return new Promise<PreparedShellCliRuntime>(() => {});
+    // The daemon is its own product and its own binary. This app is a client:
+    // it never hosts one, so `serve` names something it cannot do. Say which
+    // command to run instead rather than starting a daemon that would be a
+    // second, drifting copy of the real one.
+    console.error('`goodvibes serve` is gone: the daemon is a separate program now. Run `goodvibes-daemon serve` (installed alongside this app), or `goodvibes service start` to start the installed service.');
+    process.exit(2);
   }
 
   const {

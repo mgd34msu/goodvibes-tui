@@ -1,6 +1,5 @@
 import type { PanelManager } from '../panel-manager.ts';
 import { FleetPanel } from '../fleet-panel.ts';
-import { createFleetReadModel } from '../fleet-read-model.ts';
 import { FleetActs, type FleetDiffSurface } from '../fleet-acts.ts';
 import { createFleetGateway } from '../fleet-gateway.ts';
 import { FleetSpawn, createAcpSpawnGateway } from '../fleet-spawn.ts';
@@ -40,13 +39,12 @@ import { GOODVIBES_TUI_SURFACE_ROOT } from '../../config/surface.ts';
 export function registerOperationsPanels(manager: PanelManager, deps: ResolvedBuiltinPanelDeps): void {
   const ui = requireUiServices(deps);
 
-  // Fleet — the live unified process tree, read from the single
-  // process registry constructed once in runtime/services.ts (shared with
-  // every other consumer rather than duplicated here; the registry owns its
-  // own coalesced tick, so no manual lifecycle-event wiring is needed).
-  // runtimeBus is also passed so the read model can subscribe
-  // to the honest COMMUNICATION_CONSUMED steer-ack signal (fleet-read-model.ts).
-  const fleetReadModel = createFleetReadModel(ui.runtime.processRegistry, ui.runtime.runtimeBus);
+  // Fleet — everything running, not just what this terminal started. The read
+  // model is composed once in runtime/services.ts (so its refresh timer has an
+  // owner that stops it) and unions this surface's own live process registry
+  // with the adopted daemon's rows; see runtime/client/fleet-union.ts for who
+  // wins on a shared id and why the daemon half is polled rather than streamed.
+  const fleetReadModel = ui.runtime.fleetReadModel;
 
   // The Fleet panel's waiting-on-human acts (pick / conflict / discard) drive
   // gateway verbs over the same operator invoke path the command layer uses, and

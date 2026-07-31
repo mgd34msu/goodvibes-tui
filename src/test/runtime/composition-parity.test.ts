@@ -1,13 +1,19 @@
 /**
- * Composition-parity gate — pins daemon-vs-interactive wiring facts that the
- * TUI's forked composition roots must keep in step with the SDK's own.
+ * Composition-parity gate — pins the wiring facts this app's composition root
+ * must keep, now that it is a CLIENT of the daemon rather than a second copy of
+ * one.
  *
- * These are source-level assertions on purpose: the wiring differences they
- * pin (observed foreign-agent detection, the startup retention sweep, live
- * config-file watching) are either host-nondeterministic to exercise
- * (observed detection scans the real process table / tmux) or lifecycle
- * side-effects with no return value to inspect, so a source pin is the honest,
- * deterministic way to catch a fork that silently drops one of them.
+ * These are source-level assertions on purpose: what they pin is either
+ * host-nondeterministic to exercise or a lifecycle side-effect with no return
+ * value to inspect, so a source pin is the honest, deterministic way to catch a
+ * composition that silently drops one of them.
+ *
+ * The daemon-side half of this gate — that the standalone daemon observes
+ * foreign agents, opts into the real host power seam, and provisions the wake
+ * model at boot — went with the daemon to its own repository, where those
+ * compositions now live. What is pinned here is the client posture: this
+ * process observes nothing, serves nothing, and composes its turn over the
+ * SDK's client shape.
  */
 import { describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
@@ -36,9 +42,12 @@ function createRuntimeServicesCallArgs(source: string): string {
 }
 
 describe('composition parity — observed foreign-agent detection is daemon-side only', () => {
-  test('the standalone daemon composes observed agents (observeExternalAgents: true)', () => {
-    const args = createRuntimeServicesCallArgs(read('src/daemon/cli.ts'));
-    expect(args).toContain('observeExternalAgents: true');
+  test('nothing in this repository observes foreign agents — that scan is the daemon\'s', () => {
+    // Observed detection scans the real process table and tmux. Two processes
+    // doing it produces two rows for one agent, which is why it was always
+    // daemon-only; with the daemon extracted, this repository must not carry
+    // the opt-in at all.
+    expect(read('src/runtime/services.ts')).not.toContain('observeExternalAgents');
   });
 
   test('the interactive process does NOT observe (no double-detection; it reads the daemon snapshot)', () => {
@@ -46,9 +55,10 @@ describe('composition parity — observed foreign-agent detection is daemon-side
     expect(args).not.toContain('observeExternalAgents');
   });
 
-  test('createRuntimeServices threads the daemon opt-in into the fleet services helper', () => {
-    const services = read('src/runtime/services.ts');
-    expect(services).toContain('observeExternalAgents: options.observeExternalAgents');
+  test('this composition passes the fleet helper no observed-agent source at all', () => {
+    // The helper still SUPPORTS the opt-in — the daemon composes it — but this
+    // client must never pass it, or one agent is counted twice.
+    expect(read('src/runtime/services.ts')).not.toContain('observeExternalAgents:');
   });
 
   test('the fleet services helper constructs the observed source only under the opt-in flag', () => {
@@ -107,11 +117,12 @@ describe('composition parity — memory governance is composed (governor default
     expect(services).toContain('admitExpensiveWorkRef.current = (label) => memoryGovernor.admitExpensiveWork(label)');
   });
 
-  test('the governor is threaded into the gateway verb handlers so ops.memory.get is invokable (not a 501)', () => {
-    // memoryGovernor lands in the attachWsOnlyGatewayVerbHandlers deps object.
-    const attachIdx = services.indexOf('attachWsOnlyGatewayVerbHandlers(gatewayMethods,');
-    expect(attachIdx).toBeGreaterThan(-1);
-    expect(services.slice(attachIdx)).toContain('memoryGovernor,');
+  test('the governor is wired into no verb handler, because this process serves no verbs', () => {
+    // ops.memory.get is answered by the DAEMON's governor, over the wire. This
+    // process keeps a governor of its own because it holds real caches (the
+    // knowledge stores, the session broker) and has to defend its own
+    // footprint — but it never advertises one.
+    expect(services).not.toContain('attachWsOnlyGatewayVerbHandlers(');
   });
 
   test('the three deferrable jobs honor governor backpressure at their scheduler gates', () => {
@@ -132,14 +143,13 @@ describe('composition parity — memory governance is composed (governor default
     expect(helper).not.toContain('start: false');
   });
 
-  test('managed voice provisioning is composed so voice.local.status/install are invokable', () => {
+  test('voice setup is still composed here, because the microphone and the speaker are here', () => {
+    // The wake word listens inside THIS process (capture is a child of this
+    // terminal, inference is WASM in-process) and a spoken turn plays out of
+    // this terminal's speaker. What moved is the verb surface:
+    // voice.local.status/install are the daemon's to answer.
     expect(services).toContain('wireVoiceSetup({');
-    const helper = read('src/runtime/voice-setup-services.ts');
-    // The composer is now the SDK's exported createVoiceSetupService (SDK 1.10.1
-    // added ./platform/runtime/voice-setup); the fork's wiring delegates to it.
-    expect(helper).toContain('createVoiceSetupService({');
-    const attachIdx = services.indexOf('attachWsOnlyGatewayVerbHandlers(gatewayMethods,');
-    expect(services.slice(attachIdx)).toContain('voiceSetup,');
+    expect(read('src/runtime/voice-setup-services.ts')).toContain('createVoiceSetupService({');
   });
 
   test('the daemon serves LIVE install progress: the fork consumes the SDK composer that carries it', () => {
@@ -174,9 +184,10 @@ describe('composition parity — host power seam is opt-in (non-spawning default
     expect(services).toContain('powerSeam: options.powerSeam');
   });
 
-  test('the standalone daemon opts into the real host power seam (live keep-awake/idle-inhibit)', () => {
-    const args = createRuntimeServicesCallArgs(read('src/daemon/cli.ts'));
-    expect(args).toContain('powerSeam: createHostPowerSeam()');
+  test('this app opts into the real host seam too — a long-lived terminal inhibits idle for its own turns', () => {
+    // The daemon's opt-in went with the daemon. This one stays: a running turn
+    // in this terminal is exactly as much a reason not to suspend the machine.
+    expect(createRuntimeServicesCallArgs(read('src/runtime/bootstrap-core.ts'))).toContain('powerSeam: createHostPowerSeam()');
   });
 
   test('the embedded interactive runtime opts in too (it IS the daemon in the embedded topology)', () => {
@@ -191,8 +202,10 @@ describe('composition parity — wake-model boot provisioning is opt-in, like th
   // starts an hourly recovery sweep, so it must be an explicit opt-in — the same
   // treatment the host power seam gets, for the same reason: a test composing this
   // graph, and a one-shot CLI command, must fetch nothing and start no timer.
-  test('the standalone daemon opts in', () => {
-    expect(createRuntimeServicesCallArgs(read('src/daemon/cli.ts'))).toContain('provisionWakeModelsAtBoot: true');
+  test('the wake model is provisioned by whoever LISTENS, which is this process', () => {
+    // The daemon provisions the model at install time; this app provisions it
+    // at boot because the inference that reads it runs here.
+    expect(createRuntimeServicesCallArgs(read('src/runtime/bootstrap-core.ts'))).toContain('provisionWakeModelsAtBoot: true');
   });
 
   test('the embedded interactive runtime opts in — it IS the daemon in that topology', () => {

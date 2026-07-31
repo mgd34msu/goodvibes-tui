@@ -46,21 +46,6 @@ export interface SurfaceRuntimePollerOwners extends Omit<RuntimePollerOwners, 's
    * teardown path to have no way to stop it.
    */
   readonly stopWakeHousekeeping: () => void;
-  /**
-   * Fork-only: the daemon handler surfaces (daemon-handler-composition.ts).
-   *
-   * `unregister()` detaches the gateway handlers AND stops the two pollers this
-   * product's inbox surface owns — the retention sweep inside `InboxCursorStore`
-   * and the per-provider `InboundPoller` intervals. The SDK does not know either
-   * exists, so if this surface does not stop them nothing does.
-   */
-  readonly daemonHandlers: { readonly unregister: () => void };
-  /**
-   * Fork-only: the paired-phone feature's housekeeping timer
-   * (device-posture-composition.ts). Started by whichever entry point boots the
-   * host, so the stop belongs on this list rather than in one shutdown path.
-   */
-  readonly devicePosture: { readonly stopHousekeeping: () => void };
 }
 
 /**
@@ -86,14 +71,9 @@ export function registerSurfaceRuntimePollers(
 ): void {
   registerRuntimePollers(registry, { ...services, stopConfigWatch: extras.stopConfigWatch });
   registry.add('durability housekeeping', services.stopDurabilityHousekeeping);
-  registry.add('device housekeeping', () => services.devicePosture.stopHousekeeping());
   registry.add('wake-word housekeeping', services.stopWakeHousekeeping);
-  // Registered LAST so it tears down FIRST (the scope unwinds in reverse), which
-  // is the order daemon/cli.ts already used by hand: release the handler surfaces
-  // — closing the inbox store and stopping its poll timers — before the pollers
-  // the rest of the graph owns. Being on this list is what makes a plain
-  // `dispose()` total: every shutdown path (daemon/cli.ts, main.ts's teardown
-  // registry, the one-shot CLI commands) now stops these two, not just the one
-  // that remembered to call `unregister()` itself.
-  registry.add('daemon handler surfaces', () => services.daemonHandlers.unregister());
+  // The inbox surfaces and the device-posture housekeeping used to be stopped
+  // here too. Both moved to the daemon product with the runtimes that started
+  // them: nothing in this process polls a mailbox or reaps a device grant any
+  // more, so there is nothing left here to stop.
 }

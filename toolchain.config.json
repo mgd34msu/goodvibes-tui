@@ -6,21 +6,27 @@
     "pinSource": "dependencies",
     "lockfile": "bun.lock",
     "overlayMarker": "node_modules/@pellux/goodvibes-sdk/.local-sdk-overlay.json",
-    "sourceRoots": ["src"],
+    "sourceRoots": [
+      "src"
+    ],
     "enforceExportsMap": false
   },
   "build": {
     "appEntrypoint": "src/main.ts",
-    "daemonEntrypoint": "src/daemon/cli.ts",
     "outDir": "dist",
     "addonOutDir": "dist/lib",
-    "prebuild": [["bun", "run", "scripts/prebuild.ts"]],
+    "prebuild": [
+      [
+        "bun",
+        "run",
+        "scripts/prebuild.ts"
+      ]
+    ],
     "targets": [
       {
         "key": "linux-x64",
         "bunTarget": "bun-linux-x64",
         "appArtifact": "goodvibes-linux-x64",
-        "daemonArtifact": "goodvibes-daemon-linux-x64",
         "nativeAddonPackage": "sqlite-vec-linux-x64",
         "nativeAddonFile": "vec0.so"
       },
@@ -28,7 +34,6 @@
         "key": "linux-arm64",
         "bunTarget": "bun-linux-arm64",
         "appArtifact": "goodvibes-linux-arm64",
-        "daemonArtifact": "goodvibes-daemon-linux-arm64",
         "nativeAddonPackage": "sqlite-vec-linux-arm64",
         "nativeAddonFile": "vec0.so"
       },
@@ -36,7 +41,6 @@
         "key": "darwin-x64",
         "bunTarget": "bun-darwin-x64",
         "appArtifact": "goodvibes-macos-x64",
-        "daemonArtifact": "goodvibes-daemon-macos-x64",
         "nativeAddonPackage": "sqlite-vec-darwin-x64",
         "nativeAddonFile": "vec0.dylib"
       },
@@ -44,7 +48,6 @@
         "key": "darwin-arm64",
         "bunTarget": "bun-darwin-arm64",
         "appArtifact": "goodvibes-macos-arm64",
-        "daemonArtifact": "goodvibes-daemon-macos-arm64",
         "nativeAddonPackage": "sqlite-vec-darwin-arm64",
         "nativeAddonFile": "vec0.dylib"
       }
@@ -53,11 +56,19 @@
   "coverage": {
     "funcsFloor": 71,
     "linesFloor": 75,
-    "command": ["bun", "test", "--coverage", "src"]
+    "command": [
+      "bun",
+      "test",
+      "--coverage",
+      "src"
+    ]
   },
   "smoke": {
     "bannerPrefix": "goodvibes ",
-    "forbiddenStrings": ["sqlite-vec", "$bunfs/root"],
+    "forbiddenStrings": [
+      "sqlite-vec",
+      "$bunfs/root"
+    ],
     "binaryDefault": "dist/goodvibes-linux-x64"
   },
   "releaseCut": {
@@ -69,10 +80,25 @@
       "platform-packages/darwin-arm64/package.json"
     ],
     "syncCommands": [
-      ["bun", "run", "scripts/sync-platform-optional-deps.ts"],
-      ["bun", "run", "scripts/prebuild.ts"],
-      ["bun", "run", "scripts/export-foundation-artifacts.ts"],
-      ["bun", "install"]
+      [
+        "bun",
+        "run",
+        "scripts/sync-platform-optional-deps.ts"
+      ],
+      [
+        "bun",
+        "run",
+        "scripts/prebuild.ts"
+      ],
+      [
+        "bun",
+        "run",
+        "scripts/export-foundation-artifacts.ts"
+      ],
+      [
+        "bun",
+        "install"
+      ]
     ],
     "commitPaths": [
       "package.json",
@@ -94,9 +120,7 @@
       "CHANGELOG.md",
       "package.json",
       "src/main.ts",
-      "src/daemon/cli.ts",
       "bin/goodvibes",
-      "bin/goodvibes-daemon",
       "scripts/check-bun.sh",
       "scripts/postinstall.js",
       ".goodvibes/GOODVIBES.md"

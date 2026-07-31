@@ -57,7 +57,6 @@ function installExternalServices(
   const full: NonNullable<UiRuntimeServices['platform']['externalServices']> = {
     relayStatus: () => 'disabled',
     mintRelayPairing: async () => null,
-    collectDaemonReceipts: () => [],
     ...controller,
   };
   (uiServices.platform as UiRuntimeServices['platform'] & {

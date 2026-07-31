@@ -48,8 +48,10 @@ if (!pkg.repository || typeof pkg.repository.url !== 'string') {
   console.error('FAIL  publish-field-present — package.json missing repository metadata');
   failed += 1;
 }
-if (!pkg.bin || typeof pkg.bin.goodvibes !== 'string' || typeof pkg.bin['goodvibes-daemon'] !== 'string') {
-  console.error('FAIL  publish-field-present — package.json must expose goodvibes and goodvibes-daemon bin entries');
+// One bin. The daemon is a separate package with its own binary; this package
+// shipping a `goodvibes-daemon` entry is what made two copies of it possible.
+if (!pkg.bin || typeof pkg.bin.goodvibes !== 'string') {
+  console.error('FAIL  publish-field-present — package.json must expose the goodvibes bin entry');
   failed += 1;
 }
 
@@ -60,7 +62,6 @@ if (config.publish) {
     config: config.publish,
     bins: [
       { name: 'goodvibes', path: 'bin/goodvibes', shebang: '#!/usr/bin/env bun' },
-      { name: 'goodvibes-daemon', path: 'bin/goodvibes-daemon', shebang: '#!/usr/bin/env bun' },
     ],
   });
   for (const issue of install.issues) console.error(`FAIL  package-install-check — ${issue}`);

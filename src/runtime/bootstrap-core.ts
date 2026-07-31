@@ -24,7 +24,8 @@ import {
 } from '@/runtime/index.ts';
 import { readExecEnvScrubAllowlist } from '../input/exec-env-scrub-config.ts';
 import { createSandboxExecAsk, sandboxExecAskDepsFromRuntime } from '../permissions/sandbox-exec-gate.ts';
-import { createRuntimeServices, installDevicePosture, type RuntimeServices } from './services.ts';
+import { createRuntimeServices, type RuntimeServices } from './services.ts';
+import { registerClientPhoneTool } from './client/phone-tool.ts';
 import { createHostPowerSeam } from '@pellux/goodvibes-sdk/platform/power';
 import { runBootMemoryFold } from './memory-fold.ts';
 import { wireCostPricing } from '../export/cost-utils.ts';
@@ -381,7 +382,7 @@ export async function initializeBootstrapCore(
     contextAccountingHolder: services.contextAccountingHolder,
     // First contained (sandboxed) command run announces "commands now run contained" once — recorded and surfaced now.
     onSandboxedRun: createSandboxContainmentNotice({ configManager, notify: (text) => conversation.log(`[Sandbox] ${text}`, { fg: '135' }) }),
-  }); installDevicePosture(toolRegistry, services.devicePosture); // the `phone` tool is the only path that reaches the device capability service, so without this every `device.*` posture key governs nothing a session can observe; the housekeeping timer starts here (not at composition) so building a runtime in a test sweeps nothing
+  }); registerClientPhoneTool(toolRegistry, services.devices); // the `phone` tool follows the LOOP, so it is registered here; the posture runtime it used to call is the daemon's now and this tool reaches it over the devices.* verbs (see client/phone-tool.ts)
   // Note: installWrfcAgentToolGuard is called after routeOrBuffer is defined (further below) so the onTrace callback routes guard decisions through the pre-router buffer.
   services.agentOrchestrator.setDependencies({
     surfaceRoot: services.surface.surfaceRoot,
@@ -464,9 +465,9 @@ export async function initializeBootstrapCore(
       }
     });
   };
-  const permissionPromptRef = {
-    requestPermission: (async () => ({ approved: false, remember: false })) as PermissionRequestHandler,
-  };
+  // THE ref, not a second one: the composition already holds the prompt seam its
+  // client approval raiser calls, so the UI layer patching this patches that.
+  const permissionPromptRef = services.localPromptRef as { requestPermission: PermissionRequestHandler };
   // Trust-at-consequence-time: raised by trustGatedAsk on the first non-read
   // request in an undecided workspace; overridden once the UI layer exists — same ref-patching pattern as permissionPromptRef above.
   const trustPromptRef = { requestTrustDecision: (async () => 'restricted') as () => Promise<WorkspaceTrustLevel> };
@@ -699,16 +700,12 @@ export async function initializeBootstrapCore(
   await syncConfiguredServices(domainDispatch.syncIntegration, services.serviceRegistry);
 
   const permissionManager = new PermissionManager(
-    // Composed ask layer: the workspace trust gate (outer) wraps the sandbox-aware exec gate (inner); see sandbox-exec-gate.ts. The catastrophic block is untouched.
+    // Composed ask layer: the workspace trust gate (outer) wraps the sandbox-aware exec gate (inner); see sandbox-exec-gate.ts. The catastrophic block is untouched. The innermost ask is the CLIENT raiser: it posts approvals.raise to the daemon and prompts here (see runtime/client/approval-raiser.ts).
     trustGatedAsk(
       services.workspaceTrustManager,
       createSandboxExecAsk(
         sandboxExecAskDepsFromRuntime(configManager, featureFlags),
-        (request) => approvalBroker.requestApproval({
-          request,
-          sessionId: runtimeSessionIdRef.value,
-          localPrompt: permissionPromptRef.requestPermission,
-        }),
+        (request) => services.requestApproval({ request }),
       ),
       () => trustPromptRef.requestTrustDecision(), // indirection through the ref, not bound early — main.ts patches the real impl in later
     ),
@@ -729,8 +726,10 @@ export async function initializeBootstrapCore(
     sessionId: userSessionId,
   };
   runtimeSessionIdRef.value = runtime.sessionId;
-  // Register the live conversation so the composed daemon's rewind.plan/apply verbs
-  // can serve conversation scope for this session (see conversation-rewind-port.ts).
+  services.liveSessionIdRef.value = runtime.sessionId; // the session an ask raised on the daemon belongs to
+  // The live conversation, for this process's own /rewind AND for the daemon's
+  // questions about it — only the process holding the messages can count or
+  // drop them (conversation-rewind-port.ts, client/conversation-rewind-host.ts).
   registerSessionConversation(runtime.sessionId, conversation);
   void sharedSessionBroker.createSession({
     id: runtime.sessionId,

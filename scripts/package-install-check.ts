@@ -26,7 +26,6 @@ if (config.publish) {
     config: config.publish,
     bins: [
       { name: 'goodvibes', path: 'bin/goodvibes', shebang: '#!/usr/bin/env bun' },
-      { name: 'goodvibes-daemon', path: 'bin/goodvibes-daemon', shebang: '#!/usr/bin/env bun' },
     ],
   });
   for (const issue of install.issues) console.error(`package-install-check: ${issue}`);

@@ -8,7 +8,9 @@ describe('package CLI install verification', () => {
 
     expect(report.packageName).toBe('@pellux/goodvibes-tui');
     expect(report.issues).toEqual([]);
-    expect(report.bins.map((bin) => bin.command)).toEqual(['goodvibes', 'goodvibes-daemon']);
+    // One bin. The daemon ships as its own package with its own binary; this
+    // package carrying a second wrapper is what let two daemons exist.
+    expect(report.bins.map((bin) => bin.command)).toEqual(['goodvibes']);
     expect(report.bins.every((bin) => bin.exists && bin.executable)).toBe(true);
     expect(report.bins.every((bin) => bin.usesBunShebang)).toBe(true);
     expect(report.bins.every((bin) => bin.hasLocalPlatformBuildFallback)).toBe(true);
@@ -16,7 +18,6 @@ describe('package CLI install verification', () => {
     expect(report.bins.every((bin) => bin.hasVendoredBinaryFallback)).toBe(true);
     expect(report.bins.every((bin) => bin.hasSourceFallback)).toBe(true);
     expect(report.tarball.requiredPathsPresent).toContain('bin/goodvibes');
-    expect(report.tarball.requiredPathsPresent).toContain('bin/goodvibes-daemon');
     expect(report.tarball.requiredPathsPresent).toContain('scripts/check-bun.sh');
     expect(report.tarball.forbiddenPaths).toEqual([]);
   }, 30_000);

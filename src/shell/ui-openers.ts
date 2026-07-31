@@ -20,6 +20,8 @@ import { setActiveThemeMode } from '../renderer/theme.ts';
 import { THEME_MODE_CONFIG_KEY, coerceThemeModeSetting } from '../renderer/theme-mode-config.ts';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 import { buildFirstOpenItems, decodeFirstOpenChoice, selfRecordWorkspaceRegistration } from '../cli/tui-startup.ts';
+import type { SettingsDaemonCredentialWriter } from '../input/settings-modal-secrets.ts';
+import type { DaemonOwnedConfigWriter } from '../input/settings-modal-mutations.ts';
 import type { WorkspaceTrustLevel } from '../runtime/trust/workspace-trust.ts';
 
 type WireShellUiOpenersOptions = {
@@ -34,6 +36,18 @@ type WireShellUiOpenersOptions = {
   mcpRegistry: McpRegistry;
   subscriptionManager: SubscriptionManager;
   secretsManager?: Pick<SecretsManager, 'delete' | 'get' | 'set'>;
+  /**
+   * The daemon's credential write. Present when a daemon is configured; a
+   * daemon-scoped credential goes there rather than into this surface's own
+   * store, which the daemon never reads.
+   */
+  daemonCredentials?: SettingsDaemonCredentialWriter | null;
+  /**
+   * Where a daemon-owned setting is written. `surfaces.*`, `watchers.*`,
+   * `automation.*` and the rest are applied by the daemon; writing one into
+   * this surface's own file reports success and configures nothing.
+   */
+  daemonConfig?: DaemonOwnedConfigWriter | null;
   serviceRegistry: Pick<ServiceInspectionQuery, 'getAll'>;
   /** Backs the model picker's 'embeddings' target and its own item-list mode. */
   memoryEmbeddingRegistry: Pick<MemoryEmbeddingProviderRegistry, 'getDefaultProviderId' | 'setDefaultProvider' | 'status'>;
@@ -120,6 +134,8 @@ export function wireShellUiOpeners(options: WireShellUiOpenersOptions): void {
     mcpRegistry,
     subscriptionManager,
     secretsManager,
+    daemonCredentials,
+    daemonConfig,
     serviceRegistry,
     memoryEmbeddingRegistry,
     workingDirectory,
@@ -394,12 +410,19 @@ export function wireShellUiOpeners(options: WireShellUiOpenersOptions): void {
   commandContext.openSettingsModal = (target?: string) => {
     input.modalOpened('settings');
     input.settingsModal.open(configManager, featureFlags, subscriptionManager, serviceRegistry, mcpRegistry, secretsManager, {
-      // The Connections category asks the daemon handlers directly, through the
-      // same in-process catalog `/mail` and `/calendar` use, so the workspace
-      // reports the daemon's state rather than a local guess about it.
+      // The Connections category probes through this app's catalog, which is
+      // empty by construction — so those rows read 'unreachable' rather than
+      // inventing a settled state nothing established. Retargeting that probe
+      // at the daemon is the remaining half of this seam.
       ...(commandContext.workspace?.gatewayMethods
         ? { gatewayMethods: commandContext.workspace.gatewayMethods }
         : {}),
+      // A daemon-scoped credential goes to the daemon, which writes the secret,
+      // verifies it reads back, and only then points the config key at it.
+      ...(daemonCredentials ? { daemonCredentials } : {}),
+      // A daemon-owned setting is applied by the daemon, so it is written there.
+      ...(daemonConfig ? { daemonConfig } : {}),
+      reportError: (message: string) => { commandContext.print?.(message); },
       requestRender: render,
       onSettingApplied: (change) => {
         // forced dark/light applies immediately (rebuild palettes + full

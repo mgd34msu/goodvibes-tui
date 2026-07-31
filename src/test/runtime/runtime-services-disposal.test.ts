@@ -48,13 +48,10 @@ const POLLER_OWNERS = [
   'state/memory-consolidation-scheduler',
   'knowledge/scheduling',
   'agents/wrfc-controller',
-  // Fork-only, and the two the SDK cannot know about: the inbox retention sweep
-  // and the per-account inbound poll loops, both owned by the daemon handler
-  // surfaces this product attaches to the SDK gateway catalog. They were absent
-  // from the disposal owner list, so a graph that had been told to stop kept
-  // sweeping and kept polling.
-  'daemon/handlers/inbox/cursor-store',
-  'daemon/handlers/inbox/poller',
+  // The inbox retention sweep and the per-account inbound poll loops used to be
+  // named here too. They moved to the daemon with the handler surfaces that
+  // started them: this process no longer polls a mailbox, so there is no such
+  // timer left to survive a dispose().
 ] as const;
 
 interface Tracked { readonly kind: 'interval' | 'timeout'; readonly delayMs: number; readonly stack: string }
@@ -154,11 +151,14 @@ test('composing the graph really does start pollers — the measurement is not v
   expect(started.length).toBeGreaterThan(0);
 });
 
-test('the inbox retention sweep is genuinely running before dispose() is asked to stop it', () => {
-  // Named on its own because it is the poller the owner list was missing, and
-  // because it is the one that arms asynchronously: without this assertion the
-  // survivor check below would pass on a timer that was never created.
-  expect(liveBeforeDispose.filter((e) => e.includes('daemon/handlers/inbox/cursor-store'))).not.toEqual([]);
+test('this composition starts no mailbox poller at all', () => {
+  // The inverse of the assertion this used to make. The inbox retention sweep
+  // was the poller the disposal owner list was missing, and it armed
+  // asynchronously so a survivor check alone could pass on a timer that was
+  // never created. Now the correct answer is that it is never created here:
+  // a second process polling the same mailbox is exactly the double-answer the
+  // cluster's single-reader election existed to prevent.
+  expect(liveBeforeDispose.filter((e) => e.includes('daemon/handlers/inbox'))).toEqual([]);
 });
 
 test('dispose() stops every poller the graph started', () => {

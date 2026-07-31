@@ -12,15 +12,24 @@
  */
 
 import type { FocusTracker } from '../core/focus-tracker.ts';
+import type { ApprovalBroker, GatewayMethodCatalog, SessionLiveTurnControlsHolder, SharedSessionBroker } from '@pellux/goodvibes-sdk/platform/control-plane';
+import type { StepUpService } from '@pellux/goodvibes-sdk/daemon';
+import type { PairingTokenManager } from '@pellux/goodvibes-sdk/platform/pairing';
+import type { DevicesClient } from './client/devices-client.ts';
+import type { ApprovalRaiser } from '@pellux/goodvibes-sdk/platform/runtime/client-services';
+import type { PermissionPromptDecision, PermissionPromptRequest } from '@pellux/goodvibes-sdk/platform/permissions';
+import type { DaemonVerbCaller } from './client/operator-endpoint.ts';
+import type { WireSessionDispatch } from './client/session-dispatch.ts';
+import type { ConversationRewindHostClient } from './client/conversation-rewind-host.ts';
+import type { FleetUnionReadModel } from './client/fleet-union.ts';
+import type { DaemonConfigClient } from './client/config-client.ts';
+import type { DaemonCredentialsClient } from './client/credentials-client.ts';
 import type { ConfigManager, ServiceRegistry, SubscriptionManager, ToolLLM } from '@pellux/goodvibes-sdk/platform/config';
 import type { SecretsManager } from '../config/secrets.ts';
 import type { AutomationDeliveryManager, AutomationManager } from '@pellux/goodvibes-sdk/platform/automation';
 import type { ChannelDeliveryRouter, ChannelPolicyManager, ChannelPluginRegistry, RouteBindingManager, SurfaceRegistry } from '@pellux/goodvibes-sdk/platform/channels';
-import type { ApprovalBroker, GatewayMethodCatalog, SessionLiveTurnControlsHolder, SharedSessionBroker } from '@pellux/goodvibes-sdk/platform/control-plane';
 import type { PowerManager } from '@pellux/goodvibes-sdk/platform/power';
 import type { wireIdlePowerAndLiveTurn } from './idle-power-services.ts';
-import type { StepUpService } from '@pellux/goodvibes-sdk/daemon';
-import type { PairingTokenManager } from '@pellux/goodvibes-sdk/platform/pairing';
 import type { WatcherRegistry } from '@pellux/goodvibes-sdk/platform/watchers';
 import type { ArtifactStore } from '@pellux/goodvibes-sdk/platform/artifacts';
 import type { HomeGraphService, KnowledgeService, ProjectPlanningService } from '@pellux/goodvibes-sdk/platform/knowledge';
@@ -38,7 +47,6 @@ import type { createDurabilityServices } from './durability-services.ts';
 import type { MemorySpineClient } from '@pellux/goodvibes-sdk/platform/runtime/memory-spine';
 import type { WorkspaceCheckpointManager } from '@pellux/goodvibes-sdk/platform/workspace';
 import type { DomainDispatch, RuntimeStore } from './store/index.ts';
-import type { DevicePostureRuntime } from '@pellux/goodvibes-sdk/platform/devices';
 import type { RuntimeEventBus, DistributedRuntimeManager, RemoteRunnerRegistry, RemoteSupervisor, IntegrationHelperService, IdempotencyStore, ComponentHealthMonitor, WorktreeRegistry, SandboxSessionRegistry, ShellPathService, FeatureFlagManager, PolicyRuntimeState, SessionSurface } from '@/runtime/index.ts';
 import type { VoiceProviderRegistry, VoiceService } from '@pellux/goodvibes-sdk/platform/voice';
 import type { CacheRegistry, PauseController, MemoryGovernor } from '@pellux/goodvibes-sdk/platform/runtime/memory';
@@ -59,9 +67,6 @@ import type { AdaptivePlanner, DeterministicReplayEngine, ExecutionPlanManager, 
 import type { ArchivableProcessRegistry } from '@pellux/goodvibes-sdk/platform/runtime/fleet';
 import type { OrchestrationEngine, WorkstreamCommandService } from './workstream-services.ts';
 import type { WorkPlanStore } from '../work-plans/work-plan-store.ts';
-import type { DaemonHandlerSurfaces } from '../daemon/handlers/index.ts';
-import type { ClusterGroupComposition } from './cluster-group-composition.ts';
-import type { ClusterCoordinator } from '@pellux/goodvibes-sdk/platform/cluster';
 import type { WorkspaceTrustManager } from './trust/workspace-trust.ts';
 
 export interface RuntimeServicesOptions {
@@ -83,10 +88,6 @@ export interface RuntimeServicesOptions {
    * is the single reader that produces it.
    */
   readonly daemonHomeDirectory?: string | undefined;
-  /** Opt-in (daemon-side only): fold host-observed external coding-agent sessions
-   * into the fleet as 'observed-external' rows. Interactive leaves it off and reads
-   * the daemon snapshot. Mirrors the SDK's own createRuntimeServices option. */
-  readonly observeExternalAgents?: boolean | undefined;
   /** Host power seam opt-in. Fork mirrors the SDK: non-spawning unavailable-seam
    * default (idle-power-services.ts); daemon + embedded runtime pass createHostPowerSeam(). */
   readonly powerSeam?: Parameters<typeof wireIdlePowerAndLiveTurn>[0]['powerSeam'];
@@ -119,7 +120,36 @@ export interface RuntimeServices {
   readonly channelPlugins: ChannelPluginRegistry;
   readonly channelDeliveryRouter: ChannelDeliveryRouter;
   readonly watcherRegistry: WatcherRegistry;
+  /**
+   * This surface's own record of the asks IT raised — what the approval card
+   * and the panel render. Not authoritative: `requestApproval` below raises the
+   * same ask on the daemon, whose record every other surface reads.
+   */
   readonly approvalBroker: ApprovalBroker;
+  /** Raise an ask: `approvals.raise` on the daemon plus the prompt at this terminal. */
+  readonly requestApproval: ApprovalRaiser;
+  /** The one resolution of "which daemon", shared by every client seam. */
+  readonly daemonVerbs: DaemonVerbCaller;
+  /**
+   * Inbound dispatch for sessions this surface hosts, over the adopted daemon's
+   * session inputs. Inert until bootstrap.ts activates it; bound to the SAME
+   * continuation runner the local broker uses.
+   */
+  readonly wireSessionDispatch: WireSessionDispatch;
+  /**
+   * This surface offering its live conversation to the daemon, so a rewind
+   * driven from anywhere can reach the messages — which only this process
+   * holds. Started on adoption; released on disposal.
+   */
+  readonly conversationRewindHost: ConversationRewindHostClient;
+  /** Daemon-owned settings, read and written over `config.get` / `config.set`. */
+  readonly daemonConfig: DaemonConfigClient;
+  /** Daemon-scoped credential writes: `credentials.set`/`delete` on the daemon, one verified sequence. */
+  readonly daemonCredentials: DaemonCredentialsClient;
+  /** The terminal prompt, late-bound — the UI layer patches the real one in after boot. */
+  readonly localPromptRef: { requestPermission: (request: PermissionPromptRequest) => Promise<PermissionPromptDecision> };
+  /** The live session id an ask belongs to; written by the bootstrap tail. */
+  readonly liveSessionIdRef: { value: string | null };
   /** Loopback-fetch approval that rides the approval broker; shared by the tool registry and orchestrator so every surface asks the same way. */
   readonly localhostFetchApproval: ReturnType<typeof buildLocalhostFetchApproval>;
   /** Terminal prompt-answer handler that rides the approval broker; shared by the tool registry and orchestrator so an interactive command's prompt gets an ask/card on every surface. */
@@ -128,10 +158,25 @@ export interface RuntimeServices {
   readonly notificationDispatcher: NotificationDispatcher;
   /** Durable user-origin permission rules (remembered approvals); permissions.rules.* surface. Mirrors the SDK composition. */
   readonly userPermissionRuleStore: UserPermissionRuleStore;
+  /**
+   * An EMPTY verb catalog. This product answers no verbs — it is a client. The
+   * field exists because the SDK's `startExternalServices` takes a daemon-grade
+   * `RuntimeServices` even in the adopt-only mode this surface runs in, and
+   * because plugin loading is handed one. Nothing is ever served off it: with
+   * `adoptOnly` no `DaemonServer` is constructed, so a descriptor registered
+   * here has no listener behind it. Plugin registrations that need to be
+   * ANSWERED belong daemon-side — see docs/decisions for the plugin split.
+   */
+  readonly gatewayMethods: GatewayMethodCatalog;
+  /** Step-up (re-auth) for this surface's own privileged actions. */
+  readonly stepUpService: StepUpService;
+  /** This installation's pairing tokens — the bearer a phone or browser presents. */
+  readonly pairingTokens: PairingTokenManager;
+  /** Paired-phone posture over `devices.*` verbs; the `phone` tool calls through it. */
+  readonly devices: DevicesClient;
   readonly sessionBroker: SharedSessionBroker;
   readonly deliveryManager: AutomationDeliveryManager;
   readonly automationManager: AutomationManager;
-  readonly gatewayMethods: GatewayMethodCatalog;
   readonly artifactStore: ArtifactStore;
   readonly knowledgeService: KnowledgeService;
   readonly agentKnowledgeService: KnowledgeService;
@@ -145,8 +190,6 @@ export interface RuntimeServices {
   readonly memorySpine: MemorySpineClient;
   readonly serviceRegistry: ServiceRegistry;
   readonly secretsManager: SecretsManager;
-  readonly stepUpService: StepUpService;
-  readonly pairingTokens: PairingTokenManager; // backs pairing.tokens.* verbs + the settings device surface (mirrors the SDK composition)
   readonly subscriptionManager: SubscriptionManager;
   readonly localUserAuthManager: UserAuthManager;
   readonly profileManager: ProfileManager;
@@ -184,20 +227,6 @@ export interface RuntimeServices {
   readonly providerRegistry: ProviderRegistry;
   readonly toolLLM: ToolLLM;
   readonly distributedRuntime: DistributedRuntimeManager;
-  /**
-   * The paired-phone feature for this host: the grants ledger, the capture
-   * store, the housekeeping sweeps, and the capability service every `device.*`
-   * setting governs. Bound to the `devices.*` verbs at composition; the `phone`
-   * tool is registered on it in the bootstrap tail.
-   */
-  readonly devicePosture: DevicePostureRuntime;
-  readonly daemonHandlers: DaemonHandlerSurfaces;
-  /** Elects the one node on this network that consumes inbound messages; hand it to the DaemonServer so its consumers share this leadership instead of holding a second election. */
-  readonly clusterCoordinator: ClusterCoordinator;
-  /** LAN group membership: identity, keys, roster, and the `cluster` verbs. */
-  readonly clusterGroup: ClusterGroupComposition;
-  /** Start the group layer and then the election, in that order. Idempotent. */
-  readonly startCluster: () => Promise<void>;
   readonly remoteRunnerRegistry: RemoteRunnerRegistry;
   readonly remoteSupervisor: RemoteSupervisor;
   readonly sessionMemoryStore: SessionMemoryStore;
@@ -239,6 +268,12 @@ export interface RuntimeServices {
   readonly sessionLiveTurnControls: SessionLiveTurnControlsHolder;
   /** Unified live process registry (agents, WRFC chains, workflows, watchers, background processes) backing the Fleet panel; archive-aware — finished subtrees can be moved to the session archive view. */
   readonly processRegistry: ArchivableProcessRegistry;
+  /**
+   * What the Fleet panel reads: this surface's own registry rows UNION the
+   * adopted daemon's, deduped by node id with the local (live, actionable) copy
+   * winning. Interval-refreshed on the daemon half — see client/fleet-union.ts.
+   */
+  readonly fleetReadModel: FleetUnionReadModel;
   readonly modeManager: ModeManager;
   readonly fileUndoManager: FileUndoManager;
   readonly workspaceCheckpointManager: WorkspaceCheckpointManager;

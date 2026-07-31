@@ -147,15 +147,47 @@ export function defaultSecretBackedScope(configKey: ConfigKey): SecretScope {
   return isDaemonOwnedConfigKey(configKey) ? 'daemon' : 'user';
 }
 
+/**
+ * How a DAEMON-scoped credential reaches the daemon that will use it.
+ *
+ * One call, not two: `credentials.set` derives the store key, writes the value,
+ * reads it back to verify, and only then points the config key at it. Doing
+ * those halves separately from here would leave a window where the config
+ * names a reference that resolves to nothing — which every reader treats as a
+ * configured-but-broken credential.
+ */
+export interface DaemonCredentialWriter {
+  set(configKey: string, value: string): Promise<unknown>;
+  clear(configKey: string): Promise<void>;
+}
+
 export async function persistSecretBackedConfigValue(
   configManager: SecretBackedConfigManager,
   secretsManager: SecretBackedSecretStore | null | undefined,
   configKey: ConfigKey,
   rawValue: string,
-  options: { readonly scope?: SecretScope } = {},
+  options: { readonly scope?: SecretScope; readonly daemonWriter?: DaemonCredentialWriter | null | undefined } = {},
 ): Promise<string> {
   const update = buildSecretBackedConfigUpdate(configKey, rawValue);
   const scope = options.scope ?? defaultSecretBackedScope(configKey);
+
+  // A daemon-scoped credential is the daemon's to store, and the daemon does
+  // the whole reference-and-value sequence atomically. This surface neither
+  // writes the config key nor the secret in that case — it would be writing
+  // both into a tree the daemon never reads.
+  if (scope === 'daemon' && options.daemonWriter) {
+    const trimmed = rawValue.trim();
+    if (trimmed.length === 0) {
+      await options.daemonWriter.clear(configKey);
+      return '';
+    }
+    // Already a reference: the caller pasted one rather than a secret, so there
+    // is nothing to store — the config value is the whole write.
+    if (isSecretReferenceValue(trimmed)) return trimmed;
+    await options.daemonWriter.set(configKey, rawValue);
+    return update.configValue;
+  }
+
   const medium = getSecretWriteMedium(configManager.get('storage.secretPolicy'));
 
   // 1. Validate config write first. If setDynamic throws, no secret is written (avoids orphans).

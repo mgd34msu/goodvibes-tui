@@ -19,6 +19,7 @@ import { buildMcpEntries } from './settings-modal-data.ts';
 import { isWorktreeSetupListConfigKey, parseWorktreeSetupListInput } from './worktree-setup-config.ts';
 import { isSandboxExecListConfigKey, parseSandboxExecListInput } from './sandbox-exec-config.ts';
 import { isExecEnvScrubAllowlistConfigKey, parseExecEnvScrubAllowlistInput } from './exec-env-scrub-config.ts';
+import type { SettingsDaemonCredentialWriter } from './settings-modal-secrets.ts';
 import type { McpEntry, SettingEntry } from './settings-modal-types.ts';
 
 export interface CommitEditContext {
@@ -27,6 +28,14 @@ export interface CommitEditContext {
   readonly editBuffer: string;
   readonly configManager: ConfigManager | null;
   readonly secretsManager: SettingsSecretsManager | null;
+  /**
+   * The daemon's credential write, when a daemon is adopted. A daemon-scoped
+   * credential must land where the daemon reads it, not in this surface's own
+   * tree — see settings-modal-secrets.ts.
+   */
+  readonly daemonCredentials?: SettingsDaemonCredentialWriter | null;
+  /** Renders a refused credential write; without it a failure would be silent. */
+  readonly reportError?: ((message: string) => void) | undefined;
   readonly mcpRegistry: McpRegistry | null;
   readonly mcpAllowAllConfirmationTarget: string | null;
   getSelectedMcp(): McpEntry | null;
@@ -135,7 +144,9 @@ export function commitEditValue(ctx: CommitEditContext): boolean {
       value: String(parsed ?? ''),
       configManager: ctx.configManager,
       secretsManager: ctx.secretsManager,
+      daemonCredentials: ctx.daemonCredentials ?? null,
       setConfigValue: (key, value) => ctx.setValue(key, value),
+      ...(ctx.reportError ? { onError: ctx.reportError } : {}),
     });
   } else {
     ctx.setValue(setting.key as ConfigKey, parsed);
