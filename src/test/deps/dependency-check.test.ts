@@ -351,3 +351,37 @@ describe('@agentclientprotocol/sdk', () => {
     expect(Object.keys(mod.CLIENT_METHODS as object).length).toBeGreaterThan(0);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Pin agreement with the platform
+// ---------------------------------------------------------------------------
+
+describe('dependency ranges agree with the platform that declares them', () => {
+  /**
+   * bun.lock resolves exactly ONE copy of a package both this repository and
+   * the SDK depend on. When the two declare different ranges the older one can
+   * win, and the SDK is then compiled and run against a version older than the
+   * one it is written for — which is how an ACP pin five minors behind the
+   * SDK's went unnoticed. Nothing observes that at runtime, so it is asserted
+   * here on the declarations themselves.
+   */
+  test('every shared dependency states the same range the SDK declares', async () => {
+    const ours = (await import(join(repoRoot, 'package.json'))).default as {
+      dependencies?: Record<string, string>;
+    };
+    const platform = (await import(join(repoRoot, 'node_modules', '@pellux', 'goodvibes-sdk', 'package.json'))).default as {
+      dependencies?: Record<string, string>;
+      peerDependencies?: Record<string, string>;
+      optionalDependencies?: Record<string, string>;
+    };
+    const declared = {
+      ...(platform.dependencies ?? {}),
+      ...(platform.peerDependencies ?? {}),
+      ...(platform.optionalDependencies ?? {}),
+    };
+    const drift = Object.entries(ours.dependencies ?? {})
+      .filter(([name, range]) => name in declared && declared[name] !== range)
+      .map(([name, range]) => `${name}: this repo ${range}, platform ${declared[name]}`);
+    expect(drift).toEqual([]);
+  });
+});

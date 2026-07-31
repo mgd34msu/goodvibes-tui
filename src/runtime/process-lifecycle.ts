@@ -22,7 +22,7 @@ import { existsSync } from 'node:fs';
 import { flushActivityLogSync, logger, summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 import { createTerminalLifecycle, TERMINAL_ESCAPES } from '@pellux/goodvibes-terminal-shell';
 import { formatUserFacingErrorLine } from '../core/format-user-error.ts';
-import { allowTerminalWrite } from '@pellux/goodvibes-terminal-shell';
+import { allowTerminalWrite } from '@pellux/goodvibes-terminal-shell/terminal-output-guard';
 import { buildPersistedSessionContext, deleteRecoveryFile } from '@/runtime/index.ts';
 import type { SessionSurface } from '@/runtime/index.ts';
 import { removeLivenessMarker } from '@pellux/goodvibes-sdk/platform/runtime/operations';

@@ -3,7 +3,7 @@ import {
   allowTerminalWrite,
   installTerminalOutputGuard,
   type TerminalOutputIntercept,
-} from '@pellux/goodvibes-terminal-shell';
+} from '@pellux/goodvibes-terminal-shell/terminal-output-guard';
 
 function makeStream() {
   const writes: string[] = [];

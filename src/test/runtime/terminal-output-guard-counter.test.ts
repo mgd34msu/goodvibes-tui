@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { installFullScreenTerminalOutputGuard } from '@pellux/goodvibes-terminal-shell';
+import { installFullScreenTerminalOutputGuard } from '@pellux/goodvibes-terminal-shell/terminal-output-guard';
 
 // item 1a: direct terminal writes that would corrupt the TUI are captured
 // and counted (surfaced by /debug), NOT pushed as repeated transcript lines.

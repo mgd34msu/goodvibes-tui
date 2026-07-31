@@ -1,6 +1,6 @@
 import { logger } from '@pellux/goodvibes-sdk/platform/utils';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
-import { allowTerminalWrite } from '@pellux/goodvibes-terminal-shell';
+import { allowTerminalWrite } from '@pellux/goodvibes-terminal-shell/terminal-output-guard';
 
 /**
  * copyToClipboard - Uses OSC 52 escape sequence to copy text to the terminal clipboard.
