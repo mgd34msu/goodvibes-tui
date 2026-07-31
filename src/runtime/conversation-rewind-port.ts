@@ -11,11 +11,23 @@
 // for the anchor's turnId at TURN_COMPLETED (rewind-turn-anchors.ts) — the same
 // join key files rewind uses against the workspace checkpoint.
 //
-// This module is the single implementation of that port for the TUI, consumed by
-// BOTH the in-process /rewind command (bound to one session's conversation) and
-// the composed daemon's rewind.plan/apply verbs (resolving the live conversation
-// per anchor.sessionId from the registry below), so the truncation semantics
-// cannot drift between the two surfaces.
+// This module is the single implementation of that port for the TUI. It used to
+// have two consumers: the in-process /rewind command, and the composed daemon's
+// rewind.plan/apply verbs resolving the live conversation per anchor.sessionId
+// from the registry below.
+//
+// The second consumer is gone with the daemon. What that costs, stated plainly:
+// FILES rewind still works from anywhere — the workspace checkpoint store is the
+// daemon's and rewind.plan/apply answer for it over the wire. CONVERSATION-scope
+// rewind is answerable only by the process that owns the loop, which is this
+// one, so `/rewind` here is complete and a rewind driven from another surface
+// covers files and reports the conversation half as unavailable rather than
+// silently truncating nothing.
+//
+// Closing that needs a verb the contract does not carry: a way for a surface to
+// register its live conversation WITH the daemon so rewind.apply can call back
+// into it. That is a daemon-side round's work, and until it exists the registry
+// below serves this process's own /rewind and says so.
 // ---------------------------------------------------------------------------
 
 import type {

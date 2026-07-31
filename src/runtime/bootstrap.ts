@@ -522,6 +522,15 @@ export async function bootstrapRuntime(
   deferredStartup.schedule({
     label: 'plugins',
     run: async () => {
+      // Plugin loading stays here: a plugin's commands, tools, providers, voice
+      // and media providers and embedding providers all reach things a turn
+      // needs in THIS process. Three of the eleven registries a plugin can
+      // reach are the daemon's now — gateway methods, channel plugins and
+      // delivery strategies — and a registration into those reaches nothing
+      // from here. No plugin is affected today (none is installed, and this
+      // package bundles none); the classification and the open question about
+      // where a daemon-side plugin is loaded are recorded in
+      // docs/decisions/2026-07-30-plugin-registrations-split-verb-side-and-surface-side.md.
       await pluginManager.init({
         runtimeBus,
         commandRegistry: pluginCommandRegistry,
