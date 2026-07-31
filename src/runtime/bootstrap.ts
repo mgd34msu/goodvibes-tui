@@ -42,9 +42,10 @@ import { createBootstrapShell } from './bootstrap-shell.ts';
 import { announceResumeState } from './resume-notice.ts';
 import { announceInstallHealth } from './install-self-check-startup.ts';
 import { buildSharedOrchestratorCoreServices, refreshMemoryRecallSnapshot } from './orchestrator-core-services.ts';
-import { consumeDaemonAttachNotices, consumeExternalDaemonAttachNotices } from './daemon-attach-notices.ts';
+import { consumeDaemonAttachNotices, readExternalDaemonAttach } from './daemon-attach-notices.ts';
 import { wireContextAccountingSource } from './context-accounting-source.ts';
 import { autostartInstalledDaemon, createDaemonServiceControl, describeDaemonAutostart } from '@pellux/goodvibes-sdk/platform/runtime/client';
+import { DaemonBuildFloor } from './client/build-floors.ts';
 import { buildRelayExternalServiceMethods } from './relay-reachability-bridge.ts';
 import { startMcpConfigAutoReload } from '../mcp/runtime-reload.ts';
 
@@ -195,9 +196,6 @@ export async function bootstrapRuntime(
   } = services;
   // A saved custom-provider model must never crash boot — see provider-fallback.ts.
   await ensureBootModelResolvable(providerRegistry, configManager);
-  // A liveness flip is only PAINTED once something calls requestRender(); without
-  // this, the footer's spine segment sat correct-but-undrawn until incidental activity redrew it (minutes, during an idle stretch).
-  sessionUnionCache.setOnTransition(() => requestRender());
 
   // ── Phase 6: Orchestrator + AcpManager ───────────────────────────────────
 
@@ -381,6 +379,19 @@ export async function bootstrapRuntime(
   // mean the configured port is held and unusable by this TUI instance.
   const hostServiceIsBlocked = (status: HostServiceStatus): boolean => status.mode === 'blocked' || status.mode === 'incompatible';
 
+  // This terminal's floor on the daemon, and the bearer the last attach used —
+  // both read by attachAdoptedDaemon below, which is the one place either one
+  // is applied.
+  const daemonBuildFloor = new DaemonBuildFloor();
+  let lastDaemonToken: string | null = null;
+  // The daemon's floor on this terminal latches in services.ts, where the
+  // continuation runner reads it. This is the surface that tells the owner, and
+  // a verdict reached before this line is delivered the moment it attaches.
+  services.clientBuildGuard.onRestartRequired((verdict) => {
+    systemMessageRouter.high(`[Daemon] ${verdict.message}`);
+    requestRender();
+  });
+
   // Adopting a daemon: session identity, the inbound steer path, the
   // cross-surface union read, and the memory spine — see client/spine-adoption.ts.
   const syncSessionSpineToHostStatus = createSpineAdoptionSync({
@@ -462,7 +473,7 @@ export async function bootstrapRuntime(
           createExternalServiceFactories(companionTokenRecord.token),
         );
         externalServices = await externalServicesPromise;
-        syncSessionSpineToHostStatus(externalServices.daemonStatus, companionTokenRecord.token);
+        await attachAdoptedDaemon(companionTokenRecord.token);
       }
       const notice = describeDaemonAutostart(
         outcome,
@@ -514,23 +525,78 @@ export async function bootstrapRuntime(
       );
       externalServices = await externalServicesPromise;
       controlPlaneRecentEventsRef.value = (limit) => externalServices.listRecentControlPlaneEvents(limit);
-      syncSessionSpineToHostStatus(externalServices.daemonStatus, companionTokenRecord.token);
-      await renderDaemonAttachNotices(companionTokenRecord.token);
+      await attachAdoptedDaemon(companionTokenRecord.token);
       requestRender();
       return inspectExternalServices();
     },
   };
-  // The attach-time consuming read, exactly once as notices. There is no
-  // in-process daemon handle to fold any more — an adopted daemon's receipts
-  // (update applied, restarted after a crash, settings migrated) are read from
-  // its own /status?receipts=consume, where delivery is destructive so each one
-  // is served to exactly one reader.
-  const renderDaemonAttachNotices = async (daemonToken: string): Promise<void> => {
+  // Attaching to a daemon is a handshake, not a pointer swap. ONE /status read
+  // carries the three things this terminal has to settle before it mirrors
+  // anything, and there is no in-process daemon handle to fold any of them from:
+  //
+  //  - The DAEMON's own build. Every capability here is something the daemon
+  //    performs on this terminal's behalf, so a daemon below this build's floor
+  //    is refused rather than adopted — otherwise a verb it does not serve
+  //    surfaces as one broken feature instead of as an old daemon, and the
+  //    terminal keeps running half-working against a peer it has no reason to
+  //    suspect. Refused means local-only, which is a state this app already
+  //    renders honestly.
+  //  - The minimum CLIENT build the daemon accepts. Below it the guard latches
+  //    and the continuation runner stops taking shared-session work.
+  //  - Its undelivered receipts (update applied, restarted after a crash,
+  //    settings migrated), read from /status?receipts=consume where delivery is
+  //    destructive — so the read that consumed them is the read that renders
+  //    them.
+  const attachAdoptedDaemon = async (daemonToken: string): Promise<void> => {
+    lastDaemonToken = daemonToken;
     const daemonStatus = externalServices.daemonStatus;
-    if (daemonStatus.mode !== 'external' || !daemonStatus.baseUrl) return;
-    const notices = await consumeExternalDaemonAttachNotices({ baseUrl: daemonStatus.baseUrl, authToken: daemonToken });
-    for (const notice of notices) systemMessageRouter.high(`[Daemon] ${notice}`);
+    if (daemonStatus.mode !== 'external' || !daemonStatus.baseUrl) {
+      syncSessionSpineToHostStatus(daemonStatus, daemonToken);
+      return;
+    }
+    const read = await readExternalDaemonAttach({
+      baseUrl: daemonStatus.baseUrl,
+      authToken: daemonToken,
+      consumeReceipts: true,
+    });
+    // Nothing was read, so nothing is known — adopt as before and leave a daemon
+    // that is not answering to the spine's own reachability handling. Refusing
+    // on a failed read would turn one dropped request into a lost mirror.
+    if (!read.answered) {
+      syncSessionSpineToHostStatus(daemonStatus, daemonToken);
+      return;
+    }
+    const daemonVerdict = daemonBuildFloor.evaluate(read.statusPayload, daemonStatus.baseUrl);
+    const daemonNotice = daemonBuildFloor.noticeFor(daemonVerdict);
+    if (daemonNotice) systemMessageRouter.high(`[Daemon] ${daemonNotice}`);
+    if (daemonVerdict.status === 'daemon-update-required') {
+      // The refusal is recorded on the status every reader already consults, so
+      // the footer and /status report "a daemon is there and this build will not
+      // adopt it" rather than claiming a working mirror.
+      const refused: HostServiceStatus = { ...daemonStatus, mode: 'incompatible', reason: daemonVerdict.message };
+      externalServices = { ...externalServices, daemonStatus: refused };
+      syncSessionSpineToHostStatus(refused, daemonToken);
+      return;
+    }
+    services.clientBuildGuard.observeFloor(read.clientFloor);
+    syncSessionSpineToHostStatus(daemonStatus, daemonToken);
+    for (const notice of read.notices) systemMessageRouter.high(`[Daemon] ${notice}`);
   };
+
+  // A liveness flip is only PAINTED once something calls requestRender(); without
+  // this, the footer's spine segment sat correct-but-undrawn until incidental activity redrew it (minutes, during an idle stretch).
+  // A flip TO online also means the daemon came up, which for an already-adopted
+  // one is what its hourly self-update looks like from here — so the handshake
+  // runs again on that edge, off a signal that already fires rather than on a
+  // second timer. Both floors are re-read against whatever build came back, and
+  // any receipt the restart left behind is rendered. The flip an adoption's own
+  // first refresh causes runs the handshake once more too; that costs one
+  // /status GET and is the price of never having to decide which online flip is
+  // "really" a reconnect.
+  sessionUnionCache.setOnTransition((online) => {
+    requestRender();
+    if (online && lastDaemonToken !== null) void attachAdoptedDaemon(lastDaemonToken);
+  });
   deferredStartup.schedule({
     label: 'plugins',
     run: async () => {
@@ -601,8 +667,7 @@ export async function bootstrapRuntime(
       // Installed-but-stopped recovery, before anything reads the status.
       await maybeStartInstalledDaemon();
       controlPlaneRecentEventsRef.value = (limit) => externalServices.listRecentControlPlaneEvents(limit);
-      syncSessionSpineToHostStatus(externalServices.daemonStatus, companionTokenRecord.token);
-      await renderDaemonAttachNotices(companionTokenRecord.token);
+      await attachAdoptedDaemon(companionTokenRecord.token);
       requestRender();
     },
     onError: (error) => {

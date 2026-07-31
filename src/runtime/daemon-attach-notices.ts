@@ -11,6 +11,7 @@
  * for the embedded daemon.
  */
 import { FeatureAnnouncementStore, featureAnnouncementsPath, createSandboxContainmentAnnouncer } from '@pellux/goodvibes-sdk/platform/runtime/feature-announcements';
+import { readClientCompatibilityFloor } from '@pellux/goodvibes-sdk/platform/control-plane';
 import type { ConfigManager } from '../config/index.ts';
 
 /** A daemon receipt line (already a human one-liner, e.g. "restarted after a crash at 14:32"). */
@@ -51,43 +52,73 @@ export function consumeDaemonAttachNotices(deps: DaemonAttachNoticesDeps): strin
   return notices;
 }
 
-/** Milliseconds an external-daemon receipts read waits before giving up. */
+/** Milliseconds an external-daemon `/status` read waits before giving up. */
 const EXTERNAL_RECEIPTS_TIMEOUT_MS = 1500;
 
-export interface ExternalDaemonAttachNoticesDeps {
+export interface ExternalDaemonAttachReadDeps {
   /** The adopted daemon's base URL, e.g. "http://127.0.0.1:3421". */
   readonly baseUrl: string;
   /** The shared bearer the adopted daemon authenticates (the companion-pairing token). */
   readonly authToken: string;
+  /**
+   * Ask for the daemon's undelivered receipts on this read. Delivery at the
+   * daemon is destructive — served once, to the consuming reader — so only the
+   * read that RENDERS them asks. A reconnect read that just refreshes the two
+   * build floors leaves this off, and no receipt is eaten before a surface can
+   * show it.
+   */
+  readonly consumeReceipts?: boolean;
   /** Injectable fetch for tests; defaults to the global fetch. */
   readonly fetchImpl?: typeof fetch;
   /** Injectable timeout (ms); defaults to EXTERNAL_RECEIPTS_TIMEOUT_MS. */
   readonly timeoutMs?: number;
 }
 
+/** Everything one `/status` read of an adopted daemon tells this terminal. */
+export interface ExternalDaemonAttachRead {
+  /** True only when the daemon answered with a usable 2xx body. */
+  readonly answered: boolean;
+  /** Receipt lines to render; empty unless `consumeReceipts` was asked for. */
+  readonly notices: string[];
+  /**
+   * The minimum CLIENT build the daemon announced on the
+   * `X-Goodvibes-Client-Floor` response header, or undefined when it announced
+   * none (a daemon too old to publish one is not asking for anything).
+   */
+  readonly clientFloor: string | undefined;
+  /** The parsed body, which carries the daemon's own `version`. */
+  readonly statusPayload: unknown;
+}
+
 /**
- * Consume — exactly once — a separately-hosted (external/systemd) daemon's
- * undelivered receipts AND drained announcements over HTTP, returning the
- * one-line notices to render. The default deployment adopts such a daemon with
- * no in-process handle (daemonServer is null), so the embedded in-process fold
- * sees nothing; this hits the daemon's own consuming endpoint instead —
- * GET <baseUrl>/status?receipts=consume with the shared bearer. The daemon
- * marks the served receipts delivered as it responds (its own exactly-once
- * store), so a second attach with nothing new returns []. Any transport, auth,
- * or parse failure yields no notices rather than throwing into the attach path.
+ * One `/status` read of a separately-hosted (external/systemd) daemon, carrying
+ * the three things attaching to it decides on: its undelivered receipts, the
+ * client build floor it publishes, and its own build.
+ *
+ * The default deployment adopts such a daemon with no in-process handle
+ * (daemonServer is null), so the embedded in-process fold sees nothing; this
+ * hits the daemon's own endpoint instead — GET <baseUrl>/status with the shared
+ * bearer, plus `?receipts=consume` when the caller is going to render them. The
+ * daemon marks the served receipts delivered as it responds (its own
+ * exactly-once store), so a second attach with nothing new returns no notices.
+ * Any transport, auth, or parse failure reads as unanswered rather than
+ * throwing into the attach path.
  */
-export async function consumeExternalDaemonAttachNotices(
-  deps: ExternalDaemonAttachNoticesDeps,
-): Promise<string[]> {
+export async function readExternalDaemonAttach(
+  deps: ExternalDaemonAttachReadDeps,
+): Promise<ExternalDaemonAttachRead> {
+  const unanswered: ExternalDaemonAttachRead = {
+    answered: false, notices: [], clientFloor: undefined, statusPayload: null,
+  };
   const fetchImpl = deps.fetchImpl ?? fetch;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), deps.timeoutMs ?? EXTERNAL_RECEIPTS_TIMEOUT_MS);
   try {
     const headers = new Headers();
     if (deps.authToken.trim()) headers.set('Authorization', `Bearer ${deps.authToken.trim()}`);
-    const url = `${deps.baseUrl.replace(/\/+$/, '')}/status?receipts=consume`;
+    const url = `${deps.baseUrl.replace(/\/+$/, '')}/status${deps.consumeReceipts ? '?receipts=consume' : ''}`;
     const response = await fetchImpl(url, { headers, signal: controller.signal });
-    if (!response.ok) return [];
+    if (!response.ok) return unanswered;
     const body = (await response.json()) as { receipts?: unknown } | null;
     const receipts = Array.isArray(body?.receipts) ? body.receipts : [];
     const notices: string[] = [];
@@ -97,9 +128,14 @@ export async function consumeExternalDaemonAttachNotices(
         if (text.trim().length > 0) notices.push(text);
       }
     }
-    return notices;
+    return {
+      answered: true,
+      notices,
+      clientFloor: readClientCompatibilityFloor(response.headers),
+      statusPayload: body,
+    };
   } catch {
-    return [];
+    return unanswered;
   } finally {
     clearTimeout(timer);
   }

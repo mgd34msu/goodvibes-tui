@@ -104,7 +104,10 @@ import {
   createWireSessionDispatch,
   readSurfaceAgentOutcome,
 } from '@pellux/goodvibes-sdk/platform/runtime/client';
+import { ClientBuildGuard } from './client/build-floors.ts';
 import { createFleetUnionReadModel } from './client/fleet-union.ts';
+import { logger } from '@pellux/goodvibes-sdk/platform/utils';
+import { VERSION } from '../version.ts';
 import { createSessionConversationRewindPort, hasSessionConversation } from './conversation-rewind-port.ts';
 import { createFleetReadModel } from '../panels/fleet-read-model.ts';
 import type { PermissionPromptDecision, PermissionPromptRequest } from '@pellux/goodvibes-sdk/platform/permissions';
@@ -293,11 +296,29 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
     readAgentOutcome: (agentId) => readSurfaceAgentOutcome(agentManager.getStatus(agentId)),
   });
   disposalScope.registry.add('wire session dispatch', () => wireSessionDispatch.stop());
+  // A daemon update swaps the daemon binary and leaves this terminal running
+  // the build it started with. The daemon announces the minimum client build it
+  // accepts on the /status read the attach handshake already makes; when this
+  // build is below it the guard latches, the owner is told on the same surface
+  // daemon notices already render, and the runner below stops taking
+  // shared-session work rather than executing it under superseded rules. See
+  // client/build-floors.ts; bootstrap.ts feeds the reads and attaches the
+  // notice sink.
+  const clientBuildGuard = new ClientBuildGuard({ clientVersion: VERSION });
   // The parameter type comes from the broker's own runner rather than being
   // re-declared: a hand-written copy would drift from the routing options the
   // spawn actually forwards, and the drift would be silent.
   type ContinuationRequest = Parameters<NonNullable<Parameters<typeof sessionBroker.setContinuationRunner>[0]>>[0];
-  const continuationRunner = async ({ task, input }: ContinuationRequest): Promise<{ agentId: string }> => {
+  const continuationRunner = async ({ task, input }: ContinuationRequest): Promise<{ agentId: string } | null> => {
+    // Too old for the live daemon: refuse the work instead of doing it the old
+    // way. The owner has already been told to restart this terminal.
+    if (!clientBuildGuard.maySharedSessionWork()) {
+      logger.warn('declined a shared-session continuation: this build is below the daemon floor', {
+        sessionId: input.sessionId,
+        floor: clientBuildGuard.current().floor,
+      });
+      return null;
+    }
     const record = agentManager.spawn({
       mode: 'spawn',
       task,
@@ -564,6 +585,7 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
     requestApproval,
     daemonVerbs: verbs,
     wireSessionDispatch,
+    clientBuildGuard,
     conversationRewindHost,
     gatewayMethods,
     stepUpService,

@@ -23,6 +23,7 @@ import type {
   DevicesClient,
   WireSessionDispatch,
 } from '@pellux/goodvibes-sdk/platform/runtime/client';
+import type { ClientBuildGuard } from './client/build-floors.ts';
 import type { FleetUnionReadModel } from './client/fleet-union.ts';
 import type { ApprovalRaiser } from '@pellux/goodvibes-sdk/platform/runtime/client-services';
 import type { PermissionPromptDecision, PermissionPromptRequest } from '@pellux/goodvibes-sdk/platform/permissions';
@@ -139,6 +140,14 @@ export interface RuntimeServices {
    * continuation runner the local broker uses.
    */
   readonly wireSessionDispatch: WireSessionDispatch;
+  /**
+   * The daemon's build floor on this terminal. bootstrap.ts feeds it every
+   * floor the adopted daemon announces and attaches the notice sink; the
+   * continuation runner consults it before spawning, so a build the daemon has
+   * declared too old stops taking shared-session work instead of executing it
+   * under superseded rules. See client/build-floors.ts.
+   */
+  readonly clientBuildGuard: ClientBuildGuard;
   /**
    * This surface offering its live conversation to the daemon, so a rewind
    * driven from anywhere can reach the messages — which only this process
