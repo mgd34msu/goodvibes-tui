@@ -390,6 +390,11 @@ export async function bootstrapRuntime(
     sessionUnionCache: sessionUnionCache as unknown as Parameters<typeof createSpineAdoptionSync>[0]['sessionUnionCache'],
     legacyStorePath: services.shellPaths.resolveProjectPath('tui', 'control-plane', 'sessions.json'),
     workingDirectory: services.workingDirectory,
+    // Inbound CONTINUATION dispatch rides the same adoption signal as the steer
+    // path: a message submitted into a session this surface hosts has to reach
+    // the loop here, because the loop is here.
+    onAdopted: (client) => services.wireSessionDispatch.activate(client as never),
+    onDetached: (reason) => services.wireSessionDispatch.deactivate(reason),
   });
 
   const inspectExternalServices = () => {

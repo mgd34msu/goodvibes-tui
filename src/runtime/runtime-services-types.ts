@@ -19,6 +19,7 @@ import type { DevicesClient } from './client/devices-client.ts';
 import type { ApprovalRaiser } from '@pellux/goodvibes-sdk/platform/runtime/client-services';
 import type { PermissionPromptDecision, PermissionPromptRequest } from '@pellux/goodvibes-sdk/platform/permissions';
 import type { DaemonVerbCaller } from './client/operator-endpoint.ts';
+import type { WireSessionDispatch } from './client/session-dispatch.ts';
 import type { DaemonConfigClient } from './client/config-client.ts';
 import type { DaemonCredentialsClient } from './client/credentials-client.ts';
 import type { ConfigManager, ServiceRegistry, SubscriptionManager, ToolLLM } from '@pellux/goodvibes-sdk/platform/config';
@@ -127,6 +128,12 @@ export interface RuntimeServices {
   readonly requestApproval: ApprovalRaiser;
   /** The one resolution of "which daemon", shared by every client seam. */
   readonly daemonVerbs: DaemonVerbCaller;
+  /**
+   * Inbound dispatch for sessions this surface hosts, over the adopted daemon's
+   * session inputs. Inert until bootstrap.ts activates it; bound to the SAME
+   * continuation runner the local broker uses.
+   */
+  readonly wireSessionDispatch: WireSessionDispatch;
   /** Daemon-owned settings, read and written over `config.get` / `config.set`. */
   readonly daemonConfig: DaemonConfigClient;
   /** Daemon-scoped credential writes: `credentials.set`/`delete` on the daemon, one verified sequence. */

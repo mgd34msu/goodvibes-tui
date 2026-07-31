@@ -96,6 +96,7 @@ import { createClientApprovalRaiser } from './client/approval-raiser.ts';
 import { createDaemonConfigClient } from './client/config-client.ts';
 import { createDaemonCredentialsClient } from './client/credentials-client.ts';
 import { createDevicesClient } from './client/devices-client.ts';
+import { createWireSessionDispatch } from './client/session-dispatch.ts';
 import type { PermissionPromptDecision, PermissionPromptRequest } from '@pellux/goodvibes-sdk/platform/permissions';
 import type { RuntimeServicesOptions, RuntimeServices } from './runtime-services-types.ts';
 export type { RuntimeServicesOptions, RuntimeServices } from './runtime-services-types.ts';
@@ -253,7 +254,21 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
     messageSender: agentMessageBus,
     conversationGateConfig: configManager, // without this the gate runs on DEFAULTS
   });
-  sessionBroker.setContinuationRunner(async ({ task, input }) => {
+  // Work that arrives for a session THIS surface hosts reaches the loop through
+  // the same runner whether it came from the local broker or from the daemon's
+  // queue. The wire half is inert until bootstrap.ts adopts a daemon (see
+  // client/session-dispatch.ts); binding one runner to both is what stops a
+  // continuation delivered over the wire from taking a different path — and a
+  // different set of routing options — than one raised locally.
+  const wireSessionDispatch = createWireSessionDispatch({
+    hostedSessionIds: () => (liveSessionIdRef.value ? [liveSessionIdRef.value] : []),
+  });
+  disposalScope.registry.add('wire session dispatch', () => wireSessionDispatch.stop());
+  // The parameter type comes from the broker's own runner rather than being
+  // re-declared: a hand-written copy would drift from the routing options the
+  // spawn actually forwards, and the drift would be silent.
+  type ContinuationRequest = Parameters<NonNullable<Parameters<typeof sessionBroker.setContinuationRunner>[0]>>[0];
+  const continuationRunner = async ({ task, input }: ContinuationRequest): Promise<{ agentId: string }> => {
     const record = agentManager.spawn({
       mode: 'spawn',
       task,
@@ -273,7 +288,9 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
       context: `shared-session:${input.sessionId}`,
     });
     return { agentId: record.id };
-  });
+  };
+  sessionBroker.setContinuationRunner(continuationRunner);
+  wireSessionDispatch.setContinuationRunner(continuationRunner);
   const memoryEmbeddingRegistry = new MemoryEmbeddingProviderRegistry({ configManager });
   // Open the ONE home-scoped canonical store; legacy per-project TUI memory folds in at boot (foldTuiLegacyMemory).
   const memoryDbPath = resolveCanonicalMemoryDbPath(homeDirectory);
@@ -495,6 +512,7 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
     approvalBroker,
     requestApproval,
     daemonVerbs: verbs,
+    wireSessionDispatch,
     gatewayMethods,
     stepUpService,
     pairingTokens,
