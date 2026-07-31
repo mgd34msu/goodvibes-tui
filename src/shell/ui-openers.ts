@@ -21,6 +21,7 @@ import { THEME_MODE_CONFIG_KEY, coerceThemeModeSetting } from '../renderer/theme
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 import { buildFirstOpenItems, decodeFirstOpenChoice, selfRecordWorkspaceRegistration } from '../cli/tui-startup.ts';
 import type { SettingsDaemonCredentialWriter } from '../input/settings-modal-secrets.ts';
+import type { DaemonOwnedConfigWriter } from '../input/settings-modal-mutations.ts';
 import type { WorkspaceTrustLevel } from '../runtime/trust/workspace-trust.ts';
 
 type WireShellUiOpenersOptions = {
@@ -41,6 +42,12 @@ type WireShellUiOpenersOptions = {
    * store, which the daemon never reads.
    */
   daemonCredentials?: SettingsDaemonCredentialWriter | null;
+  /**
+   * Where a daemon-owned setting is written. `surfaces.*`, `watchers.*`,
+   * `automation.*` and the rest are applied by the daemon; writing one into
+   * this surface's own file reports success and configures nothing.
+   */
+  daemonConfig?: DaemonOwnedConfigWriter | null;
   serviceRegistry: Pick<ServiceInspectionQuery, 'getAll'>;
   /** Backs the model picker's 'embeddings' target and its own item-list mode. */
   memoryEmbeddingRegistry: Pick<MemoryEmbeddingProviderRegistry, 'getDefaultProviderId' | 'setDefaultProvider' | 'status'>;
@@ -128,6 +135,7 @@ export function wireShellUiOpeners(options: WireShellUiOpenersOptions): void {
     subscriptionManager,
     secretsManager,
     daemonCredentials,
+    daemonConfig,
     serviceRegistry,
     memoryEmbeddingRegistry,
     workingDirectory,
@@ -412,6 +420,8 @@ export function wireShellUiOpeners(options: WireShellUiOpenersOptions): void {
       // A daemon-scoped credential goes to the daemon, which writes the secret,
       // verifies it reads back, and only then points the config key at it.
       ...(daemonCredentials ? { daemonCredentials } : {}),
+      // A daemon-owned setting is applied by the daemon, so it is written there.
+      ...(daemonConfig ? { daemonConfig } : {}),
       reportError: (message: string) => { commandContext.print?.(message); },
       requestRender: render,
       onSettingApplied: (change) => {

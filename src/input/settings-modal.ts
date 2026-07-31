@@ -52,6 +52,7 @@ import { getSettingLabel } from '../renderer/settings-modal-helpers.ts';
 import {
   applySettingValue,
   syncFlagEntryFromManager,
+  type DaemonOwnedConfigWriter,
   type SettingAppliedCallback,
 } from './settings-modal-mutations.ts';
 import { featureEnablementWrite, isFeatureValueEnabled } from '../runtime/feature-settings.ts';
@@ -91,6 +92,12 @@ export interface SettingsModalOpenOptions {
    * surface storing a copy is a credential in a place nothing consults.
    */
   readonly daemonCredentials?: SettingsDaemonCredentialWriter | null;
+  /**
+   * Where a daemon-owned setting is written. Present when a daemon is
+   * configured; without it every write stays local, which is right only when
+   * there is no daemon to disagree with.
+   */
+  readonly daemonConfig?: DaemonOwnedConfigWriter | null;
   /** Renders a refused credential write, so a failed save is never silent. */
   readonly reportError?: (message: string) => void;
   /** In-process catalog the Connections category probes; see that module. */
@@ -203,6 +210,7 @@ export class SettingsModal {
   private configManager: ConfigManager | null = null;
   private secretsManager: SettingsSecretsManager | null = null;
   private daemonCredentials: SettingsDaemonCredentialWriter | null = null;
+  private daemonConfig: DaemonOwnedConfigWriter | null = null;
   private reportError: ((message: string) => void) | null = null;
   private featureFlagManager: FeatureFlagManager | null = null;
   private mcpRegistry: McpRegistry | null = null;
@@ -228,6 +236,7 @@ export class SettingsModal {
     this.configManager = configManager;
     this.secretsManager = secretsManager ?? null;
     this.daemonCredentials = options?.daemonCredentials ?? null;
+    this.daemonConfig = options?.daemonConfig ?? null;
     this.reportError = options?.reportError ?? null;
     this.featureFlagManager = featureFlagManager;
     this.subscriptionManager = subscriptionManager;
@@ -692,6 +701,8 @@ export class SettingsModal {
       refreshGroups: () => {
         if (this.configManager) refreshEntryValues(this.groups, this.configManager);
       },
+      daemonConfig: this.daemonConfig,
+      ...(this.reportError ? { onAsyncError: this.reportError } : {}),
     });
 
     // Feature-unit headers write plain domain keys; the SDK settings bridge

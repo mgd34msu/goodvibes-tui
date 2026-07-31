@@ -39,6 +39,21 @@ export type SettingAppliedCallback = (change: {
 // applySettingValue
 // ---------------------------------------------------------------------------
 
+/**
+ * Where a DAEMON-owned setting is written.
+ *
+ * `surfaces.*`, `controlPlane.*`, `watchers.*`, `device.*`, `automation.*` and
+ * the rest are executed by the daemon, unattended, with every surface closed.
+ * Writing one into this surface's own settings file reports success and
+ * configures nothing — the daemon reads a different file and never sees it.
+ * So a daemon-owned write goes over `config.set`, and a write with no reachable
+ * daemon FAILS rather than landing somewhere harmless-looking.
+ */
+export interface DaemonOwnedConfigWriter {
+  ownsKey(key: string): boolean;
+  set(key: string, value: unknown): Promise<void>;
+}
+
 export function applySettingValue({
   key,
   value,
@@ -46,6 +61,8 @@ export function applySettingValue({
   groups,
   onSettingApplied,
   refreshGroups,
+  daemonConfig,
+  onAsyncError,
 }: {
   key: ConfigKey;
   value: unknown;
@@ -54,6 +71,10 @@ export function applySettingValue({
   onSettingApplied: SettingAppliedCallback | null;
   /** Called after applying the value so the caller can re-read currentValues. */
   refreshGroups: () => void;
+  /** Present when a daemon is configured; absent keeps every write local. */
+  daemonConfig?: DaemonOwnedConfigWriter | null | undefined;
+  /** Renders a refused daemon write, so a failed save is never silent. */
+  onAsyncError?: ((message: string) => void) | undefined;
 }): ApplyValueResult {
   // Defensive: a handful of TUI-local synthetic keys (see worktree-setup-config.ts)
   // live under a config section CONFIG_SCHEMA/DEFAULT_CONFIG has never populated
@@ -73,7 +94,19 @@ export function applySettingValue({
   // we detect restart-triggering keys by sub-key name heuristic below.
   const isRestartKey = ['host', 'port', 'hostMode', 'enabled'].includes(key.split('.')[1] ?? '');
 
+  const daemonOwned = daemonConfig?.ownsKey(key) === true;
   try {
+    if (daemonOwned && daemonConfig) {
+      // The daemon's store is the one that counts for this key. The local
+      // manager is still written so this session's own reads and the rows
+      // below reflect the edit immediately; the daemon's copy is what the
+      // daemon acts on, and a refusal from it is surfaced rather than
+      // swallowed — the local value would then be the lie.
+      void daemonConfig.set(key, value).catch((error) => {
+        logger.error('SettingsModal: the daemon refused a daemon-owned config write', { key, error: summarizeError(error) });
+        onAsyncError?.(`That setting is applied by the daemon and saving it there failed: ${summarizeError(error)}`);
+      });
+    }
     configManager.setDynamic(key, value);
   } catch (e) {
     logger.error('SettingsModal: failed to set config value', { key, error: summarizeError(e) });
