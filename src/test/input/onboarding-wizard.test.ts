@@ -2098,7 +2098,7 @@ describe('daemon/auth security wizard hardening (TASK-035, TASK-036, TASK-037)',
     expect(corsNoteField?.hint).not.toContain('httpListener.allowedOrigins');
   });
 
-  test('trust-proxy-notice hint contains RESIDUAL RISK language', () => {
+  test('trust-proxy-notice names the header the rate-limiter keys on, and what it costs', () => {
     const wizard = new OnboardingWizardController();
     wizard.open('new');
     wizard.setFieldValue('capabilities.cloudflare-batch', true);
@@ -2106,7 +2106,18 @@ describe('daemon/auth security wizard hardening (TASK-035, TASK-036, TASK-037)',
 
     const cloudflareStep = wizard.steps.find((s) => s.id === 'cloudflare');
     const noticeField = cloudflareStep?.fields.find((f) => f.id === 'cloudflare.trust-proxy-notice');
-    expect(noticeField?.hint).toContain('RESIDUAL RISK');
+    const hint = noticeField?.hint ?? '';
+    // The two keys it is about to write, so the operator can go look at them.
+    expect(hint).toContain('controlPlane.trustProxy=true');
+    expect(hint).toContain('httpListener.trustProxy=true');
+    // trustProxy makes the listener read X-Forwarded-For, not CF-Connecting-IP,
+    // and a client reaching the port directly sets that header for itself.
+    expect(hint).toContain('X-Forwarded-For');
+    expect(hint).toContain('rotate its own rate-limit bucket');
+    // The narrower read exists in the SDK listener but has no setting behind
+    // it, so the notice ends on the mitigation that is actually available.
+    expect(hint).toContain('CF-Connecting-IP');
+    expect(hint).toContain('reachable only through the tunnel');
   });
 });
 
