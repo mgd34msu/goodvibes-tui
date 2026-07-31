@@ -3,7 +3,7 @@ import { existsSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 
 export interface PackageCliBinVerification {
-  readonly command: 'goodvibes' | 'goodvibes-daemon';
+  readonly command: 'goodvibes';
   readonly target: string;
   readonly exists: boolean;
   readonly executable: boolean;
@@ -27,15 +27,16 @@ export interface PackageCliVerificationReport {
   readonly issues: readonly string[];
 }
 
-const REQUIRED_BIN_COMMANDS = ['goodvibes', 'goodvibes-daemon'] as const;
+// One bin, one entry point. The daemon ships as its own package with its own
+// binary; this package carrying a second wrapper is what let two daemons exist
+// on one machine, built from one tree and drifting apart.
+const REQUIRED_BIN_COMMANDS = ['goodvibes'] as const;
 const REQUIRED_TARBALL_PATHS = [
   'README.md',
   'CHANGELOG.md',
   'package.json',
   'src/main.ts',
-  'src/daemon/cli.ts',
   'bin/goodvibes',
-  'bin/goodvibes-daemon',
   'scripts/check-bun.sh',
   'scripts/postinstall.js',
   '.goodvibes/GOODVIBES.md',
@@ -53,8 +54,8 @@ function hasExecutableBit(path: string): boolean {
 function verifyBin(root: string, command: typeof REQUIRED_BIN_COMMANDS[number], target: string | undefined): PackageCliBinVerification {
   const binPath = target ? join(root, target) : '';
   const source = target && existsSync(binPath) ? readFileSync(binPath, 'utf-8') : '';
-  const expectedLocalBuild = command === 'goodvibes' ? "dist', 'goodvibes'" : "dist', 'goodvibes-daemon'";
-  const expectedSource = command === 'goodvibes' ? "src', 'main.ts'" : "src', 'daemon', 'cli.ts'";
+  const expectedLocalBuild = "dist', 'goodvibes'";
+  const expectedSource = "src', 'main.ts'";
   return {
     command,
     target: target ?? '',

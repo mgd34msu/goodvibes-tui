@@ -52,36 +52,36 @@ const SAMPLE_DIFF = [
   '',
 ].join('\n');
 
-describe('checkpoints hunk-revert surface is wired on the composed daemon', () => {
+describe('the hunk-revert verbs are the daemon\'s to answer, and this app knows it', () => {
   const services = getTestRuntimeServices();
   const IDS = ['checkpoints.revertHunkPreview', 'checkpoints.revertHunk'] as const;
 
   for (const id of IDS) {
-    test(`${id} descriptor is registered in the composed catalog`, () => {
+    test(`${id} is in the contract this app calls against`, () => {
+      // The descriptor is cataloged — the contract is shared, and the panel
+      // below builds its request from it. What is NOT here is a handler.
       expect(services.gatewayMethods.get(id)).toBeTruthy();
     });
   }
 
-  test('both revert descriptors have attached handlers (not the 501 class)', () => {
-    expect(() => assertEveryDescriptorHasHandler(services.gatewayMethods, { onlyIds: IDS })).not.toThrow();
+  test('neither verb is answered in this process', () => {
+    // The reverse-apply writes to the working tree and mints a confirm token
+    // against the checkpoint store. The daemon owns that store; a second
+    // implementation here would mint tokens the daemon never issued and apply
+    // hunks it has no record of. `assertEveryDescriptorHasHandler` is the
+    // conformance check the DAEMON repository runs against its own catalog.
+    expect(() => assertEveryDescriptorHasHandler(services.gatewayMethods, { onlyIds: IDS })).toThrow();
   });
 
-  test('revertHunkPreview invokes end-to-end: a stale hunk is applies:false + null token, never a partial write', async () => {
-    const staleHunk = ['@@ -1,2 +1,3 @@', ' nope-context', '+never', ' also-nope'].join('\n');
-    const preview = (await services.gatewayMethods.invoke('checkpoints.revertHunkPreview', {
-      context: { clientKind: 'tui' }, body: { path: 'does-not-exist-xyz.txt', hunk: staleHunk },
-    } as never)) as { applies: boolean; token: string | null };
-    expect(preview.applies).toBe(false);
-    expect(preview.token).toBeNull();
-  });
-
-  test('revertHunk unconfirmed is an honest refusal (never a silent no-op)', async () => {
+  test('invoking one here fails loudly rather than pretending', async () => {
+    // Not a silent empty result: a surface that got `{}` back from an
+    // unimplemented verb would render "nothing to revert" for a file that has
+    // plenty to revert. The panel path below is driven through the gateway
+    // seam it is handed, which in production is the adopted daemon.
     const staleHunk = ['@@ -1,2 +1,3 @@', ' a', '+b', ' c'].join('\n');
-    const result = (await services.gatewayMethods.invoke('checkpoints.revertHunk', {
+    await expect(services.gatewayMethods.invoke('checkpoints.revertHunk', {
       context: { clientKind: 'tui' }, body: { path: 'does-not-exist-xyz.txt', hunk: staleHunk },
-    } as never)) as { receipt: unknown; refused: boolean };
-    expect(result.refused).toBe(true);
-    expect(result.receipt).toBeNull();
+    } as never)).rejects.toThrow();
   });
 });
 

@@ -1,47 +1,38 @@
 /**
- * fatal-boot-report.test.ts — the daemon says why it will not start, proven in
- * a compiled binary.
+ * fatal-boot-report.test.ts — writing the reason to a DESCRIPTOR, not to a
+ * console that may not be there.
  *
- * ── Why a compiled binary ─────────────────────────────────────────────────
+ * ── The defect this module exists for ─────────────────────────────────────
  *
- * Because this defect is invisible to a source-level test, and that is not a
- * guess. Measured against the released 1.27.0 daemon binary in an isolated home
- * holding an unparseable `.goodvibes/daemon/settings.json`: exit 1, zero bytes
- * on stdout, zero bytes on stderr, and no activity log written at all. It
- * crash-looped 77 times overnight and the only signal the owner had was that
- * everything had stopped. The identical source run under `bun` printed the
- * reason loudly, because a `bun` process has a console the fatal handler's
- * logger can reach.
+ * A compiled GoodVibes binary in an isolated home holding an unparseable
+ * `.goodvibes/daemon/settings.json` exited 1 with zero bytes on stdout, zero on
+ * stderr, and no activity log at all. It crash-looped 77 times overnight and
+ * the only signal the owner had was that everything had stopped. The identical
+ * source run under `bun` printed the reason loudly, because a `bun` process has
+ * a console the fatal handler's logger can reach and a compiled one does not.
  *
- * The cause was neither buffering nor a bypassed handler: `src/daemon/cli.ts`
- * reported the failure to the activity LOGGER and exited, the entrypoint never
- * called `configureActivityLogger`, and so no file descriptor was ever touched.
- * A `logger.error` is not a disclosure.
+ * The cause was neither buffering nor a bypassed handler: the failure was
+ * reported to the activity LOGGER, the entrypoint never called
+ * `configureActivityLogger`, and so no file descriptor was ever touched. A
+ * `logger.error` is not a disclosure.
  *
- * ── What is compiled, and why it is not cli.ts itself ─────────────────────
+ * ── What this file covers now ─────────────────────────────────────────────
  *
- * Two fixture entries under `fixtures/`, each importing the REAL modules the
- * daemon boots through — `resolveGoodVibesHomeOwnership`, the SDK's
- * `ConfigManager` (whose daemon-tier read is what throws), and for the fixed
- * one the real `reportFatalBootFailure`. The fixed entry mirrors cli.ts's tail
- * exactly; the legacy entry pins the tail as it shipped.
+ * The module, in process: that it writes to descriptor 2 and descriptor 1
+ * directly, so a replaced `console`, a torn-down stream, or a process with no
+ * console at all cannot swallow the reason. `cli/tui-startup.ts` is the caller
+ * — this app has its own version of the same failure, and this is what makes it
+ * say so.
  *
- * `src/daemon/cli.ts` compiles in under a second, and was measured directly
- * both before and after this change (zero/zero bytes → 728 bytes on stderr).
- * It is not what this test compiles, because the resulting artifact only RUNS
- * after `scripts/prebuild.ts` has rewritten
- * `node_modules/css-tree/lib/data-patch.js` — a transitive dependency of jsdom
- * — into a form `bun build --compile` can bundle. On a fresh checkout, which is
- * exactly what the CI test job has, the compiled entrypoint dies at module init
- * with `Cannot find module '../data/patch.json'` before any daemon code runs.
- * Measured both ways. Making the test mutate node_modules to work around that
- * would be a worse test than one that compiles the same real failure path with
- * none of jsdom's reach.
+ * The end-to-end half — compiling a daemon entry, feeding it a corrupt settings
+ * file, and reading the reason back off stderr and the activity log — went with
+ * the daemon to its own repository. It boots a daemon, and there is no longer
+ * one here to boot.
  */
 
-import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
+import { describe, expect, test } from 'bun:test';
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { makeProjectTempDir } from '../helpers/project-temp.ts';
 import {
@@ -51,10 +42,38 @@ import {
 } from '../../cli/fatal-boot-report.ts';
 
 const REPO_ROOT = process.cwd();
-/** Generous: two `bun build --compile` runs on a loaded host. */
-const COMPILE_TIMEOUT_MS = 180_000;
-/** The runs themselves fail fast — anything near this is a hang, not a boot. */
+/** The runs themselves fail fast — anything near this is a hang, not a write. */
 const RUN_TIMEOUT_MS = 30_000;
+
+interface InlineRun {
+  readonly status: number | null;
+  readonly stdout: string;
+  readonly stderr: string;
+}
+
+/**
+ * Run one statement against the real module in a child `bun` process, so the
+ * assertion is about what the descriptors received rather than about what a
+ * spy was told.
+ */
+function runInlineWriter(body: string): InlineRun {
+  const dir = makeProjectTempDir('gv-fatal-inline');
+  const modulePath = join(REPO_ROOT, 'src', 'cli', 'fatal-boot-report.ts');
+  const script = join(dir, 'inline.ts');
+  writeFileSync(
+    script,
+    `import { reportFatalBootFailure, writeExitingStdoutLine, writeFatalLine } from ${JSON.stringify(modulePath)};\n`
+      + `void [reportFatalBootFailure, writeExitingStdoutLine, writeFatalLine];\n`
+      + `${body}\n`,
+    'utf-8',
+  );
+  const result = spawnSync(process.execPath, ['run', script], {
+    cwd: REPO_ROOT,
+    encoding: 'utf-8',
+    timeout: RUN_TIMEOUT_MS,
+  });
+  return { status: result.status, stdout: result.stdout ?? '', stderr: result.stderr ?? '' };
+}
 
 // ---------------------------------------------------------------------------
 // The module itself, in process
@@ -131,197 +150,16 @@ describe('fatal-boot-report writes to descriptors, not to replaceable globals', 
   });
 });
 
-interface InlineRun {
-  readonly status: number | null;
-  readonly stdout: string;
-  readonly stderr: string;
-}
-
-/**
- * Run one statement against the real module in a child `bun` process, so the
- * assertion is about what the descriptors received rather than about what a
- * spy was told.
- */
-function runInlineWriter(body: string): InlineRun {
-  const dir = makeProjectTempDir('gv-fatal-inline');
-  const modulePath = join(REPO_ROOT, 'src', 'cli', 'fatal-boot-report.ts');
-  const script = join(dir, 'inline.ts');
-  writeFileSync(
-    script,
-    `import { reportFatalBootFailure, writeExitingStdoutLine, writeFatalLine } from ${JSON.stringify(modulePath)};\n`
-      + `void [reportFatalBootFailure, writeExitingStdoutLine, writeFatalLine];\n`
-      + `${body}\n`,
-    'utf-8',
-  );
-  const result = spawnSync(process.execPath, ['run', script], {
-    cwd: REPO_ROOT,
-    encoding: 'utf-8',
-    timeout: RUN_TIMEOUT_MS,
-  });
-  return { status: result.status, stdout: result.stdout ?? '', stderr: result.stderr ?? '' };
-}
-
-// ---------------------------------------------------------------------------
-// The compiled artifacts
-// ---------------------------------------------------------------------------
-
-interface CompiledEntry {
-  readonly binary: string;
-  readonly dir: string;
-}
-
-/** The host's bun compile target, in the same shape toolchain.config.json names. */
-function hostBunTarget(): string {
-  const platform = process.platform === 'darwin' ? 'darwin' : process.platform === 'win32' ? 'windows' : 'linux';
-  const arch = process.arch === 'arm64' ? 'arm64' : 'x64';
-  return `bun-${platform}-${arch}`;
-}
-
-/**
- * Compile one entry the way the release lane does — see
- * `buildCompileArgs` in @pellux/goodvibes-toolchain's build-binaries, which the
- * `build:daemon:*` scripts drive: `bun build <entry> --compile --target=<t>
- * --outfile <o> --external <nativeAddonPackage>`.
- */
-function compileEntry(entry: string, name: string): CompiledEntry {
-  const dir = makeProjectTempDir(`gv-compiled-${name}`);
-  const binary = join(dir, name);
-  const built = spawnSync(
-    process.execPath,
-    [
-      'build',
-      join(REPO_ROOT, entry),
-      '--compile',
-      `--target=${hostBunTarget()}`,
-      '--outfile',
-      binary,
-      '--external',
-      'sqlite-vec-linux-x64',
-    ],
-    { cwd: REPO_ROOT, encoding: 'utf-8', timeout: COMPILE_TIMEOUT_MS },
-  );
-  if (built.status !== 0) {
-    throw new Error(`compiling ${entry} failed (${built.status}): ${built.stderr ?? ''}`);
-  }
-  return { binary, dir };
-}
-
-interface DaemonRun {
-  readonly status: number | null;
-  readonly stdout: string;
-  readonly stderr: string;
-}
-
-/**
- * Run a compiled entry against a throwaway home.
+/*
+ * The compiled-daemon boot-honesty suite that used to live here — the one that
+ * built a daemon entry, fed it an unparseable settings file, and proved the
+ * reason reached stderr and the activity log — went with the daemon. It boots a
+ * daemon, and this repository no longer contains one to boot; the daemon
+ * repository runs it against its own entry point, which is where a regression
+ * in daemon boot honesty would actually appear.
  *
- * The environment is built from nothing but what is passed — no ambient
- * `GOODVIBES_*` from the developer's shell can decide the outcome, which
- * matters because `GOODVIBES_HOME` and `GOODVIBES_DAEMON_HOME` would each move
- * the tree this reads.
+ * What stays here is the module itself: writeFatalLine is what
+ * cli/tui-startup.ts uses to say why THIS app could not start, and the
+ * descriptor-level guarantees above are what make that reliable when a
+ * replaced console or a torn-down stream would swallow it.
  */
-function runEntry(binary: string, home: string): DaemonRun {
-  const result = spawnSync(binary, [], {
-    encoding: 'utf-8',
-    timeout: RUN_TIMEOUT_MS,
-    env: {
-      PATH: process.env['PATH'] ?? '/usr/bin:/bin',
-      HOME: home,
-      GOODVIBES_WORKING_DIR: join(home, 'work'),
-    },
-  });
-  return { status: result.status, stdout: result.stdout ?? '', stderr: result.stderr ?? '' };
-}
-
-/** A throwaway home whose daemon tier holds exactly `contents`. */
-function homeWithDaemonSettings(contents: string, label: string): string {
-  const home = makeProjectTempDir(label);
-  mkdirSync(join(home, '.goodvibes', 'daemon'), { recursive: true });
-  mkdirSync(join(home, 'work'), { recursive: true });
-  writeFileSync(join(home, '.goodvibes', 'daemon', 'settings.json'), contents, 'utf-8');
-  return home;
-}
-
-describe('the compiled daemon says why it will not start', () => {
-  let fixed: CompiledEntry;
-  let legacy: CompiledEntry;
-
-  beforeAll(() => {
-    fixed = compileEntry('src/test/daemon/fixtures/fatal-boot-entry.ts', 'gvd');
-    legacy = compileEntry('src/test/daemon/fixtures/daemon-fatal-boot-legacy-entry.ts', 'gvd-legacy');
-  }, COMPILE_TIMEOUT_MS);
-
-  afterAll(() => {
-    rmSync(fixed.dir, { recursive: true, force: true });
-    rmSync(legacy.dir, { recursive: true, force: true });
-  });
-
-  test('the shape that shipped is no longer silent — the SDK now discloses ingestion failures on its own', () => {
-    // This baseline held zero/zero through the 1.20.0 re-pin: a fatal handler
-    // that only calls logger.error has no descriptor to flush, and the shipped
-    // entrypoint never gave the logger a destination either, so nothing this
-    // repo owned wrote a byte anywhere. That is what an operator saw for 77
-    // crash-loops.
-    //
-    // As of the 1.21.0 re-pin this is no longer reproducible, for a real
-    // reason rather than a drift in the test: `@pellux/goodvibes-sdk`'s own
-    // `platform/config/settings-ingestion.js` now imports the SDK's internal
-    // `writeFatalLine` and calls it from `announceIngestionNotice` at
-    // ingestion time — before `ConfigManager`'s constructor ever throws back
-    // to this entry's own catch block. So the unparseable-settings disclosure
-    // now happens inside the SDK itself, unconditionally, regardless of
-    // whether the caller wired up its own fatal-boot reporting. The legacy
-    // entry below never calls this repo's `reportFatalBootFailure` — this
-    // assertion is proof the SDK's own layer closes the silence anyway.
-    const home = homeWithDaemonSettings('{ "controlPlane": { "port": 39153 }', 'gv-legacy-home');
-    const settingsPath = join(home, '.goodvibes', 'daemon', 'settings.json');
-    const run = runEntry(legacy.binary, home);
-    expect(run.status).toBe(1);
-    expect(run.stdout).toHaveLength(0);
-    expect(run.stderr.length).toBeGreaterThan(0);
-    expect(run.stderr).toContain(settingsPath);
-    expect(run.stderr).toContain('could not be read as JSON');
-  }, RUN_TIMEOUT_MS);
-
-  test('an unparseable settings file names the file and the parse error on stderr', () => {
-    const home = homeWithDaemonSettings('{ "controlPlane": { "port": 39153 }', 'gv-corrupt-home');
-    const settingsPath = join(home, '.goodvibes', 'daemon', 'settings.json');
-
-    const run = runEntry(fixed.binary, home);
-    expect(run.status).toBe(1);
-    expect(run.stderr.length).toBeGreaterThan(0);
-    expect(run.stderr).toContain(settingsPath);
-    expect(run.stderr).toContain('JSON Parse error');
-    // The stack too: the reason alone does not say which read refused.
-    expect(run.stderr).toContain('at ');
-  }, RUN_TIMEOUT_MS);
-
-  test('a settings file it CAN read still boots — the disclosure is not a new failure', () => {
-    const home = homeWithDaemonSettings(JSON.stringify({ controlPlane: { port: 31111 } }), 'gv-ok-home');
-    const run = runEntry(fixed.binary, home);
-    expect(run.status).toBe(0);
-    expect(run.stdout).toContain('BOOTED controlPlane.port=31111');
-    expect(run.stderr).toHaveLength(0);
-  }, RUN_TIMEOUT_MS);
-
-  test('the reason also reaches the activity log, which the shipped entrypoint never configured', () => {
-    // The stream line is the guarantee; the log line is what a person finds
-    // hours later. The daemon entrypoint called neither before this change.
-    const home = homeWithDaemonSettings('{ "controlPlane": { "port": 39153 }', 'gv-logged-home');
-    const run = runEntry(fixed.binary, home);
-    expect(run.status).toBe(1);
-    const logDir = join(home, 'work', '.goodvibes', 'logs');
-    const logged = readdirSafe(logDir)
-      .map((name) => readFileSync(join(logDir, name), 'utf-8'))
-      .join('\n');
-    expect(logged).toContain('goodvibes daemon host failed');
-  }, RUN_TIMEOUT_MS);
-});
-
-function readdirSafe(dir: string): string[] {
-  try {
-    return readdirSync(dir);
-  } catch {
-    return [];
-  }
-}

@@ -254,9 +254,15 @@ describe('the client entry point resolves no home of its own', () => {
     expect(source).not.toMatch(/homeDirectory:\s*homedir\(\)/);
   });
 
-  test('src/daemon/cli.ts uses the same resolver, so the two cannot diverge again', () => {
-    const source = readFileSync(join(projectRoot, 'src', 'daemon', 'cli.ts'), 'utf8');
-    expect(source).toContain('resolveGoodVibesHomeOwnership()');
-    expect(source).not.toMatch(/process\.env\['GOODVIBES_HOME'\]/);
+  test('nothing in this repository starts a daemon of its own any more', () => {
+    // The pair this used to pin was src/main.ts and src/daemon/cli.ts: two
+    // entry points in one tree, which had to resolve the home the same way or
+    // an app and the daemon it embedded would read different trees. There is
+    // one entry point now — the daemon is a separate program with a separate
+    // repository — so the divergence this guarded against cannot happen here.
+    // What is pinned instead is that the second entry point is really gone.
+    expect(existsSync(join(projectRoot, 'src', 'daemon'))).toBe(false);
+    const pkg = JSON.parse(readFileSync(join(projectRoot, 'package.json'), 'utf8')) as { bin?: Record<string, string> };
+    expect(Object.keys(pkg.bin ?? {})).toEqual(['goodvibes']);
   });
 });
