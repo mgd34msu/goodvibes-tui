@@ -44,6 +44,8 @@ import {
   type ApplyUpdateOptions,
 } from '../input/commands/update-runtime.ts';
 import { readUpdateSettings, type UpdateSettings } from '../config/tui-extension-settings.ts';
+import { runDaemonHandover, type DaemonHandoverOutcome } from '../runtime/daemon-handover.ts';
+import { resolveGoodVibesDaemonExecutable } from './service-posture.ts';
 import type { ConfigManager } from '../config/index.ts';
 import { VERSION } from '../version.ts';
 
@@ -217,19 +219,21 @@ export interface SelfUpdateAtLaunchParams {
  */
 export async function selfUpdateAtLaunch(params: SelfUpdateAtLaunchParams): Promise<readonly string[]> {
   const lines: string[] = [];
+  const print = (line: string): void => {
+    lines.push(line);
+    params.stdout.write(`${line}\n`);
+  };
+  const settings = readUpdateSettings(params.configManager);
   const outcome = await runLaunchAutoUpdate({
     fetchImpl: fetch as UpdateFetchLike,
     execPath: process.execPath,
     platform: process.platform,
     arch: process.arch,
     currentVersion: VERSION,
-    settings: readUpdateSettings(params.configManager),
+    settings,
     env: process.env,
     configManager: params.configManager,
-    print: (line) => {
-      lines.push(line);
-      params.stdout.write(`${line}\n`);
-    },
+    print,
   });
   if (outcome.action === 'restart') {
     process.exit(
@@ -241,7 +245,55 @@ export async function selfUpdateAtLaunch(params: SelfUpdateAtLaunchParams): Prom
       }),
     );
   }
+  // Runs AFTER the restart branch, so on a launch that updated this binary the
+  // handover happens in the restarted process rather than in one that is about
+  // to be replaced.
+  await handDaemonOverAtLaunch({ configManager: params.configManager, settings, print });
   return lines;
+}
+
+export interface HandDaemonOverAtLaunchParams {
+  readonly configManager: Pick<ConfigManager, 'get'>;
+  readonly settings: UpdateSettings;
+  readonly print: (line: string) => void;
+}
+
+/**
+ * The launch wiring for the old→new daemon handover (src/runtime/daemon-handover.ts).
+ *
+ * A daemon binary from before the split cannot update itself onto its own
+ * release line — the releases URL baked into it names this repository, which no
+ * longer builds daemons, and pointing it at the daemon's repository instead
+ * still fails because its shipped updater insists on downloading the terminal
+ * binary beside it, which that repository does not publish. So the terminal
+ * hands it over directly, once, and the path goes quiet afterwards.
+ *
+ * Gated on the SAME `update.autoUpdateAtLaunch` setting as this binary's own
+ * launch update: that setting is the operator's "do not swap binaries while I
+ * am starting up" answer, and it means the same thing for the daemon installed
+ * beside this one. No second switch is introduced for one migration.
+ *
+ * Only a binary install acts. A source or package-managed terminal has no
+ * business replacing a daemon binary on the host it happens to be running on.
+ */
+export async function handDaemonOverAtLaunch(
+  params: HandDaemonOverAtLaunchParams,
+): Promise<DaemonHandoverOutcome> {
+  if (!(params.settings.autoUpdateAtLaunch ?? true)) {
+    return { action: 'skipped', reason: 'disabled' };
+  }
+  if (detectInstallKind(process.execPath) !== 'binary') {
+    return { action: 'skipped', reason: 'not-swappable-install' };
+  }
+  const resolved = resolveGoodVibesDaemonExecutable();
+  return await runDaemonHandover({
+    fetchImpl: fetch as UpdateFetchLike,
+    binaryPath: resolved.absolute ? resolved.command : null,
+    platform: process.platform,
+    arch: process.arch,
+    configManager: params.configManager,
+    print: params.print,
+  });
 }
 
 export interface RestartOntoUpdatedBinaryOptions {
