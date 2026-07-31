@@ -30,7 +30,7 @@
  * is injected, so the policy is provable under test with fake paths and no
  * real install. The surfaces wire the real I/O:
  *   - a client's startup check reports a shadow before anything else renders;
- *   - the installer's shell implementation (goodvibes-tui scripts/install.sh)
+ *   - the installer's shell implementation (goodvibes-daemon scripts/install.sh)
  *     mirrors these same rules in POSIX sh, because an installer cannot
  *     import TypeScript.
  *

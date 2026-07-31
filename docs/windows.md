@@ -75,7 +75,8 @@ Each must be addressed (or explicitly gated off on Windows) before promotion:
 
 ## Deferred: PowerShell installer
 
-`scripts/install.ps1` (a PowerShell twin of `scripts/install.sh`) is
+`scripts/install.ps1` (a PowerShell twin of the suite installer,
+`goodvibes-daemon` `scripts/install.sh`) is
 **deferred**. Although the `windows-x64` exe compiles, it is not published as a
 stable release asset and its Windows runtime is unverified, so an installer
 that downloads and runs it would be installing an unverified beta from assets

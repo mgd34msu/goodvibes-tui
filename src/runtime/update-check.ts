@@ -25,7 +25,7 @@ export {
  * How this running process was installed, detected honestly from
  * process.execPath rather than assumed:
  *   - "binary": a standalone `bun build --compile` executable with no
- *     package-manager ancestry — the scripts/install.sh install path.
+ *     package-manager ancestry — the suite-installer install path.
  *     Swappable in place.
  *   - "bun-global-package": running the vendored binary shipped inside an
  *     npm/bun-managed package install (execPath contains a "node_modules"

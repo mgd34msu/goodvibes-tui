@@ -10,8 +10,7 @@
  *   bun run scripts/assemble-platform-packages.ts --require-all   # every target must be present
  *
  * For each target it:
- *   1. copies dist/<appArtifact> and dist/<daemonArtifact> into
- *      platform-packages/<dir>/bin/ (chmod +x),
+ *   1. copies dist/<appArtifact> into platform-packages/<dir>/bin/ (chmod +x),
  *   2. copies the matching sqlite-vec native addon (dist/lib/...) beside them
  *      under bin/lib/ when present, so semantic memory works out of the box,
  *   3. stamps the platform package.json version to match the main package.
@@ -41,25 +40,20 @@ function assemble(pkg: PlatformPackage): 'assembled' | 'skipped' {
   const pkgDir = join(packagesRoot, pkg.dir);
   const binDir = join(pkgDir, 'bin');
   const app = join(distDir, pkg.appArtifact);
-  const daemon = join(distDir, pkg.daemonArtifact);
 
-  if (!existsSync(app) || !existsSync(daemon)) {
+  if (!existsSync(app)) {
     if (requireAll) {
-      throw new Error(
-        `missing built binaries for ${pkg.name}: expected ${pkg.appArtifact} and ${pkg.daemonArtifact} in dist/`,
-      );
+      throw new Error(`missing built binary for ${pkg.name}: expected ${pkg.appArtifact} in dist/`);
     }
-    console.log(`  skip ${pkg.name}: binaries not present in dist/`);
+    console.log(`  skip ${pkg.name}: binary not present in dist/`);
     return 'skipped';
   }
 
   mkdirSync(binDir, { recursive: true });
 
-  for (const artifact of [pkg.appArtifact, pkg.daemonArtifact]) {
-    const dest = join(binDir, artifact);
-    copyFileSync(join(distDir, artifact), dest);
-    chmodSync(dest, 0o755);
-  }
+  const dest = join(binDir, pkg.appArtifact);
+  copyFileSync(app, dest);
+  chmodSync(dest, 0o755);
 
   // sqlite-vec native addon, resolved at runtime as <execDir>/lib/<pkg>/<file>.
   const addonSrc = join(distDir, 'lib', pkg.sqliteVecPackage, pkg.sqliteVecFilename);

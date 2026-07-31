@@ -3,8 +3,11 @@
  * @pellux/goodvibes-tui-<os>-<arch> package set (the esbuild / biome pattern).
  *
  * Each descriptor names a per-platform npm package that carries the prebuilt
- * `goodvibes` + `goodvibes-daemon` binaries (and the matching sqlite-vec native
- * addon). The main package declares all four as optionalDependencies with
+ * `goodvibes` binary (and the matching sqlite-vec native addon). It used to
+ * carry `goodvibes-daemon` too, because one repository built both; the daemon
+ * is its own product with its own npm package now, which the main package
+ * declares as a dependency so an npm install still brings the whole suite.
+ * The main package declares all four platform packages as optionalDependencies with
  * os/cpu fields, so the package manager installs exactly the one that matches
  * the host — with registry integrity, and with no lifecycle script (zero
  * trust). Shared by:
@@ -27,8 +30,6 @@ export interface PlatformPackage {
   readonly cpu: 'x64' | 'arm64';
   /** Release-asset filename for the TUI binary (e.g. goodvibes-linux-x64). */
   readonly appArtifact: string;
-  /** Release-asset filename for the daemon binary. */
-  readonly daemonArtifact: string;
   /** sqlite-vec native addon package name, matched to build.ts. */
   readonly sqliteVecPackage: string;
   /** Native addon filename inside that package. */
@@ -44,7 +45,6 @@ export const PLATFORM_PACKAGES: readonly PlatformPackage[] = [
     os: 'linux',
     cpu: 'x64',
     appArtifact: 'goodvibes-linux-x64',
-    daemonArtifact: 'goodvibes-daemon-linux-x64',
     sqliteVecPackage: 'sqlite-vec-linux-x64',
     sqliteVecFilename: 'vec0.so',
   },
@@ -54,7 +54,6 @@ export const PLATFORM_PACKAGES: readonly PlatformPackage[] = [
     os: 'linux',
     cpu: 'arm64',
     appArtifact: 'goodvibes-linux-arm64',
-    daemonArtifact: 'goodvibes-daemon-linux-arm64',
     sqliteVecPackage: 'sqlite-vec-linux-arm64',
     sqliteVecFilename: 'vec0.so',
   },
@@ -64,7 +63,6 @@ export const PLATFORM_PACKAGES: readonly PlatformPackage[] = [
     os: 'darwin',
     cpu: 'x64',
     appArtifact: 'goodvibes-macos-x64',
-    daemonArtifact: 'goodvibes-daemon-macos-x64',
     sqliteVecPackage: 'sqlite-vec-darwin-x64',
     sqliteVecFilename: 'vec0.dylib',
   },
@@ -74,7 +72,6 @@ export const PLATFORM_PACKAGES: readonly PlatformPackage[] = [
     os: 'darwin',
     cpu: 'arm64',
     appArtifact: 'goodvibes-macos-arm64',
-    daemonArtifact: 'goodvibes-daemon-macos-arm64',
     sqliteVecPackage: 'sqlite-vec-darwin-arm64',
     sqliteVecFilename: 'vec0.dylib',
   },

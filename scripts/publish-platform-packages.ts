@@ -53,14 +53,13 @@ let published = 0;
 for (const pkg of targets) {
   const pkgDir = join(packagesRoot, pkg.dir);
   const app = join(pkgDir, 'bin', pkg.appArtifact);
-  const daemon = join(pkgDir, 'bin', pkg.daemonArtifact);
 
-  if (!existsSync(app) || !existsSync(daemon)) {
+  if (!existsSync(app)) {
     if (allowMissing) {
       console.log(`skip ${pkg.name}: not assembled`);
       continue;
     }
-    throw new Error(`${pkg.name} is not assembled (missing binaries in ${pkgDir}/bin) — run assemble-platform-packages first`);
+    throw new Error(`${pkg.name} is not assembled (missing binary in ${pkgDir}/bin) — run assemble-platform-packages first`);
   }
 
   const pkgJsonPath = join(pkgDir, 'package.json');

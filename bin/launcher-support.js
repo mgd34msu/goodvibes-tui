@@ -23,8 +23,8 @@ const PLATFORM_PACKAGE_NAMES = {
  * trust step and no post-install download. Returns null when the package is not
  * installed (e.g. an unsupported platform, or optional-dep resolution skipped).
  */
-export function resolvePlatformPackageBinary(kind, platform, arch, fromDir) {
-  const artifactName = resolveArtifactName(kind, platform, arch);
+export function resolvePlatformPackageBinary(platform, arch, fromDir) {
+  const artifactName = resolveArtifactName(platform, arch);
   if (!artifactName) return null;
   const pkgName = PLATFORM_PACKAGE_NAMES[`${platform}-${arch}`];
   if (!pkgName) return null;
@@ -65,8 +65,12 @@ export function supportedTargetsText() {
   return SUPPORTED_TARGETS.join(', ');
 }
 
-export function resolveArtifactName(kind, platform, arch) {
-  const prefix = kind === 'daemon' ? 'goodvibes-daemon' : 'goodvibes';
+// One binary, so no artifact KIND to choose between any more: this package
+// shipped `goodvibes-daemon` alongside `goodvibes` while one repository built
+// both, and the daemon is its own product with its own package and its own
+// launcher now.
+export function resolveArtifactName(platform, arch) {
+  const prefix = 'goodvibes';
   if (platform === 'linux' && arch === 'x64') return `${prefix}-linux-x64`;
   if (platform === 'linux' && arch === 'arm64') return `${prefix}-linux-arm64`;
   if (platform === 'darwin' && arch === 'x64') return `${prefix}-macos-x64`;

@@ -200,9 +200,9 @@ describe('applyUpdate — binary install, checksum verification', () => {
   const DAEMON_PATH = '/home/user/.local/bin/goodvibes-daemon';
   const ADDON_PATH = '/home/user/.local/bin/lib/sqlite-vec-linux-x64/vec0.so';
 
-  test('a missing manifest entry hard-fails the update and never swaps either binary', async () => {
-    const fs = memoryIo({ [APP_PATH]: 'old-app', [DAEMON_PATH]: 'old-daemon' });
-    const checksumText = ''; // no entries at all for either artifact
+  test('a missing manifest entry hard-fails the update and swaps nothing', async () => {
+    const fs = memoryIo({ [APP_PATH]: 'old-app' });
+    const checksumText = ''; // no entries at all
     const options = baseApplyOptions({
       currentVersion: '1.0.0',
       fetchImpl: buildStubFetch({ latestTag: 'v1.1.0', checksumText }),
@@ -211,50 +211,28 @@ describe('applyUpdate — binary install, checksum verification', () => {
     await expect(applyUpdate(options)).rejects.toThrow(/no checksum entry for goodvibes-linux-x64/);
     expect(fs.mutations).toEqual([]);
     expect(fs.read(APP_PATH)).toBe('old-app');
-    expect(fs.read(DAEMON_PATH)).toBe('old-daemon');
   });
 
-  test('a checksum mismatch on the daemon artifact hard-fails and never swaps either binary, even though the app checksum matched', async () => {
-    const appBuffer = Buffer.from('app-bytes');
-    const daemonBuffer = Buffer.from('daemon-bytes');
-    const appHash = sha256Hex(appBuffer);
-    const checksumText = [`${appHash}  goodvibes-linux-x64`, `${'0'.repeat(64)}  goodvibes-daemon-linux-x64`].join('\n');
-    const fs = memoryIo({ [APP_PATH]: 'old-app', [DAEMON_PATH]: 'old-daemon' });
-    const options = baseApplyOptions({
-      currentVersion: '1.0.0',
-      fetchImpl: buildStubFetch({ latestTag: 'v1.1.0', checksumText, appBuffer, daemonBuffer }),
-      io: fs.io,
-    });
-    await expect(applyUpdate(options)).rejects.toThrow(/checksum mismatch for goodvibes-daemon-linux-x64/);
-    expect(fs.mutations).toEqual([]);
-    expect(fs.read(APP_PATH)).toBe('old-app');
-    expect(fs.read(DAEMON_PATH)).toBe('old-daemon');
-  });
-
-  test('matching checksums for both artifacts swap both binaries atomically and place the sqlite-vec addon', async () => {
+  test('matching checksums swap the app binary atomically and place the sqlite-vec addon', async () => {
     const appBuffer = Buffer.from('new-app-bytes');
-    const daemonBuffer = Buffer.from('new-daemon-bytes');
     const addonBuffer = Buffer.from('new-addon-bytes');
     const checksumText = [
       `${sha256Hex(appBuffer)}  goodvibes-linux-x64`,
-      `${sha256Hex(daemonBuffer)}  goodvibes-daemon-linux-x64`,
       `${sha256Hex(addonBuffer)}  sqlite-vec-linux-x64.so`,
     ].join('\n');
-    const fs = memoryIo({ [APP_PATH]: 'old-app-bytes', [DAEMON_PATH]: 'old-daemon-bytes' });
+    const fs = memoryIo({ [APP_PATH]: 'old-app-bytes' });
     const printed: string[] = [];
     const options = baseApplyOptions({
       execPath: APP_PATH,
       currentVersion: '1.0.0',
-      fetchImpl: buildStubFetch({ latestTag: 'v1.1.0', checksumText, appBuffer, daemonBuffer, addonBuffer }),
+      fetchImpl: buildStubFetch({ latestTag: 'v1.1.0', checksumText, appBuffer, addonBuffer }),
       io: fs.io,
       print: (line) => printed.push(line),
     });
     await applyUpdate(options);
     expect(fs.read(APP_PATH)).toBe('new-app-bytes');
-    expect(fs.read(DAEMON_PATH)).toBe('new-daemon-bytes');
     // Every swap keeps the outgoing file at `<path>.previous`.
     expect(fs.read(`${APP_PATH}${PREVIOUS_FILE_SUFFIX}`)).toBe('old-app-bytes');
-    expect(fs.read(`${DAEMON_PATH}${PREVIOUS_FILE_SUFFIX}`)).toBe('old-daemon-bytes');
     // The addon lands at <execDir>/lib/sqlite-vec-<os>-<arch>/vec0.<suffix> — the
     // exact path the SDK's loader resolves next to the running binary.
     expect(fs.read(ADDON_PATH)).toBe('new-addon-bytes');
@@ -262,41 +240,34 @@ describe('applyUpdate — binary install, checksum verification', () => {
     expect(printed.join('\n')).toContain(ADDON_PATH);
   });
 
-  test('a target release that predates the sqlite-vec addon (no manifest entry) still swaps the binaries and simply skips the addon', async () => {
+  test('a target release that predates the sqlite-vec addon (no manifest entry) still swaps the binary and simply skips the addon', async () => {
     const appBuffer = Buffer.from('new-app-bytes');
-    const daemonBuffer = Buffer.from('new-daemon-bytes');
-    // Binaries have valid entries; the addon has none. A pre-addon release must
+    // The binary has a valid entry; the addon has none. A pre-addon release must
     // not block an otherwise-valid binary update — the addon is skipped, never
     // placed unverified.
-    const checksumText = [
-      `${sha256Hex(appBuffer)}  goodvibes-linux-x64`,
-      `${sha256Hex(daemonBuffer)}  goodvibes-daemon-linux-x64`,
-    ].join('\n');
-    const fs = memoryIo({ [APP_PATH]: 'old-app', [DAEMON_PATH]: 'old-daemon' });
+    const checksumText = `${sha256Hex(appBuffer)}  goodvibes-linux-x64`;
+    const fs = memoryIo({ [APP_PATH]: 'old-app' });
     const options = baseApplyOptions({
       currentVersion: '1.0.0',
-      fetchImpl: buildStubFetch({ latestTag: 'v1.1.0', checksumText, appBuffer, daemonBuffer }),
+      fetchImpl: buildStubFetch({ latestTag: 'v1.1.0', checksumText, appBuffer }),
       io: fs.io,
     });
     await applyUpdate(options);
     expect(fs.read(APP_PATH)).toBe('new-app-bytes');
-    expect(fs.read(DAEMON_PATH)).toBe('new-daemon-bytes');
     expect(fs.has(ADDON_PATH)).toBe(false);
   });
 
-  test('a checksum mismatch on the sqlite-vec addon hard-fails and never swaps a binary or writes the addon', async () => {
+  test('a checksum mismatch on the sqlite-vec addon hard-fails and never swaps the binary or writes the addon', async () => {
     const appBuffer = Buffer.from('new-app-bytes');
-    const daemonBuffer = Buffer.from('new-daemon-bytes');
     const addonBuffer = Buffer.from('new-addon-bytes');
     const checksumText = [
       `${sha256Hex(appBuffer)}  goodvibes-linux-x64`,
-      `${sha256Hex(daemonBuffer)}  goodvibes-daemon-linux-x64`,
       `${'0'.repeat(64)}  sqlite-vec-linux-x64.so`,
     ].join('\n');
-    const fs = memoryIo({ [APP_PATH]: 'old-app', [DAEMON_PATH]: 'old-daemon' });
+    const fs = memoryIo({ [APP_PATH]: 'old-app' });
     const options = baseApplyOptions({
       currentVersion: '1.0.0',
-      fetchImpl: buildStubFetch({ latestTag: 'v1.1.0', checksumText, appBuffer, daemonBuffer, addonBuffer }),
+      fetchImpl: buildStubFetch({ latestTag: 'v1.1.0', checksumText, appBuffer, addonBuffer }),
       io: fs.io,
     });
     await expect(applyUpdate(options)).rejects.toThrow(/checksum mismatch for sqlite-vec-linux-x64\.so/);
@@ -305,29 +276,30 @@ describe('applyUpdate — binary install, checksum verification', () => {
     expect(fs.has(ADDON_PATH)).toBe(false);
   });
 
-  test('when the daemon binary is not present at its expected sibling location, only the app binary is swapped and the message says so honestly', async () => {
+  test('a daemon binary sitting beside the app binary is neither downloaded nor replaced', async () => {
+    // The daemon is its own product on its own release line and updates itself.
+    // This app's release publishes no daemon asset at all, so a swap from here
+    // would be looking for a file that does not exist — and would be replacing a
+    // build from a different version line if it ever found one.
     const appBuffer = Buffer.from('new-app-bytes');
-    const addonBuffer = Buffer.from('new-addon-bytes');
-    const checksumText = [
-      `${sha256Hex(appBuffer)}  goodvibes-linux-x64`,
-      `${sha256Hex(addonBuffer)}  sqlite-vec-linux-x64.so`,
-    ].join('\n');
-    const fs = memoryIo({ [APP_PATH]: 'old-app' }); // no daemon binary next to the app binary
+    const checksumText = `${sha256Hex(appBuffer)}  goodvibes-linux-x64`;
+    const fs = memoryIo({ [APP_PATH]: 'old-app', [DAEMON_PATH]: 'a-running-daemon' });
+    const calls: string[] = [];
     const printed: string[] = [];
     const options = baseApplyOptions({
+      execPath: APP_PATH,
       currentVersion: '1.0.0',
-      fetchImpl: buildStubFetch({ latestTag: 'v1.1.0', checksumText, appBuffer, addonBuffer }),
+      fetchImpl: buildStubFetch({ latestTag: 'v1.1.0', checksumText, appBuffer, calls }),
       io: fs.io,
       print: (line) => printed.push(line),
     });
     await applyUpdate(options);
     expect(fs.read(APP_PATH)).toBe('new-app-bytes');
-    expect(fs.has(DAEMON_PATH)).toBe(false);
-    // The addon is refreshed regardless of whether the daemon binary is present —
-    // it serves the app binary too.
-    expect(fs.read(ADDON_PATH)).toBe('new-addon-bytes');
-    expect(printed.join('\n')).toContain('not found at');
-    expect(printed.join('\n')).toContain('left untouched');
+    expect(fs.read(DAEMON_PATH)).toBe('a-running-daemon');
+    expect(fs.has(`${DAEMON_PATH}${PREVIOUS_FILE_SUFFIX}`)).toBe(false);
+    expect(calls.some((url) => url.includes('goodvibes-daemon'))).toBe(false);
+    // And the report says so rather than leaving a reader to wonder.
+    expect(printed.join('\n')).toContain('The daemon updates itself');
   });
 });
 
@@ -496,8 +468,8 @@ describe('applyUpdate — the real swap keeps the outgoing binary at .previous',
     const checksumText = `${sha256Hex(appBuffer)}  goodvibes-linux-x64\n`;
     const printed: string[] = [];
     // No swap/writeAddon/fileExists seams: this test exercises the REAL
-    // filesystem swap inside a scratch directory (no daemon binary present,
-    // no addon entry in the manifest, so only the app binary swaps).
+    // filesystem swap inside a scratch directory (no addon entry in the
+    // manifest, so only the app binary swaps).
     await applyUpdate({
       fetchImpl: buildStubFetch({ latestTag: 'v1.1.0', checksumText, appBuffer }),
       execPath,
@@ -561,11 +533,8 @@ describe('rollbackUpdate — one command back to the version that ran before', (
   test('exchanges each file with its kept .previous counterpart, so a second rollback rolls forward', () => {
     const dir = scratchDir();
     const execPath = join(dir, 'goodvibes');
-    const daemonPath = join(dir, 'goodvibes-daemon');
     writeFileSync(execPath, 'new-app');
     writeFileSync(`${execPath}${PREVIOUS_FILE_SUFFIX}`, 'old-app');
-    writeFileSync(daemonPath, 'new-daemon');
-    writeFileSync(`${daemonPath}${PREVIOUS_FILE_SUFFIX}`, 'old-daemon');
 
     const printed: string[] = [];
     rollbackUpdate({
@@ -579,8 +548,6 @@ describe('rollbackUpdate — one command back to the version that ran before', (
 
     expect(readFileSync(execPath, 'utf-8')).toBe('old-app');
     expect(readFileSync(`${execPath}${PREVIOUS_FILE_SUFFIX}`, 'utf-8')).toBe('new-app');
-    expect(readFileSync(daemonPath, 'utf-8')).toBe('old-daemon');
-    expect(readFileSync(`${daemonPath}${PREVIOUS_FILE_SUFFIX}`, 'utf-8')).toBe('new-daemon');
     expect(printed.join('\n')).toContain('Rolled back to the previously installed version.');
 
     // Roll forward again: the exchange is symmetric.
@@ -593,10 +560,37 @@ describe('rollbackUpdate — one command back to the version that ran before', (
       runCommand: inactiveRunner,
     });
     expect(readFileSync(execPath, 'utf-8')).toBe('new-app');
-    expect(readFileSync(daemonPath, 'utf-8')).toBe('new-daemon');
   });
 
-  test('restores the kept vector addon alongside the binaries', () => {
+  test('a daemon binary kept beside the app binary is left exactly as it was', () => {
+    // This command never replaced the daemon, so it has nothing here to restore.
+    // Rolling it back would undo an update this app did not perform, on a
+    // product with its own release line and its own rollback.
+    const dir = scratchDir();
+    const execPath = join(dir, 'goodvibes');
+    const daemonPath = join(dir, 'goodvibes-daemon');
+    writeFileSync(execPath, 'new-app');
+    writeFileSync(`${execPath}${PREVIOUS_FILE_SUFFIX}`, 'old-app');
+    writeFileSync(daemonPath, 'current-daemon');
+    writeFileSync(`${daemonPath}${PREVIOUS_FILE_SUFFIX}`, 'older-daemon');
+
+    const printed: string[] = [];
+    rollbackUpdate({
+      execPath,
+      platform: 'linux',
+      arch: 'x64',
+      print: (line) => printed.push(line),
+      configManager: { get: () => undefined },
+      runCommand: inactiveRunner,
+    });
+
+    expect(readFileSync(execPath, 'utf-8')).toBe('old-app');
+    expect(readFileSync(daemonPath, 'utf-8')).toBe('current-daemon');
+    expect(readFileSync(`${daemonPath}${PREVIOUS_FILE_SUFFIX}`, 'utf-8')).toBe('older-daemon');
+    expect(printed.join('\n')).toContain('The daemon was not rolled back');
+  });
+
+  test('restores the kept vector addon alongside the app binary', () => {
     const dir = scratchDir();
     const execPath = join(dir, 'goodvibes');
     writeFileSync(execPath, 'new-app');

@@ -6,7 +6,8 @@
  *
  * NAMING, load-bearing: this module's identifiers say "legacy" because the
  * engine migrates AWAY from the `goodvibes-daemon.service` unit name toward
- * the runtime-managed unit — but that same name is what scripts/install.sh
+ * the runtime-managed unit — but that same name is what the suite installer
+ * (goodvibes-daemon scripts/install.sh)
  * actively creates for curl-installed hosts TODAY. It is a parallel,
  * first-class install path, not an obsolete one. User-facing copy therefore
  * describes it as "the install-script unit" and never labels it legacy or
@@ -126,7 +127,7 @@ export function buildManagedDaemonServiceManager(params: BuildManagedDaemonServi
   // already configured for hostMode=network / a non-default port) keeps its
   // endpoint without a unit rewrite. Baking endpoint values here is what
   // silently re-pinned custom-configured hosts back to the values current at
-  // install time. scripts/install.sh writes the same shape — the two paths
+  // install time. The suite installer writes the same shape — the two paths
   // must produce the identical running daemon (see the installer parity test).
   // `params.host`/`params.port` remain inputs because the migration engine
   // still needs them for its read-only port-liveness probe.

@@ -4,6 +4,35 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [Unreleased]
+
+### Changes
+
+- The daemon is a separate product and this package stops carrying it. It was
+  built here, released here, shipped inside this npm tarball, vendored into
+  every platform package, and swapped by this app's `/update`. All of that came
+  from one repository holding two programs; the daemon has its own repository,
+  its own release line and its own npm package now. This package builds one
+  binary, ships one `bin` entry, vendors one file, and its releases carry four
+  binaries instead of eight.
+- `npm install @pellux/goodvibes-tui` still brings the whole thing: this package
+  declares `goodvibes-daemon` as a dependency, so one install still puts both
+  commands on your PATH. What changed is that the daemon's own package places
+  the daemon's own binary — two packages each placing a copy of
+  `goodvibes-daemon` is exactly how a machine ends up with two of them.
+- `/update apply` and `/update rollback` no longer touch the daemon binary
+  beside this one. A release of this repository publishes no daemon asset at
+  all, so a swap from here would be looking for a file that does not exist —
+  and, if one ever appeared under that name, would replace a working daemon with
+  a build from a different version line. Both commands say so in their report
+  rather than leaving a reader to wonder where the second line went. The daemon
+  updates itself, hourly, from its own releases.
+- The suite installer moved to the daemon's repository, where the release lane
+  that publishes it to goodvibes.sh lives. `curl -fsSL https://goodvibes.sh/install.sh | sh`
+  is unchanged and still installs everything — it now also installs the browser
+  operator surface. The `run-goodvibes` GitHub Action fetches that published
+  installer instead of running a committed second copy.
+
 ## [1.27.0] - 2026-07-30
 
 ### Fixes

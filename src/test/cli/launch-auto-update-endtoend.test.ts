@@ -173,13 +173,14 @@ function installOldVersion(prefix: string): Install {
   };
 }
 
-const NEW_DAEMON_BYTES = 'new-daemon-payload-bytes\n';
-
 /** A real local HTTP server speaking the exact GitHub releases shapes the updater consumes. */
 function serveRelease(options: { appBytes: string; corruptAppChecksum?: boolean; stallAppDownload?: boolean }): string {
   if (!artifacts) throw new Error('unsupported test platform');
   const appHash = options.corruptAppChecksum ? sha256Hex('not-the-real-bytes') : sha256Hex(options.appBytes);
-  const manifest = [`${appHash}  ${artifacts.app}`, `${sha256Hex(NEW_DAEMON_BYTES)}  ${artifacts.daemon}`, ''].join('\n');
+  // Deliberately app-only, exactly like a real release of this repository: the
+  // daemon has its own repository and its own manifest. A daemon asset served
+  // here would let a regression that fetched one pass unnoticed.
+  const manifest = [`${appHash}  ${artifacts.app}`, ''].join('\n');
   const server = Bun.serve({
     port: 0,
     fetch(request) {
@@ -200,9 +201,6 @@ function serveRelease(options: { appBytes: string; corruptAppChecksum?: boolean;
           return new Promise<Response>(() => {});
         }
         return new Response(options.appBytes);
-      }
-      if (path === `/releases/download/${NEW_TAG}/${artifacts.daemon}`) {
-        return new Response(NEW_DAEMON_BYTES);
       }
       return new Response('not found', { status: 404 });
     },
@@ -257,12 +255,16 @@ describe.if(artifacts !== null)('launch auto-update — end to end with real pro
     expect(run.stdout).not.toContain('UNEXPECTED-FETCH');
     expect(run.exitCode).toBe(0);
 
-    // The swap happened on disk: live files hold the served payload bytes...
+    // The swap happened on disk: the live app binary holds the served payload...
     expect(readFileSync(install.appPath, 'utf-8')).toBe(newAppBytes);
-    expect(readFileSync(install.daemonPath, 'utf-8')).toBe(NEW_DAEMON_BYTES);
-    // ...and the outgoing versions are kept byte-identical at .previous.
+    // ...and the outgoing version is kept byte-identical at .previous.
     expect(readFileSync(`${install.appPath}${PREVIOUS_FILE_SUFFIX}`).equals(install.oldAppBytes)).toBe(true);
-    expect(readFileSync(`${install.daemonPath}${PREVIOUS_FILE_SUFFIX}`).equals(install.oldDaemonBytes)).toBe(true);
+    // The daemon binary beside it is a different product on a different release
+    // line and updates itself. This app's release publishes no daemon asset, so
+    // it is neither fetched nor replaced — and nothing is parked for it either,
+    // which is what makes the rollback below leave it alone too.
+    expect(readFileSync(install.daemonPath).equals(install.oldDaemonBytes)).toBe(true);
+    expect(() => readFileSync(`${install.daemonPath}${PREVIOUS_FILE_SUFFIX}`)).toThrow();
 
     // ── rollback, for real, from the swapped state ──────────────────────────
     // rollbackUpdate is exactly what `/update rollback` invokes; only print is
@@ -279,6 +281,7 @@ describe.if(artifacts !== null)('launch auto-update — end to end with real pro
     expect(printed.join('\n')).toContain('Rolled back to the previously installed version.');
     expect(readFileSync(install.appPath).equals(install.oldAppBytes)).toBe(true);
     expect(readFileSync(install.daemonPath).equals(install.oldDaemonBytes)).toBe(true);
+    expect(printed.join('\n')).toContain('The daemon was not rolled back');
     // The exchange keeps the rolled-back-from version for one command forward.
     expect(readFileSync(`${install.appPath}${PREVIOUS_FILE_SUFFIX}`, 'utf-8')).toBe(newAppBytes);
 
