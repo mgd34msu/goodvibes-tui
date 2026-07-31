@@ -190,26 +190,30 @@ When the onboarding wizard applies with the Zero Trust Tunnel Cloudflare compone
 - `controlPlane.trustProxy = true`
 - `httpListener.trustProxy = true`
 
-This allows the login rate-limiter to key on the real client IP from the `CF-Connecting-IP` header rather than the tunnel egress address.
+This lets the login rate-limiter key on the client address the tunnel forwards rather than the tunnel's own egress address. The address is read from `X-Forwarded-For`.
 
-**Residual exposure:** the SDK now validates `CF-Connecting-IP` against Cloudflare's published IP ranges before trusting it (`isCloudflareIp` in the SDK HTTP listener), so a client reaching the listener directly cannot spoof the header to bypass the per-IP rate-limiter. Direct exposure of the listener port still bypasses tunnel-level access policies, so keep inbound traffic restricted to Cloudflare egress IPs wherever the tunnel is the intended front door.
+**Residual exposure:** `X-Forwarded-For` is a header any client can set. A client that reaches the listener port directly — bypassing the tunnel — sets its own rate-limit bucket key and can rotate it at will.
+
+The SDK's HTTP listener carries the narrower read that closes this: `trustCloudflare` accepts `CF-Connecting-IP` as the client only when the connecting peer is itself inside Cloudflare's published ranges (`isCloudflareIp`), and ignores it otherwise. It is a listener constructor parameter with no `ConfigKey` behind it, so no shipped composition — daemon included — turns it on, and the onboarding wizard cannot write it. Until it has a setting, keep the listener port reachable only through the tunnel: restrict inbound traffic to Cloudflare egress IPs, which is what you want regardless, since direct exposure also bypasses tunnel-level access policies.
 
 ### CORS configuration
 
-`httpListener.enforceCors` and `httpListener.allowedOrigins` are HttpListener constructor parameters and are not in the SDK `ConfigKey` union (SDK handoff Item 5). The onboarding wizard cannot write them via `setConfig()`.
+CORS enforcement is off by default (permissive, no origin checking) and is meant for multi-user, internet-exposed, or enterprise deployments where browser-based CSRF is a concern.
 
-To enable CORS enforcement, edit `~/.goodvibes/tui/settings.json` directly:
+The listener takes `enforceCors` and `allowedOrigins` as constructor parameters, and neither is a `ConfigKey` the onboarding wizard can write. What it does read from config when the constructor says nothing is the shared control-plane allowlist, so those are the settings to write:
 
 ```json
 {
-  "httpListener": {
-    "enforceCors": true,
-    "allowedOrigins": ["https://your-origin.example.com"]
+  "controlPlane": {
+    "cors": {
+      "enabled": true,
+      "allowedOrigins": "https://your-origin.example.com,https://another.example.com"
+    }
   }
 }
 ```
 
-Then restart the daemon. This limitation will be resolved when the SDK adds these keys to `ConfigKey`.
+`allowedOrigins` is a comma-separated string, and the same allowlist governs the control-plane router and the webhook listener. Restart the daemon after editing. With enforcement on, a listener bound to a network address refuses to start on an empty allowlist rather than serving every origin.
 
 ## Outbound HTTPS trust
 

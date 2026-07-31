@@ -266,7 +266,7 @@ export function buildCloudflareStep(controller: OnboardingWizardControllerLike):
         id: 'cloudflare.trust-proxy-notice',
         label: 'trustProxy will be enabled for control plane and HTTP listener',
         defaultValue: 'Notice',
-        hint: 'Selecting Zero Trust Tunnel auto-writes controlPlane.trustProxy=true and httpListener.trustProxy=true so the login rate-limiter keys on the real client IP (CF-Connecting-IP) rather than the tunnel egress address. RESIDUAL RISK: until the SDK validates CF-Connecting-IP against Cloudflare published IP ranges (handoff Item 5), a client that reaches the listener directly can spoof this header to bypass the per-IP rate-limiter. See docs/deployment-and-services.md for the full risk posture.',
+        hint: 'Selecting Zero Trust Tunnel auto-writes controlPlane.trustProxy=true and httpListener.trustProxy=true so the login rate-limiter keys on the client address the tunnel forwards rather than the tunnel egress address. That address is read from X-Forwarded-For, which a client reaching the listener directly can set for itself, so it can still rotate its own rate-limit bucket. The stricter read — accept CF-Connecting-IP only from a peer inside Cloudflare published ranges — ships in the SDK listener but has no setting behind it yet, so keep the listener reachable only through the tunnel. See docs/deployment-and-services.md for the full risk posture.',
       });
     }
 

@@ -303,11 +303,16 @@ function addCloudflareOperations(
     setConfig('batch.mode', batchMode);
     setConfig('batch.queueBackend', batchMode !== 'off' && components.queues ? 'cloudflare' : 'local');
     // Zero Trust Tunnel auto-enables trustProxy on both services so the
-    // login-rate-limiter keys on the real CF-Connecting-IP rather than the tunnel
-    // egress address. RESIDUAL RISK: until the SDK validates CF-Connecting-IP
-    // against Cloudflare's published IP ranges (SDK handoff Item 5), a client
-    // that reaches the listener directly can spoof the header to bypass the
-    // per-IP limiter. The wizard surfaces this in the cloudflare step notice.
+    // login-rate-limiter keys on the client address the tunnel forwards rather
+    // than the tunnel's own egress address. That address is read from
+    // X-Forwarded-For, which a client reaching the listener directly can set for
+    // itself, so it can still rotate its own rate-limit bucket. The stricter
+    // read the SDK listener ships for exactly this — accept CF-Connecting-IP
+    // only when the connecting peer is inside Cloudflare's published ranges —
+    // is a constructor option (`trustCloudflare`) with no config key behind it,
+    // so nothing writable here turns it on. The wizard says so in the
+    // cloudflare step notice: keep the listener reachable only through the
+    // tunnel.
     if (components.zeroTrustTunnel) {
       setConfig('controlPlane.trustProxy', true);
       setConfig('httpListener.trustProxy', true);

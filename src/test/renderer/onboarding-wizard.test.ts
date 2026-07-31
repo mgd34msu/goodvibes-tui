@@ -83,10 +83,12 @@ describe('renderOnboardingWizard', () => {
 
     const fullHint =
       'Selecting Zero Trust Tunnel auto-writes controlPlane.trustProxy=true and httpListener.trustProxy=true ' +
-      'so the login rate-limiter keys on the real client IP (CF-Connecting-IP) rather than the tunnel egress ' +
-      'address. RESIDUAL RISK: until the SDK validates CF-Connecting-IP against Cloudflare published IP ranges ' +
-      '(handoff Item 5), a client that reaches the listener directly can spoof this header to bypass the ' +
-      'per-IP rate-limiter. See docs/deployment-and-services.md for the full risk posture.';
+      'so the login rate-limiter keys on the client address the tunnel forwards rather than the tunnel egress ' +
+      'address. That address is read from X-Forwarded-For, which a client reaching the listener directly can ' +
+      'set for itself, so it can still rotate its own rate-limit bucket. The stricter read — accept ' +
+      'CF-Connecting-IP only from a peer inside Cloudflare published ranges — ships in the SDK listener but ' +
+      'has no setting behind it yet, so keep the listener reachable only through the tunnel. See ' +
+      'docs/deployment-and-services.md for the full risk posture.';
 
     // Narrow (collapsed, single-column) layout: hint rows are the full row
     // width with no side panels, so consecutive wrapped lines can be

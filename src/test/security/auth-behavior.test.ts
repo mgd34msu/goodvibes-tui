@@ -1,22 +1,23 @@
 /**
- * auth-behavior.test.ts — TASK-038 daemon-auth security behavior pins
+ * auth-behavior.test.ts — the daemon-auth behaviors this app depends on.
  *
- * Pins three security behaviors the TUI depends on from the SDK's
- * HttpListener / UserAuthManager surfaces:
+ * Pins four behaviors of the SDK's HttpListener / UserAuthManager surfaces:
  *
  *   1. Rate limiter: POST /login is throttled to 5 attempts/min per IP.
- *   2. Forwarded-IP spoofing: with trustProxy OFF, X-Forwarded-For / X-Real-IP
- *      headers cannot rotate the rate-limiter bucket.
- *      With trustProxy ON, documenting current behavior (header IS trusted for
- *      bucket key) — NOTE: CF range validation is not yet performed by the SDK
- *      (handoff Item 5). Tests named to reflect TODAY's behavior, not a safety
- *      assertion.
- *   3. Empty/whitespace password regression: rejected on addUser, rotatePassword,
- *      and the /login endpoint.
- *
- * CF-Connecting-IP is SDK-internal-unreachable:
- *   extractForwardedClientIp only reads x-forwarded-for / x-real-ip, not
- *   CF-Connecting-IP. CF-Connecting-IP behavior cannot be pinned from TUI-side.
+ *   2. Forwarded-IP spoofing with trustProxy OFF: X-Forwarded-For / X-Real-IP
+ *      cannot rotate the rate-limiter bucket, and neither can CF-Connecting-IP.
+ *   3. Forwarded-IP spoofing with trustProxy ON: X-Forwarded-For IS the bucket
+ *      key, so a client that can reach the listener directly rotates its own
+ *      bucket by changing the header. That is what the onboarding wizard's
+ *      Cloudflare notice tells the operator, and why it says to keep the
+ *      listener reachable only through the tunnel.
+ *   4. The narrower read that closes (3) for a Cloudflare deployment:
+ *      `trustCloudflare` accepts CF-Connecting-IP only when the connecting peer
+ *      is inside Cloudflare's published ranges, and ignores it otherwise. It is
+ *      a listener constructor option with no config key behind it, so no
+ *      shipped composition turns it on — these tests construct it directly.
+ *   5. Empty/whitespace password regression: rejected on addUser,
+ *      rotatePassword, and the /login endpoint.
  *
  * Harness: HttpListener on an isolated port with a custom serveFactory (skips
  * OS port check). No sleeps >100 ms. No real network on fixed ports.
@@ -71,6 +72,7 @@ async function startListener(opts: {
   userAuth: UserAuthManager;
   loginRateLimit?: number;
   trustProxy?: boolean;
+  trustCloudflare?: boolean;
 }): Promise<{ listener: HttpListener; baseUrl: string }> {
   // Custom serveFactory: wraps Bun.serve so the identity check
   // (this.serveFactory === Bun.serve) is FALSE, skipping requirePortAvailable.
@@ -83,6 +85,7 @@ async function startListener(opts: {
     userAuth: opts.userAuth,
     loginRateLimit: opts.loginRateLimit,
     trustProxy: opts.trustProxy,
+    trustCloudflare: opts.trustCloudflare,
     serveFactory,
   });
 
@@ -271,10 +274,10 @@ describe('forwarded-IP spoofing — trustProxy OFF (headers ignored for rate buc
   );
 
   test(
-    // NOTE: CF-Connecting-IP is SDK-internal-unreachable from TUI-side.
-    // extractForwardedClientIp does not read CF-Connecting-IP at all —
-    // it only reads x-forwarded-for and x-real-ip. CF-specific behavior
-    // is not pinnable from TUI-side tests.
+    // With trustProxy OFF the listener reads no forwarded header at all —
+    // CF-Connecting-IP included — so every request shares the connection's own
+    // bucket. Honoring CF-Connecting-IP is `trustCloudflare`'s job and requires
+    // trustProxy as well; see the trustCloudflare block below.
     'CF-Connecting-IP header is ignored (same bucket as all other requests)',
     async () => {
       const ips = ['103.21.244.1', '103.22.200.1', '103.31.4.1'];
@@ -294,20 +297,20 @@ describe('forwarded-IP spoofing — trustProxy OFF (headers ignored for rate buc
 });
 
 // ---------------------------------------------------------------------------
-// 2b. Forwarded-IP spoofing: trustProxy ON — documenting current behavior
+// 2b. Forwarded-IP spoofing: trustProxy ON — the header IS the bucket key.
 //
-// NOTE: This describe block pins TODAY's behavior when trustProxy is ON.
-// The SDK currently does NOT validate that X-Forwarded-For IPs come from
-// legitimate Cloudflare ranges (handoff Item 5). That means an attacker who
-// can send arbitrary headers to the listener can rotate their rate-limit
-// bucket by changing X-Forwarded-For.
+// trustProxy ON means the listener believes X-Forwarded-For, which is the
+// point of it: behind a tunnel or reverse proxy the connection address is the
+// proxy's, and the forwarded one is the client's. It also means a client that
+// can reach the listener DIRECTLY sets its own bucket key. That is the exposure
+// the onboarding wizard's Cloudflare notice names, and the reason it tells the
+// operator to keep the listener reachable only through the tunnel.
 //
-// These tests are named to reflect the CURRENT state. They are NOT safety
-// assertions. When Item 5 is resolved (CF range validation added to the SDK),
-// update these tests to verify the new validation behavior.
+// These tests pin the mechanism, not a safety claim. The narrower read that
+// closes it for a Cloudflare deployment is `trustCloudflare`, pinned in 2c.
 // ---------------------------------------------------------------------------
 
-describe('forwarded-IP spoofing — trustProxy ON (current behavior, no CF range validation)', () => {
+describe('forwarded-IP spoofing — trustProxy ON (the forwarded header is the bucket key)', () => {
   let listener: HttpListener;
   let baseUrl: string;
 
@@ -327,11 +330,9 @@ describe('forwarded-IP spoofing — trustProxy ON (current behavior, no CF range
   });
 
   test(
-    // TODAY: with trustProxy ON, different X-Forwarded-For values produce
-    // different rate-limiter buckets, allowing header-rotation bypass.
-    // This is a KNOWN LIMITATION (Item 5: no CF range validation).
-    // DO NOT read this test as "header rotation is safe" — it is not.
-    '[current-behavior] distinct X-Forwarded-For values land in distinct buckets (known Item-5 gap)',
+    // Distinct X-Forwarded-For values produce distinct rate-limiter buckets, so
+    // a direct client rotates its own. Not a safety assertion — the mechanism.
+    'distinct X-Forwarded-For values land in distinct buckets',
     async () => {
       // Send 3 requests, each with a different X-Forwarded-For.
       // With trustProxy ON, each has its own bucket → none are rate-limited.
@@ -358,6 +359,80 @@ describe('forwarded-IP spoofing — trustProxy ON (current behavior, no CF range
       expect(blocked.status).toBe(429);
     },
   );
+});
+
+// ---------------------------------------------------------------------------
+// 2c. trustCloudflare — CF-Connecting-IP is honored only from a Cloudflare peer
+//
+// The listener option that closes 2b for a Cloudflare deployment. It requires
+// trustProxy as well: the peer address it validates is read from
+// X-Forwarded-For, and only when that peer is inside Cloudflare's published
+// ranges is CF-Connecting-IP taken as the client. There is no config key behind
+// this option, so no shipped composition sets it — the listener is constructed
+// with it directly here.
+// ---------------------------------------------------------------------------
+
+describe('trustCloudflare — CF-Connecting-IP honored only from a Cloudflare peer', () => {
+  let listener: HttpListener;
+  let baseUrl: string;
+
+  beforeEach(async () => {
+    const { configManager, userAuth } = makeTempAuthEnv();
+    ({ listener, baseUrl } = await startListener({
+      port: nextPort(),
+      configManager,
+      userAuth,
+      loginRateLimit: 3,
+      trustProxy: true,
+      trustCloudflare: true,
+    }));
+  });
+
+  afterEach(async () => {
+    await listener.stop();
+  });
+
+  test('a peer inside a Cloudflare range has its CF-Connecting-IP taken as the client', async () => {
+    // 103.21.244.0/22 is a published Cloudflare range: this peer IS an edge
+    // node, so each distinct CF-Connecting-IP is a distinct client.
+    for (const client of ['1.2.3.4', '5.6.7.8', '9.10.11.12']) {
+      const res = await loginRequest(baseUrl, 'admin', 'wrong-password', {
+        'X-Forwarded-For': '103.21.244.1',
+        'CF-Connecting-IP': client,
+      });
+      expect(res.status).toBe(401);
+    }
+
+    // And one client exhausting its own budget does not touch the others'.
+    for (let i = 0; i < 2; i++) {
+      await loginRequest(baseUrl, 'admin', 'wrong-password', {
+        'X-Forwarded-For': '103.21.244.1',
+        'CF-Connecting-IP': '1.2.3.4',
+      });
+    }
+    const blocked = await loginRequest(baseUrl, 'admin', 'wrong-password', {
+      'X-Forwarded-For': '103.21.244.1',
+      'CF-Connecting-IP': '1.2.3.4',
+    });
+    expect(blocked.status).toBe(429);
+  });
+
+  test('a peer outside every Cloudflare range cannot rotate its bucket with CF-Connecting-IP', async () => {
+    // The exposure 2b describes, closed: this peer is not an edge node, so its
+    // CF-Connecting-IP is ignored and every request lands in the one bucket
+    // keyed by the peer address itself.
+    for (const spoofed of ['1.2.3.4', '5.6.7.8', '9.10.11.12']) {
+      await loginRequest(baseUrl, 'admin', 'wrong-password', {
+        'X-Forwarded-For': '203.0.113.7',
+        'CF-Connecting-IP': spoofed,
+      });
+    }
+    const blocked = await loginRequest(baseUrl, 'admin', 'wrong-password', {
+      'X-Forwarded-For': '203.0.113.7',
+      'CF-Connecting-IP': '198.51.100.9',
+    });
+    expect(blocked.status).toBe(429);
+  });
 });
 
 // ---------------------------------------------------------------------------
