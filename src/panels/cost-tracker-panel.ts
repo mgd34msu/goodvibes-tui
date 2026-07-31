@@ -7,7 +7,7 @@ import { createStyledCell, createEmptyLine } from '../types/grid.ts';
 import { fitDisplay, truncateDisplay } from '../utils/terminal-width.ts';
 import { BasePanel } from './base-panel.ts';
 import type { AgentEvent, TurnEvent } from '@/runtime/index.ts';
-import type { UiEventFeed } from '../runtime/ui-events.ts';
+import type { UiEventFeed } from '@/runtime/index.ts';
 import type { AgentRecord } from '@pellux/goodvibes-sdk/platform/tools';
 import {
   buildEmptyState,

@@ -34,6 +34,14 @@ import { GoodVibesSdkError } from '@pellux/goodvibes-sdk';
 import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import { resolveDaemonEnabled } from '@pellux/goodvibes-sdk/platform/config';
 import { getOrCreateCompanionToken } from '@pellux/goodvibes-sdk/platform/pairing';
+import type { DaemonVerbCaller } from '@pellux/goodvibes-sdk/platform/runtime/client';
+
+/** Re-exported so this repo's importers keep one import site for the shape
+ * every client seam takes. See the doc comment further down for why
+ * `OperatorRpc`/`OperatorRpcAvailable` (declared below, carrying `sdk`)
+ * structurally satisfy the SDK's `DaemonReachability`, and so `DaemonVerbCaller`
+ * built here still type-checks as the SDK's own. */
+export type { DaemonVerbCaller };
 
 export interface OperatorRpcUnavailable {
   readonly available: false;
@@ -124,22 +132,6 @@ export function describeOperatorRpcError(error: unknown): string {
     return `operator request failed${error.status ? ` (${error.status})` : ''}: ${error.message}`;
   }
   return error instanceof Error ? error.message : String(error);
-}
-
-/**
- * A verb caller bound to one config manager + home directory: the shape every
- * runtime client seam takes, so a seam under test is handed a fake instead of
- * reaching a real port.
- */
-export interface DaemonVerbCaller {
-  /** Whether a daemon is reachable in principle, with the honest reason when not. */
-  probe(): OperatorRpc;
-  /**
-   * Invoke a verb. Throws `GoodVibesSdkError` on a non-2xx, and a plain Error
-   * carrying the refusal reason when no daemon is configured at all — a seam
-   * that wants to degrade instead of failing should call `probe()` first.
-   */
-  invoke<T = unknown>(methodId: string, input?: unknown): Promise<T>;
 }
 
 /**

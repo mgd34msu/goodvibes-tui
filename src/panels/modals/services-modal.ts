@@ -1,5 +1,5 @@
 import type { ConfigModalActionContext, ConfigModalSurface, ConfigModalView } from '../../input/config-modal-types.ts';
-import type { ServiceInspectionQuery, SubscriptionAccessQuery } from '../../runtime/ui-service-queries.ts';
+import type { ServiceInspectionQuery, SubscriptionAccessQuery } from '@/runtime/index.ts';
 import type { ServiceConfig, ServiceInspection, ServiceConnectionTestResult } from '@pellux/goodvibes-sdk/platform/config';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 import { toneStyle, statusGlyph, pad, postureLine, kv, type Tone } from './modal-surface-helpers.ts';

@@ -44,7 +44,7 @@ import { announceInstallHealth } from './install-self-check-startup.ts';
 import { buildSharedOrchestratorCoreServices, refreshMemoryRecallSnapshot } from './orchestrator-core-services.ts';
 import { consumeDaemonAttachNotices, consumeExternalDaemonAttachNotices } from './daemon-attach-notices.ts';
 import { wireContextAccountingSource } from './context-accounting-source.ts';
-import { autostartInstalledDaemon, createDaemonServiceControl, describeDaemonAutostart } from './client/connected-daemon-autostart.ts';
+import { autostartInstalledDaemon, createDaemonServiceControl, describeDaemonAutostart } from '@pellux/goodvibes-sdk/platform/runtime/client';
 import { buildRelayExternalServiceMethods } from './relay-reachability-bridge.ts';
 import { startMcpConfigAutoReload } from '../mcp/runtime-reload.ts';
 
@@ -443,7 +443,7 @@ export async function bootstrapRuntime(
 
   // The one bounded recovery step: a daemon that is INSTALLED on this machine
   // and simply stopped gets started once and waited for, rather than becoming
-  // the user's homework. Every boundary is in client/connected-daemon-autostart.ts.
+  // the user's homework. Every boundary is in the SDK's client/daemon-autostart.ts.
   const maybeStartInstalledDaemon = async (): Promise<void> => {
     try {
       const outcome = await autostartInstalledDaemon({

@@ -1,73 +1,18 @@
 /**
- * provider-fallback.ts — the pre-catalog fallback registration for the
- * configured model, extracted verbatim from services.ts (file-size hygiene):
- * before the model catalog cache has loaded, the configured provider:model is
- * registered with SDK family-aware context-window inference so the meter and
- * compaction denominator agree with the post-catalog window.
+ * provider-fallback.ts — boot-time model routability, the part the SDK does
+ * not cover.
+ *
+ * The pre-catalog fallback registration for the configured model
+ * (`ensureConfiguredModelIsRoutable`, formerly this file's own copy) hoisted
+ * to the SDK verbatim (`@pellux/goodvibes-sdk/platform/providers`) in the
+ * 2026-07-30 daemon/TUI split — this file now only imports it for
+ * `ensureBootModelResolvable` below, which is NOT in the SDK: it is the
+ * boot-time custom-provider-readiness wrapper this app's boot path needs and
+ * the SDK's floor does not compose.
  */
 import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
-import {
-  inferFallbackContextWindow,
-  resolveReasoningEffortSpec,
-  type ModelDefinition,
-  type ProviderRegistry,
-} from '@pellux/goodvibes-sdk/platform/providers';
+import { ensureConfiguredModelIsRoutable, type ProviderRegistry } from '@pellux/goodvibes-sdk/platform/providers';
 import { logger } from '@pellux/goodvibes-sdk/platform/utils';
-
-function buildFallbackModelDefinition(provider: string, modelId: string): ModelDefinition {
-  const providerLower = provider.toLowerCase();
-  const isReasoningProvider = providerLower.includes('openai')
-    || providerLower.includes('anthropic')
-    || providerLower.includes('gemini')
-    || providerLower.includes('google');
-
-  return {
-    id: modelId,
-    provider,
-    registryKey: `${provider}:${modelId}`,
-    displayName: modelId,
-    description: 'Configured model available before the model catalog cache has loaded.',
-    capabilities: {
-      toolCalling: true,
-      codeEditing: true,
-      reasoning: isReasoningProvider,
-      multimodal: isReasoningProvider,
-    },
-    contextWindow: inferFallbackContextWindow(provider, modelId),
-    contextWindowProvenance: 'fallback',
-    selectable: true,
-    tier: 'standard',
-    // Which levels this model accepts is a property of the model, not of the
-    // provider it sits behind: the hardcoded four ('instant', 'low', 'medium',
-    // 'high') offered 'instant' to models that reject it and hid 'xhigh',
-    // 'max' and 'none' from models that accept them. The SDK resolver answers
-    // from the curated family table when the catalog has not loaded yet, and
-    // otherwise returns its own labelled best guess, which the adapters treat
-    // as "send nothing" rather than as verified levels.
-    ...(isReasoningProvider
-      ? { reasoningEffort: resolveReasoningEffortSpec({ modelId }) }
-      : {}),
-  };
-}
-
-export function ensureConfiguredModelIsRoutable(providerRegistry: ProviderRegistry, configManager: ConfigManager): void {
-  const configuredModel = String(configManager.get('provider.model') ?? '').trim();
-  if (!configuredModel.includes(':')) return;
-  if (providerRegistry.listModels().some((model) => model.registryKey === configuredModel)) return;
-
-  const [providerId, ...modelParts] = configuredModel.split(':');
-  const modelId = modelParts.join(':').trim();
-  if (!providerId || !modelId) return;
-
-  const provider = providerRegistry.tryGet(providerId);
-  if (!provider) return;
-
-  providerRegistry.registerRuntimeProvider({
-    provider,
-    replace: true,
-    models: [buildFallbackModelDefinition(providerId, modelId)],
-  });
-}
 
 /**
  * Boot-time custom-provider readiness. Custom providers register

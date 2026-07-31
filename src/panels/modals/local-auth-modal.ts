@@ -1,5 +1,5 @@
 import type { ConfigModalAction, ConfigModalActionContext, ConfigModalRow, ConfigModalSurface, ConfigModalView } from '../../input/config-modal-types.ts';
-import type { LocalAuthInspectionQuery } from '../../runtime/ui-service-queries.ts';
+import type { LocalAuthInspectionQuery } from '@/runtime/index.ts';
 import type { UserAuthManager } from '@pellux/goodvibes-sdk/platform/security';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 import { postureLine, kv } from './modal-surface-helpers.ts';

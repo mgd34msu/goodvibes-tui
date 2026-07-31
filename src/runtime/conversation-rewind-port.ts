@@ -23,7 +23,7 @@
 //
 // The daemon now ASKS. This surface offers the conversation it is holding
 // (rewind.conversation.host.register), takes the questions the daemon puts to it
-// and answers them (client/conversation-rewind-host.ts); this port is what
+// and answers them (the SDK's client/conversation-rewind-host.ts); this port is what
 // produces those answers. So conversation rewind works from any surface, and a
 // session nobody has offered is reported unavailable with the reason rather
 // than as a zero that cannot be told apart from a real one.
@@ -116,7 +116,7 @@ export function createConversationRewindPort(
 //
 // This process's conversations, by session id. Two readers now: the local
 // /rewind command, and the host loop that answers the DAEMON's questions about
-// a session this surface is running (client/conversation-rewind-host.ts) —
+// a session this surface is running (the SDK's client/conversation-rewind-host.ts) —
 // which is what makes conversation rewind work from any surface again, since
 // only the process holding the messages can count or drop them.
 // ---------------------------------------------------------------------------
@@ -141,7 +141,7 @@ export function unregisterSessionConversation(sessionId: string): void {
  * here). It is the wrong answer for a rewind driven from another surface: a
  * confident zero is indistinguishable from a real zero, and that is exactly the
  * failure the surface-hosted rewind contract exists to end. The host loop
- * (client/conversation-rewind-host.ts) checks this first and answers
+ * (the SDK's client/conversation-rewind-host.ts) checks this first and answers
  * `unavailable` with a reason instead.
  */
 export function hasSessionConversation(sessionId: string): boolean {

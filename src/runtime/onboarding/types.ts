@@ -6,7 +6,7 @@ import type {
   LocalAuthInspectionQuery,
   ServiceInspectionQuery,
   SubscriptionAccessQuery,
-} from '../ui-service-queries.ts';
+} from '@/runtime/index.ts';
 
 export type OnboardingMode = 'new' | 'edit' | 'reopen';
 

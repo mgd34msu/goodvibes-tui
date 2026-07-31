@@ -14,7 +14,7 @@ import {
   type PanelPalette,
 } from './polish.ts';
 import type { LocalAuthSnapshot, UserAuthManager } from '@pellux/goodvibes-sdk/platform/security';
-import type { LocalAuthInspectionQuery } from '../runtime/ui-service-queries.ts';
+import type { LocalAuthInspectionQuery } from '@/runtime/index.ts';
 import type { KeyName } from './types.ts';
 import { isTextBackspace } from '../input/delete-key-policy.ts';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';

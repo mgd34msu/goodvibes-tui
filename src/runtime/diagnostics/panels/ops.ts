@@ -13,7 +13,7 @@ import type { PanelConfig } from '@/runtime/index.ts';
 import { DEFAULT_PANEL_CONFIG, appendBounded, applyFilter } from '@/runtime/index.ts';
 import type { DiagnosticFilter } from '@/runtime/index.ts';
 import type { OpsInterventionReason, OpsEvent } from '@/runtime/index.ts';
-import type { UiEventFeed } from '../../ui-events.ts';
+import type { UiEventFeed } from '@/runtime/index.ts';
 
 // ---------------------------------------------------------------------------
 // Audit entry

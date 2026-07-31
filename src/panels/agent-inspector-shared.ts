@@ -1,7 +1,7 @@
 import { formatDuration } from '../utils/format-duration.ts';
 import { calcSessionCost, isModelPriced } from '../export/cost-utils.ts';
 import type { AgentEvent } from '@/runtime/index.ts';
-import type { UiEventFeed } from '../runtime/ui-events.ts';
+import type { UiEventFeed } from '@/runtime/index.ts';
 
 export type AgentInspectorEntryKind = 'user' | 'assistant' | 'tool_call' | 'tool_result' | 'session' | 'error';
 
