@@ -5,11 +5,11 @@
  * conversation-rendering pipeline, resolved to concrete hex or ANSI-256 values
  * per background mode.
  *
- * Dark mode values are the historically used colours.
- * Light mode values are defined now for correctness parity; they are consumed
- * when background-detection (terminal-bg-probe) lands and passes the
- * resolved mode down. Callers that do not yet have mode detection MUST call
- * resolveTheme('dark') as the safe default.
+ * Dark mode values are the historically used colours. Light mode values are
+ * consumed when the terminal-background probe (terminal-bg-probe.ts) resolves a
+ * light background under `display.themeMode: auto`, or when the owner forces
+ * light. A caller with no mode of its own passes 'dark', the safe default for a
+ * terminal whose background is unknown.
  *
  * IMPORTANT: inline code has NO background token. The bg:#1a1a1a hardcode
  * that previously existed caused a near-black box on light terminals.
@@ -20,14 +20,13 @@
  * status colours). It composes the same ThemeMode dimension so that
  * DEFAULT_PANEL_PALETTE, DEFAULT_STYLE, FULLSCREEN_PALETTE and
  * DEFAULT_OVERLAY_PALETTE all read through ONE mode-resolved path instead of
- * importing the static UI_TONES constant directly. Mode stays 'dark'
- * everywhere until the terminal-bg-probe lands (see) — the light
- * entry is type-complete, not a shipped light theme.
+ * importing the static UI_TONES constant directly, so one mode flip reaches
+ * every one of them.
  */
 
 import { UI_TONES } from './ui-primitives.ts';
 
-/** Background mode — dark is the safe default until terminal-bg-probe lands. */
+/** Background mode — dark is the safe default for an unprobed terminal. */
 export type ThemeMode = 'dark' | 'light';
 
 /** Resolved semantic colour tokens (concrete hex strings or ANSI-256 indices). */
@@ -150,8 +149,8 @@ const LIGHT: ThemeTokens = {
 /**
  * resolveTheme — Return the semantic token set for the given background mode.
  *
- * Call with 'dark' (the safe default) until terminal-bg-probe lands.
- * The returned object is frozen; callers should not mutate it.
+ * Call with the session's resolved mode; 'dark' is the safe default for a
+ * caller that has none. The returned object is frozen — do not mutate it.
  */
 export function resolveTheme(mode: ThemeMode): Readonly<ThemeTokens> {
   return mode === 'light' ? LIGHT : DARK;
@@ -242,7 +241,7 @@ export function resolveUiTones(mode: ThemeMode): Readonly<UiToneTokens> {
 }
 
 // ===========================================================================
-// Active-mode runtime (terminal-bg-probe landing).
+// Active-mode runtime.
 //
 // The mode is decided ONCE at startup — from appearance config (display.themeMode
 // forced dark/light) or the terminal-background probe (auto) — and is then stable

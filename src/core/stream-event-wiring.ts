@@ -53,11 +53,11 @@ export interface StreamMetrics {
    */
   stallEpisode: number;
   /**
-   * Populated from the SDK's STREAM_RETRY event when present. SDK 0.35.0 (the
-   * pinned dependency) has no such event on the TurnEvent union yet — these
-   * fields are consumed structurally (see looseTurnsFeed below) and stay
-   * undefined until a future SDK version emits it. Cleared on STREAM_DELTA
-   * (a byte arriving means the reconnect, if any, succeeded).
+   * Populated from the SDK's STREAM_RETRY event, which fires when an in-flight
+   * provider call reconnects after a transport error rather than failing the
+   * turn. Read structurally off the event feed (see looseTurnsFeed below), so a
+   * turn that never retries simply leaves these undefined. Cleared on
+   * STREAM_DELTA — a byte arriving means the reconnect succeeded.
    */
   reconnectAttempt: number | undefined;
   reconnectMaxAttempts: number | undefined;
@@ -133,31 +133,16 @@ interface StreamSystemMessageRouter {
 
 /**
  * Loosely-typed variant of the turns event feed, used only to subscribe to
- * event names not yet present in the SDK's TurnEvent union (STREAM_RETRY,
- * STREAM_STALL — see the structural-consumption comment at the subscription
- * site below). `events.turns.on` itself stays fully typed against the real
- * TurnEvent union everywhere else in this file.
+ * STREAM_STALL — a proposed event the SDK's TurnEvent union does not carry, so
+ * `events.turns.on` rejects the name at compile time. See the subscription site
+ * below. `events.turns.on` stays fully typed against the real union everywhere
+ * else in this file, STREAM_RETRY included.
  */
 interface LooseTurnEventFeed {
   on(type: string, listener: (payload: unknown) => void): () => void;
 }
 
-/** Payload shape expected from a future SDK STREAM_RETRY event. */
-interface StreamRetryLikePayload {
-  readonly attempt: number;
-  readonly maxAttempts: number;
-}
-
 /** Runtime guard validating an unknown STREAM_RETRY-like payload's shape. */
-function isStreamRetryLikePayload(payload: unknown): payload is StreamRetryLikePayload {
-  return (
-    typeof payload === 'object' &&
-    payload !== null &&
-    typeof (payload as Record<string, unknown>).attempt === 'number' &&
-    typeof (payload as Record<string, unknown>).maxAttempts === 'number'
-  );
-}
-
 /**
  * Minimal cost lookup surface for attaching cost-delta information to failover notices.
  * Returns USD-per-1M-token pricing for the given model ID, or null when the
@@ -708,29 +693,24 @@ export function wireStreamEventMetrics(
   });
   unsubs.push(() => stallWatchdog.dispose());
 
-  // --- Structural consumption of STREAM_RETRY / STREAM_STALL ---
-  // Neither event exists on the pinned SDK's (0.35.0) TurnEvent union today —
-  // both are proposed additions for the transport-level withRetry() callback
-  // (see the stall-honesty audit brief). The typed `events.turns.on` feed
-  // rejects unknown event names at compile time, so this casts the feed to a
-  // loosely-typed variant and validates each payload with a runtime guard
-  // instead of importing a type name that doesn't exist yet — same pattern
-  // used elsewhere in this codebase for settings pending SDK schema additions
-  // (see src/input/settings-modal-data.ts). Compiles today against 0.35.0;
-  // lights up automatically once the SDK adds the real event.
-  const looseTurnsFeed = events.turns as unknown as LooseTurnEventFeed;
-  unsubs.push(looseTurnsFeed.on('STREAM_RETRY', (payload) => {
-    if (!isStreamRetryLikePayload(payload)) return;
-    metrics.reconnectAttempt = payload.attempt;
-    metrics.reconnectMaxAttempts = payload.maxAttempts;
+  // A provider call that reconnected mid-stream rather than failing the turn.
+  // The attempt counter rides into the thinking fragment so a long silence
+  // reads as "retrying 2/3" instead of as a hang; STREAM_DELTA clears it,
+  // because a byte arriving means the reconnect worked.
+  unsubs.push(events.turns.on('STREAM_RETRY', (event) => {
+    metrics.reconnectAttempt = event.attempt;
+    metrics.reconnectMaxAttempts = event.maxAttempts;
     render();
   }));
+  // STREAM_STALL is a proposed SDK event and is not on the TurnEvent union, so
+  // the typed feed rejects the name at compile time. Subscribing through the
+  // loose variant means the SDK's own signal is observed the day it lands
+  // rather than silently dropped. Informational only: the local
+  // createStreamStallWatchdog above is the authoritative no-delta detector and
+  // already drives the visible indicator via streamMetrics.stallEpisode, so
+  // this repaints and does not duplicate or fight it.
+  const looseTurnsFeed = events.turns as unknown as LooseTurnEventFeed;
   unsubs.push(looseTurnsFeed.on('STREAM_STALL', () => {
-    // Informational only: the TUI's own createStreamStallWatchdog above is
-    // the authoritative no-delta detector and already drives the visible
-    // indicator via streamMetrics.stallEpisode. This subscription exists so
-    // the SDK's own signal (once it lands) is observed rather than silently
-    // dropped, without duplicating or fighting the local watchdog.
     render();
   }));
 

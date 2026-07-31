@@ -41,9 +41,9 @@ function makeTurnBus() {
   };
   return {
     on<K extends TurnEvent>(event: K, handler: K extends 'TURN_ERROR' ? (ev: { error: string }) => void : () => void) {
-      // Lazily create the bucket for event names outside the fixed TurnEvent
-      // union (e.g. the structurally-consumed STREAM_RETRY/STREAM_STALL —
-      // see stream-event-wiring.ts) — a real event bus does not throw when
+      // Lazily create the bucket for event names outside this stub's fixed
+      // list (STREAM_RETRY, and the structurally-consumed STREAM_STALL — see
+      // stream-event-wiring.ts) — a real event bus does not throw when
       // something subscribes to an event type it hasn't seen yet.
       const bucket = (listeners[event] ??= []);
       (bucket as Array<unknown>).push(handler);
@@ -60,11 +60,11 @@ function makeTurnBus() {
       if (hs) for (const h of hs.slice()) (h as () => void)();
     },
     /**
-     * Emit an arbitrary event name with a payload — used to simulate the
-     * not-yet-in-the-SDK STREAM_RETRY/STREAM_STALL events, which
-     * wireStreamEventMetrics consumes structurally (see the LooseTurnEventFeed
-     * cast in stream-event-wiring.ts) rather than through the typed TurnEvent
-     * union this stub otherwise models.
+     * Emit an arbitrary event name with a payload — for the turn events that
+     * carry one (STREAM_RETRY) and for STREAM_STALL, which the SDK's TurnEvent
+     * union does not carry and wireStreamEventMetrics subscribes to through
+     * its loose feed (see stream-event-wiring.ts). This stub's `emit` above
+     * models only the payload-free names.
      */
     emitRaw(event: string, payload?: unknown) {
       const hs = listeners[event];
@@ -1036,7 +1036,7 @@ describe('wireStreamEventMetrics — stall metrics', () => {
     expect(opts.metrics.stallEpisode).toBe(0);
   });
 
-  test('STREAM_RETRY (structurally consumed, not in the pinned SDK) populates reconnectAttempt/maxAttempts', () => {
+  test('STREAM_RETRY populates reconnectAttempt/maxAttempts', () => {
     const turns = makeTurnBus();
     const tools = makeToolBus();
     const opts = makeOptions(turns, tools);
@@ -1051,17 +1051,19 @@ describe('wireStreamEventMetrics — stall metrics', () => {
     expect(opts.metrics.reconnectMaxAttempts).toBe(5);
   });
 
-  test('a malformed STREAM_RETRY payload is ignored (runtime guard rejects it)', () => {
+  test('a later STREAM_RETRY replaces the counter rather than accumulating', () => {
     const turns = makeTurnBus();
     const tools = makeToolBus();
     const opts = makeOptions(turns, tools);
     wireStreamEventMetrics(opts);
 
     turns.emit('STREAM_START');
-    turns.emitRaw('STREAM_RETRY', { attempt: 'not-a-number' });
+    turns.emitRaw('STREAM_RETRY', { attempt: 1, maxAttempts: 3 });
+    turns.emitRaw('STREAM_RETRY', { attempt: 2, maxAttempts: 3 });
 
-    expect(opts.metrics.reconnectAttempt).toBeUndefined();
-    expect(opts.metrics.reconnectMaxAttempts).toBeUndefined();
+    // The indicator reads "retrying 2/3", not two stacked retries.
+    expect(opts.metrics.reconnectAttempt).toBe(2);
+    expect(opts.metrics.reconnectMaxAttempts).toBe(3);
   });
 
   test('STREAM_DELTA clears reconnectAttempt/maxAttempts (a byte arriving means the reconnect succeeded)', () => {
@@ -1080,7 +1082,7 @@ describe('wireStreamEventMetrics — stall metrics', () => {
     expect(opts.metrics.reconnectMaxAttempts).toBeUndefined();
   });
 
-  test('STREAM_STALL (structurally consumed) does not throw and does not disturb metrics', () => {
+  test('STREAM_STALL, which the SDK union does not carry, does not throw and does not disturb metrics', () => {
     const turns = makeTurnBus();
     const tools = makeToolBus();
     const opts = makeOptions(turns, tools);

@@ -204,47 +204,70 @@ describe('Permission flow — session approval cache', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Per-hunk modifiedArgs contract seam
+// Per-hunk modifiedArgs
 //
-// The installed @pellux/goodvibes-sdk here is 0.36.0, whose PermissionManager
-// does not yet expose PermissionCheckResult.modifiedArgs — that field lands
-// in the in-flight SDK change for this work order (0.37). The full
-// end-to-end proof that PermissionManager.checkDetailed() threads a
-// requestPermission handler's modifiedArgs verbatim through to the returned
-// PermissionCheckResult lives on the SDK side:
-// goodvibes-sdk/test/permission-hunk-modified-args.test.ts. This test
-// documents the exact structural shape the TUI's hunk-selection code
-// (src/permissions/hunk-selection.ts, src/shell/blocking-input.ts) expects
-// to consume once 0.37 publishes, without a nominal import of a
-// not-yet-published symbol.
+// When the owner deselects hunks in an edit prompt, the approval carries the
+// narrowed `edits` array back as `modifiedArgs`, and those are the arguments
+// the tool executes with. The TUI's hunk-selection code
+// (src/permissions/hunk-selection.ts, src/shell/blocking-input.ts) builds that
+// object; PermissionManager.checkDetailed threads it verbatim onto the result
+// the tool call reads. Asserted against the real manager, so a change to the
+// threading fails here rather than in a hand-written shape beside it.
 // ---------------------------------------------------------------------------
 
-describe('Permission flow — per-hunk modifiedArgs contract (pre-0.37 structural check)', () => {
-  test('a checkDetailed()-shaped result carrying modifiedArgs matches the shape hunk-selection.ts consumes', async () => {
-    type CheckDetailedResultLike = {
-      approved: boolean;
-      remember?: boolean;
-      modifiedArgs?: Record<string, unknown>;
-    };
+describe('Permission flow — per-hunk modifiedArgs', () => {
+  const hunks = [
+    { path: 'a.ts', find: 'x', replace: 'y' },
+    { path: 'a.ts', find: 'p', replace: 'q' },
+    { path: 'a.ts', find: 'm', replace: 'n' },
+  ];
 
-    const items = [
-      { path: 'a.ts', find: 'x', replace: 'y' },
-      { path: 'a.ts', find: 'p', replace: 'q' },
-      { path: 'a.ts', find: 'm', replace: 'n' },
-    ];
+  function makeStackReturning(decision: Record<string, unknown>) {
+    const config = createConfigState();
+    const requests: PermissionPromptRequest[] = [];
+    const pm = new PermissionManager(async (request) => {
+      requests.push(request);
+      return decision as never;
+    }, config, new PolicyRuntimeState());
+    return { pm, requests };
+  }
 
-    // Simulates "user deselected hunk 1 (index 1)" — mirrors the exact
-    // requestPermission handler shape PermissionManager.checkDetailed()
-    // will receive from the TUI's blocking-input resolve() call.
-    const mockRequestPermission = async (): Promise<CheckDetailedResultLike> => ({
+  test('the narrowed edits an approval carries are the ones the result exposes', async () => {
+    // "The owner deselected hunk 1" — the exact handler shape blocking-input's
+    // resolve() hands back.
+    const { pm } = makeStackReturning({
       approved: true,
       remember: false,
-      modifiedArgs: { edits: [items[0], items[2]] },
+      modifiedArgs: { edits: [hunks[0], hunks[2]] },
     });
 
-    const decision = await mockRequestPermission();
-    expect(decision.approved).toBe(true);
-    expect(decision.modifiedArgs).toEqual({ edits: [items[0], items[2]] });
-    expect(decision.modifiedArgs?.['edits']).toHaveLength(2);
+    const result = await pm.checkDetailed('edit', { edits: hunks });
+
+    expect(result.approved).toBe(true);
+    expect(result.sourceLayer).toBe('user_prompt');
+    expect(result.modifiedArgs).toEqual({ edits: [hunks[0], hunks[2]] });
+  });
+
+  test('an approval that narrows nothing carries no modifiedArgs, so the original args stand', async () => {
+    const { pm } = makeStackReturning({ approved: true });
+
+    const result = await pm.checkDetailed('edit', { edits: hunks });
+
+    expect(result.approved).toBe(true);
+    expect(result.modifiedArgs).toBeUndefined();
+  });
+
+  test('a decision that reaches no prompt carries none either', async () => {
+    // read is 'allow', so the layered decision settles before the ask.
+    const { pm, requests } = makeStackReturning({
+      approved: true,
+      modifiedArgs: { edits: [] },
+    });
+
+    const result = await pm.checkDetailed('read', { path: 'a.ts' });
+
+    expect(requests).toHaveLength(0);
+    expect(result.approved).toBe(true);
+    expect(result.modifiedArgs).toBeUndefined();
   });
 });
