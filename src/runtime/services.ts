@@ -102,6 +102,7 @@ import {
   createDaemonCredentialsClient,
   createDevicesClient,
   createWireSessionDispatch,
+  readSurfaceAgentOutcome,
 } from '@pellux/goodvibes-sdk/platform/runtime/client';
 import { createFleetUnionReadModel } from './client/fleet-union.ts';
 import { createSessionConversationRewindPort, hasSessionConversation } from './conversation-rewind-port.ts';
@@ -285,6 +286,11 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
   // different set of routing options — than one raised locally.
   const wireSessionDispatch = createWireSessionDispatch({
     hostedSessionIds: () => (liveSessionIdRef.value ? [liveSessionIdRef.value] : []),
+    // The reply half. A continuation dispatched here runs in THIS process, so
+    // the daemon's own completion poll can never see it finish; this is how the
+    // answer gets reported back, and how a message that arrived over a channel
+    // is answered into that channel instead of into nothing.
+    readAgentOutcome: (agentId) => readSurfaceAgentOutcome(agentManager.getStatus(agentId)),
   });
   disposalScope.registry.add('wire session dispatch', () => wireSessionDispatch.stop());
   // The parameter type comes from the broker's own runner rather than being
