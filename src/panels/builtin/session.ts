@@ -1,5 +1,6 @@
 import type { PanelManager } from '../panel-manager.ts';
 import { TokenBudgetPanel } from '../token-budget-panel.ts';
+import { HostedSessionPanel } from '../hosted-session-panel.ts';
 import type { ResolvedBuiltinPanelDeps } from './shared.ts';
 import { requireUiServices } from './shared.ts';
 
@@ -56,6 +57,22 @@ export function registerSessionPanels(manager: PanelManager, deps: ResolvedBuilt
       }
       return panel;
     },
+  });
+
+  // Hosted Session — a conversation whose loop runs INSIDE the daemon rather
+  // than in this process, rendered from the same `turn`/`tools` event domains a
+  // local turn emits (see panels/hosted-session-feed.ts). Not preloaded: a
+  // terminal that never opts into hosting should not carry an empty tab for it,
+  // and `/hosted new`/`/hosted attach` open it on the way in.
+  manager.registerType({
+    id: 'hosted',
+    name: 'Hosted Session',
+    // '◈' verified free against the registered builtin panel icons.
+    icon: '◈',
+    category: 'session',
+    description: 'A daemon-hosted conversation: its live transcript, the tool calls it is running, and what detaching would do to it',
+    retainOnClose: true,
+    factory: () => new HostedSessionPanel(),
   });
 
   // compat: the retired 'context' panel id still resolves — redirected

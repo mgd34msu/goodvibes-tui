@@ -25,7 +25,7 @@ import { ContextInspectorModal } from '../renderer/context-inspector.ts';
 import { BookmarkModal } from './bookmark-modal.ts';
 import { SettingsModal } from './settings-modal.ts';
 import { McpWorkspace } from './mcp-workspace.ts';
-import { SessionPickerModal } from './session-picker-modal.ts';
+import { SessionPickerModal, getSharedHostedSessionRoster } from './session-picker-modal.ts';
 import { ConfigModal } from './config-modal.ts';
 import { ProfilePickerModal } from './profile-picker-modal.ts';
 import type { PanelBurstGuardState } from './panel-paste-flood-guard.ts';
@@ -283,7 +283,7 @@ export class InputHandler implements InputHandlerLike {
     // retirement: ProcessModal/LiveTailModal/AgentDetailModal were removed
     // — F2 now opens the Fleet panel, which subsumes the live process tree.
     this.bookmarkModal = new BookmarkModal(uiServices.shell.bookmarkManager);
-    this.sessionPickerModal = new SessionPickerModal(uiServices.sessions.sessionManager, uiServices.sessions.sessionBroker);
+    this.sessionPickerModal = new SessionPickerModal(uiServices.sessions.sessionManager, uiServices.sessions.sessionBroker, getSharedHostedSessionRoster(), () => this.requestRender()); // third source: the daemon-hosted roster
     this.profilePickerModal = new ProfilePickerModal(uiServices.shell.profileManager);
     this.selectionQueue = attachSelectionModalQueue(this); // wires exitApp teardown too — see selection-modal-queue.ts
     this.initFeedContext();

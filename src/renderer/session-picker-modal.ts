@@ -92,6 +92,68 @@ function statusLabel(record: SharedSessionRecord): string {
 }
 
 const MAX_CROSS_SURFACE_ROWS = 5;
+const MAX_HOSTED_ROWS = 5;
+
+// ---------------------------------------------------------------------------
+// Daemon-hosted sessions
+// ---------------------------------------------------------------------------
+
+/**
+ * The exact honest state of the hosted section, or null when the rows speak for
+ * themselves. "Never read" and "the daemon hosts nothing" are different facts
+ * and are never collapsed into each other.
+ */
+function hostedRosterNote(roster: SessionPickerModal['hostedRoster']): string | null {
+  if (roster.note) return roster.note;
+  if (roster.capturedAt === null) return 'Not read yet.';
+  if (roster.sessions.length === 0) return 'The daemon is hosting no sessions.';
+  return null;
+}
+
+/** One hosted row: what it is, what it is doing, and what leaving it would do. */
+function hostedRowLabel(
+  record: SessionPickerModal['hostedRoster']['sessions'][number],
+  contentWidth: number,
+): string {
+  const policy = record.effectiveDetachPolicy === 'survive' ? 'survives detach' : 'ends on detach';
+  const attached = record.attachedClients.length > 0 ? `${record.attachedClients.length} attached` : 'nobody attached';
+  return fitDisplay(
+    `${record.title || record.id} · ${record.status} · ${policy} · ${attached} · ${record.id}`,
+    contentWidth,
+  );
+}
+
+/**
+ * Whether the hosted section renders at all.
+ *
+ * Absent when NOTHING is known: no roster was wired (every pre-existing caller
+ * and test), so the box size and content are unchanged for them. The moment the
+ * roster has an answer — rows, an empty-but-read list, or a reason it could not
+ * read — the section appears, because each of those is a fact worth showing.
+ */
+function hostedSectionVisible(modal: SessionPickerModal): boolean {
+  const roster = modal.hostedRoster;
+  return roster.sessions.length > 0 || roster.capturedAt !== null || roster.note !== null;
+}
+
+function hostedRowCount(modal: SessionPickerModal): number {
+  return Math.min(MAX_HOSTED_ROWS, modal.hostedRoster.sessions.length);
+}
+
+/**
+ * Extra content rows the hosted section needs: separator + header (+note)
+ * + rows (+overflow line + the attach hint). Counted for the same reason the
+ * cross-surface section counts its own — an uncounted trailing row is silently
+ * eaten by modal-factory's tail clip.
+ */
+function hostedExtraRows(modal: SessionPickerModal): number {
+  if (!hostedSectionVisible(modal)) return 0;
+  const rows = hostedRowCount(modal);
+  const noteRow = hostedRosterNote(modal.hostedRoster) ? 1 : 0;
+  const overflowRow = modal.hostedRoster.sessions.length > MAX_HOSTED_ROWS ? 1 : 0;
+  const hintRow = rows > 0 ? 1 : 0;
+  return 2 + noteRow + overflowRow + hintRow + rows;
+}
 
 /**
  * The exact honest note for the current state, or null when the union view
@@ -149,7 +211,7 @@ export function renderSessionPickerModal(
   width: number,
   viewportHeight = 24,
 ): Line[] {
-  const extraRows = crossSurfaceExtraRows(modal);
+  const extraRows = crossSurfaceExtraRows(modal) + hostedExtraRows(modal);
   const metrics = getOverlaySurfaceMetrics(width, viewportHeight, {
     chromeRows: 6,
     minContentRows: 5,
@@ -287,6 +349,53 @@ export function renderSessionPickerModal(
           style: { fg: UI_TONES.state.info, dim: true },
         });
       }
+    }
+  }
+
+  // Daemon-hosted sessions — conversations whose loop runs in the daemon rather
+  // than in this terminal. Read-only here: joining one is `/hosted attach <id>`,
+  // which opens a live stream this modal has no business owning, so the full id
+  // is rendered for the command to be typed straight off the row.
+  if (hostedSectionVisible(modal)) {
+    sections.push({ type: 'separator' });
+    sections.push({
+      type: 'text',
+      content: 'Daemon-hosted sessions',
+      style: { fg: '240', dim: true, bold: true },
+    });
+    const note = hostedRosterNote(modal.hostedRoster);
+    if (note) {
+      sections.push({
+        type: 'text',
+        content: note,
+        style: { fg: modal.hostedRoster.note ? UI_TONES.state.warn : '244', dim: !modal.hostedRoster.note },
+      });
+    }
+    if (modal.hostedRoster.sessions.length > 0) {
+      const rows = modal.hostedRoster.sessions.slice(0, MAX_HOSTED_ROWS);
+      sections.push({
+        type: 'list',
+        items: rows.map((record) => ({
+          label: hostedRowLabel(record, contentW),
+          // A terminated hosted session is kept with its reason until retention
+          // retires it; dimming it keeps it readable without looking live.
+          style: record.status === 'terminated'
+            ? { fg: '244', dim: true }
+            : record.status === 'running' ? { fg: UI_TONES.state.good } : undefined,
+        })),
+      });
+      if (modal.hostedRoster.sessions.length > MAX_HOSTED_ROWS) {
+        sections.push({
+          type: 'text',
+          content: `[showing ${MAX_HOSTED_ROWS} of ${modal.hostedRoster.sessions.length}]`,
+          style: { fg: '244', dim: true },
+        });
+      }
+      sections.push({
+        type: 'text',
+        content: 'Join one with /hosted attach <id>',
+        style: { fg: '244', dim: true },
+      });
     }
   }
 

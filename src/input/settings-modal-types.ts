@@ -71,6 +71,16 @@ export type SettingsCategory =
   // hand-editing a settings file — a third occurrence of the push.*/cluster.*
   // class the profile comment already names two of.
   | 'occasions'
+  // hostedSessions.* — sessions whose conversation loop runs inside the daemon
+  // instead of this terminal: what detaching does to one (the owner-confirmed
+  // default is `kill`, the behavior closing a client has always had), how many
+  // may run at once, how much of a conversation is kept, and how long a
+  // terminated one's record is retained. Same mandatory-dual-membership rule as
+  // profile and occasions above — without BOTH this entry and the
+  // SETTINGS_CATEGORY_GROUPS membership below, buildSettingGroups drops every
+  // hostedSessions.* key from the workspace, which is exactly what happened to
+  // push.* and cluster.* before them.
+  | 'hostedSessions'
   | 'danger';
 
 export type SettingsFocusPane = 'categories' | 'settings';
@@ -82,7 +92,11 @@ export const SETTINGS_CATEGORY_GROUPS: ReadonlyArray<{
   { label: 'Interface', categories: ['display', 'ui', 'behavior', 'notifications', 'permissions', 'policy', 'security'] },
   { label: 'AI Routing', categories: ['provider', 'pricing', 'subscriptions', 'helper', 'tools', 'tts', 'voice'] },
   { label: 'Service & Network', categories: ['service', 'daemon', 'network', 'controlPlane', 'httpListener', 'web', 'relay'] },
-  { label: 'Surfaces & Cloud', categories: ['surfaces', 'device', 'conversationGate', 'integrations', 'connections', 'mcp', 'cloudflare'] },
+  // 'hostedSessions' sits beside 'surfaces' and 'conversationGate': all three
+  // answer "where does this conversation actually run, and who can reach it" —
+  // the detach policy is a fact about the daemon holding a session open, not
+  // about this terminal's presentation of it.
+  { label: 'Surfaces & Cloud', categories: ['surfaces', 'hostedSessions', 'device', 'conversationGate', 'integrations', 'connections', 'mcp', 'cloudflare'] },
   // 'occasions' sits beside 'checkin': both are proactive background loops
   // (a cadence, a judgment pass, a conditional channel delivery) rather than
   // facts held about the owner — the data occasions/plans declare lives in
