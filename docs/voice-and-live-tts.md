@@ -59,9 +59,9 @@ Spoken turns stay active until the logical turn reaches `TURN_COMPLETED`, `TURN_
 
 The SDK synthesis API (`VoiceSynthesisRequest`) accepts a `speed` field (positive number; 1.0 is normal speed). The TUI reads this from config and passes it through to the synthesis call.
 
-`tts.speed` is visible in `/config tts` and can be adjusted with arrow keys (0.1 steps) or inline edit mode (Enter). The default is `1` (normal speed).
+`tts.speed` is visible in `/config tts` and can be adjusted with arrow keys (0.1 steps, within the supported range) or inline edit mode (Enter). The default is `1` (normal speed).
 
-**Status: native SDK ConfigKey; TUI still reads through its bridge.** The SDK (0.35.0+) defines `tts.speed` natively in the config schema (default `1`, supported range 0.25–4.0). The TUI's read path is unchanged: `readOptionalConfigNumber` in `spoken-turn-controller.ts` reads the value on every synthesis call and passes it into `VoiceSynthesisRequest.speed`. The remaining cleanup is TUI-side only — migrating the settings modal off the synthetic entry (`buildTtsSpeedSyntheticEntry` in `settings-modal-data.ts`) onto the native CONFIG_SCHEMA entry and dropping the cast.
+The SDK defines `tts.speed` in the config schema (default `1`, supported range 0.25–4.0), and both the settings modal and the synthesis call read it from there — the modal renders the schema descriptor like every other key, and `readOptionalConfigNumber` in `spoken-turn-controller.ts` reads the value on every synthesis call and passes it into `VoiceSynthesisRequest.speed`.
 
 - The setting row is visible in `/config tts`; adjusting it takes effect on the next spoken turn.
 - The TUI synthesis call passes `speed: undefined` when no value is stored, which means provider default.

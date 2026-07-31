@@ -8,7 +8,7 @@
  * DEFAULT_CONFIG, and adding an `appearance` section would require an SDK schema
  * change (out of scope for this TUI-only work order). Storing under `display`
  * reuses the same proven "TUI-local synthetic setting" pattern the codebase
- * already uses for tts.speed / behavior.notifyAfterSeconds / storage.codeIndexEnabled:
+ * already uses for behavior.notifyAfterSeconds / storage.codeIndexEnabled:
  * ConfigManager.setDynamic writes it to settings.json and get() reads it back,
  * with zero SDK changes.
  *

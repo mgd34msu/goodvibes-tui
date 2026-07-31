@@ -9,7 +9,7 @@
  * settings modal even though they fully control what runs when a fresh
  * isolated worktree is provisioned (setup commands, then untracked-file
  * carry-over). Same rationale as the other synthetic settings in
- * settings-modal-data.ts (tts.speed, behavior.notifyAfterSeconds, etc).
+ * settings-modal-data.ts (behavior.notifyAfterSeconds, display.themeMode, etc).
  *
  * Both keys hold a JSON array of strings on disk. The settings modal's
  * inline editor is a single-line text field, so — matching the SDK's own

@@ -172,11 +172,6 @@ export function buildSettingGroups(
     }
   }
 
-  // Synthetic tts.speed (not yet an SDK ConfigKey) — surfaced with an honest caveat.
-  if (ttsEntries && !ttsEntries.some((e) => e.setting.key === ('tts.speed' as ConfigKey))) {
-    ttsEntries.push(buildTtsSpeedSyntheticEntry(configManager));
-  }
-
   // Synthetic behavior.notifyAfterSeconds (TUI-local): long-task push threshold.
   const behaviorEntries = groups.get('behavior');
   if (behaviorEntries && !behaviorEntries.some((e) => e.setting.key === ('behavior.notifyAfterSeconds' as ConfigKey))) {
@@ -286,52 +281,6 @@ export function buildSettingGroups(
   // removed for this reason.
 
   return groups;
-}
-
-// ---------------------------------------------------------------------------
-// TTS_SPEED_DEFAULT — the pending-SDK default for tts.speed
-// ---------------------------------------------------------------------------
-
-/**
- * Pending default for tts.speed. Matches the value the SDK will use once
- * the schema field is added: 1 (normal speed, provider default).
- * Used for the synthetic settings-modal entry and isDefault comparisons.
- */
-export const TTS_SPEED_DEFAULT = 1;
-
-/**
- * The synthetic ConfigSetting descriptor for tts.speed.
- * `tts.speed` is not yet a ConfigKey in the SDK schema. This descriptor is
- * TUI-local and is injected into the tts settings group so users can see
- * and interact with the setting before the SDK schema catches up.
- *
- * The key is cast to ConfigKey because ConfigSetting requires it and the SDK
- * will add this key in a future release. The cast is safe: configManager.get
- * returns undefined for unknown keys rather than throwing.
- */
-export const TTS_SPEED_SYNTHETIC_SETTING: ConfigSetting = {
-  key: 'tts.speed' as ConfigKey,
-  type: 'number',
-  default: TTS_SPEED_DEFAULT,
-  description: 'Playback speed multiplier passed to the TTS provider (1.0 = normal). Takes effect immediately via the TUI bridge; SDK schema registration is pending (native typing only).',
-};
-
-/**
- * Build the synthetic SettingEntry for tts.speed.
- *
- * Reads the raw value from configManager using a cast key (tts.speed is not
- * yet a valid ConfigKey). If the value is absent or not a positive finite
- * number, falls back to TTS_SPEED_DEFAULT and marks isDefault true.
- */
-export function buildTtsSpeedSyntheticEntry(configManager: Pick<ConfigManager, 'get'>): SettingEntry {
-  const raw = configManager.get('tts.speed' as ConfigKey);
-  const parsed = typeof raw === 'number' ? raw : parseFloat(String(raw ?? ''));
-  const currentValue: number = isFinite(parsed) && parsed > 0 ? parsed : TTS_SPEED_DEFAULT;
-  return {
-    setting: TTS_SPEED_SYNTHETIC_SETTING,
-    currentValue,
-    isDefault: deepEqual(currentValue, TTS_SPEED_DEFAULT),
-  };
 }
 
 // ---------------------------------------------------------------------------
@@ -628,16 +577,6 @@ export function buildNetworkFilteredItems(
 // refreshEntryValues — re-reads currentValue/isDefault for all loaded entries
 // ---------------------------------------------------------------------------
 
-/**
- * Normalize a raw config value for the tts.speed synthetic entry.
- * Returns the raw value if it is a positive finite number, otherwise falls
- * back to TTS_SPEED_DEFAULT. Mirrors the logic in buildTtsSpeedSyntheticEntry.
- */
-function normalizeTtsSpeedValue(raw: unknown): number {
-  const parsed = typeof raw === 'number' ? raw : parseFloat(String(raw ?? ''));
-  return isFinite(parsed) && parsed > 0 ? parsed : TTS_SPEED_DEFAULT;
-}
-
 export function refreshEntryValues(
   groups: Map<SettingsCategory, SettingEntry[]>,
   configManager: ConfigManager,
@@ -683,16 +622,12 @@ export function refreshEntryValues(
         continue;
       }
       const raw = configManager.get(entry.setting.key as ConfigKey);
-      // Synthetic entries (e.g. tts.speed) that have no SDK schema key return
-      // undefined from configManager. Normalize using the same logic used at
-      // construction time so isDefault stays accurate.
-      if (entry.setting.key === ('tts.speed' as ConfigKey)) {
-        entry.currentValue = normalizeTtsSpeedValue(raw);
-      } else if (entry.setting.key === (THEME_MODE_CONFIG_KEY as ConfigKey)) {
-        entry.currentValue = coerceThemeModeSetting(raw);
-      } else {
-        entry.currentValue = raw;
-      }
+      // Synthetic entries that have no SDK schema key return undefined from
+      // configManager. Normalize using the same logic used at construction
+      // time so isDefault stays accurate.
+      entry.currentValue = entry.setting.key === (THEME_MODE_CONFIG_KEY as ConfigKey)
+        ? coerceThemeModeSetting(raw)
+        : raw;
       entry.isDefault = deepEqual(entry.currentValue, entry.setting.default);
     }
   }
@@ -736,11 +671,9 @@ export function updateEntryForKey(
       }
       const raw = configManager.get(key);
       // Synthetic entries: normalize using the same fallback logic as construction.
-      entry.currentValue = key === ('tts.speed' as ConfigKey)
-        ? normalizeTtsSpeedValue(raw)
-        : key === (THEME_MODE_CONFIG_KEY as ConfigKey)
-          ? coerceThemeModeSetting(raw)
-          : raw;
+      entry.currentValue = key === (THEME_MODE_CONFIG_KEY as ConfigKey)
+        ? coerceThemeModeSetting(raw)
+        : raw;
       entry.isDefault = deepEqual(entry.currentValue, entry.setting.default);
     }
   }
