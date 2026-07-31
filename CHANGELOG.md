@@ -25,8 +25,28 @@ All notable changes to GoodVibes TUI.
   all, so a swap from here would be looking for a file that does not exist —
   and, if one ever appeared under that name, would replace a working daemon with
   a build from a different version line. Both commands say so in their report
-  rather than leaving a reader to wonder where the second line went. The daemon
-  updates itself, hourly, from its own releases.
+  rather than leaving a reader to wonder where the second line went. A daemon
+  built from the daemon's own repository updates itself, hourly, from its own
+  releases.
+- **New: this app hands a pre-split daemon over to its own release line, once,
+  at launch.** A daemon shipped at 1.27.1 or below cannot do this for itself.
+  Its `update.releasesUrl` default is compiled in, not persisted — no settings
+  file carries it and no migration rewrites it — and it names this repository,
+  which no longer builds daemon binaries. Reconfiguring it to the daemon's
+  repository does not help either: its shipped updater adds the terminal binary
+  beside it to the same all-or-nothing download whenever `goodvibes` sits in the
+  install directory, which the installer guarantees, and the daemon's repository
+  publishes no terminal binary. So this app reads the version of the
+  `goodvibes-daemon` binary installed beside it and, when that binary predates
+  the split, downloads the current daemon from the daemon's own releases,
+  checksum-verifies it, swaps it with the outgoing build kept at
+  `<path>.previous`, and restarts the service — printing a receipt naming both
+  versions. It replaces that one file: not this app's binary, not the sqlite-vec
+  addon the three binaries share. A binary whose version cannot be read is never
+  swapped, a package-manager-managed daemon is never swapped in place, and once
+  the installed daemon is 1.28.0 or newer the path goes quiet permanently. The
+  existing `update.autoUpdateAtLaunch` setting turns it off along with this
+  app's own launch update; no second switch was added for one migration.
 - The suite installer moved to the daemon's repository, where the release lane
   that publishes it to goodvibes.sh lives. `curl -fsSL https://goodvibes.sh/install.sh | sh`
   is unchanged and still installs everything — it now also installs the browser
