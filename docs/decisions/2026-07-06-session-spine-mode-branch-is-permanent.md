@@ -2,7 +2,9 @@
 
 Date: 2026-07-06
 Scope: a prior cleanup pass's scheduled removal 2 — "TUI staged-switch escape hatch"
-Status: accepted
+Status: accepted; superseded in part 2026-07-31 by the daemon/TUI split (Phase A) and
+daemon-hosted sessions (Phase B) — see "Updated 2026-07-31" at the end. The 2026-07-06 ruling
+below is kept as written, because what it parked is the thing that later landed.
 Repo: goodvibes-tui (the mode branch is TUI-owned; the SDK pieces it calls are read-only references)
 
 ## Premise (orchestrator ruling, binding)
@@ -150,3 +152,124 @@ gate definitions for a no-op outcome. Verified via the existing full TUI gate ba
 (typecheck, `bun run test`, `bun run test:coverage`, `bun run architecture:check`,
 `bun run perf:check`, `bun run eval:gate`, `bun run build`) that the comment-only edits
 introduced no regression. See the landing commit for the exact gate numbers.
+
+## Updated 2026-07-31 — what this record parked has now been ruled and shipped
+
+### What was decided here, and what was parked
+
+The 2026-07-06 ruling above decided two things: the `embedded` / `external` mode branch is
+permanent design rather than staging residue, and no code deletion was owed. It parked a third
+question twice, in these words:
+
+> **The parallel-write mirror stays a mirror, not authoritative — by design, not oversight.**
+> `bootstrap-core.ts:742-745` registers the local session with the spine fire-and-forget,
+> alongside (never instead of) the still-authoritative local `SharedSessionBroker`. Making the
+> spine authoritative (dropping the local broker as the source of truth) is a materially larger
+> architectural change than "retire a staging escape hatch," is not implied by anything Mike
+> ruled, and is explicitly out of this brief's scope
+
+and, in the rejected alternatives:
+
+> **Make the spine authoritative and drop the local-broker mirror.** Rejected as out of scope:
+> this is a materially larger design change (moving the source of truth) than retiring a staging
+> escape hatch, was never ruled by Mike, and the prior cleanup pass's own risk note explicitly
+> warns against smuggling it into this brief.
+
+That parked question was ruled on 2026-07-30 and executed in two phases.
+
+### Phase A (daemon/TUI product separation) — what it decided about this branch
+
+The daemon became its own product (repo `goodvibes-daemon`), and this app became a pure client.
+The concrete consequence for the branch this record is about:
+
+- **This app never hosts a daemon.** `src/runtime/bootstrap.ts:441` passes `adoptOnly: true` in
+  the external-service factories, with the comment "This app never constructs a `DaemonServer`
+  or an `HttpListener`". `src/runtime/services.ts:240` constructs an empty
+  `GatewayMethodCatalog` because this product answers no verbs.
+- **`embedded` became unreachable from a surface.** The shared adopt-or-spawn ruling
+  (`goodvibes-sdk/packages/sdk/src/platform/runtime/daemon-adoption-policy.ts:121-127`) checks
+  `adoptOnly` *before* `embedInProcess`: with the port free and `adoptOnly` set, the decision is
+  `adopt-only-idle`, never `embed`. Both surface products pass it — this app at
+  `bootstrap.ts:441` and the chat host at
+  `goodvibes-agent/src/runtime/bootstrap-external-services.ts:168` — and the daemon product does
+  not call `startExternalServices` at all. The `daemon.embedInProcess` key still exists in the
+  SDK schema (`platform/config/schema-domain-core.ts:119` default `false`, entry at `:704`) and
+  the `embed` branch still exists in `bootstrap-services.ts:695`, but no shipped product
+  reaches it. `HostServiceMode` still names `'embedded'`
+  (`platform/runtime/bootstrap-services.ts:147`) and this app's `hostServiceIsActive`
+  (`bootstrap.ts:377`) still treats it as active; that is a residual union member, not a live
+  topology.
+- **The branch itself moved into the SDK and became "adopted or not".**
+  `syncSessionSpineToHostStatus` is now built by `createSpineAdoptionSync`
+  (`bootstrap.ts:386`; SDK `platform/runtime/client/spine-adoption.ts:137`). That module's own
+  header states the change: "`embedded` is gone. A surface never hosts a daemon, so there is
+  exactly one live topology — adopted — and every other mode (`disabled`, `blocked`,
+  `incompatible`, `unavailable`) means the same honest thing: no daemon, local only, nothing
+  mirrored."
+- **The one recovery step for "no daemon" is starting the installed service**, not becoming one:
+  `autostartInstalledDaemon` (SDK `platform/runtime/client/daemon-autostart.ts`), called from
+  `bootstrap.ts:449`.
+
+So the specific sentence in this record's title — "embedded/in-process operation stays" — no
+longer holds for this product. The rest of the 2026-07-06 reasoning does: the branch was never
+staging residue, and it was not deleted; it was replaced by a narrower branch in the SDK when the
+topology it distinguished ceased to exist.
+
+### Phase B (daemon-hosted sessions) — what it decided about authority
+
+Phase B did not make the spine authoritative for every session. It added a second, explicitly
+chosen kind of session whose loop runs in the daemon:
+
+- The engine is the SDK's `platform/hosted-sessions/` (`manager.ts`, `session-runtime.ts`,
+  `store.ts`, `spine-intake.ts`, `types.ts`), composed into a daemon by
+  `platform/daemon/hosted-sessions-composition.ts`. `session-runtime.ts` builds the same
+  `Orchestrator`, the same `ToolRegistry` via `registerAllTools`, and reuses the product's own
+  `permissionManager` rather than a second one.
+- Five verbs drive the lifecycle: `sessions.hosted.create`, `.attach`, `.detach`, `.kill`,
+  `.list` (`goodvibes-sdk/packages/contracts/src/generated/operator-method-ids.ts:425-429`;
+  handlers in `platform/control-plane/routes/hosted-sessions.ts`). There is deliberately no
+  hosted-only steer verb — `sessions.steer`, `sessions.followUp` and `sessions.toolCalls.cancel`
+  resolve a hosted id daemon-side (`platform/control-plane/method-catalog-hosted-sessions.ts`
+  header).
+- **The detach toggle and its owner-confirmed default:** `hostedSessions.detachPolicy`, an enum
+  of `kill` | `survive`, default **`kill`**
+  (`goodvibes-sdk/packages/sdk/src/platform/config/schema-domain-hosted-sessions.ts:39` and
+  `:49-54`). A single session may override it at creation
+  (`sessions.hosted.create` takes `detachPolicy`). The other shipped keys in that domain:
+  `hostedSessions.maxSessions` (8), `hostedSessions.maxMessagesPerSession` (500),
+  `hostedSessions.terminatedRetentionMs` (24h in ms), and
+  `hostedSessions.promoteInboundConversations` (boolean, default **`false`**).
+- **This app's reach:** `src/runtime/client/hosted-sessions.ts` (the five verbs plus the ordinary
+  session verbs a hosted id answers), `src/runtime/client/hosted-session-stream.ts` (the hosted
+  turn's tokens and tool calls arrive on the same `turn` / `tools` event domains a local session
+  uses, filtered on the id `attach` returned), `src/runtime/client/hosted-roster.ts`, and the
+  `/hosted` command (`src/input/commands/hosted-runtime.ts`: `new`, `list`, `attach`, `say`,
+  `later`, `cancel`, `detach`, `kill`). The five `hostedSessions.*` keys are a settings category
+  here (`src/input/settings-modal-types.ts:74-84`).
+
+### What is still local mode — precisely
+
+Nothing about the default experience changed. In this app:
+
+- **The local broker is still constructed and still authoritative for the session this terminal
+  runs.** `src/runtime/services.ts:273-279` builds a `SharedSessionBroker` with
+  `storePath: shellPaths.resolveProjectPath('tui', 'control-plane', 'sessions.json')`, its
+  `routeBindings`, `agentStatusProvider`, `messageSender` and `conversationGateConfig`. The
+  continuation runner bound to it (`services.ts:294`) spawns through this process's own
+  `agentManager`.
+- **The conversation loop still runs in this process.** The orchestrator, tool registry and
+  permission prompting are here; closing the terminal ends that work. The module header of
+  `src/runtime/client/hosted-sessions.ts` states it: "A local session's loop lives in this
+  process ... Local stays the default experience; hosting is something the user asks for."
+- **What crosses the wire is identity, not execution.** SDK
+  `platform/runtime/client/spine-adoption.ts` header: "Session IDENTITY, not session execution.
+  The conversation itself still runs in the surface; what the daemon holds is the register."
+  Adoption wires `sessions.register` / `sessions.close`, `sessions.inputs.list` /
+  `.deliver`, `sessions.list`, and the memory transport — nothing that moves the loop.
+- **Hosted mode is entered by an explicit act**: `/hosted new` or `/hosted attach`. There is no
+  setting that makes a terminal's own session hosted, and `hostedSessions.detachPolicy` defaults
+  to `kill`, so even a hosted session ends on detach unless the user chose otherwise.
+
+The honest summary: the parked question is answered, and the answer is "both, by choice" — the
+local broker remains the source of truth for a terminal-run session, and a daemon-hosted session
+is a separate thing the user asks for, with `kill` still the default meaning of detaching.
