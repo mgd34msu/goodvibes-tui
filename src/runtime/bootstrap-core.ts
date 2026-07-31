@@ -25,7 +25,7 @@ import {
 import { readExecEnvScrubAllowlist } from '../input/exec-env-scrub-config.ts';
 import { createSandboxExecAsk, sandboxExecAskDepsFromRuntime } from '../permissions/sandbox-exec-gate.ts';
 import { createRuntimeServices, type RuntimeServices } from './services.ts';
-import { registerClientPhoneTool } from './client/phone-tool.ts';
+import { registerClientPhoneTool } from '@pellux/goodvibes-sdk/platform/runtime/client';
 import { createHostPowerSeam } from '@pellux/goodvibes-sdk/platform/power';
 import { runBootMemoryFold } from './memory-fold.ts';
 import { wireCostPricing } from '../export/cost-utils.ts';
@@ -382,7 +382,7 @@ export async function initializeBootstrapCore(
     contextAccountingHolder: services.contextAccountingHolder,
     // First contained (sandboxed) command run announces "commands now run contained" once — recorded and surfaced now.
     onSandboxedRun: createSandboxContainmentNotice({ configManager, notify: (text) => conversation.log(`[Sandbox] ${text}`, { fg: '135' }) }),
-  }); registerClientPhoneTool(toolRegistry, services.devices); // the `phone` tool follows the LOOP, so it is registered here; the posture runtime it used to call is the daemon's now and this tool reaches it over the devices.* verbs (see client/phone-tool.ts)
+  }); registerClientPhoneTool(toolRegistry, services.devices); // the `phone` tool follows the LOOP, so it is registered here; the posture runtime it used to call is the daemon's now and this tool reaches it over the devices.* verbs (see the SDK's client/phone-tool.ts)
   // Note: installWrfcAgentToolGuard is called after routeOrBuffer is defined (further below) so the onTrace callback routes guard decisions through the pre-router buffer.
   services.agentOrchestrator.setDependencies({
     surfaceRoot: services.surface.surfaceRoot,
@@ -700,7 +700,7 @@ export async function initializeBootstrapCore(
   await syncConfiguredServices(domainDispatch.syncIntegration, services.serviceRegistry);
 
   const permissionManager = new PermissionManager(
-    // Composed ask layer: the workspace trust gate (outer) wraps the sandbox-aware exec gate (inner); see sandbox-exec-gate.ts. The catastrophic block is untouched. The innermost ask is the CLIENT raiser: it posts approvals.raise to the daemon and prompts here (see runtime/client/approval-raiser.ts).
+    // Composed ask layer: the workspace trust gate (outer) wraps the sandbox-aware exec gate (inner); see sandbox-exec-gate.ts. The catastrophic block is untouched. The innermost ask is the CLIENT raiser: it posts approvals.raise to the daemon and prompts here (see the SDK's platform/runtime/client/approval-raiser.ts).
     trustGatedAsk(
       services.workspaceTrustManager,
       createSandboxExecAsk(
@@ -729,7 +729,7 @@ export async function initializeBootstrapCore(
   services.liveSessionIdRef.value = runtime.sessionId; // the session an ask raised on the daemon belongs to
   // The live conversation, for this process's own /rewind AND for the daemon's
   // questions about it — only the process holding the messages can count or
-  // drop them (conversation-rewind-port.ts, client/conversation-rewind-host.ts).
+  // drop them (conversation-rewind-port.ts, the SDK's client/conversation-rewind-host.ts).
   registerSessionConversation(runtime.sessionId, conversation);
   void sharedSessionBroker.createSession({
     id: runtime.sessionId,

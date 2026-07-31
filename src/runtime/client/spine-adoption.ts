@@ -1,20 +1,21 @@
 /**
  * spine-adoption.ts — wiring this surface's session and memory spines to the
- * daemon it adopted.
+ * daemon it adopted, over the SDK's adoption policy.
  *
- * ── What the branch used to be, and what it is now ─────────────────────────
+ * ── What moved to the SDK, and what stays here ────────────────────────────
  *
- * There were two supported topologies and this was the one selection point
- * between them: `embedded` meant this process's own `SharedSessionBroker` WAS
- * the daemon's broker, so there was nothing to mirror to and the spine stayed
- * dormant; `external` meant a separately-running daemon this app adopted, and
- * only then did the wire mirror come up.
+ * The SDK's `@pellux/goodvibes-sdk/platform/runtime/client` now owns WHEN the
+ * wire comes up and goes down: idempotent per base URL, torn down on a
+ * change, the one-time legacy-store fold. This module owns WHAT the wire is —
+ * this terminal's own `createHttpTransport` + `createTuiSpineTransport` +
+ * `createTuiMemorySpineTransport`, injected as the SDK's `connect(baseUrl,
+ * authToken)` callback — because building the actual HTTP client is the same
+ * connection-resolution concern the verb caller already keeps product-side.
  *
- * `embedded` is gone. This app never hosts a daemon, so there is exactly one
- * live topology — adopted — and every other mode (`disabled`, `blocked`,
- * `incompatible`, `unavailable`) means the same honest thing: no daemon, local
- * only, nothing mirrored. The branch that remains is "adopted or not", not "who
- * is hosting".
+ * `activation: 'adopt-on-status'` is passed explicitly: this terminal gates
+ * adoption on its boot discovery probe's `external` verdict (it can render
+ * "no daemon" honestly), rather than wiring live-immediately the moment it is
+ * handed a base URL.
  *
  * ── What crosses the wire ──────────────────────────────────────────────────
  *
@@ -30,109 +31,69 @@
  *     turn machinery here and is acknowledged on the wire.
  *   - `sessions.list` — the cross-surface union the panels read, interval-
  *     refreshed and served synchronously.
- *   - the memory spine's wire transport, on the same adoption signal.
+ *   - the memory spine's wire transport, folded into the same handler by the
+ *     SDK — this module's own `syncMemorySpineToHostStatus` call is retired;
+ *     supplying `memoryTransport` in the bundle and `memorySpine` in the
+ *     options is what activates it now.
  *
  * Plus a one-time, marker-guarded fold of this project's own pre-spine
- * `control-plane/sessions.json` into the adopted daemon, so sessions that
- * predate the split are visible rather than stranded.
+ * `control-plane/sessions.json` into the adopted daemon, done by the SDK.
+ *
+ * ── Why this module's exported shape does not change ──────────────────────
+ *
+ * `bootstrap.ts` gates on `HostServiceStatus` and hands a bare
+ * `(daemonStatus, sharedDaemonToken)` pair to whatever this returns. The SDK's
+ * handler takes a narrower `{ mode, baseUrl }` signal instead, so the adapting
+ * happens inside this module rather than at the call site.
  */
 import { createHttpTransport, type HostServiceStatus } from '@/runtime/index.ts';
-import { foldLegacySpineStore, type SessionSpineClient } from '@pellux/goodvibes-sdk/platform/runtime/session-spine';
-import { logger } from '@pellux/goodvibes-sdk/platform/utils';
+import { createSpineAdoptionSync as createSdkSpineAdoptionSync } from '@pellux/goodvibes-sdk/platform/runtime/client';
+import type { SpineAdoptionOptions as SdkSpineAdoptionOptions } from '@pellux/goodvibes-sdk/platform/runtime/client';
 
 import { createTuiSpineTransport, type SpineSessionsClient } from '../session-spine-transport.ts';
-import { syncMemorySpineToHostStatus, type MemorySpineActiveRef } from '../memory-spine-transport.ts';
-import type { MemorySpineClient } from '@pellux/goodvibes-sdk/platform/runtime/memory-spine';
+import { createTuiMemorySpineTransport } from '../memory-spine-transport.ts';
 
-/** The inbound steer poller, as this module drives it. */
-export interface InboundInputsActivation {
-  activate(client: {
-    listInputs(sessionId: string, options: { readonly state?: string; readonly since?: number; readonly limit?: number }): Promise<{ readonly inputs: readonly unknown[] }>;
-    deliverInput(sessionId: string, inputId: string, options?: { readonly consumed?: boolean }): Promise<unknown>;
-  }): void;
-  deactivate(reason: string): void;
-}
-
-/** The cross-surface union read model, as this module drives it. */
-export interface SessionUnionActivation {
-  activate(source: { list(limit: number): Promise<readonly unknown[]> }): void;
-  deactivate(reason: string): void;
-}
-
-export interface SpineAdoptionOptions {
-  readonly sessionSpine: SessionSpineClient;
-  readonly memorySpine: MemorySpineClient;
-  readonly sessionInboundInputs: InboundInputsActivation;
-  readonly sessionUnionCache: SessionUnionActivation;
-  /** Where this project's pre-spine session store lives, for the one-time fold. */
-  readonly legacyStorePath: string;
-  readonly workingDirectory: string;
-  /**
-   * Extra seams driven on the same adoption signal: inbound continuation
-   * dispatch, and offering this surface's conversation for rewind. Both are
-   * meaningless without an adopted daemon and both must come up with one, so
-   * they ride the signal that already knows.
-   */
-  readonly onAdopted?: ((client: {
-    listInputs(sessionId: string, options: { readonly state?: string; readonly since?: number; readonly limit?: number }): Promise<{ readonly inputs: readonly unknown[] }>;
-    deliverInput(sessionId: string, inputId: string, options?: { readonly consumed?: boolean }): Promise<unknown>;
-  }) => void) | undefined;
-  readonly onDetached?: ((reason: string) => void) | undefined;
-}
+/** This module's own options: the SDK's shape minus the two fields it builds itself. */
+export type SpineAdoptionOptions = Omit<SdkSpineAdoptionOptions, 'connect' | 'activation'>;
 
 /**
  * Build the "the adopted daemon changed" handler.
  *
- * Idempotent per base URL: re-running it against the same adopted daemon is a
- * no-op, so a re-probe after an autostart does not tear a live mirror down and
- * put it back up.
+ * Idempotent per base URL (the SDK's own guarantee): re-running it against the
+ * same adopted daemon is a no-op, so a re-probe after an autostart does not
+ * tear a live mirror down and put it back up.
  */
-export function createSpineAdoptionSync(options: SpineAdoptionOptions): (daemonStatus: HostServiceStatus, sharedDaemonToken: string) => void {
-  let activeForBaseUrl: string | null = null;
-  const memorySpineActiveRef: MemorySpineActiveRef = { value: null };
+export function createSpineAdoptionSync(
+  options: SpineAdoptionOptions,
+): (daemonStatus: HostServiceStatus, sharedDaemonToken: string) => void {
+  const sync = createSdkSpineAdoptionSync({
+    ...options,
+    // This terminal has a boot discovery probe and can render "no daemon"
+    // honestly, so it gates on the probe's verdict rather than wiring the
+    // moment it is handed a base URL.
+    activation: 'adopt-on-status',
+    connect: (baseUrl, authToken) => {
+      const httpTransport = createHttpTransport({ baseUrl, authToken });
+      const sessionsClient: SpineSessionsClient = {
+        register: (input) => httpTransport.operator.sessions.register(input),
+        close: (sessionId) => httpTransport.operator.sessions.close(sessionId),
+      };
+      return {
+        sessionTransport: createTuiSpineTransport(sessionsClient),
+        inboundInputs: {
+          listInputs: async (sessionId, opts) => ({
+            inputs: await httpTransport.operator.sessions.inputs(sessionId, opts.limit, { state: opts.state, since: opts.since }),
+          }),
+          deliverInput: (sessionId, inputId, opts) =>
+            httpTransport.operator.sessions.deliverInput(sessionId, inputId, opts),
+        },
+        sessionList: { list: (limit: number) => httpTransport.operator.sessions.list(limit) },
+        memoryTransport: createTuiMemorySpineTransport({ baseUrl, authToken }),
+      };
+    },
+  });
 
   return (daemonStatus, sharedDaemonToken) => {
-    syncMemorySpineToHostStatus(options.memorySpine, daemonStatus.mode, daemonStatus.baseUrl, sharedDaemonToken, memorySpineActiveRef, logger);
-    if (daemonStatus.mode !== 'external') {
-      if (activeForBaseUrl !== null) {
-        const reason = `daemon mode changed to '${daemonStatus.mode}'`;
-        options.sessionSpine.deactivate(reason);
-        options.sessionInboundInputs.deactivate(reason);
-        options.onDetached?.(reason);
-        activeForBaseUrl = null;
-      }
-      options.sessionUnionCache.deactivate(`daemon mode '${daemonStatus.mode}'`);
-      logger.info(`[bootstrap] session spine: daemon mode '${daemonStatus.mode}' — local-only (no spine mirror)`);
-      return;
-    }
-    const baseUrl = daemonStatus.baseUrl;
-    if (activeForBaseUrl === baseUrl) return; // already wired to this exact adopted daemon
-    const httpTransport = createHttpTransport({ baseUrl, authToken: sharedDaemonToken });
-    const sessionsClient: SpineSessionsClient = {
-      register: (input) => httpTransport.operator.sessions.register(input),
-      close: (sessionId) => httpTransport.operator.sessions.close(sessionId),
-    };
-    options.sessionSpine.activate(createTuiSpineTransport(sessionsClient));
-    const inboundClient = {
-      listInputs: async (sessionId: string, opts: { readonly state?: string; readonly since?: number; readonly limit?: number }) => ({
-        inputs: await httpTransport.operator.sessions.inputs(sessionId, opts.limit, { state: opts.state, since: opts.since }),
-      }),
-      deliverInput: (sessionId: string, inputId: string, opts?: { readonly consumed?: boolean }) =>
-        httpTransport.operator.sessions.deliverInput(sessionId, inputId, opts),
-    };
-    options.sessionInboundInputs.activate(inboundClient);
-    options.onAdopted?.(inboundClient);
-    options.sessionUnionCache.activate({ list: (limit: number) => httpTransport.operator.sessions.list(limit) });
-    activeForBaseUrl = baseUrl;
-    logger.info(`[bootstrap] session spine: adopted daemon at ${baseUrl} — mirroring session identity`);
-    // One-time, marker-guarded import of this project's own pre-spine sessions.
-    const fold = foldLegacySpineStore(options.sessionSpine, {
-      storePath: options.legacyStorePath,
-      markerPath: `${options.legacyStorePath}.spine-migrated`,
-      project: options.workingDirectory,
-    });
-    if (fold.folded > 0) {
-      logger.info(`[bootstrap] session spine: folded ${fold.folded} legacy local session(s) into the adopted daemon`);
-    }
+    sync({ mode: daemonStatus.mode, baseUrl: daemonStatus.baseUrl }, sharedDaemonToken);
   };
 }

@@ -89,16 +89,18 @@ import { createFleetServices } from './fleet-services.ts';
 import { createWorkstreamServices } from './workstream-services.ts';
 import { codeIndexDbPath, createCodeIndexServices, createStoreRerooter, isCodeInjectionSettingEnabled } from './code-index-services.ts';
 import { WorkspaceTrustManager } from './trust/workspace-trust.ts';
-import { ensureConfiguredModelIsRoutable } from './provider-fallback.ts';
+import { ensureConfiguredModelIsRoutable } from '@pellux/goodvibes-sdk/platform/providers';
 import { GOODVIBES_TUI_SURFACE_ROOT } from '../config/surface.ts';
 import { createDaemonVerbCaller } from './client/operator-endpoint.ts';
-import { createClientApprovalRaiser } from './client/approval-raiser.ts';
-import { createDaemonConfigClient } from './client/config-client.ts';
-import { createDaemonCredentialsClient } from './client/credentials-client.ts';
-import { createDevicesClient } from './client/devices-client.ts';
-import { createWireSessionDispatch } from './client/session-dispatch.ts';
+import {
+  createClientApprovalRaiser,
+  createConversationRewindHost,
+  createDaemonConfigClient,
+  createDaemonCredentialsClient,
+  createDevicesClient,
+  createWireSessionDispatch,
+} from '@pellux/goodvibes-sdk/platform/runtime/client';
 import { createFleetUnionReadModel } from './client/fleet-union.ts';
-import { createConversationRewindHost } from './client/conversation-rewind-host.ts';
 import { createSessionConversationRewindPort, hasSessionConversation } from './conversation-rewind-port.ts';
 import { createFleetReadModel } from '../panels/fleet-read-model.ts';
 import type { PermissionPromptDecision, PermissionPromptRequest } from '@pellux/goodvibes-sdk/platform/permissions';
@@ -131,7 +133,7 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
   const shellPaths = createShellPathService({ workingDirectory, homeDirectory });
   // The surface's own record of the asks it raised — what the approval card and
   // the panel read. The AUTHORITATIVE record is the daemon's; the raiser below
-  // keeps the two in step (see client/approval-raiser.ts).
+  // keeps the two in step (see the SDK's client/approval-raiser.ts).
   const approvalBroker = new ApprovalBroker({
     storePath: shellPaths.resolveProjectPath('tui', 'control-plane', 'approvals.json'),
   });
@@ -143,6 +145,11 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
   const liveSessionIdRef: { value: string | null } = { value: null };
   const requestApproval = createClientApprovalRaiser({
     verbs,
+    // The SDK's raiser cannot honestly default this: it names how THIS surface
+    // reports its own decision back to the daemon (`actorSurface`), so every
+    // other surface can see where the answer came from. Reproduces the
+    // previous hard-coded `actor: 'tui', actorSurface: 'tui'` write-back exactly.
+    actor: 'tui',
     sessionId: () => liveSessionIdRef.value,
     // The "local prompt" is this surface's own broker plus the terminal ask:
     // that is what puts the ask on the approval card and in the panel while the
@@ -261,7 +268,7 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
   // Work that arrives for a session THIS surface hosts reaches the loop through
   // the same runner whether it came from the local broker or from the daemon's
   // queue. The wire half is inert until bootstrap.ts adopts a daemon (see
-  // client/session-dispatch.ts); binding one runner to both is what stops a
+  // the SDK's client/session-dispatch.ts); binding one runner to both is what stops a
   // continuation delivered over the wire from taking a different path — and a
   // different set of routing options — than one raised locally.
   const wireSessionDispatch = createWireSessionDispatch({

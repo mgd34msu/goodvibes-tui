@@ -24,7 +24,7 @@ import type { CommandRegistry, CommandContext } from '../command-registry.ts';
 import type { RuntimeTask, TaskLifecycleState } from '@/runtime/index.ts';
 import { reviewWorktreeAttachments } from '@/runtime/index.ts';
 import { requireOperatorClient, requireOpsApi, requirePanelManager, requireShellPaths } from './runtime-services.ts';
-import { createTasksClient, type TasksClient, type UnionTask } from '../../runtime/client/tasks-client.ts';
+import { createTasksClient, type TasksClient, type UnionTask } from '@pellux/goodvibes-sdk/platform/runtime/client';
 import { createDaemonVerbCaller } from '../../runtime/client/operator-endpoint.ts';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 

@@ -37,13 +37,15 @@ import { join } from 'node:path';
 import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import { GOODVIBES_TUI_SURFACE_ROOT } from '../../config/surface.ts';
 import { createDaemonVerbCaller, type DaemonVerbCaller } from '../../runtime/client/operator-endpoint.ts';
-import { createDaemonConfigClient } from '../../runtime/client/config-client.ts';
-import { createDaemonCredentialsClient } from '../../runtime/client/credentials-client.ts';
-import { createDevicesClient } from '../../runtime/client/devices-client.ts';
-import { createTasksClient } from '../../runtime/client/tasks-client.ts';
+import {
+  createClientPhoneTool,
+  createConversationRewindHost,
+  createDaemonConfigClient,
+  createDaemonCredentialsClient,
+  createDevicesClient,
+  createTasksClient,
+} from '@pellux/goodvibes-sdk/platform/runtime/client';
 import { createFleetUnionReadModel } from '../../runtime/client/fleet-union.ts';
-import { createClientPhoneTool } from '../../runtime/client/phone-tool.ts';
-import { createConversationRewindHost } from '../../runtime/client/conversation-rewind-host.ts';
 import { buildFleetSnapshot, createStaticFleetReadModel } from '../../panels/fleet-read-model.ts';
 import { makeProjectTempDir } from '../helpers/project-temp.ts';
 
@@ -367,11 +369,12 @@ if (!binary) {
         verbs,
         // Stands in for this process's conversation with a known message count,
         // which is what makes the daemon's answer checkable.
+        // Only preview/rewind are RewindConversationPort's members — the host
+        // never calls restoreBefore/restoreAfter (the TUI's own /undo-/redo
+        // accessors), so this stand-in stub carries only what it is asked for.
         port: {
           preview: async () => ({ messagesToDrop: 3, messagesRemaining: 9 }),
           rewind: async () => ({ droppedMessages: 3, undoSnapshotId: 'rwc_e2e' }),
-          restoreBefore: () => true,
-          restoreAfter: () => true,
         },
         hosts: (sessionId) => sessionId === hostedSession,
         label: 'the terminal app (e2e)',

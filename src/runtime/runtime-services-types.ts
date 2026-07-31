@@ -15,15 +15,17 @@ import type { FocusTracker } from '../core/focus-tracker.ts';
 import type { ApprovalBroker, GatewayMethodCatalog, SessionLiveTurnControlsHolder, SharedSessionBroker } from '@pellux/goodvibes-sdk/platform/control-plane';
 import type { StepUpService } from '@pellux/goodvibes-sdk/daemon';
 import type { PairingTokenManager } from '@pellux/goodvibes-sdk/platform/pairing';
-import type { DevicesClient } from './client/devices-client.ts';
+import type {
+  ConversationRewindHostClient,
+  DaemonConfigClient,
+  DaemonCredentialsClient,
+  DaemonVerbCaller,
+  DevicesClient,
+  WireSessionDispatch,
+} from '@pellux/goodvibes-sdk/platform/runtime/client';
+import type { FleetUnionReadModel } from './client/fleet-union.ts';
 import type { ApprovalRaiser } from '@pellux/goodvibes-sdk/platform/runtime/client-services';
 import type { PermissionPromptDecision, PermissionPromptRequest } from '@pellux/goodvibes-sdk/platform/permissions';
-import type { DaemonVerbCaller } from './client/operator-endpoint.ts';
-import type { WireSessionDispatch } from './client/session-dispatch.ts';
-import type { ConversationRewindHostClient } from './client/conversation-rewind-host.ts';
-import type { FleetUnionReadModel } from './client/fleet-union.ts';
-import type { DaemonConfigClient } from './client/config-client.ts';
-import type { DaemonCredentialsClient } from './client/credentials-client.ts';
 import type { ConfigManager, ServiceRegistry, SubscriptionManager, ToolLLM } from '@pellux/goodvibes-sdk/platform/config';
 import type { SecretsManager } from '../config/secrets.ts';
 import type { AutomationDeliveryManager, AutomationManager } from '@pellux/goodvibes-sdk/platform/automation';
