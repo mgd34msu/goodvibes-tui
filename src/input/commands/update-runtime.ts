@@ -3,29 +3,36 @@
  * download-verify-swap mechanics are the SDK's canonical update policy
  * module (platform/runtime/self-update — hoisted from this file's
  * semantics), the same mechanism the daemon's hourly loop and
- * scripts/install.sh follow: one update mechanism everywhere. This file owns
+ * the suite installer follow: one update mechanism everywhere. This file owns
  * only the /update UX: install-kind gating, target selection, and the
  * printed report.
  *
  * Subcommands:
  *   /update [check]           — resolve the latest release tag and report
  *                                whether this build is already current.
- *   /update apply              — for a binary install (scripts/install.sh),
- *                                download + verify + atomically swap the
- *                                app and daemon binaries, and refresh the
- *                                sqlite-vec native addon in lockstep so the
- *                                vector index never goes stale beside a new
- *                                binary. Every swap parks the outgoing file
- *                                at `<path>.previous`, so the replaced
- *                                version is always kept. For any other
- *                                install kind, prints the exact command to
- *                                run instead — it never attempts a swap it
- *                                can't do safely.
+ *   /update apply              — for a binary install (the curl installer),
+ *                                download + verify + atomically swap THIS
+ *                                app's binary, and refresh the sqlite-vec
+ *                                native addon in lockstep so the vector index
+ *                                never goes stale beside a new binary. Every
+ *                                swap parks the outgoing file at
+ *                                `<path>.previous`, so the replaced version is
+ *                                always kept. For any other install kind,
+ *                                prints the exact command to run instead — it
+ *                                never attempts a swap it can't do safely.
  *   /update rollback           — exchange each installed file with its kept
  *                                `.previous` counterpart: one command back to
  *                                the version that ran before the last update
  *                                (and, being an exchange, one more command
  *                                forward again).
+ *
+ * IT DOES NOT UPDATE THE DAEMON. `goodvibes-daemon` used to sit beside this
+ * binary as part of the same release, and this command swapped both. The daemon
+ * is its own product now, released from its own repository on its own version
+ * line, and it updates itself on an hourly loop. A swap from here would fetch
+ * an asset this repository's releases do not publish — and if one ever appeared
+ * under that name, would overwrite a working daemon with a build from the wrong
+ * line. The daemon is a neighbour in the install directory, not cargo.
  *   /update review              — install/subscription/sandbox posture,
  *                                unrelated to the update mechanics above.
  *   /update bundle export|inspect <path> — portable posture bundle, as before.
@@ -301,8 +308,6 @@ export async function applyUpdate(options: ApplyUpdateOptions): Promise<void> {
   const baseUrl = releaseDownloadBaseUrl(latestTag);
   const io = options.io ?? realUpdateFileIo;
   const appBinaryPath = options.execPath;
-  const daemonBinaryPath = join(dirname(appBinaryPath), 'goodvibes-daemon');
-  const daemonBinaryPresent = io.exists(daemonBinaryPath);
 
   // The sqlite-vec native addon travels with the binaries: refresh it in the
   // same download-verify-swap pass so /update never leaves a new binary beside a
@@ -326,9 +331,6 @@ export async function applyUpdate(options: ApplyUpdateOptions): Promise<void> {
 
   const targets: UpdateTarget[] = [
     { label: 'app binary', path: appBinaryPath, assetName: artifacts.app, executable: true },
-    ...(daemonBinaryPresent
-      ? [{ label: 'daemon binary', path: daemonBinaryPath, assetName: artifacts.daemon, executable: true }]
-      : []),
     ...(addon && addonTargetPath
       ? [{ label: 'vector addon', path: addonTargetPath, assetName: addon.assetName, executable: false }]
       : []),
@@ -360,15 +362,14 @@ export async function applyUpdate(options: ApplyUpdateOptions): Promise<void> {
     [
       `Updated to ${latestTag}.`,
       `  app binary:    ${appBinaryPath}`,
-      daemonBinaryPresent
-        ? `  daemon binary: ${daemonBinaryPath}`
-        : `  daemon binary: not found at ${daemonBinaryPath} — left untouched`,
       ...(addonTargetPath ? [`  vector addon:  ${addonTargetPath}`] : []),
       '',
       'Restart goodvibes to run the new version.',
+      // Named, not silently omitted: someone who used to see two binaries swap
+      // here should read why only one did.
       serviceInfo.managed
-        ? `The daemon is managed by systemd — restart it with: ${serviceInfo.restartCommand}`
-        : 'The daemon restarts automatically the next time goodvibes launches.',
+        ? `The daemon updates itself on its own release line — this changed nothing about it (it runs under ${serviceInfo.unitName}.service).`
+        : 'The daemon updates itself on its own release line — this changed nothing about it.',
     ].join('\n'),
   );
 }
@@ -387,9 +388,9 @@ export interface RollbackUpdateOptions {
 /**
  * One-command rollback to the version that ran before the last update,
  * delegating the exchange mechanics to the SDK's rollbackKeptPrevious (the
- * same module the swap uses): every installed file (app binary, daemon
- * binary, vector addon) that has a kept `.previous` counterpart is EXCHANGED
- * with it — the previous version becomes live, and the version being rolled
+ * same module the swap uses): every installed file this command owns (the app
+ * binary and the vector addon) that has a kept `.previous` counterpart is
+ * EXCHANGED with it — the previous version becomes live, and the version being rolled
  * back is itself kept at `.previous`, so a second `/update rollback` rolls
  * forward again. Files without a kept counterpart are reported and left
  * untouched; nothing is downloaded.
@@ -408,9 +409,11 @@ export function rollbackUpdate(options: RollbackUpdateOptions): void {
 
   const io = options.io ?? realUpdateFileIo;
   const addon = resolveSqliteVecAsset(options.platform, options.arch);
+  // The daemon binary is deliberately absent: this command never replaced it,
+  // so it has nothing here to restore. Rolling back a file another product owns
+  // would undo an update this app did not perform.
   const targets = [
     { label: 'app binary', path: options.execPath },
-    { label: 'daemon binary', path: join(dirname(options.execPath), 'goodvibes-daemon') },
     ...(addon ? [{ label: 'vector addon', path: join(dirname(options.execPath), 'lib', addon.dirName, addon.fileName) }] : []),
   ];
 
@@ -431,8 +434,8 @@ export function rollbackUpdate(options: RollbackUpdateOptions): void {
       '',
       'Restart goodvibes to run the restored version.',
       serviceInfo.managed
-        ? `The daemon is managed by systemd — restart it with: ${serviceInfo.restartCommand}`
-        : 'The daemon restarts automatically the next time goodvibes launches.',
+        ? `The daemon was not rolled back — it updates itself on its own release line (it runs under ${serviceInfo.unitName}.service).`
+        : 'The daemon was not rolled back — it updates itself on its own release line.',
     ].join('\n'),
   );
 }

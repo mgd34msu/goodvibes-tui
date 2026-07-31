@@ -8,7 +8,8 @@
  * stay in lockstep:
  *   - scripts/postinstall.js (npm install-time binary download)
  *   - src/input/commands/update-runtime.ts (the /update self-update)
- *   - scripts/install.sh (the shell installer; mirrors the same names)
+ *   - the suite installer (goodvibes-daemon scripts/install.sh; mirrors the
+ *     same names)
  */
 export {
   CHECKSUM_MANIFEST_NAME,

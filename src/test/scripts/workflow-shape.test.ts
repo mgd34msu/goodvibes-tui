@@ -312,11 +312,11 @@ describe("release.yml: by-reference release on the reusable workflows", () => {
   });
 
   test("checkouts that could default to the ref input's \"main\" instead resolve the tag ref in release mode", () => {
-    // daemon-smoke and smoke-macos checkout `github.event.inputs.ref || github.ref`,
-    // which would silently resolve to the ref input's "main" default on a
+    // smoke-macos checks out `github.event.inputs.ref || github.ref`, which
+    // would silently resolve to the ref input's "main" default on a
     // release-mode dispatch (inputs.ref is never set by the auto-release
     // job's dispatch call) unless a release-mode branch takes priority.
-    for (const name of ["daemon-smoke", "smoke-macos"]) {
+    for (const name of ["smoke-macos"]) {
       const job = rel.jobs![name]!;
       const checkout = steps(job).find((s) => String(s.uses ?? "").startsWith("actions/checkout@"));
       const ref = String((checkout?.with as { ref?: string } | undefined)?.ref ?? "");

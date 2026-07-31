@@ -3,7 +3,7 @@
  * an installed binary never drifts behind. At TUI launch (before any runtime
  * bootstrap or terminal mode change) this runs a quick version check and, when
  * a newer release exists, installs it through the SAME checksum-verified
- * download/verify/swap path `/update apply` and scripts/install.sh use
+ * download/verify/swap path `/update apply` and the suite installer use
  * (src/input/commands/update-runtime.ts — there is deliberately no second
  * updater), then asks the caller to restart onto the new binary.
  *

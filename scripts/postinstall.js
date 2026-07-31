@@ -60,9 +60,15 @@ async function downloadText(url) {
 }
 
 /**
- * Copy the prebuilt binaries (and sqlite-vec addon, if present) out of the
+ * Copy the prebuilt binary (and sqlite-vec addon, if present) out of the
  * installed platform package into vendor/. Returns true when it handled the
  * install, false when no platform package is available (fall back to download).
+ *
+ * The daemon binary is NOT here any more. The daemon is its own product with
+ * its own npm package (`goodvibes-daemon`), which this package declares as a
+ * dependency — so an npm install still brings the whole suite, and the daemon's
+ * own postinstall places the daemon's own binary. Two packages each placing
+ * a copy of `goodvibes-daemon` is exactly how a machine ends up with two.
  */
 function installFromPlatformPackage(artifacts, vendorDir) {
   const pkgName = PLATFORM_PACKAGE_NAMES[`${process.platform}-${process.arch}`];
@@ -78,17 +84,14 @@ function installFromPlatformPackage(artifacts, vendorDir) {
   }
 
   const app = join(pkgBinDir, artifacts.app);
-  const daemon = join(pkgBinDir, artifacts.daemon);
-  if (!existsSync(app) || !existsSync(daemon)) {
+  if (!existsSync(app)) {
     return false;
   }
 
-  for (const artifactName of [artifacts.app, artifacts.daemon]) {
-    const destination = join(vendorDir, artifactName);
-    rmSync(destination, { force: true });
-    copyFileSync(join(pkgBinDir, artifactName), destination);
-    prepareBinary(destination);
-  }
+  const destination = join(vendorDir, artifacts.app);
+  rmSync(destination, { force: true });
+  copyFileSync(app, destination);
+  prepareBinary(destination);
 
   // Carry the sqlite-vec native addon (bin/lib/...) beside the vendored binary
   // so semantic memory keeps working (resolved as <execDir>/lib/...).
@@ -123,16 +126,14 @@ async function installPlatformBinaries() {
 
   const localSourceDir = process.env.GOODVIBES_ASSET_SOURCE_DIR?.trim();
   if (localSourceDir) {
-    for (const artifactName of [artifacts.app, artifacts.daemon]) {
-      const sourcePath = join(localSourceDir, artifactName);
-      if (!existsSync(sourcePath)) {
-        throw new Error(`missing local release artifact for postinstall smoke: ${sourcePath}`);
-      }
-      const destination = join(vendorDir, artifactName);
-      copyFileSync(sourcePath, destination);
-      prepareBinary(destination);
+    const sourcePath = join(localSourceDir, artifacts.app);
+    if (!existsSync(sourcePath)) {
+      throw new Error(`missing local release artifact for postinstall smoke: ${sourcePath}`);
     }
-    console.log(`postinstall: installed local smoke-test binaries for ${process.platform}-${process.arch}`);
+    const destination = join(vendorDir, artifacts.app);
+    copyFileSync(sourcePath, destination);
+    prepareBinary(destination);
+    console.log(`postinstall: installed the local smoke-test binary for ${process.platform}-${process.arch}`);
     return;
   }
 
@@ -153,26 +154,25 @@ async function installPlatformBinaries() {
   writeFileSync(join(vendorDir, 'SHA256SUMS.txt'), checksumText);
   const checksums = parseChecksumFile(checksumText);
 
-  for (const artifactName of [artifacts.app, artifacts.daemon]) {
-    const destination = join(vendorDir, artifactName);
-    const tempDestination = `${destination}.download`;
+  const artifactName = artifacts.app;
+  const destination = join(vendorDir, artifactName);
+  const tempDestination = `${destination}.download`;
+  rmSync(tempDestination, { force: true });
+  await downloadFile(`${releaseBaseUrl}/${artifactName}`, tempDestination);
+  const actual = sha256(readFileSync(tempDestination));
+  const expected = checksums.get(artifactName);
+  try {
+    verifyChecksum(artifactName, actual, expected);
+  } catch (error) {
     rmSync(tempDestination, { force: true });
-    await downloadFile(`${releaseBaseUrl}/${artifactName}`, tempDestination);
-    const actual = sha256(readFileSync(tempDestination));
-    const expected = checksums.get(artifactName);
-    try {
-      verifyChecksum(artifactName, actual, expected);
-    } catch (error) {
-      rmSync(tempDestination, { force: true });
-      throw error;
-    }
-    rmSync(destination, { force: true });
-    copyFileSync(tempDestination, destination);
-    rmSync(tempDestination, { force: true });
-    prepareBinary(destination);
+    throw error;
   }
+  rmSync(destination, { force: true });
+  copyFileSync(tempDestination, destination);
+  rmSync(tempDestination, { force: true });
+  prepareBinary(destination);
 
-  console.log(`postinstall: installed release binaries for ${process.platform}-${process.arch}`);
+  console.log(`postinstall: installed the release binary for ${process.platform}-${process.arch}`);
 }
 
 function deployBundledFiles() {

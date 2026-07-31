@@ -14,11 +14,11 @@ Install from the npm registry with Bun on Linux, macOS, or WSL:
 
 ```sh
 bun add -g @pellux/goodvibes-tui
-bun pm trust -g @pellux/goodvibes-tui
+bun pm trust -g @pellux/goodvibes-tui goodvibes-daemon
 goodvibes
 ```
 
-Bun blocks lifecycle scripts for untrusted global packages. Only `@pellux/goodvibes-tui` needs trusting, so its postinstall can place the matching TUI and daemon binaries. No dependency needs trusting: the binaries come from the platform-specific `@pellux/goodvibes-tui-<os>-<arch>` package with registry integrity, and the tree-sitter grammar packages ship their `.wasm` files as plain files (the app never loads the native bindings their `install` scripts would build). Verify the install with:
+Bun blocks lifecycle scripts for untrusted global packages. `@pellux/goodvibes-tui` needs trusting so its postinstall can place the matching TUI binary, and `goodvibes-daemon` — which this package depends on, so one install brings both commands — needs trusting so its postinstall can place the daemon binary. Nothing else needs trusting: the TUI binary comes from the platform-specific `@pellux/goodvibes-tui-<os>-<arch>` package with registry integrity, and the tree-sitter grammar packages ship their `.wasm` files as plain files (the app never loads the native bindings their `install` scripts would build). Verify the install with:
 
 ```sh
 bun pm -g untrusted
@@ -41,7 +41,12 @@ On Windows, use WSL2: inside a WSL2 distribution GoodVibes is an ordinary Linux 
 
 ### Pure-binary installer (`goodvibes.sh/install.sh`)
 
-The one-line installer downloads the checksum-verified TUI, daemon, and agent binaries without a package manager, and doubles as the upgrade path:
+The one-line installer downloads the checksum-verified TUI, daemon, and agent
+binaries plus the browser operator surface's bundle without a package manager,
+and doubles as the upgrade path. It lives in the daemon's repository
+(`goodvibes-daemon` `scripts/install.sh`) — one copy for the whole suite —
+and resolves a release tag per repository, verifying every file against that
+repository's own `SHA256SUMS.txt`:
 
 ```sh
 curl -fsSL https://goodvibes.sh/install.sh | sh
@@ -49,7 +54,7 @@ curl -fsSL https://goodvibes.sh/install.sh | sh
 
 On a **fresh install** — when no daemon is running and no service unit exists yet — it also registers the daemon as a user service so it comes up immediately and on every login:
 
-- **Linux (systemd):** writes `~/.config/systemd/user/goodvibes-daemon.service` (marked as installer-managed), then `systemctl --user daemon-reload` and `enable --now`, and reports whether it went active.
+- **Linux (systemd):** writes `~/.config/systemd/user/goodvibes.service` (marked as installer-managed), then `systemctl --user daemon-reload` and `enable --now`, and reports whether it went active.
 - **macOS (launchd):** writes `~/Library/LaunchAgents/sh.goodvibes.daemon.plist` (installer-managed) and loads it with `launchctl bootstrap`.
 - **Neither available (or opted out):** prints the plain `goodvibes-daemon` command to run it yourself.
 
@@ -60,11 +65,23 @@ It never overwrites an existing unit — an already-running daemon is restarted 
 | Variable | Default | Effect |
 | --- | --- | --- |
 | `GOODVIBES_INSTALL_DIR` | `~/.local/bin` | Target directory for the binaries |
+| `GOODVIBES_VERSION` | `latest` | Pin the terminal app's release tag |
+| `GOODVIBES_DAEMON_VERSION` | `latest` | Pin the daemon's release tag |
 | `GOODVIBES_AGENT` | `1` | Set to `0` to skip installing `goodvibes-agent` |
+| `GOODVIBES_AGENT_VERSION` | `latest` | Pin the agent's release tag |
+| `GOODVIBES_WEBUI` | `1` | Set to `0` to skip the browser operator surface |
+| `GOODVIBES_WEBUI_VERSION` | `latest` | Pin the web UI's release tag |
 | `GOODVIBES_RESTART_DAEMON` | `1` | Set to `0` to leave a running daemon/agent untouched |
 | `GOODVIBES_VECTOR` | `1` | Set to `0` to skip the sqlite-vec native addon |
 | `GOODVIBES_DAEMON_SERVICE` | `1` | Set to `0` to skip first-run daemon service setup |
 | `GOODVIBES_UNINSTALL` | `0` | Set to `1` to uninstall (see below) |
+
+The browser surface is not a fourth binary and not a fourth service: its bundle
+unpacks to `<install dir>/webui/<version>` and the daemon serves it on its own
+listener. Installing it exposes nothing new to your network — the daemon's
+shipped binding is loopback and the installer does not change it, so the URL in
+the install receipt works on that machine only. Reaching it from another device
+is a deliberate separate act: `goodvibes-daemon webui enable --lan`.
 
 **Uninstall:**
 
@@ -72,7 +89,7 @@ It never overwrites an existing unit — an already-running daemon is restarted 
 curl -fsSL https://goodvibes.sh/install.sh | GOODVIBES_UNINSTALL=1 sh
 ```
 
-Uninstall mode takes precedence over everything else (no downloads happen). It stops the running daemon/agent, then removes only what the installer manages — the three binaries in the install dir, the sqlite-vec addon directories, and the service unit/plist **only when it carries the installer-managed marker**. A hand-written unit is never deleted; it is reported with the manual removal command instead. Your `~/.goodvibes` data (settings, sessions, memory) is deliberately preserved, and the summary prints the `rm -rf ~/.goodvibes` command if you want to erase it too.
+Uninstall mode takes precedence over everything else (no downloads happen). It stops the running daemon/agent, then removes only what the installer manages — the three binaries in the install dir, the sqlite-vec addon directories, the unpacked web UI bundles, and the service unit/plist **only when it carries the installer-managed marker**. A hand-written unit is never deleted; it is reported with the manual removal command instead. Your `~/.goodvibes` data (settings, sessions, memory) is deliberately preserved, and the summary prints the `rm -rf ~/.goodvibes` command if you want to erase it too.
 
 Or install from source:
 

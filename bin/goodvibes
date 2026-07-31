@@ -21,7 +21,7 @@ if (process.platform === 'win32') {
   process.exit(1);
 }
 
-const artifactName = resolveArtifactName('app', process.platform, process.arch);
+const artifactName = resolveArtifactName(process.platform, process.arch);
 const localPlatformBuild = artifactName ? join(packageRoot, 'dist', artifactName) : null;
 const localBuild = join(packageRoot, 'dist', 'goodvibes');
 const vendoredBinary = artifactName ? join(packageRoot, 'vendor', artifactName) : null;
@@ -38,7 +38,7 @@ if (vendoredBinary && isExecutable(vendoredBinary)) {
   run(vendoredBinary, process.argv.slice(2));
 }
 
-const platformPackageBinary = resolvePlatformPackageBinary('app', process.platform, process.arch, packageRoot);
+const platformPackageBinary = resolvePlatformPackageBinary(process.platform, process.arch, packageRoot);
 if (platformPackageBinary) {
   run(platformPackageBinary, process.argv.slice(2));
 }

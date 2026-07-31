@@ -22,11 +22,12 @@ import {
 type ManagedServiceActionResult = ReturnType<ManagedServiceActionRunner>;
 
 /**
- * The exact marker string scripts/install.sh writes into every unit it
+ * The exact marker string the suite installer writes into every unit it
  * creates (as a `# managed by goodvibes install.sh` comment). The reconcile
  * check below keys on it to tell an installer-created legacy unit — safe to
  * auto-retire — apart from a hand-written one that must only ever be reported.
- * Kept in lockstep with `INSTALLER_MARKER` in scripts/install.sh.
+ * Kept in lockstep with `INSTALLER_MARKER` in the suite installer
+ * (goodvibes-daemon scripts/install.sh).
  */
 export const INSTALLER_UNIT_MARKER = 'managed by goodvibes install.sh';
 

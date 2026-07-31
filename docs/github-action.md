@@ -2,9 +2,13 @@
 
 A composite action (`action.yml` at the repo root) that installs a pinned,
 checksum-verified GoodVibes release and runs a non-interactive command or prompt
-against a workspace in CI. It reuses the committed `scripts/install.sh`
-download-verify-swap logic, so every binary is verified against
-`SHA256SUMS.txt` (a missing manifest entry is a hard failure).
+against a workspace in CI. It runs the published suite installer — the same
+script `curl -fsSL https://goodvibes.sh/install.sh | sh` runs, fetched from
+`https://github.com/mgd34msu/goodvibes-daemon/releases/latest/download/install.sh`
+— so every binary is verified against its repository's `SHA256SUMS.txt` (a
+missing manifest entry is a hard failure). The installer lives in the daemon's
+repository because the daemon is the product everything else installs alongside;
+there is one copy of it, not one per consumer.
 
 ## Usage
 

@@ -3,7 +3,7 @@ import { resolveArtifactNames, resolveSqliteVecAsset } from '../../runtime/relea
 
 // These names are a wire contract shared by three places that must stay in
 // lockstep: the release workflow (which names the flat assets + SHA256SUMS
-// entries), scripts/install.sh (which downloads and places them), and the
+// entries), the suite installer (which downloads and places them), and the
 // /update self-update path (update-runtime.ts). A change here that isn't
 // mirrored in the other two silently breaks pure-binary vector search.
 

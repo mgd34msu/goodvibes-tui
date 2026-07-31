@@ -35,17 +35,13 @@ jobs:
         # Cross-compiled from Linux; bun-windows-x64 is a supported compile
         # target and produces a PE32+ executable.
         run: bun build src/main.ts --compile --target=bun-windows-x64 --outfile dist/goodvibes-windows-x64.exe
-      - name: Build windows-x64 daemon binary (beta)
-        run: bun build src/daemon/cli.ts --compile --target=bun-windows-x64 --outfile dist/goodvibes-daemon-windows-x64.exe
-      - name: Report binary sizes
-        run: ls -lh dist/goodvibes-windows-x64.exe dist/goodvibes-daemon-windows-x64.exe
+      - name: Report binary size
+        run: ls -lh dist/goodvibes-windows-x64.exe
       - name: Upload windows-x64 beta artifacts
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: windows-x64-beta-binaries
-          path: |
-            dist/goodvibes-windows-x64.exe
-            dist/goodvibes-daemon-windows-x64.exe
+          path: dist/goodvibes-windows-x64.exe
           retention-days: 1
 
   smoke-windows-beta:
@@ -78,19 +74,3 @@ jobs:
             exit 1
           }
           Write-Host "Windows smoke passed: $out"
-      - name: Smoke test — goodvibes-daemon-windows-x64.exe --version
-        shell: pwsh
-        run: |
-          $exe = "dist/goodvibes-daemon-windows-x64.exe"
-          Write-Host "Running $exe --version"
-          $out = & $exe --version 2>&1
-          Write-Host "Output: $out"
-          if ($LASTEXITCODE -ne 0) {
-            Write-Error "goodvibes-daemon-windows-x64.exe --version exited $LASTEXITCODE"
-            exit 1
-          }
-          if ($out -notmatch '^goodvibes-daemon ') {
-            Write-Error "unexpected --version output: $out"
-            exit 1
-          }
-          Write-Host "Windows daemon smoke passed: $out"
