@@ -21,9 +21,9 @@
 |│ SERVICE & NETWORK      │   showThinking        false       boolean    default       false        │|
 |│     Service (6)        │   showReasoningSumma  false       boolean    default       false        │|
 |│     Daemon (3)         │   showTokenSpeed      false       boolean    default       false        │|
-|│     Network (47)       │   showToolPreview     false       boolean    default       false        │|
+|│     Network (48)       │   showToolPreview     false       boolean    default       false        │|
 |│     Control Plane (18  │   themeMode           auto        enum       default       auto         │|
-|│     HTTP Listener (7)  │                                                                         │|
+|│     HTTP Listener (8)  │                                                                         │|
 |│     Web (6)            │                                                                         │|
 |│     Relay (5)          │                                                                         │|
 |│ SURFACES & CLOUD       │                                                                         │|
