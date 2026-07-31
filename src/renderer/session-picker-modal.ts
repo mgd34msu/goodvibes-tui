@@ -110,16 +110,28 @@ function hostedRosterNote(roster: SessionPickerModal['hostedRoster']): string | 
   return null;
 }
 
-/** One hosted row: what it is, what it is doing, and what leaving it would do. */
+/**
+ * One hosted row: the id first, then what it is doing, what leaving it would
+ * do, and finally its title.
+ *
+ * The id leads because it is the ACTIONABLE part — the row exists so `/hosted
+ * attach <id>` can be typed off it — and a narrow terminal clips the tail. What
+ * gets clipped must therefore be the descriptive end of the line, never the
+ * thing the user has to retype.
+ */
 function hostedRowLabel(
   record: SessionPickerModal['hostedRoster']['sessions'][number],
   contentWidth: number,
 ): string {
   const policy = record.effectiveDetachPolicy === 'survive' ? 'survives detach' : 'ends on detach';
   const attached = record.attachedClients.length > 0 ? `${record.attachedClients.length} attached` : 'nobody attached';
+  // Fitted to the content width MINUS the list indent modal-factory adds: at
+  // the full width the row wraps to a second line, which the section's row
+  // accounting does not reserve, and the trailing attach hint is then what the
+  // tail clip eats.
   return fitDisplay(
-    `${record.title || record.id} · ${record.status} · ${policy} · ${attached} · ${record.id}`,
-    contentWidth,
+    `${record.id} · ${record.status} · ${policy} · ${attached} · ${record.title || 'untitled'}`,
+    Math.max(8, contentWidth - 4),
   );
 }
 

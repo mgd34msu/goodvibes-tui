@@ -134,3 +134,55 @@ describe('occasions settings surface — all twelve keys reach the modal, not dr
     expect(CATEGORY_INFO.occasions.length).toBeGreaterThan(20);
   });
 });
+
+/**
+ * Regression coverage for the hostedSessions.* settings the SDK added for
+ * daemon-hosted sessions (Phase B): the detach policy and the bounds around it.
+ *
+ * The same failure class the occasions block above documents, and the fourth
+ * time it has bitten this repo (push.*, cluster.*, occasions.*): a config
+ * prefix with no `SettingsCategory` entry and no SETTINGS_CATEGORY_GROUPS
+ * membership is dropped from the workspace entirely by buildSettingGroups'
+ * `if (groups.has(cat))` guard, leaving a real, schema-declared, daemon-honored
+ * setting reachable only by hand-editing a file. `hostedSessions` had neither
+ * before this round.
+ *
+ * The detach default matters more than most: the owner ruled it stays `kill` —
+ * what closing a client has always done — so a flipped default would silently
+ * change what quitting means. That value is asserted here, not just its
+ * presence.
+ */
+describe('hosted-session settings surface — every key reaches the modal, not dropped', () => {
+  const HOSTED_SETTING_KEYS = [
+    'hostedSessions.detachPolicy',
+    'hostedSessions.maxSessions',
+    'hostedSessions.maxMessagesPerSession',
+    'hostedSessions.terminatedRetentionMs',
+  ] as const;
+
+  test('every hostedSessions.* key lands specifically in the hostedSessions group', () => {
+    const { configManager } = createTestManagers();
+    const groups = buildSettingGroups(configManager);
+    const entries = groups.get('hostedSessions') ?? [];
+    const keys = new Set(entries.map((entry) => entry.setting.key));
+    for (const key of HOSTED_SETTING_KEYS) {
+      expect(findEntry(groups, key), `${key} missing from buildSettingGroups — dropped from the workspace`).toBeDefined();
+      expect(keys.has(key), `${key} not in the 'hostedSessions' group`).toBe(true);
+    }
+  });
+
+  test('the shipped detach default is kill — the behavior closing a client has always had', () => {
+    const { configManager } = createTestManagers();
+    const groups = buildSettingGroups(configManager);
+    const entry = findEntry(groups, 'hostedSessions.detachPolicy');
+    expect(entry!.setting.default).toBe('kill');
+    expect(entry!.isDefault).toBe(true);
+    expect(entry!.setting.description.toLowerCase()).toContain('survive');
+  });
+
+  test('the hostedSessions category has a real label and a non-empty description', () => {
+    expect(CATEGORY_LABELS.hostedSessions).toBeTruthy();
+    expect(CATEGORY_INFO.hostedSessions).toBeTruthy();
+    expect(CATEGORY_INFO.hostedSessions.length).toBeGreaterThan(20);
+  });
+});

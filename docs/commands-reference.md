@@ -6,7 +6,7 @@
 
 # Command Reference
 
-GoodVibes ships **155** built-in slash commands across **75** categories. Every command below is generated directly from the command registry, so this list is always complete and current. Type a command in the composer prefixed with `/`, or press `Ctrl+K` (or run `/palette`) to search them all in the command palette.
+GoodVibes ships **156** built-in slash commands across **75** categories. Every command below is generated directly from the command registry, so this list is always complete and current. Type a command in the composer prefixed with `/`, or press `Ctrl+K` (or run `/palette`) to search them all in the command palette.
 
 ## Categories
 
@@ -71,7 +71,7 @@ GoodVibes ships **155** built-in slash commands across **75** categories. Every 
 - [Security](#security) — 1
 - [Services](#services) — 1
 - [Session Content](#session-content) — 10
-- [Sessions & Replay](#sessions-replay) — 3
+- [Sessions & Replay](#sessions-replay) — 4
 - [Settings Sync](#settings-sync) — 1
 - [Sharing](#sharing) — 1
 - [Shell & Session](#shell-session) — 20
@@ -515,6 +515,7 @@ GoodVibes ships **155** built-in slash commands across **75** categories. Every 
 
 | Command | Aliases | Usage | Description |
 | --- | --- | --- | --- |
+| `/hosted` | — | `[new\|list\|attach\|say\|later\|cancel\|detach\|kill] [args]` | Daemon-hosted sessions: start, join, steer and leave a conversation whose loop runs in the daemon |
 | `/replay` | `/rep` | `[load [runId] \| step [n] \| seek <rev> \| diff \| export <path>]` | Deterministic replay: load, step, seek, diff, and export recorded runs |
 | `/resume` | — | `[session-id-or-name]` | Resume a previous session — pick from a list, or pass an id/name |
 | `/session` | `/sess` | `<subcommand> [args]` | Session lifecycle and orchestration: list, resume, fork, save, export, link-task, handoff, graph, cancel |
