@@ -32,8 +32,7 @@ import {
 } from '@/runtime/index.ts';
 import { bindWriteLastSessionPointerToSurface } from './session-pointer-surface.ts';
 import { foldLegacySpineStore, deriveSpineFooterStatus } from '@pellux/goodvibes-sdk/platform/runtime/session-spine';
-import { createTuiSpineTransport, type SpineSessionsClient } from './session-spine-transport.ts';
-import { syncMemorySpineToHostStatus, type MemorySpineActiveRef } from './memory-spine-transport.ts';
+import { createSpineAdoptionSync } from './client/spine-adoption.ts';
 import { pruneStaleOperatorTokens } from '@pellux/goodvibes-sdk/platform/pairing';
 import { resolveDaemonCompanionToken, workspaceOperatorTokenCandidates } from './operator-token-cleanup.ts';
 import type { UiRuntimeServices } from './ui-services.ts';
@@ -45,7 +44,7 @@ import { announceInstallHealth } from './install-self-check-startup.ts';
 import { buildSharedOrchestratorCoreServices, refreshMemoryRecallSnapshot } from './orchestrator-core-services.ts';
 import { consumeDaemonAttachNotices, consumeExternalDaemonAttachNotices } from './daemon-attach-notices.ts';
 import { wireContextAccountingSource } from './context-accounting-source.ts';
-import { createEmbeddedServiceFactories } from './embedded-service-factories.ts';
+import { autostartInstalledDaemon, createDaemonServiceControl, describeDaemonAutostart } from './client/connected-daemon-autostart.ts';
 import { buildRelayExternalServiceMethods } from './relay-reachability-bridge.ts';
 import { startMcpConfigAutoReload } from '../mcp/runtime-reload.ts';
 
@@ -382,71 +381,16 @@ export async function bootstrapRuntime(
   // mean the configured port is held and unusable by this TUI instance.
   const hostServiceIsBlocked = (status: HostServiceStatus): boolean => status.mode === 'blocked' || status.mode === 'incompatible';
 
-  // PERMANENT DESIGN (docs/decisions/2026-07-06-session-spine-mode-branch-is-permanent.md):
-  // 'embedded'/'external' are two distinct, both-supported daemon topologies, not
-  // migration stages — the ONE client-selection point for the session spine, driven by
-  // the SAME authoritative HostServiceMode adopt-or-start already computed above.
-  // 'embedded' (daemon.embedInProcess=true) means THIS process's own SharedSessionBroker
-  // already IS the daemon's broker — nothing to mirror TO, so the spine stays
-  // permanently dormant. Every other mode ('disabled'/'blocked'/'incompatible'/
-  // 'unavailable') also stays local-only and honest. Only 'external' (a separately-
-  // running daemon this TUI adopted) activates the wire mirror.
-  let spineActiveForBaseUrl: string | null = null;
-  // Same adoption signal drives the memory spine (WO memory-adopt) — see
-  // memory-spine-transport.ts. 'embedded' (this process hosts its own daemon)
-  // stays local: the daemon's canonical store IS this process's own
-  // memoryRegistry, so there is no wire hop to make.
-  const memorySpineActiveRef: MemorySpineActiveRef = { value: null };
-  const syncSessionSpineToHostStatus = (daemonStatus: HostServiceStatus, sharedDaemonToken: string): void => {
-    syncMemorySpineToHostStatus(services.memorySpine, daemonStatus.mode, daemonStatus.baseUrl, sharedDaemonToken, memorySpineActiveRef, logger);
-    if (daemonStatus.mode !== 'external') {
-      if (spineActiveForBaseUrl !== null) {
-        sessionSpine.deactivate(`daemon mode changed to '${daemonStatus.mode}'`);
-        sessionInboundInputs.deactivate(`daemon mode changed to '${daemonStatus.mode}'`);
-        spineActiveForBaseUrl = null;
-      }
-      // Keep the read facade honest per topology (permanent, not staged): 'embedded'
-      // means this process's broker IS the daemon's broker (local reads are the whole
-      // truth); every other non-external mode is local-only/dormant.
-      if (daemonStatus.mode === 'embedded') sessionUnionCache.markEmbedded();
-      else sessionUnionCache.deactivate(`daemon mode '${daemonStatus.mode}'`);
-      logger.info(`[bootstrap] session spine: daemon mode '${daemonStatus.mode}' — local-only (no spine mirror)`);
-      return;
-    }
-    const baseUrl = daemonStatus.baseUrl;
-    if (spineActiveForBaseUrl === baseUrl) return; // already wired to this exact adopted daemon
-    const httpTransport = createHttpTransport({ baseUrl, authToken: sharedDaemonToken });
-    const sessionsClient: SpineSessionsClient = {
-      register: (input) => httpTransport.operator.sessions.register(input),
-      close: (sessionId) => httpTransport.operator.sessions.close(sessionId),
-    };
-    sessionSpine.activate(createTuiSpineTransport(sessionsClient));
-    // Adopt the same daemon's wire for the INBOUND steer path — collect
-    // steer/follow-up inputs another live surface queued for this session and
-    // inject them into the turn machinery (acking delivery on the wire).
-    sessionInboundInputs.activate({
-      listInputs: async (sessionId, opts) => ({
-        inputs: await httpTransport.operator.sessions.inputs(sessionId, opts.limit, { state: opts.state, since: opts.since }),
-      }),
-      deliverInput: (sessionId, inputId, opts) => httpTransport.operator.sessions.deliverInput(sessionId, inputId, opts),
-    });
-    // 'external' only: adopt the same daemon's wire as the read facade's cross-surface
-    // union source (interval-refreshed; served synchronously to panels).
-    sessionUnionCache.activate({ list: (limit) => httpTransport.operator.sessions.list(limit) });
-    spineActiveForBaseUrl = baseUrl;
-    logger.info(`[bootstrap] session spine: adopted external daemon at ${baseUrl} — mirroring session identity`);
-    // Legacy fold: one-time (marker-guarded) import of this project's own
-    // pre-spine control-plane sessions.json into the now-adopted daemon.
-    const legacyStorePath = services.shellPaths.resolveProjectPath('tui', 'control-plane', 'sessions.json');
-    const fold = foldLegacySpineStore(sessionSpine, {
-      storePath: legacyStorePath,
-      markerPath: `${legacyStorePath}.spine-migrated`,
-      project: services.workingDirectory,
-    });
-    if (fold.folded > 0) {
-      logger.info(`[bootstrap] session spine: folded ${fold.folded} legacy local session(s) into the adopted daemon`);
-    }
-  };
+  // Adopting a daemon: session identity, the inbound steer path, the
+  // cross-surface union read, and the memory spine — see client/spine-adoption.ts.
+  const syncSessionSpineToHostStatus = createSpineAdoptionSync({
+    sessionSpine,
+    memorySpine: services.memorySpine,
+    sessionInboundInputs: sessionInboundInputs as unknown as Parameters<typeof createSpineAdoptionSync>[0]['sessionInboundInputs'],
+    sessionUnionCache: sessionUnionCache as unknown as Parameters<typeof createSpineAdoptionSync>[0]['sessionUnionCache'],
+    legacyStorePath: services.shellPaths.resolveProjectPath('tui', 'control-plane', 'sessions.json'),
+    workingDirectory: services.workingDirectory,
+  });
 
   const inspectExternalServices = () => {
     const daemonStatus = externalServices.daemonStatus;
@@ -467,24 +411,57 @@ export async function bootstrapRuntime(
     };
   };
 
-  const waitForConfigDrivenRestarts = async (handle: ExternalServicesHandle): Promise<void> => {
-    const waitForRestart = async (service: unknown): Promise<void> => {
-      const maybeRestarting = service as { waitForRestart?: unknown } | null;
-      if (typeof maybeRestarting?.waitForRestart === 'function') {
-        await maybeRestarting.waitForRestart();
+  // ADOPT ONLY. This app never constructs a DaemonServer or an HttpListener: the
+  // daemon is a separate product with its own binary and its own service unit,
+  // and a second copy embedded here is exactly the drift the split removed. The
+  // factories carry the shared bearer and the daemon's state directory so an
+  // adopted daemon is authenticated the same way it always was — no factory that
+  // BUILDS anything is passed, and `adoptOnly` makes the SDK refuse to start one
+  // even if a future caller did.
+  //
+  // `daemonRuntimeDir` names the daemon's own STATE directory
+  // (`<home>/.goodvibes/daemon`), which is where operator-tokens.json,
+  // auth-users.json and daemon-settings.json live — not the home above it. Every
+  // reader in this repository resolves it that way.
+  const createExternalServiceFactories = (token: string): ExternalServiceFactories => ({
+    sharedDaemonToken: token,
+    daemonRuntimeDir: join(services.homeDirectory, '.goodvibes', 'daemon'),
+    adoptOnly: true,
+  });
+
+  // The one bounded recovery step: a daemon that is INSTALLED on this machine
+  // and simply stopped gets started once and waited for, rather than becoming
+  // the user's homework. Every boundary is in client/connected-daemon-autostart.ts.
+  const maybeStartInstalledDaemon = async (): Promise<void> => {
+    try {
+      const outcome = await autostartInstalledDaemon({
+        daemonMode: externalServices.daemonStatus.mode,
+        control: createDaemonServiceControl({
+          configManager,
+          workingDirectory: services.workingDirectory,
+          homeDirectory: services.homeDirectory,
+        }),
+        isReachable: async () => await sessionSpine.probeReachability() === 'online',
+      });
+      if (outcome.action === 'started' || outcome.action === 'came-online') {
+        const companionTokenRecord = resolveDaemonCompanionToken(join(services.homeDirectory, '.goodvibes', 'daemon'));
+        externalServicesPromise = startExternalServices(
+          configManager, runtimeBus, hookDispatcher, services,
+          createExternalServiceFactories(companionTokenRecord.token),
+        );
+        externalServices = await externalServicesPromise;
+        syncSessionSpineToHostStatus(externalServices.daemonStatus, companionTokenRecord.token);
       }
-    };
-
-    await Promise.all([
-      waitForRestart(handle.daemonServer),
-      waitForRestart(handle.httpListener),
-    ]);
+      const notice = describeDaemonAutostart(
+        outcome,
+        externalServices.daemonStatus.mode === 'external',
+        externalServices.daemonStatus.reason ?? externalServices.daemonStatus.mode,
+      );
+      if (notice) systemMessageRouter[notice.level](notice.text);
+    } catch (error) {
+      logger.debug('Boot-time daemon start check failed', { error: summarizeError(error) });
+    }
   };
-
-  // Embedded DaemonServer/HttpListener factories (incl. the facade auto-update
-  // suppression), plus the daemon STATE directory — see embedded-service-factories.ts.
-  const createExternalServiceFactories = (token: string): ExternalServiceFactories =>
-    createEmbeddedServiceFactories(token, services.clusterCoordinator, services.clusterGroup.verbs, join(services.homeDirectory, '.goodvibes', 'daemon'));
 
   let externalServices: ExternalServicesHandle = {
     daemonServer: null, httpListener: null,
@@ -498,11 +475,13 @@ export async function bootstrapRuntime(
     externalServices: NonNullable<typeof uiServices.platform.externalServices>;
   };
   platformExternalServices.externalServices = {
+    // The relay is a DAEMON feature: the reachability controller lives inside
+    // the DaemonServer, and this app no longer has one. `daemonServer` is
+    // permanently null here, so these two report 'disabled'/null honestly rather
+    // than claiming a relay this process could never have registered. Reading an
+    // adopted daemon's relay state is a verb this contract does not carry yet.
     ...buildRelayExternalServiceMethods(() => externalServices.daemonServer),
     inspect: inspectExternalServices,
-    // Undelivered daemon receipts (update/crash/migration) for the attach-time
-    // consuming read; empty when no daemon runs. Marked delivered once served.
-    collectDaemonReceipts: () => (externalServices.daemonServer as { collectDaemonReceipts?: () => readonly { id: string; text: string; at: number }[] } | null)?.collectDaemonReceipts?.() ?? [],
     restart: async () => {
       if (externalServicesPromise) {
         try {
@@ -511,7 +490,6 @@ export async function bootstrapRuntime(
           // A failed previous startup should not prevent a restart attempt.
         }
       }
-      await waitForConfigDrivenRestarts(externalServices);
       await externalServices.stop();
       const daemonHomeDir = join(services.homeDirectory, '.goodvibes', 'daemon');
       const companionTokenRecord = resolveDaemonCompanionToken(daemonHomeDir);
@@ -530,12 +508,15 @@ export async function bootstrapRuntime(
       return inspectExternalServices();
     },
   };
-  // The attach-time consuming read, exactly once as notices. An adopted EXTERNAL daemon has no in-process handle (daemonServer null), so read its own /status?receipts=consume over HTTP; the embedded daemon keeps the in-process fold.
+  // The attach-time consuming read, exactly once as notices. There is no
+  // in-process daemon handle to fold any more — an adopted daemon's receipts
+  // (update applied, restarted after a crash, settings migrated) are read from
+  // its own /status?receipts=consume, where delivery is destructive so each one
+  // is served to exactly one reader.
   const renderDaemonAttachNotices = async (daemonToken: string): Promise<void> => {
     const daemonStatus = externalServices.daemonStatus;
-    const notices = daemonStatus.mode === 'external' && daemonStatus.baseUrl
-      ? await consumeExternalDaemonAttachNotices({ baseUrl: daemonStatus.baseUrl, authToken: daemonToken })
-      : consumeDaemonAttachNotices({ configManager, collectReceipts: () => platformExternalServices.externalServices.collectDaemonReceipts() });
+    if (daemonStatus.mode !== 'external' || !daemonStatus.baseUrl) return;
+    const notices = await consumeExternalDaemonAttachNotices({ baseUrl: daemonStatus.baseUrl, authToken: daemonToken });
     for (const notice of notices) systemMessageRouter.high(`[Daemon] ${notice}`);
   };
   deferredStartup.schedule({
@@ -596,10 +577,8 @@ export async function bootstrapRuntime(
         createExternalServiceFactories(companionTokenRecord.token),
       );
       externalServices = await externalServicesPromise;
-      // Join the coordination group even with no embedded daemon: the inbox
-      // poller is gated on leadership and nothing else would start it when
-      // daemon.enabled is false. Idempotent with the DaemonServer's own call.
-      await services.startCluster();
+      // Installed-but-stopped recovery, before anything reads the status.
+      await maybeStartInstalledDaemon();
       controlPlaneRecentEventsRef.value = (limit) => externalServices.listRecentControlPlaneEvents(limit);
       syncSessionSpineToHostStatus(externalServices.daemonStatus, companionTokenRecord.token);
       await renderDaemonAttachNotices(companionTokenRecord.token);
