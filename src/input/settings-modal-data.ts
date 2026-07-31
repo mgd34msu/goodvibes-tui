@@ -13,7 +13,7 @@ import type { FeatureFlagManager } from '@/runtime/index.ts';
 import type { McpRegistry } from '@pellux/goodvibes-sdk/platform/mcp';
 import { buildSubscriptionEntries } from './settings-modal-subscriptions.ts';
 import type { SubscriptionManager } from '@pellux/goodvibes-sdk/platform/config';
-import type { ServiceInspectionQuery } from '../runtime/ui-service-queries.ts';
+import type { ServiceInspectionQuery } from '@/runtime/index.ts';
 import { CODE_INDEX_ENABLED_CONFIG_KEY } from '../runtime/code-index-services.ts';
 import {
   WORKTREE_SETUP_CARRY_OVER_GLOBS_CONFIG_KEY,

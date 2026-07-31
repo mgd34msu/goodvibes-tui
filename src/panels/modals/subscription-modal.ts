@@ -1,5 +1,5 @@
 import type { ConfigModalActionContext, ConfigModalSurface, ConfigModalView } from '../../input/config-modal-types.ts';
-import type { ServiceInspectionQuery, SubscriptionAccessQuery } from '../../runtime/ui-service-queries.ts';
+import type { ServiceInspectionQuery, SubscriptionAccessQuery } from '@/runtime/index.ts';
 import type { ProviderSubscription, PendingSubscriptionLogin } from '@pellux/goodvibes-sdk/platform/config';
 import { listBuiltinSubscriptionProviders } from '@pellux/goodvibes-sdk/platform/config';
 import { formatElapsed } from '../../utils/format-elapsed.ts';

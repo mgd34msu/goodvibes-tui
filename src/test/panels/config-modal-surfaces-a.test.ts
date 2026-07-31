@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import { createServicesModalSurface } from '../../panels/modals/services-modal.ts';
 import { createSubscriptionModalSurface } from '../../panels/modals/subscription-modal.ts';
 import { createRemoteModalSurface } from '../../panels/modals/remote-modal.ts';
-import type { ServiceInspectionQuery, SubscriptionAccessQuery } from '../../runtime/ui-service-queries.ts';
+import type { ServiceInspectionQuery, SubscriptionAccessQuery } from '@/runtime/index.ts';
 import type { UiReadModel, UiRemoteSnapshot } from '../../runtime/ui-read-models.ts';
 import type { ConfigModalActionContext, ConfigModalRow } from '../../input/config-modal-types.ts';
 

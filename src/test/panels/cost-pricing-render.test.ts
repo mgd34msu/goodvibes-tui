@@ -12,7 +12,7 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import type { ResolvedModelPricing } from '@pellux/goodvibes-sdk/platform/providers';
 import { RuntimeEventBus, createEventEnvelope } from '@/runtime/index.ts';
-import { createUiRuntimeEvents } from '../../runtime/ui-events.ts';
+import { createUiRuntimeEvents } from '@/runtime/index.ts';
 import { CostTrackerPanel } from '../../panels/cost-tracker-panel.ts';
 import {
   describePricingSource,

@@ -41,7 +41,7 @@ const EMPTY_AUTH_MANAGER = {
     users: [],
     sessions: [],
   }),
-} as unknown as import('../../runtime/ui-service-queries.ts').LocalAuthInspectionQuery;
+} as unknown as import('@/runtime/index.ts').LocalAuthInspectionQuery;
 
 // ---------------------------------------------------------------------------
 // 1. Masked rendering: no plaintext in any rendered line

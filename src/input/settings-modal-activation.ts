@@ -16,7 +16,7 @@ import { buildMcpEntries, buildSubscriptionEntries } from './settings-modal-data
 import { modelPickerLaunchForKey } from './settings-modal-behavior.ts';
 import type { ConfigKey } from '@pellux/goodvibes-sdk/platform/config';
 import type { SubscriptionManager } from '@pellux/goodvibes-sdk/platform/config';
-import type { ServiceInspectionQuery } from '../runtime/ui-service-queries.ts';
+import type { ServiceInspectionQuery } from '@/runtime/index.ts';
 import type { ModelPickerTarget } from './model-picker.ts';
 
 // ---------------------------------------------------------------------------

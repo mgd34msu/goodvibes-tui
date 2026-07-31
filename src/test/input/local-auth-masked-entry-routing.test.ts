@@ -40,7 +40,7 @@ function linesText(lines: Line[]): string {
 }
 
 /** Stub LocalAuthInspectionQuery (display-only) — same shape as the panel tests. */
-const EMPTY_INSPECTION: import('../../runtime/ui-service-queries.ts').LocalAuthInspectionQuery = {
+const EMPTY_INSPECTION: import('@/runtime/index.ts').LocalAuthInspectionQuery = {
   inspect: () => ({
     userStorePath: '/tmp/gv-test-users',
     bootstrapCredentialPath: '/tmp/gv-test-bootstrap',
@@ -51,7 +51,7 @@ const EMPTY_INSPECTION: import('../../runtime/ui-service-queries.ts').LocalAuthI
     users: [],
     sessions: [],
   }),
-} as unknown as import('../../runtime/ui-service-queries.ts').LocalAuthInspectionQuery;
+} as unknown as import('@/runtime/index.ts').LocalAuthInspectionQuery;
 
 /** Build a PanelManager with the LocalAuthPanel type registered. */
 function makePanelManager(): PanelManager {

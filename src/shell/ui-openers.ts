@@ -11,7 +11,7 @@ import type { McpRegistry } from '@pellux/goodvibes-sdk/platform/mcp';
 import type { SubscriptionManager } from '@pellux/goodvibes-sdk/platform/config';
 import type { SecretsManager } from '@pellux/goodvibes-sdk/platform/config';
 import type { MemoryEmbeddingProviderRegistry } from '@pellux/goodvibes-sdk/platform/state';
-import type { ServiceInspectionQuery } from '../runtime/ui-service-queries.ts';
+import type { ServiceInspectionQuery } from '@/runtime/index.ts';
 import type { EmbeddingProviderPickerEntry, ModelPickerTargetInfo } from '../input/model-picker.ts';
 import type { SelectionItem } from '../input/selection-modal.ts';
 import { categorizeBuiltinCommands } from '../input/commands.ts';

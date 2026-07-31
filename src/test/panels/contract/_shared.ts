@@ -72,7 +72,7 @@ export const EMPTY_SERVICE_QUERY = {
   getAll: () => ({} as Record<string, never>),
   inspect: async (_name: string) => null,
   testConnection: async (_name: string) => ({ ok: false, error: 'not connected', durationMs: 0 }),
-} as unknown as import('../../../runtime/ui-service-queries.ts').ServiceInspectionQuery;
+} as unknown as import('@/runtime/index.ts').ServiceInspectionQuery;
 
 export const EMPTY_SUBSCRIPTION_MANAGER = {
   list: () => [],
@@ -107,13 +107,13 @@ export const EMPTY_LOCAL_AUTH_MANAGER = {
     users: [],
     sessions: [],
   }),
-} as unknown as import('../../../runtime/ui-service-queries.ts').LocalAuthInspectionQuery;
+} as unknown as import('@/runtime/index.ts').LocalAuthInspectionQuery;
 
 export const EMPTY_OPS_EVENT_FEED = {
   on: (_event: string, _cb: unknown) => () => {},
   onEnvelope: (_event: string, _cb: unknown) => () => {},
   emit: () => {},
-} as unknown as import('../../../runtime/ui-events.ts').UiEventFeed<never>;
+} as unknown as import('@/runtime/index.ts').UiEventFeed<never>;
 
 export const EMPTY_WORKTREE_REGISTRY = {
   list: async () => [],
@@ -175,7 +175,7 @@ export const EMPTY_TASKS_READ_MODEL = makeReadModelMock({
 
 export const EMPTY_SESSION_MEMORY_QUERY = {
   list: () => [],
-} as unknown as import('../../../runtime/ui-service-queries.ts').SessionMemoryQuery;
+} as unknown as import('@/runtime/index.ts').SessionMemoryQuery;
 
 export const EMPTY_PROJECT_PLANNING_SERVICE = {
   status: async () => ({
@@ -225,7 +225,7 @@ export const EMPTY_TURN_EVENT_FEED = {
   on: (_event: string, _cb: unknown) => () => {},
   onEnvelope: (_event: string, _cb: unknown) => () => {},
   emit: () => {},
-} as unknown as import('../../../runtime/ui-events.ts').UiEventFeed<never>;
+} as unknown as import('@/runtime/index.ts').UiEventFeed<never>;
 
 export const EMPTY_SERVICES_SUBSCRIPTION_QUERY = {
   list: () => [],
@@ -234,7 +234,7 @@ export const EMPTY_SERVICES_SUBSCRIPTION_QUERY = {
   getPending: (_p: string) => null,
   getAccessToken: (_p: string) => null,
   logout: (_p: string) => {},
-} as unknown as import('../../../runtime/ui-service-queries.ts').SubscriptionAccessQuery;
+} as unknown as import('@/runtime/index.ts').SubscriptionAccessQuery;
 
 export type PanelEntry = {
   readonly label: string;

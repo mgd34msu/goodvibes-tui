@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, test } from 'bun:test';
 import type { RuntimeEventBus } from '@/runtime/index.ts';
-import { createUiRuntimeEvents } from '../../../runtime/ui-events.ts';
+import { createUiRuntimeEvents } from '@/runtime/index.ts';
 import { CostTrackerPanel } from '../../../panels/cost-tracker-panel.ts';
 import { createRuntimeBusStub, linesText } from './_shared.ts';
 

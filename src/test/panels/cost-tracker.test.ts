@@ -2,7 +2,7 @@ import { describe, test, expect, beforeEach } from 'bun:test';
 import { getCostFromPricingCatalog } from '@pellux/goodvibes-sdk/platform/providers';
 import type { PricingCatalog } from '@pellux/goodvibes-sdk/platform/providers';
 import { RuntimeEventBus, createEventEnvelope } from '@/runtime/index.ts';
-import { createUiRuntimeEvents } from '../../runtime/ui-events.ts';
+import { createUiRuntimeEvents } from '@/runtime/index.ts';
 import { CostTrackerPanel } from '../../panels/cost-tracker-panel.ts';
 import type { AgentRecord } from '@pellux/goodvibes-sdk/platform/tools';
 

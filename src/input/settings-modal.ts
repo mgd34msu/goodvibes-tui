@@ -20,7 +20,7 @@ import { type ConfigKey } from '@pellux/goodvibes-sdk/platform/config';
 import type { ModelPickerTarget } from './model-picker.ts';
 import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import type { SubscriptionManager } from '@pellux/goodvibes-sdk/platform/config';
-import type { ServiceInspectionQuery } from '../runtime/ui-service-queries.ts';
+import type { ServiceInspectionQuery } from '@/runtime/index.ts';
 import type { SettingsDaemonCredentialWriter, SettingsSecretsManager } from './settings-modal-secrets.ts';
 import { CVV_PROMPT_TRADEOFF_WARNING } from '@pellux/goodvibes-sdk/platform/payments';
 import { PAYMENTS_CVV_HANDLING_CONFIG_KEY } from './payments-config.ts';

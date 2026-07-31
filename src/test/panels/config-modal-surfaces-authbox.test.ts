@@ -4,7 +4,7 @@ import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import { SandboxSessionRegistry } from '@/runtime/index.ts';
 import { createLocalAuthModalSurface } from '../../panels/modals/local-auth-modal.ts';
 import { createSandboxModalSurface } from '../../panels/modals/sandbox-modal.ts';
-import type { LocalAuthInspectionQuery } from '../../runtime/ui-service-queries.ts';
+import type { LocalAuthInspectionQuery } from '@/runtime/index.ts';
 import type { ConfigModalActionContext, ConfigModalRow } from '../../input/config-modal-types.ts';
 import { makeProjectTempDir } from '../helpers/project-temp.ts';
 

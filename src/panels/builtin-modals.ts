@@ -1,7 +1,7 @@
 import type { PanelManager } from './panel-manager.ts';
 import { requireUiServices, type ResolvedBuiltinPanelDeps } from './builtin/shared.ts';
 import type { ConfigModalSurface, ConfigModalView } from '../input/config-modal-types.ts';
-import { createProviderRuntimeInspectionQuery } from '../runtime/ui-service-queries.ts';
+import { createProviderRuntimeInspectionQuery } from '@/runtime/index.ts';
 import { createRuntimeProviderApi } from '@/runtime/index.ts';
 import { copyToClipboard } from '../utils/clipboard.ts';
 import { ensurePublicBaseUrl } from '../core/pairing-origin.ts';
