@@ -46,7 +46,7 @@ import { consumeDaemonAttachNotices, readExternalDaemonAttach } from './daemon-a
 import { wireContextAccountingSource } from './context-accounting-source.ts';
 import { autostartInstalledDaemon, createDaemonServiceControl, describeDaemonAutostart } from '@pellux/goodvibes-sdk/platform/runtime/client';
 import { DaemonBuildFloor } from './client/build-floors.ts';
-import { buildRelayExternalServiceMethods } from './relay-reachability-bridge.ts';
+import { relayReadAccessors } from './relay-reachability-bridge.ts';
 import { startMcpConfigAutoReload } from '../mcp/runtime-reload.ts';
 
 type ExternalServiceFactories = NonNullable<Parameters<typeof startExternalServices>[4]>;
@@ -498,12 +498,11 @@ export async function bootstrapRuntime(
     externalServices: NonNullable<typeof uiServices.platform.externalServices>;
   };
   platformExternalServices.externalServices = {
-    // The relay is a DAEMON feature: the reachability controller lives inside
-    // the DaemonServer, and this app no longer has one. `daemonServer` is
-    // permanently null here, so these two report 'disabled'/null honestly rather
-    // than claiming a relay this process could never have registered. Reading an
-    // adopted daemon's relay state is a verb this contract does not carry yet.
-    ...buildRelayExternalServiceMethods(() => externalServices.daemonServer),
+    // The relay is a DAEMON feature and reading an adopted daemon's relay state
+    // is a verb this contract does not carry, so these two report 'unavailable'
+    // rather than a state this process is in no position to know — see
+    // relay-reachability-bridge.ts.
+    ...relayReadAccessors,
     inspect: inspectExternalServices,
     restart: async () => {
       if (externalServicesPromise) {

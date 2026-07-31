@@ -228,10 +228,11 @@ function renderSandboxSection(sandbox: CliSandboxStatus | null): string[] {
 }
 
 /**
- * The `Relay:` block — config + feature-flag gate only. This CLI invocation is
- * a separate one-shot process from any running daemon, so it cannot read the
- * daemon's live in-memory connection state (see /relay status in the TUI for
- * that). "active" here means the gate that lets a running daemon register.
+ * The `Relay:` block — config + feature-flag gate only. The live registration
+ * state lives in the running daemon's memory and no verb exposes it, so no
+ * client reads it: this CLI reports the gate, and `/relay status` in the
+ * terminal app reports the same gate plus an honest "not readable here" for the
+ * live half. "active" means the gate that lets a running daemon register.
  */
 function renderRelaySection(relay: CliRelayStatus | null): string[] {
   if (!relay) return [];

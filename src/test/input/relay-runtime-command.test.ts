@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { CommandRegistry, type CommandContext } from '../../input/command-registry.ts';
 import { registerRelayRuntimeCommands } from '../../input/commands/relay-runtime.ts';
+import { RELAY_STATE_NOT_READABLE_HERE, relayReadAccessors } from '../../runtime/relay-reachability-bridge.ts';
 
 const RELAY_CONFIG: Record<string, unknown> = {
   'relay.enabled': true,
@@ -69,6 +70,31 @@ describe('/relay command', () => {
       externalServices: { relayStatus: () => 'reconnecting', mintRelayPairing: async () => null },
     }));
     expect(out.join('\n')).toContain('Relay: offline');
+  });
+
+  test('the shipped accessors report the relay state as unreadable here, never as off', async () => {
+    // The state is real and lives in the daemon; 'disabled' would tell an
+    // operator whose daemon IS registered that their relay is turned off.
+    const registry = new CommandRegistry();
+    registerRelayRuntimeCommands(registry);
+    const out: string[] = [];
+    await registry.execute('relay', ['status'], ctx({ out, externalServices: relayReadAccessors }));
+    const text = out.join('\n');
+    expect(text).toContain('Relay: unavailable');
+    expect(text).toContain(RELAY_STATE_NOT_READABLE_HERE);
+    expect(text).not.toContain('live connection state:');
+    // The configuration half is this terminal's own and is still reported.
+    expect(text).toContain('abc123');
+  });
+
+  test('pair says why it cannot mint rather than blaming an unregistered relay', async () => {
+    const registry = new CommandRegistry();
+    registerRelayRuntimeCommands(registry);
+    const out: string[] = [];
+    await registry.execute('relay', ['pair'], ctx({ out, externalServices: relayReadAccessors }));
+    const text = out.join('\n');
+    expect(text).toContain(RELAY_STATE_NOT_READABLE_HERE);
+    expect(text).not.toContain('may not be registered yet');
   });
 
   test('pair prints the encoded payload and a QR block when minting succeeds', async () => {

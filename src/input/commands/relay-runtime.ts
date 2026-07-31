@@ -1,13 +1,20 @@
 import type { CommandContext } from '../command-registry.ts';
 import type { CommandRegistry } from '../command-registry.ts';
 import { generateQrMatrix, renderQrToString } from '@pellux/goodvibes-sdk/platform/pairing';
+import { RELAY_STATE_NOT_READABLE_HERE } from '../../runtime/relay-reachability-bridge.ts';
 
 /**
- * Register the /relay command — reachability status and QR-encodable pairing
- * for the SDK's outbound zero-knowledge relay (relay.* settings, gated by the
- * `relay-connect` feature flag). The live registration state lives only in
- * the running daemon's memory (`DaemonServer.getRelayReachability()`), reached
- * here through `ctx.platform.externalServices` — see relay-reachability-bridge.ts.
+ * Register the /relay command — the relay's configuration, its reachability
+ * state, and a QR-encodable pairing payload for the SDK's outbound
+ * zero-knowledge relay (relay.* settings, gated by the `relay-connect` feature
+ * flag).
+ *
+ * The CONFIGURATION half is read here, from this terminal's own config. The
+ * LIVE half is not: registration state and pairing live in the running daemon's
+ * memory (`DaemonServer.getRelayReachability()`), and no verb exposes either to
+ * a client — so both read 'unavailable' with the reason said out loud rather
+ * than a state this terminal is in no position to know. See
+ * relay-reachability-bridge.ts.
  */
 
 function relayConfigured(ctx: CommandContext): { enabled: boolean; url: string; rendezvousId: string; label: string; flagOn: boolean } {
@@ -32,14 +39,16 @@ async function renderStatus(ctx: CommandContext): Promise<void> {
     ].join('\n'));
     return;
   }
-  const live = ctx.platform.externalServices?.relayStatus() ?? 'disabled';
-  const state = live === 'registered' ? 'registered' : live === 'disabled' ? 'disabled' : 'offline';
+  const live = ctx.platform.externalServices?.relayStatus() ?? 'unavailable';
+  const state = live === 'registered' || live === 'disabled' || live === 'unavailable' ? live : 'offline';
   ctx.print([
     `Relay: ${state}`,
     `  rendezvous id: ${cfg.rendezvousId || '(not yet minted — start the daemon to generate one)'}`,
     `  url: ${cfg.url || '(not set)'}`,
     `  label: ${cfg.label || '(not set)'}`,
-    `  live connection state: ${live}`,
+    state === 'unavailable'
+      ? `  ${RELAY_STATE_NOT_READABLE_HERE}`
+      : `  live connection state: ${live}`,
     '  The relay operator sees only ciphertext and connection metadata — self-host your own relay for full control.',
   ].join('\n'));
 }
@@ -57,7 +66,7 @@ async function renderPair(ctx: CommandContext): Promise<void> {
   }
   const minted = await externalServices.mintRelayPairing();
   if (!minted) {
-    ctx.print('Could not mint a relay pairing payload — the relay connection may not be registered yet. Check /relay status.');
+    ctx.print(`Relay pairing cannot be minted from here. ${RELAY_STATE_NOT_READABLE_HERE}`);
     return;
   }
   const qrMatrix = generateQrMatrix(minted.encoded);
