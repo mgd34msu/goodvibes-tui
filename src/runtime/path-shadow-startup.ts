@@ -33,7 +33,7 @@ import {
   scanCommandShadows,
   splitPathEntries,
   type ShadowScanResult,
-} from './path-shadow.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/path-shadow';
 import { buildReachabilityNotices, type ReachabilityNotice } from './reachability-notice.ts';
 import { VERSION } from '../version.ts';
 import type { SystemMessageRouter } from '../core/system-message-router.ts';

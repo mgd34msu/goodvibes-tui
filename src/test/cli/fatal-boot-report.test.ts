@@ -39,7 +39,7 @@ import {
   reportFatalBootFailure,
   writeExitingStdoutLine,
   writeFatalLine,
-} from '../../cli/fatal-boot-report.ts';
+} from '@pellux/goodvibes-sdk/platform/daemon';
 
 const REPO_ROOT = process.cwd();
 /** The runs themselves fail fast — anything near this is a hang, not a write. */
@@ -58,7 +58,7 @@ interface InlineRun {
  */
 function runInlineWriter(body: string): InlineRun {
   const dir = makeProjectTempDir('gv-fatal-inline');
-  const modulePath = join(REPO_ROOT, 'src', 'cli', 'fatal-boot-report.ts');
+  const modulePath = '@pellux/goodvibes-sdk/platform/daemon';
   const script = join(dir, 'inline.ts');
   writeFileSync(
     script,

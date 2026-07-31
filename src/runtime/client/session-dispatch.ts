@@ -35,15 +35,17 @@
 import { logger, summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 import type { SharedSessionInputRecord } from '@pellux/goodvibes-sdk/platform/control-plane';
 import type { SessionContinuationDispatch } from '@pellux/goodvibes-sdk/platform/runtime/client-services';
+import type { SharedSessionContinuationRunner } from '@pellux/goodvibes-sdk/platform/control-plane';
 import type { SpineInboundInputsClient } from '../session-inbound-inputs.ts';
 
 /**
- * The runner shape the SDK's dispatch seam binds. Declared structurally rather
- * than imported: `SharedSessionContinuationRunner` lives on a control-plane
- * module the package does not re-export, and re-declaring the two fields a
- * caller passes is honest about how little of it this seam uses.
+ * The runner shape the SDK's dispatch seam binds. Named structurally here while
+ * `SharedSessionContinuationRunner` was the one member of its module the
+ * control-plane barrel did not re-export; it does now, so this is the SDK's own
+ * type under the name this seam already used. The `| null` is the setter's own
+ * "unbind" argument, which the structural form picked up from the signature.
  */
-type ContinuationRunner = Parameters<SessionContinuationDispatch['setContinuationRunner']>[0];
+type ContinuationRunner = SharedSessionContinuationRunner | null;
 
 const DEFAULT_INTERVAL_MS = 2_000;
 

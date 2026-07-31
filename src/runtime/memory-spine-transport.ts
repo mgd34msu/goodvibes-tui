@@ -63,12 +63,8 @@ import type {
   MemorySearchFilter,
   MemorySemanticSearchResult,
 } from '@pellux/goodvibes-sdk/platform/state';
-import type { MemoryVectorStats } from '@pellux/goodvibes-sdk/platform/state';
+import type { MemoryImportResult, MemoryReviewPatch, MemoryVectorStats } from '@pellux/goodvibes-sdk/platform/state';
 
-/** Derived from `MemoryAccess` itself rather than imported by name — `MemoryReviewPatch` is not re-exported from the SDK's public `platform/state` entry point. */
-type MemoryReviewPatch = Parameters<MemoryAccess['updateReview']>[1];
-/** Same reasoning — `MemoryImportResult` is not re-exported from a public SDK entry point. */
-type MemoryImportResult = Awaited<ReturnType<MemoryAccess['importBundle']>>;
 
 /**
  * The 404 discriminator and the "daemon does not serve this verb" rejection are

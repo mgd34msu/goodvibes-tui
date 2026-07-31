@@ -4,7 +4,7 @@ import {
   resolveSelfDirectory,
 } from '../../runtime/path-shadow-startup.ts';
 import { buildReachabilityNotices, reachabilityNoticeLines } from '../../runtime/reachability-notice.ts';
-import { scanCommandShadows } from '../../runtime/path-shadow.ts';
+import { scanCommandShadows } from '@pellux/goodvibes-sdk/platform/runtime/path-shadow';
 
 /**
  * The startup reachability check: does this running build say so when the

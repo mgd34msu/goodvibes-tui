@@ -6,7 +6,7 @@ import { hasResumableWizardProgress, readOnboardingCheckMarker, readWizardProgre
 import { startOnboardingFastPath } from '../runtime/onboarding/fast-path.ts';
 import { checkRecoveryForSession, readLastSessionPointer, type SessionSurface } from '@/runtime/index.ts';
 import { logger } from '@pellux/goodvibes-sdk/platform/utils';
-import { writeFatalLine } from './fatal-boot-report.ts';
+import { writeFatalLine } from '@pellux/goodvibes-sdk/platform/daemon';
 import { offerRecoverySnapshot } from '../runtime/recovery-prompt.ts';
 import { buildRecoveryOfferWiring } from '../runtime/recovery-offer-wiring.ts';
 import type { ConversationManager } from '../core/conversation.ts';
