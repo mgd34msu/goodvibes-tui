@@ -90,10 +90,22 @@ function isTestSource(path: string): boolean {
   return path.includes('/src/test/') || path.endsWith('.test.ts') || path.includes('/__tests__/');
 }
 
+/**
+ * Paths named by a rule that no longer exist.
+ *
+ * A rule scoped to a directory that has since moved out of this repository
+ * matches nothing and passes, forever, while reading as if it were still
+ * guarding something. That is worse than no rule at all, so a named-but-missing
+ * path is a failure of THIS file, reported at the end beside the violations it
+ * would otherwise have hidden.
+ */
+const missingRuleTargets = new Set<string>();
+
 function expandTargets(targets: readonly string[]): string[] {
   return targets.flatMap((target) => {
     const abs = join(ROOT, target);
     if (!existsSync(abs)) {
+      missingRuleTargets.add(target);
       return [];
     }
     const stats = statSync(abs);
@@ -102,6 +114,22 @@ function expandTargets(targets: readonly string[]): string[] {
     }
     return [abs];
   });
+}
+
+/**
+ * An exemption for a file that is gone is the same defect in the other
+ * direction: it reads as a deliberate carve-out and exempts nothing.
+ */
+function checkAllowEntries(rulesToCheck: readonly Rule[]): string[] {
+  const stale: string[] = [];
+  for (const rule of rulesToCheck) {
+    for (const entry of rule.allow ?? []) {
+      if (!existsSync(join(ROOT, entry))) {
+        stale.push(`[${rule.name}] allow-entry names a file that does not exist: ${entry}`);
+      }
+    }
+  }
+  return stale;
 }
 
 function isGenericObjectSchema(schema: Record<string, unknown> | undefined): boolean {
@@ -317,25 +345,25 @@ const LAYER_BOUNDARY_RULES: readonly LayerBoundaryRule[] = [
     // or daemon process management would create a hard dependency on entrypoint
     // concerns that the UI layer must never own.
     name: 'renderer-no-entrypoints',
-    rationale: 'renderer is a pure UI layer and must not depend on CLI/daemon entrypoints',
+    rationale: 'renderer is a pure UI layer and must not depend on the CLI entrypoint',
     fromLayers: new Set(['renderer']),
-    toLayers: new Set(['cli', 'daemon']),
+    toLayers: new Set(['cli']),
   },
   {
     // Rationale: input handles keystrokes and user interactions; it must not pull in
     // CLI argument parsing or daemon lifecycle — those are entrypoint concerns.
     name: 'input-no-entrypoints',
-    rationale: 'input is a pure event-handling layer and must not depend on CLI/daemon entrypoints',
+    rationale: 'input is a pure event-handling layer and must not depend on the CLI entrypoint',
     fromLayers: new Set(['input']),
-    toLayers: new Set(['cli', 'daemon']),
+    toLayers: new Set(['cli']),
   },
   {
     // Rationale: panels are reusable UI widgets; importing CLI or daemon would
     // make them entrypoint-specific and prevent reuse across surfaces.
     name: 'panels-no-entrypoints',
-    rationale: 'panels are reusable UI widgets and must not depend on CLI/daemon entrypoints',
+    rationale: 'panels are reusable UI widgets and must not depend on the CLI entrypoint',
     fromLayers: new Set(['panels']),
-    toLayers: new Set(['cli', 'daemon']),
+    toLayers: new Set(['cli']),
   },
   {
     // Rationale: config is the lowest-level configuration layer used everywhere;
@@ -343,9 +371,9 @@ const LAYER_BOUNDARY_RULES: readonly LayerBoundaryRule[] = [
     // and prevents config from being used in headless/daemon contexts.
     name: 'config-no-shell-ui',
     rationale:
-      'config is a foundational layer used in all contexts (TUI, daemon, SDK) and must not depend on shell-UI',
+      'config is a foundational layer read in every context, headless included, and must not depend on shell-UI',
     fromLayers: new Set(['config']),
-    toLayers: new Set(['renderer', 'input', 'panels', 'cli', 'daemon']),
+    toLayers: new Set(['renderer', 'input', 'panels', 'cli']),
   },
   {
     // Rationale: providers supply LLM/API abstractions used by core and runtime;
@@ -354,15 +382,7 @@ const LAYER_BOUNDARY_RULES: readonly LayerBoundaryRule[] = [
     rationale:
       'providers are headless LLM abstractions and must not depend on shell-UI or entrypoints',
     fromLayers: new Set(['providers']),
-    toLayers: new Set(['renderer', 'input', 'panels', 'cli', 'daemon']),
-  },
-  {
-    // Rationale: channels are the async event-delivery layer used by runtime and
-    // daemon; they must not import shell-UI to remain usable without a TUI.
-    name: 'channels-no-shell-ui',
-    rationale: 'channels are headless event delivery and must not depend on shell-UI layers',
-    fromLayers: new Set(['channels']),
-    toLayers: new Set(['renderer', 'input', 'panels']),
+    toLayers: new Set(['renderer', 'input', 'panels', 'cli']),
   },
   {
     // Rationale: audio handles TTS and media playback; it is wired into the UI
@@ -371,16 +391,6 @@ const LAYER_BOUNDARY_RULES: readonly LayerBoundaryRule[] = [
     rationale: 'audio is a headless media layer and must not import shell-UI or CLI entrypoints',
     fromLayers: new Set(['audio']),
     toLayers: new Set(['renderer', 'input', 'panels', 'cli']),
-  },
-  {
-    // Rationale: daemon manages the background process and serves HTTP; importing
-    // shell-UI would make the daemon depend on Ink/TUI rendering, which is
-    // incompatible with headless daemon operation.
-    name: 'daemon-no-shell-ui',
-    rationale:
-      'daemon is a headless background process and must not import TUI shell-UI layers',
-    fromLayers: new Set(['daemon']),
-    toLayers: new Set(['renderer', 'input', 'panels']),
   },
 ];
 
@@ -448,7 +458,6 @@ const rules: readonly Rule[] = [
     name: 'no-ambient-integration-helper-usage',
     files: nonTestFiles,
     pattern: /\b(setIntegrationHelpersContext|clearIntegrationHelpersContext|getIntegrationHelpersContextOptional|getLegacyIntegrationHelperService)\b/,
-    allow: ['src/runtime/integration/helpers.ts'],
     message: 'ambient integration-helper access is forbidden outside the helper module',
   },
   {
@@ -466,91 +475,23 @@ const rules: readonly Rule[] = [
   },
   {
     name: 'no-singleton-core-lookups-in-adapters',
-    files: expandTargets([
-      'src/daemon',
-      'src/control-plane/routes',
-      'src/runtime/bootstrap.ts',
-      'src/runtime/bootstrap-services.ts',
-      'src/daemon/cli.ts',
-      'src/daemon/control-plane.ts',
-    ]),
+    files: expandTargets(['src/runtime/bootstrap.ts']),
     pattern: /\b(AutomationManager|SharedSessionBroker|ApprovalBroker|RouteBindingManager|SurfaceRegistry|WatcherRegistry|ChannelPolicyManager)\.getInstance\(|\bgetDistributedRuntimeManager\(/,
     message: 'adapter/composition code must use explicit RuntimeServices ownership instead of singleton lookups',
-  },
-  {
-    name: 'no-service-active-lookups-in-adapters',
-    files: expandTargets([
-      'src/daemon',
-      'src/control-plane/routes',
-      'src/channels/delivery',
-    ]),
-    pattern: /\b(ArtifactStore|KnowledgeService|VoiceService|WebSearchService|MediaProviderRegistry|MultimodalService|GatewayMethodCatalog|ControlPlaneGateway)\.getActive\(/,
-    message: 'adapter-layer code must receive app-owned services instead of pulling active instances',
   },
   {
     name: 'no-singleton-lookups-in-shell-bridges',
     files: expandTargets([
       'src/main.ts',
       'src/runtime/bootstrap-command-context.ts',
-      'src/runtime/bootstrap-runtime-events.ts',
-      'src/panels/control-plane-panel.ts',
-      'src/channels/builtin-runtime.ts',
-      'src/channels/builtin/rendering.ts',
     ]),
     pattern: /\b(AutomationManager|SharedSessionBroker|ApprovalBroker|AgentManager|ModeManager|ChannelPolicyManager|FileUndoManager)\.getInstance\(|\bChannelDeliveryRouter\.getActive\(/,
     message: 'shell adapters and builtin channel bridges must receive explicit app-owned dependencies',
   },
   {
-    name: 'future-foundation-surfaces-no-server-or-shell-imports',
-    files: expandTargets([
-      'src/runtime/operator-client.ts',
-      'src/runtime/peer-client.ts',
-      'src/runtime/transports',
-      'src/runtime/runtime-provider-api.ts',
-      'src/runtime/runtime-knowledge-api.ts',
-      'src/runtime/runtime-hook-api.ts',
-      'src/runtime/runtime-mcp-api.ts',
-      'src/providers/provider-api.ts',
-      'src/knowledge/knowledge-api.ts',
-      'src/hooks/hook-api.ts',
-      'src/mcp/mcp-api.ts',
-    ]),
-    pattern: /from ['"][.\/]+(?:\.\.\/)*(?:daemon|input|panels|renderer)(?:\/|\.ts['"])/,
-    message: 'future foundation/client surfaces must not depend on daemon or shell modules',
-  },
-  {
-    name: 'future-server-surfaces-no-shell-imports',
-    files: expandTargets([
-      'src/daemon',
-      'src/control-plane/routes',
-    ]),
-    pattern: /from ['"][.\/]+(?:\.\.\/)*(?:input|panels|renderer)(?:\/|\.ts['"])/,
-    message: 'future server surfaces must not depend on TUI shell modules',
-  },
-  {
-    name: 'no-raw-generic-object-contract-schemas',
-    files: expandTargets([
-      'src/control-plane/operator-contract-schemas-admin.ts',
-      'src/control-plane/operator-contract-schemas-channels.ts',
-      'src/control-plane/operator-contract-schemas-knowledge.ts',
-      'src/control-plane/operator-contract-schemas-media.ts',
-      'src/control-plane/operator-contract-schemas-permissions.ts',
-      'src/control-plane/operator-contract-schemas-remote.ts',
-      'src/control-plane/operator-contract-schemas.ts',
-      'src/control-plane/media-contract-schemas.ts',
-      'src/control-plane/operator-contract.ts',
-    ]),
-    pattern: /\bJSON_OBJECT_SCHEMA\b/,
-    message: 'contract schema modules must use explicit DTO schemas or named typed JSON record/document schemas instead of raw JSON_OBJECT_SCHEMA',
-  },
-  {
     name: 'no-implicit-project-root-literals',
     files: nonTestFiles,
-    allow: [
-      'src/main.ts',
-      'src/daemon/cli.ts',
-      'src/runtime/worktree/registry.ts',
-    ],
+    allow: ['src/main.ts'],
     pattern: /join\(\s*['"]\.goodvibes['"]|join\(\s*['"]\.['"]\s*,\s*['"]\.goodvibes['"]|workspaceRoot:\s*['"]\.['"]/,
     message: 'reusable code must not hide project-root ownership behind relative .goodvibes paths or "." workspace roots; inject explicit owned roots instead',
   },
@@ -559,7 +500,6 @@ const rules: readonly Rule[] = [
     files: nonTestFiles,
     allow: [
       'src/main.ts',
-      'src/daemon/cli.ts',
       // The one place either root is allowed to ask. It exists BECAUSE the two
       // roots each answered separately and the client's answer ignored
       // GOODVIBES_HOME, so a redirected process wrote into the real tree. Every
@@ -797,6 +737,37 @@ const internalIdentifierCandidates = [
 
 for (const v of checkNoInternalIdentifiers(internalIdentifierCandidates)) {
   violations.push(v);
+}
+
+// ─── Rules that guard nothing ─────────────────────────────────────────────────
+
+// A layer is a top-level src/ directory. A boundary rule naming one that is not
+// there matches nothing — the same vacuous-pass class as a missing rule target,
+// reached through the other half of the engine.
+const liveLayers = new Set(
+  readdirSync(SRC_ROOT, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => entry.name),
+);
+for (const rule of LAYER_BOUNDARY_RULES) {
+  for (const layer of [...rule.fromLayers, ...rule.toLayers]) {
+    if (!liveLayers.has(layer)) {
+      violations.push(
+        `[${rule.name}] names the layer "${layer}", which is not a directory under src/ —`
+        + ' the rule matches nothing; remove the layer (and the rule, if nothing live is left)',
+      );
+    }
+  }
+}
+
+for (const stale of checkAllowEntries(rules)) {
+  violations.push(stale);
+}
+for (const target of [...missingRuleTargets].sort()) {
+  violations.push(
+    `a rule is scoped to "${target}", which does not exist — the rule matches nothing and passes vacuously;`
+    + ' remove the path (and the rule, if it has no live paths left) or correct it',
+  );
 }
 
 // ─── Report ───────────────────────────────────────────────────────────────────
