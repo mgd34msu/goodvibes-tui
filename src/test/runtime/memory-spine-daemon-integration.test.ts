@@ -11,9 +11,13 @@
  *     detached copy — the one-writer invariant, proven, not asserted;
  *   - a recall-honesty degraded reason (indexUnavailableReason) survives the
  *     wire transport to the caller unchanged (a spy transport, since forcing a
- *     real sqlite-vec unavailability is not a deterministic condition to boot);
- *   - deactivation on daemon loss reverts the spine to local access, logging the
- *     SDK's own honest note, and further writes land on the local store again.
+ *     real sqlite-vec unavailability is not a deterministic condition to boot).
+ *
+ * Deactivation-on-daemon-loss is NOT covered here any more: it exercised
+ * `syncMemorySpineToHostStatus`, retired in the memory-spine SDK convergence
+ * (2026-07-31) in favor of the SDK's own `createSpineAdoptionSync`, whose
+ * adoption policy (including deactivate-on-loss) is pinned in the SDK's own
+ * test suite.
  */
 import { afterEach, describe, expect, test } from 'bun:test';
 import { rmSync } from 'node:fs';
@@ -21,7 +25,7 @@ import { bootDaemon, type BootedDaemon } from '@pellux/goodvibes-sdk/platform/da
 import { MemorySpineClient } from '@pellux/goodvibes-sdk/platform/runtime/memory-spine';
 import type { MemoryAccess, MemoryTransport } from '@pellux/goodvibes-sdk/platform/runtime/memory-spine';
 import type { MemoryLink, MemoryRecord } from '@pellux/goodvibes-sdk/platform/state';
-import { createTuiMemorySpineTransport, syncMemorySpineToHostStatus, type MemorySpineActiveRef } from '../../runtime/memory-spine-transport.ts';
+import { createTuiMemorySpineTransport } from '../../runtime/memory-spine-transport.ts';
 import { makeProjectTempDir } from '../helpers/project-temp.ts';
 
 const TOKEN = 'memory-spine-integration-token';
@@ -325,35 +329,10 @@ describe('memory-spine recall honesty passthrough', () => {
   }, TEST_BUDGET_MS);
 });
 
-describe('memory-spine deactivation on daemon loss', () => {
-  test('reverts to local access with the SDK\'s own honest logged note; further writes land locally', async () => {
-    const { access: local, records } = createFakeLocalAccess();
-    const notes: Array<{ message: string; meta: unknown }> = [];
-    const client = new MemorySpineClient({
-      local,
-      log: { debug: () => {}, info: (message, meta) => { notes.push({ message, meta }); } },
-    });
-    const activeRef: MemorySpineActiveRef = { value: null };
-    const log = { info: () => {} };
-
-    // Adopt an external daemon (fake baseUrl — this test only exercises the
-    // activate/deactivate state machine, not a live wire round-trip).
-    syncMemorySpineToHostStatus(client, 'external', 'http://127.0.0.1:9', 'tok', activeRef, log);
-    expect(client.mode()).toBe('client');
-    expect(activeRef.value).toBe('http://127.0.0.1:9');
-
-    // Daemon lost — mode changes away from 'external'.
-    syncMemorySpineToHostStatus(client, 'unavailable', 'http://127.0.0.1:9', 'tok', activeRef, log);
-    expect(client.mode()).toBe('local');
-    expect(activeRef.value).toBeNull();
-
-    // The SDK client itself logs the honest note on deactivate — not a silent flip.
-    const deactivateNote = notes.find((n) => n.message.includes('deactivated'));
-    expect(deactivateNote?.message).toBe('memory spine deactivated — reverting to owned-local memory access');
-    expect(deactivateNote?.meta).toEqual({ reason: "daemon mode changed to 'unavailable'" });
-
-    // A write now lands on the LOCAL store again, not any wire target.
-    const record = await client.add({ cls: 'fact', summary: 'back to local after daemon loss' });
-    expect(records.has(record.id)).toBe(true);
-  }, TEST_BUDGET_MS);
-});
+// Note: the previous "memory-spine deactivation on daemon loss" block here
+// exercised `syncMemorySpineToHostStatus`, which was retired in the
+// memory-spine SDK convergence (2026-07-31): activation is now folded into
+// the SDK's `createSpineAdoptionSync` (see `spine-adoption.ts`), and that
+// adoption policy — including deactivate-on-loss reverting to local access —
+// is pinned in the SDK's own test suite
+// (test/client-seam-spine-adoption.test.ts), not duplicated here.
