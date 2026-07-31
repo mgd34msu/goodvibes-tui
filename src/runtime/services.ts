@@ -97,6 +97,8 @@ import { createDaemonConfigClient } from './client/config-client.ts';
 import { createDaemonCredentialsClient } from './client/credentials-client.ts';
 import { createDevicesClient } from './client/devices-client.ts';
 import { createWireSessionDispatch } from './client/session-dispatch.ts';
+import { createFleetUnionReadModel } from './client/fleet-union.ts';
+import { createFleetReadModel } from '../panels/fleet-read-model.ts';
 import type { PermissionPromptDecision, PermissionPromptRequest } from '@pellux/goodvibes-sdk/platform/permissions';
 import type { RuntimeServicesOptions, RuntimeServices } from './runtime-services-types.ts';
 export type { RuntimeServicesOptions, RuntimeServices } from './runtime-services-types.ts';
@@ -419,6 +421,16 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
     runtimeBus: options.runtimeBus,
     providerRegistry,
   });
+  // What the Fleet panel reads: this surface's own live registry UNION the
+  // adopted daemon's rows. The daemon runs work no registry here knows about
+  // (scheduled jobs, channel-driven runs, sessions other surfaces started, the
+  // external agents it observes), and a panel showing only half the fleet is
+  // worse than one showing none — the half it shows looks complete.
+  const fleetReadModel = createFleetUnionReadModel({
+    local: createFleetReadModel(processRegistry, options.runtimeBus),
+    verbs,
+  });
+  disposalScope.registry.add('fleet union refresh', () => fleetReadModel.stop());
   const workspaceCheckpointManager = createWorkspaceCheckpointing({ workspaceRoot: workingDirectory, surface, runtimeBus: options.runtimeBus, configManager });
   const { memoryConsolidationScheduler, powerManager, sessionLiveTurnControls } = wireIdlePowerAndLiveTurn({ configManager, memoryRegistry, runtimeBus: options.runtimeBus, isIdle: () => sessionBroker.countBusySessions() === 0 && !pauseController.isPaused('memory-consolidation') && admitExpensiveWork('memory consolidation').allowed, snapshotTick: () => storeSnapshotScheduler.tick(), heartbeat: async () => { await automationManager.triggerHeartbeat({ source: 'wake-catchup' }); }, powerSeam: options.powerSeam });
 
@@ -605,6 +617,7 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
     pauseController,
     sessionLiveTurnControls,
     processRegistry,
+    fleetReadModel,
     modeManager,
     fileUndoManager,
     workspaceCheckpointManager,

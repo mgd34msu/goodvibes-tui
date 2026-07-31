@@ -84,6 +84,14 @@ export function resolveOperatorRpc(deps: {
   readonly homeDirectory: string | (() => string);
 }): OperatorRpc {
   const { configManager } = deps;
+  // A refusal is a VALUE here, never a throw — that is the whole contract of
+  // this function, and callers rely on it to print an honest line rather than
+  // crash a keystroke. A context whose config manager cannot answer (a narrow
+  // embed, a partially-wired test double) is one more case of "no daemon can be
+  // resolved", not an exception to raise from a probe.
+  if (typeof (configManager as { get?: unknown } | null)?.get !== 'function') {
+    return { available: false, reason: 'no config manager is wired here, so no control-plane daemon can be resolved.' };
+  }
   if (!resolveDaemonEnabled(configManager)) {
     return { available: false, reason: 'the daemon is disabled (daemon.enabled=false) — no operator surface to reach. Enable it in /settings, then retry.' };
   }

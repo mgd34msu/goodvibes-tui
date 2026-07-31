@@ -117,6 +117,8 @@ export interface UiRuntimeSharedServices {
     readonly remoteSupervisor: RuntimeServices['remoteSupervisor'] & RemoteSupervisor;
     /** the shared live process registry backing the Fleet panel. */
     readonly processRegistry: RuntimeServices['processRegistry'];
+    /** The Fleet panel's read model: local rows union the adopted daemon's. */
+    readonly fleetReadModel: RuntimeServices['fleetReadModel'];
     /** The shared runtime event bus — the Fleet panel subscribes to its 'communication' domain for the honest steer-consumed signal. */
     readonly runtimeBus: RuntimeServices['runtimeBus'];
   };
@@ -210,6 +212,7 @@ export function createUiRuntimeServices(
       remoteRunnerRegistry: runtimeServices.remoteRunnerRegistry,
       remoteSupervisor: runtimeServices.remoteSupervisor,
       processRegistry: runtimeServices.processRegistry,
+      fleetReadModel: runtimeServices.fleetReadModel,
       runtimeBus: runtimeServices.runtimeBus,
     },
     events: createUiRuntimeEvents(runtimeServices.runtimeBus),

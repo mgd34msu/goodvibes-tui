@@ -40,6 +40,9 @@ import { createDaemonVerbCaller, type DaemonVerbCaller } from '../../runtime/cli
 import { createDaemonConfigClient } from '../../runtime/client/config-client.ts';
 import { createDaemonCredentialsClient } from '../../runtime/client/credentials-client.ts';
 import { createDevicesClient } from '../../runtime/client/devices-client.ts';
+import { createTasksClient } from '../../runtime/client/tasks-client.ts';
+import { createFleetUnionReadModel } from '../../runtime/client/fleet-union.ts';
+import { buildFleetSnapshot, createStaticFleetReadModel } from '../../panels/fleet-read-model.ts';
 import { makeProjectTempDir } from '../helpers/project-temp.ts';
 
 /** A port well clear of the daemon's default 3421 and of anything an install uses. */
@@ -247,9 +250,50 @@ if (!binary) {
       await credentials.clear(configKey);
     });
 
-    test('S11 tasks: the task list is served by the daemon, not by an in-process catalog', async () => {
-      const rows = readList<unknown>(await verbs.invoke('tasks.list', {}), 'tasks');
-      expect(Array.isArray(rows)).toBe(true);
+    test('S11 tasks: the union reader reaches the daemon and keeps the local half separable', async () => {
+      // Driven through the product's own union client, so what is exercised is
+      // the verb id, the wrapper key the tasks array actually arrives under,
+      // and the local-wins dedupe — not a hand-rolled fetch that could be right
+      // while the product is wrong.
+      const localOnly = { id: 'local-only', kind: 'agent', title: 'this terminal', status: 'running',
+        owner: 'tui', cancellable: true, childTaskIds: [], queuedAt: Date.now() } as never;
+      const client = createTasksClient({
+        local: { list: () => [localOnly], get: (id: string) => (id === 'local-only' ? localOnly : null) },
+        verbs,
+      });
+      const result = await client.list();
+      // The daemon answered, so the union is complete rather than degraded.
+      expect(result.daemonUnavailable).toBeNull();
+      const local = result.tasks.filter((entry) => entry.origin === 'local');
+      expect(local.map((entry) => entry.task.id)).toEqual(['local-only']);
+      // Every row the daemon contributed is labelled as the daemon's, which is
+      // what decides whether a lifecycle act may be applied locally.
+      for (const entry of result.tasks.filter((e) => e.origin === 'daemon')) {
+        expect(typeof entry.task.id).toBe('string');
+      }
+    });
+
+    test('S10 fleet: the union read model folds the daemon\'s rows in over the wire', async () => {
+      const localNode = { id: 'local-agent', kind: 'agent', label: 'this terminal', state: 'thinking',
+        elapsedMs: 0, costState: 'unpriced',
+        capabilities: { interruptible: false, resumable: false, killable: false, steerable: false } } as never;
+      const union = createFleetUnionReadModel({
+        local: createStaticFleetReadModel(buildFleetSnapshot([localNode], Date.now())),
+        verbs,
+      });
+      // A real fleet.snapshot round trip: this is a ws-declared verb, so it also
+      // proves the generic-gateway fallback carries the fleet reads.
+      await union.refresh();
+      const ids = union.getSnapshot().rows.map((row) => row.node.id);
+      // The local row survives the merge whatever the daemon returned; a fresh
+      // daemon contributes none, and that is an honest empty rather than a
+      // failure.
+      expect(ids).toContain('local-agent');
+      // Steering a row this terminal does not own refuses with a reason.
+      const refusal = union.steer('not-a-local-row', 'stop');
+      expect(refusal.queued).toBe(false);
+      if (refusal.queued === false) expect(refusal.reason).toContain('daemon');
+      union.stop();
     });
 
     test('S12 devices: the device verbs answer, with no paired phone on a fresh home', async () => {

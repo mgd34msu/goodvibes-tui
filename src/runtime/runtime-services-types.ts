@@ -20,6 +20,7 @@ import type { ApprovalRaiser } from '@pellux/goodvibes-sdk/platform/runtime/clie
 import type { PermissionPromptDecision, PermissionPromptRequest } from '@pellux/goodvibes-sdk/platform/permissions';
 import type { DaemonVerbCaller } from './client/operator-endpoint.ts';
 import type { WireSessionDispatch } from './client/session-dispatch.ts';
+import type { FleetUnionReadModel } from './client/fleet-union.ts';
 import type { DaemonConfigClient } from './client/config-client.ts';
 import type { DaemonCredentialsClient } from './client/credentials-client.ts';
 import type { ConfigManager, ServiceRegistry, SubscriptionManager, ToolLLM } from '@pellux/goodvibes-sdk/platform/config';
@@ -260,6 +261,12 @@ export interface RuntimeServices {
   readonly sessionLiveTurnControls: SessionLiveTurnControlsHolder;
   /** Unified live process registry (agents, WRFC chains, workflows, watchers, background processes) backing the Fleet panel; archive-aware — finished subtrees can be moved to the session archive view. */
   readonly processRegistry: ArchivableProcessRegistry;
+  /**
+   * What the Fleet panel reads: this surface's own registry rows UNION the
+   * adopted daemon's, deduped by node id with the local (live, actionable) copy
+   * winning. Interval-refreshed on the daemon half — see client/fleet-union.ts.
+   */
+  readonly fleetReadModel: FleetUnionReadModel;
   readonly modeManager: ModeManager;
   readonly fileUndoManager: FileUndoManager;
   readonly workspaceCheckpointManager: WorkspaceCheckpointManager;
