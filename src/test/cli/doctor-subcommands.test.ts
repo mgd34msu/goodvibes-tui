@@ -3,7 +3,7 @@ import { rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import { handleDoctorSubcommand } from '../../cli/doctor.ts';
-import type { GoodVibesCliOutputFormat } from '../../cli/types.ts';
+import type { GoodVibesCliOutputFormat } from '@pellux/goodvibes-terminal-shell';
 import { makeProjectTempDir } from '../helpers/project-temp.ts';
 
 function makeOptions(root: string, subcommand: string, args: string[], outputFormat: GoodVibesCliOutputFormat = 'text') {

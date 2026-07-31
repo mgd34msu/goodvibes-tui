@@ -16,8 +16,8 @@
 
 import { performance } from 'node:perf_hooks';
 import { Compositor } from '../src/renderer/compositor.ts';
-import { createEmptyLine } from '../src/types/grid.ts';
-import type { Line } from '../src/types/grid.ts';
+import { createEmptyLine } from '@pellux/goodvibes-sdk/platform/types';
+import type { Line } from '@pellux/goodvibes-sdk/platform/types';
 
 /** Frame bench configuration — change here to update both gate and test. */
 export const FRAME_BENCH_CONFIG = {

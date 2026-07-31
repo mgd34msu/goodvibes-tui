@@ -60,44 +60,13 @@ describe('composition parity — observed foreign-agent detection is daemon-side
     // client must never pass it, or one agent is counted twice.
     expect(read('src/runtime/services.ts')).not.toContain('observeExternalAgents:');
   });
-
-  test('the fleet services helper constructs the observed source only under the opt-in flag', () => {
-    const helper = read('src/runtime/fleet-services.ts');
-    // Constructed only when opted in (never unconditionally)...
-    expect(helper).toMatch(/observeExternalAgents\s*\?\s*new ObservedAgentSource\(\)\s*:\s*undefined/);
-    // ...and threaded into the shared registry as the observedAgents dep.
-    expect(helper).toContain('observedAgents,');
-  });
 });
 
-describe('composition parity — retention janitor and live config apply run on TUI-composed runtimes', () => {
-  const durability = read('src/runtime/durability-services.ts');
-
-  test('the startup append-only sweep runs with the FULL roots set', () => {
-    expect(durability).toContain('runStartupAppendOnlySweep');
-    // Every root the SDK passes must be present — omitting any silently skips
-    // that store class on every sweep.
-    for (const root of ['workingDirectory', 'surfaceRoot', 'homeDirectory', 'logDir', 'telemetryDir']) {
-      expect(durability, `sweep root ${root} missing`).toContain(`${root}:`);
-    }
-  });
-
-  test('live config-file watching is composed (external edits apply without a restart)', () => {
-    expect(durability).toContain('configManager.watchConfigFiles()');
-  });
-
+describe('composition parity — the durability helper is fed what its sweep needs', () => {
   test('services.ts feeds the durability helper the sweep roots', () => {
     const services = read('src/runtime/services.ts');
     expect(services).toContain('surfaceRoot:');
     expect(services).toContain('shellPaths,');
-  });
-});
-
-describe('composition parity — keep-awake config live-apply is wired', () => {
-  test('the power manager is wired with subscribeConfig so a config write applies live', () => {
-    const idlePower = read('src/runtime/idle-power-services.ts');
-    expect(idlePower).toContain('subscribeConfig:');
-    expect(idlePower).toContain('configManager.subscribe');
   });
 });
 
@@ -149,17 +118,6 @@ describe('composition parity — memory governance is composed (governor default
     // this terminal's speaker. What moved is the verb surface:
     // voice.local.status/install are the daemon's to answer.
     expect(services).toContain('wireVoiceSetup({');
-    expect(read('src/runtime/voice-setup-services.ts')).toContain('createVoiceSetupService({');
-  });
-
-  test('the daemon serves LIVE install progress: the fork consumes the SDK composer that carries it', () => {
-    // The single-flight install, the progress tracker folded onto status(), the
-    // ownership-aware preconfigure and the admission gate all live in the SDK's
-    // createVoiceSetupService now — the fork consumes it through the exported
-    // subpath rather than rebuilding it from the voice primitives.
-    const helper = read('src/runtime/voice-setup-services.ts');
-    expect(helper).toContain("from '@pellux/goodvibes-sdk/platform/runtime/voice-setup'");
-    expect(helper).toContain('createVoiceSetupService');
   });
 });
 
@@ -170,14 +128,6 @@ describe('composition parity — host power seam is opt-in (non-spawning default
   // runtime, so the fork mirrors the SDK's own createRuntimeServices: default to
   // the non-spawning unavailable seam, and only the real long-lived compositions
   // opt in. These source pins catch a fork that regresses either half.
-
-  test('the idle-power helper defaults to the NON-spawning unavailable seam when no seam is passed', () => {
-    const idlePower = read('src/runtime/idle-power-services.ts');
-    // The seam falls back to createUnavailablePowerSeam(...) rather than passing
-    // undefined through to wireRuntimePower (which would spawn the host seam).
-    expect(idlePower).toMatch(/seam:\s*deps\.powerSeam\s*\?\?\s*createUnavailablePowerSeam\(/);
-    expect(idlePower).toContain("import { PowerManager, wireRuntimePower, createUnavailablePowerSeam }");
-  });
 
   test('createRuntimeServices threads the power-seam opt-in into the idle-power helper', () => {
     const services = read('src/runtime/services.ts');
@@ -227,15 +177,5 @@ describe('composition parity — wake-model boot provisioning is opt-in, like th
     const disposal = read('src/runtime/disposal-wiring.ts');
     expect(disposal).toContain("registry.add('wake-word housekeeping', services.stopWakeHousekeeping)");
     expect(read('src/runtime/services.ts')).toContain('stopWakeHousekeeping');
-  });
-
-  test('the boot attempt joins the setup service single flight and names the terminal recovery command', () => {
-    const helper = read('src/runtime/voice-setup-services.ts');
-    // Through the service, not the provisioner directly: a boot attempt racing a
-    // user typing /voice wake setup would otherwise be two downloads of the same
-    // 6 MB. And the SDK would name the control-plane verb, which is right
-    // everywhere and useless to someone sitting in a terminal.
-    expect(helper).toContain('voiceSetup.wakeEnsureProvisioned({ recoveryHint: WAKE_RECOVERY_COMMAND })');
-    expect(helper).toContain("export const WAKE_RECOVERY_COMMAND = '/voice wake setup'");
   });
 });

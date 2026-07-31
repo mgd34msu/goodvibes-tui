@@ -33,7 +33,7 @@ import type { ProviderRegistry } from '@pellux/goodvibes-sdk/platform/providers'
 import type { ArtifactStore } from '@pellux/goodvibes-sdk/platform/artifacts';
 import type { MemoryRegistry } from '@pellux/goodvibes-sdk/platform/state';
 import type { RuntimeEventBus } from '@/runtime/index.ts';
-import { WorkPlanStore } from '../work-plans/work-plan-store.ts';
+import { WorkPlanStore } from '@pellux/goodvibes-sdk/platform/workflow';
 
 const REGULAR_KNOWLEDGE_DB_FILE = 'knowledge-wiki.sqlite';
 const HOME_GRAPH_KNOWLEDGE_DB_FILE = 'knowledge-home-graph.sqlite';
@@ -84,7 +84,13 @@ export function createKnowledgeServices(deps: KnowledgeServicesDeps): KnowledgeS
   const homeGraphService = new HomeGraphService(homeGraphKnowledgeStore, artifactStore, { semanticService: homeGraphSemanticService, admitExpensiveWork });
   const projectPlanningProjectId = projectPlanningProjectIdFromPath(deps.workingDirectory);
   const projectPlanningService = new ProjectPlanningService(knowledgeStore, { defaultProjectId: projectPlanningProjectId });
-  const workPlanStore = new WorkPlanStore({ homeDirectory: deps.homeDirectory, projectId: projectPlanningProjectId, projectRoot: deps.workingDirectory });
+  const workPlanStore = new WorkPlanStore({
+    homeDirectory: deps.homeDirectory,
+    projectId: projectPlanningProjectId,
+    projectRoot: deps.workingDirectory,
+    surfaceRoot: 'tui',
+    source: 'tui',
+  });
   return {
     knowledgeStore, agentKnowledgeStore, homeGraphKnowledgeStore,
     knowledgeSemanticService, homeGraphSemanticService, agentKnowledgeSemanticService,

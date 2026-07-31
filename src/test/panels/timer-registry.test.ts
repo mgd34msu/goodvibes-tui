@@ -9,7 +9,7 @@
 
 import { describe, test, expect, mock } from 'bun:test';
 import { BasePanel } from '../../panels/base-panel.ts';
-import type { Line } from '../../types/grid.ts';
+import type { Line } from '@pellux/goodvibes-sdk/platform/types';
 
 // ---------------------------------------------------------------------------
 // Minimal concrete subclass

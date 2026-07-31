@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { discoverPlugins } from '../plugins/loader.ts';
 import { validateManifestV2 } from '@/runtime/index.ts';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
-import type { CliCommandOutput, CliCommandRuntime } from './types.ts';
+import type { CliCommandOutput, CliCommandRuntime } from '@pellux/goodvibes-terminal-shell';
 import { handlePluginBundlesCommand } from './plugin-bundles-command.ts';
 
 // ---------------------------------------------------------------------------

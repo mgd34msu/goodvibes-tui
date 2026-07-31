@@ -25,8 +25,8 @@
 import { describe, test, expect, beforeEach } from 'bun:test';
 import { Compositor } from '../../renderer/compositor.ts';
 import type { CompositeRequest } from '../../renderer/compositor.ts';
-import { createStyledCell } from '../../types/grid.ts';
-import type { Line } from '../../types/grid.ts';
+import { createStyledCell } from '@pellux/goodvibes-sdk/platform/types';
+import type { Line } from '@pellux/goodvibes-sdk/platform/types';
 import { InputHandler } from '../../input/handler.ts';
 import { SelectionManager } from '../../input/selection.ts';
 import { InfiniteBuffer } from '../../core/history.ts';

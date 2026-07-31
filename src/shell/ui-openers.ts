@@ -22,7 +22,7 @@ import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 import { buildFirstOpenItems, decodeFirstOpenChoice, selfRecordWorkspaceRegistration } from '../cli/tui-startup.ts';
 import type { SettingsDaemonCredentialWriter } from '../input/settings-modal-secrets.ts';
 import type { DaemonOwnedConfigWriter } from '../input/settings-modal-mutations.ts';
-import type { WorkspaceTrustLevel } from '../runtime/trust/workspace-trust.ts';
+import type { WorkspaceTrustLevel } from '@pellux/goodvibes-sdk/platform/runtime/operations';
 
 type WireShellUiOpenersOptions = {
   commandContext: CommandContext;

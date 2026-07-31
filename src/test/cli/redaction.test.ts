@@ -20,7 +20,7 @@ import {
   redactConfig,
   redactSerializedSecrets,
   redactText,
-} from '../../cli/redaction.ts';
+} from '@pellux/goodvibes-terminal-shell';
 
 /** Every credential-bearing config path the TUI's own config surface can hold. */
 const CREDENTIAL_PATHS: readonly string[] = [

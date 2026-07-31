@@ -4,8 +4,8 @@ import type { ConfigModalSurface, ConfigModalView } from '../input/config-modal-
 import { createProviderRuntimeInspectionQuery } from '@/runtime/index.ts';
 import { createRuntimeProviderApi } from '@/runtime/index.ts';
 import { copyToClipboard } from '../utils/clipboard.ts';
-import { ensurePublicBaseUrl } from '../core/pairing-origin.ts';
-import { availablePairingOffers, mintPairingHandoff, defaultPairingTokenName } from '../core/pairing-handoff.ts';
+import { ensurePublicBaseUrl } from '@pellux/goodvibes-sdk/platform/pairing';
+import { availablePairingOffers, mintPairingHandoff, defaultPairingTokenName } from '@pellux/goodvibes-sdk/platform/pairing';
 import { probePairingTailscale, runPairingTailscaleServe } from '../core/pairing-tailscale-gateway.ts';
 // ── Providers & Connectivity + Security subset ────────────────────────────────
 import { createServicesModalSurface } from './modals/services-modal.ts';

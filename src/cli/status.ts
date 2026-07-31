@@ -1,10 +1,10 @@
 import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import { resolveDaemonEnabled } from '@pellux/goodvibes-sdk/platform/config';
 import type { OnboardingCheckMarkersState } from '../runtime/onboarding/index.ts';
-import { formatRuntimeEndpointBinding, resolveRuntimeEndpointBinding } from './endpoints.ts';
-import type { RuntimeEndpointBinding, RuntimeEndpointId } from './endpoints.ts';
+import { formatRuntimeEndpointBinding, resolveRuntimeEndpointBinding } from '@pellux/goodvibes-terminal-shell';
+import type { RuntimeEndpointBinding, RuntimeEndpointId } from '@pellux/goodvibes-terminal-shell';
 import { classifyBindPosture, isNetworkFacing } from './network-posture.ts';
-import type { GoodVibesCliOutputFormat } from './types.ts';
+import type { GoodVibesCliOutputFormat } from '@pellux/goodvibes-terminal-shell';
 import type { CliServicePosture } from './service-posture.ts';
 import type { InstallSelfCheckFinding } from '../runtime/install-self-check.ts';
 import { getProviderIdFromModel } from '../config/provider-model.ts';

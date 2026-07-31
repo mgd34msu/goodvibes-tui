@@ -1,5 +1,5 @@
-import type { Line } from '../types/grid.ts';
-import { createEmptyLine } from '../types/grid.ts';
+import type { Line } from '@pellux/goodvibes-sdk/platform/types';
+import { createEmptyLine } from '@pellux/goodvibes-sdk/platform/types';
 import { fitDisplay, truncateDisplay } from '../utils/terminal-width.ts';
 import { ScrollableListPanel } from './scrollable-list-panel.ts';
 import {

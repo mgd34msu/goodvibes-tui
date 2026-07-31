@@ -1,6 +1,6 @@
 import type { CommandRegistry } from '../command-registry.ts';
-import type { WorkPlanItemStatus, WorkPlanStore } from '../../work-plans/work-plan-store.ts';
-import { WORK_PLAN_STATUSES } from '../../work-plans/work-plan-store.ts';
+import type { WorkPlanItemStatus, WorkPlanStore } from '@pellux/goodvibes-sdk/platform/workflow';
+import { WORK_PLAN_STATUSES } from '@pellux/goodvibes-sdk/platform/workflow';
 import { openModalCommand } from './runtime-services.ts';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 

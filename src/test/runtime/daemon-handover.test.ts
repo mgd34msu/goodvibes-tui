@@ -14,7 +14,7 @@ import {
   type PerformDaemonHandoverOptions,
   type RunCommandLike,
   type RunDaemonHandoverOptions,
-} from '@/runtime/daemon-handover.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/client';
 import type { UpdateFileIo } from '@pellux/goodvibes-sdk/platform/runtime/self-update';
 import type { UpdateFetchLike } from '@/runtime/update-check.ts';
 

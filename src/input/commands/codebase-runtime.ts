@@ -21,7 +21,7 @@
 
 import type { CodeIndexStats, CodeContextResult, CodeIndexReindexActivity } from '@pellux/goodvibes-sdk/platform/state';
 import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
-import { isCodeIndexAutoStartEnabled, CODE_INDEX_MAX_FILES, CODE_INDEX_MAX_FILE_BYTES, CODE_INDEX_MAX_TOTAL_BYTES } from '../../runtime/code-index-services.ts';
+import { isCodeIndexAutoStartEnabled, CODE_INDEX_MAX_FILES, CODE_INDEX_MAX_FILE_BYTES, CODE_INDEX_MAX_TOTAL_BYTES } from '@pellux/goodvibes-sdk/platform/runtime/operations';
 import type { CommandContext, CommandRegistry } from '../command-registry.ts';
 
 // ---------------------------------------------------------------------------

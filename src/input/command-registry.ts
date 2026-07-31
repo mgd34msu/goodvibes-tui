@@ -266,7 +266,7 @@ export interface CommandSessionServices {
    */
   readonly hydrateSessionUsage?: () => void;
   /** The orchestration engine's command-facing facade — see runtime/workstream-services.ts. */
-  readonly workstreamEngine?: import('../runtime/workstream-services.ts').WorkstreamCommandService;
+  readonly workstreamEngine?: import('@pellux/goodvibes-sdk/platform/orchestration').WorkstreamCommandService;
   /** The repo source-tree code index — see runtime/code-index-services.ts. */
   readonly codeIndexStore?: import('@pellux/goodvibes-sdk/platform/state').CodeIndexStore;
   /** Tool-site reindex scheduler — `/codebase status` reports its last activity. */
@@ -308,14 +308,14 @@ export interface CommandWorkspaceUiServices {
   workspaceCheckpointManager?: WorkspaceCheckpointManager;
   /** In-process gateway catalog — the /review hunk-revert flow invokes checkpoints.revertHunk(Preview) over it. */
   gatewayMethods?: GatewayMethodCatalog;
-  workspaceTrustManager?: import('../runtime/trust/workspace-trust.ts').WorkspaceTrustManager;
-  workspaceRegistrationManager?: import('../runtime/trust/workspace-registration.ts').WorkspaceRegistrationManager;
+  workspaceTrustManager?: import('@pellux/goodvibes-sdk/platform/runtime/operations').WorkspaceTrustManager;
+  workspaceRegistrationManager?: import('@pellux/goodvibes-sdk/platform/runtime/operations').WorkspaceRegistrationManager;
   panelManager?: PanelManager;
   profileManager?: import('@pellux/goodvibes-sdk/platform/profiles').ProfileManager;
   bookmarkManager?: import('@pellux/goodvibes-sdk/platform/bookmarks').BookmarkManager;
   projectPlanningService?: import('@pellux/goodvibes-sdk/platform/knowledge').ProjectPlanningService;
   projectPlanningProjectId?: string;
-  workPlanStore?: import('../work-plans/work-plan-store.ts').WorkPlanStore;
+  workPlanStore?: import('@pellux/goodvibes-sdk/platform/workflow').WorkPlanStore;
 }
 
 export interface CommandWorkspaceServices

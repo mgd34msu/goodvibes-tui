@@ -1,5 +1,5 @@
 import { describe, test, expect } from 'bun:test';
-import { formatLastSeen, formatCreated, formatDeviceLine, resolveTokenByIdPrefix, shortTokenId } from '../../core/pairing-devices.ts';
+import { formatLastSeen, formatCreated, formatDeviceLine, resolveTokenByIdPrefix, shortTokenId } from '@pellux/goodvibes-sdk/platform/pairing';
 import type { PublicPairingToken } from '@pellux/goodvibes-sdk/platform/pairing';
 
 const NOW = Date.UTC(2026, 6, 13, 12, 0, 0);

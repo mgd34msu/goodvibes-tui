@@ -1,9 +1,9 @@
 import { afterAll, describe, expect, test } from 'bun:test';
 import { rmSync } from 'node:fs';
-import { parseGoodVibesCli } from '../../cli/parser.ts';
+import { parseGoodVibesCli } from '@pellux/goodvibes-terminal-shell';
 import { buildControlPlaneStatusResult, formatControlPlaneStatus } from '../../cli/management-commands.ts';
 import { buildListenerTestResult, formatListenerTestResult } from '../../cli/surface-command.ts';
-import type { CliCommandRuntime } from '../../cli/types.ts';
+import type { CliCommandRuntime } from '@pellux/goodvibes-terminal-shell';
 import { makeProjectTempDir } from '../helpers/project-temp.ts';
 
 /**

@@ -26,8 +26,8 @@ import { SettingsModal, SETTINGS_CATEGORIES } from '../../input/settings-modal.t
 import type { SettingsCategory } from '../../input/settings-modal.ts';
 import { renderSettingsModal } from '../../renderer/settings-modal.ts';
 import { getFullscreenWorkspaceMetrics } from '../../renderer/fullscreen-workspace.ts';
-import { getConfigSchemaSetting } from '../../runtime/feature-settings.ts';
-import type { Line } from '../../types/grid.ts';
+import { getConfigSchemaSetting } from '@pellux/goodvibes-terminal-shell';
+import type { Line } from '@pellux/goodvibes-sdk/platform/types';
 
 const HEIGHT = 24;
 

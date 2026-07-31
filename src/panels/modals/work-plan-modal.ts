@@ -4,7 +4,7 @@ import type {
   ConfigModalSurface,
   ConfigModalView,
 } from '../../input/config-modal-types.ts';
-import type { WorkPlanItemStatus } from '../../work-plans/work-plan-store.ts';
+import type { WorkPlanItemStatus } from '@pellux/goodvibes-sdk/platform/workflow';
 
 // ---------------------------------------------------------------------------
 // Work Plan → config-modal surface (group-B port). Lists the active

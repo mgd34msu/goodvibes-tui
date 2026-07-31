@@ -17,8 +17,8 @@ import { existsSync, readFileSync, rmSync } from 'node:fs';
 import { wireTurnEventHandlers } from '../../core/turn-event-wiring.ts';
 import type { WireTurnEventHandlersOptions } from '../../core/turn-event-wiring.ts';
 import type { WebhookNotifier } from '@pellux/goodvibes-sdk/platform/integrations';
-import { FocusTracker } from '../../core/focus-tracker.ts';
-import { journalPathFor } from '../../core/transcript-journal.ts';
+import { FocusTracker } from '@pellux/goodvibes-sdk/platform/runtime/operations';
+import { journalPathFor } from '@pellux/goodvibes-sdk/platform/runtime/operations';
 import { makeProjectTempDir } from '../helpers/project-temp.ts';
 import { makeTestSurface } from '../helpers/session-surface.ts';
 

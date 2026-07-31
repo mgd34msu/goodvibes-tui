@@ -8,8 +8,8 @@
 // ---------------------------------------------------------------------------
 
 import { describe, test, expect, beforeEach } from 'bun:test';
-import type { Line } from '../../types/grid.ts';
-import { createEmptyLine } from '../../types/grid.ts';
+import type { Line } from '@pellux/goodvibes-sdk/platform/types';
+import { createEmptyLine } from '@pellux/goodvibes-sdk/platform/types';
 import { ScrollableListPanel } from '../../panels/scrollable-list-panel.ts';
 
 // ---------------------------------------------------------------------------

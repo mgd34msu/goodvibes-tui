@@ -11,7 +11,7 @@
  * each other and both can disagree with what Tab actually reveals.
  */
 
-import type { Line } from '../types/grid.ts';
+import type { Line } from '@pellux/goodvibes-sdk/platform/types';
 import { renderMarkdownTracked } from './markdown.ts';
 import { renderDiffView } from './diff-view.ts';
 

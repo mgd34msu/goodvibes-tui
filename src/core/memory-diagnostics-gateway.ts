@@ -19,7 +19,7 @@
 import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import { GoodVibesSdkError } from '@pellux/goodvibes-sdk';
 import { resolveOperatorRpc, describeOperatorRpcError } from '../input/commands/operator-rpc.ts';
-import { memoryStatusLines, type MemoryGovernorSnapshotResult } from './memory-status.ts';
+import { memoryStatusLines, type MemoryGovernorSnapshotResult } from '@pellux/goodvibes-sdk/platform/runtime/memory';
 
 /** The narrow async verb surface the /health memory (doctor) surface drives. */
 export interface MemoryDiagnosticsGateway {

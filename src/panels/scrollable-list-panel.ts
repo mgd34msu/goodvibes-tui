@@ -1,5 +1,5 @@
-import type { Line } from '../types/grid.ts';
-import { createEmptyLine, createStyledCell } from '../types/grid.ts';
+import type { Line } from '@pellux/goodvibes-sdk/platform/types';
+import { createEmptyLine, createStyledCell } from '@pellux/goodvibes-sdk/platform/types';
 import { BasePanel } from './base-panel.ts';
 import type { PanelCategory } from './types.ts';
 import type { ComponentHealthMonitor } from '../runtime/perf/panel-health-monitor.ts';

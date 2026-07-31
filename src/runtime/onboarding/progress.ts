@@ -1,6 +1,6 @@
 import { existsSync, unlinkSync } from 'node:fs';
-import { atomicWriteFileSync } from '@/config/atomic-write.ts';
-import { readVersioned } from '@/config/read-versioned.ts';
+import { atomicWriteFileSync } from '@pellux/goodvibes-sdk/platform/config';
+import { readVersioned } from '@pellux/goodvibes-sdk/platform/config';
 
 import type {
   OnboardingMode,

@@ -146,7 +146,7 @@ async function measureStartup(): Promise<number> {
     `const t0 = performance.now();`,
     `await import('./src/renderer/compositor.ts');`,
     `await import('./src/renderer/buffer.ts');`,
-    `await import('./src/types/grid.ts');`,
+    `await import('@pellux/goodvibes-sdk/platform/types');`,
     `const t1 = performance.now();`,
     `process.stdout.write(String(Math.round((t1 - t0) * 10) / 10));`,
   ].join(' ');

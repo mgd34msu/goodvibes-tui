@@ -54,7 +54,7 @@ import { statSync } from 'node:fs';
 import { checkRecoveryFile, checkRecoveryForSession, consumeRecovery, removeRecoveryPoint } from '@/runtime/index.ts';
 import type { RecoveryFileInfo, SessionSurface } from '@/runtime/index.ts';
 import { isRecoveryRemovalRecorded, pruneRecoveryDecisions, recordRecoveryRemoval } from './recovery-decisions.ts';
-import { checkSessionLiveness } from './session-liveness-marker.ts';
+import { checkSessionLiveness } from '@pellux/goodvibes-sdk/platform/runtime/operations';
 import type { SelectionItem, SelectionResult } from '../input/selection-modal.ts';
 
 /** How the offer ended. Returned so startup wiring (and tests) can assert the real outcome. */

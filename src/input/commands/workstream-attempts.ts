@@ -23,7 +23,7 @@ import type {
 import { AttemptError } from '@pellux/goodvibes-sdk/platform/orchestration';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 import type { CommandContext } from '../command-registry.ts';
-import type { WorkstreamCommandService } from '../../runtime/workstream-services.ts';
+import type { WorkstreamCommandService } from '@pellux/goodvibes-sdk/platform/orchestration';
 import { requirePanelManager } from './runtime-services.ts';
 import { describeFailureReason, isTurnBudgetReason } from '../../core/turn-budget-outcome.ts';
 import { type AttemptGraphItem, renderDependentHoldLines } from './workstream-attempt-dependents.ts';

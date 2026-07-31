@@ -29,7 +29,7 @@
 
 import type { ConversationMessageSnapshot } from '@pellux/goodvibes-sdk/platform/core';
 import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
-import { createEmptyLine, type Line } from '../types/grid.ts';
+import { createEmptyLine, type Line } from '@pellux/goodvibes-sdk/platform/types';
 import type { MessageLineCache } from '../core/conversation-line-cache.ts';
 import type { ConversationRenderContext } from '../core/conversation-rendering.ts';
 import { renderConversationEventLine, renderConversationNotice } from '../renderer/conversation-surface.ts';

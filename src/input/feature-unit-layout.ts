@@ -22,7 +22,7 @@
 import { FEATURE_SETTINGS } from '@pellux/goodvibes-sdk/platform/runtime/state';
 import type { FeatureSetting } from '@pellux/goodvibes-sdk/platform/runtime/state';
 import type { ConfigSetting } from '@pellux/goodvibes-sdk/platform/config';
-import { getConfigSchemaSetting } from '../runtime/feature-settings.ts';
+import { getConfigSchemaSetting } from '@pellux/goodvibes-terminal-shell';
 import type { FlagEntry, SettingEntry, SettingsCategory } from './settings-modal-types.ts';
 
 /** Every enablement key — these rows render as feature headers, never as plain sub-rows. */

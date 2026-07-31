@@ -13,7 +13,7 @@ import {
   readVersioned,
   reapQuarantinedFiles,
   UNRECOGNIZED_SUFFIX,
-} from '../../config/read-versioned.ts';
+} from '@pellux/goodvibes-sdk/platform/config';
 
 let dir: string;
 const NOW = 1_800_000_000_000;

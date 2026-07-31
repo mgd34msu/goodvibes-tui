@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { renderGoodVibesVersion, renderDaemonStartupBanner } from '../../cli/help.ts';
-import { resolveRuntimeEndpointBinding } from '../../cli/endpoints.ts';
+import { resolveRuntimeEndpointBinding } from '@pellux/goodvibes-terminal-shell';
 import { resolveWebPort } from '@pellux/goodvibes-sdk/platform/daemon';
 import { VERSION } from '../../version.ts';
 import type { ConfigManager } from '../../config/index.ts';

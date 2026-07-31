@@ -12,8 +12,8 @@
  */
 import { describe, test, expect, mock, beforeEach, afterEach } from 'bun:test';
 import { createBudgetBreachNotifier } from '../../core/budget-breach-notifier.ts';
-import { setPricingSource } from '../../export/cost-utils.ts';
-import { FocusTracker } from '../../core/focus-tracker.ts';
+import { setPricingSource } from '@pellux/goodvibes-sdk/platform/providers';
+import { FocusTracker } from '@pellux/goodvibes-sdk/platform/runtime/operations';
 
 // A model with a known, real price so calcSessionCost produces a real breach.
 const PRICED_MODEL = 'claude-sonnet-4-6'; // present in cost-utils.ts STATIC_FALLBACK_PRICING

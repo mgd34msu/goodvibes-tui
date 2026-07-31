@@ -25,7 +25,7 @@
 import type { ProcessNode } from '@pellux/goodvibes-sdk/platform/runtime/fleet';
 import type { WorkItem } from '@pellux/goodvibes-sdk/platform/orchestration';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
-import type { Line } from '../types/grid.ts';
+import type { Line } from '@pellux/goodvibes-sdk/platform/types';
 import { isPanelSearchBackspace, isPanelSearchCancel, isPanelSearchCommit, isPanelSearchPrintable } from './search-focus.ts';
 import { appendSteerText } from './fleet-tabs.ts';
 import { isObservedExternalNode, observedKindLabel, type ObservedNode } from './fleet-observed-render.ts';

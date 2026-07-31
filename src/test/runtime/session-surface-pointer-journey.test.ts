@@ -24,7 +24,7 @@ import { SessionManager } from '@pellux/goodvibes-sdk/platform/sessions';
 import { readLastSessionPointer, writeLastSessionPointer } from '@/runtime/index.ts';
 import { wireTurnEventHandlers, type WireTurnEventHandlersOptions } from '../../core/turn-event-wiring.ts';
 import { announceResumeState } from '../../runtime/resume-notice.ts';
-import { bindWriteLastSessionPointerToSurface } from '../../runtime/session-pointer-surface.ts';
+import { bindWriteLastSessionPointerToSurface } from '@pellux/goodvibes-sdk/platform/runtime/operations';
 import { applyInitialTuiCliState } from '../../cli/tui-startup.ts';
 import { makeProjectTempDir } from '../helpers/project-temp.ts';
 import { makeTestSurface } from '../helpers/session-surface.ts';

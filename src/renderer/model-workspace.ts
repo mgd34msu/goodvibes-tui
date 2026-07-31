@@ -8,8 +8,8 @@
 import type { ModelDefinition } from '@pellux/goodvibes-sdk/platform/providers';
 import type { ModelPickerModal } from '../input/model-picker.ts';
 import type { ModelPickerTargetInfo } from '../input/model-picker.ts';
-import type { Line } from '../types/grid.ts';
-import { createEmptyLine, createStyledCell } from '../types/grid.ts';
+import type { Line } from '@pellux/goodvibes-sdk/platform/types';
+import { createEmptyLine, createStyledCell } from '@pellux/goodvibes-sdk/platform/types';
 import { fitDisplay, getDisplayWidth, wrapText } from '../utils/terminal-width.ts';
 import { abbreviateCount } from '../utils/format-number.ts';
 import { GLYPHS, UI_TONES } from './ui-primitives.ts';

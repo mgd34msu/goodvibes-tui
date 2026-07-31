@@ -15,7 +15,7 @@
  */
 
 import type { ConfigKey } from '../../config/index.ts';
-import { getFeatureSetting, isFeatureDefaultEnabled } from '../../runtime/feature-settings.ts';
+import { getFeatureSetting, isFeatureDefaultEnabled } from '@pellux/goodvibes-terminal-shell';
 import type {
   OnboardingWizardControllerLike,
   OnboardingWizardFieldDefinition,

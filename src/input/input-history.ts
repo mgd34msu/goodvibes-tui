@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { atomicWriteFileSync } from '@/config/atomic-write.ts';
+import { atomicWriteFileSync } from '@pellux/goodvibes-sdk/platform/config';
 import { logger } from '@pellux/goodvibes-sdk/platform/utils';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 

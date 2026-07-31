@@ -12,7 +12,7 @@ import { join } from 'path';
 import { tmpdir } from 'os';
 import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import type { ConfigKey } from '@pellux/goodvibes-sdk/platform/config';
-import { computeBudgetBreach, readBudgetAlertUsd, BUDGET_ALERT_USD_DEFAULT, BUDGET_ALERT_USD_CONFIG_KEY } from '../../export/cost-utils.ts';
+import { computeBudgetBreach, readBudgetAlertUsd, BUDGET_ALERT_USD_DEFAULT, BUDGET_ALERT_USD_CONFIG_KEY } from '@pellux/goodvibes-sdk/platform/providers';
 
 describe('computeBudgetBreach', () => {
   test('false when no budget is configured (threshold <= 0)', () => {

@@ -4,7 +4,7 @@ import {
   deriveCredentialAvailability,
   readClientCredentialStatus,
   type CredentialAvailability,
-} from '../../config/credential-availability.ts';
+} from '@pellux/goodvibes-sdk/platform/config';
 
 // Prove the client-side credential-status read degrades HONESTLY and never
 // fabricates a confident "configured" or leaks a secret value. Fully hermetic — no

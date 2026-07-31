@@ -31,7 +31,7 @@ import type { WatcherRegistry } from '@pellux/goodvibes-sdk/platform/watchers';
 import type { RuntimeStore } from '../../runtime/store/index.ts';
 import type { KnowledgeApi } from '@pellux/goodvibes-sdk/platform/knowledge';
 import type { SessionChangeTracker } from '@pellux/goodvibes-sdk/platform/sessions';
-import type { Line } from '../../types/grid.ts';
+import type { Line } from '@pellux/goodvibes-sdk/platform/types';
 import type { Panel, PanelCategory } from '../types.ts';
 import { BasePanel } from '../base-panel.ts';
 import { buildEmptyState, buildPanelWorkspace, DEFAULT_PANEL_PALETTE } from '../polish.ts';
@@ -120,7 +120,7 @@ export interface BuiltinPanelDeps {
   /** Stable workspace project id for project:<projectId> planning spaces. */
   projectPlanningProjectId?: string;
   /** TUI-owned persistent work plan store. */
-  workPlanStore?: import('../../work-plans/work-plan-store.ts').WorkPlanStore;
+  workPlanStore?: import('@pellux/goodvibes-sdk/platform/workflow').WorkPlanStore;
   /** Explicit UI-facing runtime services for agent/process/WRFC/remote panels and modals. */
   uiServices?: UiRuntimeServices;
   /** Shared plugin manager for plugin and security panels (widened past the read-only observer surface — — so PluginsPanel can drive enable/disable/verify/lift-quarantine). */
@@ -189,7 +189,7 @@ export type ResolvedBuiltinPanelDeps = Omit<
   readonly adaptivePlanner: AdaptivePlanner;
   readonly projectPlanningService: ProjectPlanningService;
   readonly projectPlanningProjectId: string;
-  readonly workPlanStore: import('../../work-plans/work-plan-store.ts').WorkPlanStore;
+  readonly workPlanStore: import('@pellux/goodvibes-sdk/platform/workflow').WorkPlanStore;
   readonly policyRuntimeState: PolicyRuntimeState;
 };
 

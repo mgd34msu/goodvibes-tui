@@ -1,5 +1,5 @@
 import type { CommandContext, CommandRegistry } from '../command-registry.ts';
-import { formatDeviceLine, resolveTokenByIdPrefix } from '../../core/pairing-devices.ts';
+import { formatDeviceLine, resolveTokenByIdPrefix } from '@pellux/goodvibes-sdk/platform/pairing';
 
 /**
  * Register the /devices command — manage the per-device pairing tokens minted by

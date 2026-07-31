@@ -6,13 +6,13 @@ import { getSubscriptionProviderConfig, listAvailableSubscriptionProviders } fro
 import { beginOpenAICodexLogin, exchangeOpenAICodexCode } from '@pellux/goodvibes-sdk/platform/config';
 import { inspectProviderAuth } from '@/runtime/index.ts';
 import { generateQrMatrix, renderQrToString, PAIRING_HANDOFF_OFFER_KINDS, type PairingHandoffOfferKind } from '@pellux/goodvibes-sdk/platform/pairing';
-import { ensurePublicBaseUrl } from '../core/pairing-origin.ts';
-import { formatPairingOffers, formatPostureCapabilities, pairingPostureNotice } from '../core/pairing-offers.ts';
-import { defaultPairingTokenName } from '../core/pairing-handoff.ts';
-import { stableUrlHostForBindHost } from '../core/stable-host.ts';
-import { formatRuntimeEndpointBinding, resolveRuntimeEndpointBinding } from './endpoints.ts';
+import { ensurePublicBaseUrl } from '@pellux/goodvibes-sdk/platform/pairing';
+import { formatPairingOffers, formatPostureCapabilities, pairingPostureNotice } from '@pellux/goodvibes-sdk/platform/pairing';
+import { defaultPairingTokenName } from '@pellux/goodvibes-sdk/platform/pairing';
+import { stableUrlHostForBindHost } from '@pellux/goodvibes-sdk/platform/pairing';
+import { formatRuntimeEndpointBinding, resolveRuntimeEndpointBinding } from '@pellux/goodvibes-terminal-shell';
 import { classifyBindPosture, isNetworkFacing } from './network-posture.ts';
-import type { CliCommandRuntime } from './types.ts';
+import type { CliCommandRuntime } from '@pellux/goodvibes-terminal-shell';
 import type { RuntimeServices } from '../runtime/services.ts';
 import { extractAuthorizationCode, formatJsonOrText, hasCommandFlag, openBrowser, probeTcp, readAuthPaths, readOptionValue, runNonInteractiveAgent, withRuntimeServices, yesNo } from './management-utils.ts';
 

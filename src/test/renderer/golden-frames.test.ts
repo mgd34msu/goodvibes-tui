@@ -84,7 +84,7 @@ import { PermissionPromptUI } from '../../permissions/prompt.ts';
 import type { PermissionRequest } from '@pellux/goodvibes-sdk/platform/permissions';
 import { resolveApprovalRequester } from '../../permissions/hunk-selection.ts';
 import { ModalFactory } from '../../renderer/modal-factory.ts';
-import type { Cell, Line } from '../../types/grid.ts';
+import type { Cell, Line } from '@pellux/goodvibes-sdk/platform/types';
 import { makeTestSurface } from '../helpers/session-surface.ts';
 import { makeProjectTempDir } from '../helpers/project-temp.ts';
 

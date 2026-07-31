@@ -27,8 +27,8 @@ import { createSandboxExecAsk, sandboxExecAskDepsFromRuntime } from '../permissi
 import { createRuntimeServices, type RuntimeServices } from './services.ts';
 import { registerClientPhoneTool } from '@pellux/goodvibes-sdk/platform/runtime/client';
 import { createHostPowerSeam } from '@pellux/goodvibes-sdk/platform/power';
-import { runBootMemoryFold } from './memory-fold.ts';
-import { wireCostPricing } from '../export/cost-utils.ts';
+import { runBootMemoryFold } from '@pellux/goodvibes-sdk/platform/runtime/operations';
+import { wireCostPricing } from '@pellux/goodvibes-sdk/platform/providers';
 import { createUiRuntimeServices, type UiRuntimeServices } from './ui-services.ts';
 import { join } from 'node:path';
 import { installWrfcAgentToolGuard } from '../tools/wrfc-agent-guard.ts';
@@ -36,7 +36,7 @@ import { createWrfcPersistence, type WrfcPersistence } from './wrfc-persistence.
 import type { SystemMessagePriority } from '../core/system-message-router.ts';
 import { SessionSpineClient, SessionUnionCache, TUI_SPINE_PARTICIPANT } from '@pellux/goodvibes-sdk/platform/runtime/session-spine';
 import { SessionInboundInputPoller, createBootstrapInboundInputPoller } from './session-inbound-inputs.ts';
-import { trustGatedAsk, type WorkspaceTrustLevel } from './trust/workspace-trust.ts';
+import { trustGatedAsk, type WorkspaceTrustLevel } from '@pellux/goodvibes-sdk/platform/runtime/operations';
 import { syncNotifierQueueIntegrations } from './bootstrap-notifier-sync.ts';
 
 // --- Pre-router buffer ---

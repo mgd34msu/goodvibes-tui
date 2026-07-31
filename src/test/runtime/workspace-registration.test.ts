@@ -3,7 +3,7 @@ import { mkdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { WorkspaceRegistrationStore } from '@pellux/goodvibes-sdk/platform/workspace';
-import { WorkspaceRegistrationManager } from '../../runtime/trust/workspace-registration.ts';
+import { WorkspaceRegistrationManager } from '@pellux/goodvibes-sdk/platform/runtime/operations';
 import { selfRecordWorkspaceRegistration } from '../../cli/tui-startup.ts';
 
 let home: string;

@@ -45,7 +45,7 @@ import { mayEnterCardDetails, mayOfferCardEntryFlow, describeCardEntryRefusal } 
 import type { CommandContext } from '../../input/command-registry.ts';
 import { handlePromptKeyToken, type KeyRouteState } from '../../input/handler-feed-routes.ts';
 import { InputHistory } from '../../input/input-history.ts';
-import { redactConfig, collectSensitiveConfigValues, redactSerializedSecrets } from '../../cli/redaction.ts';
+import { redactConfig, collectSensitiveConfigValues, redactSerializedSecrets } from '@pellux/goodvibes-terminal-shell';
 
 const FAKE_CVV = '731';
 // Deliberately NOT the command's own placeholder example (4242424242424242,

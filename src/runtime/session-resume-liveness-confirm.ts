@@ -14,7 +14,7 @@
  * proceeds exactly as it always did. The marker belonging to THIS process is
  * ignored too — re-resuming the session already open here is not a fork.
  */
-import { checkSessionLiveness } from './session-liveness-marker.ts';
+import { checkSessionLiveness } from '@pellux/goodvibes-sdk/platform/runtime/operations';
 import type { SessionSurface } from '@/runtime/index.ts';
 import type { SelectionItem, SelectionResult } from '../input/selection-modal.ts';
 

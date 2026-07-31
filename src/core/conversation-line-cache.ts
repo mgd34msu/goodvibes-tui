@@ -45,7 +45,7 @@
  * are replayed at the same buffer offsets a cold render would have produced.
  */
 
-import { createEmptyLine, type Line } from '../types/grid.ts';
+import { createEmptyLine, type Line } from '@pellux/goodvibes-sdk/platform/types';
 import type { BlockMeta } from './conversation-types.ts';
 import type { ConversationRenderContext } from './conversation-rendering.ts';
 import {

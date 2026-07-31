@@ -4,7 +4,7 @@ import {
   collectCompletedToolCallIds,
   type ConversationRenderContext,
 } from '../../core/conversation-rendering.ts';
-import type { Line } from '../../types/grid.ts';
+import type { Line } from '@pellux/goodvibes-sdk/platform/types';
 import { lineToString } from '../setup.ts';
 
 function makeContext(): { context: ConversationRenderContext; lines: Line[] } {

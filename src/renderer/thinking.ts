@@ -1,4 +1,4 @@
-import { type Line } from '../types/grid.ts';
+import { type Line } from '@pellux/goodvibes-sdk/platform/types';
 import { BORDERS } from './layout.ts';
 import { renderConversationNotice } from './conversation-surface.ts';
 import { activeUiTones } from './theme.ts';

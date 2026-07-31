@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { ExpandableListPanel } from '../../panels/expandable-list-panel.ts';
 import { buildPanelLine, DEFAULT_PANEL_PALETTE } from '../../panels/polish.ts';
-import type { Line } from '../../types/grid.ts';
+import type { Line } from '@pellux/goodvibes-sdk/platform/types';
 import { linesToText } from '../setup.ts';
 
 class DemoPanel extends ExpandableListPanel<string> {

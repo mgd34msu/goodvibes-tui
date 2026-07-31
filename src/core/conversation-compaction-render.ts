@@ -11,7 +11,7 @@ import { activeTheme } from '../renderer/theme.ts';
 import { renderMarkdownTracked } from '../renderer/markdown.ts';
 import { renderConversationCollapsedFragment, renderConversationEventLine } from '../renderer/conversation-surface.ts';
 import { GLYPHS } from '../renderer/ui-primitives.ts';
-import type { Line } from '../types/grid.ts';
+import type { Line } from '@pellux/goodvibes-sdk/platform/types';
 import type { BlockMeta } from './conversation-types.ts';
 
 /**

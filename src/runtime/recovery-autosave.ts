@@ -14,7 +14,7 @@
  */
 import { buildPersistedSessionContext, writeRecoveryFile } from '@/runtime/index.ts';
 import type { SessionSurface } from '@/runtime/index.ts';
-import { writeLivenessMarker } from './session-liveness-marker.ts';
+import { writeLivenessMarker } from '@pellux/goodvibes-sdk/platform/runtime/operations';
 import type { ConversationManager, ConversationMessageSnapshot } from '../core/conversation.ts';
 
 export interface StartRecoveryAutosaveOptions {

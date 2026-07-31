@@ -9,9 +9,9 @@ import {
   serializeMarketplaceIndex,
   type PinnedMarketplaceIndex,
 } from '@pellux/goodvibes-sdk/platform/runtime/ecosystem';
-import { parseGoodVibesCli } from '../../cli/parser.ts';
+import { parseGoodVibesCli } from '@pellux/goodvibes-terminal-shell';
 import { handlePluginCommand } from '../../cli/plugin-command.ts';
-import type { CliCommandRuntime } from '../../cli/types.ts';
+import type { CliCommandRuntime } from '@pellux/goodvibes-terminal-shell';
 import { makeProjectTempDir } from '../helpers/project-temp.ts';
 
 function makeRuntime(root: string, args: readonly string[]): CliCommandRuntime {

@@ -9,7 +9,7 @@
 // that distinction for the operator.
 // ---------------------------------------------------------------------------
 
-import type { Line } from '../types/grid.ts';
+import type { Line } from '@pellux/goodvibes-sdk/platform/types';
 import type { FleetTabsState } from '../panels/fleet-tabs.ts';
 import { renderTabStrip, type TabHitRegion } from './tab-strip.ts';
 import { UI_TONES } from './ui-primitives.ts';

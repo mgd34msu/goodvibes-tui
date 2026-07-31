@@ -6,7 +6,7 @@ import {
   readMemoryShowProvenance,
   MEMORY_SHOW_PROVENANCE_DEFAULT,
 } from '../../core/memory-provenance.ts';
-import type { Line } from '../../types/grid.ts';
+import type { Line } from '@pellux/goodvibes-sdk/platform/types';
 import { buildSettingGroups } from '../../input/settings-modal-data.ts';
 import { createTestManagers } from '../helpers/test-managers.ts';
 

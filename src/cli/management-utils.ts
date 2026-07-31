@@ -26,10 +26,10 @@ import { createRuntimeStore } from '../runtime/store/index.ts';
 import type { RuntimeServices } from '../runtime/services.ts';
 import { RuntimeEventBus, type TurnEvent, createShellPathService, configureRuntimeEventBusDefaults, runtimeEventBusOptionsFrom } from '@/runtime/index.ts';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
-import { resolveRuntimeEndpointBinding } from './endpoints.ts';
-import { applyRuntimeEndpointFlagOverrides } from './config-overrides.ts';
-import type { RuntimeEndpointId } from './endpoints.ts';
-import type { CliCommandRuntime, GoodVibesCliParseResult } from './types.ts';
+import { resolveRuntimeEndpointBinding } from '@pellux/goodvibes-terminal-shell';
+import { applyRuntimeEndpointFlagOverrides } from '@pellux/goodvibes-terminal-shell';
+import type { RuntimeEndpointId } from '@pellux/goodvibes-terminal-shell';
+import type { CliCommandRuntime, GoodVibesCliParseResult } from '@pellux/goodvibes-terminal-shell';
 import { openBrowser as _openBrowser } from '../utils/browser.ts';
 
 type Formatter = (value: unknown, text: string) => string;

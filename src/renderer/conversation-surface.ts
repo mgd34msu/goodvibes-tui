@@ -1,4 +1,4 @@
-import { type Line, createEmptyLine, createStyledCell } from '../types/grid.ts';
+import { type Line, createEmptyLine, createStyledCell } from '@pellux/goodvibes-sdk/platform/types';
 import { getDisplayWidth, wrapText } from '../utils/terminal-width.ts';
 import { LAYOUT } from './layout.ts';
 import { GLYPHS } from './ui-primitives.ts';

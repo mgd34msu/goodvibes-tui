@@ -1,6 +1,6 @@
 import { describe, test, expect } from 'bun:test';
-import { resolvePairingWebOrigin, ensurePublicBaseUrl, isHttpOnLan } from '../../core/pairing-origin.ts';
-import type { StableHostInputs } from '../../core/stable-host.ts';
+import { resolvePairingWebOrigin, ensurePublicBaseUrl, isHttpOnLan } from '@pellux/goodvibes-sdk/platform/pairing';
+import type { StableHostInputs } from '@pellux/goodvibes-sdk/platform/pairing';
 import type { ConfigKey, ConfigManager } from '../../config/index.ts';
 
 /**

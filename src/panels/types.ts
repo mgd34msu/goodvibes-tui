@@ -1,4 +1,4 @@
-import type { Line } from '../types/grid.ts';
+import type { Line } from '@pellux/goodvibes-sdk/platform/types';
 import type { StatusState } from '../renderer/status-glyphs.ts';
 import type { ComponentResourceContract, ComponentHealthState } from '../runtime/perf/panel-contracts.ts';
 // Routed through the `@/` alias (not `./panel-manager.ts`) so this foundational

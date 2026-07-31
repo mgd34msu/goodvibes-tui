@@ -1,7 +1,7 @@
 import type { CommandContext, CommandRegistry } from '../input/command-registry.ts';
 import type { InputHandler } from '../input/handler.ts';
 import type { SelectionItem } from '../input/selection-modal.ts';
-import type { WorkspaceRegistrationManager } from '../runtime/trust/workspace-registration.ts';
+import type { WorkspaceRegistrationManager } from '@pellux/goodvibes-sdk/platform/runtime/operations';
 import { hasResumableWizardProgress, readOnboardingCheckMarker, readWizardProgress } from '../runtime/onboarding/index.ts';
 import { startOnboardingFastPath } from '../runtime/onboarding/fast-path.ts';
 import { checkRecoveryForSession, readLastSessionPointer, type SessionSurface } from '@/runtime/index.ts';
@@ -11,7 +11,7 @@ import { offerRecoverySnapshot } from '../runtime/recovery-prompt.ts';
 import { buildRecoveryOfferWiring } from '../runtime/recovery-offer-wiring.ts';
 import type { ConversationManager } from '../core/conversation.ts';
 import type { SessionManager } from '@pellux/goodvibes-sdk/platform/sessions';
-import type { GoodVibesCliParseResult } from './types.ts';
+import type { GoodVibesCliParseResult } from '@pellux/goodvibes-terminal-shell';
 
 export type TuiStartupShellPaths = Parameters<typeof readOnboardingCheckMarker>[0] & {
   readonly workingDirectory: string;

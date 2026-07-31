@@ -7,7 +7,7 @@ import {
   MEMORY_DIAGNOSTICS_UNAVAILABLE,
   type MemoryDiagnosticsGatewayResolution,
 } from '../../core/memory-diagnostics-gateway.ts';
-import type { MemoryGovernorSnapshotResult } from '../../core/memory-status.ts';
+import type { MemoryGovernorSnapshotResult } from '@pellux/goodvibes-sdk/platform/runtime/memory';
 import { wireMemoryPressureNotice } from '../../runtime/notification-dispatch.ts';
 import { CommandRegistry } from '../../input/command-registry.ts';
 import { registerHealthRuntimeCommands } from '../../input/commands/health-runtime.ts';

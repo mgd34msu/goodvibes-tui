@@ -19,7 +19,7 @@
 // do not implement a bespoke two-press or Enter-only variant.
 // ---------------------------------------------------------------------------
 
-import type { Line } from '../types/grid.ts';
+import type { Line } from '@pellux/goodvibes-sdk/platform/types';
 import { buildPanelLine } from './polish.ts';
 import { DEFAULT_PANEL_PALETTE } from './polish.ts';
 

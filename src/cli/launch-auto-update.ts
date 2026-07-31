@@ -44,7 +44,7 @@ import {
   type ApplyUpdateOptions,
 } from '../input/commands/update-runtime.ts';
 import { readUpdateSettings, type UpdateSettings } from '../config/tui-extension-settings.ts';
-import { runDaemonHandover, type DaemonHandoverOutcome } from '../runtime/daemon-handover.ts';
+import { runDaemonHandover, type DaemonHandoverOutcome } from '@pellux/goodvibes-sdk/platform/runtime/client';
 import { resolveGoodVibesDaemonExecutable } from './service-posture.ts';
 import type { ConfigManager } from '../config/index.ts';
 import { VERSION } from '../version.ts';

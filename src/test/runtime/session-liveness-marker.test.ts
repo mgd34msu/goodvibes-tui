@@ -16,7 +16,7 @@ import {
   livenessMarkerPathFor,
   removeLivenessMarker,
   writeLivenessMarker,
-} from '../../runtime/session-liveness-marker.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/operations';
 
 let tmpHome: string;
 let surface: SessionSurface;

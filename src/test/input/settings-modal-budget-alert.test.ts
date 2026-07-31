@@ -17,7 +17,7 @@ import { tmpdir } from 'os';
 import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import type { ConfigKey } from '@pellux/goodvibes-sdk/platform/config';
 import { buildBudgetAlertUsdSyntheticEntry, buildSettingGroups } from '../../input/settings-modal-data.ts';
-import { BUDGET_ALERT_USD_CONFIG_KEY, BUDGET_ALERT_USD_DEFAULT } from '../../export/cost-utils.ts';
+import { BUDGET_ALERT_USD_CONFIG_KEY, BUDGET_ALERT_USD_DEFAULT } from '@pellux/goodvibes-sdk/platform/providers';
 
 describe('buildBudgetAlertUsdSyntheticEntry', () => {
   const originalCwd = process.cwd();

@@ -21,7 +21,7 @@
  */
 
 import { expect } from 'bun:test';
-import type { Line } from '../../types/grid.ts';
+import type { Line } from '@pellux/goodvibes-sdk/platform/types';
 
 /** Box-drawing chrome + gutter/selection markers whose positions define the frame skeleton. */
 export const DEFAULT_STRUCTURAL_GLYPHS: ReadonlySet<string> = new Set([

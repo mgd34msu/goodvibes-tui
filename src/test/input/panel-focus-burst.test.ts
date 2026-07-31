@@ -17,7 +17,7 @@
 import { describe, test, expect, mock } from 'bun:test';
 import { InputHandler } from '../../input/handler.ts';
 import { SelectionManager } from '../../input/selection.ts';
-import { FocusTracker } from '../../core/focus-tracker.ts';
+import { FocusTracker } from '@pellux/goodvibes-sdk/platform/runtime/operations';
 
 function buildHandler(activePanel: { id: string; handleInput: (key: string) => boolean; isCapturingTextBurst?: () => boolean }) {
   let focusTarget: 'panel' | 'prompt' = 'panel'; // start focused on the panel

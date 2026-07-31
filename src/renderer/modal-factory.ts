@@ -1,5 +1,5 @@
-import type { Line, Cell } from '../types/grid.ts';
-import { createStyledCell } from '../types/grid.ts';
+import type { Line, Cell } from '@pellux/goodvibes-sdk/platform/types';
+import { createStyledCell } from '@pellux/goodvibes-sdk/platform/types';
 import { fitDisplay, getDisplayWidth, truncateDisplay, wrapText } from '../utils/terminal-width.ts';
 import {
   createOverlayBorderLine,

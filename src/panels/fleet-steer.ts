@@ -13,7 +13,7 @@ import { STEER_TTL_MS, type ProcessNode } from '@pellux/goodvibes-sdk/platform/r
 import { isTerminalProcessState } from './fleet-read-model.ts';
 import type { FleetTab, SteerBadge, SteerBadgeStatus } from './fleet-tabs.ts';
 import { buildPanelLine, DEFAULT_PANEL_PALETTE, type PanelPalette } from './polish.ts';
-import type { Line } from '../types/grid.ts';
+import type { Line } from '@pellux/goodvibes-sdk/platform/types';
 
 /** Linger before an auto-resolved (consumed/dropped) steer badge is cleared from the tab. */
 export const STEER_BADGE_LINGER_MS = 4_000;

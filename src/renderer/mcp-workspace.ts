@@ -1,5 +1,5 @@
 import type { McpWorkspace, McpWorkspaceRow } from '../input/mcp-workspace.ts';
-import type { Line } from '../types/grid.ts';
+import type { Line } from '@pellux/goodvibes-sdk/platform/types';
 import { wrapText } from '../utils/terminal-width.ts';
 import { GLYPHS } from './ui-primitives.ts';
 import {

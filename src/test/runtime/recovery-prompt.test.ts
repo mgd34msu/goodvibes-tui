@@ -23,7 +23,7 @@ import {
   type RecoveryPromptDeps,
   type SelectionOpener,
 } from '../../runtime/recovery-prompt.ts';
-import { writeLivenessMarker } from '../../runtime/session-liveness-marker.ts';
+import { writeLivenessMarker } from '@pellux/goodvibes-sdk/platform/runtime/operations';
 import { makeProjectTempDir } from '../helpers/project-temp.ts';
 import { ageRecoverySnapshot, makeTestSurface } from '../helpers/session-surface.ts';
 import { recoveryDecisionsPathFor } from '../../runtime/recovery-decisions.ts';

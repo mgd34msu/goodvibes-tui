@@ -12,8 +12,8 @@
 import { describe, test, expect } from 'bun:test';
 import { mkdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
-import type { Line } from '../../types/grid.ts';
-import { createStyledCell } from '../../types/grid.ts';
+import type { Line } from '@pellux/goodvibes-sdk/platform/types';
+import { createStyledCell } from '@pellux/goodvibes-sdk/platform/types';
 import { renderSettingsModal } from '../../renderer/settings-modal.ts';
 import { SettingsModal } from '../../input/settings-modal.ts';
 import { ConfigManager, ServiceRegistry, SubscriptionManager } from '@pellux/goodvibes-sdk/platform/config';

@@ -14,9 +14,9 @@
 import { describe, test, expect } from 'bun:test';
 import { FEATURE_SETTINGS } from '@pellux/goodvibes-sdk/platform/runtime/state';
 import { CONFIG_SCHEMA } from '@pellux/goodvibes-sdk/platform/config';
-import { featureEnablementWrite, getFeatureSetting, isFeatureValueEnabled } from '../../runtime/feature-settings.ts';
+import { featureEnablementWrite, getFeatureSetting, isFeatureValueEnabled } from '@pellux/goodvibes-terminal-shell';
 import { OnboardingWizardController } from '../../input/onboarding/onboarding-wizard.ts';
-import { getServerSurfaceFeatureFlags } from '../../runtime/surface-feature-flags.ts';
+import { getServerSurfaceFeatureFlags } from '@pellux/goodvibes-sdk/platform/runtime/operations';
 import { EXTERNAL_SURFACE_SPECS } from '../../input/onboarding/onboarding-wizard-external-surfaces.ts';
 import {
   FEATURE_ONBOARDING_SECTIONS,

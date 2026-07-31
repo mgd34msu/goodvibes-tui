@@ -2,7 +2,7 @@ import type { OrchestratorCoreServices } from '@pellux/goodvibes-sdk/platform/co
 import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import type { ProviderRegistry } from '@pellux/goodvibes-sdk/platform/providers';
 import type { RuntimeServices } from './services.ts';
-import { isCodeInjectionSettingEnabled } from './code-index-services.ts';
+import { isCodeInjectionSettingEnabled } from '@pellux/goodvibes-sdk/platform/runtime/operations';
 
 /** The slice of the runtime services bag the shared orchestrator payload draws from. */
 export type OrchestratorCoreServicesSource = Pick<

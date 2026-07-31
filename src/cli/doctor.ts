@@ -4,8 +4,8 @@ import type { PermissionCategory, PermissionCheckResult } from '@pellux/goodvibe
 import { PolicyRuntimeState, createFeatureFlagManager, deriveFeatureStates } from '@/runtime/index.ts';
 import { getProviderIdFromModel } from '../config/provider-model.ts';
 import { describeConfiguredEffort } from '../providers/reasoning-effort-surface.ts';
-import type { CliCommandOutput } from './types.ts';
-import type { GoodVibesCliOutputFormat } from './types.ts';
+import type { CliCommandOutput } from '@pellux/goodvibes-terminal-shell';
+import type { GoodVibesCliOutputFormat } from '@pellux/goodvibes-terminal-shell';
 import { buildHooksValidation } from './hooks-report.ts';
 
 // ---------------------------------------------------------------------------

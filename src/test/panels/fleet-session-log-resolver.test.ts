@@ -26,7 +26,7 @@ import { createShellPathService } from '@/runtime/index.ts';
 import type { ProcessNode } from '@pellux/goodvibes-sdk/platform/runtime/fleet';
 import { FleetPanel, type FleetActionCallbacks } from '../../panels/fleet-panel.ts';
 import { buildFleetSnapshot, createStaticFleetReadModel } from '../../panels/fleet-read-model.ts';
-import type { Line } from '../../types/grid.ts';
+import type { Line } from '@pellux/goodvibes-sdk/platform/types';
 import { makeProjectTempDir } from '../helpers/project-temp.ts';
 
 const NOW = 1_700_000_000_000;

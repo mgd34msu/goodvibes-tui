@@ -17,7 +17,7 @@ import {
   NOTIFY_AFTER_SECONDS_DEFAULT,
   NOTIFY_AFTER_SECONDS_OFF,
 } from '../../core/long-task-notifier.ts';
-import { FocusTracker } from '../../core/focus-tracker.ts';
+import { FocusTracker } from '@pellux/goodvibes-sdk/platform/runtime/operations';
 
 // ---------------------------------------------------------------------------
 // Helpers

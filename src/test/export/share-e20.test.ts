@@ -1,5 +1,5 @@
 import { describe, test, expect, mock, beforeEach, afterEach } from 'bun:test';
-import { calcSessionCost, getPricing } from '../../export/cost-utils.ts';
+import { calcSessionCost, getPricing } from '@pellux/goodvibes-sdk/platform/providers';
 import {
   resolveGithubToken,
   GistUploadTarget,

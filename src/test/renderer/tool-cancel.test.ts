@@ -6,7 +6,7 @@ import {
 import { renderToolCallBlock } from '../../renderer/tool-call.ts';
 import { createCancelToolCall, type ToolCancelOrchestrator } from '../../core/turn-cancellation.ts';
 import { KeybindingsManager } from '../../input/keybindings.ts';
-import type { Line } from '../../types/grid.ts';
+import type { Line } from '@pellux/goodvibes-sdk/platform/types';
 import { lineToString } from '../setup.ts';
 
 // ---------------------------------------------------------------------------

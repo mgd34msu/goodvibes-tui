@@ -27,9 +27,9 @@
  * positioning is involved, so an OSC 9 emitted between frames is safe.
  */
 import { logger } from '@pellux/goodvibes-sdk/platform/utils';
-import { allowTerminalWrite } from '../runtime/terminal-output-guard.ts';
-import { readBooleanConfig, type ConfigGet } from './alert-gating.ts';
-import type { FocusTracker } from './focus-tracker.ts';
+import { allowTerminalWrite } from '@pellux/goodvibes-terminal-shell';
+import { readBooleanConfig, type ConfigGet } from '@pellux/goodvibes-sdk/platform/runtime/operations';
+import type { FocusTracker } from '@pellux/goodvibes-sdk/platform/runtime/operations';
 
 export type TerminalNotifySignal = 'approval-wait' | 'turn-end' | 'agent-blocked';
 

@@ -1,4 +1,4 @@
-import { type Line, createStyledCell, createEmptyLine } from '../types/grid.ts';
+import { type Line, createStyledCell, createEmptyLine } from '@pellux/goodvibes-sdk/platform/types';
 import { LAYOUT, TOOL_STATUS } from './layout.ts';
 import { getDisplayWidth, truncateDisplay } from '../utils/terminal-width.ts';
 import type { ToolCall } from '@pellux/goodvibes-sdk/platform/types';

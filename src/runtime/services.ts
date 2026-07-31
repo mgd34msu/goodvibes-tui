@@ -44,12 +44,12 @@
  * two disagree the daemon's record is the truth, and the client seams in
  * runtime/client/ are what keep them in step.
  */
-import { FocusTracker } from '../core/focus-tracker.ts';
+import { FocusTracker } from '@pellux/goodvibes-sdk/platform/runtime/operations';
 import { AutomationDeliveryManager, AutomationManager } from '@pellux/goodvibes-sdk/platform/automation';
 import { ChannelPolicyManager } from '@pellux/goodvibes-sdk/platform/channels';
 import { ApprovalBroker, GatewayMethodCatalog, SharedSessionBroker } from '@pellux/goodvibes-sdk/platform/control-plane';
 import { createClientRuntimeServices } from '@pellux/goodvibes-sdk/platform/runtime/client-services';
-import { wireIdlePowerAndLiveTurn } from './idle-power-services.ts';
+import { wireIdlePowerAndLiveTurn } from '@pellux/goodvibes-sdk/platform/runtime/operations';
 import { createDisposalScope, registerSurfaceRuntimePollers } from './disposal-wiring.ts';
 import { composeCredentialServices } from './credential-composition.ts';
 import { WatcherRegistry } from '@pellux/goodvibes-sdk/platform/watchers';
@@ -62,33 +62,33 @@ import { MemoryEmbeddingProviderRegistry, MemoryRegistry, MemoryStore, resolveCa
 import { buildExecPromptAnswerHandler } from '@pellux/goodvibes-sdk/platform/runtime/permissions/exec-prompt-wiring';
 import { buildLocalhostFetchApproval } from '@pellux/goodvibes-sdk/platform/runtime/permissions/localhost-fetch-approval';
 import { createNotificationDispatcher, wireRuntimeNotificationBridge, wireMemoryPressureNotice } from './notification-dispatch.ts';
-import { createDurabilityServices } from './durability-services.ts';
+import { createDurabilityServices } from '@pellux/goodvibes-sdk/platform/runtime/operations';
 import { MemorySpineClient, createLocalMemoryAccess } from '@pellux/goodvibes-sdk/platform/runtime/memory-spine';
 import { createWorkspaceCheckpointing } from './workspace-checkpointing.ts';
 import { createDomainDispatch } from './store/index.ts';
 import { DistributedRuntimeManager, IntegrationHelperService, IdempotencyStore, ComponentHealthMonitor, WorktreeRegistry, createFeatureFlagManager, createShellPathService } from '@/runtime/index.ts';
-import { createSessionStorageServices } from './session-storage-services.ts';
+import { createSessionStorageServices } from '@pellux/goodvibes-sdk/platform/runtime/operations';
 import { VoiceProviderRegistry, VoiceService, ensureBuiltinVoiceProviders } from '@pellux/goodvibes-sdk/platform/voice';
 import { CacheRegistry, PauseController } from '@pellux/goodvibes-sdk/platform/runtime/memory';
 import { wireMemoryGovernance } from './memory-governance-services.ts';
-import { wireVoiceSetup } from './voice-setup-services.ts';
+import { wireVoiceSetup } from '@pellux/goodvibes-sdk/platform/runtime/operations';
 import { PanelManager } from '../panels/panel-manager.ts';
 import { BookmarkManager } from '@pellux/goodvibes-sdk/platform/bookmarks';
 import { ProfileManager } from '@pellux/goodvibes-sdk/platform/profiles';
 import { SessionChangeTracker } from '@pellux/goodvibes-sdk/platform/sessions';
 import { ApiTokenAuditor, UserAuthManager } from '@pellux/goodvibes-sdk/platform/security';
 import { WebhookNotifier } from '@pellux/goodvibes-sdk/platform/integrations';
-import { createRemoteExecutionServices } from './remote-execution-composition.ts';
+import { createRemoteExecutionServices } from '@pellux/goodvibes-sdk/platform/runtime/operations';
 import { WrfcController } from '@pellux/goodvibes-sdk/platform/agents';
 import { KeybindingsManager } from '../input/keybindings.ts';
 import { AdaptivePlanner, DeterministicReplayEngine, ExecutionPlanManager, SessionLineageTracker, SessionMemoryStore } from '@pellux/goodvibes-sdk/platform/core';
 import { deriveFeatureStates, bindFeatureSettingsBridge } from '@pellux/goodvibes-sdk/platform/runtime/state';
-import { createChannelComposition } from './channel-composition.ts';
-import { applyProviderOptimizerConfigMode, bindProviderOptimizerFeatureFlag } from './provider-optimizer-wiring.ts';
-import { createFleetServices } from './fleet-services.ts';
-import { createWorkstreamServices } from './workstream-services.ts';
-import { codeIndexDbPath, createCodeIndexServices, createStoreRerooter, isCodeInjectionSettingEnabled } from './code-index-services.ts';
-import { WorkspaceTrustManager } from './trust/workspace-trust.ts';
+import { createChannelComposition } from '@pellux/goodvibes-sdk/platform/runtime/operations';
+import { applyProviderOptimizerConfigMode, bindProviderOptimizerFeatureFlag } from '@pellux/goodvibes-sdk/platform/runtime/operations';
+import { createFleetServices } from '@pellux/goodvibes-terminal-shell';
+import { createWorkstreamServices } from '@pellux/goodvibes-sdk/platform/orchestration';
+import { codeIndexDbPath, createCodeIndexServices, createStoreRerooter, isCodeInjectionSettingEnabled } from '@pellux/goodvibes-sdk/platform/runtime/operations';
+import { WorkspaceTrustManager } from '@pellux/goodvibes-sdk/platform/runtime/operations';
 import { ensureConfiguredModelIsRoutable } from '@pellux/goodvibes-sdk/platform/providers';
 import { GOODVIBES_TUI_SURFACE_ROOT } from '../config/surface.ts';
 import { createDaemonVerbCaller } from './client/operator-endpoint.ts';
@@ -118,7 +118,7 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
   const disposalScope = createDisposalScope('RuntimeServices'); const workingDirectory = options.workingDir; // disposal seam: see ./disposal-wiring.ts
   const homeDirectory = options.homeDirectory;
   // Built before anything that touches session state — see session-storage-services.ts.
-  const { surface, sessionManager } = createSessionStorageServices({ workingDirectory, homeDirectory });
+  const { surface, sessionManager } = createSessionStorageServices({ workingDirectory, homeDirectory, surfaceRoot: GOODVIBES_TUI_SURFACE_ROOT });
   const configManager = options.configManager;
   const featureFlags = options.featureFlags ?? createFeatureFlagManager();
   if (options.featureFlags === undefined) {
@@ -190,7 +190,7 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
     ...(options.daemonHomeDirectory === undefined ? {} : { daemonHome: options.daemonHomeDirectory }),
   });
   const runtimeDispatch = createDomainDispatch(options.runtimeStore);
-  const workspaceTrustManager = new WorkspaceTrustManager({ shellPaths });
+  const workspaceTrustManager = new WorkspaceTrustManager({ shellPaths, surfaceRoot: GOODVIBES_TUI_SURFACE_ROOT });
   const {
     agentManager, agentMessageBus, agentOrchestrator, archetypeLoader,
     contextAccountingHolder, providerRegistry, providerCapabilityRegistry, cacheHitTracker,
@@ -342,7 +342,7 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
   sessionBroker.setContinuationRunner(continuationRunner);
   wireSessionDispatch.setContinuationRunner(continuationRunner);
   const memoryEmbeddingRegistry = new MemoryEmbeddingProviderRegistry({ configManager });
-  // Open the ONE home-scoped canonical store; legacy per-project TUI memory folds in at boot (foldTuiLegacyMemory).
+  // Open the ONE home-scoped canonical store; legacy per-project TUI memory folds in at boot (foldLegacyProjectMemory).
   const memoryDbPath = resolveCanonicalMemoryDbPath(homeDirectory);
   const memoryStore = new MemoryStore(memoryDbPath, {
     embeddingRegistry: memoryEmbeddingRegistry,
@@ -453,11 +453,11 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
     agentManager, configManager, adaptivePlanner, runtimeBus: options.runtimeBus, projectRoot: workingDirectory,
   });
   // Repo source-tree code index, sharing memoryEmbeddingRegistry with MemoryStore.
-  const { codeIndexStore, codeIndexReindexScheduler } = createCodeIndexServices({ workingDirectory, configManager, memoryEmbeddingRegistry, isReindexPaused: () => pauseController.isPaused('code-index-reindex'), admitExpensiveWork });
+  const { codeIndexStore, codeIndexReindexScheduler } = createCodeIndexServices({ workingDirectory, surfaceRoot: GOODVIBES_TUI_SURFACE_ROOT, configManager, memoryEmbeddingRegistry, isReindexPaused: () => pauseController.isPaused('code-index-reindex'), admitExpensiveWork });
   const codeInjectionOrchestratorDeps = { codeIndex: codeIndexStore, isCodeInjectionSettingEnabled: () => isCodeInjectionSettingEnabled(configManager), codeIndexReindexScheduler };
   // Store snapshots, the periodic append-only sweep, durable remembered-approval rules + the live credential chain.
   const { storeSnapshotScheduler, appendOnlyRetentionScheduler, userPermissionRuleStore, stopDurabilityHousekeeping, stopConfigWatch } = createDurabilityServices({
-    configManager, secretsManager, providerRegistry, memoryDbPath, codeIndexDbPath: codeIndexDbPath(workingDirectory), surface, shellPaths,
+    configManager, secretsManager, providerRegistry, memoryDbPath, codeIndexDbPath: codeIndexDbPath(workingDirectory, GOODVIBES_TUI_SURFACE_ROOT), surface, shellPaths,
     ...(options.currentSessionId ? { currentSessionId: options.currentSessionId } : {}),
   });
   const { processRegistry } = createFleetServices({ // Shared archive-aware fleet registry — see fleet-services.ts
@@ -684,7 +684,7 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
     fileUndoManager,
     workspaceCheckpointManager,
     integrationHelpers,
-    rerootStores: createStoreRerooter({ codeIndexStore, projectIndex }),
+    rerootStores: createStoreRerooter({ codeIndexStore, projectIndex, surfaceRoot: GOODVIBES_TUI_SURFACE_ROOT }),
     cancelHostedAgentRuns: () => cancelAllAgentRuns(agentManager),
     dispose: (): void => disposalScope.dispose(),
   };

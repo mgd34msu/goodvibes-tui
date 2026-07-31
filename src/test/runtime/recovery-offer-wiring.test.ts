@@ -18,7 +18,7 @@ import type { SessionSurface } from '@/runtime/index.ts';
 import { ConversationManager } from '../../core/conversation.ts';
 import { buildRecoveryOfferWiring } from '../../runtime/recovery-offer-wiring.ts';
 import { offerRecoverySnapshot, type SelectionOpener,  resetAnsweredRecoveryOffersForTest } from '../../runtime/recovery-prompt.ts';
-import { bindWriteLastSessionPointerToSurface } from '../../runtime/session-pointer-surface.ts';
+import { bindWriteLastSessionPointerToSurface } from '@pellux/goodvibes-sdk/platform/runtime/operations';
 import { makeProjectTempDir } from '../helpers/project-temp.ts';
 import { ageRecoverySnapshot, makeTestSurface } from '../helpers/session-surface.ts';
 

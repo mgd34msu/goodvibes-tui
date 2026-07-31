@@ -102,13 +102,13 @@ export async function writeTempFile(dir: string, name: string, content: string):
  * Extract plain text string from a Line (Cell[]).
  * Joins all cell characters, trims trailing spaces.
  */
-export function lineToString(line: import('../types/grid.ts').Line): string {
+export function lineToString(line: import('@pellux/goodvibes-sdk/platform/types').Line): string {
   return line.map((c) => c.char).join('').trimEnd();
 }
 
 /**
  * Extract plain text from an array of Lines.
  */
-export function linesToText(lines: import('../types/grid.ts').Line[]): string[] {
+export function linesToText(lines: import('@pellux/goodvibes-sdk/platform/types').Line[]): string[] {
   return lines.map(lineToString);
 }

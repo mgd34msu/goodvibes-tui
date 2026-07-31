@@ -12,7 +12,7 @@
 // way don't each hand-roll the same field + dispatch + render wiring.
 // ---------------------------------------------------------------------------
 
-import type { Line } from '../types/grid.ts';
+import type { Line } from '@pellux/goodvibes-sdk/platform/types';
 import { type ConfirmState, handleConfirmInput, renderConfirmLines } from './confirm-state.ts';
 
 export interface PanelConfirmOverlayHandlers {

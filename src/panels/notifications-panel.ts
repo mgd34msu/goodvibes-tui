@@ -8,7 +8,7 @@
  * the conversation. Descriptive text (titles, bodies, reason descriptions)
  * is always wrapped in full — never clipped to a column width.
  */
-import type { Line } from '../types/grid.ts';
+import type { Line } from '@pellux/goodvibes-sdk/platform/types';
 import type { RoutingDecision } from '@/runtime/index.ts';
 import { BasePanel } from './base-panel.ts';
 import {

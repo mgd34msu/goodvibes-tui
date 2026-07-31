@@ -3,7 +3,7 @@ import { renderSearchOverlay } from '../../renderer/search-overlay.ts';
 import { SearchManager } from '../../input/search.ts';
 
 /** Extract text from a rendered Line (Cell array). */
-function lineText(line: import('../../types/grid.ts').Line): string {
+function lineText(line: import('@pellux/goodvibes-sdk/platform/types').Line): string {
   return line.map(c => c.char).join('');
 }
 

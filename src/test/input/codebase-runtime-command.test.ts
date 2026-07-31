@@ -20,7 +20,7 @@ import { MemoryEmbeddingProviderRegistry } from '@pellux/goodvibes-sdk/platform/
 import type { CodeIndexStore } from '@pellux/goodvibes-sdk/platform/state';
 import { CommandRegistry, type CommandContext } from '../../input/command-registry.ts';
 import { registerCodebaseRuntimeCommands } from '../../input/commands/codebase-runtime.ts';
-import { CODE_INDEX_ENABLED_CONFIG_KEY, createCodeIndexServices } from '../../runtime/code-index-services.ts';
+import { CODE_INDEX_ENABLED_CONFIG_KEY, createCodeIndexServices } from '@pellux/goodvibes-sdk/platform/runtime/operations';
 import { makeProjectTempDir } from '../helpers/project-temp.ts';
 
 const tempDirs: string[] = [];
@@ -51,7 +51,7 @@ function makeRealStore(): { store: CodeIndexStore; configManager: ConfigManager 
   const workingDirectory = makeScratchWorkingDirectory();
   const configManager = makeConfigManager(workingDirectory);
   const memoryEmbeddingRegistry = new MemoryEmbeddingProviderRegistry({ configManager });
-  const { codeIndexStore } = createCodeIndexServices({ workingDirectory, configManager, memoryEmbeddingRegistry });
+  const { codeIndexStore } = createCodeIndexServices({ workingDirectory, surfaceRoot: 'tui', configManager, memoryEmbeddingRegistry });
   return { store: codeIndexStore, configManager };
 }
 

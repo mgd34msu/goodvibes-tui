@@ -19,8 +19,8 @@ import type { PolicyRuntimeState } from '@/runtime/index.ts';
 import type { FileUndoManager } from '@pellux/goodvibes-sdk/platform/state';
 import type { WorkspaceCheckpointManager } from '@pellux/goodvibes-sdk/platform/workspace';
 import type { GatewayMethodCatalog } from '@pellux/goodvibes-sdk/platform/control-plane';
-import type { WorkspaceTrustManager } from './trust/workspace-trust.ts';
-import type { WorkspaceRegistrationManager } from './trust/workspace-registration.ts';
+import type { WorkspaceTrustManager } from '@pellux/goodvibes-sdk/platform/runtime/operations';
+import type { WorkspaceRegistrationManager } from '@pellux/goodvibes-sdk/platform/runtime/operations';
 import type { McpRegistry } from '@pellux/goodvibes-sdk/platform/mcp';
 import type { MemoryRegistry } from '@pellux/goodvibes-sdk/platform/state';
 import type { IntegrationHelperService } from '@/runtime/index.ts';
@@ -91,7 +91,7 @@ export type CreateBootstrapCommandContextOptions = {
   knowledgeService?: KnowledgeService;
   projectPlanningService?: import('@pellux/goodvibes-sdk/platform/knowledge').ProjectPlanningService;
   projectPlanningProjectId?: string;
-  workPlanStore?: import('../work-plans/work-plan-store.ts').WorkPlanStore;
+  workPlanStore?: import('@pellux/goodvibes-sdk/platform/workflow').WorkPlanStore;
   providerOptimizer?: import('@pellux/goodvibes-sdk/platform/providers').ProviderOptimizer;
   pluginManager?: PluginManager;
   hookWorkbench?: HookWorkbench;
@@ -134,7 +134,7 @@ export type CreateBootstrapCommandContextOptions = {
   wrfcController?: import('@pellux/goodvibes-sdk/platform/agents').WrfcController;
   componentHealthMonitor: import('@/runtime/index.ts').ComponentHealthMonitor;
   hydrateSessionUsage?: () => void;
-  workstreamEngine?: import('./workstream-services.ts').WorkstreamCommandService;
+  workstreamEngine?: import('@pellux/goodvibes-sdk/platform/orchestration').WorkstreamCommandService;
   codeIndexStore?: import('@pellux/goodvibes-sdk/platform/state').CodeIndexStore;
   codeIndexReindexScheduler?: import('@pellux/goodvibes-sdk/platform/state').CodeIndexReindexScheduler;
   isPassiveCodeInjectionFlagEnabled?: () => boolean;

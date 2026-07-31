@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { rmSync } from 'node:fs';
 import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
-import { applyRuntimeConfigValue } from '../../cli/config-overrides.ts';
+import { applyRuntimeConfigValue } from '@pellux/goodvibes-terminal-shell';
 import { buildPermissionProvenance, renderPermissionProvenance } from '../../input/commands/permissions-provenance.ts';
 import { makeProjectTempDir } from '../helpers/project-temp.ts';
 

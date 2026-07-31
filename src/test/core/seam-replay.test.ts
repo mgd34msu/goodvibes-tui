@@ -31,7 +31,7 @@ import {
   JOURNAL_SCHEMA_VERSION,
   journalPathFor,
   openTranscriptJournal,
-} from '../../core/transcript-journal.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/operations';
 import {
   replayJournalForSession,
   replayJournalIntoConversation,

@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { installTuiTerminalOutputGuard } from '../../runtime/terminal-output-guard.ts';
+import { installFullScreenTerminalOutputGuard } from '@pellux/goodvibes-terminal-shell';
 
 // item 1a: direct terminal writes that would corrupt the TUI are captured
 // and counted (surfaced by /debug), NOT pushed as repeated transcript lines.
@@ -9,7 +9,7 @@ describe('TUI terminal-output guard counter (1a)', () => {
     const fakeStdout = { write: (s: string | Uint8Array) => { written.push(String(s)); return true; } };
     const captures: number[] = [];
 
-    const guard = installTuiTerminalOutputGuard({
+    const guard = installFullScreenTerminalOutputGuard({
       stdout: fakeStdout as never,
       stderr: fakeStdout as never,
       active: true,

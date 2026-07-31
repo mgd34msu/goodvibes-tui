@@ -5,10 +5,10 @@
  * roomy workspace with contextual documentation, not a cramped modal list.
  */
 
-import type { Line } from '../types/grid.ts';
+import type { Line } from '@pellux/goodvibes-sdk/platform/types';
 import type { SettingsModal, SettingEntry, McpEntry, SubscriptionEntry, SettingsCategory } from '../input/settings-modal.ts';
 import { SETTINGS_CATEGORIES, SETTINGS_CATEGORY_GROUPS } from '../input/settings-modal.ts';
-import { FEATURE_SETTINGS_BY_ID, isFeatureValueEnabled } from '../runtime/feature-settings.ts';
+import { FEATURE_SETTINGS_BY_ID, isFeatureValueEnabled } from '@pellux/goodvibes-terminal-shell';
 import { getDisplayWidth, wrapText } from '../utils/terminal-width.ts';
 import { CATEGORY_INFO, CATEGORY_LABELS, describeUiRouting, formatValue, getSettingLabel, inferSubscriptionRouteReason, valueColor } from './settings-modal-helpers.ts';
 import { buildConnectionContext, renderConnectionRows } from './settings-modal-connections.ts';

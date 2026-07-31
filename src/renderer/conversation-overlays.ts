@@ -1,4 +1,4 @@
-import type { Line } from '../types/grid.ts';
+import type { Line } from '@pellux/goodvibes-sdk/platform/types';
 import type { ConversationManager } from '../core/conversation';
 import type { CommandRegistry } from '../input/command-registry.ts';
 import type { InputHandler } from '../input/handler.ts';

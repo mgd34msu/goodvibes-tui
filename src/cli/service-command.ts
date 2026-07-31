@@ -1,7 +1,7 @@
 import { mkdirSync } from 'node:fs';
-import type { CliCommandRuntime } from './types.ts';
+import type { CliCommandRuntime } from '@pellux/goodvibes-terminal-shell';
 import { buildCliServicePosture, createPlatformServiceManager, formatCliServicePosture, getServiceStateRoot } from './service-posture.ts';
-import type { CliCommandOutput } from './types.ts';
+import type { CliCommandOutput } from '@pellux/goodvibes-terminal-shell';
 
 function enableServicePosture(runtime: CliCommandRuntime): void {
   runtime.configManager.setDynamic('service.enabled', true);

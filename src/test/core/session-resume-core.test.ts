@@ -23,7 +23,7 @@ import { ConversationManager } from '../../core/conversation.ts';
 import { PanelManager } from '../../panels/panel-manager.ts';
 import { makeProjectTempDir } from '../helpers/project-temp.ts';
 import { resumeSessionCore, reopenPanelsWithModalSkip, DEFAULT_PANEL_REOPEN_LIMIT } from '../../core/session-resume-core.ts';
-import { clearTurnAnchors, getTurnAnchors, persistTurnAnchors, recordTurnAnchor } from '../../core/rewind-turn-anchors.ts';
+import { clearTurnAnchors, getTurnAnchors, persistTurnAnchors, recordTurnAnchor } from '@pellux/goodvibes-sdk/platform/rewind';
 import { makeTestSurface } from '../helpers/session-surface.ts';
 
 let tmpDir: string;

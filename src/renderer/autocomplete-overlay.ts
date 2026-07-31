@@ -1,4 +1,4 @@
-import { type Line } from '../types/grid.ts';
+import { type Line } from '@pellux/goodvibes-sdk/platform/types';
 import { fitDisplay, getDisplayWidth, truncateDisplay } from '../utils/terminal-width.ts';
 import { wrapWithHangingIndent } from './text-layout.ts';
 import type { AutocompleteEngine } from '../input/autocomplete.ts';

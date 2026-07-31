@@ -9,7 +9,7 @@ import { existsSync, rmSync } from 'node:fs';
 import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import { createUnavailablePowerSeam } from '@pellux/goodvibes-sdk/platform/power';
 import { fetchDaemonPowerState, forwardKeepAwakeToDaemon, installKeepAwakeRemoteForward } from '../../runtime/power-keepawake-remote.ts';
-import { wireIdlePowerAndLiveTurn } from '../../runtime/idle-power-services.ts';
+import { wireIdlePowerAndLiveTurn } from '@pellux/goodvibes-sdk/platform/runtime/operations';
 import { makeProjectTempDir } from '../helpers/project-temp.ts';
 
 function spyConfig() {

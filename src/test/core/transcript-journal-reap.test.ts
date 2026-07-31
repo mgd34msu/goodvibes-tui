@@ -21,7 +21,7 @@ import {
   openTranscriptJournal,
   reapOrphanedJournals,
   replayJournal,
-} from '../../core/transcript-journal.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/operations';
 
 let tmpHome: string;
 let surface: SessionSurface;

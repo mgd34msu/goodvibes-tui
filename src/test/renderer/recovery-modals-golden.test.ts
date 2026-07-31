@@ -33,7 +33,7 @@ import {
 } from '../../runtime/recovery-prompt.ts';
 import type { SelectionItem } from '../../input/selection-modal.ts';
 import type { RecoveryFileInfo } from '@/runtime/index.ts';
-import type { Cell, Line } from '../../types/grid.ts';
+import type { Cell, Line } from '@pellux/goodvibes-sdk/platform/types';
 
 const GOLDENS_DIR = new URL('./golden-frames/', import.meta.url).pathname;
 const UPDATE = process.env['GOODVIBES_UPDATE_GOLDENS'] === '1';

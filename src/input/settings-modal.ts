@@ -55,7 +55,7 @@ import {
   type DaemonOwnedConfigWriter,
   type SettingAppliedCallback,
 } from './settings-modal-mutations.ts';
-import { featureEnablementWrite, isFeatureValueEnabled } from '../runtime/feature-settings.ts';
+import { featureEnablementWrite, isFeatureValueEnabled } from '@pellux/goodvibes-terminal-shell';
 import {
   activateSelected as _activateSelected,
   handleSubscriptionLogoutKey as _handleSubscriptionLogoutKey,

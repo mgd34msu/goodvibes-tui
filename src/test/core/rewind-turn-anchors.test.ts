@@ -10,7 +10,7 @@ import {
   resolveTurnAnchor,
   restoreTurnAnchors,
   type TurnAnchor,
-} from '../../core/rewind-turn-anchors.ts';
+} from '@pellux/goodvibes-sdk/platform/rewind';
 import { makeProjectTempDir } from '../helpers/project-temp.ts';
 
 const tempDirs: string[] = [];

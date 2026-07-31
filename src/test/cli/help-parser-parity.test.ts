@@ -10,9 +10,8 @@
  * completions/generate.ts — preventing silent documentation rot.
  */
 
-import { readFileSync } from 'node:fs';
 import { describe, expect, test } from 'bun:test';
-import { parseGoodVibesCli } from '../../cli/parser.ts';
+import { GOODVIBES_CLI_CATALOG, parseGoodVibesCli } from '@pellux/goodvibes-terminal-shell';
 import { renderGoodVibesHelp } from '../../cli/help.ts';
 import { GLOBAL_FLAGS } from '../../cli/completions/generate.ts';
 
@@ -79,19 +78,21 @@ const PARSER_SHORT_TO_LONG: ReadonlyMap<string, string> = new Map([
 // ---------------------------------------------------------------------------
 
 /**
- * Extract all flag tokens (--long and -short forms) that the parser source
- * recognises by scanning `name === '--x'` / `name === '-x'` patterns.
- * Returns a Set of all matched flag literals.
+ * Every flag token this terminal's CLI vocabulary declares, read off the
+ * catalog the parser is driven by. This is the ground truth the hand-lists
+ * below are checked against — a declared token IS what the parser accepts, so
+ * there is nothing to scrape and nothing that can be true of the source text
+ * and false of the parse.
  */
 function extractParserFlags(): Set<string> {
-  const parserPath = new URL('../../cli/parser.ts', import.meta.url).pathname;
-  const source = readFileSync(parserPath, 'utf-8');
-  // Match: name === '--foo'  or  name === '-f'
-  const pattern = /name\s*===\s*'(--?[A-Za-z][A-Za-z0-9-]*)'/g;
   const found = new Set<string>();
-  let match: RegExpExecArray | null;
-  while ((match = pattern.exec(source)) !== null) {
-    found.add(match[1]!);
+  for (const spec of GOODVIBES_CLI_CATALOG.globalFlags) {
+    for (const token of spec.tokens) found.add(token);
+  }
+  for (const command of GOODVIBES_CLI_CATALOG.commands) {
+    for (const spec of command.flags ?? []) {
+      for (const token of spec.tokens) found.add(token);
+    }
   }
   return found;
 }
@@ -124,12 +125,12 @@ describe('help-parser parity: hand-lists match parser source', () => {
   const SOURCE_LONG_ADJUSTED = new Set(SOURCE_LONG_FLAGS);
   SOURCE_LONG_ADJUSTED.delete('--cd'); // alias of --working-dir; hand-list uses the canonical
 
-  test('every long flag in parser.ts is in PARSER_KNOWN_LONG_FLAGS', () => {
+  test('every long flag in the CLI catalog is in PARSER_KNOWN_LONG_FLAGS', () => {
     const missing = [...SOURCE_LONG_ADJUSTED].filter((f) => !HAND_LONG_SET.has(f));
     expect(missing).toEqual([]);
   });
 
-  test('every entry in PARSER_KNOWN_LONG_FLAGS exists in parser.ts source', () => {
+  test('every entry in PARSER_KNOWN_LONG_FLAGS exists in the CLI catalog', () => {
     const phantom = [...HAND_LONG_SET].filter((f) => !SOURCE_LONG_FLAGS.has(f));
     expect(phantom).toEqual([]);
   });
@@ -137,12 +138,12 @@ describe('help-parser parity: hand-lists match parser source', () => {
   // Short flags: hand-list is the keys of PARSER_SHORT_TO_LONG.
   const HAND_SHORT_SET = new Set<string>(PARSER_SHORT_TO_LONG.keys());
 
-  test('every short flag in parser.ts is in PARSER_SHORT_TO_LONG', () => {
+  test('every short flag in the CLI catalog is in PARSER_SHORT_TO_LONG', () => {
     const missing = [...SOURCE_SHORT_FLAGS].filter((f) => !HAND_SHORT_SET.has(f));
     expect(missing).toEqual([]);
   });
 
-  test('every entry in PARSER_SHORT_TO_LONG exists in parser.ts source', () => {
+  test('every entry in PARSER_SHORT_TO_LONG exists in the CLI catalog', () => {
     const phantom = [...HAND_SHORT_SET].filter((f) => !SOURCE_SHORT_FLAGS.has(f));
     expect(phantom).toEqual([]);
   });

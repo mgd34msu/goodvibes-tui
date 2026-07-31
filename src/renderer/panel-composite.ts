@@ -1,4 +1,4 @@
-import type { Line } from '../types/grid.ts';
+import type { Line } from '@pellux/goodvibes-sdk/platform/types';
 import type { Panel } from '../panels/types.ts';
 import type { InputHandler } from '../input/handler.ts';
 import type { PanelManager } from '../panels/panel-manager.ts';

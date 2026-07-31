@@ -1,13 +1,13 @@
 import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import { BasePanel } from './base-panel.ts';
-import { createEmptyLine, createStyledCell, type Line } from '../types/grid.ts';
+import { createEmptyLine, createStyledCell, type Line } from '@pellux/goodvibes-sdk/platform/types';
 import type { Orchestrator } from '../core/orchestrator';
 import { evaluateSessionMaintenance } from '@/runtime/index.ts';
 import type { TurnEvent } from '@/runtime/index.ts';
 import type { UiEventFeed } from '@/runtime/index.ts';
 import type { UiReadModel, UiSessionSnapshot } from '../runtime/ui-read-models.ts';
 import type { SessionMemoryQuery } from '@/runtime/index.ts';
-import { calcSessionCost, describePricingSource, isModelPriced } from '../export/cost-utils.ts';
+import { calcSessionCost, describePricingSource, isModelPriced } from '@pellux/goodvibes-sdk/platform/providers';
 import { type ConfirmState, handleConfirmInput, renderConfirmLines } from './confirm-state.ts';
 import type { PanelIntegrationContext } from './types.ts';
 import {

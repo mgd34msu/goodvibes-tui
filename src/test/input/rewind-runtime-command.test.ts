@@ -20,7 +20,7 @@ import {
   redoLastRewind,
   resetRewindState,
 } from '../../input/commands/rewind-runtime.ts';
-import { recordTurnAnchor, clearTurnAnchors } from '../../core/rewind-turn-anchors.ts';
+import { recordTurnAnchor, clearTurnAnchors } from '@pellux/goodvibes-sdk/platform/rewind';
 import { DiffPanel } from '../../panels/diff-panel.ts';
 import { makeProjectTempDir } from '../helpers/project-temp.ts';
 

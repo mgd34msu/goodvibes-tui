@@ -8,7 +8,7 @@
 // ---------------------------------------------------------------------------
 
 import type { ProcessCostState, ProcessNode, ProcessReviewSummary, ProcessUsage } from '@pellux/goodvibes-sdk/platform/runtime/fleet';
-import type { Line } from '../types/grid.ts';
+import type { Line } from '@pellux/goodvibes-sdk/platform/types';
 import { formatAgentCost } from './agent-inspector-shared.ts';
 import { buildPanelLine, DEFAULT_PANEL_PALETTE, type ColumnSpec, type PanelPalette } from './polish.ts';
 import { fleetAttentionText, fleetNodeAttention, fleetStallMarker, fleetUsageTokens, hasFleetCost, type FleetStateTone } from './fleet-read-model.ts';

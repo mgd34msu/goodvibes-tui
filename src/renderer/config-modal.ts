@@ -1,4 +1,4 @@
-import type { Line } from '../types/grid.ts';
+import type { Line } from '@pellux/goodvibes-sdk/platform/types';
 import { ModalFactory, type ModalSection, type ModalTab } from './modal-factory.ts';
 import { getOverlayMaxWidth } from './overlay-viewport.ts';
 import { activeUiTones } from './theme.ts';

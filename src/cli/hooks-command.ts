@@ -1,5 +1,5 @@
 import { buildHooksValidation } from './hooks-report.ts';
-import type { CliCommandOutput, CliCommandRuntime } from './types.ts';
+import type { CliCommandOutput, CliCommandRuntime } from '@pellux/goodvibes-terminal-shell';
 
 // ---------------------------------------------------------------------------
 // `goodvibes hooks validate` — validate the user's hooks.json against the

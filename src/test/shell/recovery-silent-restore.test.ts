@@ -30,7 +30,7 @@ import { ConversationManager } from '../../core/conversation.ts';
 import { announceResumeState } from '../../runtime/resume-notice.ts';
 import { checkRecoveryFile, deleteRecoveryFile, writeRecoveryFile } from '@/runtime/index.ts';
 import type { SessionSurface } from '@/runtime/index.ts';
-import { journalPathFor, openTranscriptJournal } from '../../core/transcript-journal.ts';
+import { journalPathFor, openTranscriptJournal } from '@pellux/goodvibes-sdk/platform/runtime/operations';
 import { makeProjectTempDir } from '../helpers/project-temp.ts';
 import { ageRecoverySnapshot, makeTestSurface } from '../helpers/session-surface.ts';
 

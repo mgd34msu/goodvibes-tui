@@ -38,7 +38,7 @@ import type { KeybindingsManager } from './keybindings.ts';
 import type { ModelPickerTarget } from './model-picker.ts';
 import type { KillRing } from './kill-ring.ts';
 import type { PanelMouseLayout } from './handler-feed-routes.ts';
-import type { FocusTracker } from '../core/focus-tracker.ts';
+import type { FocusTracker } from '@pellux/goodvibes-sdk/platform/runtime/operations';
 import type { PanelBurstGuardState } from './panel-paste-flood-guard.ts';
 
 /**

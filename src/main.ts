@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 import { resolveGoodVibesDaemonHome, resolveGoodVibesHome } from './config/goodvibes-home.ts';
 import { Compositor } from './renderer/compositor.ts';
-import { type Line } from './types/grid.ts';
+import { type Line } from '@pellux/goodvibes-sdk/platform/types';
 import { UIFactory } from './renderer/ui-factory.ts';
 import { Orchestrator } from './core/orchestrator';
 import { InputHandler } from './input/handler.ts';
@@ -52,12 +52,12 @@ import { resolveFoldedBookmarkLine } from './core/bookmark-navigation.ts';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 import { prepareShellCliRuntime } from './cli/entrypoint.ts';
 import { applyInitialTuiCliState, reportFatalStartupError } from './cli/tui-startup.ts';
-import { applyConfiguredHitlMode, applyRuntimeConfigValue, applyTuiRuntimeConfigDefaults } from './cli/config-overrides.ts';
+import { applyConfiguredHitlMode, applyRuntimeConfigValue, applyTerminalRuntimeConfigDefaults } from '@pellux/goodvibes-terminal-shell';
 import { renderToolCallBlock } from './renderer/tool-call.ts';
 import { wireSpokenTurnRuntime } from './audio/spoken-turn-wiring.ts';
 import { installVoiceCapture } from './shell/voice-capture-shell.ts';
 import { attachSpokenTurnModelRouting, createSpokenTurnInputOptions } from './audio/spoken-turn-model-routing.ts';
-import { allowTerminalWrite, installTuiTerminalOutputGuard } from './runtime/terminal-output-guard.ts';
+import { allowTerminalWrite, installFullScreenTerminalOutputGuard } from '@pellux/goodvibes-terminal-shell';
 import { installProcessLifecycle } from './runtime/process-lifecycle.ts';
 import { createRenderScheduler } from '@pellux/goodvibes-terminal-shell';
 import { buildCommandArgsHint } from './input/command-args-hint.ts';
@@ -151,7 +151,7 @@ async function main() {
   conversation.setWidthProvider(() => activeConversationWidth);
   // Persisted HITL mode + TUI-side config defaults (doc'd at their definitions).
   applyConfiguredHitlMode(configManager, modeManager);
-  applyTuiRuntimeConfigDefaults(configManager);
+  applyTerminalRuntimeConfigDefaults(configManager);
 
   // Re-surface pre-TUI launch-update lines in-session (the alt screen wipes
   // stdout). Launch-time update mechanics are routine, not urgent — low
@@ -650,7 +650,7 @@ async function main() {
   };
   const renderScheduler = createRenderScheduler(renderNow, undefined, () => lifecycle.isTerminalRestored()); // coalescer; no frames after terminal restore
   const render = (): void => renderScheduler.schedule(); // captured direct writes → activity log + quiet /debug counter, not repeated transcript lines (1a)
-  const terminalOutputGuard = installTuiTerminalOutputGuard({ stdout, stderr: process.stderr, onCapture: (total) => { commandContext.session.runtime.terminalWritesIntercepted = total; render(); } });
+  const terminalOutputGuard = installFullScreenTerminalOutputGuard({ stdout, stderr: process.stderr, onCapture: (total) => { commandContext.session.runtime.terminalWritesIntercepted = total; render(); } });
 
   setRenderRequest(() => renderScheduler.flushNow()); // bootstrap's 16ms coalescer composites via the (restore-gated) scheduler
   setPanelFrameRequester(render); // live panels repaint when idle (a replay finding: fleet sat stale until keypress)

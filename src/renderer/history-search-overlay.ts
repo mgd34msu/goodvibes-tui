@@ -1,4 +1,4 @@
-import type { Line } from '../types/grid.ts';
+import type { Line } from '@pellux/goodvibes-sdk/platform/types';
 import { fitDisplay, getDisplayWidth } from '../utils/terminal-width.ts';
 import type { HistorySearch } from '../input/input-history.ts';
 import { createBottomBarLine, writeBottomBarText } from './bottom-bar.ts';

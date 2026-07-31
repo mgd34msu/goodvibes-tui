@@ -12,7 +12,7 @@ import { tmpdir } from 'os';
 import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import type { ConfigKey } from '@pellux/goodvibes-sdk/platform/config';
 import { buildCodeIndexEnabledSyntheticEntry, buildSettingGroups } from '../../input/settings-modal-data.ts';
-import { CODE_INDEX_ENABLED_CONFIG_KEY, isCodeIndexAutoStartEnabled } from '../../runtime/code-index-services.ts';
+import { CODE_INDEX_ENABLED_CONFIG_KEY, isCodeIndexAutoStartEnabled } from '@pellux/goodvibes-sdk/platform/runtime/operations';
 
 describe('storage.codeIndexEnabled synthetic setting', () => {
   const originalCwd = process.cwd();

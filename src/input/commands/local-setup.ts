@@ -1,6 +1,6 @@
 import { dirname, join } from 'path';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { atomicWriteFileSync } from '../../config/atomic-write.ts';
+import { atomicWriteFileSync } from '@pellux/goodvibes-sdk/platform/config';
 import type { CommandRegistry } from '../command-registry.ts';
 import type { ConfigKey } from '../../config/index.ts';
 import { CONFIG_SCHEMA } from '../../config/index.ts';

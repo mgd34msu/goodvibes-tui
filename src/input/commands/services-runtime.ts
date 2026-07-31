@@ -1,6 +1,6 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
-import { atomicWriteFileSync } from '../../config/atomic-write.ts';
+import { atomicWriteFileSync } from '@pellux/goodvibes-sdk/platform/config';
 import type { CommandRegistry } from '../command-registry.ts';
 import type { SelectionAction, SelectionItem } from '../selection-modal.ts';
 import { openCommandPanel, requireServiceRegistry, requireShellPaths } from './runtime-services.ts';

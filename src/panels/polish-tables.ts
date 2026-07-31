@@ -1,4 +1,4 @@
-import type { Line } from '../types/grid.ts';
+import type { Line } from '@pellux/goodvibes-sdk/platform/types';
 import { getDisplayWidth, truncateDisplay } from '../utils/terminal-width.ts';
 import { GLYPHS, UI_TONES } from '../renderer/ui-primitives.ts';
 // Build on the leaf primitives in ./polish-core.ts (palette + base line

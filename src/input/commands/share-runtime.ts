@@ -10,7 +10,7 @@ import {
 import { logger } from '@pellux/goodvibes-sdk/platform/utils';
 import { requireShellPaths } from './runtime-services.ts';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
-import { calcSessionCost, isModelPriced } from '../../export/cost-utils.ts';
+import { calcSessionCost, isModelPriced } from '@pellux/goodvibes-sdk/platform/providers';
 import {
   GistUploadTarget,
   NO_TOKEN_GUIDANCE,

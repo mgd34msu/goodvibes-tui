@@ -10,7 +10,7 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { atomicWriteFileSync } from '../../config/atomic-write.ts';
+import { atomicWriteFileSync } from '@pellux/goodvibes-sdk/platform/config';
 
 let tmpDir: string;
 

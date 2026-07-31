@@ -11,7 +11,7 @@
  * anywhere else in the app had to change.
  */
 
-import type { FocusTracker } from '../core/focus-tracker.ts';
+import type { FocusTracker } from '@pellux/goodvibes-sdk/platform/runtime/operations';
 import type { ApprovalBroker, GatewayMethodCatalog, SessionLiveTurnControlsHolder, SharedSessionBroker } from '@pellux/goodvibes-sdk/platform/control-plane';
 import type { StepUpService } from '@pellux/goodvibes-sdk/daemon';
 import type { PairingTokenManager } from '@pellux/goodvibes-sdk/platform/pairing';
@@ -32,7 +32,7 @@ import type { SecretsManager } from '../config/secrets.ts';
 import type { AutomationDeliveryManager, AutomationManager } from '@pellux/goodvibes-sdk/platform/automation';
 import type { ChannelDeliveryRouter, ChannelPolicyManager, ChannelPluginRegistry, RouteBindingManager, SurfaceRegistry } from '@pellux/goodvibes-sdk/platform/channels';
 import type { PowerManager } from '@pellux/goodvibes-sdk/platform/power';
-import type { wireIdlePowerAndLiveTurn } from './idle-power-services.ts';
+import type { wireIdlePowerAndLiveTurn } from '@pellux/goodvibes-sdk/platform/runtime/operations';
 import type { WatcherRegistry } from '@pellux/goodvibes-sdk/platform/watchers';
 import type { ArtifactStore } from '@pellux/goodvibes-sdk/platform/artifacts';
 import type { HomeGraphService, KnowledgeService, ProjectPlanningService } from '@pellux/goodvibes-sdk/platform/knowledge';
@@ -46,7 +46,7 @@ import type { UserPermissionRuleStore } from '@pellux/goodvibes-sdk/platform/per
 import type { buildExecPromptAnswerHandler } from '@pellux/goodvibes-sdk/platform/runtime/permissions/exec-prompt-wiring';
 import type { buildLocalhostFetchApproval } from '@pellux/goodvibes-sdk/platform/runtime/permissions/localhost-fetch-approval';
 import type { NotificationDispatcher } from './notification-dispatch.ts';
-import type { createDurabilityServices } from './durability-services.ts';
+import type { createDurabilityServices } from '@pellux/goodvibes-sdk/platform/runtime/operations';
 import type { MemorySpineClient } from '@pellux/goodvibes-sdk/platform/runtime/memory-spine';
 import type { WorkspaceCheckpointManager } from '@pellux/goodvibes-sdk/platform/workspace';
 import type { DomainDispatch, RuntimeStore } from './store/index.ts';
@@ -68,9 +68,9 @@ import type { BenchmarkStore, CacheHitTracker, FavoritesStore, ModelLimitsServic
 import type { KeybindingsManager } from '../input/keybindings.ts';
 import type { AdaptivePlanner, DeterministicReplayEngine, ExecutionPlanManager, SessionLineageTracker, SessionMemoryStore } from '@pellux/goodvibes-sdk/platform/core';
 import type { ArchivableProcessRegistry } from '@pellux/goodvibes-sdk/platform/runtime/fleet';
-import type { OrchestrationEngine, WorkstreamCommandService } from './workstream-services.ts';
-import type { WorkPlanStore } from '../work-plans/work-plan-store.ts';
-import type { WorkspaceTrustManager } from './trust/workspace-trust.ts';
+import type { OrchestrationEngine, WorkstreamCommandService } from '@pellux/goodvibes-sdk/platform/orchestration';
+import type { WorkPlanStore } from '@pellux/goodvibes-sdk/platform/workflow';
+import type { WorkspaceTrustManager } from '@pellux/goodvibes-sdk/platform/runtime/operations';
 
 export interface RuntimeServicesOptions {
   readonly runtimeBus: RuntimeEventBus;

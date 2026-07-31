@@ -10,10 +10,10 @@ import { applyInitialTuiCliState } from '../../cli/tui-startup.ts';
 import { writeOnboardingCheckMarker } from '../../runtime/onboarding/index.ts';
 import { writeWizardProgress } from '../../runtime/onboarding/index.ts';
 import { ConversationManager } from '../../core/conversation.ts';
-import { bindWriteLastSessionPointerToSurface } from '../../runtime/session-pointer-surface.ts';
+import { bindWriteLastSessionPointerToSurface } from '@pellux/goodvibes-sdk/platform/runtime/operations';
 import type { CommandContext } from '../../input/command-registry.ts';
 import type { InputHandler } from '../../input/handler.ts';
-import type { GoodVibesCliParseResult } from '../../cli/types.ts';
+import type { GoodVibesCliParseResult } from '@pellux/goodvibes-terminal-shell';
 import { makeTestSurface } from '../helpers/session-surface.ts';
 
 beforeEach(() => { resetAnsweredRecoveryOffersForTest(); });

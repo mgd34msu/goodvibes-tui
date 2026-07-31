@@ -11,7 +11,7 @@
  */
 import { describe, test, expect, mock } from 'bun:test';
 import { wrapRequestPermissionWithAlert } from '../../core/approval-alert.ts';
-import { FocusTracker } from '../../core/focus-tracker.ts';
+import { FocusTracker } from '@pellux/goodvibes-sdk/platform/runtime/operations';
 import type { PermissionPromptRequest } from '@pellux/goodvibes-sdk/platform/permissions';
 
 function makeRequest(overrides: Partial<PermissionPromptRequest> = {}): PermissionPromptRequest {

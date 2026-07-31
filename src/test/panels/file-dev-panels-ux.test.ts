@@ -15,7 +15,7 @@ import { describe, test, expect, afterEach } from 'bun:test';
 import { rmSync, writeFileSync } from 'node:fs';
 import { execSync } from 'node:child_process';
 import { dirname, join } from 'node:path';
-import type { Line } from '../../types/grid.ts';
+import type { Line } from '@pellux/goodvibes-sdk/platform/types';
 import { DiffPanel } from '../../panels/diff-panel.ts';
 import { GitPanel } from '../../panels/git-panel.ts';
 import { makeProjectTempDir } from '../helpers/project-temp.ts';

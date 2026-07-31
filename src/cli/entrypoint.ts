@@ -25,14 +25,15 @@ import {
 } from './index.ts';
 import { buildCliServicePosture, getGoodVibesPackageRoot, resolveGoodVibesDaemonExecutable } from './service-posture.ts';
 import { runInstallSelfCheck } from '../runtime/install-self-check.ts';
-import { readPersistedWorkspaceTrust } from '../runtime/trust/workspace-trust.ts';
-import { WorkspaceRegistrationManager } from '../runtime/trust/workspace-registration.ts';
+import { readPersistedWorkspaceTrust } from '@pellux/goodvibes-sdk/platform/runtime/operations';
+import { WorkspaceRegistrationManager } from '@pellux/goodvibes-sdk/platform/runtime/operations';
 import type { CliWorkspaceStatus, CliSandboxStatus, CliRelayStatus } from './status.ts';
 import { detectSandboxAvailability, probeSandboxHost } from '@pellux/goodvibes-sdk/platform/tools/exec/sandbox';
 import { createFeatureFlagManager, deriveFeatureStates } from '@/runtime/index.ts';
 import { ensureGoodvibesGitignore } from './ensure-goodvibes-gitignore.ts';
 import { runDaemonConfigMigration } from '../config/run-daemon-config-migration.ts';
 import { describeDaemonConfigMigration } from '@pellux/goodvibes-sdk/platform/config';
+import { GOODVIBES_TUI_SURFACE_ROOT } from '../config/surface.ts';
 
 type ShellEntrypointOwnership = {
   readonly workingDirectory: string;
@@ -184,7 +185,7 @@ export async function prepareShellCliRuntime(
     // Read-only workspace posture for the report: the trust reader never
     // persists (no grandfathering side effect), and registration resolve() is
     // read-only, so `status`/`doctor` observe state without mutating it.
-    const trustView = readPersistedWorkspaceTrust(shellPaths);
+    const trustView = readPersistedWorkspaceTrust(shellPaths, GOODVIBES_TUI_SURFACE_ROOT);
     const registrationEvaluation = await new WorkspaceRegistrationManager({ shellPaths }).evaluate();
     const workspaceStatus: CliWorkspaceStatus = {
       trustLevel: trustView.level,

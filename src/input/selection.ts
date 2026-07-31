@@ -1,5 +1,5 @@
 import type { InfiniteBuffer } from '../core/history.ts';
-import type { Cell } from '../types/grid.ts';
+import type { Cell } from '@pellux/goodvibes-sdk/platform/types';
 
 export interface SelectionPoint {
   col: number;

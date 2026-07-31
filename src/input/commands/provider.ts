@@ -19,7 +19,7 @@ import type { RouteExplanation } from '@pellux/goodvibes-sdk/platform/providers'
 import type { FallbackTestResult, FallbackTransition } from '@pellux/goodvibes-sdk/platform/providers';
 import type { ProviderApiModelRecord } from '@pellux/goodvibes-sdk/platform/providers';
 import { requireProviderApi } from './runtime-services.ts';
-import { featureEnablementWrite } from '../../runtime/feature-settings.ts';
+import { featureEnablementWrite } from '@pellux/goodvibes-terminal-shell';
 
 const PROVIDER_OPTIMIZER_FLAG = 'provider-optimizer';
 

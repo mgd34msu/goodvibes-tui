@@ -1,4 +1,4 @@
-import { createStyledCell, type Line } from '../types/grid.ts';
+import { createStyledCell, type Line } from '@pellux/goodvibes-sdk/platform/types';
 import { getOverlayMaxWidth } from './overlay-viewport.ts';
 import { GLYPHS } from './ui-primitives.ts';
 import { activeUiTones, registerThemeRefresh } from './theme.ts';

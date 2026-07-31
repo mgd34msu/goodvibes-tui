@@ -2,7 +2,7 @@ import { join } from 'node:path';
 import { describe, expect, test } from 'bun:test';
 import { CommandRegistry, type CommandContext } from '../../input/command-registry.ts';
 import { registerWorkPlanRuntimeCommands } from '../../input/commands/work-plan-runtime.ts';
-import { WorkPlanStore } from '../../work-plans/work-plan-store.ts';
+import { WorkPlanStore } from '@pellux/goodvibes-sdk/platform/workflow';
 import { makeProjectTempDir } from '../helpers/project-temp.ts';
 
 function makeContext(out: string[], opened: string[], store: WorkPlanStore): CommandContext {
@@ -52,6 +52,7 @@ describe('workplan command', () => {
       homeDirectory: makeProjectTempDir('gv-work-plan-command'),
       projectId: 'project:command',
       projectRoot: '/tmp/command',
+      surfaceRoot: 'tui',
     });
     const out: string[] = [];
     const opened: string[] = [];
@@ -82,6 +83,7 @@ describe('workplan command', () => {
       homeDirectory: makeProjectTempDir('gv-work-plan-edit'),
       projectId: 'project:edit',
       projectRoot: '/tmp/edit',
+      surfaceRoot: 'tui',
     });
     const out: string[] = [];
     const ctx = makeContext(out, [], store);

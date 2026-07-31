@@ -14,7 +14,7 @@
  * has moved off it.
  */
 
-import { type Line, createEmptyLine } from '../types/grid.ts';
+import { type Line, createEmptyLine } from '@pellux/goodvibes-sdk/platform/types';
 import { VERSION } from '../version.ts';
 import { getDisplayWidth } from '../utils/terminal-width.ts';
 import type { GitHeaderInfo } from './git-status.ts';

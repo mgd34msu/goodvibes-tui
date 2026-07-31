@@ -6,7 +6,7 @@
  * are a different, complementary surface, not this one.
  */
 
-import { type Line } from '../types/grid.ts';
+import { type Line } from '@pellux/goodvibes-sdk/platform/types';
 import { ModalFactory } from './modal-factory.ts';
 import type { SlashCommand } from '../input/command-registry.ts';
 import type { KeybindingsManager } from '../input/keybindings.ts';

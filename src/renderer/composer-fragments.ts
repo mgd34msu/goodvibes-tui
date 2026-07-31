@@ -5,7 +5,7 @@
 // UIFactory static methods are thin wrappers over these.
 // ---------------------------------------------------------------------------
 
-import { type Line } from '../types/grid.ts';
+import { type Line } from '@pellux/goodvibes-sdk/platform/types';
 import { renderConversationFragment } from './conversation-surface.ts';
 import { activeUiTones } from './theme.ts';
 import { activeTheme } from './theme.ts';

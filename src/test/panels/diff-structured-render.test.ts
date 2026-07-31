@@ -10,7 +10,7 @@ import { DiffPanel } from '../../panels/diff-panel.ts';
 // complete. These are full-string render assertions at 80x24 and 60-col.
 // ---------------------------------------------------------------------------
 
-function textOf(lines: import('../../types/grid.ts').Line[]): string {
+function textOf(lines: import('@pellux/goodvibes-sdk/platform/types').Line[]): string {
   return lines.map((l) => l.map((c) => c.char ?? '').join('')).join('\n');
 }
 

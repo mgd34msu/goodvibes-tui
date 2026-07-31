@@ -13,7 +13,7 @@
 // ---------------------------------------------------------------------------
 
 import { RuntimeEventBus } from '@/runtime/index.ts';
-import type { Line } from '../../../types/grid.ts';
+import type { Line } from '@pellux/goodvibes-sdk/platform/types';
 
 // Drain queued microtasks so bus.emit() listeners (OBS-14 async dispatch) run before assertions.
 export const flushMicrotasks = async () => { await Promise.resolve(); await Promise.resolve(); await Promise.resolve(); };

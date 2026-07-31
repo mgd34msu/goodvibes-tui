@@ -1,7 +1,7 @@
 import { promises as fsPromises } from 'node:fs';
 import { join, sep } from 'node:path';
-import type { Line } from '../types/grid.ts';
-import { createEmptyLine } from '../types/grid.ts';
+import type { Line } from '@pellux/goodvibes-sdk/platform/types';
+import { createEmptyLine } from '@pellux/goodvibes-sdk/platform/types';
 import { type ConfirmState, handleConfirmInput, renderConfirmLines } from './confirm-state.ts';
 import { getDisplayWidth, truncateDisplay } from '../utils/terminal-width.ts';
 import { ScrollableListPanel } from './scrollable-list-panel.ts';

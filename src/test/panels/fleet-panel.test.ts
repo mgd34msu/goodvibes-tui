@@ -15,7 +15,7 @@ import {
   type FleetSnapshot,
 } from '../../panels/fleet-read-model.ts';
 import { PanelManager } from '../../panels/panel-manager.ts';
-import type { Line } from '../../types/grid.ts';
+import type { Line } from '@pellux/goodvibes-sdk/platform/types';
 
 const NOW = 1_700_000_000_000;
 

@@ -26,7 +26,7 @@ import { createBootstrapCommandActions } from '../../runtime/bootstrap-command-p
 import { handlePanelFocusToken } from '../../input/handler-feed-routes.ts';
 import type { PanelFocusRouteState } from '../../input/handler-feed-routes.ts';
 import { KeybindingsManager } from '../../input/keybindings.ts';
-import type { Line } from '../../types/grid.ts';
+import type { Line } from '@pellux/goodvibes-sdk/platform/types';
 import { makeProjectTempDir } from '../helpers/project-temp.ts';
 
 // ---------------------------------------------------------------------------

@@ -14,7 +14,7 @@ import type { McpRegistry } from '@pellux/goodvibes-sdk/platform/mcp';
 import { buildSubscriptionEntries } from './settings-modal-subscriptions.ts';
 import type { SubscriptionManager } from '@pellux/goodvibes-sdk/platform/config';
 import type { ServiceInspectionQuery } from '@/runtime/index.ts';
-import { CODE_INDEX_ENABLED_CONFIG_KEY } from '../runtime/code-index-services.ts';
+import { CODE_INDEX_ENABLED_CONFIG_KEY } from '@pellux/goodvibes-sdk/platform/runtime/operations';
 import {
   WORKTREE_SETUP_CARRY_OVER_GLOBS_CONFIG_KEY,
   WORKTREE_SETUP_COMMANDS_CONFIG_KEY,
@@ -23,7 +23,7 @@ import {
   isWorktreeSetupListConfigKey,
   readWorktreeSetupList,
 } from './worktree-setup-config.ts';
-import { BUDGET_ALERT_USD_CONFIG_KEY, BUDGET_ALERT_USD_DEFAULT, readBudgetAlertUsd } from '../export/cost-utils.ts';
+import { BUDGET_ALERT_USD_CONFIG_KEY, BUDGET_ALERT_USD_DEFAULT, readBudgetAlertUsd } from '@pellux/goodvibes-sdk/platform/providers';
 import { MEMORY_PROJECTION_DIR_CONFIG_KEY, buildMemoryProjectionDirSyntheticEntry } from './commands/recall-files-config.ts';
 import { MEMORY_SHOW_PROVENANCE_CONFIG_KEY, buildMemoryProvenanceSyntheticEntry } from '../core/memory-provenance.ts';
 import {
@@ -54,7 +54,7 @@ import {
 import { enrichRelaySettingDescriptions } from './relay-settings-descriptions.ts';
 import { enrichDaemonOwnedSettingDescriptions } from './daemon-owned-settings-descriptions.ts';
 import { applyFeatureUnitLayout } from './feature-unit-layout.ts';
-import { FEATURE_SETTINGS_BY_ID } from '../runtime/feature-settings.ts';
+import { FEATURE_SETTINGS_BY_ID } from '@pellux/goodvibes-terminal-shell';
 import {
   buildPaymentsSyntheticEntries,
   isPaymentsSyntheticConfigKey,

@@ -17,7 +17,7 @@ import { ConversationManager } from '../../core/conversation.ts';
 import { PanelManager } from '../../panels/panel-manager.ts';
 import { makeProjectTempDir } from '../helpers/project-temp.ts';
 import { handleSessionWorkflowCommand } from '../../input/commands/session-workflow.ts';
-import { writeLivenessMarker } from '../../runtime/session-liveness-marker.ts';
+import { writeLivenessMarker } from '@pellux/goodvibes-sdk/platform/runtime/operations';
 import { makeTestSurface } from '../helpers/session-surface.ts';
 
 let tmpDir: string;

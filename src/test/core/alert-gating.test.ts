@@ -7,8 +7,8 @@
  * - shouldFireAlert: per-class on/off, master gate on/off, focus state interactions
  */
 import { describe, test, expect } from 'bun:test';
-import { readBooleanConfig, readNotifyOnlyWhenUnfocused, shouldFireAlert } from '../../core/alert-gating.ts';
-import { FocusTracker } from '../../core/focus-tracker.ts';
+import { readBooleanConfig, readNotifyOnlyWhenUnfocused, shouldFireAlert } from '@pellux/goodvibes-sdk/platform/runtime/operations';
+import { FocusTracker } from '@pellux/goodvibes-sdk/platform/runtime/operations';
 
 function makeConfigGet(overrides: Record<string, unknown> = {}) {
   return (key: string): unknown => overrides[key];

@@ -31,8 +31,8 @@
 import { notifyCompletion } from '@pellux/goodvibes-sdk/platform/utils';
 import { logger } from '@pellux/goodvibes-sdk/platform/utils';
 import type { WebhookNotifier } from '@pellux/goodvibes-sdk/platform/integrations';
-import type { FocusTracker } from './focus-tracker.ts';
-import { readNotifyOnlyWhenUnfocused, type ConfigGet } from './alert-gating.ts';
+import type { FocusTracker } from '@pellux/goodvibes-sdk/platform/runtime/operations';
+import { readNotifyOnlyWhenUnfocused, type ConfigGet } from '@pellux/goodvibes-sdk/platform/runtime/operations';
 
 /** Default threshold in seconds. Turns shorter than this do not notify. */
 export const NOTIFY_AFTER_SECONDS_DEFAULT = 60;

@@ -1,5 +1,5 @@
 import { join } from 'node:path';
-import { readBudgetAlertUsd, BUDGET_ALERT_USD_DEFAULT } from '../export/cost-utils.ts';
+import { readBudgetAlertUsd, BUDGET_ALERT_USD_DEFAULT } from '@pellux/goodvibes-sdk/platform/providers';
 import { refreshMemoryRecallSnapshot } from './orchestrator-core-services.ts';
 import { sumConversationUsage, type ConversationManager } from '../core/conversation';
 import type { Orchestrator } from '../core/orchestrator';
@@ -17,7 +17,7 @@ import { GitStatusProvider } from '../renderer/git-status.ts';
 import type { GitHeaderInfo } from '../renderer/git-status.ts';
 import type { PermissionRequestHandler } from '@pellux/goodvibes-sdk/platform/permissions';
 import { registerBuiltinPanels } from '../panels/builtin-panels.ts';
-import { WorkspaceRegistrationManager } from './trust/workspace-registration.ts';
+import { WorkspaceRegistrationManager } from '@pellux/goodvibes-sdk/platform/runtime/operations';
 import { createSystemMessageRouter, type SystemMessageRouter } from '../core/system-message-router.ts';
 import { getConfigSnapshot } from '../config/index.ts';
 import { createBootstrapCommandContext } from './bootstrap-command-context.ts';

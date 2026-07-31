@@ -7,7 +7,7 @@ import { summarizeToolResult } from '../renderer/tool-result-summary.ts';
 import type { ToolCall } from '@pellux/goodvibes-sdk/platform/types';
 import { renderThinkingBlock } from '../renderer/thinking.ts';
 import { renderSystemMessage } from '../renderer/system-message.ts';
-import { createEmptyLine, type Line, type Cell } from '../types/grid.ts';
+import { createEmptyLine, type Line, type Cell } from '@pellux/goodvibes-sdk/platform/types';
 import { getSplashLines, type SplashOptions } from '../utils/splash-lines.ts';
 import { interpolateColor, getDisplayWidth, wrapText } from '../utils/terminal-width.ts';
 import { LAYOUT, TOOL_STATUS } from '../renderer/layout.ts';

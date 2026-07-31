@@ -22,7 +22,7 @@ import {
 } from '../../runtime/session-resume-liveness-confirm.ts';
 import { createResumeSessionHandler } from '../../runtime/bootstrap-hook-bridge.ts';
 import { ConversationManager } from '../../core/conversation.ts';
-import { writeLivenessMarker, LIVENESS_STALE_AFTER_MS } from '../../runtime/session-liveness-marker.ts';
+import { writeLivenessMarker, LIVENESS_STALE_AFTER_MS } from '@pellux/goodvibes-sdk/platform/runtime/operations';
 import { makeProjectTempDir } from '../helpers/project-temp.ts';
 import { makeTestSurface } from '../helpers/session-surface.ts';
 

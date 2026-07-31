@@ -17,7 +17,7 @@
 import { existsSync } from 'node:fs';
 import { getGoodVibesPackageRoot, resolveGoodVibesDaemonExecutable } from '../cli/service-posture.ts';
 import { runInstallSelfCheck } from './install-self-check.ts';
-import { announceReachability } from './path-shadow-startup.ts';
+import { announceInstallReachability } from './path-shadow-startup.ts';
 import type { SystemMessageRouter } from '../core/system-message-router.ts';
 
 export function announceInstallSelfCheck(router: SystemMessageRouter): void {
@@ -53,7 +53,7 @@ export function announceInstallSelfCheck(router: SystemMessageRouter): void {
  */
 export function announceInstallHealth(router: SystemMessageRouter): void {
   announceInstallSelfCheck(router);
-  void announceReachability(router).catch(() => {
+  void announceInstallReachability(router).catch(() => {
     // Best-effort — a reachability check must never block or crash boot.
   });
 }

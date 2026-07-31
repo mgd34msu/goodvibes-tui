@@ -1,4 +1,4 @@
-import type { RuntimeEndpointBinding } from './endpoints.ts';
+import type { RuntimeEndpointBinding } from '@pellux/goodvibes-terminal-shell';
 
 export type BindPostureKind = 'local' | 'local-network' | 'custom-network';
 

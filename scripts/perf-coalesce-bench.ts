@@ -25,9 +25,9 @@
 
 import { performance } from 'node:perf_hooks';
 import { Compositor } from '../src/renderer/compositor.ts';
-import { createEmptyLine } from '../src/types/grid.ts';
+import { createEmptyLine } from '@pellux/goodvibes-sdk/platform/types';
 import { createRenderScheduler } from '@pellux/goodvibes-terminal-shell';
-import type { Line } from '../src/types/grid.ts';
+import type { Line } from '@pellux/goodvibes-sdk/platform/types';
 
 const WIDTH = 80;
 const HEIGHT = 24;

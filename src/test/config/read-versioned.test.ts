@@ -2,8 +2,8 @@ import { beforeEach, describe, expect, test } from 'bun:test';
 import { existsSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { makeProjectTempDir } from '../helpers/project-temp.ts';
-import { readVersioned } from '@/config/read-versioned.ts';
-import type { VersionMigration } from '@/config/read-versioned.ts';
+import { readVersioned } from '@pellux/goodvibes-sdk/platform/config';
+import type { VersionMigration } from '@pellux/goodvibes-sdk/platform/config';
 
 // ─── Helpers ───────────────────────────────────────────────────────────────
 

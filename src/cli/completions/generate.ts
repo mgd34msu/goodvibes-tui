@@ -23,7 +23,7 @@
  *     `"completions": "bun run src/cli/completions/generate.ts"` to write files.
  */
 
-import type { GoodVibesCliCommand } from '../types.ts';
+import type { GoodVibesCliCommand } from '@pellux/goodvibes-terminal-shell';
 
 // ---------------------------------------------------------------------------
 // Typed completion data surface

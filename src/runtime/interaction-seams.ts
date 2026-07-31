@@ -11,7 +11,7 @@
 
 import type { CommandContext } from '../input/command-registry.ts';
 import type { PowerManager } from '@pellux/goodvibes-sdk/platform/power';
-import type { Line } from '../types/grid.ts';
+import type { Line } from '@pellux/goodvibes-sdk/platform/types';
 import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import { createCancelToolCall, type ToolCancelOrchestrator } from '../core/turn-cancellation.ts';
 import { powerSurfaceFromState } from '../core/power-status.ts';

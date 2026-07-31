@@ -13,9 +13,9 @@ import type {
 } from '@pellux/goodvibes-sdk/platform/orchestration';
 import { AttemptError } from '@pellux/goodvibes-sdk/platform/orchestration';
 import type { CommandContext } from '../../input/command-registry.ts';
-import type { WorkstreamCommandService } from '../../runtime/workstream-services.ts';
+import type { WorkstreamCommandService } from '@pellux/goodvibes-sdk/platform/orchestration';
 import { handleAttemptsSubcommand } from '../../input/commands/workstream-attempts.ts';
-import { validateAttempts } from '../../runtime/workstream-attempts-validation.ts';
+import { validateAttempts } from '@pellux/goodvibes-sdk/platform/orchestration';
 import { DiffPanel } from '../../panels/diff-panel.ts';
 
 // ---- validateAttempts ----------------------------------------------------

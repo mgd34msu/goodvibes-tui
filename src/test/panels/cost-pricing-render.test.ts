@@ -20,7 +20,7 @@ import {
   setPricingSource,
   MODEL_PRICES_CONFIG_KEY,
   BUDGET_ALERT_USD_CONFIG_KEY,
-} from '../../export/cost-utils.ts';
+} from '@pellux/goodvibes-sdk/platform/providers';
 
 const TEST_ENV_CTX = { sessionId: 'test-session', traceId: 'test-trace', source: 'cost-pricing-test' };
 

@@ -20,7 +20,7 @@ import {
 import { HostedSessionPanel } from '../../panels/hosted-session-panel.ts';
 import type { HostedSessionRecord } from '@pellux/goodvibes-sdk/platform/hosted-sessions';
 import type { HostedSessionStreamEvent } from '../../runtime/client/hosted-session-stream.ts';
-import type { Line } from '../../types/grid.ts';
+import type { Line } from '@pellux/goodvibes-sdk/platform/types';
 
 function makeRecord(overrides: Partial<HostedSessionRecord> = {}): HostedSessionRecord {
   return {

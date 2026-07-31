@@ -35,14 +35,14 @@
 
 import { performance } from 'node:perf_hooks';
 import { heapStats } from 'bun:jsc';
-import type { Line } from '../src/types/grid.ts';
+import type { Line } from '@pellux/goodvibes-sdk/platform/types';
 import { appendConversationMessages } from '../src/core/conversation-rendering.ts';
 import { ConversationManager } from '../src/core/conversation.ts';
 import { renderMarkdownTracked } from '../src/renderer/markdown.ts';
 import { renderCodeBlock } from '../src/renderer/code-block.ts';
 import { PanelManager } from '../src/panels/panel-manager.ts';
 import type { Panel, PanelCategory } from '../src/panels/types.ts';
-import { createEmptyLine, createStyledCell } from '../src/types/grid.ts';
+import { createEmptyLine, createStyledCell } from '@pellux/goodvibes-sdk/platform/types';
 import { buildPanelCompositeData } from '../src/renderer/panel-composite.ts';
 import { renderHelpOverlay } from '../src/renderer/help-overlay.ts';
 import { KeybindingsManager } from '../src/input/keybindings.ts';

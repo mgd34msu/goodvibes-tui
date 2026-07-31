@@ -8,7 +8,7 @@ const WIDTH = 80;
 const lineText = lineToString;
 
 /** Get all non-empty text lines from a render result. */
-function textLines(lines: import('../../types/grid.ts').Line[]): string[] {
+function textLines(lines: import('@pellux/goodvibes-sdk/platform/types').Line[]): string[] {
   return linesToText(lines).filter((t) => t.length > 0);
 }
 
@@ -182,7 +182,7 @@ describe('renderMarkdown', () => {
     // Border positions are read from the Cell array, not the joined string: a
     // wide glyph occupies two array slots (the second is the placeholder cell
     // whose char is ''), so buffer columns and string offsets differ.
-    const barCols = (line: import('../../types/grid.ts').Line): number[] => {
+    const barCols = (line: import('@pellux/goodvibes-sdk/platform/types').Line): number[] => {
       const cols: number[] = [];
       for (let i = 0; i < line.length; i++) if (line[i].char === '│') cols.push(i);
       return cols;

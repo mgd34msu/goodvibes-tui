@@ -7,7 +7,7 @@
 import { describe, test, expect, mock, spyOn } from 'bun:test';
 import type { InputFeedContext } from '../../input/handler-feed.ts';
 import * as handlerFeedModule from '../../input/handler-feed.ts';
-import { FocusTracker } from '../../core/focus-tracker.ts';
+import { FocusTracker } from '@pellux/goodvibes-sdk/platform/runtime/operations';
 
 describe('InputFeedContext reuse (α1)', () => {
   test('feedInputTokens receives the same context object on every feed() call', () => {

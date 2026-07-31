@@ -8,7 +8,7 @@ import { RuntimeEventBus, installEcosystemCatalogEntry } from '@/runtime/index.t
 import { createRuntimeServices } from '../../runtime/services.ts';
 import { createUiRuntimeServices } from '../../runtime/ui-services.ts';
 import { createRuntimeStore } from '../../runtime/store/index.ts';
-import type { Line } from '../../types/grid.ts';
+import type { Line } from '@pellux/goodvibes-sdk/platform/types';
 import type { ShellPathService } from '@/runtime/index.ts';
 import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import { trackDisposables } from '../helpers/disposables.ts';

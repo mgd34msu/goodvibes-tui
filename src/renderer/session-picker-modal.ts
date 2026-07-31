@@ -15,7 +15,7 @@
  * this section is entirely absent and the box sizing is unchanged.
  */
 
-import type { Line } from '../types/grid.ts';
+import type { Line } from '@pellux/goodvibes-sdk/platform/types';
 import type { SharedSessionRecord } from '@pellux/goodvibes-sdk/platform/control-plane';
 import { ModalFactory } from './modal-factory.ts';
 import { UI_TONES } from './ui-primitives.ts';

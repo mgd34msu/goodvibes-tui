@@ -18,7 +18,7 @@
 import { describe, test, expect } from 'bun:test';
 import { ConversationManager } from '../../core/conversation.ts';
 import { TerminalBuffer } from '../../renderer/buffer.ts';
-import type { Line } from '../../types/grid.ts';
+import type { Line } from '@pellux/goodvibes-sdk/platform/types';
 
 const W = 90;
 const H = 40;

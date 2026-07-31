@@ -27,8 +27,8 @@ import type { PolicyRuntimeState } from '@/runtime/index.ts';
 import type { CodeIndexStore, FileUndoManager } from '@pellux/goodvibes-sdk/platform/state';
 import type { WorkspaceCheckpointManager } from '@pellux/goodvibes-sdk/platform/workspace';
 import type { GatewayMethodCatalog } from '@pellux/goodvibes-sdk/platform/control-plane';
-import type { WorkspaceTrustManager } from './trust/workspace-trust.ts';
-import type { WorkspaceRegistrationManager } from './trust/workspace-registration.ts';
+import type { WorkspaceTrustManager } from '@pellux/goodvibes-sdk/platform/runtime/operations';
+import type { WorkspaceRegistrationManager } from '@pellux/goodvibes-sdk/platform/runtime/operations';
 import type { McpRegistry } from '@pellux/goodvibes-sdk/platform/mcp';
 import type { MemoryRegistry } from '@pellux/goodvibes-sdk/platform/state';
 import type { IntegrationHelperService } from '@/runtime/index.ts';
@@ -113,7 +113,7 @@ export interface BootstrapCommandSectionOptions {
   readonly knowledgeService?: KnowledgeService;
   readonly projectPlanningService?: import('@pellux/goodvibes-sdk/platform/knowledge').ProjectPlanningService;
   readonly projectPlanningProjectId?: string;
-  readonly workPlanStore?: import('../work-plans/work-plan-store.ts').WorkPlanStore;
+  readonly workPlanStore?: import('@pellux/goodvibes-sdk/platform/workflow').WorkPlanStore;
   readonly pluginManager?: PluginManager;
   readonly hookWorkbench?: HookWorkbench;
   readonly providerOptimizer?: import('@pellux/goodvibes-sdk/platform/providers').ProviderOptimizer;
@@ -134,7 +134,7 @@ export interface BootstrapCommandSectionOptions {
   readonly wrfcController?: import('@pellux/goodvibes-sdk/platform/agents').WrfcController;
   readonly changeTracker?: import('@pellux/goodvibes-sdk/platform/sessions').SessionChangeTracker;
   readonly hydrateSessionUsage?: () => void;
-  readonly workstreamEngine?: import('./workstream-services.ts').WorkstreamCommandService;
+  readonly workstreamEngine?: import('@pellux/goodvibes-sdk/platform/orchestration').WorkstreamCommandService;
   readonly codeIndexStore?: CodeIndexStore;
   readonly codeIndexReindexScheduler?: import('@pellux/goodvibes-sdk/platform/state').CodeIndexReindexScheduler;
   readonly isPassiveCodeInjectionFlagEnabled?: () => boolean;

@@ -8,7 +8,7 @@ import {
   renderConfirmLines,
   type ConfirmState,
 } from '../../panels/confirm-state.ts';
-import type { Line } from '../../types/grid.ts';
+import type { Line } from '@pellux/goodvibes-sdk/platform/types';
 
 function lineText(line: Line): string {
   return line.map((c) => c.char ?? ' ').join('').trimEnd();

@@ -17,7 +17,7 @@
 
 import { describe, test, expect } from 'bun:test';
 import type { BasePanel } from '../../../panels/base-panel.ts';
-import type { Line } from '../../../types/grid.ts';
+import type { Line } from '@pellux/goodvibes-sdk/platform/types';
 
 export function linesText(lines: Line[]): string {
   return lines.map((line) => line.map((cell) => cell.char ?? ' ').join('')).join('\n');

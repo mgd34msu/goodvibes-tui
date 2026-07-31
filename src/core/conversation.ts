@@ -1,5 +1,5 @@
 import { InfiniteBuffer } from './history.ts';
-import { createEmptyLine, type Line, type Cell } from '../types/grid.ts';
+import { createEmptyLine, type Line, type Cell } from '@pellux/goodvibes-sdk/platform/types';
 import type { SplashOptions } from '../utils/splash-lines.ts';
 import type { ToolCall, ToolResult } from '@pellux/goodvibes-sdk/platform/types';
 import type { ProviderMessage, ContentPart } from '@pellux/goodvibes-sdk/platform/providers';

@@ -36,7 +36,7 @@ import type {
   RewindConversationPreview,
 } from '@pellux/goodvibes-sdk/platform/rewind';
 import type { ConversationManager } from '../core/conversation.ts';
-import { resolveTurnAnchor } from '../core/rewind-turn-anchors.ts';
+import { resolveTurnAnchor } from '@pellux/goodvibes-sdk/platform/rewind';
 
 type ConversationJson = Parameters<ConversationManager['fromJSON']>[0];
 

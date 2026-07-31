@@ -26,8 +26,8 @@
 
 import { AdaptivePlanner } from '@pellux/goodvibes-sdk/platform/core';
 import type { CreateWorkstreamInput, PhaseKind, PhaseRole, WorkItem, WorkItemState, Workstream, WorkstreamIsolation } from '@pellux/goodvibes-sdk/platform/orchestration';
-import type { WorkstreamCommandService, WorkstreamDraft, WorkstreamDraftProvenance } from '../../runtime/workstream-services.ts';
-import { validateAttempts } from '../../runtime/workstream-attempts-validation.ts';
+import type { WorkstreamCommandService, WorkstreamDraft, WorkstreamDraftProvenance } from '@pellux/goodvibes-sdk/platform/orchestration';
+import { validateAttempts } from '@pellux/goodvibes-sdk/platform/orchestration';
 import { handleAttemptsSubcommand } from './workstream-attempts.ts';
 import type { CommandContext, CommandRegistry } from '../command-registry.ts';
 import { describeOperatorRpcError, getOperatorRpc } from './operator-rpc.ts';

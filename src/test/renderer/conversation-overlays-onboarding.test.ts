@@ -4,7 +4,7 @@ import { CommandRegistry, type CommandContext } from '../../input/command-regist
 import { InputHandler } from '../../input/handler.ts';
 import { SelectionManager } from '../../input/selection.ts';
 import { applyConversationOverlays } from '../../renderer/conversation-overlays.ts';
-import { createEmptyLine } from '../../types/grid.ts';
+import { createEmptyLine } from '@pellux/goodvibes-sdk/platform/types';
 import { InfiniteBuffer } from '../../core/history.ts';
 import { createDefaultUiRuntimeServices } from '../helpers/ui-services.ts';
 import { disposeTestRuntimeServicesAfterAll } from '../helpers/runtime-services.ts';

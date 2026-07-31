@@ -1,4 +1,4 @@
-import type { Line } from '../types/grid.ts';
+import type { Line } from '@pellux/goodvibes-sdk/platform/types';
 import { GLYPHS } from './ui-primitives.ts';
 import {
   borderLine,

@@ -15,7 +15,7 @@ import {
   applyRuntimeConfigDefault,
   applyRuntimeConfigValue,
   applyRuntimeConfigOverrides,
-} from '../../cli/config-overrides.ts';
+} from '@pellux/goodvibes-terminal-shell';
 
 // ---------------------------------------------------------------------------
 // Helpers

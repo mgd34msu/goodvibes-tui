@@ -1,7 +1,7 @@
 import type { OnboardingAcknowledgementTarget, OnboardingApplyOperation, OnboardingApplyRequest } from '../../runtime/onboarding/index.ts';
 import { formatProviderModel } from '../../config/provider-model.ts';
-import { getServerSurfaceFeatureFlags } from '../../runtime/surface-feature-flags.ts';
-import { featureEnablementWrite } from '../../runtime/feature-settings.ts';
+import { getServerSurfaceFeatureFlags } from '@pellux/goodvibes-sdk/platform/runtime/operations';
+import { featureEnablementWrite } from '@pellux/goodvibes-terminal-shell';
 import {
   buildCloudflareApiTokenRef,
   buildCloudflareOperationalTokenRef,

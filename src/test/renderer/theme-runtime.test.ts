@@ -21,7 +21,7 @@ import { FULLSCREEN_PALETTE } from '../../renderer/fullscreen-primitives.ts';
 import { DEFAULT_OVERLAY_PALETTE } from '../../renderer/overlay-box.ts';
 import { renderMarkdown } from '../../renderer/markdown.ts';
 import { addConversationSplashScreen } from '../../core/conversation-rendering.ts';
-import type { Line } from '../../types/grid.ts';
+import type { Line } from '@pellux/goodvibes-sdk/platform/types';
 import {
   coerceThemeModeSetting,
   resolveConfiguredThemeMode,

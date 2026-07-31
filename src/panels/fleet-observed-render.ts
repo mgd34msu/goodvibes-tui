@@ -14,7 +14,7 @@
 // ---------------------------------------------------------------------------
 
 import type { ProcessNode, ProcessObserved, ObservedAgentKind } from '@pellux/goodvibes-sdk/platform/runtime/fleet';
-import type { Line } from '../types/grid.ts';
+import type { Line } from '@pellux/goodvibes-sdk/platform/types';
 import { buildPanelLine, buildSearchInputLine, DEFAULT_PANEL_PALETTE, type PanelPalette } from './polish.ts';
 import { truncateDisplay, wrapText } from '../utils/terminal-width.ts';
 

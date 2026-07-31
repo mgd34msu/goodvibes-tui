@@ -1,4 +1,4 @@
-import type { Line } from '../types/grid.ts';
+import type { Line } from '@pellux/goodvibes-sdk/platform/types';
 import { renderProcessIndicator, renderVoiceCaptureIndicator } from './process-indicator.ts';
 import { UIFactory } from './ui-factory.ts';
 import { voiceCaptureRowVisible, type VoiceCaptureIndicatorState } from '../core/voice-capture-status.ts';

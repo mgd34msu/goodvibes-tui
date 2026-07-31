@@ -24,8 +24,8 @@ import { CURRENT_WORKSTREAM_SCHEMA_VERSION } from '@pellux/goodvibes-sdk/platfor
 import type { PlanProposal } from '@pellux/goodvibes-sdk/platform/core';
 import { CommandRegistry, type CommandContext } from '../../input/command-registry.ts';
 import { registerWorkstreamRuntimeCommands } from '../../input/commands/workstream-runtime.ts';
-import type { WorkstreamCommandService, WorkstreamDraft, WorkstreamDraftProvenance } from '../../runtime/workstream-services.ts';
-import { editItemBrief, moveItemInSpec, removeItemFromSpec } from '../../runtime/workstream-draft-edits.ts';
+import type { WorkstreamCommandService, WorkstreamDraft, WorkstreamDraftProvenance } from '@pellux/goodvibes-sdk/platform/orchestration';
+import { editItemBrief, moveItemInSpec, removeItemFromSpec } from '@pellux/goodvibes-sdk/platform/orchestration';
 
 function makePhase(overrides: Partial<Phase> & { id: string; ordinal: number }): Phase {
   return {

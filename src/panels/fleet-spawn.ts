@@ -22,7 +22,7 @@
 import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import type { OperatorMethodOutput } from '@pellux/goodvibes-sdk';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
-import type { Line } from '../types/grid.ts';
+import type { Line } from '@pellux/goodvibes-sdk/platform/types';
 import { resolveOperatorRpc } from '../input/commands/operator-rpc.ts';
 import {
   buildKeyboardHints,

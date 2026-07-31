@@ -6,7 +6,7 @@
  */
 import { join } from 'node:path';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
-import { resolveDaemonCompanionToken } from '../runtime/operator-token-cleanup.ts';
+import { resolveDaemonCompanionToken } from '@pellux/goodvibes-sdk/platform/runtime/operations';
 import { isLoopbackAddress } from './onboarding/onboarding-wizard-helpers.ts';
 import {
   buildManagedDaemonServiceManager,
@@ -22,6 +22,7 @@ import {
   isRuntimeEndpointActive,
   runtimePortDiagnostic,
 } from './onboarding/onboarding-runtime-status.ts';
+import { GOODVIBES_TUI_SURFACE_ROOT } from '../config/surface.ts';
 
 /**
  * Immediately (not deferred to the final wizard Apply):
@@ -60,7 +61,7 @@ export async function handleConnectExistingDaemonForHandler(handler: InputHandle
   handler.requestRender();
   try {
     const daemonHomeDir = join(handler.uiServices.environment.homeDirectory, '.goodvibes', 'daemon');
-    resolveDaemonCompanionToken(daemonHomeDir, token);
+    resolveDaemonCompanionToken(daemonHomeDir, GOODVIBES_TUI_SURFACE_ROOT, token);
     // hostMode has to move with the host. The control-plane URL is DERIVED from
     // hostMode/host/port, and 'local' pins the dial target to 127.0.0.1 no
     // matter what host is stored — so adopting a daemon on another machine

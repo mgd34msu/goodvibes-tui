@@ -8,7 +8,7 @@
  * renderInlineMarkdown so existing importers are unaffected.
  */
 
-import type { Cell } from '../types/grid.ts';
+import type { Cell } from '@pellux/goodvibes-sdk/platform/types';
 
 /** Module-level set of inline markdown special characters (hoisted out of hot loop). */
 const INLINE_SPECIAL_CHARS = new Set(['[', '`', '*', '_', '~']);

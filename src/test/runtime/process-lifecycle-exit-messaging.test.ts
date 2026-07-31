@@ -34,7 +34,7 @@ import {
   PASTE_DISABLE,
 } from '../../renderer/terminal-escapes.ts';
 import { makeProjectTempDir } from '../helpers/project-temp.ts';
-import { livenessMarkerPathFor, writeLivenessMarker } from '../../runtime/session-liveness-marker.ts';
+import { livenessMarkerPathFor, writeLivenessMarker } from '@pellux/goodvibes-sdk/platform/runtime/operations';
 import type { BootstrapContext } from '../../runtime/bootstrap.ts';
 import { makeTestSurface } from '../helpers/session-surface.ts';
 

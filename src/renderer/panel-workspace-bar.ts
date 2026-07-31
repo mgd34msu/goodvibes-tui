@@ -1,4 +1,4 @@
-import type { Line } from '../types/grid.ts';
+import type { Line } from '@pellux/goodvibes-sdk/platform/types';
 import type { WorkspaceTab } from '../panels/panel-manager.ts';
 import { renderTabStrip, type TabHitRegion } from './tab-strip.ts';
 import { UI_TONES } from './ui-primitives.ts';

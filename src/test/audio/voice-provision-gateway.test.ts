@@ -18,7 +18,7 @@ import { printWakeStatus, runWakeProvision } from '../../core/wake-provision-run
 import { CommandRegistry } from '../../input/command-registry.ts';
 import { registerExperienceRuntimeCommands } from '../../input/commands/experience-runtime.ts';
 import type { CommandContext } from '../../input/command-registry.ts';
-import { wireVoiceSetup, WAKE_RECOVERY_COMMAND } from '../../runtime/voice-setup-services.ts';
+import { wireVoiceSetup, WAKE_RECOVERY_COMMAND } from '@pellux/goodvibes-sdk/platform/runtime/operations';
 
 const STATUS: VoiceRuntimeStatusResult = {
   platform: 'linux-x64',

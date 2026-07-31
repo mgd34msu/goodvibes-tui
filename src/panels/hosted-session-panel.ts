@@ -13,7 +13,7 @@
  * backfilled history plus the live frames. When there is no stream open the
  * panel says why rather than showing a still conversation that looks finished.
  */
-import type { Line } from '../types/grid.ts';
+import type { Line } from '@pellux/goodvibes-sdk/platform/types';
 import { BasePanel } from './base-panel.ts';
 import {
   buildEmptyState,

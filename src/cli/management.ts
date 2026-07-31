@@ -11,12 +11,12 @@ import { BUILTIN_SECRET_PROVIDER_SOURCES, describeSecretRef, isSecretRefInput, r
 import { getSubscriptionProviderConfig, listAvailableSubscriptionProviders } from '@pellux/goodvibes-sdk/platform/config';
 import { beginOpenAICodexLogin, exchangeOpenAICodexCode } from '@pellux/goodvibes-sdk/platform/config';
 import { inspectProviderAuth } from '@/runtime/index.ts';
-import type { CliCommandRuntime, GoodVibesCliParseResult } from './types.ts';
+import type { CliCommandRuntime, GoodVibesCliParseResult } from '@pellux/goodvibes-terminal-shell';
 import { formatProviderAuthRoute, summarizeProviderAuthRoutes } from './provider-auth-routes.ts';
 import { classifyProviderSetup } from '../providers/provider-classification.ts';
-import { resolveRuntimeEndpointBinding } from './endpoints.ts';
-import { applyRuntimeEndpointFlagOverrides } from './config-overrides.ts';
-import type { RuntimeEndpointId } from './endpoints.ts';
+import { resolveRuntimeEndpointBinding } from '@pellux/goodvibes-terminal-shell';
+import { applyRuntimeEndpointFlagOverrides } from '@pellux/goodvibes-terminal-shell';
+import type { RuntimeEndpointId } from '@pellux/goodvibes-terminal-shell';
 import { handleServiceCommand } from './service-command.ts';
 import { handleBundleCommand } from './bundle-command.ts';
 import { handleHooksCommand } from './hooks-command.ts';

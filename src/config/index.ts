@@ -79,10 +79,10 @@ export {
   credentialReadModeFromHostMode,
   deriveCredentialAvailability,
   readClientCredentialStatus,
-} from './credential-availability.ts';
+} from '@pellux/goodvibes-sdk/platform/config';
 export type {
   CredentialAvailability,
   CredentialReadMode,
   CredentialStatusEntry,
   CredentialStatusOutcome,
-} from './credential-availability.ts';
+} from '@pellux/goodvibes-sdk/platform/config';

@@ -12,7 +12,7 @@
  * shared caller already reports for any non-interactive invocation.
  */
 import { resolveDaemonHomeDir } from '@pellux/goodvibes-sdk/platform/workspace';
-import { runClusterCommand, CLUSTER_SUBCOMMANDS } from '../../cluster/commands.ts';
+import { runClusterCommand, CLUSTER_SUBCOMMANDS } from '@pellux/goodvibes-terminal-shell';
 import type { CommandRegistry } from '../command-registry.ts';
 
 /** Subcommand → argument hint, surfaced as the operator types. */

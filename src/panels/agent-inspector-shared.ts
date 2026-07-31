@@ -1,5 +1,5 @@
 import { formatDuration } from '../utils/format-duration.ts';
-import { calcSessionCost, isModelPriced } from '../export/cost-utils.ts';
+import { calcSessionCost, isModelPriced } from '@pellux/goodvibes-sdk/platform/providers';
 import type { AgentEvent } from '@/runtime/index.ts';
 import type { UiEventFeed } from '@/runtime/index.ts';
 

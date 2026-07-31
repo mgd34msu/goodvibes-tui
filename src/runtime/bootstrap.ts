@@ -15,7 +15,7 @@ import { AcpManager } from '@pellux/goodvibes-sdk/platform/acp';
 import { getTierPromptSupplement, getTierForContextWindow } from '@pellux/goodvibes-sdk/platform/providers';
 import { logger, summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 import type { PermissionRequestHandler } from '@pellux/goodvibes-sdk/platform/permissions';
-import type { WorkspaceTrustLevel } from './trust/workspace-trust.ts';
+import type { WorkspaceTrustLevel } from '@pellux/goodvibes-sdk/platform/runtime/operations';
 import type { CommandContext } from '../input/command-registry.ts';
 import type { InputHistory } from '../input/input-history.ts';
 import type { GitStatusProvider, GitHeaderInfo } from '../renderer/git-status.ts';
@@ -30,11 +30,11 @@ import {
   scheduleBackgroundMcpDiscovery, startBackgroundProviderRegistration, restoreSavedModel, startExternalServices,
   type ExternalServicesHandle, type HostServiceStatus, createHttpTransport, createDeferredStartupCoordinator,
 } from '@/runtime/index.ts';
-import { bindWriteLastSessionPointerToSurface } from './session-pointer-surface.ts';
+import { bindWriteLastSessionPointerToSurface } from '@pellux/goodvibes-sdk/platform/runtime/operations';
 import { foldLegacySpineStore, deriveSpineFooterStatus } from '@pellux/goodvibes-sdk/platform/runtime/session-spine';
 import { createSpineAdoptionSync } from './client/spine-adoption.ts';
 import { pruneStaleOperatorTokens } from '@pellux/goodvibes-sdk/platform/pairing';
-import { resolveDaemonCompanionToken, workspaceOperatorTokenCandidates } from './operator-token-cleanup.ts';
+import { resolveDaemonCompanionToken, workspaceOperatorTokenCandidates } from '@pellux/goodvibes-sdk/platform/runtime/operations';
 import type { UiRuntimeServices } from './ui-services.ts';
 import { initializeBootstrapCore } from './bootstrap-core.ts';
 import { ensureBootModelResolvable } from './provider-fallback.ts';
@@ -51,6 +51,7 @@ import {
 } from './client/host-service-status.ts';
 import { relayReadAccessors } from './relay-reachability-bridge.ts';
 import { startMcpConfigAutoReload } from '../mcp/runtime-reload.ts';
+import { GOODVIBES_TUI_SURFACE_ROOT } from '../config/surface.ts';
 
 type ExternalServiceFactories = NonNullable<Parameters<typeof startExternalServices>[4]>;
 
@@ -425,7 +426,7 @@ export async function bootstrapRuntime(
         isReachable: async () => await sessionSpine.probeReachability() === 'online',
       });
       if (outcome.action === 'started' || outcome.action === 'came-online') {
-        const companionTokenRecord = resolveDaemonCompanionToken(join(services.homeDirectory, '.goodvibes', 'daemon'));
+        const companionTokenRecord = resolveDaemonCompanionToken(join(services.homeDirectory, '.goodvibes', 'daemon'), GOODVIBES_TUI_SURFACE_ROOT);
         externalServicesPromise = startExternalServices(
           configManager, runtimeBus, hookDispatcher, services,
           createExternalServiceFactories(companionTokenRecord.token),
@@ -472,7 +473,7 @@ export async function bootstrapRuntime(
       }
       await externalServices.stop();
       const daemonHomeDir = join(services.homeDirectory, '.goodvibes', 'daemon');
-      const companionTokenRecord = resolveDaemonCompanionToken(daemonHomeDir);
+      const companionTokenRecord = resolveDaemonCompanionToken(daemonHomeDir, GOODVIBES_TUI_SURFACE_ROOT);
       externalServicesPromise = startExternalServices(
         configManager,
         runtimeBus,
@@ -546,7 +547,7 @@ export async function bootstrapRuntime(
       // bearer, so tokens scanned from the /qrcode panel's QR actually
       // authenticate against the embedded daemon this surface starts.
       const daemonHomeDir = join(services.homeDirectory, '.goodvibes', 'daemon');
-      const companionTokenRecord = resolveDaemonCompanionToken(daemonHomeDir);
+      const companionTokenRecord = resolveDaemonCompanionToken(daemonHomeDir, GOODVIBES_TUI_SURFACE_ROOT);
       // Fix (TUI 0.19.20): remove stale pre-0.21.28 workspace-scoped operator
       // token files so only the canonical <daemonHomeDir>/operator-tokens.json survives.
       // The prune is best-effort — it silently skips missing files, no-ops when tokens
@@ -554,7 +555,7 @@ export async function bootstrapRuntime(
       // See `pruneStaleOperatorTokens` in the SDK for semantics.
       const prune = pruneStaleOperatorTokens({
         daemonHomeDir,
-        candidatePaths: workspaceOperatorTokenCandidates(services.workingDirectory),
+        candidatePaths: workspaceOperatorTokenCandidates(services.workingDirectory, GOODVIBES_TUI_SURFACE_ROOT),
       });
       if (prune.prunedPaths.length > 0) {
         logger.info(`[bootstrap] Pruned ${prune.prunedPaths.length} stale operator-token file(s): ${prune.prunedPaths.join(', ')}`);

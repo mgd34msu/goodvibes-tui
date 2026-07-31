@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { SelectionManager } from '../../input/selection.ts';
-import { createEmptyLine, createStyledCell, type Line } from '../../types/grid.ts';
+import { createEmptyLine, createStyledCell, type Line } from '@pellux/goodvibes-sdk/platform/types';
 
 function makeHistory(lines: Line[]) {
   return {

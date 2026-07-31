@@ -17,7 +17,7 @@
 import { describe, test, expect } from 'bun:test';
 import { InputTokenizer } from '@pellux/goodvibes-sdk/platform/core';
 import { feedInputTokens, type InputFeedContext } from '../../input/handler-feed.ts';
-import { FocusTracker } from '../../core/focus-tracker.ts';
+import { FocusTracker } from '@pellux/goodvibes-sdk/platform/runtime/operations';
 
 function unexpected(name: string) {
   return () => { throw new Error(`unexpected call: ${name} — a focus token must never reach this`); };

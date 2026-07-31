@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { ConfigManager } from '../config/index.ts';
-import { isFeatureConfigEnabled } from '../runtime/feature-settings.ts';
+import { isFeatureConfigEnabled } from '@pellux/goodvibes-terminal-shell';
 import {
   applyRuntimeConfigDefault,
   applyRuntimeConfigOverrides,

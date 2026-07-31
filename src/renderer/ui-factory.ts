@@ -1,4 +1,4 @@
-import { type Line, type Cell, createEmptyLine, createEmptyCell } from '../types/grid.ts';
+import { type Line, type Cell, createEmptyLine, createEmptyCell } from '@pellux/goodvibes-sdk/platform/types';
 import { LAYOUT } from './layout.ts';
 import { VERSION } from '../version.ts';
 import { fitDisplay, getDisplayWidth, truncateDisplay, wrapText, interpolateColor, joinPrioritizedSegments, type PrioritizedSegment } from '../utils/terminal-width.ts';
@@ -13,7 +13,7 @@ import { computeContextUsage } from '../core/context-usage.ts';
 import { permissionModeLabel, permissionModeTone } from '../core/permission-mode.ts';
 import { SLEEP_DISABLED_CHIP } from '../core/power-status.ts';
 import { renderQueuedMessageList, renderMemoryProvenanceChip, type MemoryProvenanceEntry } from './composer-fragments.ts';
-import { calcSessionCost, isModelPriced } from '../export/cost-utils.ts';
+import { calcSessionCost, isModelPriced } from '@pellux/goodvibes-sdk/platform/providers';
 import { buildFooterTip, isAgentActive } from './footer-tips.ts';
 import type { StreamMetrics } from '../core/stream-event-wiring.ts';
 import { waitingPhrase, type WaitingState } from '@pellux/goodvibes-sdk/platform/presentation';

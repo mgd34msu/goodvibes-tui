@@ -1,5 +1,5 @@
 import { BasePanel } from './base-panel.ts';
-import { createEmptyLine, createStyledCell, type Line } from '../types/grid.ts';
+import { createEmptyLine, createStyledCell, type Line } from '@pellux/goodvibes-sdk/platform/types';
 import { truncateDisplay, getDisplayWidth } from '../utils/terminal-width.ts';
 import { GitService } from '@pellux/goodvibes-sdk/platform/git';
 import { logger } from '@pellux/goodvibes-sdk/platform/utils';

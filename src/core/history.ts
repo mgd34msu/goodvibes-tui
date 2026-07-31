@@ -1,4 +1,4 @@
-import { type Line, createEmptyLine } from '../types/grid.ts';
+import { type Line, createEmptyLine } from '@pellux/goodvibes-sdk/platform/types';
 
 /**
  * InfiniteBuffer - Manages the complete conversation history as a list of lines.

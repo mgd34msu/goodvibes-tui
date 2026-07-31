@@ -23,7 +23,7 @@ import { lineToString } from '../setup.ts';
  * Collect all cell characters from a rendered block into a single string.
  * Easier than joining individual lines for containment assertions.
  */
-function blockToText(lines: import('../../types/grid.ts').Line[]): string {
+function blockToText(lines: import('@pellux/goodvibes-sdk/platform/types').Line[]): string {
   return lines.map((line) => line.map((c) => c.char).join('')).join('\n').trimEnd();
 }
 
@@ -176,7 +176,7 @@ describe('renderToolCallBlock ANSI sanitization', () => {
    * Collect printable cell text from rendered lines, excluding NUL padding.
    * Escape sequences should never appear in rendered output.
    */
-  function collectText(lines: import('../../types/grid.ts').Line[]): string {
+  function collectText(lines: import('@pellux/goodvibes-sdk/platform/types').Line[]): string {
     return lines
       .map((line) => line.map((c) => c.char).join(''))
       .join('')

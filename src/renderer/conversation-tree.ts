@@ -61,8 +61,8 @@
  */
 
 import { LAYOUT } from './layout.ts';
-import type { Line } from '../types/grid.ts';
-import { createStyledCell } from '../types/grid.ts';
+import type { Line } from '@pellux/goodvibes-sdk/platform/types';
+import { createStyledCell } from '@pellux/goodvibes-sdk/platform/types';
 import { getDisplayWidth } from '../utils/terminal-width.ts';
 
 /** Columns added per nesting level. Fixed — never content-dependent. */

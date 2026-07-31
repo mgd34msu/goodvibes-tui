@@ -19,7 +19,7 @@ import {
   reapOrphanedAnchorSidecars,
   restoreTurnAnchors,
   type TurnAnchor,
-} from '../../core/rewind-turn-anchors.ts';
+} from '@pellux/goodvibes-sdk/platform/rewind';
 
 let tmpDir: string;
 let surface: SessionSurface;

@@ -5,10 +5,10 @@ import {
   GOODVIBES_NTFY_REMOTE_TOPIC,
   resolveGoodVibesNtfyTopics,
 } from '@pellux/goodvibes-sdk/platform/integrations';
-import { enableFeatureFlags, getMissingSurfaceFeatureFlags, getServerSurfaceFeatureFlags, surfaceFeatureGateSettingsKeys } from '../runtime/surface-feature-flags.ts';
-import { formatRuntimeEndpointBinding, resolveRuntimeEndpointBinding } from './endpoints.ts';
+import { enableFeatureFlags, getMissingSurfaceFeatureFlags, getServerSurfaceFeatureFlags, surfaceFeatureGateSettingsKeys } from '@pellux/goodvibes-sdk/platform/runtime/operations';
+import { formatRuntimeEndpointBinding, resolveRuntimeEndpointBinding } from '@pellux/goodvibes-terminal-shell';
 import { classifyBindPosture, isNetworkFacing } from './network-posture.ts';
-import type { CliCommandRuntime } from './types.ts';
+import type { CliCommandRuntime } from '@pellux/goodvibes-terminal-shell';
 import {
   applyTargetEndpointFlagsOrDefault,
   enableEndpointLanDefault,

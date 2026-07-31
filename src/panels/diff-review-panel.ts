@@ -13,8 +13,8 @@
 // snapshot. The panel never presents a stale diff as current.
 // ---------------------------------------------------------------------------
 
-import type { Line } from '../types/grid.ts';
-import { createEmptyLine } from '../types/grid.ts';
+import type { Line } from '@pellux/goodvibes-sdk/platform/types';
+import { createEmptyLine } from '@pellux/goodvibes-sdk/platform/types';
 import { truncateDisplay } from '../utils/terminal-width.ts';
 import { GitService } from '@pellux/goodvibes-sdk/platform/git';
 import { BasePanel } from './base-panel.ts';

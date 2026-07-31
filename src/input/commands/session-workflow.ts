@@ -8,7 +8,7 @@ import type { SessionReturnContextSummary } from '@/runtime/index.ts';
 import { formatReturnContextForDisplay, getReturnContextMode, maybeAssistReturnContextSummary } from '@/runtime/index.ts';
 import { requirePanelManager, requireProviderApi, requireSessionManager, requireSurface } from './runtime-services.ts';
 import { resumeSessionCore, reopenPanelsWithModalSkip, DEFAULT_PANEL_REOPEN_LIMIT } from '../../core/session-resume-core.ts';
-import { checkSessionLiveness } from '../../runtime/session-liveness-marker.ts';
+import { checkSessionLiveness } from '@pellux/goodvibes-sdk/platform/runtime/operations';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 
 function parseTranscriptKind(raw: string | undefined): TranscriptEventKind | 'all' {

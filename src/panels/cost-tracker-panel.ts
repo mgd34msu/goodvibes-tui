@@ -2,8 +2,8 @@
 // CostTrackerPanel — per-session / per-agent / per-plan cost estimates
 // ---------------------------------------------------------------------------
 
-import type { Line } from '../types/grid.ts';
-import { createStyledCell, createEmptyLine } from '../types/grid.ts';
+import type { Line } from '@pellux/goodvibes-sdk/platform/types';
+import { createStyledCell, createEmptyLine } from '@pellux/goodvibes-sdk/platform/types';
 import { fitDisplay, truncateDisplay } from '../utils/terminal-width.ts';
 import { BasePanel } from './base-panel.ts';
 import type { AgentEvent, TurnEvent } from '@/runtime/index.ts';
@@ -22,7 +22,7 @@ import {
   DEFAULT_PANEL_PALETTE,
   type PanelWorkspaceSection,
 } from './polish.ts';
-import { calcSessionCost, describePricingSource, isModelPriced, computeBudgetBreach, readBudgetAlertUsd, writeManualModelPrice, BUDGET_ALERT_USD_CONFIG_KEY, type BudgetAlertConfigAccess } from '../export/cost-utils.ts';
+import { calcSessionCost, describePricingSource, isModelPriced, computeBudgetBreach, readBudgetAlertUsd, writeManualModelPrice, BUDGET_ALERT_USD_CONFIG_KEY, type BudgetAlertConfigAccess } from '@pellux/goodvibes-sdk/platform/providers';
 import { abbreviateCount } from '../utils/format-number.ts';
 import { isTextBackspace } from '../input/delete-key-policy.ts';
 

@@ -16,7 +16,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { UserAuthManager } from '@pellux/goodvibes-sdk/platform/security';
 import { LocalAuthPanel } from '../../panels/local-auth-panel.ts';
-import type { Line } from '../../types/grid.ts';
+import type { Line } from '@pellux/goodvibes-sdk/platform/types';
 import { InputHistory } from '../../input/input-history.ts';
 import { makeProjectTempDir } from '../helpers/project-temp.ts';
 

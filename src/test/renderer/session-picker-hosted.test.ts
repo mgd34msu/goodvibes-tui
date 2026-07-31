@@ -17,7 +17,7 @@ import { makeProjectTempDir } from '../helpers/project-temp.ts';
 import { makeTestSurface } from '../helpers/session-surface.ts';
 import type { HostedRosterSnapshot } from '../../runtime/client/hosted-roster.ts';
 import type { HostedSessionRecord } from '@pellux/goodvibes-sdk/platform/hosted-sessions';
-import type { Line } from '../../types/grid.ts';
+import type { Line } from '@pellux/goodvibes-sdk/platform/types';
 
 function frameText(lines: Line[]): string {
   return lines.map((line) => line.map((cell) => cell?.char ?? ' ').join('')).join('\n');

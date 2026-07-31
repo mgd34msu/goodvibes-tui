@@ -32,7 +32,7 @@
  * 6. Return a result so the caller can emit an honest notice.
  */
 
-import { journalPathFor, openTranscriptJournal, replayJournal } from './transcript-journal.ts';
+import { journalPathFor, openTranscriptJournal, replayJournal } from '@pellux/goodvibes-sdk/platform/runtime/operations';
 import type { ConversationManager } from './conversation.ts';
 import type { ConversationMessageSnapshot } from '@pellux/goodvibes-sdk/platform/core';
 import type { SessionSurface } from '@/runtime/index.ts';

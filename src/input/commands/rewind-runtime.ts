@@ -42,7 +42,7 @@ import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 import type { WorkspaceCheckpoint, WorkspaceCheckpointManager } from '@pellux/goodvibes-sdk/platform/workspace';
 import type { CommandContext, CommandRegistry } from '../command-registry.ts';
 import { buildRewindReceiptBlock } from '../../core/rewind-receipt.ts';
-import { getTurnAnchors, type TurnAnchor } from '../../core/rewind-turn-anchors.ts';
+import { getTurnAnchors, type TurnAnchor } from '@pellux/goodvibes-sdk/platform/rewind';
 import { createConversationRewindPort, type ConversationRewindPort } from '../../runtime/conversation-rewind-port.ts';
 import { requirePanelManager } from './runtime-services.ts';
 import { shortId } from './checkpoint-runtime.ts';

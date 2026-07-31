@@ -38,7 +38,7 @@ const STATUS_COL = treeBranchCol(0);
 
 /** The grid's step between levels, read off the grid rather than asserted at it. */
 const STEP_COLS = treeBranchCol(treeIndentCols(2, 96)) - treeBranchCol(treeIndentCols(1, 96));
-import type { Line } from '../../types/grid.ts';
+import type { Line } from '@pellux/goodvibes-sdk/platform/types';
 import type { ConversationMessageSnapshot } from '@pellux/goodvibes-sdk/platform/core';
 
 type Message = ConversationMessageSnapshot;

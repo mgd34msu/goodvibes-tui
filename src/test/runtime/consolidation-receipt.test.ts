@@ -3,7 +3,7 @@ import { rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { FeatureAnnouncementStore } from '@pellux/goodvibes-sdk/platform/runtime/feature-announcements';
 import type { MemoryConsolidationRunReceipt } from '@pellux/goodvibes-sdk/platform/state';
-import { formatConsolidationReceipt } from '../../core/consolidation-receipt.ts';
+import { formatConsolidationReceipt } from '@pellux/goodvibes-sdk/platform/state';
 import { consumeDaemonAttachNotices } from '../../runtime/daemon-attach-notices.ts';
 import { makeProjectTempDir } from '../helpers/project-temp.ts';
 

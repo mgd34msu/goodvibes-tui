@@ -22,8 +22,8 @@ import { notifyCompletion } from '@pellux/goodvibes-sdk/platform/utils';
 import { logger } from '@pellux/goodvibes-sdk/platform/utils';
 import type { WebhookNotifier } from '@pellux/goodvibes-sdk/platform/integrations';
 import type { PermissionRequestHandler, PermissionPromptRequest } from '@pellux/goodvibes-sdk/platform/permissions';
-import type { FocusTracker } from './focus-tracker.ts';
-import { shouldFireAlert, FORCE_NOTIFY_DURATION_MS, type ConfigGet } from './alert-gating.ts';
+import type { FocusTracker } from '@pellux/goodvibes-sdk/platform/runtime/operations';
+import { shouldFireAlert, FORCE_NOTIFY_DURATION_MS, type ConfigGet } from '@pellux/goodvibes-sdk/platform/runtime/operations';
 import type { TerminalNotifier } from './terminal-notifier.ts';
 
 export interface ApprovalAlertDeps {

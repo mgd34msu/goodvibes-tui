@@ -28,7 +28,7 @@ import { describe, test, expect } from 'bun:test';
 import { InputHandler } from '../../input/handler.ts';
 import { SelectionManager } from '../../input/selection.ts';
 import { PanelManager } from '../../panels/panel-manager.ts';
-import { FocusTracker } from '../../core/focus-tracker.ts';
+import { FocusTracker } from '@pellux/goodvibes-sdk/platform/runtime/operations';
 import type { Panel } from '../../panels/types.ts';
 
 /** A Fleet stand-in whose handleInput never consumes anything (mirrors the root tree tab: no confirm armed, no session tab active). */

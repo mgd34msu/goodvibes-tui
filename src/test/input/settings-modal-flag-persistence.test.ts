@@ -17,7 +17,7 @@ import { FEATURE_SETTINGS } from '@pellux/goodvibes-sdk/platform/runtime/state';
 import {
   featureEnablementWrite,
   isFeatureConfigEnabled,
-} from '../../runtime/feature-settings.ts';
+} from '@pellux/goodvibes-terminal-shell';
 
 describe('feature enablement writes — domain-key persistence', () => {
   let tmpDir: string;

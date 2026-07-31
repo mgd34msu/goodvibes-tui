@@ -5,8 +5,8 @@ import {
   defaultPairingTokenName,
   pairingQrContent,
   type PairingTokenMinter,
-} from '../../core/pairing-handoff.ts';
-import { formatPairingOffers, formatPostureCapabilities, pairingPostureNotice } from '../../core/pairing-offers.ts';
+} from '@pellux/goodvibes-sdk/platform/pairing';
+import { formatPairingOffers, formatPostureCapabilities, pairingPostureNotice } from '@pellux/goodvibes-sdk/platform/pairing';
 import { LAN_PLAIN_HTTP_NOTICE, parsePairingHandoffLink } from '@pellux/goodvibes-sdk/platform/pairing';
 
 function fakeMinter(): PairingTokenMinter & { minted: string[] } {

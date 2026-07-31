@@ -12,7 +12,7 @@
 // ---------------------------------------------------------------------------
 
 import { readFile } from 'node:fs/promises';
-import type { Line } from '../types/grid.ts';
+import type { Line } from '@pellux/goodvibes-sdk/platform/types';
 import type { SteerResult } from '@pellux/goodvibes-sdk/platform/runtime/fleet';
 import type { ConversationMessageSnapshot } from '@pellux/goodvibes-sdk/platform/core';
 import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';

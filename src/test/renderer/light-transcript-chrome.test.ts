@@ -27,7 +27,7 @@ import { renderSystemMessage } from '../../renderer/system-message.ts';
 import { renderThinkingBlock } from '../../renderer/thinking.ts';
 import { UIFactory } from '../../renderer/ui-factory.ts';
 import { setActiveThemeMode } from '../../renderer/theme.ts';
-import type { Line } from '../../types/grid.ts';
+import type { Line } from '@pellux/goodvibes-sdk/platform/types';
 
 afterEach(() => setActiveThemeMode('dark'));
 

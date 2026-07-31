@@ -11,7 +11,7 @@ import {
   type BundleActivationPlan,
 } from '@pellux/goodvibes-sdk/platform/runtime/ecosystem';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
-import type { CliCommandOutput, CliCommandRuntime } from './types.ts';
+import type { CliCommandOutput, CliCommandRuntime } from '@pellux/goodvibes-terminal-shell';
 
 // ---------------------------------------------------------------------------
 // `goodvibes plugin bundles browse|install|list` — the capability-bundle

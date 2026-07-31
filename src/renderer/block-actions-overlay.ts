@@ -7,7 +7,7 @@
  * block summary and action list are always shown in full.
  */
 
-import { type Line } from '../types/grid.ts';
+import { type Line } from '@pellux/goodvibes-sdk/platform/types';
 import { ModalFactory, type ModalSection } from './modal-factory.ts';
 import type { BlockActionsMenu } from './block-actions.ts';
 import { describeBlockForReceipt } from '../input/handler-content-actions.ts';

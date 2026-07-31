@@ -8,7 +8,7 @@ import {
   memoryPressureLevel,
   type MemoryGovernorSnapshotResult,
   type MemoryPressurePayload,
-} from '../../core/memory-status.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/memory';
 
 function snapshot(overrides: Partial<MemoryGovernorSnapshotResult> = {}): MemoryGovernorSnapshotResult {
   return {

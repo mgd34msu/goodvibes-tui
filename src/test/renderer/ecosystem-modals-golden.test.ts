@@ -31,7 +31,7 @@ import { workPlanModalGoldenSurface } from '../../panels/modals/work-plan-modal.
 import { keybindingsModalGoldenSurface } from '../../panels/modals/keybindings-modal.ts';
 import { pairingModalGoldenSurface } from '../../panels/modals/pairing-modal.ts';
 import { planningModalGoldenSurface } from '../../panels/modals/planning-modal.ts';
-import type { Cell, Line } from '../../types/grid.ts';
+import type { Cell, Line } from '@pellux/goodvibes-sdk/platform/types';
 
 const GOLDENS_DIR = new URL('./golden-frames/', import.meta.url).pathname;
 const UPDATE = process.env['GOODVIBES_UPDATE_GOLDENS'] === '1';

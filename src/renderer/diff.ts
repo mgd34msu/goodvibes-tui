@@ -1,5 +1,5 @@
 import { TerminalBuffer } from './buffer.ts';
-import { type Cell } from '../types/grid.ts';
+import { type Cell } from '@pellux/goodvibes-sdk/platform/types';
 import {
   type TermColorCaps,
   downsampleColor,

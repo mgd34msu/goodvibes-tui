@@ -2,7 +2,7 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { CONFIG_SCHEMA } from '@pellux/goodvibes-sdk/platform/config';
 import { FEATURE_SETTINGS } from '@pellux/goodvibes-sdk/platform/runtime/state';
-import { featureEnablementWrite } from '../runtime/feature-settings.ts';
+import { featureEnablementWrite, GOODVIBES_CLI_CATALOG } from '@pellux/goodvibes-terminal-shell';
 import { CommandRegistry } from '../input/command-registry.ts';
 import { registerBuiltinCommands } from '../input/commands.ts';
 
@@ -531,18 +531,20 @@ function countBuiltinPanels(root: string): number {
   return count;
 }
 
-function listCliCommands(root: string): string[] {
-  const text = readFileSync(join(root, 'src', 'cli', 'types.ts'), 'utf8');
-  const match = text.match(/export type GoodVibesCliCommand =([\s\S]*?)export type GoodVibesCliOutputFormat/);
-  if (!match) return [];
-  return [...match[1].matchAll(/\|\s*'([^']+)'/g)]
-    .map((entry) => entry[1])
+/**
+ * The CLI command words this terminal actually accepts, read off the catalog
+ * the parser is driven by rather than scraped out of a source file — the
+ * ledger counts what ships, and a catalog entry IS what ships.
+ */
+function listCliCommands(): string[] {
+  return GOODVIBES_CLI_CATALOG.commands
+    .map((spec) => spec.name as string)
     .filter((command) => command !== 'unknown');
 }
 
 export function buildVerificationLedger(root: string): VerificationLedger {
   const slashCommandNames = listSlashCommands();
-  const cliCommandNames = listCliCommands(root);
+  const cliCommandNames = listCliCommands();
   const slashCommands = slashCommandNames.length;
   const panels = countBuiltinPanels(root);
   const cliCommands = cliCommandNames.length;

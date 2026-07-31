@@ -46,8 +46,8 @@
 
 import type { WrfcChain, WrfcState } from '@pellux/goodvibes-sdk/platform/agents';
 import type { RuntimeEventBus, WorkflowEvent } from '@/runtime/index.ts';
-import { atomicWriteFileSync } from '../config/atomic-write.ts';
-import { readVersioned } from '../config/read-versioned.ts';
+import { atomicWriteFileSync } from '@pellux/goodvibes-sdk/platform/config';
+import { readVersioned } from '@pellux/goodvibes-sdk/platform/config';
 import type { SystemMessageRouter } from '../core/system-message-router.ts';
 
 // ─── Constants ───────────────────────────────────────────────────────────────

@@ -7,7 +7,7 @@ import {
   firstNonInternalIpv4,
   stableUrlHostForBindHost,
   type StableHostInputs,
-} from '../../core/stable-host.ts';
+} from '@pellux/goodvibes-sdk/platform/pairing';
 
 describe('resolveStableHost ladder', () => {
   test('tailscale MagicDNS wins when tailscale is up', () => {
