@@ -42,6 +42,8 @@ import { createDaemonCredentialsClient } from '../../runtime/client/credentials-
 import { createDevicesClient } from '../../runtime/client/devices-client.ts';
 import { createTasksClient } from '../../runtime/client/tasks-client.ts';
 import { createFleetUnionReadModel } from '../../runtime/client/fleet-union.ts';
+import { createClientPhoneTool } from '../../runtime/client/phone-tool.ts';
+import { createConversationRewindHost } from '../../runtime/client/conversation-rewind-host.ts';
 import { buildFleetSnapshot, createStaticFleetReadModel } from '../../panels/fleet-read-model.ts';
 import { makeProjectTempDir } from '../helpers/project-temp.ts';
 
@@ -64,6 +66,25 @@ function resolveDaemonBinary(): string | null {
 }
 
 const sleep = (ms: number): Promise<void> => new Promise((resolve) => { setTimeout(resolve, ms); });
+
+/**
+ * Find the conversation half of a rewind plan, wherever the plan nests it.
+ *
+ * Searched by SHAPE rather than by a fixed path: the assertion that matters is
+ * "the numbers this surface answered with came back", and pinning the plan's
+ * internal layout here would make this test fail for a reorganisation that
+ * broke nothing. A record carrying both message counts is the conversation part.
+ */
+function findConversationPart(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== 'object') return null;
+  const record = value as Record<string, unknown>;
+  if ('messagesToDrop' in record && 'messagesRemaining' in record) return record;
+  for (const nested of Object.values(record)) {
+    const found = findConversationPart(nested);
+    if (found) return found;
+  }
+  return null;
+}
 
 /**
  * Read a list off a response that may be the array itself or a one-key wrapper.
@@ -299,6 +320,103 @@ if (!binary) {
     test('S12 devices: the device verbs answer, with no paired phone on a fresh home', async () => {
       const rows = await createDevicesClient(verbs).listNodes();
       expect(rows).toEqual([]);
+    });
+
+    test('S12 devices: a capability request reaches the runtime and its refusal is an ANSWER', async () => {
+      // A fresh home has no paired phone, so the runtime refuses. That refusal
+      // is the point: it proves the request reached the real capability service
+      // (wrong verb id or wrong argument names would have thrown instead), and
+      // it proves the shape a decline comes back in.
+      const outcome = await createDevicesClient(verbs).requestCapability({
+        nodeId: 'phone-that-is-not-paired',
+        capabilityId: 'device.clipboard.read',
+        reason: 'end-to-end check',
+      });
+      expect(outcome.ok).toBe(false);
+      // The runtime's own code and words, not a transport error dressed up.
+      expect(String(outcome.refusal ?? '')).not.toBe('');
+      expect(String(outcome.detail ?? '')).not.toBe('');
+
+      // And through the TOOL, which is what the model sees: a refusal is a
+      // SUCCESSFUL tool result saying it was refused, never a failed call the
+      // model would retry by prompting the person again.
+      const tool = createClientPhoneTool(createDevicesClient(verbs));
+      const result = await tool.execute({
+        action: 'run',
+        capabilityId: 'device.clipboard.read',
+        nodeId: 'phone-that-is-not-paired',
+        reason: 'end-to-end check',
+      });
+      const payload = JSON.parse(String(result.output ?? '{}')) as Record<string, unknown>;
+      // With nothing paired the tool refuses before the round trip, naming the
+      // absent phone — which is the honest answer and not an invented refusal.
+      expect(String(payload['error'] ?? payload['detail'] ?? '')).not.toBe('');
+    });
+
+    test('S12 devices: retained captures list over the wire on a fresh home', async () => {
+      const listed = await createDevicesClient(verbs).listArtifacts({ limit: 5 });
+      expect(listed.artifacts).toEqual([]);
+      // The retention window is the daemon's policy, reported rather than
+      // guessed — a zero here would mean the verb did not answer at all.
+      expect(listed.retentionHours).toBeGreaterThan(0);
+    });
+
+    test('S15 rewind: a conversation-scope rewind driven daemon-side is answered by THIS surface', async () => {
+      const hostedSession = `e2e-rewind-${Date.now()}`;
+      const host = createConversationRewindHost({
+        verbs,
+        // Stands in for this process's conversation with a known message count,
+        // which is what makes the daemon's answer checkable.
+        port: {
+          preview: async () => ({ messagesToDrop: 3, messagesRemaining: 9 }),
+          rewind: async () => ({ droppedMessages: 3, undoSnapshotId: 'rwc_e2e' }),
+          restoreBefore: () => true,
+          restoreAfter: () => true,
+        },
+        hosts: (sessionId) => sessionId === hostedSession,
+        label: 'the terminal app (e2e)',
+        waitMs: 0,
+      });
+
+      // Before the offer: the daemon holds no conversation for this session and
+      // must say so rather than answering zero. This is the exact regression the
+      // surface-hosted contract exists to close — the old behaviour returned a
+      // confident 0 here, indistinguishable from a real one.
+      const beforeOffer = await verbs.invoke<Record<string, unknown>>('rewind.plan', {
+        sessionId: hostedSession, scope: 'conversation',
+      });
+      const beforeConversation = findConversationPart(beforeOffer);
+      expect(beforeConversation?.['available']).toBe(false);
+      // Not merely a false flag: the plan carries a warning saying WHY, so the
+      // zeroes beside it cannot be read as a real count by anything downstream.
+      expect(JSON.stringify(beforeOffer['warnings'] ?? [])).toContain('conversation rewind unavailable');
+
+      host.offer(hostedSession);
+      await host.pump();
+      expect(host.hostId()).toBeTruthy();
+
+      // Now drive the rewind from the DAEMON side, exactly as another surface
+      // would, and answer it from here while the call is in flight.
+      const planned = verbs.invoke<Record<string, unknown>>('rewind.plan', {
+        sessionId: hostedSession, scope: 'conversation',
+      });
+      // The question is raised by the call above; one pump takes and answers it.
+      await new Promise((resolve) => { setTimeout(resolve, 150); });
+      await host.pump();
+      const plan = await planned;
+
+      // The counts came from THIS process's port and nothing else could have
+      // produced them: the daemon has no conversation for this session, and
+      // 3-of-12 is a shape it could not have guessed. Read out of the plan's
+      // conversation part by name rather than by string search, so a plan that
+      // merely happened to contain a 3 somewhere cannot pass this.
+      const conversation = findConversationPart(plan);
+      expect(conversation).toBeTruthy();
+      expect(conversation?.['messagesToDrop']).toBe(3);
+      expect(conversation?.['messagesRemaining']).toBe(9);
+      expect(conversation?.['available']).not.toBe(false);
+
+      await host.stop();
     });
 
     test('S15 checkpoints: the checkpoint list is answered by the daemon', async () => {

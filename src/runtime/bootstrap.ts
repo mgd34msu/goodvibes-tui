@@ -390,11 +390,18 @@ export async function bootstrapRuntime(
     sessionUnionCache: sessionUnionCache as unknown as Parameters<typeof createSpineAdoptionSync>[0]['sessionUnionCache'],
     legacyStorePath: services.shellPaths.resolveProjectPath('tui', 'control-plane', 'sessions.json'),
     workingDirectory: services.workingDirectory,
-    // Inbound CONTINUATION dispatch rides the same adoption signal as the steer
-    // path: a message submitted into a session this surface hosts has to reach
-    // the loop here, because the loop is here.
-    onAdopted: (client) => services.wireSessionDispatch.activate(client as never),
-    onDetached: (reason) => services.wireSessionDispatch.deactivate(reason),
+    // Both ride adoption. A message submitted into a session this surface hosts
+    // must reach the loop here, because the loop is here; and a rewind driven
+    // from the web app or another terminal is answerable only by the process
+    // holding the messages, which is also here.
+    onAdopted: (client) => {
+      services.wireSessionDispatch.activate(client as never);
+      if (runtime.sessionId) services.conversationRewindHost.start(runtime.sessionId);
+    },
+    onDetached: (reason) => {
+      services.wireSessionDispatch.deactivate(reason);
+      void services.conversationRewindHost.stop();
+    },
   });
 
   const inspectExternalServices = () => {

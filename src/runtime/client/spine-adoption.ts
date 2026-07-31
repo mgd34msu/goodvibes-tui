@@ -67,7 +67,12 @@ export interface SpineAdoptionOptions {
   /** Where this project's pre-spine session store lives, for the one-time fold. */
   readonly legacyStorePath: string;
   readonly workingDirectory: string;
-  /** Optional extra seam driven on the same adoption signal (continuation dispatch). */
+  /**
+   * Extra seams driven on the same adoption signal: inbound continuation
+   * dispatch, and offering this surface's conversation for rewind. Both are
+   * meaningless without an adopted daemon and both must come up with one, so
+   * they ride the signal that already knows.
+   */
   readonly onAdopted?: ((client: {
     listInputs(sessionId: string, options: { readonly state?: string; readonly since?: number; readonly limit?: number }): Promise<{ readonly inputs: readonly unknown[] }>;
     deliverInput(sessionId: string, inputId: string, options?: { readonly consumed?: boolean }): Promise<unknown>;

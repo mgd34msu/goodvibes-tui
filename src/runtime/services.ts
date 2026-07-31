@@ -98,6 +98,8 @@ import { createDaemonCredentialsClient } from './client/credentials-client.ts';
 import { createDevicesClient } from './client/devices-client.ts';
 import { createWireSessionDispatch } from './client/session-dispatch.ts';
 import { createFleetUnionReadModel } from './client/fleet-union.ts';
+import { createConversationRewindHost } from './client/conversation-rewind-host.ts';
+import { createSessionConversationRewindPort, hasSessionConversation } from './conversation-rewind-port.ts';
 import { createFleetReadModel } from '../panels/fleet-read-model.ts';
 import type { PermissionPromptDecision, PermissionPromptRequest } from '@pellux/goodvibes-sdk/platform/permissions';
 import type { RuntimeServicesOptions, RuntimeServices } from './runtime-services-types.ts';
@@ -431,6 +433,17 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
     verbs,
   });
   disposalScope.registry.add('fleet union refresh', () => fleetReadModel.stop());
+  // Conversation-scope rewind, from ANY surface. The daemon holds the
+  // checkpoint store and answers the files half; the messages live in this
+  // process, so this offers them and answers the daemon's questions about them.
+  // Started on adoption (bootstrap.ts), released on disposal.
+  const conversationRewindHost = createConversationRewindHost({
+    verbs,
+    port: createSessionConversationRewindPort(),
+    hosts: hasSessionConversation,
+    label: 'the terminal app',
+  });
+  disposalScope.registry.add('conversation rewind host', () => { void conversationRewindHost.stop(); });
   const workspaceCheckpointManager = createWorkspaceCheckpointing({ workspaceRoot: workingDirectory, surface, runtimeBus: options.runtimeBus, configManager });
   const { memoryConsolidationScheduler, powerManager, sessionLiveTurnControls } = wireIdlePowerAndLiveTurn({ configManager, memoryRegistry, runtimeBus: options.runtimeBus, isIdle: () => sessionBroker.countBusySessions() === 0 && !pauseController.isPaused('memory-consolidation') && admitExpensiveWork('memory consolidation').allowed, snapshotTick: () => storeSnapshotScheduler.tick(), heartbeat: async () => { await automationManager.triggerHeartbeat({ source: 'wake-catchup' }); }, powerSeam: options.powerSeam });
 
@@ -525,6 +538,7 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
     requestApproval,
     daemonVerbs: verbs,
     wireSessionDispatch,
+    conversationRewindHost,
     gatewayMethods,
     stepUpService,
     pairingTokens,

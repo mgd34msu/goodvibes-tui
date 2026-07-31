@@ -11,23 +11,22 @@
 // for the anchor's turnId at TURN_COMPLETED (rewind-turn-anchors.ts) — the same
 // join key files rewind uses against the workspace checkpoint.
 //
-// This module is the single implementation of that port for the TUI. It used to
-// have two consumers: the in-process /rewind command, and the composed daemon's
-// rewind.plan/apply verbs resolving the live conversation per anchor.sessionId
-// from the registry below.
+// This module is the single implementation of that port for the TUI, and it has
+// two consumers again — but the second one reaches it differently now.
 //
-// The second consumer is gone with the daemon. What that costs, stated plainly:
-// FILES rewind still works from anywhere — the workspace checkpoint store is the
-// daemon's and rewind.plan/apply answer for it over the wire. CONVERSATION-scope
-// rewind is answerable only by the process that owns the loop, which is this
-// one, so `/rewind` here is complete and a rewind driven from another surface
-// covers files and reports the conversation half as unavailable rather than
-// silently truncating nothing.
+// It used to be the composed daemon's own rewind.plan/apply verbs, resolving a
+// conversation out of the registry below because the daemon was this process.
+// It is not any more. FILES rewind still works from anywhere (the workspace
+// checkpoint store is the daemon's), but the messages live in whichever process
+// runs the loop, and for a while a rewind driven from another surface got a
+// confident "0 messages to drop" from a daemon registry nothing could populate.
 //
-// Closing that needs a verb the contract does not carry: a way for a surface to
-// register its live conversation WITH the daemon so rewind.apply can call back
-// into it. That is a daemon-side round's work, and until it exists the registry
-// below serves this process's own /rewind and says so.
+// The daemon now ASKS. This surface offers the conversation it is holding
+// (rewind.conversation.host.register), takes the questions the daemon puts to it
+// and answers them (client/conversation-rewind-host.ts); this port is what
+// produces those answers. So conversation rewind works from any surface, and a
+// session nobody has offered is reported unavailable with the reason rather
+// than as a zero that cannot be told apart from a real one.
 // ---------------------------------------------------------------------------
 
 import type {
@@ -113,10 +112,13 @@ export function createConversationRewindPort(
 }
 
 // ---------------------------------------------------------------------------
-// Live per-session conversation registry — the daemon-hosted mutable store the
-// composed daemon's rewind.plan/apply verbs resolve conversations from. The TUI
-// registers its active session's ConversationManager at bootstrap; a session
-// with no registration reports conversation rewind as "nothing to drop".
+// Live per-session conversation registry.
+//
+// This process's conversations, by session id. Two readers now: the local
+// /rewind command, and the host loop that answers the DAEMON's questions about
+// a session this surface is running (client/conversation-rewind-host.ts) —
+// which is what makes conversation rewind work from any surface again, since
+// only the process holding the messages can count or drop them.
 // ---------------------------------------------------------------------------
 
 const liveConversations = new Map<string, ConversationManager>();
@@ -132,10 +134,24 @@ export function unregisterSessionConversation(sessionId: string): void {
 }
 
 /**
- * The conversation rewind port the composed daemon threads into
- * registerGatewayVerbGroups — it resolves each anchor's live conversation from
- * the registry above, so the daemon's own rewind verbs serve conversation scope
- * live in this process.
+ * Whether this process is actually holding a session's conversation right now.
+ *
+ * The port below answers "nothing to drop" for a session it cannot resolve,
+ * which is the right degrade for a LOCAL /rewind (there is nothing to truncate
+ * here). It is the wrong answer for a rewind driven from another surface: a
+ * confident zero is indistinguishable from a real zero, and that is exactly the
+ * failure the surface-hosted rewind contract exists to end. The host loop
+ * (client/conversation-rewind-host.ts) checks this first and answers
+ * `unavailable` with a reason instead.
+ */
+export function hasSessionConversation(sessionId: string): boolean {
+  return liveConversations.has(sessionId);
+}
+
+/**
+ * The port that answers for whichever of this process's conversations an anchor
+ * names. Used by the local /rewind command and, through the host loop, by the
+ * daemon when a rewind driven from anywhere touches a session running here.
  */
 export function createSessionConversationRewindPort(): ConversationRewindPort {
   return createConversationRewindPort((sessionId) => liveConversations.get(sessionId) ?? null);

@@ -727,10 +727,9 @@ export async function initializeBootstrapCore(
   };
   runtimeSessionIdRef.value = runtime.sessionId;
   services.liveSessionIdRef.value = runtime.sessionId; // the session an ask raised on the daemon belongs to
-  // Register the live conversation for THIS process's own /rewind. The daemon
-  // holds the checkpoint store and answers the FILES half over the wire; only
-  // the process running the loop can answer for the conversation, and there is
-  // no verb yet by which it offers that back (conversation-rewind-port.ts).
+  // The live conversation, for this process's own /rewind AND for the daemon's
+  // questions about it — only the process holding the messages can count or
+  // drop them (conversation-rewind-port.ts, client/conversation-rewind-host.ts).
   registerSessionConversation(runtime.sessionId, conversation);
   void sharedSessionBroker.createSession({
     id: runtime.sessionId,

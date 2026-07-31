@@ -20,6 +20,7 @@ import type { ApprovalRaiser } from '@pellux/goodvibes-sdk/platform/runtime/clie
 import type { PermissionPromptDecision, PermissionPromptRequest } from '@pellux/goodvibes-sdk/platform/permissions';
 import type { DaemonVerbCaller } from './client/operator-endpoint.ts';
 import type { WireSessionDispatch } from './client/session-dispatch.ts';
+import type { ConversationRewindHostClient } from './client/conversation-rewind-host.ts';
 import type { FleetUnionReadModel } from './client/fleet-union.ts';
 import type { DaemonConfigClient } from './client/config-client.ts';
 import type { DaemonCredentialsClient } from './client/credentials-client.ts';
@@ -135,6 +136,12 @@ export interface RuntimeServices {
    * continuation runner the local broker uses.
    */
   readonly wireSessionDispatch: WireSessionDispatch;
+  /**
+   * This surface offering its live conversation to the daemon, so a rewind
+   * driven from anywhere can reach the messages — which only this process
+   * holds. Started on adoption; released on disposal.
+   */
+  readonly conversationRewindHost: ConversationRewindHostClient;
   /** Daemon-owned settings, read and written over `config.get` / `config.set`. */
   readonly daemonConfig: DaemonConfigClient;
   /** Daemon-scoped credential writes: `credentials.set`/`delete` on the daemon, one verified sequence. */
