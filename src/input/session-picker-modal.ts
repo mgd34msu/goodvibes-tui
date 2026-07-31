@@ -17,6 +17,17 @@
  * selectable for load/delete. `sessionBroker` is optional so every existing
  * caller/test that only cares about local saved-session management keeps
  * working unchanged.
+ *
+ * Hosted sessions: a third, also read-only section lists the conversations
+ * running INSIDE the daemon (`sessions.hosted.list`, held by the shared roster
+ * in runtime/client/hosted-roster.ts). They belong in the place a person
+ * already goes to ask "what sessions are there" — a hosted session is exactly
+ * that, one whose loop happens to live elsewhere. Joining one is `/hosted
+ * attach <id>` rather than an Enter here, for the same reason cross-surface
+ * rows are not loadable: there is no on-disk transcript this process can
+ * `load()`, and attaching opens a live stream that the picker has no business
+ * owning. The id is rendered in full so the command can be typed straight from
+ * the row.
  */
 
 import { unlinkSync } from 'node:fs';
@@ -25,6 +36,20 @@ import type { SharedSessionRecord } from '@pellux/goodvibes-sdk/platform/control
 import type { CrossSurfaceView, SessionReadFacade } from '@pellux/goodvibes-sdk/platform/runtime/session-spine';
 import type { ConversationManager } from '../core/conversation';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
+import type { HostedRosterSnapshot } from '../runtime/client/hosted-roster.ts';
+// Re-exported so the composition site (input/handler.ts) reaches the picker and
+// its hosted roster through ONE import — that file sits on this repo's 800-line
+// per-file gate and a second import line there is a real cost.
+export { getSharedHostedSessionRoster } from '../runtime/client/hosted-roster.ts';
+
+/** What the picker needs of the hosted roster: the last answer, and a way to ask again. */
+export interface SessionPickerHostedRoster {
+  snapshot(): HostedRosterSnapshot;
+  refresh(): Promise<void>;
+}
+
+/** Honest default when no roster was wired: nothing has been read, and nothing is claimed. */
+const UNREAD_HOSTED_ROSTER: HostedRosterSnapshot = { sessions: [], capturedAt: null, note: null };
 
 // ---------------------------------------------------------------------------
 // SessionPickerModal
@@ -51,12 +76,22 @@ export class SessionPickerModal {
   public visibleRows = 8;
   public deleteConfirmationTarget: string | null = null;
 
+  /** Daemon-hosted sessions (view-only) — see class doc. Never a fabricated empty list. */
+  public hostedRoster: HostedRosterSnapshot = UNREAD_HOSTED_ROSTER;
+
   /** Last status message to show in the modal (e.g. error or success). */
   public statusMessage = '';
 
   public constructor(
     private readonly sessionManager: SessionManager,
     private readonly sessionBroker?: SessionReadFacade,
+    private readonly hostedRosterSource?: SessionPickerHostedRoster,
+    /**
+     * Called when a late roster refresh lands, so the frame the user is looking
+     * at picks it up. Without it the refresh still happens; it just shows on the
+     * next keystroke, which is what a modal with no render hook can honestly do.
+     */
+    private readonly onRosterRefreshed?: () => void,
   ) {}
 
   /**
@@ -71,6 +106,17 @@ export class SessionPickerModal {
     } else {
       this.crossSurfaceSessions = [];
       this.crossSurfaceView = DORMANT_CROSS_SURFACE_VIEW;
+    }
+    // The roster's LAST answer renders immediately (a round trip must not delay
+    // the modal), and a refresh is asked for behind it. A refusal keeps the last
+    // rows and records why, so the section never silently empties.
+    this.hostedRoster = this.hostedRosterSource?.snapshot() ?? UNREAD_HOSTED_ROSTER;
+    if (this.hostedRosterSource) {
+      const source = this.hostedRosterSource;
+      void source.refresh().then(() => {
+        this.hostedRoster = source.snapshot();
+        this.onRosterRefreshed?.();
+      });
     }
     this.selectedIndex = 0;
     this.scrollOffset = 0;

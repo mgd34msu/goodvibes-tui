@@ -92,6 +92,9 @@ import { WorkspaceTrustManager } from './trust/workspace-trust.ts';
 import { ensureConfiguredModelIsRoutable } from '@pellux/goodvibes-sdk/platform/providers';
 import { GOODVIBES_TUI_SURFACE_ROOT } from '../config/surface.ts';
 import { createDaemonVerbCaller } from './client/operator-endpoint.ts';
+import { createTerminalApprovalUpdateSubscriber } from './client/approval-updates.ts';
+import { createHostedSessionsClient } from './client/hosted-sessions.ts';
+import { getSharedHostedSessionRoster } from './client/hosted-roster.ts';
 import {
   createClientApprovalRaiser,
   createConversationRewindHost,
@@ -125,6 +128,10 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
   const verbs = createDaemonVerbCaller({ configManager, homeDirectory });
   const daemonConfig = createDaemonConfigClient(verbs);
   const devices = createDevicesClient(verbs);
+  // Daemon-hosted sessions: the session picker (built in the input layer, which
+  // has no config manager to resolve a daemon from) reads the roster; this is
+  // the one place that can give it a client. See client/hosted-roster.ts.
+  getSharedHostedSessionRoster().bindClient(createHostedSessionsClient(verbs));
 
   // Built here rather than read off the client composition below because the
   // approval seam it feeds is an INPUT to that composition: the path service is
@@ -159,6 +166,11 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
       ...(liveSessionIdRef.value ? { sessionId: liveSessionIdRef.value } : {}),
       localPrompt: (prompt) => localPromptRef.requestPermission(prompt),
     }),
+    // The push channel for a decision made on another surface. Without it the
+    // raiser learns by re-reading the record on an interval; with it a phone's
+    // answer reaches this terminal in the time one SSE frame takes. The interval
+    // stays as the fallback — see client/approval-updates.ts.
+    subscribeApprovalUpdates: createTerminalApprovalUpdateSubscriber({ configManager, homeDirectory }),
   });
 
   // ── The SDK's client floor: everything a turn needs in this process.

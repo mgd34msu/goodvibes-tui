@@ -32,7 +32,7 @@
  */
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { spawn, type ChildProcess } from 'node:child_process';
-import { existsSync, mkdirSync, readFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import { GOODVIBES_TUI_SURFACE_ROOT } from '../../config/surface.ts';
@@ -48,20 +48,129 @@ import {
 import { createFleetUnionReadModel } from '../../runtime/client/fleet-union.ts';
 import { buildFleetSnapshot, createStaticFleetReadModel } from '../../panels/fleet-read-model.ts';
 import { makeProjectTempDir } from '../helpers/project-temp.ts';
+import { createHostedSessionsClient, terminalHostedClientId } from '../../runtime/client/hosted-sessions.ts';
+import { watchHostedSession } from '../../runtime/client/hosted-session-stream.ts';
+import { createTerminalApprovalUpdateSubscriber } from '../../runtime/client/approval-updates.ts';
+import { HostedSessionFeed } from '../../panels/hosted-session-feed.ts';
+import { leaveHostedSessionOnExit } from '../../runtime/client/hosted-exit.ts';
 
 /** A port well clear of the daemon's default 3421 and of anything an install uses. */
 const E2E_PORT = 39_471;
+/** The stub model a hosted turn actually calls. Also clear of everything real. */
+const STUB_MODEL_PORT = 39_472;
+const STUB_PROVIDER_NAME = 'adopt-e2e-stub';
+const STUB_MODEL_NAME = 'adopt-e2e-model';
 const BOOT_TIMEOUT_MS = 45_000;
 const BOOT_POLL_MS = 250;
+
+/**
+ * What the stub answers with next.
+ *
+ * A hosted turn is driven by whatever the model says, so the test decides that
+ * per case: a plain sentence for the streaming check, a tool call for the case
+ * that must make the run ASK for permission.
+ */
+let stubNextReply: { readonly content: string } | { readonly toolCall: { name: string; args: unknown } } =
+  { content: 'a hosted answer' };
+let stubCalls = 0;
+
+/** Everything the daemon under test said, kept so a failure can quote it. */
+const daemonLog: string[] = [];
+
+/**
+ * A minimal OpenAI-compatible server: the models listing plus one completion.
+ *
+ * It answers as a STREAM when asked to, which is not a nicety — a hosted turn
+ * runs the ordinary orchestrator, which streams, and a provider that answers a
+ * streaming request with a plain JSON body errors the turn and gets dropped from
+ * the daemon's routable models. (Observed exactly that way while writing this:
+ * a non-streaming stub made every later `sessions.hosted.create` refuse with
+ * "not in this daemon's model registry".)
+ */
+function startStubModelServer(): { stop: () => void } {
+  const chunk = (delta: unknown, finishReason: string | null): string => `data: ${JSON.stringify({
+    id: `chatcmpl-${stubCalls}`,
+    object: 'chat.completion.chunk',
+    created: Math.floor(Date.now() / 1000),
+    model: STUB_MODEL_NAME,
+    choices: [{ index: 0, delta, finish_reason: finishReason }],
+    ...(finishReason ? { usage: { prompt_tokens: 10, completion_tokens: 8, total_tokens: 18 } } : {}),
+  })}\n\n`;
+
+  const server = Bun.serve({
+    port: STUB_MODEL_PORT,
+    hostname: '127.0.0.1',
+    fetch: async (request) => {
+      if (new URL(request.url).pathname.endsWith('/models')) {
+        return Response.json({ data: [{ id: STUB_MODEL_NAME }] });
+      }
+      stubCalls += 1;
+      const body = await request.json().catch(() => ({})) as { stream?: boolean };
+      const reply = stubNextReply;
+      const isToolCall = 'toolCall' in reply;
+      const finalDelta = isToolCall
+        ? {
+            role: 'assistant',
+            tool_calls: [{
+              index: 0,
+              id: `call-${stubCalls}`,
+              type: 'function',
+              function: { name: reply.toolCall.name, arguments: JSON.stringify(reply.toolCall.args) },
+            }],
+          }
+        : { role: 'assistant', content: reply.content };
+
+      if (body.stream) {
+        return new Response(
+          chunk(finalDelta, null) + chunk({}, isToolCall ? 'tool_calls' : 'stop') + 'data: [DONE]\n\n',
+          { headers: { 'content-type': 'text/event-stream' } },
+        );
+      }
+      return Response.json({
+        id: `chatcmpl-${stubCalls}`,
+        object: 'chat.completion',
+        created: Math.floor(Date.now() / 1000),
+        model: STUB_MODEL_NAME,
+        choices: [{
+          index: 0,
+          message: isToolCall ? { ...finalDelta, content: null } : finalDelta,
+          finish_reason: isToolCall ? 'tool_calls' : 'stop',
+        }],
+        usage: { prompt_tokens: 10, completion_tokens: 8, total_tokens: 18 },
+      });
+    },
+  });
+  return { stop: () => server.stop(true) };
+}
+
+/** Poll a condition rather than sleeping a guessed interval. */
+async function waitFor(predicate: () => boolean | Promise<boolean>, timeoutMs = 30_000): Promise<boolean> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (await predicate()) return true;
+    await sleep(200);
+  }
+  return false;
+}
 
 function resolveDaemonBinary(): string | null {
   const configured = process.env['GOODVIBES_DAEMON_E2E_BINARY'];
   if (configured) return existsSync(configured) ? configured : null;
   // The daemon repository sits beside this one; its compiled binary is what the
   // installer places, so it is what this drives.
+  // The release artifact carries the os-arch suffix `resolveArtifactNames`
+  // produces, which is what a plain `bun run build` in the daemon repo leaves
+  // in dist/ — looked for by that name too, so a developer who just built the
+  // daemon does not also have to set an env var to run this suite.
+  const platformSuffix: Record<string, string> = {
+    'linux-x64': 'linux-x64', 'linux-arm64': 'linux-arm64',
+    'darwin-x64': 'macos-x64', 'darwin-arm64': 'macos-arm64',
+  };
+  const artifactName = `goodvibes-daemon-${platformSuffix[`${process.platform}-${process.arch}`] ?? 'linux-x64'}`;
   const candidates = [
     join(process.cwd(), '..', 'daemon-e2e', 'dist', 'goodvibes-daemon-e2e'),
     join(process.cwd(), '..', '..', 'goodvibes-daemon', 'dist', 'goodvibes-daemon'),
+    join(process.cwd(), '..', '..', 'goodvibes-daemon', 'dist', artifactName),
     join(process.cwd(), '..', '..', '.gv-worktrees', 'daemon-e2e', 'dist', 'goodvibes-daemon-e2e'),
   ];
   return candidates.find((path) => existsSync(path)) ?? null;
@@ -118,14 +227,37 @@ async function bootIsolatedDaemon(binary: string): Promise<BootedDaemon> {
   const daemonHome = join(home, '.goodvibes', 'daemon');
   mkdirSync(workingDir, { recursive: true });
   mkdirSync(daemonHome, { recursive: true });
+  // A hosted turn calls a REAL model, so the daemon needs a routable provider
+  // before it boots — this is the daemon repo's own proof-script vocabulary
+  // (scripts/hosted-session-proof.ts): a discovered-provider record pointing at
+  // a local OpenAI-compatible stub, read at boot and registered.
+  const surfaceDir = join(home, '.goodvibes', GOODVIBES_TUI_SURFACE_ROOT);
+  mkdirSync(surfaceDir, { recursive: true });
+  writeFileSync(join(surfaceDir, 'discovered-providers.json'), JSON.stringify([{
+    name: STUB_PROVIDER_NAME,
+    host: '127.0.0.1',
+    port: STUB_MODEL_PORT,
+    baseURL: `http://127.0.0.1:${STUB_MODEL_PORT}/v1`,
+    models: [STUB_MODEL_NAME],
+    serverType: 'vllm',
+    lastSeen: Date.now(),
+  }], null, 2));
+  writeFileSync(join(workingDir, 'note.txt'), 'the note a hosted session can read\n');
   const child = spawn(binary, ['--daemon-home', daemonHome, '--working-dir', workingDir, '--port', String(E2E_PORT)], {
     // A pristine environment: an ambient GOODVIBES_HOME in the developer's
     // shell would move the tree this daemon reads, which is the one thing this
     // suite must never let happen.
     env: { PATH: process.env['PATH'] ?? '/usr/bin:/bin', HOME: home, GOODVIBES_HOME: home },
-    stdio: ['ignore', 'ignore', 'ignore'],
+    // Captured rather than discarded: when a hosted turn takes the daemon down
+    // the reason is in here, and a suite that threw the daemon's own words away
+    // can only report that something stopped answering.
+    stdio: ['ignore', 'pipe', 'pipe'],
     detached: false,
   });
+
+  child.stdout?.on('data', (chunk: Buffer) => { daemonLog.push(chunk.toString()); });
+  child.stderr?.on('data', (chunk: Buffer) => { daemonLog.push(chunk.toString()); });
+  child.on('exit', (code, signal) => { daemonLog.push(`\n[daemon exited code=${code} signal=${signal}]\n`); });
 
   const baseUrl = `http://127.0.0.1:${E2E_PORT}`;
   const tokenPath = join(daemonHome, 'operator-tokens.json');
@@ -164,8 +296,13 @@ if (!binary) {
   describe('client seams against a real daemon', () => {
     let daemon: BootedDaemon;
     let verbs: DaemonVerbCaller;
+    let stubModel: { stop: () => void } | null = null;
 
     beforeAll(async () => {
+      // Up BEFORE the daemon: the discovered-provider record the boot writes is
+      // read at startup and probed, so a stub that is not yet listening means a
+      // provider the daemon never registers.
+      stubModel = startStubModelServer();
       daemon = await bootIsolatedDaemon(binary);
       // THE PRODUCT'S OWN SEAM, not a hand-rolled client. `createDaemonVerbCaller`
       // is what every retargeted seam calls through, so what this suite exercises
@@ -185,7 +322,11 @@ if (!binary) {
     }, BOOT_TIMEOUT_MS + 10_000);
 
     afterAll(() => {
+      if (process.env['GOODVIBES_DAEMON_E2E_LOG']) {
+        writeFileSync(process.env['GOODVIBES_DAEMON_E2E_LOG'], daemonLog.join(''));
+      }
       daemon?.child.kill('SIGTERM');
+      stubModel?.stop();
     });
 
     test('the daemon answers on its isolated port, and it is not the default one', () => {
@@ -425,6 +566,239 @@ if (!binary) {
     test('S15 checkpoints: the checkpoint list is answered by the daemon', async () => {
       const rows = readList<unknown>(await verbs.invoke('checkpoints.list', {}), 'checkpoints');
       expect(Array.isArray(rows)).toBe(true);
+    });
+
+    // ── Phase B: sessions the daemon HOSTS ────────────────────────────────
+    //
+    // Everything below drives the real binary through the whole hosted story:
+    // create, one turn that calls a real (stubbed) model, the stream this
+    // terminal renders from, detach under BOTH policies, reattach with history
+    // and a resumed stream, and an approval the hosted run itself raised
+    // arriving on the push channel the raiser now subscribes to.
+    describe('hosted sessions', () => {
+      let killPolicySessionId = '';
+      let survivorSessionId = '';
+
+      test('create composes a session in the named workspace, under the shipped kill default', async () => {
+        const config = createDaemonConfigClient(verbs);
+        await config.set('hostedSessions.detachPolicy', 'kill');
+        const client = createHostedSessionsClient(verbs);
+
+        const record = await client.create({
+          workspaceRoot: join(daemon.home, 'work'),
+          title: 'the adopt e2e hosted session',
+          modelId: `${STUB_PROVIDER_NAME}:${STUB_MODEL_NAME}`,
+        });
+        killPolicySessionId = record.id;
+
+        expect(record.status).toBe('idle');
+        // The DAEMON's answer about what leaving would do — not this client's
+        // memory of a setting it wrote a moment ago.
+        expect(record.effectiveDetachPolicy).toBe('kill');
+        expect(record.detachPolicy).toBeNull();
+        expect(record.workspaceRoot).toBe(join(daemon.home, 'work'));
+        expect(record.attachedClients).toContain(terminalHostedClientId());
+
+        const listed = await client.list();
+        expect(listed.map((entry) => entry.id)).toContain(record.id);
+      });
+
+      test('a relative workspace root is refused rather than resolved against the daemon\'s own directory', async () => {
+        let refusal: unknown = null;
+        try {
+          await createHostedSessionsClient(verbs).create({ workspaceRoot: 'relative/path' });
+        } catch (error) {
+          refusal = error;
+        }
+        expect(String((refusal as Error | null)?.message ?? '')).toContain('absolute');
+      });
+
+      test('a turn driven by sessions.steer calls a real model, and its output arrives on the stream this panel renders from', async () => {
+        stubNextReply = { content: 'the hosted session answered over the wire' };
+        const callsBefore = stubCalls;
+        const client = createHostedSessionsClient(verbs);
+        const feed = new HostedSessionFeed();
+
+        // The product's own subscription — the same one `/hosted attach` opens,
+        // narrowed to turn/tools/session and filtered on this session id.
+        const subscription = await watchHostedSession({
+          baseUrl: daemon.baseUrl,
+          sessionId: killPolicySessionId,
+          getAuthToken: () => daemon.token,
+          onEvent: (event) => feed.apply(event),
+          onLifecycle: (update) => feed.applyLifecycle(update),
+        });
+        expect(subscription).not.toBeNull();
+        feed.attach((await client.attach(killPolicySessionId)).session, []);
+
+        // `sessions.steer` — the ORDINARY verb, resolving a hosted id.
+        await client.steer(killPolicySessionId, 'say something for the record');
+
+        expect(await waitFor(() => stubCalls > callsBefore), daemonLog.join('').slice(-2000)).toBe(true);
+        // The turn's text reached this process over SSE, folded into the rows
+        // the Hosted Session panel draws.
+        expect(await waitFor(() => feed.getState().rows.some(
+          (row) => row.kind === 'assistant' && row.text.includes('answered over the wire'),
+        )), daemonLog.join('').slice(-2000)).toBe(true);
+
+        subscription?.close();
+      }, 60_000);
+
+      test('detach under the kill default ends the session, and the record says why', async () => {
+        const record = await createHostedSessionsClient(verbs).detach(killPolicySessionId);
+        expect(record.status).toBe('terminated');
+        // A hosted session never simply disappears: the reason is on the record.
+        expect(record.terminatedReason).toBe('detached');
+
+        // And it is gone from the live list while still answerable with --all.
+        const client = createHostedSessionsClient(verbs);
+        expect((await client.list()).map((entry) => entry.id)).not.toContain(killPolicySessionId);
+        expect((await client.list({ includeTerminated: true })).map((entry) => entry.id))
+          .toContain(killPolicySessionId);
+      });
+
+      test('detach under survive leaves it idle, and reattaching backfills the history and resumes the stream', async () => {
+        await createDaemonConfigClient(verbs).set('hostedSessions.detachPolicy', 'survive');
+        const client = createHostedSessionsClient(verbs);
+        const survivor = await client.create({
+          workspaceRoot: join(daemon.home, 'work'),
+          title: 'the survivor',
+          modelId: `${STUB_PROVIDER_NAME}:${STUB_MODEL_NAME}`,
+        });
+        survivorSessionId = survivor.id;
+        expect(survivor.effectiveDetachPolicy).toBe('survive');
+
+        stubNextReply = { content: 'said before the terminal walked away' };
+        const callsBefore = stubCalls;
+        await client.steer(survivorSessionId, 'say something before I go');
+        expect(await waitFor(() => stubCalls > callsBefore)).toBe(true);
+
+        const detached = await client.detach(survivorSessionId);
+        expect(detached.status).not.toBe('terminated');
+        expect(detached.attachedClients).not.toContain(terminalHostedClientId());
+
+        // Reattach: the transcript comes back, which is the whole point of a
+        // session outliving the window that started it.
+        const reattached = await client.attach(survivorSessionId);
+        expect(reattached.session.id).toBe(survivorSessionId);
+        expect(reattached.session.status).not.toBe('terminated');
+        expect(reattached.history.length).toBeGreaterThan(0);
+        expect(JSON.stringify(reattached.history)).toContain('before the terminal walked away');
+
+        // And the live stream resumes: a turn steered AFTER the reattach lands
+        // on the newly opened subscription, not only in the backfill.
+        const feed = new HostedSessionFeed();
+        feed.attach(reattached.session, reattached.history);
+        const subscription = await watchHostedSession({
+          baseUrl: daemon.baseUrl,
+          sessionId: survivorSessionId,
+          getAuthToken: () => daemon.token,
+          onEvent: (event) => feed.apply(event),
+        });
+        expect(subscription).not.toBeNull();
+
+        stubNextReply = { content: 'and this is after the reattach' };
+        await client.steer(survivorSessionId, 'say something now that I am back');
+        expect(await waitFor(() => feed.getState().rows.some(
+          (row) => row.text.includes('after the reattach'),
+        ))).toBe(true);
+        subscription?.close();
+      }, 90_000);
+
+      test('a per-session kill override beats a survive setting', async () => {
+        const client = createHostedSessionsClient(verbs);
+        const overridden = await client.create({
+          workspaceRoot: join(daemon.home, 'work'),
+          detachPolicy: 'kill',
+        });
+        expect(overridden.detachPolicy).toBe('kill');
+        expect(overridden.effectiveDetachPolicy).toBe('kill');
+        const after = await client.detach(overridden.id);
+        expect(after.status).toBe('terminated');
+        expect(after.terminatedReason).toBe('detached');
+      });
+
+      test('an approval raised BY the hosted run arrives on the SSE channel the raiser now subscribes to', async () => {
+        // The subscriber is the product's own seam — the one wired into
+        // createClientApprovalRaiser in runtime/services.ts — so what this
+        // exercises is the base-URL derivation, the token read and the
+        // permissions-domain narrowing that ship, not a hand-rolled stream.
+        const configManager = new ConfigManager({
+          surfaceRoot: GOODVIBES_TUI_SURFACE_ROOT,
+          configDir: join(daemon.home, 'client-config'),
+          workingDir: join(daemon.home, 'work'),
+          homeDir: daemon.home,
+        });
+        configManager.setDynamic('daemon.enabled' as never, true as never);
+        configManager.setDynamic('controlPlane.host' as never, '127.0.0.1' as never);
+        configManager.setDynamic('controlPlane.port' as never, E2E_PORT as never);
+        const seen: string[] = [];
+        const subscription = await createTerminalApprovalUpdateSubscriber({
+          configManager, homeDirectory: daemon.home,
+        })((notice) => { seen.push(String(notice.approval['status'] ?? '')); });
+        expect(subscription).not.toBeNull();
+
+        // Now make the hosted run ASK. A tool call in a workspace whose trust is
+        // still undecided raises the trust question as an ordinary approval
+        // record — the daemon has no screen, so asking IS publishing on this
+        // channel. Nothing else in this suite has decided this workspace.
+        stubNextReply = { toolCall: { name: 'exec', args: { commands: ['echo hosted'] } } };
+        await createHostedSessionsClient(verbs).steer(survivorSessionId, 'run a command for me');
+
+        expect(await waitFor(() => seen.length > 0, 45_000)).toBe(true);
+        // Pending is what a raise publishes; a decision would publish again.
+        expect(seen[0]).toBe('pending');
+
+        // The daemon's own list agrees — the record is real, not a frame this
+        // process invented.
+        const rows = readList<{ status: string }>(
+          await verbs.invoke('approvals.list', { includeResolved: true }), 'approvals');
+        expect(rows.some((row) => row.status === 'pending')).toBe(true);
+
+        subscription?.close();
+        stubNextReply = { content: 'back to plain answers' };
+      }, 90_000);
+
+      test('quitting the terminal detaches, so the kill default still means what it always meant', async () => {
+        // The exit path, driven exactly as bootstrap's shutdown drives it. A
+        // terminal that exits WITHOUT this leaves a kill-policy session alive
+        // and attached to a process that is gone, which is the familiar
+        // behavior silently changing — the thing the owner's default exists to
+        // prevent.
+        await createDaemonConfigClient(verbs).set('hostedSessions.detachPolicy', 'kill');
+        const client = createHostedSessionsClient(verbs);
+        const leaving = await client.create({ workspaceRoot: join(daemon.home, 'work') });
+        expect(leaving.effectiveDetachPolicy).toBe('kill');
+
+        const configManager = new ConfigManager({
+          surfaceRoot: GOODVIBES_TUI_SURFACE_ROOT,
+          configDir: join(daemon.home, 'client-config'),
+          workingDir: join(daemon.home, 'work'),
+          homeDir: daemon.home,
+        });
+        configManager.setDynamic('daemon.enabled' as never, true as never);
+        configManager.setDynamic('controlPlane.host' as never, '127.0.0.1' as never);
+        configManager.setDynamic('controlPlane.port' as never, E2E_PORT as never);
+        const feed = new HostedSessionFeed();
+        feed.attach(leaving, []);
+
+        expect(await leaveHostedSessionOnExit({ configManager, homeDirectory: daemon.home, feed })).toBe('detached');
+
+        const after = (await client.list({ includeTerminated: true })).find((entry) => entry.id === leaving.id);
+        expect(after?.status).toBe('terminated');
+        expect(after?.terminatedReason).toBe('detached');
+
+        // Nothing attached is not an error and must not delay an exit.
+        expect(await leaveHostedSessionOnExit({
+          configManager, homeDirectory: daemon.home, feed: new HostedSessionFeed(),
+        })).toBe('none');
+      }, 30_000);
+
+      test('kill ends a session regardless of policy, and the record keeps its reason', async () => {
+        const record = await createHostedSessionsClient(verbs).kill(survivorSessionId);
+        expect(record.status).toBe('terminated');
+        expect(record.terminatedReason).toBe('killed');
+      });
     });
 
     test('S6 voice: speech-to-text refuses honestly when no local provider is provisioned', async () => {

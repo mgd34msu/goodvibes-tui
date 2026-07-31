@@ -80,6 +80,7 @@ import { registerReviewRuntimeCommands } from './commands/review-runtime.ts';
 import { registerPaletteRuntimeCommands } from './commands/palette-runtime.ts';
 import { registerCiRuntimeCommands } from './commands/ci-runtime.ts';
 import { registerCheckinRuntimeCommands } from './commands/checkin-runtime.ts';
+import { registerHostedRuntimeCommands } from './commands/hosted-runtime.ts';
 import { registerMailRuntimeCommands } from './commands/mail-runtime.ts';
 import { registerCalendarRuntimeCommands } from './commands/calendar-runtime.ts';
 import { registerPrincipalsRuntimeCommands } from './commands/principals-runtime.ts';
@@ -188,6 +189,7 @@ export const BUILTIN_COMMAND_GROUPS: readonly BuiltinCommandGroup[] = [
   { category: 'Policy', register: (registry) => registry.register(policyCommand) },
   { category: 'Providers', register: (registry) => registry.register(providerCommand) },
   { category: 'Eval', register: (registry) => registry.register(evalCommand) },
+  { category: 'Sessions & Replay', register: registerHostedRuntimeCommands },
   { category: 'Sessions & Replay', register: (registry) => registry.register(sessionCommand) },
   { category: 'Sessions & Replay', register: (registry) => registry.register(resumeCommand) },
   { category: 'Memory', register: (registry) => registry.register(recallCommand) },

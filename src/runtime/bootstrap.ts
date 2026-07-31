@@ -26,7 +26,7 @@ import type { RuntimeContext, BootstrapOptions } from './context.ts';
 import type { SystemMessageRouter } from '../core/system-message-router.ts';
 import {
   shutdownRuntime, fireSessionStart, createTaskManager, OpsControlPlane, AcpTaskAdapter,
-  emitSessionReady, emitSessionStarted, loadLastConversation,
+  emitSessionReady, emitSessionStarted, loadLastConversation, leaveHostedSessionOnExit,
   scheduleBackgroundMcpDiscovery, startBackgroundProviderRegistration, restoreSavedModel, startExternalServices,
   type ExternalServicesHandle, type HostServiceStatus, createHttpTransport, createDeferredStartupCoordinator,
 } from '@/runtime/index.ts';
@@ -743,9 +743,9 @@ export async function bootstrapRuntime(
       // a no-op when the spine was never activated (embedded/local-only topology).
       sessionSpine.close(runtime.sessionId);
       sessionSpine.dispose();
-      sessionInboundInputs.dispose(); // stop the inbound steer poll interval on exit
-      sessionUnionCache.dispose(); // stop the wire-refresh interval on exit
-      await deferredStartup.drain(100);
+      sessionInboundInputs.dispose(); sessionUnionCache.dispose(); // stop the inbound-steer poll and the wire-refresh interval on exit
+      // Quitting has to SAY it is leaving: a hosted session's detach policy applies when the LAST client detaches, so an exit that never detaches leaves a kill-policy session (the shipped default) alive, attached to a process that is gone. Bounded and non-throwing — see client/hosted-exit.ts.
+      await Promise.all([leaveHostedSessionOnExit({ configManager, homeDirectory: services.homeDirectory }), deferredStartup.drain(100)]);
       if (externalServicesPromise) {
         try {
           externalServices = await externalServicesPromise;
