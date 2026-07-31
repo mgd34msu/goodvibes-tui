@@ -11,16 +11,50 @@ import {
 
 export type SettingsSecretsManager = Pick<SecretsManager, 'delete' | 'set'>;
 
+/**
+ * The daemon's own credential write, when this app has a daemon to write to.
+ *
+ * A daemon-scoped credential is two writes that only work together — the secret
+ * value and the config reference that points at it — and `credentials.set` does
+ * both, verifying the value reads back before it touches the config. Splitting
+ * them across a process boundary leaves a window where the config names a
+ * reference resolving to nothing, which every reader treats as a
+ * configured-but-broken credential.
+ */
+export interface SettingsDaemonCredentialWriter {
+  set(configKey: string, value: string): Promise<unknown>;
+  clear(configKey: string): Promise<void>;
+}
+
 export function setSecretBackedSettingValue(args: {
   key: ConfigKey;
   value: string;
   configManager: ConfigManager;
   secretsManager: SettingsSecretsManager | null;
+  /** Present when a daemon is adopted; absent leaves the historical local path. */
+  daemonCredentials?: SettingsDaemonCredentialWriter | null;
   setConfigValue: (key: ConfigKey, value: unknown) => void;
+  /** Surface the daemon's refusal; without it a failed write would be silent. */
+  onError?: (message: string) => void;
 }): void {
   const { key, value, configManager, secretsManager, setConfigValue } = args;
   if (!secretsManager) {
     setConfigValue(key, value.trim());
+    return;
+  }
+
+  // A daemon-scoped credential never lands in this surface's own tree: the
+  // daemon is the process that spends it, and a copy here would be a credential
+  // sitting somewhere nothing reads it from.
+  if (defaultSecretBackedScope(key) === 'daemon' && args.daemonCredentials) {
+    const writer = args.daemonCredentials;
+    const trimmed = value.trim();
+    const done = trimmed.length === 0 ? writer.clear(key) : writer.set(key, value);
+    void done.catch((error) => {
+      const message = summarizeError(error);
+      logger.error('SettingsModal: the daemon refused the credential write', { key, error: message });
+      args.onError?.(`Saving that credential failed: ${message}`);
+    });
     return;
   }
 

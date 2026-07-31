@@ -20,7 +20,7 @@ import type { ApprovalRaiser } from '@pellux/goodvibes-sdk/platform/runtime/clie
 import type { PermissionPromptDecision, PermissionPromptRequest } from '@pellux/goodvibes-sdk/platform/permissions';
 import type { DaemonVerbCaller } from './client/operator-endpoint.ts';
 import type { DaemonConfigClient } from './client/config-client.ts';
-import type { SecretBackedSecretStore } from '../config/secret-config.ts';
+import type { DaemonCredentialsClient } from './client/credentials-client.ts';
 import type { ConfigManager, ServiceRegistry, SubscriptionManager, ToolLLM } from '@pellux/goodvibes-sdk/platform/config';
 import type { SecretsManager } from '../config/secrets.ts';
 import type { AutomationDeliveryManager, AutomationManager } from '@pellux/goodvibes-sdk/platform/automation';
@@ -129,8 +129,8 @@ export interface RuntimeServices {
   readonly daemonVerbs: DaemonVerbCaller;
   /** Daemon-owned settings, read and written over `config.get` / `config.set`. */
   readonly daemonConfig: DaemonConfigClient;
-  /** Secret writes split by scope: daemon-scoped over `credentials.*`, the rest local. */
-  readonly clientSecretStore: SecretBackedSecretStore;
+  /** Daemon-scoped credential writes: `credentials.set`/`delete` on the daemon, one verified sequence. */
+  readonly daemonCredentials: DaemonCredentialsClient;
   /** The terminal prompt, late-bound — the UI layer patches the real one in after boot. */
   readonly localPromptRef: { requestPermission: (request: PermissionPromptRequest) => Promise<PermissionPromptDecision> };
   /** The live session id an ask belongs to; written by the bootstrap tail. */

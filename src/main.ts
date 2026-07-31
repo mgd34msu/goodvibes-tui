@@ -668,6 +668,7 @@ async function main() {
     mcpRegistry: ctx.services.mcpRegistry,
     subscriptionManager,
     secretsManager,
+    daemonCredentials: ctx.services.daemonCredentials, // a daemon-scoped credential is stored by the daemon, in one verified step
     serviceRegistry: ctx.services.serviceRegistry,
     memoryEmbeddingRegistry: ctx.services.memoryEmbeddingRegistry,
     workingDirectory: workingDir,

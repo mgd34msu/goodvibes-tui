@@ -8,82 +8,83 @@
  * VALUE that reference points at. When the terminal app hosted the daemon, both
  * halves landed in one process's tree and the pair held.
  *
- * As a pure client it does not. The reference now goes to the daemon over
- * `config.set` (config-client.ts) because the key is daemon-owned; the value
- * has to follow it, or the daemon resolves the reference and finds nothing —
- * the mailbox password that reports saved and never polls, the card that is not
- * there at purchase time. `credentials.set` / `credentials.delete` are the
- * verbs that carry the value to the same place the reference went.
+ * As a pure client it does not. The reference belongs with the daemon (the key
+ * is daemon-owned) and so does the value, or the daemon resolves the reference
+ * and finds nothing — the mailbox password that reports saved and never polls,
+ * the card that is not there at purchase time.
  *
- * ── Scope ──────────────────────────────────────────────────────────────────
+ * ── Why this is ONE verb and not two writes from here ─────────────────────
  *
- * Only DAEMON-scoped writes come here. A `user`-scoped secret (an API key this
- * terminal's own provider calls use) stays in this surface's own secret store —
- * it is this process that spends it, and sending it to the daemon would put a
- * credential somewhere it is not needed. `defaultSecretBackedScope` in
- * config/secret-config.ts already makes exactly that call from the key's
- * ownership, so this store honours the scope it is handed rather than
- * second-guessing it.
+ * `credentials.set` takes the CONFIG KEY — `surfaces.telegram.botToken`, not
+ * `GOODVIBES_SURFACES_TELEGRAM_BOT_TOKEN` — and does the whole sequence itself,
+ * in an order this client could not enforce from the outside:
  *
- * ── No silent local fallback ───────────────────────────────────────────────
+ *   1. derive the secret-store name from the config path (one derivation,
+ *      platform-wide, so a client cannot name it differently);
+ *   2. write the value at the scope the ownership rules resolve;
+ *   3. read it BACK and compare;
+ *   4. only then replace the config value with its reference.
  *
- * With no reachable daemon a daemon-scoped write REJECTS. Writing it locally
- * instead would produce the split pair this module exists to prevent, and the
+ * If step 3 does not match, the config is left exactly as it was and the call
+ * fails. A config key pointing at a reference that resolves to nothing is worse
+ * than a key that was never written: every reader treats it as a
+ * configured-but-broken credential and the surface that wrote it was told it
+ * succeeded. Splitting this into a `config.set` plus a secret write from here
+ * would reintroduce exactly that window.
+ *
+ * The verb also refuses a key that is not a credential-bearing setting, with a
+ * message naming `config.set` as the right call — so a mistake here is a
+ * refusal, not a config value quietly replaced by a reference nobody can read.
+ *
+ * ── What never comes back ─────────────────────────────────────────────────
+ *
+ * The value. Not on success, not in an error, not in a log line. The response
+ * names the config key, the store key, the scope and the reference — everything
+ * needed to verify the write and nothing that repeats the credential.
+ *
+ * ── No silent local fallback ──────────────────────────────────────────────
+ *
+ * With no reachable daemon a daemon-owned credential write REJECTS, and the
  * caller (the settings modal, `/payments card`, the onboarding wizard) renders
- * the refusal so the user knows the credential is not stored anywhere.
+ * the refusal. Writing it locally instead produces the split pair this module
+ * exists to prevent.
  */
-import type { SecretScope, SecretStorageMedium } from '../../config/secrets.ts';
-import type { SecretBackedSecretStore } from '../../config/secret-config.ts';
 import type { DaemonVerbCaller } from './operator-endpoint.ts';
 
-export interface SecretWriteOptions {
-  readonly scope?: SecretScope;
-  readonly medium?: SecretStorageMedium;
+/** What the daemon reports back about a credential write. Never the value. */
+export interface CredentialWriteReceipt {
+  readonly key?: string;
+  readonly secretKey?: string;
+  readonly scope?: string;
+  readonly reference?: string;
 }
 
-/**
- * A secret store that routes DAEMON-scoped writes to the daemon's own
- * credential verbs and leaves every other scope with the local store.
- */
-export function createSplitScopeSecretStore(deps: {
-  readonly local: SecretBackedSecretStore;
-  readonly verbs: DaemonVerbCaller;
-}): SecretBackedSecretStore {
-  const isDaemonScoped = (options?: SecretWriteOptions): boolean => options?.scope === 'daemon';
+export interface DaemonCredentialsClient {
+  /**
+   * Store a credential for a daemon-owned config key. The daemon writes the
+   * secret, verifies it reads back, and only then points the config key at it.
+   */
+  set(configKey: string, value: string): Promise<CredentialWriteReceipt>;
+  /** Clear a credential and the config reference that pointed at it. */
+  clear(configKey: string): Promise<void>;
+}
 
-  const requireDaemon = (key: string): void => {
-    const probe = deps.verbs.probe();
+export function createDaemonCredentialsClient(verbs: DaemonVerbCaller): DaemonCredentialsClient {
+  const requireDaemon = (configKey: string): void => {
+    const probe = verbs.probe();
     if (!probe.available) {
-      throw new Error(`'${key}' is a credential the daemon uses and ${probe.reason}`);
+      throw new Error(`'${configKey}' is a credential the daemon uses and ${probe.reason}`);
     }
   };
 
   return {
-    set: async (key, value, options) => {
-      if (!isDaemonScoped(options)) {
-        await deps.local.set(key, value, options);
-        return;
-      }
-      requireDaemon(key);
-      await deps.verbs.invoke('credentials.set', {
-        key,
-        value,
-        scope: 'daemon',
-        ...(options?.medium === undefined ? {} : { medium: options.medium }),
-      });
+    set: async (configKey, value) => {
+      requireDaemon(configKey);
+      return await verbs.invoke<CredentialWriteReceipt>('credentials.set', { key: configKey, value });
     },
-
-    delete: async (key, options) => {
-      if (!isDaemonScoped(options)) {
-        await deps.local.delete?.(key, options);
-        return;
-      }
-      requireDaemon(key);
-      await deps.verbs.invoke('credentials.delete', {
-        key,
-        scope: 'daemon',
-        ...(options?.medium === undefined ? {} : { medium: options.medium }),
-      });
+    clear: async (configKey) => {
+      requireDaemon(configKey);
+      await verbs.invoke('credentials.delete', { key: configKey });
     },
   };
 }

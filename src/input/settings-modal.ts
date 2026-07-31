@@ -21,7 +21,7 @@ import type { ModelPickerTarget } from './model-picker.ts';
 import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import type { SubscriptionManager } from '@pellux/goodvibes-sdk/platform/config';
 import type { ServiceInspectionQuery } from '../runtime/ui-service-queries.ts';
-import type { SettingsSecretsManager } from './settings-modal-secrets.ts';
+import type { SettingsDaemonCredentialWriter, SettingsSecretsManager } from './settings-modal-secrets.ts';
 import { CVV_PROMPT_TRADEOFF_WARNING } from '@pellux/goodvibes-sdk/platform/payments';
 import { PAYMENTS_CVV_HANDLING_CONFIG_KEY } from './payments-config.ts';
 import type { FeatureFlagManager } from '@/runtime/index.ts';
@@ -85,6 +85,14 @@ export type SettingsModalChangeHandler = (change: SettingsModalChange) => Settin
 
 export interface SettingsModalOpenOptions {
   readonly onSettingApplied?: SettingsModalChangeHandler;
+  /**
+   * The daemon's credential write. A daemon-scoped credential (a mailbox
+   * password, a bot token, a card) must land where the daemon reads it — this
+   * surface storing a copy is a credential in a place nothing consults.
+   */
+  readonly daemonCredentials?: SettingsDaemonCredentialWriter | null;
+  /** Renders a refused credential write, so a failed save is never silent. */
+  readonly reportError?: (message: string) => void;
   /** In-process catalog the Connections category probes; see that module. */
   readonly gatewayMethods?: GatewayMethodCatalog;
   /** Called when an async connection refresh has new rows to paint. */
@@ -194,6 +202,8 @@ export class SettingsModal {
 
   private configManager: ConfigManager | null = null;
   private secretsManager: SettingsSecretsManager | null = null;
+  private daemonCredentials: SettingsDaemonCredentialWriter | null = null;
+  private reportError: ((message: string) => void) | null = null;
   private featureFlagManager: FeatureFlagManager | null = null;
   private mcpRegistry: McpRegistry | null = null;
   private subscriptionManager: SubscriptionManager | null = null;
@@ -217,6 +227,8 @@ export class SettingsModal {
   ): void {
     this.configManager = configManager;
     this.secretsManager = secretsManager ?? null;
+    this.daemonCredentials = options?.daemonCredentials ?? null;
+    this.reportError = options?.reportError ?? null;
     this.featureFlagManager = featureFlagManager;
     this.subscriptionManager = subscriptionManager;
     this.serviceRegistry = serviceRegistry;
@@ -557,6 +569,8 @@ export class SettingsModal {
       editBuffer: this.editBuffer,
       configManager: this.configManager,
       secretsManager: this.secretsManager,
+      daemonCredentials: this.daemonCredentials,
+      ...(this.reportError ? { reportError: this.reportError } : {}),
       mcpRegistry: this.mcpRegistry,
       mcpAllowAllConfirmationTarget: this.mcpAllowAllConfirmationTarget,
       getSelectedMcp: () => this.getSelectedMcp(),

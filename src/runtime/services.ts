@@ -94,7 +94,7 @@ import { GOODVIBES_TUI_SURFACE_ROOT } from '../config/surface.ts';
 import { createDaemonVerbCaller } from './client/operator-endpoint.ts';
 import { createClientApprovalRaiser } from './client/approval-raiser.ts';
 import { createDaemonConfigClient } from './client/config-client.ts';
-import { createSplitScopeSecretStore } from './client/credentials-client.ts';
+import { createDaemonCredentialsClient } from './client/credentials-client.ts';
 import { createDevicesClient } from './client/devices-client.ts';
 import type { PermissionPromptDecision, PermissionPromptRequest } from '@pellux/goodvibes-sdk/platform/permissions';
 import type { RuntimeServicesOptions, RuntimeServices } from './runtime-services-types.ts';
@@ -182,10 +182,10 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
   // refresh from their own listing APIs.
   providerRegistry.initProviderModelDiscovery();
 
-  // Secret writes SPLIT by scope: a daemon-scoped credential goes to the daemon
-  // over `credentials.set` so it lands beside the `goodvibes://` reference that
-  // points at it; everything else stays in this surface's own store.
-  const clientSecretStore = createSplitScopeSecretStore({ local: secretsManager, verbs });
+  // A daemon-scoped credential goes to the daemon over `credentials.set`, which
+  // writes the value AND points the config key at it in one verified sequence.
+  // Everything else stays in this surface's own store.
+  const daemonCredentials = createDaemonCredentialsClient(verbs);
 
   // Memory governance seams built EARLY so the scheduler gates and the knowledge
   // background jobs can consult the pause controller before the MemoryGovernor
@@ -500,7 +500,7 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
     pairingTokens,
     devices,
     daemonConfig,
-    clientSecretStore,
+    daemonCredentials,
     localPromptRef,
     liveSessionIdRef,
     localhostFetchApproval,

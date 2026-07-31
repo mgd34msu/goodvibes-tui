@@ -134,6 +134,57 @@ export interface DaemonVerbCaller {
   invoke<T = unknown>(methodId: string, input?: unknown): Promise<T>;
 }
 
+/**
+ * The generic gateway-method route, for a verb the contract carries with a
+ * WEBSOCKET binding only.
+ *
+ * This matters more than it looks. `sdk.operator.invoke` resolves a method's
+ * declared `http` route and refuses — with a contract error, before any request
+ * is made — when the method has none. A large part of what this client needs is
+ * exactly that class: `approvals.raise`, `credentials.set`/`delete`,
+ * `checkpoints.*`, `rewind.*` and the `fleet.*` reads are all `transport: ws`
+ * in the operator contract, with no REST path of their own.
+ *
+ * The daemon serves every catalogued verb over one generic route regardless of
+ * its declared transport, which is what a client that is not holding a
+ * websocket uses. Calling that route directly is not a workaround for a missing
+ * binding: it IS the binding for a ws-declared verb reached over HTTP.
+ */
+async function invokeGatewayMethodOverHttp<T>(
+  rpc: OperatorRpcAvailable,
+  baseUrl: string,
+  authToken: string,
+  methodId: string,
+  input: unknown,
+): Promise<T> {
+  void rpc;
+  const response = await fetch(`${baseUrl}/api/control-plane/methods/${encodeURIComponent(methodId)}/invoke`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${authToken}`, 'Content-Type': 'application/json' },
+    // The envelope the route requires: `body` must be PRESENT even when empty,
+    // or the route refuses with a 400 naming the shape it wanted.
+    body: JSON.stringify({ body: input ?? {} }),
+  });
+  const payload = await response.json().catch(() => null) as unknown;
+  if (!response.ok) {
+    const described = payload && typeof payload === 'object' && 'error' in payload
+      ? String((payload as { error: unknown }).error)
+      : `HTTP ${response.status}`;
+    throw new GoodVibesSdkError(`'${methodId}' failed: ${described}`, {
+      // Mapped from the status rather than fixed, so `describeOperatorRpcError`
+      // and every caller that branches on category sees the same classification
+      // it would have seen through the typed client path.
+      category: response.status === 401 || response.status === 403
+        ? 'authorization'
+        : response.status === 404 ? 'not_found' : response.status >= 500 ? 'service' : 'bad_request',
+      source: 'runtime',
+      recoverable: response.status >= 500,
+      status: response.status,
+    });
+  }
+  return payload as T;
+}
+
 export function createDaemonVerbCaller(deps: {
   readonly configManager: ConfigManager;
   readonly homeDirectory: string | (() => string);
@@ -143,7 +194,20 @@ export function createDaemonVerbCaller(deps: {
     invoke: async <T,>(methodId: string, input?: unknown): Promise<T> => {
       const rpc = resolveOperatorRpc(deps);
       if (!rpc.available) throw new Error(`cannot invoke '${methodId}': ${rpc.reason}`);
-      return await rpc.sdk.operator.invoke(methodId as never, (input ?? {}) as never) as T;
+      try {
+        return await rpc.sdk.operator.invoke(methodId as never, (input ?? {}) as never) as T;
+      } catch (error) {
+        // A CONTRACT_MISMATCH here means exactly one thing: this verb declares
+        // no HTTP route. That is a routing fact, not a failure of the call, so
+        // it falls through to the generic gateway route rather than surfacing
+        // as "the daemon refused" to a user who did nothing wrong.
+        if (!(error instanceof GoodVibesSdkError) || error.code !== 'CONTRACT_MISMATCH') throw error;
+        const baseUrl = resolveControlPlaneBaseUrl(deps.configManager);
+        if (!baseUrl) throw error;
+        const homeDirectory = typeof deps.homeDirectory === 'function' ? deps.homeDirectory() : deps.homeDirectory;
+        const token = getOrCreateCompanionToken('tui', { daemonHomeDir: resolveDaemonStateDirectory(homeDirectory) }).token;
+        return await invokeGatewayMethodOverHttp<T>(rpc, baseUrl, token, methodId, input);
+      }
     },
   };
 }

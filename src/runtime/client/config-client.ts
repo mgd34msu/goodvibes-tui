@@ -49,8 +49,25 @@ export interface DaemonConfigClient {
   set(key: string, value: unknown): Promise<void>;
   /** Read a daemon-owned key; `undefined` when the daemon could not answer. */
   get(key: string): Promise<unknown>;
-  /** The daemon's whole settings snapshot, for a settings view that opens cold. */
+  /** The daemon's whole resolved config snapshot, for a settings view that opens cold. */
   snapshot(): Promise<Record<string, unknown> | null>;
+}
+
+/**
+ * Walk a dotted config path through a nested snapshot.
+ *
+ * `config.get` returns the whole RESOLVED config tree — it takes no key. That
+ * is the right shape for the daemon (one read answers a settings view) and the
+ * wrong shape for a single-key read, so the walk happens here rather than in
+ * every caller that wanted one value.
+ */
+function readDottedPath(snapshot: Record<string, unknown> | null, key: string): unknown {
+  let cursor: unknown = snapshot;
+  for (const segment of key.split('.')) {
+    if (cursor === null || typeof cursor !== 'object') return undefined;
+    cursor = (cursor as Record<string, unknown>)[segment];
+  }
+  return cursor;
 }
 
 export function createDaemonConfigClient(verbs: DaemonVerbCaller): DaemonConfigClient {
@@ -62,16 +79,15 @@ export function createDaemonConfigClient(verbs: DaemonVerbCaller): DaemonConfigC
       if (!probe.available) {
         throw new Error(`'${key}' is a daemon-owned setting and ${probe.reason}`);
       }
+      // The route takes a body envelope, not a flat pair.
       await verbs.invoke('config.set', { key, value });
     },
 
     get: async (key) => {
       try {
-        const result = await verbs.invoke<{ value?: unknown } | unknown>('config.get', { key });
-        if (result !== null && typeof result === 'object' && 'value' in (result as Record<string, unknown>)) {
-          return (result as { value: unknown }).value;
-        }
-        return result;
+        // `config.get` takes no key: it answers with the whole resolved tree.
+        const snapshot = await verbs.invoke<Record<string, unknown>>('config.get', {});
+        return readDottedPath(snapshot ?? null, key);
       } catch (error) {
         logger.debug('[config] reading a daemon-owned key failed; showing the local value', {
           key,
@@ -83,13 +99,9 @@ export function createDaemonConfigClient(verbs: DaemonVerbCaller): DaemonConfigC
 
     snapshot: async () => {
       try {
-        const result = await verbs.invoke<{ settings?: Record<string, unknown> } | Record<string, unknown>>('settings.snapshot', {});
-        if (result && typeof result === 'object' && 'settings' in result) {
-          return (result as { settings: Record<string, unknown> }).settings;
-        }
-        return (result as Record<string, unknown>) ?? null;
+        return await verbs.invoke<Record<string, unknown>>('config.get', {}) ?? null;
       } catch (error) {
-        logger.debug('[config] the daemon settings snapshot was not available', { error: summarizeError(error) });
+        logger.debug('[config] the daemon config snapshot was not available', { error: summarizeError(error) });
         return null;
       }
     },
