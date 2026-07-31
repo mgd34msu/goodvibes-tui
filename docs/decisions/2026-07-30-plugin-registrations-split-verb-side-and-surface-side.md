@@ -2,7 +2,7 @@
 
 Date: 2026-07-30
 Scope: the plugin verb-side / surface-side split, moved into the daemon-separation conversion
-Status: accepted, with one item left open for the daemon-side round
+Status: accepted; the open item is settled below (2026-07-31)
 Repo: goodvibes-tui (the plugin API itself is the SDK's; this record is about what it reaches here)
 
 ## Why this had to be settled with the conversion, not after it
@@ -59,15 +59,71 @@ discovered and loaded here. That is one plugin, loaded twice, with each host tak
 can honour — which is the shape the SDK's loader already supports (it takes the registries the
 host has) and which needs no new plugin API.
 
-What is NOT settled, and is deliberately left: whether a single plugin manifest declares both
+What was NOT settled, and was deliberately left: whether a single plugin manifest declares both
 halves, or whether the two hosts read the same directory and each ignores what it cannot use.
-Both work; the choice is about what an author has to write, and it should be made when there
-is an author to ask. Until then the classification above is the honest statement of what
-happens, and no plugin is affected because none is installed.
+
+## Settled (2026-07-31): one plugin package, each host loads what it can serve
+
+**One plugin package. Both hosts read the same directories. Each loads the registrations it can
+serve and ignores the rest.** No manifest change, no per-half declaration, no new plugin API.
+
+An author writes one plugin. Where it is installed decides nothing about which halves run; what
+decides that is which host loaded it. This is the direction the platform already runs in:
+
+- **It is already true on disk.** Neither host passes `additionalDirectories`, so both scan
+  `<cwd>/.goodvibes/plugins` and `~/.goodvibes/plugins`. A manifest that declared halves would
+  be describing a split that the filesystem does not have.
+- **The manifest cannot express it anyway.** The capability vocabulary in the SDK's plugin
+  manifest types has no channel, delivery or gateway entry — the two it does list for
+  registration (`register.panel`, `register.hook`) are backed by no API method at all. Making a
+  manifest declare halves means inventing a vocabulary for a distinction the author does not
+  have to care about.
+- **It matches the degrade the composition already relies on.** A registration into a catalog
+  nothing serves is accepted and cataloged rather than refused — that is what this record's
+  middle section describes for the client's gateway catalog today. The daemon's side of that is
+  now written the same way, and made honest: see below.
+- **Two hosts, one enabled-set.** Both resolve their plugin state to `~/.goodvibes/tui/plugins.json`
+  (the daemon's surface root is deliberately still `tui` for Phase A). Enabling a plugin enables
+  it for both, which is the same answer as "one plugin package" — and it is the behaviour an
+  author writing one plugin would expect. Worth naming as a consequence rather than an accident:
+  two hosts write that file with a whole-file, last-writer-wins save.
+
+### What that means the daemon had to do, and now does
+
+The daemon repository constructed a `PluginManager` and never called `init` on it. It could list
+a plugin directory and load nothing out of it — `enable` persisted a flag that turned nothing on.
+Every one of the three rows above therefore reached nothing no matter where the plugin was
+installed. The daemon now builds its loader dependencies (`src/runtime/plugin-composition.ts`)
+and initialises the manager at boot, with:
+
+- **the three verb-side registries served for real** — the gateway catalog this process answers
+  from, the channel registry its inbound pollers and cluster election read, and the delivery
+  router replies actually leave through (`deliveryManager.getDeliveryRouter()`, not a second
+  router built from the same arguments);
+- **the provider-shaped registries it genuinely has** — providers, memory embeddings, voice,
+  media, web search;
+- **the two surface-side kinds accepted and named.** `PluginLoaderDeps` has no optional members
+  and the plugin API guards nothing, so a host that supplies nothing for a registry does not
+  decline that kind: it throws inside the plugin's own `init`, and the loader drops the WHOLE
+  plugin — including the halves that host could have run. "Ignores the rest" therefore has to be
+  a registry that accepts the registration and goes nowhere. Both stand-ins log what they took
+  and that nothing here will run it, so the same plugin loaded by a surface is visibly where
+  that half happens.
+
+`registerTool` stays on the surface-side list, as classified above, and that classification was
+written when the daemon hosted no runs of its own. The daemon does host runs, and they build
+their tools through the agent orchestrator's own registry rather than through a registry a
+plugin can reach. The round that moves session hosting daemon-side is the one that re-examines
+this row.
 
 ## What was NOT done here, and why
 
-No warning was added at load time for a registration that lands in the empty catalog. With
-zero installed plugins it would fire for nobody, and the right place for it is the loader that
-knows which host it is running in — which is an SDK change, on the round that gives the daemon
-its plugin loading.
+No warning was added inside the SDK loader for a registration that lands in a catalog nothing
+serves. The right place for it is the loader that knows which host it is running in, which is an
+SDK change; the daemon says it at its own stand-ins instead, where the fact is local and certain.
+
+Nothing was built for a plugin that does not exist. There are still zero installed plugins and
+zero bundled ones — what changed is that a plugin dropped into either host's directory now
+loads, in both hosts, and a test drives that end to end against a real fixture on disk
+(`goodvibes-daemon/src/test/runtime/plugin-composition.test.ts`). Until this round no test in
+any repository had executed the loader's init path at all.

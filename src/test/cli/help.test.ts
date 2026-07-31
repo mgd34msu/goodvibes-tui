@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { renderGoodVibesVersion, renderDaemonStartupBanner } from '../../cli/help.ts';
 import { resolveRuntimeEndpointBinding } from '../../cli/endpoints.ts';
+import { resolveWebPort } from '@pellux/goodvibes-sdk/platform/daemon';
 import { VERSION } from '../../version.ts';
 import type { ConfigManager } from '../../config/index.ts';
 
@@ -159,15 +160,19 @@ describe('daemon startup banner — binding honesty (mirrors the SDK bind path)'
     expect(resolveRuntimeEndpointBinding(fakeConfig({}), 'controlPlane').recognized).toBe(true);
   });
 
-  test("web port is anchored to the SDK's resolveWebPort (bare Number, no collapse): 0 stays 0 and non-numeric stays NaN, matching the tailscale/announcement machinery", () => {
-    // The SDK has NO resolveHostBinding consumer for the web endpoint — its
-    // web machinery (resolveWebPort driving tailscale serve, the surface
-    // registry, feature announcements) uses `Number(raw ?? default)` with no
-    // ||-collapse. Collapsing here would make displays assert a port that
-    // machinery is not using. (The proper close — a real web bind resolver —
-    // is SDK-side.)
-    expect(resolveRuntimeEndpointBinding(fakeConfig({ 'web.port': 0 }), 'web').port).toBe(0);
-    expect(Number.isNaN(resolveRuntimeEndpointBinding(fakeConfig({ 'web.port': 'abc' }), 'web').port)).toBe(true);
+  test("web port is the SDK's resolveWebPort, called rather than copied", () => {
+    // This used to assert the copy's semantics — a bare `Number(raw ?? 3423)`,
+    // so a stored 0 displayed as 0 and a non-numeric value as NaN — because
+    // that was what the SDK's web machinery did and a display must not
+    // disagree with the machinery. The SDK closed that gap: resolveWebBinding
+    // validates, and surface announcements, channel account links and
+    // tailscale-serve all anchor to it. So the assertion is the same one it
+    // always was — agreement — against the function itself rather than against
+    // a transcription of what it used to do.
+    for (const stored of [0, 'abc', 8080, undefined]) {
+      expect(resolveRuntimeEndpointBinding(fakeConfig(stored === undefined ? {} : { 'web.port': stored }), 'web').port)
+        .toBe(resolveWebPort(stored));
+    }
     expect(resolveRuntimeEndpointBinding(fakeConfig({}), 'web').port).toBe(3423);
     // controlPlane/httpListener keep the resolveHostBinding-anchored collapse.
     expect(resolveRuntimeEndpointBinding(fakeConfig({ 'controlPlane.port': 0 }), 'controlPlane').port).toBe(3421);

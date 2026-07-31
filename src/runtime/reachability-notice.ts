@@ -24,7 +24,7 @@
  */
 
 import { compareVersions, normalizeVersion } from './update-check.ts';
-import { describeShadowReport, type ShadowScanResult } from './path-shadow.ts';
+import { describeShadowReport, type ShadowScanResult } from '@pellux/goodvibes-sdk/platform/runtime/path-shadow';
 
 export type ReachabilityNoticeKind = 'shadowed' | 'not-on-path' | 'behind';
 

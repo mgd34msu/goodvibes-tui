@@ -19,7 +19,7 @@ import {
   splitPathEntries,
   versionLineIdentifiesCommand,
   type ShadowScanInput,
-} from '../../runtime/path-shadow.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/path-shadow';
 
 const HOME = '/home/owner';
 const INSTALL_DIR = `${HOME}/.local/bin`;

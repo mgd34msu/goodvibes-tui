@@ -7,11 +7,10 @@
  * ring, default 20 entries) and appends the same record to the agent's
  * session transcript as `{type:'knowledge_injection', turn, ...record}`.
  *
- * `TurnInjectionRecord` itself is not re-exported from the SDK's
- * `platform/agents` barrel (only `AgentRecord.turnInjections` carries its
- * structural shape through the already-public `platform/tools` barrel), so
- * the entry type here is DERIVED from `AgentRecord` rather than imported by
- * name — this needs no SDK export change.
+ * `TurnInjectionRecord` was reachable only as the element type of
+ * `AgentRecord.turnInjections`, so the entry type here was derived positionally
+ * from that array rather than named. The `platform/agents` barrel exports the
+ * record type now, and this names it.
  *
  * Reality check (since updated): the TUI's main interactive
  * session DOES route through this engine. The SDK `Orchestrator` runs per-turn
@@ -24,10 +23,10 @@
  * record onto their own `AgentRecord.turnInjections`, rendered per-agent by
  * `buildTurnInjectionsText` when an explicit agent id is given.
  */
-import type { AgentRecord } from '@pellux/goodvibes-sdk/platform/tools';
+import type { TurnInjectionRecord } from '@pellux/goodvibes-sdk/platform/agents';
 
-/** One TurnInjectionRecord entry, derived from AgentRecord (see module doc). */
-export type TurnInjectionEntry = NonNullable<AgentRecord['turnInjections']>[number];
+/** One per-turn injection record, under the name this renderer already used. */
+export type TurnInjectionEntry = TurnInjectionRecord;
 
 function fmtN(n: number): string {
   return n.toLocaleString();

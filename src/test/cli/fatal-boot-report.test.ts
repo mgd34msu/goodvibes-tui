@@ -39,7 +39,7 @@ import {
   reportFatalBootFailure,
   writeExitingStdoutLine,
   writeFatalLine,
-} from '../../cli/fatal-boot-report.ts';
+} from '@pellux/goodvibes-sdk/platform/daemon';
 
 const REPO_ROOT = process.cwd();
 /** The runs themselves fail fast — anything near this is a hang, not a write. */
@@ -58,7 +58,7 @@ interface InlineRun {
  */
 function runInlineWriter(body: string): InlineRun {
   const dir = makeProjectTempDir('gv-fatal-inline');
-  const modulePath = join(REPO_ROOT, 'src', 'cli', 'fatal-boot-report.ts');
+  const modulePath = '@pellux/goodvibes-sdk/platform/daemon';
   const script = join(dir, 'inline.ts');
   writeFileSync(
     script,
@@ -143,7 +143,7 @@ describe('fatal-boot-report writes to descriptors, not to replaceable globals', 
     expect(run.status).toBe(0);
   });
 
-  test('the exported surface is the SDK\'s, name for name, so the re-pin is a one-line import swap', () => {
+  test('the three names this app reaches for are all on the subpath it imports', () => {
     expect(typeof writeFatalLine).toBe('function');
     expect(typeof writeExitingStdoutLine).toBe('function');
     expect(typeof reportFatalBootFailure).toBe('function');

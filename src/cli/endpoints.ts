@@ -1,3 +1,4 @@
+import { resolveWebPort } from '@pellux/goodvibes-sdk/platform/daemon';
 import type { ConfigKey, ConfigManager } from '../config/index.ts';
 
 export type RuntimeEndpointId = 'controlPlane' | 'httpListener' | 'web';
@@ -81,16 +82,16 @@ export function resolveRuntimeEndpointBinding(
   //   - controlPlane / httpListener bind via resolveHostBinding, which is fed
   //     `Number(raw ?? default)` and applies `customPort || DEFAULT` — a
   //     stored 0 or non-numeric value collapses to the endpoint default.
-  //   - web has NO resolveHostBinding consumer in the SDK at all; its closest
-  //     machinery (resolveWebPort, which drives tailscale-serve, plus the
-  //     surface registry/announcements) uses bare `Number(raw ?? default)`
-  //     with no || collapse — 0 stays 0 and a non-numeric value stays NaN.
-  //     Collapsing here would make the display assert a port the tailscale/
-  //     announcement machinery is not actually using. (The SDK's web-port
-  //     handling is inconsistent-by-absence — a proper resolveHostBinding-style
-  //     web resolver is an SDK-side fix; until then this mirrors resolveWebPort.)
+  //   - web goes through the SDK's own resolveWebPort. This used to be a copy
+  //     of what that function did when it was a bare `Number(raw ?? default)`,
+  //     with a note saying a proper resolver was an SDK-side fix. The SDK has
+  //     one now — resolveWebBinding, which surface announcements, channel
+  //     account links and tailscale-serve all anchor to — so the copy would now
+  //     be the thing making the display disagree with the machinery.
   const rawPort = Number(config.get(keys.port) ?? RUNTIME_ENDPOINT_DEFAULT_PORTS[endpoint]);
-  const port = endpoint === 'web' ? rawPort : (rawPort || RUNTIME_ENDPOINT_DEFAULT_PORTS[endpoint]);
+  const port = endpoint === 'web'
+    ? resolveWebPort(config.get(keys.port))
+    : (rawPort || RUNTIME_ENDPOINT_DEFAULT_PORTS[endpoint]);
   if (hostMode === 'network') {
     return { hostMode, configuredHost, host: '0.0.0.0', port, recognized: true };
   }

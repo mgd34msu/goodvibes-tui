@@ -118,6 +118,7 @@ export interface RuntimeServices {
   readonly routeBindings: RouteBindingManager;
   readonly surfaceRegistry: SurfaceRegistry;
   readonly channelPlugins: ChannelPluginRegistry;
+  /** The one router this surface delivers through — AutomationDeliveryManager's own, not a second copy of it. */
   readonly channelDeliveryRouter: ChannelDeliveryRouter;
   readonly watcherRegistry: WatcherRegistry;
   /**

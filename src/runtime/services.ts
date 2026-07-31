@@ -46,7 +46,7 @@
  */
 import { FocusTracker } from '../core/focus-tracker.ts';
 import { AutomationDeliveryManager, AutomationManager } from '@pellux/goodvibes-sdk/platform/automation';
-import { ChannelDeliveryRouter, ChannelPolicyManager } from '@pellux/goodvibes-sdk/platform/channels';
+import { ChannelPolicyManager } from '@pellux/goodvibes-sdk/platform/channels';
 import { ApprovalBroker, GatewayMethodCatalog, SharedSessionBroker } from '@pellux/goodvibes-sdk/platform/control-plane';
 import { createClientRuntimeServices } from '@pellux/goodvibes-sdk/platform/runtime/client-services';
 import { wireIdlePowerAndLiveTurn } from './idle-power-services.ts';
@@ -394,12 +394,13 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
   const planManager = new ExecutionPlanManager(workingDirectory);
   const adaptivePlanner = new AdaptivePlanner();
   const idempotencyStore = new IdempotencyStore();
-  const channelDeliveryRouter = new ChannelDeliveryRouter({
-    configManager,
-    secretsManager,
-    serviceRegistry,
-    artifactStore,
-  });
+  // ONE router, not two. This surface used to build a second ChannelDeliveryRouter
+  // from the same four arguments AutomationDeliveryManager builds its own from,
+  // and expose that second one — so the router on the service surface and the
+  // router replies actually leave through were different objects, and a delivery
+  // strategy registered on the exposed one reached nothing. The SDK's
+  // RuntimeServices contract requires the field; it now names the real router.
+  const channelDeliveryRouter = deliveryManager.getDeliveryRouter();
   // The phase/work-item orchestration engine, constructed before the process
   // registry so its fleet nodes can be folded in below.
   const { orchestrationEngine, workstreamCommands } = createWorkstreamServices({

@@ -53,14 +53,14 @@ export type { BlockMeta };
 import type { ConversationMessageSnapshot } from '@pellux/goodvibes-sdk/platform/core';
 type Message = ConversationMessageSnapshot;
 
-/** Matches Orchestrator.usage's shape (SDK platform/core/orchestrator.ts). Not
- * exported by the SDK as a standalone type, so mirrored here. */
-export interface OrchestratorUsageTotals {
-  input: number;
-  output: number;
-  cacheRead: number;
-  cacheWrite: number;
-}
+/**
+ * `Orchestrator.usage`'s own type, re-exported under the name this module's
+ * callers already use. It was four fields written out here, because the shape
+ * was an inferred object literal on the class with no name to import; it has
+ * one now.
+ */
+import type { OrchestratorUsageTotals } from '@pellux/goodvibes-sdk/platform/core';
+export type { OrchestratorUsageTotals };
 
 /**
  * sumConversationUsage - Fold every assistant message's per-turn usage into
