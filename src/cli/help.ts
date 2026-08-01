@@ -58,7 +58,6 @@ export function renderGoodVibesHelp(binary = 'goodvibes'): string {
     'Commands:',
     '  tui [path]                 Start the interactive TUI (default)',
     '  run|exec [prompt]          Run non-interactively with text/json/stream-json output',
-    '  serve|daemon               Start the daemon/API host',
     '  web                        Show browser surface bind URL and enablement',
     '  service                    Inspect/manage daemon service lifecycle',
     '  status                     Print config, provider, service, and onboarding posture',
@@ -134,7 +133,7 @@ export function renderGoodVibesHelp(binary = 'goodvibes'): string {
     `  ${binary} control-plane status`,
     `  ${binary} subscription providers`,
     `  ${binary} subscription login openai start --open`,
-    `  ${binary} serve --hostname 0.0.0.0 --port 3421`,
+    `  goodvibes-daemon --hostname 0.0.0.0 --port 3421`,
   ].join('\n');
 }
 
@@ -247,9 +246,9 @@ const COMMAND_HELP: Record<string, CommandHelp> = {
     examples: ['completion bash', 'completion zsh'],
   },
   serve: {
-    usage: ['serve [--hostname <host>] [--port <port>]', 'daemon [--hostname <host>] [--port <port>]'],
-    summary: 'Start the headless GoodVibes daemon/API host.',
-    examples: ['serve', 'serve --hostname 0.0.0.0 --port 3421'],
+    usage: ['serve'],
+    summary: 'Not served here: the daemon is its own program. Run `goodvibes-daemon` (or manage the installed service with `goodvibes service`).',
+    examples: [],
   },
   remote: {
     usage: ['remote', 'bridge'],
