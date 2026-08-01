@@ -1,3 +1,7 @@
+/// <reference types="@pellux/goodvibes-sdk/sql-js" />
+// `sql.js` ships no types. The declaration is SDK-owned and reaches here
+// through that reference — there is no local copy to keep in step.
+
 /**
  * G6 — Dependency verification smoke tests.
  *
