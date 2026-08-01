@@ -120,7 +120,7 @@ Each row links to the page that documents it. The product's own `?` overlay and 
 | Session durability | Post-turn snapshots plus an fsync-per-record transcript journal replayed at every resume | [session-durability.md](docs/session-durability.md) |
 | Planning | Conversational planning loop, project-scoped knowledge spaces, readiness evaluation, the Planning panel | [project-planning.md](docs/project-planning.md) |
 | Sharing and export | `/share` to HTML, JSON, or Markdown with redaction, upload, and clipboard options | [share-command.md](docs/share-command.md) |
-| Daemon and services | TUI-only or in-process daemon, headless daemon/API host, browser operator surface, background service and autostart, inbound TLS, outbound trust | [deployment-and-services.md](docs/deployment-and-services.md) |
+| Daemon and services | Connecting to the standalone GoodVibes daemon, browser operator surface, background service and autostart, inbound TLS, outbound trust | [deployment-and-services.md](docs/deployment-and-services.md) |
 | Remote access | A worked home-server setup: always-on daemon, browser access, TUI over SSH, reachability and TLS | [remote-access.md](docs/remote-access.md) |
 | Channels and API | Slack, Discord, Telegram, Matrix, webhook and other surfaces; the shared reply pipeline; remote peers and node hosts; the control-plane HTTP and streaming API | [channels-remote-and-api.md](docs/channels-remote-and-api.md) |
 | Voice | Live `/tts` playback, TTS and STT providers, streaming voice API | [voice-and-live-tts.md](docs/voice-and-live-tts.md) |
@@ -154,7 +154,7 @@ Edit them live with `/settings` or the fullscreen `/config` workspace rather tha
 | `display.showThinking` | `false` | Show model thinking traces |
 | `behavior.autoCompactThreshold` | `80` | Context percentage before auto-compact runs |
 | `helper.enabled` | `false` | Route grunt work to a cheaper helper model |
-| `daemon.enabled` | `true` | Run the local session daemon, bound to loopback |
+| `daemon.enabled` | `true` | Spawn or adopt a detached local session daemon, bound to loopback |
 
 The wider key table, the permission modes, and the hand-edited TUI namespaces (checkpoint root guard, scriptable statusline, session behavior, launch-time self-update) are in [docs/configuration.md](docs/configuration.md).
 
@@ -193,11 +193,10 @@ bun run dev
 | Command | Does |
 | --- | --- |
 | `bun run dev` | Run the TUI from source |
-| `bun run daemon` | Run the headless daemon/API host from source |
 | `bun test` | Run the suite through the parallel per-file runner |
 | `bun run build` | Compile `src/main.ts` into `dist/goodvibes` |
 
-The compiled binary is the TUI entrypoint; it also hosts the daemon in-process (`daemon.enabled`, on by default, loopback-bound) and the HTTP listener when `danger.httpListener` is enabled.
+The compiled binary is the TUI entrypoint; it spawns or adopts the standalone GoodVibes daemon (`daemon.enabled`, on by default, loopback-bound) and hosts the HTTP listener when `danger.httpListener` is enabled.
 
 Tests live under `src/test/`, mirroring the source tree, and cover contract, security, release-gate, runtime, renderer, panel, integration, and anti-regression cases. Several gates run alongside them in CI: byte-exact golden renderer frames, performance budgets for startup and frame composition and line production (`scripts/perf-baseline.json`), and architecture rules for import cycles, layer boundaries, source-file size, and unused renderer exports (`scripts/check-architecture.ts`).
 
@@ -208,7 +207,7 @@ Some decisions worth knowing before you read the source:
 - **In-process agents** — agents run in the same process rather than over IPC, staying isolated through scoped tool registries and namespaced state.
 - **Typed runtime store** — a plain `zustand/vanilla` store with typed selectors and dispatch paths, reachable from agents, tools, renderer, hooks, channels, and daemon surfaces alike.
 - **Tree-sitter and bundled language servers** — grammars for structural analysis, outlines, and AST-level edits, several embedded as WASM for instant startup; TypeScript, Python, Bash, CSS, HTML, and JSON language servers ship as dependencies, while `rust-analyzer` and `gopls` are fetched on first use with checksum verification.
-- **Backend-first external surface** — the daemon and control plane expose typed HTTP and gateway methods, so other clients do not reimplement runtime logic.
+- **Backend-first external surface** — the daemon product exposes typed HTTP and gateway methods, so other clients do not reimplement runtime logic.
 - **Crash recovery** — periodic snapshots plus an fsync-per-record append-only transcript journal, replayed at every resume seam.
 - **Render coalescing and a per-message line cache** — same-tick render requests collapse into one composite frame, and transcript growth re-renders only the appended message instead of rebuilding the whole conversation.
 
@@ -227,7 +226,6 @@ src/
 ├── config/                 settings layering, surface roots, secrets, credential availability
 ├── permissions/            approval cards, hunk selection, sandbox exec gate
 ├── cli/                    flag parsing, management verbs, doctor, launch-time self-update
-├── daemon/                 daemon CLI, lifecycle, request handlers, service commands
 ├── tools/, mcp/, plugins/  TUI-local tool guards, MCP hot reload, plugin loader
 ├── audio/, export/         turn playback and speech routing, cost pricing and gist upload
 ├── verification/, work-plans/, widget/    live verifier and ledger, work-plan store, widget module
