@@ -1,5 +1,5 @@
 import type { InputToken } from '@pellux/goodvibes-sdk/platform/core';
-import type { InfiniteBuffer } from '../core/history.ts';
+import type { InfiniteBuffer } from '@pellux/goodvibes-terminal-shell';
 import type { ConversationManager } from '../core/conversation';
 import type { SelectionResult, SelectionModal } from './selection-modal.ts';
 import type { BookmarkModal } from './bookmark-modal.ts';

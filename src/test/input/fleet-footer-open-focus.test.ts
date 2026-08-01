@@ -17,7 +17,7 @@
  */
 import { describe, test, expect } from 'bun:test';
 import { InputHandler } from '../../input/handler.ts';
-import { SelectionManager } from '../../input/selection.ts';
+import { SelectionManager } from '@pellux/goodvibes-terminal-shell';
 import { PanelManager } from '../../panels/panel-manager.ts';
 import { FocusTracker } from '@pellux/goodvibes-sdk/platform/runtime/operations';
 import type { Panel } from '../../panels/types.ts';
@@ -83,7 +83,7 @@ function buildHandler(panelManager: PanelManager): InputHandler {
     selection,
     () => 0,
     () => 24,
-    (() => ({ getLineCount: () => 0 })) as unknown as () => import('../../core/history.ts').InfiniteBuffer,
+    (() => ({ getLineCount: () => 0 })) as unknown as () => import('@pellux/goodvibes-terminal-shell').InfiniteBuffer,
     () => {},
     () => {},
     uiServices as unknown as import('../../runtime/ui-services.ts').UiRuntimeServices,

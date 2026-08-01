@@ -1,6 +1,6 @@
 import { describe, test, expect, beforeEach } from 'bun:test';
 import { SearchManager } from '../../input/search.ts';
-import { InfiniteBuffer } from '../../core/history.ts';
+import { InfiniteBuffer } from '@pellux/goodvibes-terminal-shell';
 import { ConversationManager } from '../../core/conversation';
 import type { Cell } from '@pellux/goodvibes-sdk/platform/types';
 

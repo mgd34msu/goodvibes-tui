@@ -1,7 +1,7 @@
 import { describe, test, expect, beforeEach } from 'bun:test';
 import { InputHandler } from '../../input/handler.ts';
-import { SelectionManager } from '../../input/selection.ts';
-import { InfiniteBuffer } from '../../core/history.ts';
+import { SelectionManager } from '@pellux/goodvibes-terminal-shell';
+import { InfiniteBuffer } from '@pellux/goodvibes-terminal-shell';
 import { createDefaultUiRuntimeServices } from '../helpers/ui-services.ts';
 import { disposeTestRuntimeServicesAfterAll } from '../helpers/runtime-services.ts';
 import { registerPaste } from '../../input/handler-content-actions.ts';

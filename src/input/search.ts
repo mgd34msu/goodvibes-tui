@@ -1,4 +1,4 @@
-import type { InfiniteBuffer } from '../core/history.ts';
+import type { InfiniteBuffer } from '@pellux/goodvibes-terminal-shell';
 import type { ConversationManager } from '../core/conversation';
 
 export interface SearchMatch {

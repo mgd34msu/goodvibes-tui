@@ -8,6 +8,7 @@ import { describe, test, expect, mock, spyOn } from 'bun:test';
 import type { InputFeedContext } from '../../input/handler-feed.ts';
 import * as handlerFeedModule from '../../input/handler-feed.ts';
 import { FocusTracker } from '@pellux/goodvibes-sdk/platform/runtime/operations';
+import { SelectionManager } from '@pellux/goodvibes-terminal-shell';
 
 describe('InputFeedContext reuse (α1)', () => {
   test('feedInputTokens receives the same context object on every feed() call', () => {
@@ -22,7 +23,6 @@ describe('InputFeedContext reuse (α1)', () => {
     // Build a minimal InputHandler — only needs enough to construct without crashing.
     // We import dynamically so the spy is in place before the module executes feedInputTokens.
     const { InputHandler } = require('../../input/handler.ts') as typeof import('../../input/handler.ts');
-    const { SelectionManager } = require('../../input/selection.ts') as typeof import('../../input/selection.ts');
 
     const requestRender = mock(() => {});
     const getScrollTop = () => 0;
@@ -76,7 +76,7 @@ describe('InputFeedContext reuse (α1)', () => {
       selection,
       getScrollTop,
       getViewportHeight,
-      getHistory as unknown as () => import('../../core/history.ts').InfiniteBuffer,
+      getHistory as unknown as () => import('@pellux/goodvibes-terminal-shell').InfiniteBuffer,
       scroll,
       exitApp,
       uiServices as unknown as import('../../runtime/ui-services.ts').UiRuntimeServices,
@@ -114,7 +114,6 @@ describe('InputFeedContext reuse (α1)', () => {
     );
 
     const { InputHandler } = require('../../input/handler.ts') as typeof import('../../input/handler.ts');
-    const { SelectionManager } = require('../../input/selection.ts') as typeof import('../../input/selection.ts');
 
     const uiServices = {
       agents: {
@@ -151,7 +150,7 @@ describe('InputFeedContext reuse (α1)', () => {
       selection,
       () => 0,
       () => 24,
-      (() => ({ getLineCount: () => 0 })) as unknown as () => import('../../core/history.ts').InfiniteBuffer,
+      (() => ({ getLineCount: () => 0 })) as unknown as () => import('@pellux/goodvibes-terminal-shell').InfiniteBuffer,
       () => {},
       () => {},
       uiServices as unknown as import('../../runtime/ui-services.ts').UiRuntimeServices,

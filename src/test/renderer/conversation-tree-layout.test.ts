@@ -26,7 +26,7 @@ import {
   treeContentCol,
   treeIndentCols,
   treeTextCol,
-} from '../../renderer/conversation-tree.ts';
+} from '@pellux/goodvibes-terminal-shell';
 
 /**
  * The column a branch row's status glyph must occupy: the same one a depth-0

@@ -19,7 +19,7 @@ import type { WorkspaceTrustLevel } from '@pellux/goodvibes-sdk/platform/runtime
 import type { CommandContext } from '../input/command-registry.ts';
 import type { InputHistory } from '../input/input-history.ts';
 import type { GitStatusProvider, GitHeaderInfo } from '../renderer/git-status.ts';
-import type { SelectionManager } from '../input/selection.ts';
+import type { SelectionManager } from '@pellux/goodvibes-terminal-shell';
 import type { Compositor } from '../renderer/compositor.ts';
 
 import type { RuntimeContext, BootstrapOptions } from './context.ts';

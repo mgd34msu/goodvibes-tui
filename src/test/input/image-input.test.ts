@@ -1,8 +1,8 @@
 import { describe, test, expect, beforeEach } from 'bun:test';
 import { join } from 'node:path';
 import { InputHandler } from '../../input/handler.ts';
-import { SelectionManager } from '../../input/selection.ts';
-import { InfiniteBuffer } from '../../core/history.ts';
+import { SelectionManager } from '@pellux/goodvibes-terminal-shell';
+import { InfiniteBuffer } from '@pellux/goodvibes-terminal-shell';
 import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import { createPermissionConfigReader, PermissionManager } from '@pellux/goodvibes-sdk/platform/permissions';
 import { PolicyRuntimeState } from '@/runtime/index.ts';

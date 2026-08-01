@@ -21,7 +21,7 @@ import {
   type ConversationRenderContext,
 } from './conversation-render-context.ts';
 import { renderCompactionContinuationMessage } from './conversation-compaction-render.ts';
-import { drawTreeRails, treeIndentCols, treeTextCol } from '../renderer/conversation-tree.ts';
+import { drawTreeRails, treeIndentCols, treeTextCol } from '@pellux/goodvibes-terminal-shell';
 import {
   MAX_NEST_DEPTH,
   buildRenderPlan,

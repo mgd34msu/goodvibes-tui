@@ -4,7 +4,7 @@ import type { InputHistory } from './input-history.ts';
 import type { ContentPart } from '@pellux/goodvibes-sdk/platform/providers';
 import type { CommandRegistry, CommandContext } from './command-registry.ts';
 import type { AutocompleteEngine } from './autocomplete.ts';
-import type { SelectionManager } from './selection.ts';
+import type { SelectionManager } from '@pellux/goodvibes-terminal-shell';
 import type { WrappedPromptInfo } from './handler-prompt-buffer.ts';
 import {
   ensureInputCursorVisible as computeInputScrollTop,

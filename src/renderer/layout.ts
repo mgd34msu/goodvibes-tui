@@ -2,15 +2,12 @@ import { GLYPHS, SPINNER_FRAMES, UI_TONES } from './ui-primitives.ts';
 
 /**
  * Layout constants — single source of truth for margins and content width.
- * All renderers import these instead of hardcoding indent values.
+ * All renderers import these instead of hardcoding indent values. The object
+ * itself lives in @pellux/goodvibes-terminal-shell alongside the transcript
+ * tree geometry that reads LEFT_MARGIN/RIGHT_MARGIN out of it, so the margins
+ * and the glyph columns derived from them cannot drift apart.
  */
-export const LAYOUT = {
-  LEFT_MARGIN: 4,
-  RIGHT_MARGIN: 2,
-  contentWidth: (termWidth: number) => termWidth - LAYOUT.LEFT_MARGIN - LAYOUT.RIGHT_MARGIN,
-  /** Used by createMessageBar in ui-factory.ts for user message ghost boxes. */
-  USER_BOX_MARGIN: 2,
-} as const;
+export { TRANSCRIPT_LAYOUT as LAYOUT } from '@pellux/goodvibes-terminal-shell';
 
 export const TOOL_STATUS = {
   SUCCESS_ICON: GLYPHS.status.success,

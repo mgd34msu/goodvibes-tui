@@ -11,8 +11,8 @@
  *     already-allocated context before each feed() dispatch.
  */
 import type { InputFeedContext } from './handler-feed.ts';
-import type { SelectionManager } from './selection.ts';
-import type { InfiniteBuffer } from '../core/history.ts';
+import type { SelectionManager } from '@pellux/goodvibes-terminal-shell';
+import type { InfiniteBuffer } from '@pellux/goodvibes-terminal-shell';
 import type { CommandRegistry, CommandContext } from './command-registry.ts';
 import type { AutocompleteEngine } from './autocomplete.ts';
 import type { FilePickerModal } from './file-picker.ts';

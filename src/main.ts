@@ -5,7 +5,7 @@ import { type Line } from '@pellux/goodvibes-sdk/platform/types';
 import { UIFactory } from './renderer/ui-factory.ts';
 import { Orchestrator } from '@pellux/goodvibes-sdk/platform/core';
 import { InputHandler } from './input/handler.ts';
-import { SelectionManager } from './input/selection.ts';
+import { SelectionManager } from '@pellux/goodvibes-terminal-shell';
 import type { ContentPart } from '@pellux/goodvibes-sdk/platform/providers';
 import { ToolRegistry } from '@pellux/goodvibes-sdk/platform/tools';
 import { registerAllTools } from '@pellux/goodvibes-sdk/platform/tools';

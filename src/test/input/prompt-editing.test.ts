@@ -1,9 +1,9 @@
 import { describe, test, expect, beforeEach } from 'bun:test';
 import { InputHandler } from '../../input/handler.ts';
-import { SelectionManager } from '../../input/selection.ts';
+import { SelectionManager } from '@pellux/goodvibes-terminal-shell';
 import { CommandRegistry } from '../../input/command-registry.ts';
 import { AutocompleteEngine } from '../../input/autocomplete.ts';
-import { InfiniteBuffer } from '../../core/history.ts';
+import { InfiniteBuffer } from '@pellux/goodvibes-terminal-shell';
 import { createDefaultUiRuntimeServices } from '../helpers/ui-services.ts';
 import { disposeTestRuntimeServicesAfterAll } from '../helpers/runtime-services.ts';
 import type { UndoState } from '../../input/handler-prompt-buffer.ts';

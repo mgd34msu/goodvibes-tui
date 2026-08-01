@@ -6,7 +6,7 @@ import { stripDangerousAnsi } from './ansi-sanitize.ts';
 import { formatElapsed } from '../utils/format-elapsed.ts';
 import { GLYPHS } from './ui-primitives.ts';
 import { activeUiTones } from './theme.ts';
-import { treeContentCol, treeTextCol, writeTreeStatusMarker } from './conversation-tree.ts';
+import { treeContentCol, treeTextCol, writeTreeStatusMarker } from '@pellux/goodvibes-terminal-shell';
 
 const TOOL_NAME_MIN_WIDTH = 8;
 const TOOL_NAME_MAX_WIDTH = 20;

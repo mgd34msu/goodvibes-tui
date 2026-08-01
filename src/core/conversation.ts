@@ -1,4 +1,4 @@
-import { InfiniteBuffer } from './history.ts';
+import { InfiniteBuffer } from '@pellux/goodvibes-terminal-shell';
 import { createEmptyLine, type Line, type Cell } from '@pellux/goodvibes-sdk/platform/types';
 import type { SplashOptions } from '../utils/splash-lines.ts';
 import type { ToolCall, ToolResult } from '@pellux/goodvibes-sdk/platform/types';

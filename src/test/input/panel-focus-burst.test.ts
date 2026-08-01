@@ -16,7 +16,7 @@
  */
 import { describe, test, expect, mock } from 'bun:test';
 import { InputHandler } from '../../input/handler.ts';
-import { SelectionManager } from '../../input/selection.ts';
+import { SelectionManager } from '@pellux/goodvibes-terminal-shell';
 import { FocusTracker } from '@pellux/goodvibes-sdk/platform/runtime/operations';
 
 function buildHandler(activePanel: { id: string; handleInput: (key: string) => boolean; isCapturingTextBurst?: () => boolean }) {
@@ -68,7 +68,7 @@ function buildHandler(activePanel: { id: string; handleInput: (key: string) => b
     selection,
     () => 0,
     () => 24,
-    (() => ({ getLineCount: () => 0 })) as unknown as () => import('../../core/history.ts').InfiniteBuffer,
+    (() => ({ getLineCount: () => 0 })) as unknown as () => import('@pellux/goodvibes-terminal-shell').InfiniteBuffer,
     mock(() => {}),
     mock(() => {}),
     uiServices as unknown as import('../../runtime/ui-services.ts').UiRuntimeServices,

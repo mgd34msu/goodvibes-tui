@@ -1,5 +1,5 @@
 import type { InputToken } from '@pellux/goodvibes-sdk/platform/core';
-import type { InfiniteBuffer } from '../core/history.ts';
+import type { InfiniteBuffer } from '@pellux/goodvibes-terminal-shell';
 import type { SearchManager } from './search.ts';
 import type { HistorySearch } from './input-history.ts';
 import type { ConversationManager } from '../core/conversation';

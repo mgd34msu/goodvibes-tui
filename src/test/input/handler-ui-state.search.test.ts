@@ -1,7 +1,7 @@
 import { describe, test, expect, beforeEach } from 'bun:test';
 import { handleSearchModeToken } from '../../input/handler-ui-state.ts';
 import { SearchManager } from '../../input/search.ts';
-import { InfiniteBuffer } from '../../core/history.ts';
+import { InfiniteBuffer } from '@pellux/goodvibes-terminal-shell';
 import type { Cell } from '@pellux/goodvibes-sdk/platform/types';
 import type { InputToken } from '@pellux/goodvibes-sdk/platform/core';
 

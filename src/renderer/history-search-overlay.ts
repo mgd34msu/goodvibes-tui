@@ -1,7 +1,7 @@
 import type { Line } from '@pellux/goodvibes-sdk/platform/types';
 import { fitDisplay, getDisplayWidth } from '../utils/terminal-width.ts';
 import type { HistorySearch } from '../input/input-history.ts';
-import { createBottomBarLine, writeBottomBarText } from './bottom-bar.ts';
+import { createBottomBarLine, writeBottomBarText } from '@pellux/goodvibes-terminal-shell';
 import { formatHints } from './hint-grammar.ts';
 
 /**

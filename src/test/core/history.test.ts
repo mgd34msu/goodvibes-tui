@@ -1,5 +1,5 @@
 import { describe, test, expect, beforeEach } from 'bun:test';
-import { InfiniteBuffer } from '../../core/history.ts';
+import { InfiniteBuffer } from '@pellux/goodvibes-terminal-shell';
 import { createEmptyLine, createStyledCell } from '@pellux/goodvibes-sdk/platform/types';
 import type { Line } from '@pellux/goodvibes-sdk/platform/types';
 

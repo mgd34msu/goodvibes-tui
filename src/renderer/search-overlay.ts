@@ -1,7 +1,7 @@
 import type { Line } from '@pellux/goodvibes-sdk/platform/types';
 import { fitDisplay, getDisplayWidth, truncateDisplay } from '../utils/terminal-width.ts';
 import type { SearchManager } from '../input/search.ts';
-import { createBottomBarLine, writeBottomBarText } from './bottom-bar.ts';
+import { createBottomBarLine, writeBottomBarText } from '@pellux/goodvibes-terminal-shell';
 
 /**
  * Render the search bar as a single Line[] overlay at the bottom of the viewport.

@@ -2,7 +2,7 @@ import { type Line, createEmptyLine, createStyledCell } from '@pellux/goodvibes-
 import { getDisplayWidth, wrapText } from '../utils/terminal-width.ts';
 import { LAYOUT } from './layout.ts';
 import { GLYPHS } from './ui-primitives.ts';
-import { treeBranchCol, treeContentCol } from './conversation-tree.ts';
+import { treeBranchCol, treeContentCol } from '@pellux/goodvibes-terminal-shell';
 
 export interface ConversationSurfacePalette {
   readonly accent: string;

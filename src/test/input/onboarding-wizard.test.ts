@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { InfiniteBuffer } from '../../core/history.ts';
+import { InfiniteBuffer } from '@pellux/goodvibes-terminal-shell';
 import { CommandRegistry, type CommandContext } from '../../input/command-registry.ts';
 import { InputHandler } from '../../input/handler.ts';
 import { OnboardingWizardController } from '../../input/onboarding/onboarding-wizard.ts';
@@ -9,7 +9,7 @@ import { relayReadAccessors } from '../../runtime/relay-reachability-bridge.ts';
 import { EXTERNAL_SURFACE_SPECS, getExternalSurfaceAutoStartFieldId } from '../../input/onboarding/onboarding-wizard-external-surfaces.ts';
 import { buildGoodVibesSecretKey, buildGoodVibesSecretRef } from '../../input/onboarding/onboarding-wizard-helpers.ts';
 import { handleOnboardingWizardToken } from '../../input/onboarding/handler-onboarding-routes.ts';
-import { SelectionManager } from '../../input/selection.ts';
+import { SelectionManager } from '@pellux/goodvibes-terminal-shell';
 import { DEFAULT_CONFIG } from '@pellux/goodvibes-sdk/platform/config';
 import { getProviderIdFromModel } from '@pellux/goodvibes-sdk/platform/providers';
 import { readOnboardingCheckMarker, type OnboardingSnapshotState } from '../../runtime/onboarding/index.ts';
