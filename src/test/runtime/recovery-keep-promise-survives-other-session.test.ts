@@ -56,7 +56,15 @@ function makeDeps(open: SelectionOpener, forSurface: SessionSurface): RecoveryPr
     openSelection: open,
     receipt: () => {},
     render: () => {},
-    applySnapshot: () => 0,
+    // This test never reaches Resume — it is about Keep and Remove — so the
+    // restore seam only has to be present, not to do anything.
+    applySnapshot: () => ({
+      applied: false,
+      refusal: 'no-snapshot' as const,
+      retired: false,
+      messageCount: 0,
+      journalReplay: { replayed: 0, hadCorruptTail: false },
+    }),
   };
 }
 

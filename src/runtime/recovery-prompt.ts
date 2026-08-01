@@ -14,11 +14,14 @@
  * Rules this flow keeps:
  *   - Nothing is ever applied without the user picking Resume. There is no
  *     silent auto-restore path here, and this module never loads a snapshot
- *     just to look at it — `checkRecoveryFile` reports, `consumeRecovery`
- *     loads, and only the second one runs after an explicit yes.
- *   - The SDK's `consumeRecovery` is load-then-delete: the snapshot file is
- *     retired only after a successful load, so a failed read can never
- *     destroy state that was never actually recovered.
+ *     just to look at it — `checkRecoveryFile` reports, and only an explicit
+ *     yes reaches the code that opens the file.
+ *   - The SDK's `applyRecoverySnapshot` is what runs on that yes, and it will
+ *     not run without the confirmation token this flow hands it. It reads,
+ *     retires and applies in one operation, load-then-delete: the file is
+ *     retired only after a successful load, so a failed read can never destroy
+ *     state that was never actually recovered — and a successful load can
+ *     never leave a restored snapshot behind to be offered again.
  *   - Every fact shown is one we actually have (session id, snapshot age,
  *     title when the snapshot carries one, byte size when the file is where
  *     we can stat it). Nothing is estimated to fill the sentence out.
@@ -51,7 +54,8 @@
  *     decisions cannot quietly grow forever and nothing is deleted in silence.
  */
 import { statSync } from 'node:fs';
-import { checkRecoveryFile, checkRecoveryForSession, consumeRecovery, removeRecoveryPoint } from '@/runtime/index.ts';
+import { checkRecoveryFile, checkRecoveryForSession, removeRecoveryPoint } from '@/runtime/index.ts';
+import type { ApplyRecoverySnapshotResult } from '@pellux/goodvibes-sdk/platform/runtime/operations';
 import type { RecoveryFileInfo, SessionSurface } from '@/runtime/index.ts';
 import { isRecoveryRemovalRecorded, pruneRecoveryDecisions, recordRecoveryRemoval } from './recovery-decisions.ts';
 import { checkSessionLiveness } from '@pellux/goodvibes-sdk/platform/runtime/operations';
@@ -79,10 +83,16 @@ export interface RecoveryPromptDeps {
   readonly openSelection: SelectionOpener | undefined;
   /**
    * Apply an explicitly-accepted snapshot to the live conversation and report
-   * how many messages ended up in it. Supplied by the startup wiring so this
-   * module never reaches into conversation state itself.
+   * what happened. Supplied by the startup wiring so this module never reaches
+   * into conversation state itself.
+   *
+   * It takes a session id, not a loaded snapshot: reading the snapshot and
+   * retiring it are one operation in the SDK's `applyRecoverySnapshot`, so this
+   * flow cannot load one and then leave it behind. That is why "could not read
+   * it" arrives here as a refusal in the result rather than as a separate
+   * consume step this module runs first.
    */
-  readonly applySnapshot: (payload: { readonly snapshot: Record<string, unknown>; readonly sessionId: string }) => number;
+  readonly applySnapshot: (payload: { readonly sessionId: string }) => ApplyRecoverySnapshotResult;
   /** One-line honest receipt into the transcript. */
   readonly receipt: (line: string) => void;
   readonly render: () => void;
@@ -301,16 +311,20 @@ export async function offerRecoverySnapshot(deps: RecoveryPromptDeps): Promise<R
     const answer = await ask(open, RECOVERY_OFFER_TITLE, buildRecoveryOfferItems(facts));
 
     if (answer === 'resume') {
-      const { snapshot, consumed } = consumeRecovery(deps.surface, info.sessionId);
-      if (!snapshot || !consumed) {
-        // consumeRecovery leaves the file alone when the load fails, so the
-        // snapshot is still there to try again next launch. Say so.
-        deps.receipt('Recovery snapshot could not be read — it was left on disk and will be offered again next launch.');
+      const result = deps.applySnapshot({ sessionId: info.sessionId });
+      if (!result.applied) {
+        // Each refusal is a different fact and gets its own sentence, because
+        // "left on disk, try again next launch" and "the file was damaged and
+        // is gone" are not the same news.
+        deps.receipt(
+          result.refusal === 'no-snapshot'
+            ? 'Recovery snapshot could not be read — it was left on disk and will be offered again next launch.'
+            : `Recovery snapshot for session ${info.sessionId} could not be restored — the file was damaged, and reading it retired it. Nothing was changed in this session.`,
+        );
         deps.render();
         return 'resume-failed';
       }
-      const messageCount = deps.applySnapshot({ snapshot: snapshot as unknown as Record<string, unknown>, sessionId: info.sessionId });
-      deps.receipt(`Recovery snapshot restored: ${messageCount} message(s) from session ${info.sessionId}. The recovery point has been retired.`);
+      deps.receipt(`Recovery snapshot restored: ${result.messageCount} message(s) from session ${info.sessionId}. The recovery point has been retired.`);
       deps.render();
       return 'resumed';
     }

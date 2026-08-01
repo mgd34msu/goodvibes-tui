@@ -23,7 +23,11 @@ import {
   type RecoveryPromptDeps,
   type SelectionOpener,
 } from '../../runtime/recovery-prompt.ts';
-import { writeLivenessMarker } from '@pellux/goodvibes-sdk/platform/runtime/operations';
+import {
+  applyRecoverySnapshot,
+  confirmRecoveryRestore,
+  writeLivenessMarker,
+} from '@pellux/goodvibes-sdk/platform/runtime/operations';
 import { makeProjectTempDir } from '../helpers/project-temp.ts';
 import { ageRecoverySnapshot, makeTestSurface } from '../helpers/session-surface.ts';
 import { recoveryDecisionsPathFor } from '../../runtime/recovery-decisions.ts';
@@ -76,11 +80,35 @@ function makeDeps(open: SelectionOpener | undefined, sink: { receipts: string[];
     receipt: (line) => sink.receipts.push(line),
     render: () => {},
     now: () => Date.now(),
-    applySnapshot: ({ snapshot, sessionId }) => {
-      const messages = (snapshot as { messages?: unknown[] }).messages ?? [];
-      sink.applied.push({ sessionId, messages: messages.length });
-      return messages.length;
+    // The same call the real wiring makes — this test drives the actual
+    // read/retire/apply mechanism, so "retires the file" below is a fact about
+    // the shipped code rather than about a stub that happened to delete it.
+    applySnapshot: ({ sessionId }) => {
+      const conversation = makeStubConversation();
+      const result = applyRecoverySnapshot({
+        surface,
+        sessionId,
+        conversation,
+        persistSnapshot: () => {},
+        confirmation: confirmRecoveryRestore(true)!,
+      });
+      if (result.applied) sink.applied.push({ sessionId, messages: result.messageCount });
+      return result;
     },
+  };
+}
+
+/** The narrowest conversation the restore mechanism accepts. */
+function makeStubConversation(): Parameters<typeof applyRecoverySnapshot>[0]['conversation'] {
+  let messages: unknown[] = [];
+  return {
+    title: '',
+    resetAll: () => { messages = []; },
+    toJSON: () => ({ messages, title: '', titleSource: 'system' }),
+    fromJSON: (data: { messages: unknown[] }) => { messages = data.messages ?? []; },
+    rebuildHistory: () => {},
+    getTitleSource: () => 'system',
+    getMessageCount: () => messages.length,
   };
 }
 

@@ -35,7 +35,7 @@ import {
 import {
   replayJournalForSession,
   replayJournalIntoConversation,
-} from '../../core/session-recovery.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/operations';
 import { ConversationManager } from '../../core/conversation.ts';
 import { createResumeSessionHandler } from '../../runtime/bootstrap-hook-bridge.ts';
 import type { ResumeSessionOptions } from '../../runtime/bootstrap-hook-bridge.ts';

@@ -30,7 +30,7 @@ import type { SessionManager, SessionMeta } from '@pellux/goodvibes-sdk/platform
 import type { SessionSurface } from '@/runtime/index.ts';
 import type { ConversationManager } from './conversation.ts';
 import { restoreTurnAnchors } from '@pellux/goodvibes-sdk/platform/rewind';
-import { replayJournalForSession, type ReplayIntoConversationResult } from './session-recovery.ts';
+import { replayJournalForSession, type ReplayIntoConversationResult } from '@pellux/goodvibes-sdk/platform/runtime/operations';
 
 export interface SessionResumeRuntime {
   sessionId: string;
