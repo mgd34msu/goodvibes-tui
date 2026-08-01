@@ -189,12 +189,15 @@ When the onboarding wizard applies with the Zero Trust Tunnel Cloudflare compone
 
 - `controlPlane.trustProxy = true`
 - `httpListener.trustProxy = true`
+- `httpListener.trustCloudflare = true`
 
-This lets the login rate-limiter key on the client address the tunnel forwards rather than the tunnel's own egress address. The address is read from `X-Forwarded-For`.
+The two `trustProxy` keys let the login rate-limiter key on the client address the tunnel forwards rather than the tunnel's own egress address. On their own, that address is read from `X-Forwarded-For`.
 
-**Residual exposure:** `X-Forwarded-For` is a header any client can set. A client that reaches the listener port directly — bypassing the tunnel — sets its own rate-limit bucket key and can rotate it at will.
+**What `X-Forwarded-For` alone leaves open:** it is a header any client can set. A client that reaches the port directly — bypassing the tunnel — sets its own rate-limit bucket key and can rotate it at will.
 
-The SDK's HTTP listener carries the narrower read that closes this: `trustCloudflare` accepts `CF-Connecting-IP` as the client only when the connecting peer is itself inside Cloudflare's published ranges (`isCloudflareIp`), and ignores it otherwise. It is a listener constructor parameter with no `ConfigKey` behind it, so no shipped composition — daemon included — turns it on, and the onboarding wizard cannot write it. Until it has a setting, keep the listener port reachable only through the tunnel: restrict inbound traffic to Cloudflare egress IPs, which is what you want regardless, since direct exposure also bypasses tunnel-level access policies.
+`httpListener.trustCloudflare` is what closes it for the HTTP listener: the client address comes from `CF-Connecting-IP`, and only when the connecting peer is itself inside Cloudflare's published ranges (`isCloudflareIp`); otherwise the header is ignored. It requires `httpListener.trustProxy` — with that off, `CF-Connecting-IP` is ignored whatever this says — and the onboarding wizard's Zero Trust Tunnel step writes both, so this route arrives with the narrower read already on.
+
+**What is still open:** the control plane has no `trustCloudflare` equivalent, so its rate-limiter is still keyed on `X-Forwarded-For`. Keep both ports reachable only through the tunnel: restrict inbound traffic to Cloudflare egress IPs, which is what you want regardless, since direct exposure also bypasses tunnel-level access policies.
 
 ### CORS configuration
 

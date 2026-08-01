@@ -10,8 +10,8 @@ import { EXTERNAL_SURFACE_SPECS, getExternalSurfaceAutoStartFieldId } from '../.
 import { buildGoodVibesSecretKey, buildGoodVibesSecretRef } from '../../input/onboarding/onboarding-wizard-helpers.ts';
 import { handleOnboardingWizardToken } from '../../input/onboarding/handler-onboarding-routes.ts';
 import { SelectionManager } from '../../input/selection.ts';
-import { DEFAULT_CONFIG } from '../../config/index.ts';
-import { getProviderIdFromModel } from '../../config/provider-model.ts';
+import { DEFAULT_CONFIG } from '@pellux/goodvibes-sdk/platform/config';
+import { getProviderIdFromModel } from '@pellux/goodvibes-sdk/platform/providers';
 import { readOnboardingCheckMarker, type OnboardingSnapshotState } from '../../runtime/onboarding/index.ts';
 import { createDefaultUiRuntimeServices } from '../helpers/ui-services.ts';
 import { resetTestRuntimeServices, disposeTestRuntimeServicesAfterAll } from '../helpers/runtime-services.ts';
@@ -2003,6 +2003,40 @@ describe('daemon/auth security wizard hardening (TASK-035, TASK-036, TASK-037)',
     expect(configValues.get('httpListener.trustProxy')).toBe(true);
   });
 
+  test('selecting Zero Trust Tunnel turns on trustCloudflare for the HTTP listener', () => {
+    // The tunnel route is exactly the deployment the stricter forwarded-address
+    // read is for: CF-Connecting-IP, accepted only from a peer inside a
+    // published Cloudflare range. Writing it here is what stops a client that
+    // reaches the listener directly from naming its own address — with only
+    // trustProxy set, X-Forwarded-For is caller-controlled.
+    const wizard = new OnboardingWizardController();
+    wizard.open('new');
+    wizard.setFieldValue('capabilities.cloudflare-batch', true);
+    wizard.setFieldValue('cloudflare.component.zeroTrustTunnel', true);
+
+    const configValues = new Map<string, unknown>();
+    for (const op of wizard.buildApplyRequest().operations) {
+      if (op.kind === 'set-config') configValues.set(op.key, op.value);
+    }
+
+    expect(configValues.get('httpListener.trustCloudflare')).toBe(true);
+    // It is a no-op without trustProxy, so the same branch must write both.
+    expect(configValues.get('httpListener.trustProxy')).toBe(true);
+  });
+
+  test('not selecting Zero Trust Tunnel does NOT write trustCloudflare', () => {
+    const wizard = new OnboardingWizardController();
+    wizard.open('new');
+    wizard.setFieldValue('capabilities.cloudflare-batch', true);
+
+    const configValues = new Map<string, unknown>();
+    for (const op of wizard.buildApplyRequest().operations) {
+      if (op.kind === 'set-config') configValues.set(op.key, op.value);
+    }
+
+    expect(configValues.has('httpListener.trustCloudflare')).toBe(false);
+  });
+
   test('not selecting Zero Trust Tunnel does NOT write trustProxy', () => {
     const wizard = new OnboardingWizardController();
     wizard.open('new');
@@ -2107,17 +2141,24 @@ describe('daemon/auth security wizard hardening (TASK-035, TASK-036, TASK-037)',
     const cloudflareStep = wizard.steps.find((s) => s.id === 'cloudflare');
     const noticeField = cloudflareStep?.fields.find((f) => f.id === 'cloudflare.trust-proxy-notice');
     const hint = noticeField?.hint ?? '';
-    // The two keys it is about to write, so the operator can go look at them.
+    // Every key it is about to write, so the operator can go look at them.
     expect(hint).toContain('controlPlane.trustProxy=true');
     expect(hint).toContain('httpListener.trustProxy=true');
-    // trustProxy makes the listener read X-Forwarded-For, not CF-Connecting-IP,
-    // and a client reaching the port directly sets that header for itself.
+    expect(hint).toContain('httpListener.trustCloudflare=true');
+    // trustProxy alone makes the listener read X-Forwarded-For, which a client
+    // reaching the port directly sets for itself.
     expect(hint).toContain('X-Forwarded-For');
-    expect(hint).toContain('rotate its own rate-limit bucket');
-    // The narrower read exists in the SDK listener but has no setting behind
-    // it, so the notice ends on the mitigation that is actually available.
+    // The narrower read is now ON for this route rather than something to go
+    // find, and the notice has to say so plainly.
     expect(hint).toContain('CF-Connecting-IP');
+    expect(hint).toContain('ON for this route');
+    expect(hint).toContain('published Cloudflare range');
+    // What is still NOT covered stays named: the control plane has no
+    // equivalent setting, so the tunnel is its only protection.
+    expect(hint).toContain('The control plane has no equivalent setting');
     expect(hint).toContain('reachable only through the tunnel');
+    // The retired claim must be gone — it was true before the key existed.
+    expect(hint).not.toContain('has no setting behind it yet');
   });
 });
 

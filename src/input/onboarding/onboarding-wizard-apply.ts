@@ -1,5 +1,5 @@
 import type { OnboardingAcknowledgementTarget, OnboardingApplyOperation, OnboardingApplyRequest } from '../../runtime/onboarding/index.ts';
-import { formatProviderModel } from '../../config/provider-model.ts';
+import { formatProviderModel } from '@pellux/goodvibes-sdk/platform/providers';
 import { getServerSurfaceFeatureFlags } from '@pellux/goodvibes-sdk/platform/runtime/operations';
 import { featureEnablementWrite } from '@pellux/goodvibes-terminal-shell';
 import {
@@ -304,18 +304,22 @@ function addCloudflareOperations(
     setConfig('batch.queueBackend', batchMode !== 'off' && components.queues ? 'cloudflare' : 'local');
     // Zero Trust Tunnel auto-enables trustProxy on both services so the
     // login-rate-limiter keys on the client address the tunnel forwards rather
-    // than the tunnel's own egress address. That address is read from
-    // X-Forwarded-For, which a client reaching the listener directly can set for
-    // itself, so it can still rotate its own rate-limit bucket. The stricter
-    // read the SDK listener ships for exactly this — accept CF-Connecting-IP
-    // only when the connecting peer is inside Cloudflare's published ranges —
-    // is a constructor option (`trustCloudflare`) with no config key behind it,
-    // so nothing writable here turns it on. The wizard says so in the
-    // cloudflare step notice: keep the listener reachable only through the
-    // tunnel.
+    // than the tunnel's own egress address. On its own, that address is read
+    // from X-Forwarded-For, which a client reaching the listener directly can
+    // set for itself — so it could still choose which address the rate limiter
+    // and the audit log recorded.
+    //
+    // httpListener.trustCloudflare is what closes that: the listener reads
+    // CF-Connecting-IP instead, and only when the connecting peer is inside a
+    // published Cloudflare range, so a direct client cannot name its own
+    // address. This route puts the listener behind the tunnel, which is exactly
+    // the deployment the stricter read is for, so the wizard turns it on rather
+    // than leaving it to be found in the settings list. It is a no-op without
+    // trustProxy, which the same branch writes.
     if (components.zeroTrustTunnel) {
       setConfig('controlPlane.trustProxy', true);
       setConfig('httpListener.trustProxy', true);
+      setConfig('httpListener.trustCloudflare', true);
     }
   }
 

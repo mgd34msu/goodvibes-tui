@@ -82,13 +82,14 @@ describe('renderOnboardingWizard', () => {
     expect(wizard.getSelectedFieldIndex()).toBe(noticeIndex);
 
     const fullHint =
-      'Selecting Zero Trust Tunnel auto-writes controlPlane.trustProxy=true and httpListener.trustProxy=true ' +
+      'Selecting Zero Trust Tunnel auto-writes controlPlane.trustProxy=true and httpListener.trustProxy=true, ' +
       'so the login rate-limiter keys on the client address the tunnel forwards rather than the tunnel egress ' +
-      'address. That address is read from X-Forwarded-For, which a client reaching the listener directly can ' +
-      'set for itself, so it can still rotate its own rate-limit bucket. The stricter read — accept ' +
-      'CF-Connecting-IP only from a peer inside Cloudflare published ranges — ships in the SDK listener but ' +
-      'has no setting behind it yet, so keep the listener reachable only through the tunnel. See ' +
-      'docs/deployment-and-services.md for the full risk posture.';
+      'address. On their own those two read that address from X-Forwarded-For, which a client reaching the port ' +
+      'directly can set for itself. It also writes httpListener.trustCloudflare=true, which is ON for this ' +
+      'route: the HTTP listener instead reads CF-Connecting-IP and only accepts it from a peer inside a ' +
+      'published Cloudflare range, so a direct client cannot name its own address to pick which rate-limit ' +
+      'bucket and audit-log entry it lands in. The control plane has no equivalent setting, so keep it ' +
+      'reachable only through the tunnel. See docs/deployment-and-services.md for the full posture.';
 
     // Narrow (collapsed, single-column) layout: hint rows are the full row
     // width with no side panels, so consecutive wrapped lines can be
@@ -108,7 +109,7 @@ describe('renderOnboardingWizard', () => {
     // wrapping is complete and in order for the shared hintLines logic).
     const wideText = linesToText(renderOnboardingWizard(wizard, 188, 40)).join(' ');
     expect(wideText).toContain('Selecting Zero Trust Tunnel auto-writes controlPlane.trustProxy=true');
-    expect(wideText).toContain('for the full risk posture.');
+    expect(wideText).toContain('for the full posture.');
   });
 
   test('does not render raw masked edit buffers', () => {

@@ -264,9 +264,9 @@ export function buildCloudflareStep(controller: OnboardingWizardControllerLike):
       fields.push({
         kind: 'status',
         id: 'cloudflare.trust-proxy-notice',
-        label: 'trustProxy will be enabled for control plane and HTTP listener',
+        label: 'Forwarded-address handling will be configured for this route',
         defaultValue: 'Notice',
-        hint: 'Selecting Zero Trust Tunnel auto-writes controlPlane.trustProxy=true and httpListener.trustProxy=true so the login rate-limiter keys on the client address the tunnel forwards rather than the tunnel egress address. That address is read from X-Forwarded-For, which a client reaching the listener directly can set for itself, so it can still rotate its own rate-limit bucket. The stricter read — accept CF-Connecting-IP only from a peer inside Cloudflare published ranges — ships in the SDK listener but has no setting behind it yet, so keep the listener reachable only through the tunnel. See docs/deployment-and-services.md for the full risk posture.',
+        hint: 'Selecting Zero Trust Tunnel auto-writes controlPlane.trustProxy=true and httpListener.trustProxy=true, so the login rate-limiter keys on the client address the tunnel forwards rather than the tunnel egress address. On their own those two read that address from X-Forwarded-For, which a client reaching the port directly can set for itself. It also writes httpListener.trustCloudflare=true, which is ON for this route: the HTTP listener instead reads CF-Connecting-IP and only accepts it from a peer inside a published Cloudflare range, so a direct client cannot name its own address to pick which rate-limit bucket and audit-log entry it lands in. The control plane has no equivalent setting, so keep it reachable only through the tunnel. See docs/deployment-and-services.md for the full posture.',
       });
     }
 
@@ -476,7 +476,9 @@ export function buildCloudflareStep(controller: OnboardingWizardControllerLike):
       `Components: ${enabled ? componentCount : 0} selected`,
       `Token setup: ${enabled ? setupSource : 'not used'}`,
       `Provision on final apply: ${enabled ? controller.getStringFieldValue('cloudflare.provision-on-apply', 'no') : 'no'}`,
-      ...(enabled && components.zeroTrustTunnel ? ['trustProxy: enabled for control plane and HTTP listener (see security notice)'] : []),
+      ...(enabled && components.zeroTrustTunnel
+        ? ['trustProxy: enabled for control plane and HTTP listener; trustCloudflare: ON for the HTTP listener (see notice)']
+        : []),
     ],
     fields,
   };
