@@ -4,6 +4,17 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [2.0.2] - 2026-08-01
+
+### Changes
+
+- Fixed: importing settings that include `display.themeMode` no longer prints
+  an "unknown key" warning. The key is now declared in the platform
+  configuration schema (SDK 2.0.1) — `auto` probes the terminal background
+  once at startup, `dark` and `light` force a fixed appearance — and the
+  settings screen's row for it comes from that schema like every other
+  `display.*` key, instead of a local stand-in descriptor.
+
 ## [2.0.1] - 2026-08-01
 
 ### Changes
