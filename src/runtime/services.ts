@@ -1,19 +1,12 @@
 /**
  * services.ts — the terminal app's composition root, as a CLIENT.
  *
- * ── What this stopped being ────────────────────────────────────────────────
- *
- * Until the daemon became its own product, this function built a daemon: a
- * `GatewayMethodCatalog` that SERVED verbs, the inbox/triage/drafts/routing
- * handlers, the cluster group and its election, the device-posture runtime and
- * its housekeeping, the mail service deps — all constructed here and all
- * answered from this process. A second copy ran in the standalone daemon binary
- * built out of this same repository, and the two drifted.
- *
- * Every one of those pieces now lives in the daemon product. This composition
- * serves no verbs, elects nothing, polls no mailbox, and supervises no remote
- * runner. It builds what a TURN needs in this process and reaches the daemon
- * for the rest.
+ * Every gateway-serving piece — the `GatewayMethodCatalog`, the
+ * inbox/triage/drafts/routing handlers, the cluster group and its election,
+ * the device-posture runtime and its housekeeping, the mail service deps —
+ * lives in the daemon product. This composition serves no verbs, elects
+ * nothing, polls no mailbox, and supervises no remote runner. It builds what
+ * a TURN needs in this process and reaches the daemon for the rest.
  *
  * ── The floor comes from the SDK ───────────────────────────────────────────
  *
@@ -21,8 +14,8 @@
  * services, hooks, plugins, MCP, the file-tool caches, permissions as a client,
  * the spine clients — are composed by `createClientRuntimeServices`, the SDK's
  * one implementation of that shape. Not a fork of it and not a copy of it: the
- * agent product composes the same function, so a wiring step added there cannot
- * silently miss this product the way `registerGatewayVerbGroups` once did.
+ * agent product composes the same function, so a wiring step added there
+ * cannot silently miss this product.
  *
  * The SDK's own note on that shape applies here literally: it is a FLOOR, not a
  * ceiling. Everything below the `createClientRuntimeServices` call is what THIS

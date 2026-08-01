@@ -2,7 +2,7 @@
  * hosted-roster.ts — the last answer the daemon gave about what it is hosting.
  *
  * The session picker is where a person goes to ask "what sessions are there?",
- * and after Phase B the honest answer includes conversations running inside the
+ * and the honest answer includes conversations running inside the
  * daemon — not only this terminal's saved transcripts and the cross-surface
  * union. The picker is a synchronous render over modal state, though, and
  * `sessions.hosted.list` is a round trip. This roster is the seam between them:

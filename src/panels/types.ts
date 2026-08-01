@@ -65,7 +65,6 @@ export type KeyName = NamedKey | (string & {});
  *   - automation-control:     hooks, plugins, marketplace, automation jobs, worktrees
  *   - incidents-diagnostics:  failure review, eval gates, API call debugging
  *   - runtime-ops:            live operator consoles (cockpit, tasks, orchestration, comms)
- * 'development' | 'agent' | 'session' | 'ai' are unchanged from before the split.
  */
 export type PanelCategory =
   | 'development'

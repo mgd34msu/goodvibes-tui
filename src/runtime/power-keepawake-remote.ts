@@ -13,8 +13,9 @@
 // A single config subscriber carries ALL THREE toggle paths (/power, Alt+A, the
 // settings modal): each lands on the power.keepAwake config key — the local
 // PowerManager persists it on set, and the settings modal writes it directly —
-// so subscribing to that one key catches every origin. In the EMBEDDED topology
-// this is a no-op: the in-process manager already IS the daemon.
+// so subscribing to that one key catches every origin. When there is no adopted
+// external daemon (`isExternalDaemon()` false), this is a no-op: there is nothing
+// to forward to.
 // ---------------------------------------------------------------------------
 
 import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';

@@ -19,8 +19,8 @@
  *
  * ── What crosses the wire ──────────────────────────────────────────────────
  *
- * Session IDENTITY, not session execution. Per Phase A of the daemon split the
- * conversation itself still runs here; what the daemon holds is the register —
+ * Session IDENTITY, not session execution. The conversation itself runs here;
+ * what the daemon holds is the register —
  * which sessions exist, which surface is live on each, and the inputs queued
  * against them. Concretely, on adoption this wires:
  *

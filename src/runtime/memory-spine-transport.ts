@@ -18,7 +18,7 @@
  * to a divergent local copy.
  *
  * The SDK's `rest-transport.ts` (`platform/runtime/memory-spine`) adopted
- * this file's version as the superset during the split hoist — same routes,
+ * this file's version as the superset — same routes,
  * same discriminator functions, same honesty contract, same transport-http
  * primitives — so this file now just delegates. `MemorySpineWireOptions`
  * (`{baseUrl, authToken, fetchImpl?}`) is the same shape the SDK's

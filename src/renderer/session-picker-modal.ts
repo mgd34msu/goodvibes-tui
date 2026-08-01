@@ -169,7 +169,7 @@ function hostedExtraRows(modal: SessionPickerModal): number {
 
 /**
  * The exact honest note for the current state, or null when the union view
- * needs no caveat (fresh/embedded with rows). Precedence: offline > stale >
+ * needs no caveat (fresh, with rows). Precedence: offline > stale >
  * true-empty — the three designed states, never collapsed into
  * each other (an offline view never silently renders as "no sessions yet").
  */

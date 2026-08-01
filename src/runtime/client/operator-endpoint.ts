@@ -22,7 +22,7 @@
  * daemon that has not wired a verb returns) throws `GoodVibesSdkError` and
  * `describeOperatorRpcError` renders it.
  *
- * Auth is the loopback file-token bootstrap, unchanged by the split: the token
+ * Auth is the loopback file-token bootstrap: the token
  * is read (or minted) from the daemon's own state directory. A daemon on
  * another machine is reached by the network-adopt path, which writes that
  * daemon's bearer into the same file — so this resolution covers both.

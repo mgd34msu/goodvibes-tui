@@ -78,7 +78,7 @@ export interface ShellFooterBuildOptions {
   /**
    * Cross-surface session-spine posture for the context-info segment.
    * Set ONLY in adopted-daemon mode ('online'/'offline'); left undefined in
-   * embedded/local mode so no segment renders.
+   * local-only mode so no segment renders.
    */
   readonly sessionSpineStatus?: 'online' | 'offline';
   /** The web surface's reachable URL, when that surface is enabled; a persistent footer segment. */

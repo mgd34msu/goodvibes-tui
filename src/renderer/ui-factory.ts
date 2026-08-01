@@ -145,7 +145,7 @@ export class UIFactory {
     composerPendingRisk?: 'none' | 'approval-wait' | 'shell' | 'command' | 'remote',
     compact: boolean = false,
     // Honest cross-surface spine posture. Defined ONLY in adopted-daemon
-    // mode (undefined in embedded/local), so the segment is absent otherwise.
+    // mode (undefined in local-only mode), so the segment is absent otherwise.
     sessionSpineStatus?: 'online' | 'offline',
     // Session permission mode (config value). Rendered as a leading pill in the
     // posture block; undefined suppresses the pill (e.g. bare test callers).

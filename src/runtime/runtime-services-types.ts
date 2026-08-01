@@ -92,7 +92,7 @@ export interface RuntimeServicesOptions {
    */
   readonly daemonHomeDirectory?: string | undefined;
   /** Host power seam opt-in. Fork mirrors the SDK: non-spawning unavailable-seam
-   * default (idle-power-services.ts); daemon + embedded runtime pass createHostPowerSeam(). */
+   * default (idle-power-services.ts); this product always passes createHostPowerSeam(), since it never has a co-located daemon to own its own inhibitor. */
   readonly powerSeam?: Parameters<typeof wireIdlePowerAndLiveTurn>[0]['powerSeam'];
   /** Live session id, read per crash-residue sweep so the running session is exempt — see durability-services.ts. */
   readonly currentSessionId?: (() => string | null) | undefined;

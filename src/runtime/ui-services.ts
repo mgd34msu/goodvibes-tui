@@ -143,7 +143,7 @@ export interface UiRuntimeServicesOptions extends UiReadModelOptions {
   readonly getControlPlaneRecentEvents?: (limit: number) => readonly ControlPlaneRecentEvent[];
   /**
    * The shared session read facade constructed in bootstrap-core (so
-   * bootstrap.ts can drive its adopted-external/embedded/local mode). When omitted
+   * bootstrap.ts can drive its adopted-external/local mode). When omitted
    * (test callers), a local-only passthrough facade over the broker is auto-created.
    */
   readonly sessionUnionCache?: SessionUnionCache;
