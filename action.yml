@@ -63,19 +63,22 @@ runs:
         fi
         mkdir -p "$INSTALL_DIR"
         export GOODVIBES_INSTALL_DIR="$INSTALL_DIR"
-        # The suite installer lives in the daemon's repository — one copy, the
-        # same one `curl -fsSL https://goodvibes.sh/install.sh | sh` runs — and
-        # ships as a release asset of it, so this fetches it from the URL that
-        # is always the current published installer. It verifies every binary
-        # it places against that repository's SHA256SUMS.txt; a missing manifest
-        # entry is a hard failure, never a skip.
+        # The suite installer is hosted at https://goodvibes.sh/install.sh (a
+        # Cloudflare Pages project; its _redirects file owns this path) — the
+        # same script `curl -fsSL https://goodvibes.sh/install.sh | sh` runs.
+        # It resolves a release tag per product repository and verifies every
+        # binary it places against that repository's own SHA256SUMS.txt; a
+        # missing manifest entry is a hard failure, never a skip.
         #
-        # It used to be a committed copy in this repository, which is how two
-        # installers start drifting apart. Nothing else about this step changed:
-        # it is the same script, resolved from where it is now published.
+        # This used to fetch a copy attached to the daemon repository's own
+        # GitHub release (https://github.com/mgd34msu/goodvibes-daemon/releases/
+        # latest/download/install.sh), but the daemon/TUI product split retired
+        # that asset — the daemon's releases now carry only the daemon's own
+        # artifacts, so that URL 404s. The hosted URL is the one canonical copy
+        # and does not drift per-repository.
         curl -fsSL --proto '=https' --retry 3 \
           -o "$RUNNER_TEMP/goodvibes-install.sh" \
-          https://github.com/mgd34msu/goodvibes-daemon/releases/latest/download/install.sh
+          https://goodvibes.sh/install.sh
         sh "$RUNNER_TEMP/goodvibes-install.sh"
         # Put the install dir on PATH for later steps in the job.
         echo "$INSTALL_DIR" >> "$GITHUB_PATH"
