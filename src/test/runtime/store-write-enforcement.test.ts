@@ -1,3 +1,4 @@
+// Deliberately per-repo test, byte-identical to the sibling product's copy by design: it walks THIS repo's own src/runtime tree to pin that product's store-write boundary, so a shared home would have nothing to scan.
 /**
  * GC-ARCH-003: Runtime store write enforcement — static architecture test.
  *

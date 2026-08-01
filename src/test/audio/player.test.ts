@@ -1,3 +1,4 @@
+// Deliberately per-repo test, byte-identical to the sibling product's copy by design: the module it exercises is this repo's own and has diverged from the sibling's, so the two copies prove different code and neither can stand in for the other.
 import { afterEach, describe, expect, test } from 'bun:test';
 import { chmodSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';

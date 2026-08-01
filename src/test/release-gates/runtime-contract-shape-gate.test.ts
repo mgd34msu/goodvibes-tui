@@ -71,14 +71,16 @@ function makeContext(
 describe('runtime contract shape gate', () => {
   test('critical release gates and chaos packs exist', async () => {
     const root = join(import.meta.dir, '..');
+    // Only the packs whose subject is this product's own code are listed. The
+    // policy-and-budget evidence gate, the provider-failure pack and the MCP
+    // reconnect pack all exercised SDK-owned runtime behaviour reached through
+    // the runtime barrel; they now run in the SDK's own suite, where the code
+    // they assert lives, so this tree is the wrong place to require them.
     const required = [
       ['release-gates', 'runtime-substrate-gate.test.ts'],
       ['release-gates', 'operability-gate.test.ts'],
-      ['release-gates', 'policy-and-budget-evidence-gate.test.ts'],
-      ['chaos', 'provider-failures.test.ts'],
       ['chaos', 'hook-failures.test.ts'],
       ['chaos', 'plugin-crash.test.ts'],
-      ['chaos', 'mcp-reconnect.test.ts'],
       ['chaos', 'health-cascades.test.ts'],
     ];
     for (const parts of required) {
