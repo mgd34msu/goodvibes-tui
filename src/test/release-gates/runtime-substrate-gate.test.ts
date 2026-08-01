@@ -3,7 +3,7 @@ import { mkdirSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { ConversationManager } from '../../core/conversation.ts';
-import { Orchestrator } from '../../core/orchestrator.ts';
+import { Orchestrator } from '@pellux/goodvibes-sdk/platform/core';
 import { PermissionManager, createPermissionConfigReader } from '@pellux/goodvibes-sdk/platform/permissions';
 import type { ChatRequest, ChatResponse, LLMProvider } from '@pellux/goodvibes-sdk/platform/providers';
 import { RuntimeEventBus } from '@/runtime/index.ts';

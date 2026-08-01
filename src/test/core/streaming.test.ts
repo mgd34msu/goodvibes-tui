@@ -186,7 +186,7 @@ describe('RuntimeEventBus stream events', () => {
 
 describe('Orchestrator: abort during streaming cleanup', () => {
   async function buildOrchestrator() {
-    const { Orchestrator } = await import('../../core/orchestrator.ts');
+    const { Orchestrator } = await import('@pellux/goodvibes-sdk/platform/core');
     const { ConversationManager } = await import('../../core/conversation.ts');
     const { PermissionManager, createPermissionConfigReader } = await import('@pellux/goodvibes-sdk/platform/permissions');
     const { ToolRegistry } = await import('@pellux/goodvibes-sdk/platform/tools');

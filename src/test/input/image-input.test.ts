@@ -299,7 +299,7 @@ describe('addUserMessage with ContentPart[]', () => {
 describe('Orchestrator capability check for non-multimodal models', () => {
   test('strips images and adds warning when model lacks multimodal capability', async () => {
     const { ToolRegistry } = await import('@pellux/goodvibes-sdk/platform/tools');
-    const { Orchestrator } = await import('../../core/orchestrator.ts');
+    const { Orchestrator } = await import('@pellux/goodvibes-sdk/platform/core');
     const { ConversationManager } = await import('../../core/conversation.ts');
     const { RuntimeEventBus } = await import('@/runtime/index.ts');
 

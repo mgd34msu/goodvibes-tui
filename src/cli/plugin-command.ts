@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
-import { discoverPlugins } from '../plugins/loader.ts';
+import { discoverPlugins } from '@pellux/goodvibes-sdk/platform/plugins';
 import { validateManifestV2 } from '@/runtime/index.ts';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 import type { CliCommandOutput, CliCommandRuntime } from '@pellux/goodvibes-terminal-shell';

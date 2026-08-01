@@ -15,7 +15,7 @@ import type { SessionEvent } from '@/runtime/index.ts';
 import type { CommandRegistry, SlashCommand } from '../../input/command-registry.ts';
 import type { ModelDefinition, ProviderRegistry } from '@pellux/goodvibes-sdk/platform/providers';
 import type { ToolRegistry } from '@pellux/goodvibes-sdk/platform/tools';
-import type { LoadedPlugin, PluginLoaderDeps } from '../../plugins/loader';
+import type { LoadedPlugin, PluginLoaderDeps } from '@pellux/goodvibes-sdk/platform/plugins';
 import type { PluginAPIContext } from '@pellux/goodvibes-sdk/platform/plugins';
 import { ChannelDeliveryRouter, ChannelPluginRegistry } from '@pellux/goodvibes-sdk/platform/channels';
 import { GatewayMethodCatalog } from '@pellux/goodvibes-sdk/platform/control-plane';
@@ -211,14 +211,14 @@ function getPluginManagerTestAccess(
 
 describe('discoverPlugins', () => {
   test('returns an array when no plugin directories exist', async () => {
-    const { discoverPlugins } = await import('../../plugins/loader.ts');
+    const { discoverPlugins } = await import('@pellux/goodvibes-sdk/platform/plugins');
     const tempRoot = makeTempDir();
     const result = discoverPlugins(makePluginPathOptions(tempRoot));
     expect(Array.isArray(result)).toBe(true);
   });
 
   test('skips directories without manifest.json', async () => {
-    const { discoverPlugins } = await import('../../plugins/loader.ts');
+    const { discoverPlugins } = await import('@pellux/goodvibes-sdk/platform/plugins');
     const tempRoot = makeTempDir();
     const pluginDir = join(tempRoot, '.goodvibes', 'plugins', `missing-manifest-${process.pid}-${Date.now()}`);
     mkdirSync(pluginDir, { recursive: true });
@@ -232,7 +232,7 @@ describe('discoverPlugins', () => {
   });
 
   test('prefers project-local plugins over global plugins with the same name', async () => {
-    const { discoverPlugins, getUserPluginDirectory } = await import('../../plugins/loader.ts');
+    const { discoverPlugins, getUserPluginDirectory } = await import('@pellux/goodvibes-sdk/platform/plugins');
     const tempRoot = makeTempDir();
     const pathOptions = makePluginPathOptions(tempRoot);
     const localPluginDir = join(tempRoot, '.goodvibes', 'plugins', 'duplicate-plugin');
@@ -277,7 +277,7 @@ describe('loadPlugin', () => {
   });
 
   test('returns null when entry file does not exist', async () => {
-    const { loadPlugin } = await import('../../plugins/loader.ts');
+    const { loadPlugin } = await import('@pellux/goodvibes-sdk/platform/plugins');
     const manifest = {
       name: 'test-plugin',
       version: '1.0.0',
@@ -288,7 +288,7 @@ describe('loadPlugin', () => {
   });
 
   test('returns null when entry has no init export', async () => {
-    const { loadPlugin } = await import('../../plugins/loader.ts');
+    const { loadPlugin } = await import('@pellux/goodvibes-sdk/platform/plugins');
     makeEntry(pluginDir, `export const notInit = 'nope';`);
     const manifest = { name: 'test-plugin', version: '1.0.0', description: 'test' };
     const result = await loadPlugin({ pluginDir, manifest }, deps);
@@ -296,7 +296,7 @@ describe('loadPlugin', () => {
   });
 
   test('calls init with a PluginAPI and returns active plugin', async () => {
-    const { loadPlugin } = await import('../../plugins/loader.ts');
+    const { loadPlugin } = await import('@pellux/goodvibes-sdk/platform/plugins');
     const cacheBust = Date.now();
     makeEntry(pluginDir, `
 export function init(api) {
@@ -319,7 +319,7 @@ export function init(api) {
   });
 
   test('path traversal in manifest.main is rejected', async () => {
-    const { loadPlugin } = await import('../../plugins/loader.ts');
+    const { loadPlugin } = await import('@pellux/goodvibes-sdk/platform/plugins');
     const manifest = {
       name: 'evil-plugin',
       version: '1.0.0',
@@ -331,7 +331,7 @@ export function init(api) {
   });
 
   test('path traversal with symlink-like double-dots is rejected', async () => {
-    const { loadPlugin } = await import('../../plugins/loader.ts');
+    const { loadPlugin } = await import('@pellux/goodvibes-sdk/platform/plugins');
     const manifest = {
       name: 'evil-plugin',
       version: '1.0.0',
@@ -343,7 +343,7 @@ export function init(api) {
   });
 
   test('calls activate after init when exported', async () => {
-    const { loadPlugin } = await import('../../plugins/loader.ts');
+    const { loadPlugin } = await import('@pellux/goodvibes-sdk/platform/plugins');
     const cacheBust2 = Date.now() + 1;
     makeEntry(pluginDir, `
 let activated = false;
@@ -364,7 +364,7 @@ export function getActivated() { return activated; }
   });
 
   test('returns null and runs cleanup when init throws', async () => {
-    const { loadPlugin } = await import('../../plugins/loader.ts');
+    const { loadPlugin } = await import('@pellux/goodvibes-sdk/platform/plugins');
     const cacheBust3 = Date.now() + 2;
     let cleanedUp = false;
     makeEntry(pluginDir, `
@@ -388,7 +388,7 @@ export function init(api) {
 
 describe('unloadPlugin', () => {
   test('calls deactivate and runs all cleanup callbacks', async () => {
-    const { unloadPlugin } = await import('../../plugins/loader.ts');
+    const { unloadPlugin } = await import('@pellux/goodvibes-sdk/platform/plugins');
 
     let deactivateCalled = false;
     let cleanup1Called = false;
@@ -415,7 +415,7 @@ describe('unloadPlugin', () => {
   });
 
   test('is a no-op when plugin is not active', async () => {
-    const { unloadPlugin } = await import('../../plugins/loader.ts');
+    const { unloadPlugin } = await import('@pellux/goodvibes-sdk/platform/plugins');
 
     let deactivateCalled = false;
     const plugin = createLoadedPlugin({
@@ -432,7 +432,7 @@ describe('unloadPlugin', () => {
   });
 
   test('continues cleanup even when deactivate throws', async () => {
-    const { unloadPlugin } = await import('../../plugins/loader.ts');
+    const { unloadPlugin } = await import('@pellux/goodvibes-sdk/platform/plugins');
 
     let cleanupCalled = false;
     const plugin = createLoadedPlugin({
@@ -449,7 +449,7 @@ describe('unloadPlugin', () => {
   });
 
   test('event unsub is called on unload (onEvent cleanup)', async () => {
-    const { unloadPlugin } = await import('../../plugins/loader.ts');
+    const { unloadPlugin } = await import('@pellux/goodvibes-sdk/platform/plugins');
 
     let unsubCalled = false;
     const plugin = createLoadedPlugin({
@@ -462,7 +462,7 @@ describe('unloadPlugin', () => {
   });
 
   test('command is unregistered on unload (registerCommand cleanup)', async () => {
-    const { unloadPlugin } = await import('../../plugins/loader.ts');
+    const { unloadPlugin } = await import('@pellux/goodvibes-sdk/platform/plugins');
     const cmdReg = makeFakeCommandRegistry();
     // Simulate a registered command
     cmdReg.register({ name: 'plugin-test-cmd', description: 'test', handler: async () => {} });
@@ -839,7 +839,7 @@ describe('loadPlugin path traversal guard', () => {
   });
 
   test('rejects manifest.main that traverses outside plugin dir', async () => {
-    const { loadPlugin } = await import('../../plugins/loader.ts');
+    const { loadPlugin } = await import('@pellux/goodvibes-sdk/platform/plugins');
     const deps = makeFakeDeps();
     const manifest = {
       name: 'evil',
@@ -852,7 +852,7 @@ describe('loadPlugin path traversal guard', () => {
   });
 
   test('rejects manifest.main with single parent traversal', async () => {
-    const { loadPlugin } = await import('../../plugins/loader.ts');
+    const { loadPlugin } = await import('@pellux/goodvibes-sdk/platform/plugins');
     const deps = makeFakeDeps();
     const manifest = {
       name: 'evil',
@@ -865,7 +865,7 @@ describe('loadPlugin path traversal guard', () => {
   });
 
   test('allows manifest.main within plugin dir', async () => {
-    const { loadPlugin } = await import('../../plugins/loader.ts');
+    const { loadPlugin } = await import('@pellux/goodvibes-sdk/platform/plugins');
     const deps = makeFakeDeps();
     // Entry file doesn't exist — but traversal check passes first, so
     // the failure is "entry file not found", not "path traversal".

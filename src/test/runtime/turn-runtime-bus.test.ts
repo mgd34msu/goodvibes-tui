@@ -2,7 +2,7 @@ import { afterEach, describe, expect, mock, test } from 'bun:test';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { ConversationManager } from '../../core/conversation.ts';
-import { Orchestrator } from '../../core/orchestrator.ts';
+import { Orchestrator } from '@pellux/goodvibes-sdk/platform/core';
 import { PermissionManager } from '@pellux/goodvibes-sdk/platform/permissions';
 import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import { PolicyRuntimeState } from '@/runtime/index.ts';

@@ -70,7 +70,7 @@ describe('Orchestrator', () => {
   });
 
   async function buildOrchestrator(renderRequest: (() => void) | null = null) {
-    const { Orchestrator } = await import('../../core/orchestrator.ts');
+    const { Orchestrator } = await import('@pellux/goodvibes-sdk/platform/core');
     const { ConversationManager } = await import('../../core/conversation.ts');
     const cm = new ConversationManager(() => 80, configManager);
     const policyRuntimeState = new PolicyRuntimeState();
@@ -99,7 +99,7 @@ describe('Orchestrator', () => {
   }
 
   async function buildOrchestratorWithHooks(hookDispatcher: HookDispatcher) {
-    const { Orchestrator } = await import('../../core/orchestrator.ts');
+    const { Orchestrator } = await import('@pellux/goodvibes-sdk/platform/core');
     const { ConversationManager } = await import('../../core/conversation.ts');
     const cm = new ConversationManager(() => 80, configManager);
     const policyRuntimeState = new PolicyRuntimeState();
@@ -772,7 +772,7 @@ describe('Orchestrator', () => {
       const origGet = reg.get.bind(reg);
       const origGetForModel = reg.getForModel.bind(reg);
       const origGetCurrentModel = reg.getCurrentModel.bind(reg);
-      // Patch all three provider-lookup paths used by core/orchestrator.ts
+      // Patch all three provider-lookup paths used by the SDK's Orchestrator
       reg.get = mock(() => provider);
       reg.getForModel = mock(() => provider);
       reg.getCurrentModel = mock(() => MOCK_MODEL);

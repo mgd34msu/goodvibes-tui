@@ -13,7 +13,7 @@ import { Compositor } from '../renderer/compositor.ts';
 import type { PermissionRequestHandler } from '@pellux/goodvibes-sdk/platform/permissions';
 import type { SystemMessageRouter } from '../core/system-message-router.ts';
 import type { ConversationFollowUpItem } from '@pellux/goodvibes-sdk/platform/core';
-import type { OrchestratorUserInputOptions } from '../core/orchestrator.ts';
+import type { OrchestratorUserInputOptions } from '@pellux/goodvibes-sdk/platform/core';
 import type { ControlPlaneRecentEvent } from '@pellux/goodvibes-sdk/platform/control-plane';
 import type { BootstrapOptions } from './context.ts';
 import { createRuntimeStore, createDomainDispatch, type RuntimeStore } from './store/index.ts';
@@ -118,11 +118,11 @@ export interface BootstrapCoreState {
   readonly requestRender: () => void;
   readonly setRenderRequest: (fn: () => void) => void;
   readonly runtimeSessionIdRef: { value: string };
-  /** Cross-surface identity mirror; permanently dormant for embedded/local-only (docs/decisions/2026-07-06-session-spine-mode-branch-is-permanent.md), activated by bootstrap.ts only for an adopted 'external' daemon. */
+  /** Cross-surface identity mirror; permanently dormant for local-only and for the SDK's 'embedded' HostServiceMode (unreachable in this product — see the ADOPT ONLY guard in bootstrap.ts) (docs/decisions/2026-07-06-session-spine-mode-branch-is-permanent.md), activated by bootstrap.ts only for an adopted 'external' daemon. */
   readonly sessionSpine: SessionSpineClient;
   /** Inbound steer/follow-up delivery; dormant until bootstrap.ts activates it. */
   readonly sessionInboundInputs: SessionInboundInputPoller;
-  /** Cache-backed read facade; bootstrap.ts drives its mode (embedded/external/local-only) from the same HostServiceMode as the spine above. */
+  /** Cache-backed read facade; bootstrap.ts drives its mode (external/local-only in this product — 'embedded' is an unreachable HostServiceMode value here) from the same HostServiceMode as the spine above. */
   readonly sessionUnionCache: SessionUnionCache;
   /**
    * WRFC chain persistence — call `rehydrate()` once after the SystemMessageRouter
@@ -250,8 +250,8 @@ export async function initializeBootstrapCore(
     runtimeStore: store,
     getConversationTitle: () => getConversationTitle(),
     workingDir, homeDirectory, ...(options.daemonHomeDirectory === undefined ? {} : { daemonHomeDirectory: options.daemonHomeDirectory }),
-    // Embedded topology: the in-process runtime IS the daemon, so it holds its own OS inhibitor (fork
-    // default is non-spawning) and owns the wake-model boot retry a standalone daemon would. See services.ts.
+    // This product only ever adopts an external daemon (or runs local-only), never embedding one,
+    // so it holds its own OS inhibitor (fork default is non-spawning) and owns the wake-model boot retry itself. See services.ts.
     powerSeam: createHostPowerSeam(), provisionWakeModelsAtBoot: true,
   });
   await services.workspaceTrustManager.load(); // settle any already-persisted trust decision before any tool runs
@@ -296,10 +296,11 @@ export async function initializeBootstrapCore(
     surfaceRegistry,
     watcherRegistry,
   } = services;
-  // Permanently dormant for embedded/local-only (nothing to mirror to); bootstrap.ts activates it only for an adopted 'external' daemon.
+  // Permanently dormant for local-only, and for the SDK's 'embedded' HostServiceMode (unreachable
+  // in this product); bootstrap.ts activates it only for an adopted 'external' daemon.
   const sessionSpine = new SessionSpineClient({ participant: TUI_SPINE_PARTICIPANT, recordKind: 'tui' });
-  // Cache-backed read facade over the local broker (passthrough until bootstrap.ts marks it
-  // embedded, or activates the adopted-daemon wire union for 'external').
+  // Cache-backed read facade over the local broker (passthrough until bootstrap.ts
+  // activates the adopted-daemon wire union for 'external').
   // selfSessionIds keeps local authoritative for our own wire-mirrored session even when local/wire ids diverge (D-TUI-1).
   const sessionUnionCache = new SessionUnionCache({ local: sharedSessionBroker, selfSessionIds: () => sessionSpine.mirroredSessionIds });
 
@@ -447,7 +448,7 @@ export async function initializeBootstrapCore(
       logger.error('Render threw; next requestRender will reschedule', { error: String(err) });
     }
     // Debounced spine heartbeat on turn/render activity (no-op while dormant, i.e.
-    // embedded/local-only): a cheap synchronous no-op unless its own internal window has
+    // local-only, or the SDK's 'embedded' mode which this product never reaches): a cheap synchronous no-op unless its own internal window has
     // elapsed (at most one wire call per heartbeatMinIntervalMs) — safe on the hot path.
     sessionSpine.heartbeat(runtimeSessionIdRef.value);
   };

@@ -14,7 +14,7 @@ import type { CompactionQualityScore } from '../../renderer/compaction-quality.t
 import type { UiReadModels } from '../../runtime/ui-read-models.ts';
 import type { ShellPathService, SessionSurface } from '@/runtime/index.ts';
 import type { EcosystemCatalogPathOptions } from '@/runtime/index.ts';
-import type { PluginPathOptions } from '../../plugins/loader';
+import type { PluginPathOptions } from '@pellux/goodvibes-sdk/platform/plugins';
 import type { DirectTransport } from '@/runtime/index.ts';
 import type { KnowledgeApi } from '@pellux/goodvibes-sdk/platform/knowledge';
 import type { HookApi } from '@pellux/goodvibes-sdk/platform/hooks';

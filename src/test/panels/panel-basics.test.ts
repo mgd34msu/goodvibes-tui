@@ -11,7 +11,7 @@
 import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
 import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import type { Line } from '@pellux/goodvibes-sdk/platform/types';
-import type { Orchestrator } from '../../core/orchestrator';
+import type { Orchestrator } from '@pellux/goodvibes-sdk/platform/core';
 const TEST_ROOT = '/tmp/goodvibes-test';
 
 // ---------------------------------------------------------------------------

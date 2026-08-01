@@ -2,7 +2,7 @@ import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import type { ServiceRegistry } from '@pellux/goodvibes-sdk/platform/config';
 import type { ToolRegistry } from '@pellux/goodvibes-sdk/platform/tools';
 import type { ProviderRegistry } from '@pellux/goodvibes-sdk/platform/providers';
-import type { Orchestrator } from '../../core/orchestrator';
+import type { Orchestrator } from '@pellux/goodvibes-sdk/platform/core';
 import type { MemoryAccess } from '@pellux/goodvibes-sdk/platform/runtime/memory-spine';
 import type { ApprovalBroker } from '@pellux/goodvibes-sdk/platform/control-plane';
 import type { SessionReadFacade } from '@pellux/goodvibes-sdk/platform/runtime/session-spine';

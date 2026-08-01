@@ -1,4 +1,4 @@
-import type { Orchestrator } from './orchestrator';
+import type { Orchestrator } from '@pellux/goodvibes-sdk/platform/core';
 import type { SpokenTurnRuntime } from '../audio/spoken-turn-wiring.ts';
 
 /**

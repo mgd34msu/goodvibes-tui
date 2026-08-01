@@ -1,6 +1,6 @@
 import { resolve } from 'path';
 import type { PluginStatus } from '@pellux/goodvibes-sdk/platform/plugins';
-import { getPluginDirectories, getUserPluginDirectory } from '../../plugins/loader';
+import { getPluginDirectories, getUserPluginDirectory } from '@pellux/goodvibes-sdk/platform/plugins';
 import type { CommandRegistry } from '../command-registry.ts';
 import {
   installEcosystemCatalogEntry,

@@ -30,7 +30,7 @@
  *     -> coreServices.memoryRegistry -> turn-loop injection -> accessor ring.
  */
 import { describe, expect, test } from 'bun:test';
-import { Orchestrator } from '../../core/orchestrator.ts';
+import { Orchestrator } from '@pellux/goodvibes-sdk/platform/core';
 import { ConversationManager } from '../../core/conversation.ts';
 import { buildSharedOrchestratorCoreServices, type OrchestratorCoreServicesSource } from '../../runtime/orchestrator-core-services.ts';
 import { ToolRegistry } from '@pellux/goodvibes-sdk/platform/tools';

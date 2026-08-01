@@ -3,7 +3,7 @@ import { resolveGoodVibesDaemonHome, resolveGoodVibesHome } from '@pellux/goodvi
 import { Compositor } from './renderer/compositor.ts';
 import { type Line } from '@pellux/goodvibes-sdk/platform/types';
 import { UIFactory } from './renderer/ui-factory.ts';
-import { Orchestrator } from './core/orchestrator';
+import { Orchestrator } from '@pellux/goodvibes-sdk/platform/core';
 import { InputHandler } from './input/handler.ts';
 import { SelectionManager } from './input/selection.ts';
 import type { ContentPart } from '@pellux/goodvibes-sdk/platform/providers';

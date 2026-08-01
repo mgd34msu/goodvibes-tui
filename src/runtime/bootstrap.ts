@@ -10,7 +10,7 @@
  *   - lifecycle.ts: save/shutdown helpers
  */
 import { join } from 'node:path';
-import { Orchestrator, type OrchestratorUserInputOptions } from '../core/orchestrator.ts';
+import { Orchestrator, type OrchestratorUserInputOptions } from '@pellux/goodvibes-sdk/platform/core';
 import { AcpManager } from '@pellux/goodvibes-sdk/platform/acp';
 import { getTierPromptSupplement, getTierForContextWindow } from '@pellux/goodvibes-sdk/platform/providers';
 import { logger, summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
@@ -394,9 +394,8 @@ export async function bootstrapRuntime(
   };
 
   // ADOPT ONLY. This app never constructs a DaemonServer or an HttpListener: the
-  // daemon is a separate product with its own binary and its own service unit,
-  // and a second copy embedded here is exactly the drift the split removed. The
-  // factories carry the shared bearer and the daemon's state directory so an
+  // daemon is a separate product with its own binary and its own service unit.
+  // The factories carry the shared bearer and the daemon's state directory so an
   // adopted daemon is authenticated the same way it always was — no factory that
   // BUILDS anything is passed, and `adoptOnly` makes the SDK refuse to start one
   // even if a future caller did.
@@ -545,7 +544,7 @@ export async function bootstrapRuntime(
     run: async () => {
       // Register the persistent companion-pairing token as the daemon's shared
       // bearer, so tokens scanned from the /qrcode panel's QR actually
-      // authenticate against the embedded daemon this surface starts.
+      // authenticate against the daemon this surface adopts.
       const daemonHomeDir = join(services.homeDirectory, '.goodvibes', 'daemon');
       const companionTokenRecord = resolveDaemonCompanionToken(daemonHomeDir, GOODVIBES_TUI_SURFACE_ROOT);
       // Fix (TUI 0.19.20): remove stale pre-0.21.28 workspace-scoped operator

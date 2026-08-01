@@ -4,7 +4,7 @@ import type { CommandContext } from '../command-registry.ts';
 import { discoverSkills } from '../../panels/skills-panel.ts';
 import { buildSandboxReview, isRunningInWsl } from '@/runtime/index.ts';
 import { renderQemuWrapperTemplate } from '@/runtime/index.ts';
-import { getPluginDirectories } from '../../plugins/loader';
+import { getPluginDirectories } from '@pellux/goodvibes-sdk/platform/plugins';
 import { listBuiltinSubscriptionProviders } from '@pellux/goodvibes-sdk/platform/config';
 import type { SetupReviewSnapshot } from './local-setup-transfer.ts';
 import { requireProviderApi, requireReadModels, requireServiceRegistry, requireShellPaths, requireSubscriptionManager } from './runtime-services.ts';

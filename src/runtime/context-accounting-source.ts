@@ -1,4 +1,4 @@
-import type { Orchestrator } from '../core/orchestrator.ts';
+import type { Orchestrator } from '@pellux/goodvibes-sdk/platform/core';
 import type { ProviderRegistry } from '@pellux/goodvibes-sdk/platform/providers';
 import type { SessionLineageTracker } from '@pellux/goodvibes-sdk/platform/core';
 import type { ContextAccountingSource } from '@pellux/goodvibes-sdk/platform/tools';

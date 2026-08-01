@@ -161,7 +161,7 @@ describe('Orchestrator tool result reconciliation', () => {
   });
 
   async function buildOrchestrator() {
-    const { Orchestrator } = await import('../../core/orchestrator.ts');
+    const { Orchestrator } = await import('@pellux/goodvibes-sdk/platform/core');
     const { ConversationManager } = await import('../../core/conversation.ts');
     const { PermissionManager, createPermissionConfigReader } = await import('@pellux/goodvibes-sdk/platform/permissions');
     const configManager = createTestConfigManager();
@@ -361,7 +361,7 @@ describe('Orchestrator tool result reconciliation', () => {
   });
 
   test('isReconciliationEnabled returns false when flag is disabled in manager', async () => {
-    const { Orchestrator } = await import('../../core/orchestrator.ts');
+    const { Orchestrator } = await import('@pellux/goodvibes-sdk/platform/core');
     const { ConversationManager } = await import('../../core/conversation.ts');
     const { PermissionManager, createPermissionConfigReader } = await import('@pellux/goodvibes-sdk/platform/permissions');
     const { createFeatureFlagManager } = await import('@/runtime/index.ts');
@@ -394,7 +394,7 @@ describe('Orchestrator tool result reconciliation', () => {
   // ---------------------------------------------------------------------------
 
   test('reconcileUnresolvedToolCalls does NOT emit event when flag is disabled', async () => {
-    const { Orchestrator } = await import('../../core/orchestrator.ts');
+    const { Orchestrator } = await import('@pellux/goodvibes-sdk/platform/core');
     const { ConversationManager } = await import('../../core/conversation.ts');
     const { PermissionManager, createPermissionConfigReader } = await import('@pellux/goodvibes-sdk/platform/permissions');
     const { createFeatureFlagManager } = await import('@/runtime/index.ts');

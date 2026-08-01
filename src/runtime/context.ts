@@ -6,7 +6,7 @@
  * the runtime loop.
  */
 import type { ConversationManager } from '../core/conversation';
-import type { Orchestrator } from '../core/orchestrator';
+import type { Orchestrator } from '@pellux/goodvibes-sdk/platform/core';
 import type { ToolRegistry } from '@pellux/goodvibes-sdk/platform/tools';
 import type { PermissionManager } from '@pellux/goodvibes-sdk/platform/permissions';
 import type { HookDispatcher } from '@pellux/goodvibes-sdk/platform/hooks';

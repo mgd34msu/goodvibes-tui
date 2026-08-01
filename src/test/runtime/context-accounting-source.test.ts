@@ -20,7 +20,7 @@ import { describe, expect, test } from 'bun:test';
 import { createContextAccountingSource } from '../../runtime/context-accounting-source.ts';
 import { ContextAccountingHolder, createContextAccountingTool } from '@pellux/goodvibes-sdk/platform/tools';
 import type { ModelDefinition } from '@pellux/goodvibes-sdk/platform/providers';
-import type { Orchestrator } from '../../core/orchestrator.ts';
+import type { Orchestrator } from '@pellux/goodvibes-sdk/platform/core';
 
 /**
  * TurnInjectionRecord is not exported from the SDK's public entry points;
