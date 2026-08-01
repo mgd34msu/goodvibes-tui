@@ -30,7 +30,7 @@ function createConfig(overrides: {
       if (key === 'daemon.enabled') return overrides.daemon ?? false;
       // These tests exercise the EMBEDDED daemon/listener path via the
       // createDaemonServer/createHttpListener factories directly — force
-      // daemon.embedInProcess so startHostServices never attempts the new
+      // daemon.embedInProcess so startHostServices never attempts its
       // default detached-spawn path (which would really try to spawn a
       // goodvibes-daemon subprocess and blow the test's timeout budget).
       if (key === 'daemon.embedInProcess') return true;

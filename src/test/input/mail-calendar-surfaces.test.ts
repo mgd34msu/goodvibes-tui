@@ -21,8 +21,7 @@
  * conformance suites.
  *
  * Everything else here — the argument parsing, the rendering, the status
- * derivation, the Connections category's behaviour — is surface work and is
- * unchanged by the split.
+ * derivation, the Connections category's behaviour — is surface work.
  */
 
 import { describe, expect, test } from 'bun:test';

@@ -137,7 +137,7 @@ describe('occasions settings surface — all twelve keys reach the modal, not dr
 
 /**
  * Regression coverage for the hostedSessions.* settings the SDK added for
- * daemon-hosted sessions (Phase B): the detach policy and the bounds around it.
+ * daemon-hosted sessions: the detach policy and the bounds around it.
  *
  * The same failure class the occasions block above documents, and the fourth
  * time it has bitten this repo (push.*, cluster.*, occasions.*): a config

@@ -12,7 +12,7 @@
  * the first-paint critical path; it documents the measured background cost
  * and guards it does not regress silently.
  *
- * (The sibling "no daemon present -> starts its own embedded daemon" shape is
+ * (The sibling "no daemon present -> spawns a detached daemon" shape is
  * not exercised here: it binds the real controlPlane.port from the shared
  * test RuntimeServices' ConfigManager rather than the probe-decision config
  * passed to startHostServices, so a real system daemon on the default port

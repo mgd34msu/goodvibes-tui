@@ -101,7 +101,7 @@ describe('keep-awake survives the TUI closing — embedded topology', () => {
       first.memoryConsolidationScheduler.stop();
       // Persisted: the config key now carries the toggle...
       expect(configManager.get('power.keepAwake')).toBe(true);
-      // ...and the NEXT composition (the next TUI/embedded-daemon start on this
+      // ...and the NEXT composition (the next TUI start on this
       // config) re-applies it at start — the toggle outlives the process.
       const second = wireIdlePowerAndLiveTurn(stubDeps);
       await new Promise((resolve) => setTimeout(resolve, 25));

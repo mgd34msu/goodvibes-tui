@@ -7,7 +7,7 @@
 // one panel edits only that panel's module. This file imports every
 // contract module (registering their describe/test blocks with bun:test)
 // and asserts that the contract-module count matches the expected registry
-// size, preserving the module/registry parity check from before the split.
+// size, preserving the module/registry parity check.
 //
 // (the purge): 13 contract modules were removed along with their
 // panels (RETIRE-INTO-FLEET: incident-review, routes, ops-control,

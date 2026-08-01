@@ -11,7 +11,7 @@
  * proves the same nothing.
  *
  * So this suite boots the actual `goodvibes-daemon` binary, built from the
- * daemon repository, and drives the seams the split retargeted against it:
+ * daemon repository, and drives this app's client seams against it:
  * session registration, an approval raised and decided, a config write, a task
  * listing, and the honest refusal path when a verb is not available.
  *
@@ -384,8 +384,8 @@ if (!binary) {
 
     test('S4 config: a daemon-owned key written over the wire reads back changed', async () => {
       // watchers.* is daemon-owned (the daemon runs the watcher framework), so
-      // this is exactly the class of write that would have silently landed in
-      // this surface's own settings file before the split.
+      // this is exactly the class of write that would silently land in
+      // this surface's own settings file if it were not routed to the daemon.
       const config = createDaemonConfigClient(verbs);
       expect(config.ownsKey('watchers.enabled')).toBe(true);
       await config.set('watchers.enabled', false);
@@ -568,7 +568,7 @@ if (!binary) {
       expect(Array.isArray(rows)).toBe(true);
     });
 
-    // ── Phase B: sessions the daemon HOSTS ────────────────────────────────
+    // ── hosted sessions ────────────────────────────────────────────────────
     //
     // Everything below drives the real binary through the whole hosted story:
     // create, one turn that calls a real (stubbed) model, the stream this
