@@ -118,11 +118,11 @@ export interface BootstrapCoreState {
   readonly requestRender: () => void;
   readonly setRenderRequest: (fn: () => void) => void;
   readonly runtimeSessionIdRef: { value: string };
-  /** Cross-surface identity mirror; permanently dormant for local-only and for the SDK's 'embedded' HostServiceMode (unreachable in this product — see the ADOPT ONLY guard in bootstrap.ts) (docs/decisions/2026-07-06-session-spine-mode-branch-is-permanent.md), activated by bootstrap.ts only for an adopted 'external' daemon. */
+  /** Cross-surface identity mirror; dormant for local-only, and for the SDK's 'embedded' HostServiceMode, which no product-facing setting can select — this product only ever adopts an external daemon or runs local-only (see the ADOPT ONLY guard in bootstrap.ts) (docs/decisions/2026-07-06-session-spine-mode-branch-is-permanent.md). Activated by bootstrap.ts only for an adopted 'external' daemon. */
   readonly sessionSpine: SessionSpineClient;
   /** Inbound steer/follow-up delivery; dormant until bootstrap.ts activates it. */
   readonly sessionInboundInputs: SessionInboundInputPoller;
-  /** Cache-backed read facade; bootstrap.ts drives its mode (external/local-only in this product — 'embedded' is an unreachable HostServiceMode value here) from the same HostServiceMode as the spine above. */
+  /** Cache-backed read facade; bootstrap.ts drives its mode (external/local-only in this product — 'embedded' is a HostServiceMode value with no product-facing setting to select it here) from the same HostServiceMode as the spine above. */
   readonly sessionUnionCache: SessionUnionCache;
   /**
    * WRFC chain persistence — call `rehydrate()` once after the SystemMessageRouter
@@ -296,8 +296,8 @@ export async function initializeBootstrapCore(
     surfaceRegistry,
     watcherRegistry,
   } = services;
-  // Permanently dormant for local-only, and for the SDK's 'embedded' HostServiceMode (unreachable
-  // in this product); bootstrap.ts activates it only for an adopted 'external' daemon.
+  // Dormant for local-only, and for the SDK's 'embedded' HostServiceMode — no product-facing
+  // setting can select it (SDK-internal embedder/test machinery); bootstrap.ts activates this spine only for an adopted 'external' daemon.
   const sessionSpine = new SessionSpineClient({ participant: TUI_SPINE_PARTICIPANT, recordKind: 'tui' });
   // Cache-backed read facade over the local broker (passthrough until bootstrap.ts
   // activates the adopted-daemon wire union for 'external').
@@ -447,9 +447,9 @@ export async function initializeBootstrapCore(
     } catch (err) {
       logger.error('Render threw; next requestRender will reschedule', { error: String(err) });
     }
-    // Debounced spine heartbeat on turn/render activity (no-op while dormant, i.e.
-    // local-only, or the SDK's 'embedded' mode which this product never reaches): a cheap synchronous no-op unless its own internal window has
-    // elapsed (at most one wire call per heartbeatMinIntervalMs) — safe on the hot path.
+    // Debounced spine heartbeat on turn/render activity (no-op while dormant, i.e. local-only, or
+    // the SDK's 'embedded' mode, for which no product-facing setting exists): a cheap synchronous
+    // no-op unless its own internal window has elapsed (at most one wire call per heartbeatMinIntervalMs) — safe on the hot path.
     sessionSpine.heartbeat(runtimeSessionIdRef.value);
   };
   const requestRender = (): void => {

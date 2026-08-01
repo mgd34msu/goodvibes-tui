@@ -12,6 +12,22 @@ It also mirrors the npm package to GitHub Packages:
 
 The binary release is the primary distribution channel.
 
+## Breaking Changes
+
+A breaking change gets a bold-prefixed entry under `### Changes` in the
+`[Unreleased]` section of `CHANGELOG.md`, stating in plain language what
+refuses to work, why, what the user sees, and the remedy. The GitHub Release
+body is generated from that section when no `docs/releases/<version>.md`
+exists (see GitHub CD below), so a breaking-change entry written there is also
+what a reader sees on the release page.
+
+- **1.28.0 daemon build floor.** This client refuses to attach to a daemon
+  older than `1.28.0` — the release where the daemon became its own product —
+  and reports it as an unadopted, incompatible service rather than adopting
+  it. The floor is declared as `TUI_DAEMON_BUILD_FLOOR` in
+  `src/runtime/client/build-floors.ts`; see `CHANGELOG.md`'s `[Unreleased]`
+  entry for the full account of what a user sees and the remedy.
+
 ## Local Release Checks
 
 Before cutting a release tag, run:

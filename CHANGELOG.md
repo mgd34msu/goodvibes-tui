@@ -8,6 +8,26 @@ All notable changes to GoodVibes TUI.
 
 ### Changes
 
+- **Breaking: this build refuses to attach to a daemon older than `1.28.0`.**
+  1.28.0 is the daemon release where the daemon became its own product and
+  this terminal became a pure client of it — the session register, the
+  inbound steer queue, the fleet needs-input push and the credential writes
+  this build calls are all served there, and an older daemon answers some of
+  those and not others. Rather than run half-working against a peer it has no
+  reason to suspect, this build reads the daemon's version on every attach and
+  refuses one below its floor instead of adopting it. What a user sees: the
+  daemon status reads as an unadopted, incompatible service, and one line
+  names both versions — "`<daemon>` is running build X; this client requires
+  1.28.0 or newer — update the daemon." Refused means local-only, which this
+  app already renders honestly; no second daemon is started on the occupied
+  port. On the ordinary path nothing needs doing: a pre-split daemon (1.27.1
+  or below) is handed over to its own release line once at this app's next
+  launch (see below), and every daemon past the split updates itself hourly
+  from there, so the floor is met without anyone touching anything. If a
+  daemon still answers below 1.28.0 — auto-update turned off, or a fresh
+  manual install of an old release — re-run the suite installer
+  (`curl -fsSL https://goodvibes.sh/install.sh | sh`) to bring the daemon
+  current.
 - The daemon is a separate product and this package stops carrying it. It was
   built here, released here, shipped inside this npm tarball, vendored into
   every platform package, and swapped by this app's `/update`. All of that came

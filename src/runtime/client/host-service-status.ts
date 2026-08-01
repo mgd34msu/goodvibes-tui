@@ -49,7 +49,13 @@ export function createPendingServiceStatus(
   };
 }
 
-/** A service this terminal can actually use. */
+/**
+ * A service this terminal can actually use. Called for both the daemon and the
+ * HTTP listener (see bootstrap.ts), so the 'embedded' arm stays live: the SDK
+ * always reports its in-process HTTP listener as 'embedded', even though this
+ * product's daemon status can never carry that mode (adoptOnly is hardcoded on
+ * every host-services call this app makes).
+ */
 export function hostServiceIsActive(status: HostServiceStatus): boolean {
   return status.mode === 'embedded' || status.mode === 'external';
 }

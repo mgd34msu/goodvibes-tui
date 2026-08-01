@@ -273,3 +273,70 @@ Nothing about the default experience changed. In this app:
 The honest summary: the parked question is answered, and the answer is "both, by choice" — the
 local broker remains the source of truth for a terminal-run session, and a daemon-hosted session
 is a separate thing the user asks for, with `kill` still the default meaning of detaching.
+
+## Addendum 2026-07-31 — `daemon.embedInProcess` is deleted as a product-facing setting
+
+The "Updated 2026-07-31" section above, written earlier the same day, still described
+`daemon.embedInProcess` as "a residual union member, not a live topology" — present in the SDK
+schema, reachable by nothing shipped, but still there for a user to find in `/config` and turn on
+to no effect. The owner ruled, later the same day, that this residual is removed outright:
+`daemon.embedInProcess` and its schema row are deleted as a product-facing setting. The SDK's
+embed capability itself is not deleted — it stays as composition machinery for an embedder or a
+test harness to construct a `DaemonServer`/`HttpListener` factory pair directly and call
+`startHostServices` without `adoptOnly`, exactly the shape `src/test/runtime/bootstrap-services.test.ts`
+exercises against the SDK's exported function today. What is gone is the idea that a shipped
+product exposes a setting that could ever select it.
+
+This changes what "unreachable in this product" means for this file's own subject, the
+`embedded`/`external`... now `adopted`/not-adopted... branch this app builds around the daemon's
+`HostServiceMode`:
+
+- Before this addendum: the branch was unreachable because this app always passes `adoptOnly:
+  true`, a fact about how this app calls the SDK. A future caller in this same app that dropped
+  `adoptOnly` could in principle have reached `embed`, because the schema row still existed and a
+  user could still (uselessly) flip it.
+- After this addendum: there is no product-facing key left anywhere in this app's settings surface
+  that could ever ask for `embed`, so the branch is doubly unreachable — by this app's own
+  `adoptOnly` stance, and because the setting that would have to be `true` for `embed` to win
+  against `adoptOnly` no longer exists to flip. `docs/configuration.md` and the `/config` modal
+  (schema-driven from `CONFIG_SCHEMA`, `src/input/settings-modal-data.ts`) drop the row
+  automatically once the SDK schema entry is gone — this repo names no such key explicitly outside
+  its tests and this document.
+
+### What this app pruned and what it kept, and why
+
+Every site that tested `HostServiceStatus.mode === 'embedded'` was traced by which status object
+actually flows into it, because `'embedded'` is dead for this app's **daemon** status but stays
+correct and alive for the SDK's **HTTP listener** status (the SDK always reports its own
+in-process HTTP listener as `'embedded'` — that fact did not change and is not part of what the
+owner ruled on here):
+
+- `src/runtime/client/host-service-status.ts` (`hostServiceIsActive`) and
+  `src/input/onboarding/onboarding-runtime-status.ts` (`isRuntimeEndpointActive`,
+  `isRuntimeEndpointOccupyingConfiguredPort`, `formatRuntimeActiveSuccessMessage`,
+  `runtimePortDiagnostic`) all take either endpoint's status as an argument and are called with
+  both the daemon's and the HTTP listener's status (see `bootstrap.ts` and
+  `handler-onboarding.ts`). Their `'embedded'` arms are kept, with a comment at each site naming
+  which caller keeps the arm live.
+- `src/runtime/bootstrap-core.ts`'s `sessionSpine`, `sessionUnionCache`, and the heartbeat call are
+  daemon-only — there is no HTTP-listener caller that could make `'embedded'` live for them. Their
+  comments, which called the branch "permanently dormant" / "unreachable in this product" as a
+  fact about this app's `adoptOnly` stance, are rewritten to state the current, stronger reason: no
+  product-facing setting exists that could select it at all. Nothing was deleted here — the SDK's
+  `SessionSpineClient` and `SessionUnionCache` still support activation for an adopted `'external'`
+  daemon, which remains this app's one live cross-surface topology, and the explanation for why the
+  branch exists (two topologies used to both be real; now only one is) stays on the page rather
+  than being deleted along with the setting.
+- `src/test/runtime/bootstrap-services.test.ts` calls the SDK's `startHostServices` directly with a
+  hand-written config mock and injected `createDaemonServer`/`createHttpListener` factories,
+  bypassing this app's `adoptOnly: true` wrapper entirely. That test exercises the SDK's embedder
+  composition machinery on its own terms, not this app's product settings surface, so it needed no
+  change and is not evidence of a live product topology.
+- `src/test/runtime/session-union-cache.test.ts` and `src/test/config/credential-availability.test.ts`
+  unit-test SDK exports (`SessionUnionCache.markEmbedded()`, `deriveSpineFooterStatus`,
+  `credentialReadModeFromHostMode`) directly and generically across the whole `HostServiceMode`
+  enum; none of them go through this app's bootstrap wiring, so none of them assert on a branch
+  this app owns.
+- No test asserted on `bootstrap-core.ts`'s now-dead-for-daemon `'embedded'` branch specifically (the
+  existing coverage for that file exercises the `'external'`-vs-not split, which is unchanged), so
+  no test required weakening or rewriting for this addendum.
