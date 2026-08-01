@@ -189,8 +189,8 @@ jobs:
 
   # ── Stage flat release assets (push/tag only): merge all target artifacts,
   #    flatten each platform's sqlite-vec addon to an installer-parseable name,
-  #    and hand the 4 binaries + 4 addons to the reusable GH-release as one
-  #    artifact. A missing addon is fatal. ────────────────────────────────────
+  #    add the suite installer, and hand the 4 binaries + 4 addons + install.sh
+  #    to the reusable GH-release as one artifact. A missing addon is fatal. ──
   stage-release-assets:
     needs: [binaries, install-smoke, smoke-macos]
     if: >-
@@ -201,6 +201,10 @@ jobs:
     outputs:
       version: ${{ steps.version.outputs.version }}
     steps:
+      - name: Checkout
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+        with:
+          ref: ${{ github.ref }}
       - name: Resolve version from the tag
         id: version
         run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
@@ -209,6 +213,22 @@ jobs:
         with:
           path: dist/
           merge-multiple: true
+      # The suite installer ships as a release asset of THIS repository, which is
+      # what gives it a permanent public URL:
+      #   https://github.com/mgd34msu/goodvibes-tui/releases/latest/download/install.sh
+      # goodvibes.sh serves /install.sh from that URL, so the site needs no
+      # per-release deployment at all — and because it rides the same
+      # SHA256SUMS.txt as the binaries, the installer people run is itself
+      # checksummed by the release that produced it.
+      - name: Stage the suite installer as a release asset
+        run: |
+          set -eu
+          if [ ! -f scripts/install.sh ]; then
+            echo "FATAL: scripts/install.sh is missing — the suite installer is a release asset of this repository" >&2
+            exit 1
+          fi
+          cp scripts/install.sh dist/install.sh
+          echo "staged install.sh"
       - name: Flatten sqlite-vec addons as flat release assets
         run: |
           set -eu
@@ -234,11 +254,12 @@ jobs:
           path: |
             dist/goodvibes-*
             dist/sqlite-vec-*
+            dist/install.sh
           if-no-files-found: error
           retention-days: 1
 
   # ── GitHub Release (push/tag only): reusable changelog excerpt + SHA256SUMS
-  #    over the 4 binaries + 4 addons + pinned softprops upload. ──────────────
+  #    over the 4 binaries + 4 addons + install.sh + pinned softprops upload. ─
   gh-release:
     needs: stage-release-assets
     if: >-
@@ -254,6 +275,7 @@ jobs:
       assets-glob: |
         dist/goodvibes-*
         dist/sqlite-vec-*
+        dist/install.sh
       # Hand-written per-release notes override the changelog excerpt when the
       # file exists at the tagged ref (docs/releases/<version>.md, no v prefix —
       # the same resolution the old validate-release used).

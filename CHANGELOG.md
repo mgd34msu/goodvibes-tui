@@ -4,6 +4,17 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [2.0.1] - 2026-08-01
+
+### Changes
+
+- The suite installer ships from this repository's releases again. It moved to
+  the daemon's repository for one release and back: the installer covers all
+  four products (daemon, terminal app, agent, web UI bundle), and this
+  repository — the terminal app's — is its correct home, so `goodvibes.sh`
+  serves it from here. Content is identical to what the daemon's release
+  carried; only the release lane that publishes it changed.
+
 ## [2.0.0] - 2026-08-01
 
 ### Changes
