@@ -15,8 +15,8 @@ import {
   setManagedSettingLock,
   type SettingsSyncBundle,
 } from '@/runtime/index.ts';
-import { getProviderIdFromModel } from '../../config/provider-model.ts';
-import { type ConfigKey } from '../../config/index.ts';
+import { getProviderIdFromModel } from '@pellux/goodvibes-sdk/platform/providers';
+import { type ConfigKey } from '@pellux/goodvibes-sdk/platform/config';
 import { CONFIG_KEYS } from '@pellux/goodvibes-sdk/platform/config';
 import type { CommandRegistry } from '../command-registry.ts';
 import { openCommandPanel, requireShellPaths } from './runtime-services.ts';

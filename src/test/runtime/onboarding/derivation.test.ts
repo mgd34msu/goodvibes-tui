@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
-import { DEFAULT_CONFIG } from '../../../config/index.ts';
-import { getProviderIdFromModel } from '../../../config/provider-model.ts';
+import { DEFAULT_CONFIG } from '@pellux/goodvibes-sdk/platform/config';
+import { getProviderIdFromModel } from '@pellux/goodvibes-sdk/platform/providers';
 import type { OnboardingSnapshotState } from '../../../runtime/onboarding/index.ts';
 import {
   deriveReopenEditAcknowledgementState,

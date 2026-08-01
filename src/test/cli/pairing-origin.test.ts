@@ -1,7 +1,7 @@
 import { describe, test, expect } from 'bun:test';
 import { resolvePairingWebOrigin, ensurePublicBaseUrl, isHttpOnLan } from '@pellux/goodvibes-sdk/platform/pairing';
 import type { StableHostInputs } from '@pellux/goodvibes-sdk/platform/pairing';
-import type { ConfigKey, ConfigManager } from '../../config/index.ts';
+import type { ConfigKey, ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 
 /**
  * Minimal config double: a map of keys to values, plus a setDynamic recorder.

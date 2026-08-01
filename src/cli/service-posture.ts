@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { PlatformServiceManager } from '@pellux/goodvibes-sdk/platform/daemon';
 import type { ManagedServiceStatus } from '@pellux/goodvibes-sdk/platform/daemon';
 import { resolveDaemonEnabled } from '@pellux/goodvibes-sdk/platform/config';
-import type { ConfigManager } from '../config/index.ts';
+import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import { formatRuntimeEndpointBinding, resolveRuntimeEndpointBinding } from '@pellux/goodvibes-terminal-shell';
 import type { RuntimeEndpointBinding, RuntimeEndpointId } from '@pellux/goodvibes-terminal-shell';
 import { classifyBindPosture, isNetworkFacing } from './network-posture.ts';

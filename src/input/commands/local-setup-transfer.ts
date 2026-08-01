@@ -1,8 +1,8 @@
 import { dirname, join, resolve } from 'node:path';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import type { CommandContext } from '../command-registry.ts';
-import type { ConfigKey } from '../../config/index.ts';
-import { CONFIG_SCHEMA } from '../../config/index.ts';
+import type { ConfigKey } from '@pellux/goodvibes-sdk/platform/config';
+import { CONFIG_SCHEMA } from '@pellux/goodvibes-sdk/platform/config';
 import { requireShellPaths } from './runtime-services.ts';
 
 export interface SetupReviewSnapshot {

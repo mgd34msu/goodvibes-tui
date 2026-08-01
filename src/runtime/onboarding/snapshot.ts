@@ -1,5 +1,5 @@
 import type { SecretStorageReview } from '../../config/secrets.ts';
-import { getProviderIdFromModel } from '../../config/provider-model.ts';
+import { getProviderIdFromModel } from '@pellux/goodvibes-sdk/platform/providers';
 import type { LocalAuthSnapshot } from '@pellux/goodvibes-sdk/platform/security';
 import { readOnboardingRuntimeState } from './state.ts';
 import type {

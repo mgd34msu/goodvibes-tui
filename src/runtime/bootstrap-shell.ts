@@ -19,7 +19,7 @@ import type { PermissionRequestHandler } from '@pellux/goodvibes-sdk/platform/pe
 import { registerBuiltinPanels } from '../panels/builtin-panels.ts';
 import { WorkspaceRegistrationManager } from '@pellux/goodvibes-sdk/platform/runtime/operations';
 import { createSystemMessageRouter, type SystemMessageRouter } from '../core/system-message-router.ts';
-import { getConfigSnapshot } from '../config/index.ts';
+import { getConfigSnapshot } from '@pellux/goodvibes-sdk/platform/config';
 import { createBootstrapCommandContext } from './bootstrap-command-context.ts';
 import { createResumeSessionHandler } from './bootstrap-hook-bridge.ts';
 import { confirmLiveResume } from './session-resume-liveness-confirm.ts';

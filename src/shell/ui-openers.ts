@@ -1,5 +1,5 @@
-import type { ConfigManager } from '../config/index.ts';
-import { getProviderIdFromModel } from '../config/provider-model.ts';
+import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
+import { getProviderIdFromModel } from '@pellux/goodvibes-sdk/platform/providers';
 import type { ConversationManager } from '../core/conversation';
 import type { CommandContext } from '../input/command-registry.ts';
 import type { InputHandler } from '../input/handler.ts';

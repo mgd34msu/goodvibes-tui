@@ -1,6 +1,6 @@
 import { WorkspaceCheckpointManager } from '@pellux/goodvibes-sdk/platform/workspace';
 import { withCheckpointGuardSettings } from '../config/tui-extension-settings.ts';
-import type { ConfigManager } from '../config/index.ts';
+import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import type { RuntimeEventBus, SessionSurface } from '@/runtime/index.ts';
 
 /**

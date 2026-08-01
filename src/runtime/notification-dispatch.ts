@@ -13,7 +13,7 @@
 
 import { createNotificationRouter, type NotificationRouter } from '@pellux/goodvibes-sdk/platform/runtime/ui';
 import type { Notification, RoutingDecision, RuntimeEventBus, RuntimeEventDomain } from '@/runtime/index.ts';
-import type { ConfigManager } from '../config/index.ts';
+import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import { getSharedNotificationFeed, type PanelNotificationFeed } from '../panels/notifications-feed.ts';
 import { memoryPressureLine, memoryPressureLevel, type MemoryPressurePayload } from '@pellux/goodvibes-sdk/platform/runtime/memory';
 

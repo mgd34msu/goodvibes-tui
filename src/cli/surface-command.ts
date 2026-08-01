@@ -1,4 +1,4 @@
-import type { ConfigKey } from '../config/index.ts';
+import type { ConfigKey } from '@pellux/goodvibes-sdk/platform/config';
 import {
   GOODVIBES_NTFY_AGENT_TOPIC,
   GOODVIBES_NTFY_CHAT_TOPIC,

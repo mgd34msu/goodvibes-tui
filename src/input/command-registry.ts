@@ -1,8 +1,8 @@
 import type { McpRegistry } from '@pellux/goodvibes-sdk/platform/mcp';
 import type { ProviderRegistry } from '@pellux/goodvibes-sdk/platform/providers';
 import type { ConversationManager } from '../core/conversation';
-import type { ConfigManager } from '../config/index.ts';
-import type { DeepReadonly, GoodVibesConfig } from '../config/index.ts';
+import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
+import type { DeepReadonly, GoodVibesConfig } from '@pellux/goodvibes-sdk/platform/config';
 import type { ToolRegistry } from '@pellux/goodvibes-sdk/platform/tools';
 import type { PermissionRequestHandler } from '@pellux/goodvibes-sdk/platform/permissions';
 import type { SelectionItem, SelectionResult, SelectionAction } from './selection-modal.ts';

@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
-import { ConfigManager } from '../config/index.ts';
-import { formatProviderModel, getModelIdFromProviderModel, getProviderIdFromModel } from '../config/provider-model.ts';
+import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
+import { formatProviderModel, getModelIdFromProviderModel, getProviderIdFromModel } from '@pellux/goodvibes-sdk/platform/providers';
 import { readOnboardingCheckMarkers } from '../runtime/onboarding/index.ts';
 import { GlobalNetworkTransportInstaller } from '@/runtime/index.ts';
 import { createShellPathService } from '@/runtime/index.ts';

@@ -1,4 +1,4 @@
-import { getConfigSnapshot } from '../config/index.ts';
+import { getConfigSnapshot } from '@pellux/goodvibes-sdk/platform/config';
 import {
   describeServingEffort,
   publishActiveEffortOptions,

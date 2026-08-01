@@ -3,7 +3,7 @@ import { renderGoodVibesVersion, renderDaemonStartupBanner } from '../../cli/hel
 import { resolveRuntimeEndpointBinding } from '@pellux/goodvibes-terminal-shell';
 import { resolveWebPort } from '@pellux/goodvibes-sdk/platform/daemon';
 import { VERSION } from '../../version.ts';
-import type { ConfigManager } from '../../config/index.ts';
+import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 
 describe('CLI help/version', () => {
   test('does not report the consuming project npm_package_version', () => {

@@ -20,7 +20,7 @@
 import { getBuiltinSetupSchema } from '@pellux/goodvibes-sdk/platform/channels';
 import type { ChannelSetupFieldDescriptor, ChannelSetupSchema, ChannelSurface } from '@pellux/goodvibes-sdk/platform/channels';
 import type { CommandContext } from '../command-registry.ts';
-import type { ConfigManager, ConfigKey } from '../../config/index.ts';
+import type { ConfigManager, ConfigKey } from '@pellux/goodvibes-sdk/platform/config';
 import { persistSecretBackedConfigValue } from '../../config/secret-config.ts';
 import { describeOperatorRpcError, getOperatorRpc } from './operator-rpc.ts';
 

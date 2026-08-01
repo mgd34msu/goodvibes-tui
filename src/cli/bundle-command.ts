@@ -6,9 +6,9 @@ import { listProviderRuntimeSnapshots } from '@pellux/goodvibes-sdk/platform/pro
 import { createRuntimeServices } from '../runtime/services.ts';
 import { createRuntimeStore } from '../runtime/store/index.ts';
 import { getOnboardingCheckMarkerPath } from '../runtime/onboarding/index.ts';
-import { CONFIG_SCHEMA } from '../config/index.ts';
+import { CONFIG_SCHEMA } from '@pellux/goodvibes-sdk/platform/config';
 import { SecretsManager } from '../config/secrets.ts';
-import type { ConfigKey } from '../config/index.ts';
+import type { ConfigKey } from '@pellux/goodvibes-sdk/platform/config';
 import type { CliCommandRuntime } from '@pellux/goodvibes-terminal-shell';
 import type { CliCommandOutput } from '@pellux/goodvibes-terminal-shell';
 import { getPackageVersion } from './help.ts';

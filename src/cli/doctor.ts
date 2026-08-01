@@ -2,7 +2,7 @@ import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import { PermissionManager, createPermissionConfigReader } from '@pellux/goodvibes-sdk/platform/permissions';
 import type { PermissionCategory, PermissionCheckResult } from '@pellux/goodvibes-sdk/platform/permissions';
 import { PolicyRuntimeState, createFeatureFlagManager, deriveFeatureStates } from '@/runtime/index.ts';
-import { getProviderIdFromModel } from '../config/provider-model.ts';
+import { getProviderIdFromModel } from '@pellux/goodvibes-sdk/platform/providers';
 import { describeConfiguredEffort } from '../providers/reasoning-effort-surface.ts';
 import type { CliCommandOutput } from '@pellux/goodvibes-terminal-shell';
 import type { GoodVibesCliOutputFormat } from '@pellux/goodvibes-terminal-shell';

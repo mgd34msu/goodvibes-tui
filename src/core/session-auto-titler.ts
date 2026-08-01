@@ -9,7 +9,7 @@
  */
 
 import type { ConversationMessageSnapshot } from '@pellux/goodvibes-sdk/platform/core';
-import type { ConfigManager } from '../config/index.ts';
+import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import { readSessionSettings } from '../config/tui-extension-settings.ts';
 
 /** Minimal conversation surface the titler needs. */

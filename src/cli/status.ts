@@ -7,7 +7,7 @@ import { classifyBindPosture, isNetworkFacing } from './network-posture.ts';
 import type { GoodVibesCliOutputFormat } from '@pellux/goodvibes-terminal-shell';
 import type { CliServicePosture } from './service-posture.ts';
 import type { InstallSelfCheckFinding } from '../runtime/install-self-check.ts';
-import { getProviderIdFromModel } from '../config/provider-model.ts';
+import { getProviderIdFromModel } from '@pellux/goodvibes-sdk/platform/providers';
 import { describeConfiguredEffort } from '../providers/reasoning-effort-surface.ts';
 
 export interface CliStatusOptions {

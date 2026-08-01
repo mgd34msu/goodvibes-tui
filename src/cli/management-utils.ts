@@ -18,7 +18,7 @@ import { join } from 'node:path';
 import net from 'node:net';
 import { spawn } from 'node:child_process';
 import { networkInterfaces } from 'node:os';
-import type { ConfigManager, GoodVibesConfig } from '../config/index.ts';
+import type { ConfigManager, GoodVibesConfig } from '@pellux/goodvibes-sdk/platform/config';
 import { bootstrapRuntime } from '../runtime/bootstrap.ts';
 import { refreshMemoryRecallSnapshot } from '../runtime/orchestrator-core-services.ts';
 import { createRuntimeServices } from '../runtime/services.ts';

@@ -140,7 +140,7 @@ export function buildManagedDaemonServiceManager(params: BuildManagedDaemonServi
     // operator-tokens.json, auth-users.json and daemon-settings.json — which is
     // `<home>/.goodvibes/daemon`. This baked the USER HOME, so a serviced
     // daemon filed its identity a level above where every reader in this
-    // repository looks: config/goodvibes-home.ts resolves the flag AS the state
+    // repository looks: the SDK's platform/config goodvibes-home resolves the flag AS the state
     // directory, cli/service-posture.ts already writes the state directory into
     // GOODVIBES_DAEMON_HOME for the unit it installs, and runtime/bootstrap.ts
     // reads the companion token from the state directory. On a normal machine

@@ -14,7 +14,7 @@
  * lockstep with the SDK feature-flag set.
  */
 
-import type { ConfigKey } from '../../config/index.ts';
+import type { ConfigKey } from '@pellux/goodvibes-sdk/platform/config';
 import { getFeatureSetting, isFeatureDefaultEnabled } from '@pellux/goodvibes-terminal-shell';
 import type {
   OnboardingWizardControllerLike,

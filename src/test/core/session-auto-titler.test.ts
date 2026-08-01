@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { createSessionAutoTitler, sanitizeTitle, type TitlerConversation } from '@/core/session-auto-titler.ts';
-import type { ConfigManager } from '@/config/index.ts';
+import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import type { ConversationMessageSnapshot } from '@pellux/goodvibes-sdk/platform/core';
 
 const cfg: Pick<ConfigManager, 'getRaw'> = { getRaw: () => ({} as ReturnType<ConfigManager['getRaw']>) };

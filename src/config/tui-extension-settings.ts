@@ -17,7 +17,7 @@
  * owned by their real consumer instead of being duplicated in the TUI.
  */
 
-import type { ConfigManager } from './index.ts';
+import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 
 type RawRecord = Record<string, unknown>;
 

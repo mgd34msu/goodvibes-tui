@@ -26,7 +26,7 @@ import {
   resolveGoodVibesHome,
   resolveGoodVibesHomeOwnership,
   resolveGoodVibesTreeDirectory,
-} from '../../config/goodvibes-home.ts';
+} from '@pellux/goodvibes-sdk/platform/config';
 import { makeProjectTempDir } from '../helpers/project-temp.ts';
 
 const projectRoot = resolve(join(import.meta.dir, '..', '..', '..'));
@@ -40,7 +40,7 @@ const projectRoot = resolve(join(import.meta.dir, '..', '..', '..'));
 const CHILD_SCRIPT = `
 import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import { SecretsManager } from '${projectRoot}/src/config/secrets.ts';
-import { resolveGoodVibesDaemonHome, resolveGoodVibesHome } from '${projectRoot}/src/config/goodvibes-home.ts';
+import { resolveGoodVibesDaemonHome, resolveGoodVibesHome } from '@pellux/goodvibes-sdk/platform/config';
 
 const homeDirectory = resolveGoodVibesHome();
 const daemonHomeDirectory = resolveGoodVibesDaemonHome(homeDirectory);
@@ -217,11 +217,18 @@ describe('GOODVIBES_HOME has exactly one meaning', () => {
       .toBe(join(sandbox, '.goodvibes', 'daemon', 'secrets.enc'));
   });
 
-  test('nothing outside the resolver reads the variable', () => {
+  test('nothing in this repository reads the variable', () => {
     // The behavioural twin of check-architecture's one-goodvibes-home-meaning
     // rule, so a second meaning cannot be reintroduced in either gate alone.
     // Reads only — src/cli/service-posture.ts WRITES it into the systemd unit's
     // Environment= block, which is how the daemon receives the one meaning.
+    //
+    // The expected reader count is now ZERO, not one: the resolver moved to the
+    // SDK (@pellux/goodvibes-sdk/platform/config) when the daemon turned out to
+    // carry a byte-identical copy of it, and one meaning cannot live in two
+    // repositories. So there is no longer a local file allowed to ask — any
+    // match here is a surface re-deriving the tree root for itself, which is
+    // exactly the shape of the incident this whole module exists to prevent.
     const readPattern = /\benv(?:ironment)?\s*(?:\[\s*['"]GOODVIBES_HOME['"]\s*\]|\.GOODVIBES_HOME\b)/;
     const sources: string[] = [];
     const collect = (directory: string): void => {
@@ -240,7 +247,7 @@ describe('GOODVIBES_HOME has exactly one meaning', () => {
       .map((path) => relative(projectRoot, path))
       .sort();
 
-    expect(readers).toEqual([join('src', 'config', 'goodvibes-home.ts')]);
+    expect(readers).toEqual([]);
   });
 });
 

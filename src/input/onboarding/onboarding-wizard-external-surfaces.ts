@@ -34,7 +34,7 @@ import type {
   ChannelSetupFieldKind,
   ChannelSurface,
 } from '@pellux/goodvibes-sdk/platform/channels';
-import { DEFAULT_CONFIG, type ConfigKey } from '../../config/index.ts';
+import { DEFAULT_CONFIG, type ConfigKey } from '@pellux/goodvibes-sdk/platform/config';
 import type { OnboardingSnapshotState } from '../../runtime/onboarding/index.ts';
 import { TELEGRAM_MODE_OPTIONS, WHATSAPP_PROVIDER_OPTIONS } from './onboarding-wizard-constants.ts';
 import type { ExternalSurfaceSetupFieldSpec, ExternalSurfaceSpec, OnboardingWizardRadioOption } from './onboarding-wizard-types.ts';

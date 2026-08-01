@@ -2,8 +2,8 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import type { CommandRegistry } from '../command-registry.ts';
 import { profileDataToConfigSnapshot } from '@pellux/goodvibes-sdk/platform/profiles';
-import { CONFIG_SCHEMA, type ConfigKey } from '../../config/index.ts';
-import { getProviderIdFromModel } from '../../config/provider-model.ts';
+import { CONFIG_SCHEMA, type ConfigKey } from '@pellux/goodvibes-sdk/platform/config';
+import { getProviderIdFromModel } from '@pellux/goodvibes-sdk/platform/providers';
 import { CONFIG_KEYS } from '@pellux/goodvibes-sdk/platform/config';
 import type { ManagedSettingsBundle } from '@/runtime/index.ts';
 import {

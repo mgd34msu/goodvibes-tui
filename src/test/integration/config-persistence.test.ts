@@ -6,15 +6,15 @@
  */
 import { describe, test, expect, beforeEach } from 'bun:test';
 import { join } from 'path';
-import { ConfigManager } from '../../config/index.ts';
-import type { ConfigKey } from '../../config/index.ts';
+import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
+import type { ConfigKey } from '@pellux/goodvibes-sdk/platform/config';
 import { makeProjectTempDir } from '../helpers/project-temp.ts';
 
 // NOTE: 'provider.provider' is not a real schema leaf — GoodVibesConfig's
 // 'provider' section only has model/reasoningEffort/embeddingProvider/etc
 // (getConfiguredProviderId derives the provider by parsing the
 // "provider:model" prefix out of provider.model instead; see
-// src/config/index.ts + provider-model.ts). ConfigManager's get/set are
+// the SDK's platform/config + platform/providers provider-model). ConfigManager's get/set are
 // permissive about unknown dot-paths at runtime (no schema entry ⇒ no
 // validation, plain property read/write on the section object), so this
 // still round-trips — it's legacy/orphaned coverage for a key nothing else

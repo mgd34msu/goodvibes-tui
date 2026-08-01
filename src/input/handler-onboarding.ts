@@ -1,7 +1,7 @@
 import { createOAuthLocalListener, resolveDaemonEnabled } from '@pellux/goodvibes-sdk/platform/config';
 import { beginOpenAICodexLogin, exchangeOpenAICodexCode } from '@pellux/goodvibes-sdk/platform/config';
 import { summarizeError, openExternalUrl } from '@pellux/goodvibes-sdk/platform/utils';
-import { getProviderIdFromModel } from '../config/provider-model.ts';
+import { getProviderIdFromModel } from '@pellux/goodvibes-sdk/platform/providers';
 import { buildProviderAccountSnapshot } from '@/runtime/index.ts';
 import { enrichProviderAccountsSnapshot } from '../runtime/onboarding/provider-key-capture.ts';
 import { handleConnectExistingDaemonForHandler, handleMigrateLegacyDaemonServiceForHandler } from './handler-onboarding-daemon-adopt.ts';

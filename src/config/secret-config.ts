@@ -1,5 +1,5 @@
 import { isSecretRefInput, isDaemonOwnedConfigKey } from '@pellux/goodvibes-sdk/platform/config';
-import type { ConfigKey } from './index.ts';
+import type { ConfigKey } from '@pellux/goodvibes-sdk/platform/config';
 import type { SecretScope, SecretStorageMedium } from './secrets.ts';
 
 export const SECRET_CONFIG_KEYS = new Set<ConfigKey>([

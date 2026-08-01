@@ -62,7 +62,7 @@
  */
 
 import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
-import type { ConfigKey } from '../config/index.ts';
+import type { ConfigKey } from '@pellux/goodvibes-sdk/platform/config';
 import type { SettingEntry } from './settings-modal-types.ts';
 
 /** Real ConfigManager's read surface — these four keys are defensive reads (see header comment). */

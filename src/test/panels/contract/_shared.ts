@@ -66,7 +66,7 @@ export const EMPTY_CONFIG_MANAGER = {
   getControlPlaneConfigDir: () => '/tmp/gv-test-config',
   getWorkingDirectory: () => '/tmp',
   getHomeDirectory: () => '/tmp',
-} as unknown as import('../../../config/index.ts').ConfigManager;
+} as unknown as import('@pellux/goodvibes-sdk/platform/config').ConfigManager;
 
 export const EMPTY_SERVICE_QUERY = {
   getAll: () => ({} as Record<string, never>),

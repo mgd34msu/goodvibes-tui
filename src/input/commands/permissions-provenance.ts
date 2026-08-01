@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
-import type { ConfigManager, ConfigKey } from '../../config/index.ts';
-import { CONFIG_SCHEMA } from '../../config/index.ts';
+import type { ConfigManager, ConfigKey } from '@pellux/goodvibes-sdk/platform/config';
+import { CONFIG_SCHEMA } from '@pellux/goodvibes-sdk/platform/config';
 import { SHIPPED_CREDENTIAL_READ_RULES } from '@pellux/goodvibes-sdk/platform/permissions';
 
 // ---------------------------------------------------------------------------

@@ -59,7 +59,7 @@
 
 import type { CommandRegistry, CommandContext } from '../command-registry.ts';
 import { persistSecretBackedConfigValue } from '../../config/secret-config.ts';
-import type { ConfigKey } from '../../config/index.ts';
+import type { ConfigKey } from '@pellux/goodvibes-sdk/platform/config';
 import { describeCardEntryRefusal, mayOfferCardEntryFlow } from '@pellux/goodvibes-sdk/platform/payments';
 import {
   PAYMENTS_CARD_NUMBER_CONFIG_KEY,

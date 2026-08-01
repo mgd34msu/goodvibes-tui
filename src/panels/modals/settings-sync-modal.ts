@@ -1,6 +1,6 @@
 import type { ConfigModalAction, ConfigModalActionContext, ConfigModalRow, ConfigModalSurface, ConfigModalView } from '../../input/config-modal-types.ts';
 import { getSettingsControlPlaneSnapshot } from '@/runtime/index.ts';
-import type { ConfigManager } from '../../config/index.ts';
+import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import { toneStyle, pad, postureLine, kv, type Tone } from './modal-surface-helpers.ts';
 
 type Snapshot = ReturnType<typeof getSettingsControlPlaneSnapshot>;

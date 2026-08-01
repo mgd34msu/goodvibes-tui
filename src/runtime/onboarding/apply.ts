@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, unlinkSync } from 'node:fs';
 import { atomicWriteFileSync } from '@pellux/goodvibes-sdk/platform/config';
 import { isSecretRefInput } from '@pellux/goodvibes-sdk/platform/config';
-import { CONFIG_SCHEMA, DEFAULT_CONFIG } from '../../config/index.ts';
+import { CONFIG_SCHEMA, DEFAULT_CONFIG } from '@pellux/goodvibes-sdk/platform/config';
 import {
   getOnboardingRuntimeStatePath,
   readOnboardingRuntimeState,

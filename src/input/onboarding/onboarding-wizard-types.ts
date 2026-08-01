@@ -9,7 +9,7 @@ import {
   type OnboardingStep1CapabilityItem,
   type OnboardingStepDerivationState,
 } from '../../runtime/onboarding/index.ts';
-import type { ConfigKey } from '../../config/index.ts';
+import type { ConfigKey } from '@pellux/goodvibes-sdk/platform/config';
 
 export type OnboardingWizardMode = OnboardingMode;
 

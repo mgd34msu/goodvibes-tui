@@ -5,7 +5,7 @@ import {
   writeLiveVerificationReportFiles,
 } from '../src/verification/live-verifier.ts';
 import { join, resolve } from 'node:path';
-import { resolveGoodVibesTreeDirectory } from '../src/config/goodvibes-home.ts';
+import { resolveGoodVibesTreeDirectory } from '@pellux/goodvibes-sdk/platform/config';
 
 function readArgValue(args: readonly string[], flag: string): string | undefined {
   const index = args.indexOf(flag);

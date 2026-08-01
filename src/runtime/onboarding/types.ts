@@ -1,4 +1,4 @@
-import type { ConfigManager, ConfigKey, GoodVibesConfig } from '../../config/index.ts';
+import type { ConfigManager, ConfigKey, GoodVibesConfig } from '@pellux/goodvibes-sdk/platform/config';
 import type { SecretsManager, SecretRecord, SecretStorageReview } from '../../config/secrets.ts';
 import type { LocalAuthSnapshot, UserAuthManager } from '@pellux/goodvibes-sdk/platform/security';
 import type { ShellPathService } from '@/runtime/index.ts';

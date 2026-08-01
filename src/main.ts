@@ -1,5 +1,5 @@
 #!/usr/bin/env bun
-import { resolveGoodVibesDaemonHome, resolveGoodVibesHome } from './config/goodvibes-home.ts';
+import { resolveGoodVibesDaemonHome, resolveGoodVibesHome } from '@pellux/goodvibes-sdk/platform/config';
 import { Compositor } from './renderer/compositor.ts';
 import { type Line } from '@pellux/goodvibes-sdk/platform/types';
 import { UIFactory } from './renderer/ui-factory.ts';
@@ -67,7 +67,7 @@ import { formatUserFacingErrorLine } from './core/format-user-error.ts';
 import { wireStreamEventMetrics, createStreamMetrics, type StreamMetrics, type WireStreamEventMetricsResult } from './core/stream-event-wiring.ts';
 import { wireTurnEventHandlers } from './core/turn-event-wiring.ts';
 import { resolveContextStatusHint } from './renderer/context-status-hint.ts';
-import { isEffectiveDangerMode } from './config/index.ts';
+import { isEffectiveDangerMode } from '@pellux/goodvibes-sdk/platform/config';
 import { createScriptableStatusline } from './core/scriptable-statusline.ts';
 import { applyComposerCapture, applyAtModelDirective } from './input/composer-capture.ts';
 import { createSessionAutoTitler } from './core/session-auto-titler.ts';

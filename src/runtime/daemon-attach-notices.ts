@@ -12,7 +12,7 @@
  */
 import { FeatureAnnouncementStore, featureAnnouncementsPath, createSandboxContainmentAnnouncer } from '@pellux/goodvibes-sdk/platform/runtime/feature-announcements';
 import { readClientCompatibilityFloor } from '@pellux/goodvibes-sdk/platform/control-plane';
-import type { ConfigManager } from '../config/index.ts';
+import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 
 /** A daemon receipt line (already a human one-liner, e.g. "restarted after a crash at 14:32"). */
 export interface DaemonReceiptLike {

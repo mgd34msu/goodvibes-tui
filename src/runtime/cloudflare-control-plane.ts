@@ -1,6 +1,6 @@
 import { join } from 'node:path';
 import { getOrCreateCompanionToken } from '@pellux/goodvibes-sdk/platform/pairing';
-import type { ConfigManager } from '../config/index.ts';
+import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 
 export const CLOUDFLARE_COMPONENT_IDS = [
   'workers',
