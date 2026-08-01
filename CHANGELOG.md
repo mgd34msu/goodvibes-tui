@@ -53,6 +53,44 @@ All notable changes to GoodVibes TUI.
   operator surface. The `run-goodvibes` GitHub Action fetches that published
   installer instead of running a committed second copy.
 
+- The Cloudflare Zero Trust Tunnel route now turns on
+  `httpListener.trustCloudflare`. That route already wrote
+  `controlPlane.trustProxy` and `httpListener.trustProxy` so the login
+  rate-limiter keyed on the address the tunnel forwards — but with only
+  trustProxy set, that address comes from `X-Forwarded-For`, which a client
+  reaching the listener directly sets for itself, so it could still choose which
+  rate-limit bucket and audit-log entry it landed in. The stricter read (the
+  address comes from `CF-Connecting-IP`, accepted only from a peer inside a
+  published Cloudflare range) had no setting behind it when the wizard was
+  written and now does. The step's notice says the protection is ON for this
+  route, and still names what is not covered: the control plane has no
+  equivalent setting, so keep it reachable only through the tunnel.
+
+- Crash-restore is the SDK's mechanism now, and this app keeps the ask.
+  `core/session-recovery.ts` is gone; `applyRecoverySnapshot` and the
+  journal-replay helpers it wrapped moved to the SDK
+  (`platform/runtime/recovery-snapshot-apply.ts`, and the
+  `transcript-journal-replay.ts` this repo had a second copy of).
+  `runtime/recovery-prompt.ts` still owns the two-step modal, and
+  `runtime/recovery-offer-wiring.ts` still owns this shell's live objects; what
+  they now hand the SDK is the user's answer. Reading a snapshot and retiring it
+  are one operation there, so this flow can no longer load one and leave it
+  behind — and a snapshot that turns out to be damaged is reported as such
+  instead of being applied as an empty conversation.
+
+- Three config modules the daemon carried a byte-identical copy of are the
+  SDK's: `config/goodvibes-home.ts` (tree-root and daemon-home resolution),
+  `config/provider-model.ts` (`provider:model` parsing) and `config/index.ts`
+  (which was a barrel over the SDK plus two derivation helpers, both of which
+  moved). Every importer reads them from `@pellux/goodvibes-sdk/platform/config`
+  and `.../platform/providers`. One behaviour came with them: an unreadable
+  `provider.systemPromptFile` still degrades to "no configured system prompt"
+  rather than throwing, because the SDK adopted this app's version.
+
+- The local `sql.js` ambient declaration is gone. The SDK ships the declaration
+  now, and the one file that imports `sql.js` picks it up with
+  `/// <reference types="@pellux/goodvibes-sdk/sql-js" />`.
+
 ## [1.27.0] - 2026-07-30
 
 ### Fixes

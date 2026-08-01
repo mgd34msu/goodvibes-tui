@@ -1,3 +1,4 @@
+// Deliberately per-repo test scaffolding, byte-identical to the sibling product's copy by design: it binds to this repo's own working tree, source layout and Bun test lifecycle, so a shared home would mean inventing a test-only published package rather than hoisting anything.
 /**
  * Typed test doubles for the parts of `ConfigManager` that read and write settings.
  *
@@ -18,7 +19,7 @@
  * Values are keyed by dotted config path, e.g. `{ 'display.themeMode': 'dark' }`. Keys with
  * no entry read back as `undefined`, matching a real manager with nothing persisted.
  */
-import type { ConfigManager, GoodVibesConfig } from '../../config/index.ts';
+import type { ConfigManager, GoodVibesConfig } from '@pellux/goodvibes-sdk/platform/config';
 
 /** A `get` that reads from `values`, for tests taking `Pick<ConfigManager, 'get'>`. */
 export function configGetStub(values: Record<string, unknown> = {}): ConfigManager['get'] {
