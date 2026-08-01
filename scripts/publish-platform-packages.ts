@@ -7,6 +7,12 @@
  * (default: npm). A package whose bin/ was not assembled is a hard error unless
  * --allow-missing is passed.
  *
+ * Idempotent: before publishing, checks whether name@version already exists on
+ * the target registry and skips (does not error) if so. A re-dispatched
+ * release run — the tag-redo path, or a retry after a later job in the same
+ * run failed — must be able to re-run this step without an npm E403 /
+ * GitHub Packages E409 "cannot publish over existing version" failure.
+ *
  * Usage:
  *   bun run scripts/publish-platform-packages.ts            # publish all
  *   bun run scripts/publish-platform-packages.ts --dry-run  # npm pack instead
@@ -42,6 +48,27 @@ function rescopeName(name: string): string {
   return match ? `${scopeOverride}/${match[1]}` : name;
 }
 
+/**
+ * True if name@version already exists on the target registry. `npm view`
+ * exits non-zero (unpublished name, unpublished version, or a registry that
+ * 404s the lookup) when it does not, which we treat the same as "not
+ * published yet" — the subsequent `npm publish` remains the source of truth
+ * for any real failure.
+ */
+function alreadyPublished(name: string, version: string): boolean {
+  try {
+    const out = execFileSync('npm', ['view', `${name}@${version}`, 'version', '--registry', registry], {
+      env: process.env,
+      stdio: ['ignore', 'pipe', 'ignore'],
+    })
+      .toString()
+      .trim();
+    return out === version;
+  } catch {
+    return false;
+  }
+}
+
 const mainVersion = (JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')) as { version: string }).version;
 
 const targets = only ? PLATFORM_PACKAGES.filter((p) => p.dir === only) : PLATFORM_PACKAGES;
@@ -75,6 +102,11 @@ for (const pkg of targets) {
   if (publishName !== pkgJson.name) {
     pkgJson.name = publishName;
     writeFileSync(pkgJsonPath, `${JSON.stringify(pkgJson, null, 2)}\n`);
+  }
+
+  if (!dryRun && alreadyPublished(publishName, version)) {
+    console.log(`skip ${publishName}@${version}: already published to ${registry}`);
+    continue;
   }
 
   const npmArgs = dryRun
