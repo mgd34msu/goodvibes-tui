@@ -159,15 +159,10 @@ Environment variables take precedence over stored secrets when both are present.
 bun run dev
 ```
 
-That starts the full TUI runtime from `src/main.ts`.
-
-## Run the headless daemon/API host from source
-
-```sh
-GOODVIBES_DAEMON_TOKEN=... GOODVIBES_HTTP_TOKEN=... bun run daemon
-```
-
-Use this when you want the daemon/API host without the interactive TUI.
+That starts the full TUI runtime from `src/main.ts`. It connects to the daemon the same way the
+compiled binary does — adopting one already running, or starting an installed-but-stopped daemon
+service — never running the daemon itself. To run the daemon/API host from source instead, clone
+and run `goodvibes-daemon` from its own repository.
 
 ## Build and run the compiled binary
 
@@ -176,7 +171,8 @@ bun run build
 ./dist/goodvibes
 ```
 
-`bun run build` compiles `src/main.ts` into `dist/goodvibes`. The compiled binary runs the TUI and can also host the daemon and HTTP listener in-process when those services are enabled in config.
+`bun run build` compiles `src/main.ts` into `dist/goodvibes`. The compiled binary runs the TUI and
+can also host the HTTP listener in-process when `danger.httpListener` is enabled in config.
 
 ## Launch and resume
 

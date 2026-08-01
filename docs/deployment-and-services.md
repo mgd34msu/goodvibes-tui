@@ -4,9 +4,9 @@
 
 GoodVibes supports a few distinct deployment shapes:
 
-- local TUI only
-- TUI with in-process daemon/API host
-- source-run headless daemon/API host
+- local TUI only, with no daemon
+- TUI connected to a daemon it adopted or autostarted (the default)
+- a standalone `goodvibes-daemon` process, with no TUI attached
 - daemon/API host behind a reverse proxy with HTTPS termination
 - daemon/API host with direct HTTPS from GoodVibes itself
 - omnichannel runtime with external routes and channel delivery
@@ -28,56 +28,51 @@ or, for the compiled build:
 
 In this mode you still get the full TUI, tools, providers, knowledge system, artifacts, and local runtime surfaces.
 
-## In-process daemon and HTTP listener
+## Adopting or autostarting the daemon, and the in-process HTTP listener
 
-The TUI runtime hosts the daemon in-process by default (`daemon.enabled`, on by default)
-and can also host the HTTP listener and the shared control-plane surface when these
-settings are enabled:
+The daemon (`goodvibes-daemon`) is a separate product with its own binary and its own service
+unit — this app never constructs one in-process. What `daemon.enabled` (default `true`) actually
+does on this side:
 
-- `daemon.enabled` (default `true`)
-- `controlPlane.enabled`
-- `danger.httpListener`
+- adopt a compatible daemon already listening at the configured `controlPlane.host`/`controlPlane.port`
+- if none is reachable but a daemon service is installed on this machine and simply stopped, start
+  that installed service and wait for it to answer
+- otherwise, run with no daemon: this surface still gives you the full TUI, tools, providers,
+  knowledge system, artifacts, and local runtime surfaces — cross-surface session visibility and
+  daemon-hosted capabilities are simply unavailable until a daemon appears
+
+The HTTP listener is different: it genuinely runs in-process in this app when enabled —
+
+- `danger.httpListener` (default `false`)
 
 The compiled binary built by `bun run build` includes this path because it compiles `src/main.ts`, and the main runtime bootstraps external services through the deferred startup path.
 
-This is the easiest way to run:
+## Running the daemon
 
-- the interactive TUI
-- the local daemon/API host
-- the local HTTP listener
-
-in one process.
-
-## Headless daemon/API host
-
-For a daemon-only process, use:
+`goodvibes-daemon` is built and released from its own repository. Run it directly:
 
 ```sh
-GOODVIBES_DAEMON_TOKEN=... GOODVIBES_HTTP_TOKEN=... bun run daemon
+goodvibes-daemon                      # run in the foreground
+goodvibes-daemon install-service      # install and start the user service unit
 ```
 
-This runs the dedicated daemon CLI entrypoint from `src/daemon/cli.ts`. It starts:
+This path is useful for service-style deployments, automation entrypoints, and local integrations that do not need the interactive terminal UI. See that repository's own documentation for its full CLI and configuration reference.
 
-- the daemon server
-- the optional HTTP listener when `danger.httpListener` is enabled
-
-This path is useful for service-style deployments, automation entrypoints, and local integrations that do not need the interactive terminal UI.
-
-The installed package also exposes a `goodvibes-daemon` launcher. Global installs should put both `goodvibes` and `goodvibes-daemon` on `PATH`.
+The installed package also exposes a `goodvibes-daemon` launcher — the suite installer (`goodvibes.sh/install.sh`) puts both `goodvibes` and `goodvibes-daemon` on `PATH`.
 
 ## Connecting the TUI to an already-running daemon
 
-The TUI normally adopts a compatible GoodVibes daemon it finds already listening at its configured `controlPlane.host`/`controlPlane.port`, or starts its own if none is found. Adoption authenticates with a bearer token read from `<homeDirectory>/.goodvibes/daemon/operator-tokens.json`; if that file does not already hold the *same* token the target daemon was started with, the TUI cannot tell the two apart from a token it has never seen and will not adopt it.
+The TUI normally adopts a compatible GoodVibes daemon it finds already listening at its configured `controlPlane.host`/`controlPlane.port`, or starts an installed-but-stopped one, as described above. Adoption authenticates with a bearer token read from `<homeDirectory>/.goodvibes/daemon/operator-tokens.json`; if that file does not already hold the *same* token the target daemon was started with, the TUI cannot tell the two apart from a token it has never seen and will not adopt it.
 
 Two ways to point a TUI instance at a daemon it did not start itself:
 
 **Interactive** — in the onboarding wizard's Network step, set "GoodVibes daemon source" to "Connect to an existing running daemon," fill in that daemon's host, port, and token, and select "Connect to this daemon now." This installs the token into `operator-tokens.json`, applies the host/port, and restarts the external-services controller immediately so you see whether the connection succeeded before finishing the rest of onboarding.
 
-**Non-interactive** — set the same `GOODVIBES_DAEMON_TOKEN` environment variable used above to start a headless daemon with a fixed token, and point the TUI (or another daemon) at the same host/port and token:
+**Non-interactive** — set the `GOODVIBES_DAEMON_TOKEN` environment variable to run the daemon with a fixed, known token, and point the TUI at the same host/port and token:
 
 ```sh
 # Start the daemon once, with a fixed, known token:
-GOODVIBES_DAEMON_TOKEN=gv_shared_token bun run daemon --hostname 0.0.0.0 --port 3421
+GOODVIBES_DAEMON_TOKEN=gv_shared_token goodvibes-daemon --hostname 0.0.0.0 --port 3421
 
 # Point a TUI at it (any home directory — no shared operator-tokens.json needed):
 GOODVIBES_DAEMON_TOKEN=gv_shared_token bun run dev \
@@ -85,7 +80,7 @@ GOODVIBES_DAEMON_TOKEN=gv_shared_token bun run dev \
   --config controlPlane.port=3421
 ```
 
-`GOODVIBES_DAEMON_TOKEN` is read by both sides: the daemon CLI uses it as the bearer token every route requires, and the TUI runtime uses it to install (or confirm) the matching entry in its own `operator-tokens.json` before probing that host/port, so adoption succeeds without hand-editing any files. This mirrors `src/verification/live-verifier.ts`'s existing fallback to the same variable when probing a daemon's HTTP surface from the outside.
+`GOODVIBES_DAEMON_TOKEN` is read by both sides: the daemon uses it as the bearer token every route requires, and the TUI runtime uses it to install (or confirm) the matching entry in its own `operator-tokens.json` before probing that host/port, so adoption succeeds without hand-editing any files. This mirrors `src/verification/live-verifier.ts`'s existing fallback to the same variable when probing a daemon's HTTP surface from the outside.
 
 ## Background service and autostart
 
@@ -107,7 +102,7 @@ goodvibes service status
 goodvibes status --output json
 ```
 
-The daemon uses the daemon home under `~/.goodvibes/daemon` for daemon-owned runtime state. A TUI-owned in-process daemon may still use the active TUI/project configuration to derive its runtime settings.
+The daemon uses the daemon home under `~/.goodvibes/daemon` for daemon-owned runtime state.
 
 ## Web/browser surface
 
@@ -245,7 +240,7 @@ This is the right place to add enterprise or internal roots for outbound HTTPS a
 - entrypoint: `src/main.ts`
 - output: `dist/goodvibes`
 
-The default build does not produce a separate compiled daemon-only executable. If you want a compiled headless daemon binary later, that would need its own build target for `src/daemon/cli.ts`.
+This build does not produce a daemon executable — the daemon binary is built and released from the `goodvibes-daemon` repository.
 
 ## Local auth and service tokens
 
@@ -352,7 +347,7 @@ The control-plane method catalog is the canonical typed surface for external cli
 
 ## Service startup behavior inside the TUI
 
-When the TUI owns the daemon/listener startup path, it probes the configured bind ports first and skips startup cleanly if another instance already owns them. That avoids duplicate local-service hangs while still allowing the TUI to run normally.
+Before adopting or autostarting a daemon, and before starting its own in-process HTTP listener, the TUI probes the configured bind ports first and skips startup cleanly if another instance already owns them. That avoids duplicate local-service hangs while still allowing the TUI to run normally.
 
 ## Related docs
 

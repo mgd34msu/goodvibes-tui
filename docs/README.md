@@ -11,7 +11,7 @@ This directory contains the current product documentation for `goodvibes-tui`.
   The layered settings model, the key-settings table, permission modes and the policy/trust system, plus the TUI-owned namespaces you add by hand to settings.json: checkpoint root guard, the scriptable statusline, session behavior, and launch-time self-update.
 
 - [Deployment and services](deployment-and-services.md)
-  TUI-only mode, compiled binary behavior, in-process daemon/listener hosting, source-run daemon mode, inbound TLS, outbound trust configuration, control-plane entrypoints, the service registry and secret references, profiles and setup transfer, and integration helpers.
+  TUI-only mode, compiled binary behavior, adopting or autostarting the daemon, the in-process HTTP listener, inbound TLS, outbound trust configuration, control-plane entrypoints, the service registry and secret references, profiles and setup transfer, and integration helpers.
 
 - [Remote access: a home server setup](remote-access.md)
   Step-by-step continuity setup: daemon on an always-on box, webui from any browser, TUI over SSH, Tailscale for reachability and TLS, validated by `goodvibes doctor`.
