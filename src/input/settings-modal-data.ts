@@ -37,13 +37,6 @@ import {
   readExecEnvScrubAllowlist,
 } from './exec-env-scrub-config.ts';
 import {
-  THEME_MODE_CONFIG_KEY,
-  THEME_MODE_VALUES,
-  THEME_MODE_DEFAULT,
-  THEME_MODE_DESCRIPTION,
-  coerceThemeModeSetting,
-} from '../renderer/theme-mode-config.ts';
-import {
   SETTINGS_CATEGORIES,
   type FlagEntry,
   type McpEntry,
@@ -143,12 +136,6 @@ export function buildSettingGroups(
     // its own it would match nothing and drop out of the workspace entirely —
     // reachable only by hand-editing a settings file.
     if (rawCat === 'cluster' && groups.has('network')) groups.get('network')!.push(entry);
-  }
-
-  // Synthetic display.themeMode enum (auto|dark|light) — TUI-local, see theme-mode-config.ts.
-  const displayEntries = groups.get('display');
-  if (displayEntries && !displayEntries.some((e) => e.setting.key === (THEME_MODE_CONFIG_KEY as ConfigKey))) {
-    displayEntries.push(buildThemeModeSyntheticEntry(configManager));
   }
 
   const uiEntries = groups.get('ui');
@@ -281,34 +268,6 @@ export function buildSettingGroups(
   // removed for this reason.
 
   return groups;
-}
-
-// ---------------------------------------------------------------------------
-// display.themeMode synthetic setting (light theme)
-// ---------------------------------------------------------------------------
-
-/**
- * The synthetic ConfigSetting descriptor for display.themeMode. TUI-local (not
- * in the SDK ConfigKey union); the key is cast to ConfigKey as the other
- * synthetic settings do. Stored under the existing `display` section so
- * ConfigManager.setDynamic/get round-trip it with no SDK change.
- */
-export const THEME_MODE_SYNTHETIC_SETTING: ConfigSetting = {
-  key: THEME_MODE_CONFIG_KEY as ConfigKey,
-  type: 'enum',
-  default: THEME_MODE_DEFAULT,
-  enumValues: [...THEME_MODE_VALUES],
-  description: THEME_MODE_DESCRIPTION,
-};
-
-/** Build the synthetic SettingEntry for display.themeMode. */
-export function buildThemeModeSyntheticEntry(configManager: Pick<ConfigManager, 'get'>): SettingEntry {
-  const currentValue = coerceThemeModeSetting(configManager.get(THEME_MODE_CONFIG_KEY as ConfigKey));
-  return {
-    setting: THEME_MODE_SYNTHETIC_SETTING,
-    currentValue,
-    isDefault: currentValue === THEME_MODE_DEFAULT,
-  };
 }
 
 // ---------------------------------------------------------------------------
@@ -623,11 +582,9 @@ export function refreshEntryValues(
       }
       const raw = configManager.get(entry.setting.key as ConfigKey);
       // Synthetic entries that have no SDK schema key return undefined from
-      // configManager. Normalize using the same logic used at construction
-      // time so isDefault stays accurate.
-      entry.currentValue = entry.setting.key === (THEME_MODE_CONFIG_KEY as ConfigKey)
-        ? coerceThemeModeSetting(raw)
-        : raw;
+      // configManager; the schema-driven entries above already normalize on
+      // their own read paths, so the raw value is used as-is here.
+      entry.currentValue = raw;
       entry.isDefault = deepEqual(entry.currentValue, entry.setting.default);
     }
   }
@@ -670,10 +627,7 @@ export function updateEntryForKey(
         continue;
       }
       const raw = configManager.get(key);
-      // Synthetic entries: normalize using the same fallback logic as construction.
-      entry.currentValue = key === (THEME_MODE_CONFIG_KEY as ConfigKey)
-        ? coerceThemeModeSetting(raw)
-        : raw;
+      entry.currentValue = raw;
       entry.isDefault = deepEqual(entry.currentValue, entry.setting.default);
     }
   }

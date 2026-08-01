@@ -26,15 +26,15 @@
  * implicit card the way this app's `/payments card` flow models it, so these
  * four fields are synthetic sub-keys under the SDK's real `payments`
  * section — the same established pattern this codebase already uses for
- * `behavior.notifyAfterSeconds`, `display.themeMode`, etc.: a key one level
- * under an EXISTING section that CONFIG_SCHEMA has no scalar entry for.
+ * `behavior.notifyAfterSeconds`, `storage.codeIndexEnabled`, etc.: a key one
+ * level under an EXISTING section that CONFIG_SCHEMA has no scalar entry for.
  *
  * That one-level-under-an-existing-section shape matters mechanically: the
  * real ConfigManager's dotted-path resolver only throws "Invalid config path"
  * when an INTERMEDIATE segment is missing (e.g. `payments.card.number`, where
  * `card` is not itself a section) — it does not throw for a final leaf that
  * the schema has not declared (`payments.cardNumber`), the same tolerance
- * `display.themeMode` relies on under `display`. So these four keys are named
+ * `storage.codeIndexEnabled` relies on under `storage`. So these four keys are named
  * FLAT (`payments.cardNumber`, not `payments.card.number`) specifically so
  * `ConfigManager.get/setDynamic` accepts them — verified against the real
  * ConfigManager (not the fake store this module used before this round): a
@@ -79,7 +79,7 @@ export const PAYMENTS_CVV_HANDLING_CONFIG_KEY = 'payments.cvvHandling' as Config
 function readStringField(configManager: PaymentsConfigReader, key: ConfigKey): string {
   // Defensive try/catch, same rationale as worktree-setup-config.ts's
   // readWorktreeSetupList and this codebase's other one-level-under-a-real-
-  // section synthetic reads (behavior.notifyAfterSeconds, display.themeMode): the real
+  // section synthetic reads (behavior.notifyAfterSeconds, storage.codeIndexEnabled): the real
   // ConfigManager never throws for these particular keys (verified — see
   // header comment), but degrading to empty rather than crashing the whole
   // settings modal is the same posture every synthetic setting here takes

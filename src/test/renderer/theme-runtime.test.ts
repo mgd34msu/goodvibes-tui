@@ -25,7 +25,6 @@ import type { Line } from '@pellux/goodvibes-sdk/platform/types';
 import {
   coerceThemeModeSetting,
   resolveConfiguredThemeMode,
-  THEME_MODE_DEFAULT,
 } from '../../renderer/theme-mode-config.ts';
 import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 
@@ -181,20 +180,19 @@ describe('theme-mode config', () => {
     expect(coerceThemeModeSetting('auto')).toBe('auto');
     expect(coerceThemeModeSetting('dark')).toBe('dark');
     expect(coerceThemeModeSetting('light')).toBe('light');
-    expect(coerceThemeModeSetting(undefined)).toBe(THEME_MODE_DEFAULT);
-    expect(coerceThemeModeSetting('nonsense')).toBe(THEME_MODE_DEFAULT);
-    expect(coerceThemeModeSetting(42)).toBe(THEME_MODE_DEFAULT);
+    expect(coerceThemeModeSetting(undefined)).toBe('auto');
+    expect(coerceThemeModeSetting('nonsense')).toBe('auto');
+    expect(coerceThemeModeSetting(42)).toBe('auto');
   });
 
   test('resolveConfiguredThemeMode reads the key and defaults to auto', () => {
-    // display.themeMode is TUI-local (cast key, not in the SDK ConfigKey
-    // union — see theme-mode-config.ts). `get` is cast through `unknown`
-    // straight to ConfigManager's own method type (rather than reconstructed
-    // as an independent generic signature): the SDK's ConfigValue mapped type
-    // is a very large discriminated union, and asking the compiler to
-    // structurally verify a freshly-written generic signature against it here
-    // risks TS's "excessive stack depth" recursion limit (TS2321) — a
-    // compiler limitation, not a real type mismatch.
+    // `get` is cast through `unknown` straight to ConfigManager's own method
+    // type (rather than reconstructed as an independent generic signature):
+    // the SDK's ConfigValue mapped type is a very large discriminated union,
+    // and asking the compiler to structurally verify a freshly-written
+    // generic signature against it here risks TS's "excessive stack depth"
+    // recursion limit (TS2321) — a compiler limitation, not a real type
+    // mismatch.
     expect(resolveConfiguredThemeMode({
       get: ((_key: string) => 'light') as unknown as ConfigManager['get'],
     })).toBe('light');

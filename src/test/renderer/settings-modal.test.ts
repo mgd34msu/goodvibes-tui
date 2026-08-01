@@ -124,7 +124,7 @@ describe('renderSettingsModal', () => {
   test('category rail and header show the active category count', () => {
     const lines = renderSettingsModal(modal, W);
     const texts = linesToText(lines).join('\n');
-    // 9 = the SDK display keys plus the synthetic display.themeMode entry.
+    // 9 = the SDK's 9 display.* CONFIG_SCHEMA keys (display.themeMode included).
     expect(texts).toContain('Display (9)');
   });
 
