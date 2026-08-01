@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { MemoryStore, MemoryEmbeddingProviderRegistry } from '@pellux/goodvibes-sdk/platform/state';
-import { ConfigManager } from '../../config/index.ts';
+import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import { foldLegacyProjectMemory } from '@pellux/goodvibes-sdk/platform/runtime/operations';
 
 // foldLegacyProjectMemory folds a project's legacy per-project TUI memory

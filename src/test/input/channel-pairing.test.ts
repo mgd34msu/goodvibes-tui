@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'bun:test';
 import { getBuiltinSetupSchema } from '@pellux/goodvibes-sdk/platform/channels';
-import type { ConfigManager } from '../../config/index.ts';
+import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import type { CommandContext } from '../../input/command-registry.ts';
 import { runChannelPairing } from '../../input/commands/channel-pairing.ts';
 

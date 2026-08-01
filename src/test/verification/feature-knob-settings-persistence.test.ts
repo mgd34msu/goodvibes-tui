@@ -15,8 +15,8 @@
  */
 import { describe, test, expect, beforeEach } from 'bun:test';
 import { join } from 'node:path';
-import { ConfigManager, CONFIG_SCHEMA } from '../../config/index.ts';
-import type { ConfigKey } from '../../config/index.ts';
+import { ConfigManager, CONFIG_SCHEMA } from '@pellux/goodvibes-sdk/platform/config';
+import type { ConfigKey } from '@pellux/goodvibes-sdk/platform/config';
 import { FEATURE_KNOB_LOCAL_SETTINGS } from '../../verification/verification-ledger.ts';
 import { makeProjectTempDir } from '../helpers/project-temp.ts';
 

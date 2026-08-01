@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { DEFAULT_CONFIG } from '../../config/index.ts';
+import { DEFAULT_CONFIG } from '@pellux/goodvibes-sdk/platform/config';
 import { ConversationManager } from '../../core/conversation';
 import type { CommandContext } from '../../input/command-registry.ts';
 import { GLYPHS } from '../../renderer/ui-primitives.ts';

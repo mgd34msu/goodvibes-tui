@@ -25,8 +25,8 @@
 import { describe, test, expect } from 'bun:test';
 import { join } from 'node:path';
 import { makeProjectTempDir } from '../helpers/project-temp.ts';
-import { ConfigManager, CONFIG_SCHEMA } from '../../config/index.ts';
-import type { ConfigKey } from '../../config/index.ts';
+import { ConfigManager, CONFIG_SCHEMA } from '@pellux/goodvibes-sdk/platform/config';
+import type { ConfigKey } from '@pellux/goodvibes-sdk/platform/config';
 import { PAYMENTS_LOCAL_SETTINGS } from '../../verification/verification-ledger.ts';
 
 /**

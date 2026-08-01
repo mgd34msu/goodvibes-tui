@@ -27,7 +27,7 @@ import {
   resolveConfiguredThemeMode,
   THEME_MODE_DEFAULT,
 } from '../../renderer/theme-mode-config.ts';
-import type { ConfigManager } from '../../config/index.ts';
+import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 
 // Always restore the shared default so later tests (and the golden suite in
 // sibling files) see dark.
