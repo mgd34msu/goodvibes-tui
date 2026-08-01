@@ -206,73 +206,105 @@ export type RemoteRuntimeEventsOptions = Transport.RemoteRuntimeEventsOptions;
 export type RemoteRuntimeEvents = Transport.RemoteRuntimeEvents;
 export type SerializedRuntimeEnvelope = Transport.SerializedRuntimeEnvelope;
 
-// Operations compatibility aliases.
-export const AcpTaskAdapter = operations.AcpTaskAdapter;
-export const OpsControlPlane = operations.OpsControlPlane;
-export const OpsIllegalActionError = operations.OpsIllegalActionError;
-export const OpsTargetNotFoundError = operations.OpsTargetNotFoundError;
-export const ToolContractVerifier = operations.ToolContractVerifier;
-export const McpLifecycleManager = operations.McpLifecycleManager;
-export const McpPermissionManager = operations.McpPermissionManager;
-export const McpSchemaFreshnessTracker = operations.McpSchemaFreshnessTracker;
-export const buildMcpAttackPathReview = operations.buildMcpAttackPathReview;
-export const createMcpLifecycleManager = operations.createMcpLifecycleManager;
-export const DEFAULT_RECONNECT_CONFIG = operations.DEFAULT_RECONNECT_CONFIG;
-export const ALL_CAPABILITIES = operations.ALL_CAPABILITIES;
-export const PLUGIN_CAPABILITIES = operations.PLUGIN_CAPABILITIES;
-export const HIGH_RISK_CAPABILITIES = operations.HIGH_RISK_CAPABILITIES;
-export const PluginLifecycleManager = operations.PluginLifecycleManager;
-export const PluginQuarantineEngine = operations.PluginQuarantineEngine;
-export const PluginTrustStore = operations.PluginTrustStore;
-export const SAFE_CAPABILITIES = operations.SAFE_CAPABILITIES;
-export const filterCapabilitiesByTrust = operations.filterCapabilitiesByTrust;
-export const hasCapability = operations.hasCapability;
-export const isHighRiskCapability = operations.isHighRiskCapability;
-export const isPluginOperational = operations.isPluginOperational;
-export const isPluginReloadable = operations.isPluginReloadable;
-export const isPluginTerminal = operations.isPluginTerminal;
-export const resolveCapabilityManifest = operations.resolveCapabilityManifest;
-export const validateManifestV2 = operations.validateManifestV2;
-export const validatePluginSignature = operations.validatePluginSignature;
-// Instance-type companions for the operations class aliases (see note above the
-// security block): the `export const` form re-exports the value only.
-export type AcpTaskAdapter = InstanceType<typeof operations.AcpTaskAdapter>;
-export type OpsIllegalActionError = InstanceType<typeof operations.OpsIllegalActionError>;
-export type OpsTargetNotFoundError = InstanceType<typeof operations.OpsTargetNotFoundError>;
-export type ToolContractVerifier = InstanceType<typeof operations.ToolContractVerifier>;
-export type McpLifecycleManager = InstanceType<typeof operations.McpLifecycleManager>;
-export type McpPermissionManager = InstanceType<typeof operations.McpPermissionManager>;
-export type McpSchemaFreshnessTracker = InstanceType<typeof operations.McpSchemaFreshnessTracker>;
-export type PluginLifecycleManager = InstanceType<typeof operations.PluginLifecycleManager>;
-export type PluginQuarantineEngine = InstanceType<typeof operations.PluginQuarantineEngine>;
-export type PluginTrustStore = InstanceType<typeof operations.PluginTrustStore>;
-export const LOW_QUALITY_THRESHOLD = operations.LOW_QUALITY_THRESHOLD;
-export const computeQualityScore = operations.computeQualityScore;
-export const createCompactionManager = operations.createCompactionManager;
-export const describeScore = operations.describeScore;
-export const escalateStrategy = operations.escalateStrategy;
-export const isTerminalCompactionState = operations.isTerminalCompactionState;
-export const reachableFromCompactionState = operations.reachableFromCompactionState;
-export const compactionFailurePlaybook = operations.compactionFailurePlaybook;
-export const exportRecoveryPlaybook = operations.exportRecoveryPlaybook;
-export const permissionDeadlockPlaybook = operations.permissionDeadlockPlaybook;
-export const pluginDegradationPlaybook = operations.pluginDegradationPlaybook;
-export const reconnectFailurePlaybook = operations.reconnectFailurePlaybook;
-export const sessionUnrecoverablePlaybook = operations.sessionUnrecoverablePlaybook;
-export const stuckTurnPlaybook = operations.stuckTurnPlaybook;
-export const createSessionUnrecoverablePlaybook = operations.createSessionUnrecoverablePlaybook;
-export const createStuckTurnPlaybook = operations.createStuckTurnPlaybook;
-export const evaluateOrchestrationSpawn = operations.evaluateOrchestrationSpawn;
-export const TRANSPORT_COMPATIBILITY_MATRIX = operations.TRANSPORT_COMPATIBILITY_MATRIX;
-export const applyTransition = operations.applyTransition;
-export const canTransition = operations.canTransition;
-export const isOperational = operations.isOperational;
-export const isReloadable = operations.isReloadable;
-export const isTerminal = operations.isTerminal;
-export const reachableFrom = operations.reachableFrom;
-export const evaluateSessionMaintenance = operations.evaluateSessionMaintenance;
-export const formatSessionMaintenanceLines = operations.formatSessionMaintenanceLines;
-export const getGuidanceMode = operations.getGuidanceMode;
+// Operations compatibility aliases. Grouped as a single live ESM re-export
+// from the SDK's own `platform/runtime/operations` subpath rather than eager
+// `export const X = operations.X` module-scope reads off the `operations`
+// namespace object: those reads evaluated the namespace getter while the
+// compiled single-file bundle could still be mid-cycle, and the binding they
+// reached for was not defined yet — source execution hid this, the compiled
+// binary died on it at load. A grouped `export { ... } from '<subpath>'` is a
+// live binding resolved by the module system, not a module-scope value read,
+// so it is cycle-safe.
+export {
+  AcpTaskAdapter,
+  OpsControlPlane,
+  OpsIllegalActionError,
+  OpsTargetNotFoundError,
+  ToolContractVerifier,
+  McpLifecycleManager,
+  McpPermissionManager,
+  McpSchemaFreshnessTracker,
+  buildMcpAttackPathReview,
+  createMcpLifecycleManager,
+  DEFAULT_RECONNECT_CONFIG,
+  ALL_CAPABILITIES,
+  PLUGIN_CAPABILITIES,
+  HIGH_RISK_CAPABILITIES,
+  PluginLifecycleManager,
+  PluginQuarantineEngine,
+  PluginTrustStore,
+  SAFE_CAPABILITIES,
+  filterCapabilitiesByTrust,
+  hasCapability,
+  isHighRiskCapability,
+  isPluginOperational,
+  isPluginReloadable,
+  isPluginTerminal,
+  resolveCapabilityManifest,
+  validateManifestV2,
+  validatePluginSignature,
+  LOW_QUALITY_THRESHOLD,
+  computeQualityScore,
+  createCompactionManager,
+  describeScore,
+  escalateStrategy,
+  isTerminalCompactionState,
+  reachableFromCompactionState,
+  compactionFailurePlaybook,
+  exportRecoveryPlaybook,
+  permissionDeadlockPlaybook,
+  pluginDegradationPlaybook,
+  reconnectFailurePlaybook,
+  sessionUnrecoverablePlaybook,
+  stuckTurnPlaybook,
+  createSessionUnrecoverablePlaybook,
+  createStuckTurnPlaybook,
+  evaluateOrchestrationSpawn,
+  TRANSPORT_COMPATIBILITY_MATRIX,
+  applyTransition,
+  canTransition,
+  isOperational,
+  isReloadable,
+  isTerminal,
+  reachableFrom,
+  evaluateSessionMaintenance,
+  formatSessionMaintenanceLines,
+  getGuidanceMode,
+  buildPersistedSessionContext,
+  buildLocalReturnContextSummary,
+  formatReturnContextForDisplay,
+  getReturnContextMode,
+  maybeAssistReturnContextSummary,
+  persistConversation,
+  generateUserSessionId,
+  loadLastConversation,
+  loadRecoveryConversation,
+  writeRecoveryFile,
+  deleteRecoveryFile,
+  checkRecoveryFile,
+  getRecoveryFilePath,
+  getRecoveryDir,
+  getLastSessionPointerPath,
+  writeLastSessionPointer,
+  readLastSessionPointer,
+  createSessionSurface,
+  consumeRecovery,
+  removeRecoveryPoint,
+  checkRecoveryForSession,
+  exportRemoteArtifactForAgent,
+  importRemoteArtifact,
+  RemoteRunnerRegistry,
+  RemoteSupervisor,
+  DistributedRuntimeManager,
+  getDistributedNodeHostContract,
+  CURRENT_PROTOCOL_VERSION,
+  VersionMismatchError,
+  negotiateProtocolVersion,
+  createTaskManager,
+  PhasedToolExecutor,
+  budgetPhase,
+  permissionPhase,
+} from '@pellux/goodvibes-sdk/platform/runtime/operations';
 // Snapshot-retention symbols (SnapshotPruner, RetentionPolicy,
 // DEFAULT_RETENTION_CONFIG) are intentionally NOT re-exported here. No app code
 // consumes them — only the retention unit test does, and it now imports them
@@ -284,48 +316,26 @@ export const getGuidanceMode = operations.getGuidanceMode;
 // `var` declaration on the darwin-arm64 target, so the compiled binary died at
 // startup with `ReferenceError: SnapshotPruner2 is not defined`. Dropping the
 // re-export removes the collision (and the same latent hazard for the other two).
-export const buildPersistedSessionContext = operations.buildPersistedSessionContext;
-export const buildLocalReturnContextSummary = operations.buildLocalReturnContextSummary;
-export const formatReturnContextForDisplay = operations.formatReturnContextForDisplay;
-export const getReturnContextMode = operations.getReturnContextMode;
-export const maybeAssistReturnContextSummary = operations.maybeAssistReturnContextSummary;
-export const persistConversation = operations.persistConversation;
-export const generateUserSessionId = operations.generateUserSessionId;
-export const loadLastConversation = operations.loadLastConversation;
-export const loadRecoveryConversation = operations.loadRecoveryConversation;
-export const writeRecoveryFile = operations.writeRecoveryFile;
-export const deleteRecoveryFile = operations.deleteRecoveryFile;
-export const checkRecoveryFile = operations.checkRecoveryFile;
-export const getRecoveryFilePath = operations.getRecoveryFilePath;
-export const getRecoveryDir = operations.getRecoveryDir;
-export const getLastSessionPointerPath = operations.getLastSessionPointerPath;
-export const writeLastSessionPointer = operations.writeLastSessionPointer;
-export const readLastSessionPointer = operations.readLastSessionPointer;
+// Instance-type companions for the operations class aliases are no longer
+// declared here: `export { X } from '<subpath>'` forwards a class's value AND
+// its implicit instance type together, so a separate local
+// `export type X = InstanceType<typeof operations.X>` for the same name is
+// now a redundant declaration that TypeScript rejects as a conflict
+// (TS2484). This applies to every class name in the grouped re-export above
+// (AcpTaskAdapter, OpsControlPlane, OpsIllegalActionError,
+// OpsTargetNotFoundError, ToolContractVerifier, McpLifecycleManager,
+// McpPermissionManager, McpSchemaFreshnessTracker, PluginLifecycleManager,
+// PluginQuarantineEngine, PluginTrustStore, RemoteRunnerRegistry,
+// RemoteSupervisor, DistributedRuntimeManager) — their instance types are
+// forwarded automatically and are not redeclared below.
 // The declare-once storage handle (platform/runtime/session-surface.ts) plus
 // the two prompted-recovery primitives that only accept it. Every session
 // path in this app derives from one surface built in runtime/services.ts.
-export const createSessionSurface = operations.createSessionSurface;
 export type SessionSurface = Operations.SessionSurface;
-export const consumeRecovery = operations.consumeRecovery;
-export const removeRecoveryPoint = operations.removeRecoveryPoint;
 // Probe for a NAMED session's live snapshot (per-session supersession — see
 // session-recovery.ts's header) without retiring anything. Backs the
 // --continue / --resume pre-resume check in cli/tui-startup.ts.
-export const checkRecoveryForSession = operations.checkRecoveryForSession;
 export type RecoveryFileInfo = Operations.RecoveryFileInfo;
-export const exportRemoteArtifactForAgent = operations.exportRemoteArtifactForAgent;
-export const importRemoteArtifact = operations.importRemoteArtifact;
-export const RemoteRunnerRegistry = operations.RemoteRunnerRegistry;
-export const RemoteSupervisor = operations.RemoteSupervisor;
-export const DistributedRuntimeManager = operations.DistributedRuntimeManager;
-export const getDistributedNodeHostContract = operations.getDistributedNodeHostContract;
-export const CURRENT_PROTOCOL_VERSION = operations.CURRENT_PROTOCOL_VERSION;
-export const VersionMismatchError = operations.VersionMismatchError;
-export const negotiateProtocolVersion = operations.negotiateProtocolVersion;
-export const createTaskManager = operations.createTaskManager;
-export const PhasedToolExecutor = operations.PhasedToolExecutor;
-export const budgetPhase = operations.budgetPhase;
-export const permissionPhase = operations.permissionPhase;
 
 export type RemoteSessionBundle = Operations.RemoteSessionBundle;
 export type ContractVerifierOptions = Operations.ContractVerifierOptions;
@@ -363,10 +373,10 @@ export type CompactionStrategy = Operations.CompactionStrategy;
 export type StrategyInput = Operations.StrategyInput;
 export type StrategyOutput = Operations.StrategyOutput;
 export type DistributedRuntimeSnapshotStore = Operations.DistributedRuntimeSnapshotStore;
-export type RemoteRunnerRegistry = Operations.RemoteRunnerRegistry;
-export type RemoteSupervisor = Operations.RemoteSupervisor;
-export type DistributedRuntimeManager = Operations.DistributedRuntimeManager;
-export type OpsControlPlane = Operations.OpsControlPlane;
+// RemoteRunnerRegistry, RemoteSupervisor, DistributedRuntimeManager, and
+// OpsControlPlane are classes forwarded by the grouped value re-export above
+// (`export { X } from '<subpath>'` carries both the value and its implicit
+// instance type), so redeclaring their types here would conflict (TS2484).
 export type RuntimeTransitionResult = Operations.RuntimeTransitionResult;
 export type RetentionClass = Operations.RetentionClass;
 export type RetentionClassConfig = Operations.RetentionClassConfig;
