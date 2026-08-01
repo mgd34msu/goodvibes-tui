@@ -12,7 +12,7 @@ the Linux release binaries and every code path apply unchanged:
 curl -fsSL https://goodvibes.sh/install.sh | sh
 # or, with Bun already installed:
 bun add -g @pellux/goodvibes-tui
-bun pm trust -g @pellux/goodvibes-tui
+bun pm trust -g @pellux/goodvibes-tui goodvibes-daemon
 ```
 
 The `linux-x64` (or `linux-arm64`) binaries run natively in WSL2. This is the
@@ -57,11 +57,12 @@ Each must be addressed (or explicitly gated off on Windows) before promotion:
    POSIX TTYs; Windows console (conhost / Windows Terminal) mode handling and
    cleanup-on-crash are unverified.
 
-4. **Launcher rejects win32.** `bin/goodvibes` and `bin/goodvibes-daemon`
-   short-circuit with an error on `process.platform === 'win32'` and point at
-   WSL. This is intentional today; promoting native Windows means teaching the
-   launchers to resolve and run the `.exe` (and adding a `windows-x64` platform
-   binary package).
+4. **Launcher rejects win32.** `bin/goodvibes` in this repository
+   short-circuits with an error on `process.platform === 'win32'` and points at
+   WSL; the daemon's own launcher, in the separate `goodvibes-daemon`
+   repository, does the same. This is intentional today; promoting native
+   Windows means teaching both launchers to resolve and run the `.exe` (and
+   adding a `windows-x64` platform binary package for each).
 
 ## Promotion criteria
 

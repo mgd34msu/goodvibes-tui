@@ -80,7 +80,7 @@ bun run tsc --noEmit --pretty false
 bun run architecture:check
 bun run perf:check
 bun run build
-bun run smoke:daemon
+bun run smoke:tui
 bun run verification:live -- --home ~/.goodvibes --out /tmp/goodvibes-live-verification
 ```
 

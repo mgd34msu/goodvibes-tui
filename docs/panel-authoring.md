@@ -1,6 +1,6 @@
 # Panel Authoring Guide
 
-This guide is the on-ramp for contributors who want to extend goodvibes-tui with a new panel. It covers the class hierarchy, the canonical implementation pattern used by the 22+ built-in panels, rendering utilities, input handling, performance instrumentation, and contract testing.
+This guide is the on-ramp for contributors who want to extend goodvibes-tui with a new panel. It covers the class hierarchy, the canonical implementation pattern used by the built-in panels, rendering utilities, input handling, performance instrumentation, and contract testing. Most secondary surfaces are modals now, not panels — see `builtin-modals.ts`.
 
 ## Table of Contents
 

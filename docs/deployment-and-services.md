@@ -90,7 +90,7 @@ The fullscreen `/config` workspace exposes service settings under `Service`:
 - `service.autostart`
 - `service.restartOnFailure`
 - `service.platform`
-- `service.name`
+- `service.serviceName`
 - `service.logPath`
 
 Changing `service.autostart` from the TUI is intended to reconcile the OS service, not just update JSON. On Linux this means writing/enabling/disabling the user `systemd` service. When service mode is enabled for the first time, the TUI installs the service definition, reloads user units, and starts/enables the daemon service if autostart is on. Disabling service mode or autostart removes/disables the OS-level autostart path.

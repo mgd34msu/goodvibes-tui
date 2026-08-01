@@ -44,7 +44,13 @@ This directory contains the current product documentation for `goodvibes-tui`.
   `/share` session export to HTML/JSON/Markdown with redaction, upload, clipboard, and open options.
 
 - [CLI flags](cli-flags.md)
-  Global flags reference: session lifecycle (`--continue`, `--resume`, `--fork`), confirmation bypass (`-y`/`--non-interactive`), output format consolidation, `--host` alias, and all other startup flags.
+  Global flags reference: session lifecycle (`--continue`, `--resume`, `--fork`), confirmation bypass (`-y`/`--non-interactive`), output format consolidation, `--host` alias, and all other startup and command-specific flags.
+
+- [Commands reference](commands-reference.md)
+  The generated, categorized list of every slash command, its arguments, and its description — the same list `?` renders in the product.
+
+- [Windows support](windows.md)
+  WSL2 as the supported path today, what the native Windows beta binary can and cannot do yet, and the POSIX-assumption blockers ahead of promotion.
 
 - [Tools and commands](tools-and-commands.md)
   Built-in tool families and a per-tool reference, slash-command families, the full keyboard-binding reference, the agent/archetype and hook systems, MCP and plugin extensibility, and the operator, diagnostics, and workflow surfaces that tie them together.
@@ -66,3 +72,6 @@ This directory contains the current product documentation for `goodvibes-tui`.
 
 - [Foundation artifacts](foundation-artifacts/README.md)
   Checked-in operator and peer contract manifests plus canonical knowledge GraphQL and SQL artifacts for release-gate and SDK extraction work.
+
+- [GitHub Action](github-action.md)
+  The `run-goodvibes` composite action: installing a pinned, checksum-verified release in CI and running a non-interactive command or prompt against a workspace.

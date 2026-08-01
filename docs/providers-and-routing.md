@@ -59,6 +59,12 @@ The runtime also supports a broad compatible/gateway layer. Current built-ins in
 - `vercel-ai-gateway`
 - `litellm`
 - `copilot-proxy`
+- `cohere`
+- `deepinfra`
+- `perplexity` (chat completions; distinct from the search provider of the same name below)
+- `sambanova`
+- `opencode-zen`
+- `zenmux` and `zenmux-anthropic` (two endpoints of the same provider, both keyed off `ZENMUX_API_KEY`)
 
 ## Local discovery
 
@@ -199,7 +205,7 @@ Provider JSON is hot-reloaded, so custom provider definitions appear in the mode
 
 ## Daemon OpenAI-Compatible API
 
-SDK 0.28.0 exposes a daemon-hosted OpenAI-compatible surface for local clients that can speak the OpenAI REST shape but need GoodVibes provider routing:
+The daemon hosts an OpenAI-compatible surface for local clients that can speak the OpenAI REST shape but need GoodVibes provider routing:
 
 ```text
 GET  /v1/models
@@ -236,6 +242,7 @@ Current voice providers include:
 - `google` for `stt`
 - `microsoft`
 - `vydra`
+- `local` for `tts`, `tts-stream`, and `stt` — free, offline engines (whisper.cpp/faster-whisper for STT, Piper/Kokoro for TTS). Nothing auto-downloads; it reports `unconfigured` until `voice.local.*` keys point at an installed engine and model. See [voice-and-live-tts.md](voice-and-live-tts.md).
 
 The TUI `/tts` command uses providers that advertise `tts-stream` for live local playback. Configure defaults through `/config tts`: `tts.provider` chooses the streaming provider, `tts.voice` chooses a provider voice, and `tts.llmProvider` / `tts.llmModel` optionally override the response model. `/tts` uses the active chat model by default when the TTS LLM override is empty. See [Voice and live TTS](voice-and-live-tts.md) for command usage and playback requirements.
 

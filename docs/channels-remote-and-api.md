@@ -221,7 +221,7 @@ Notification text contains only structural metadata: task kind, elapsed time, ok
 
 ### Focus state
 
-Terminal focus tracking is not implemented. Notifications fire regardless of whether the TUI window is currently focused.
+Notifications are gated by `behavior.notifyOnlyWhenUnfocused` (on by default): they fire only when the terminal is unfocused, or when focus state was never observed. Set it to `false` to fire regardless of focus.
 
 ### Wiring
 

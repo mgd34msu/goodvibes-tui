@@ -52,7 +52,7 @@ curl -fsSL https://goodvibes.sh/install.sh | sh
 ```
 
 The installer downloads checksum-verified binaries, registers the daemon as a
-systemd user service (`goodvibes-daemon.service`), and enables user lingering
+systemd user service (`goodvibes.service`), and enables user lingering
 so the service starts at boot — no login required, which is the point of an
 always-on box. If lingering cannot be enabled non-interactively, the installer
 prints the one command to run once (`loginctl enable-linger <user>`).
@@ -67,7 +67,7 @@ that one manual command, an explicit note saying so).
 goodvibes service status
 ```
 
-(or, equivalently: `systemctl --user status goodvibes-daemon.service`)
+(or, equivalently: `systemctl --user status goodvibes.service`)
 
 **You should now see** the service reported as installed and running. If it
 is not, `goodvibes service check` prints what is wrong and exits non-zero.

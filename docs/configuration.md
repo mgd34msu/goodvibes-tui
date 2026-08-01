@@ -70,7 +70,7 @@ for reference.
 | `web.port` | `3423` | Web/browser surface port |
 | `orchestration.recursionEnabled` | `false` | Allow recursive agent orchestration under bounded policy controls |
 | `orchestration.maxDepth` | `0` | Maximum recursive orchestration depth: `0` disables, higher values (up to `5`) allow deeper bounded recursion |
-| `daemon.enabled` | `true` | Run the local session daemon (loopback-bound; on by default) |
+| `daemon.enabled` | `true` | Whether this client adopts a running daemon at all — it does not start one itself; see [deployment-and-services.md](deployment-and-services.md) |
 | `danger.httpListener` | `false` | Enable HTTP webhook listener |
 | `tools.autoHeal` | `false` | Auto-fix syntax errors on write/edit |
 | `tools.hooksFile` | `hooks.json` | Hook configuration file name |

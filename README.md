@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/mgd34msu/goodvibes-tui/actions/workflows/ci.yml/badge.svg)](https://github.com/mgd34msu/goodvibes-tui/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Version](https://img.shields.io/badge/version-1.27.1-blue.svg)](https://github.com/mgd34msu/goodvibes-tui)
+[![Version](https://img.shields.io/badge/version-2.0.0-blue.svg)](https://github.com/mgd34msu/goodvibes-tui)
 
 GoodVibes is a terminal console for coding and operations work with an AI model. You run `goodvibes` in a project directory and get a full-screen terminal app where you talk to a model that can read and edit your files, run shell commands, search the web, and hand work off to background agents — asking your permission before anything that writes or executes. It talks to many model providers (OpenAI, Anthropic, Gemini, Bedrock, Copilot, OpenRouter and other OpenAI-compatible gateways, plus local servers like Ollama and LM Studio that it finds on startup), keeps its settings, sessions, and secrets on your own machine, and shows you the token count and running cost of every turn. Alongside the conversation, panels turn background work — running agents, git state, diffs, tokens, cost — into live control rooms.
 
@@ -196,7 +196,7 @@ bun run dev
 | `bun test` | Run the suite through the parallel per-file runner |
 | `bun run build` | Compile `src/main.ts` into `dist/goodvibes` |
 
-The compiled binary is the TUI entrypoint; it spawns or adopts the standalone GoodVibes daemon (`daemon.enabled`, on by default, loopback-bound) and hosts the HTTP listener when `danger.httpListener` is enabled.
+The compiled binary is the TUI entrypoint; it adopts a running standalone GoodVibes daemon, or starts one already installed as a stopped service — it never spawns a new daemon process itself (`daemon.enabled`, on by default, loopback-bound) — and hosts the HTTP listener when `danger.httpListener` is enabled.
 
 Tests live under `src/test/`, mirroring the source tree, and cover contract, security, release-gate, runtime, renderer, panel, integration, and anti-regression cases. Several gates run alongside them in CI: byte-exact golden renderer frames, performance budgets for startup and frame composition and line production (`scripts/perf-baseline.json`), and architecture rules for import cycles, layer boundaries, source-file size, and unused renderer exports (`scripts/check-architecture.ts`).
 

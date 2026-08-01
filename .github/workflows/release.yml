@@ -149,6 +149,8 @@ jobs:
       - name: Pack npm tarball
         run: npm pack
       - name: Install tarball in clean temp project
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           # Release-mode dispatch resolves GITHUB_REF_NAME to the dispatched
           # tag (same as push) — it must NOT fall into the inputs.ref branch,
@@ -167,6 +169,14 @@ jobs:
           HOME="$TMPROOT/home"
           cd "$TMPDIR"
           npm init -y
+          # The daemon dependency's postinstall reads the SAME asset-source
+          # variable and copies ITS artifacts from there — stage them beside
+          # this app's, in the exact layout that postinstall expects, so the
+          # clean-project install needs no network and asserts real bytes.
+          DAEMON_VERSION="$(node -e "console.log(require('${GITHUB_WORKSPACE}/package.json').dependencies['@pellux/goodvibes-daemon'])")"
+          gh release download "v${DAEMON_VERSION}" -R mgd34msu/goodvibes-daemon -p goodvibes-daemon-linux-x64 -D "${GITHUB_WORKSPACE}/dist" --clobber
+          mkdir -p "${GITHUB_WORKSPACE}/dist/lib/sqlite-vec-linux-x64"
+          gh release download "v${DAEMON_VERSION}" -R mgd34msu/goodvibes-daemon -p sqlite-vec-linux-x64.so -O "${GITHUB_WORKSPACE}/dist/lib/sqlite-vec-linux-x64/vec0.so" --clobber
           GOODVIBES_ASSET_SOURCE_DIR="${GITHUB_WORKSPACE}/dist" HOME="$HOME" npm install "${GITHUB_WORKSPACE}/pellux-goodvibes-tui-${VERSION}.tgz"
           test -x node_modules/.bin/goodvibes
           test -x node_modules/@pellux/goodvibes-tui/vendor/goodvibes-linux-x64

@@ -85,17 +85,17 @@ The npm package is intended to be directly installable:
 Install behavior:
 
 - Bun is the recommended global installer because GoodVibes is a Bun program and the package is hosted on the npm registry.
-- Bun global installs require trusting only the app package's own postinstall after the first install:
+- Bun global installs require trusting the app package and the daemon package it depends on, so both postinstalls can place their binaries:
 
   ```sh
-  bun pm trust -g @pellux/goodvibes-tui
+  bun pm trust -g @pellux/goodvibes-tui goodvibes-daemon
   ```
 
-  No dependency needs trusting: the binaries arrive through the platform-specific `@pellux/goodvibes-tui-<os>-<arch>` package (registry integrity, no lifecycle script), and the tree-sitter grammar packages contribute only their prebuilt `.wasm` files.
+  No other dependency needs trusting: the TUI binary arrives through the platform-specific `@pellux/goodvibes-tui-<os>-<arch>` package (registry integrity, no lifecycle script), and the tree-sitter grammar packages contribute only their prebuilt `.wasm` files. `@pellux/goodvibes-daemon` is a regular dependency — installing this package always brings the daemon along — and its own postinstall places the `goodvibes-daemon` binary the same way this package's postinstall places `goodvibes`.
 
 - `bun pm -g untrusted` should report `Found 0 untrusted dependencies with scripts`.
 - the main package declares four `@pellux/goodvibes-tui-<os>-<arch>` payload packages as `optionalDependencies` with `os`/`cpu` fields (the esbuild pattern), so the package manager installs exactly the one that matches the host, verified against the registry integrity hash. This is why plain `npm`/`pnpm` installs work, not just Bun.
-- `postinstall` prefers the platform package's binaries (a plain copy into `vendor/`, no download) and falls back to the version-matched GitHub Release download (checksum-verified against `SHA256SUMS.txt`) only when no platform package is present. The `bin/goodvibes` and `bin/goodvibes-daemon` launchers also resolve the platform package directly, so the binaries run even if the postinstall was skipped.
+- `postinstall` prefers the platform package's binary (a plain copy into `vendor/`, no download) and falls back to the version-matched GitHub Release download (checksum-verified against `SHA256SUMS.txt`) only when no platform package is present. The `bin/goodvibes` launcher also resolves the platform package directly, so the binary runs even if the postinstall was skipped. This package ships one bin entry, `goodvibes`; the `goodvibes-daemon` binary and its launcher belong to the separate `@pellux/goodvibes-daemon` package.
 - npm and pnpm installs still require `bun` to be on `PATH` for the from-source fallback; the preinstall check fails clearly if it is missing.
 - on Windows, use WSL2 (the Linux binary path applies unchanged); native Windows is beta and non-gating — see [windows.md](windows.md)
 - if Bun is available and no prebuilt binary is present, the launchers can still fall back to Bun + source
@@ -138,10 +138,12 @@ The release workflow publishes these release assets before registry publishing:
 - `goodvibes-linux-arm64`
 - `goodvibes-macos-x64`
 - `goodvibes-macos-arm64`
-- `goodvibes-daemon-linux-x64`
-- `goodvibes-daemon-linux-arm64`
-- `goodvibes-daemon-macos-x64`
-- `goodvibes-daemon-macos-arm64`
+- `sqlite-vec-linux-x64.so`
+- `sqlite-vec-linux-arm64.so`
+- `sqlite-vec-darwin-x64.dylib`
+- `sqlite-vec-darwin-arm64.dylib`
 - `SHA256SUMS.txt`
+
+The `goodvibes-daemon-*` binaries are a separate release, built and published by the `goodvibes-daemon` repository's own release workflow.
 
 For normal users who just want the executable, GitHub Releases remain the simplest path.

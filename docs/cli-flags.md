@@ -1,6 +1,6 @@
 # CLI Flags
 
-All flags are global (available regardless of the subcommand in use). Session-lifecycle flags are evaluated at TUI startup and are silently ignored for non-TUI commands.
+Most flags below are global (available regardless of the subcommand in use). Session-lifecycle flags are evaluated at TUI startup and are silently ignored for non-TUI commands. A few flags are specific to one command; those are listed separately in [Command-specific flags](#command-specific-flags).
 
 ## Session lifecycle
 
@@ -121,15 +121,15 @@ goodvibes -m anthropic:claude-sonnet-4-6
 
 ### `--port <number>`
 
-Override the port for `serve`, `web`, or other network-bound commands. Must be 1–65535.
+Override the port for `web`, `surfaces enable`, or other network-bound commands. Must be 1–65535.
 
 ### `--hostname <address>`, `--host <address>`
 
 Override the bind address. `--host` is an alias; both map to the same `hostname` field.
 
 ```sh
-goodvibes serve --hostname 0.0.0.0
-goodvibes serve --host 127.0.0.1
+goodvibes web --hostname 0.0.0.0 --port 3423
+goodvibes surfaces enable web --host 0.0.0.0
 ```
 
 ### `--open`
@@ -193,4 +193,25 @@ Print the version string and exit.
 
 ```sh
 goodvibes run -- --flag-for-subprocess
+```
+
+## Command-specific flags
+
+These apply to one command only, not globally.
+
+### `--strict` (`doctor` only)
+
+Also fail on advisory findings, for CI. Without it, `doctor` exits non-zero only for a must-fix finding.
+
+```sh
+goodvibes doctor --strict
+```
+
+### `--password <value>`, `--password-stdin`, `--role <role>` (`auth add-user` / `auth rotate-password` only)
+
+Set the new user's password inline, or read it from stdin (`--password-stdin`) instead of putting it on the command line. Falls back to the `GOODVIBES_AUTH_PASSWORD` environment variable when neither is given. `--role` assigns a role and may be repeated; `auth add-user` defaults to the `user` role when none is given. `auth rotate-password` takes `--password`/`--password-stdin` but not `--role`.
+
+```sh
+goodvibes auth add-user alice --password-stdin --role admin
+goodvibes auth rotate-password alice --password-stdin
 ```

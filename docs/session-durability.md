@@ -14,9 +14,9 @@ triggering a recovery-file write would be lost.
 
 ## WAL journal layer (gap-filler)
 
-The transcript journal (`src/core/transcript-journal.ts`) fills this gap with a per-session
-append-only NDJSON file that records durable conversation events **before** the turn snapshot is
-written.
+The transcript journal (the SDK's `TranscriptJournal`, wired in `src/core/turn-event-wiring.ts`)
+fills this gap with a per-session append-only NDJSON file that records durable conversation events
+**before** the turn snapshot is written.
 
 ### How it works
 
@@ -29,17 +29,20 @@ written.
    gap-filler). If the snapshot fails, the full conversation state is appended as an
    `assistant_turn` record so recovery can still reconstruct it.
 
-3. **Restart / session resume** → `replayJournalForSession()` (`src/core/session-recovery.ts`)
-   is called from three wired seams: (a) `session-workflow.ts` for `--continue`, `--resume`,
-   `/session resume`, and `--fork`; (b) `blocking-input.ts` for Ctrl+R crash recovery;
-   (c) `bootstrap-hook-bridge.ts` `createResumeSessionHandler` for in-TUI panel resume.
+3. **Restart / session resume** → `replayJournalForSession()` (the SDK's, called from
+   `resumeSessionCore` in `src/core/session-resume-core.ts`) is reached from two call sites:
+   (a) `session-workflow.ts`, which handles `/session resume` directly and is also where
+   `--continue`, `--resume`, and `--fork` route through (see [CLI flags](cli-flags.md)); and
+   (b) `bootstrap-hook-bridge.ts`'s `createResumeSessionHandler`, used both for the automatic
+   startup recovery modal (see "The startup recovery modal" in
+   [getting-started.md](getting-started.md)) and for in-TUI panel resume.
    It calls `replayJournal(journalPath, snapshotTimestamp)` to find records that post-date
    the loaded snapshot, applies the final record’s messages to the live conversation (each
    record carries the full snapshot, so the last record is authoritative), writes a fresh
-   snapshot via the SessionManager, and calls `journal.rotate()`. Of the three seams, only
-   `session-workflow.ts` prints the replay notice to the conversation (`[Recovery] Replayed
-   N journal record(s) — restored turns since last snapshot.`); the Ctrl+R and panel-resume
-   seams replay silently.
+   snapshot via the SessionManager, and calls `journal.rotate()`. Only the `session-workflow.ts`
+   seam prints the replay notice to the conversation (`[Recovery] Replayed N journal record(s) —
+   restored turns since last snapshot.`); the startup-modal and panel-resume seam replays
+   silently.
 
 ### File format
 
@@ -94,14 +97,16 @@ The journal header carries `"version": 1`. If a future process writes a higher v
 | Transcript journal | Every durable event | User messages + completed turns |
 
 A SIGKILL at any moment loses **at most the in-flight append** (one partial JSON line), never a
-full conversation turn. All three resume paths (CLI flags, Ctrl+R recovery, and in-TUI panel
-resume) call `replayJournalForSession` so the gap is closed on whichever path the user takes.
+full conversation turn. Every resume path — `--continue`/`--resume`/`--fork`, `/session resume`,
+the startup recovery modal, and in-TUI panel resume — routes through `resumeSessionCore`, which
+calls `replayJournalForSession`, so the gap is closed on whichever path the user takes.
 
 ### Known limit: `--continue` with no last-session pointer
 
 If a session was killed before the first snapshot was written (i.e., no last-session pointer
-exists), `--continue` falls through to onboarding with no journal replay entry point. The journal
-for that session is still present on disk. **Recovery path:** launch the TUI normally; the Ctrl+R
-prompt will appear if a recovery file exists, or use `/session resume <id>` once a snapshot
-exists. This is a known limit with no automatic workaround — it only affects sessions that were
-never snapshotted.
+exists), `--continue` does nothing — it does not fall through to onboarding or start any other
+flow. The journal for that session is still present on disk. **Recovery path:** launch the TUI
+normally; the startup recovery modal (see "The startup recovery modal" in
+[getting-started.md](getting-started.md)) offers to resume from the recovery snapshot if one
+exists, or use `/session resume <id>` once a snapshot exists. This is a known limit with no
+automatic workaround — it only affects sessions that were never snapshotted.
