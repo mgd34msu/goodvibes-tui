@@ -720,6 +720,49 @@ unit_is_endpoint_pinned() {
   grep -qe '--hostname' -e '--port' "$1" 2>/dev/null
 }
 
+# The --daemon-home value a unit/plist launches with, quotes stripped; empty
+# when the flag is absent. Handles the systemd token form
+# (--daemon-home "/path" on the ExecStart line) and the launchd form (the
+# <string> element after <string>--daemon-home</string>).
+unit_daemon_home_value() {
+  _uv=$(sed -n 's/.*--daemon-home[= ][= ]*"\{0,1\}\([^" ]*\)"\{0,1\}.*/\1/p' "$1" 2>/dev/null | head -1)
+  if [ -z "$_uv" ]; then
+    _uv=$(awk '/<string>--daemon-home<\/string>/{getline; gsub(/.*<string>|<\/string>.*/,""); print; exit}' "$1" 2>/dev/null)
+  fi
+  printf '%s' "$_uv"
+}
+
+# True when the unit/plist launches the daemon with its own state directory
+# ($HOME/.goodvibes/daemon) as --daemon-home. The flag being PRESENT is not
+# currency: a unit carrying any other value points the daemon's identity at
+# the wrong directory — a daemon launched that way runs, answers status, and
+# serves nothing, because its channel workers open an empty store. Currency
+# requires the value.
+unit_daemon_home_is_canonical() {
+  [ "$(unit_daemon_home_value "$1")" = "$HOME/.goodvibes/daemon" ]
+}
+
+# One-line reason a unit's launch arguments are stale, or nothing when they
+# are current. Both writers below derive everything else from settings at
+# boot, so staleness is exactly: pinned endpoint flags, or a --daemon-home
+# that is absent or names the wrong directory.
+unit_launch_stale_reason() {
+  if unit_is_endpoint_pinned "$1"; then
+    printf 'pins endpoint flags (--hostname/--port) from an older release, which override the controlPlane settings on every boot'
+    return 0
+  fi
+  if ! unit_daemon_home_is_canonical "$1"; then
+    _sr=$(unit_daemon_home_value "$1")
+    if [ -z "$_sr" ]; then
+      printf 'launches without --daemon-home'
+    else
+      printf 'launches with --daemon-home %s instead of %s/.goodvibes/daemon' "$_sr" "$HOME"
+    fi
+    return 0
+  fi
+  return 0
+}
+
 # Timestamped backup of a unit/plist file about to be regenerated, with a
 # receipt naming it. Fingerprint/structural provenance is only PROBABLY
 # platform-owned — a user may have customized a product-written unit in place
@@ -734,35 +777,37 @@ backup_unit_file() {
 }
 
 # Upgrade-time content currency for the CANONICAL unit (Linux): a
-# platform-managed unit still carrying pinned endpoint flags is regenerated to
-# the config-derived shape (file + daemon-reload only — the ordinary restart
-# path right after this applies it to a running daemon). A hand-written unit
-# is never rewritten: honest notice only. Runs BEFORE restart_running_daemon
-# so the restart picks up the new content in the same run.
-refresh_pinned_canonical_unit() {
+# platform-managed unit whose launch arguments are stale — pinned endpoint
+# flags, or a --daemon-home that is absent or names the wrong directory — is
+# regenerated to the current shape (file + daemon-reload only — the ordinary
+# restart path right after this applies it to a running daemon). A
+# hand-written unit is never rewritten: honest notice naming the problem
+# only. Runs BEFORE restart_running_daemon so the restart picks up the new
+# content in the same run.
+refresh_stale_canonical_unit() {
   [ "$os_tag" = "linux" ] || return 0
   _rp=$(systemd_daemon_unit_path)
   [ -f "$_rp" ] || return 0
-  unit_is_endpoint_pinned "$_rp" || return 0
+  _reason=$(unit_launch_stale_reason "$_rp")
+  [ -n "$_reason" ] || return 0
   case "$(canonical_unit_provenance "$_rp")" in
     managed)
       say ""
-      say "Regenerating $SYSTEMD_DAEMON_UNIT: it pins endpoint flags (--hostname/--port) from an older release,"
-      say "  which override the controlPlane settings on every boot. The daemon now resolves its endpoint from"
-      say "  settings at startup."
+      say "Regenerating $SYSTEMD_DAEMON_UNIT: it $_reason."
       backup_unit_file "$_rp"
       write_systemd_unit "$_rp"
       command -v systemctl >/dev/null 2>&1 && systemctl --user daemon-reload 2>/dev/null || true
-      say "  rewrote    $_rp (config-derived launch)"
+      say "  rewrote    $_rp (config-derived launch, --daemon-home $HOME/.goodvibes/daemon)"
       if [ "$RESTART_DAEMON" != "1" ]; then
-        say "  NOTE: GOODVIBES_RESTART_DAEMON=0 — the running daemon keeps the old pinned endpoint until restarted."
+        say "  NOTE: GOODVIBES_RESTART_DAEMON=0 — the running daemon keeps the old launch arguments until restarted."
       fi
       ;;
     hand-written)
       say ""
-      say "NOTE: $SYSTEMD_DAEMON_UNIT at $_rp pins endpoint flags (--hostname/--port), which override the"
-      say "  controlPlane settings — and the unit is not recognizably platform-managed, so it was left untouched."
-      say "  Remove those flags yourself so the daemon follows your settings."
+      say "NOTE: $SYSTEMD_DAEMON_UNIT at $_rp $_reason —"
+      say "  and the unit is not recognizably platform-managed, so it was left untouched."
+      say "  Fix the launch arguments yourself so the daemon runs with its own state directory:"
+      say "    --daemon-home $HOME/.goodvibes/daemon"
       ;;
   esac
 }
@@ -1401,22 +1446,27 @@ migrate_legacy_systemd_unit() {
     # then retire the legacy unit.
     say ""
     say "Transferring daemon supervision from $LEGACY_SYSTEMD_DAEMON_UNIT to $SYSTEMD_DAEMON_UNIT ..."
-    # A pre-existing canonical unit that still pins endpoint flags would make
-    # the transfer start a daemon on the WRONG endpoint and retire the legacy
-    # unit that was serving the configured one — behind a receipt that only
-    # verifies liveness. Platform-managed pinned units are re-derived first;
-    # a hand-written pinned unit refuses the transfer honestly.
-    if [ -f "$canonical_path" ] && unit_is_endpoint_pinned "$canonical_path"; then
+    # A pre-existing canonical unit with stale launch arguments — pinned
+    # endpoint flags, or a wrong/absent --daemon-home — would make the
+    # transfer start a daemon on the WRONG endpoint or against the WRONG
+    # state directory, and retire the legacy unit that was serving the
+    # configured one — behind a receipt that only verifies liveness.
+    # Platform-managed stale units are re-derived first; a hand-written
+    # stale unit refuses the transfer honestly.
+    transfer_stale_reason=''
+    [ -f "$canonical_path" ] && transfer_stale_reason=$(unit_launch_stale_reason "$canonical_path")
+    if [ -n "$transfer_stale_reason" ]; then
       case "$(canonical_unit_provenance "$canonical_path")" in
         managed)
           backup_unit_file "$canonical_path"
           write_systemd_unit "$canonical_path"
-          say "  rewrote    $canonical_path (replaced older pinned endpoint flags with the config-derived launch)"
+          say "  rewrote    $canonical_path (it $transfer_stale_reason)"
           ;;
         *)
-          say "  NOTE: the existing $SYSTEMD_DAEMON_UNIT pins endpoint flags (--hostname/--port) and is not"
-          say "  recognizably platform-managed — transferring supervision onto it could bind the wrong endpoint."
-          say "  The units were not changed; remove those flags yourself, or migrate deliberately with:"
+          say "  NOTE: the existing $SYSTEMD_DAEMON_UNIT $transfer_stale_reason and is not"
+          say "  recognizably platform-managed — transferring supervision onto it could run the daemon wrong."
+          say "  The units were not changed; fix the launch arguments yourself (the daemon's own state directory"
+          say "  is --daemon-home $HOME/.goodvibes/daemon), or migrate deliberately with:"
           say "    goodvibes-daemon migrate-service"
           # The restart path deferred the in-place restart to this transfer
           # ('the migration step below transfers it') — the promise must not
@@ -1562,11 +1612,13 @@ migrate_one_launchd_plist() {
   plist_path="$1"
   plist_label="$2"
   [ -f "$plist_path" ] || return 0
-  # Already the current launch form — nothing to migrate. Current means
-  # --daemon-home present AND no pinned endpoint flags: the middle generation
-  # carried --daemon-home PLUS --hostname/--port, and keying the gate on
-  # --daemon-home alone declared those pinned plists current forever.
-  if grep -q -- '--daemon-home' "$plist_path" 2>/dev/null &&
+  # Already the current launch form — nothing to migrate. Current means the
+  # CANONICAL --daemon-home value AND no pinned endpoint flags: the middle
+  # generation carried --daemon-home PLUS --hostname/--port, and keying the
+  # gate on --daemon-home's mere presence declared those pinned plists — and
+  # any plist pointing the daemon's identity at the wrong directory —
+  # current forever.
+  if unit_daemon_home_is_canonical "$plist_path" &&
      ! unit_is_endpoint_pinned "$plist_path"; then
     return 0
   fi
@@ -1586,11 +1638,13 @@ migrate_one_launchd_plist() {
   fi
 
   if [ "$plist_managed" != "1" ]; then
-    if unit_is_endpoint_pinned "$plist_path"; then
+    _plr=$(unit_launch_stale_reason "$plist_path")
+    if [ -n "$_plr" ]; then
       say ""
-      say "NOTE: the LaunchAgent at $plist_path pins endpoint flags (--hostname/--port), which override the"
-      say "  controlPlane settings — and it is not recognizably platform-managed, so it was left untouched."
-      say "  Remove those flags yourself so the daemon follows your settings."
+      say "NOTE: the LaunchAgent at $plist_path $_plr —"
+      say "  and it is not recognizably platform-managed, so it was left untouched."
+      say "  Fix the launch arguments yourself so the daemon follows your settings and runs with its own"
+      say "  state directory: --daemon-home $HOME/.goodvibes/daemon"
     fi
     return 0
   fi
@@ -2780,7 +2834,7 @@ main() {
 
   # Bring a platform-managed canonical unit up to the current (config-derived)
   # launch shape BEFORE the restart below, so the restart applies it.
-  refresh_pinned_canonical_unit
+  refresh_stale_canonical_unit
 
   restart_running_daemon
 
