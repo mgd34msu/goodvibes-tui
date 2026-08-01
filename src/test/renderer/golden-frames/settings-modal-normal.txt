@@ -20,7 +20,7 @@
 |│     Voice (local engi  │   theme               vaporwave   string     default       vaporwave    │|
 |│ SERVICE & NETWORK      │   showThinking        false       boolean    default       false        │|
 |│     Service (6)        │   showReasoningSumma  false       boolean    default       false        │|
-|│     Daemon (3)         │   showTokenSpeed      false       boolean    default       false        │|
+|│     Daemon (2)         │   showTokenSpeed      false       boolean    default       false        │|
 |│     Network (48)       │   showToolPreview     false       boolean    default       false        │|
 |│     Control Plane (18  │   themeMode           auto        enum       default       auto         │|
 |│     HTTP Listener (8)  │                                                                         │|
