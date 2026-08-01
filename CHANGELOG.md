@@ -4,7 +4,7 @@ All notable changes to GoodVibes TUI.
 
 ---
 
-## [Unreleased]
+## [2.0.0] - 2026-08-01
 
 ### Changes
 
@@ -319,7 +319,7 @@ Updated: @pellux/goodvibes-sdk and @pellux/goodvibes-terminal-shell to 1.11.3 (q
 - 366560a0 daemon: honest startup identity and unattended legacy-unit reconcile
 - 615d60aa installer: unify the daemon service on the canonical goodvibes.service unit
 
-## [Unreleased]
+## [2.0.0] - 2026-08-01
 
 ### Fixed
 - Installer now creates one daemon service unit that matches the app. The curl
@@ -1251,7 +1251,7 @@ First release of the best-in-class program: a full UX-first review of the codeba
 - 7ff4ab69 fix installed daemon service home
 - 8303819d docs: document Bun global trust setup
 
-## [Unreleased]
+## [2.0.0] - 2026-08-01
 
 ---
 

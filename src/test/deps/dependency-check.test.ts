@@ -383,8 +383,23 @@ describe('dependency ranges agree with the platform that declares them', () => {
       ...(platform.peerDependencies ?? {}),
       ...(platform.optionalDependencies ?? {}),
     };
+    const { readFileSync } = await import('node:fs');
     const drift = Object.entries(ours.dependencies ?? {})
-      .filter(([name, range]) => name in declared && declared[name] !== range)
+      .filter(([name, range]) => {
+        const platformRange = declared[name];
+        if (platformRange === undefined) return false;
+        if (!platformRange.startsWith('file:')) return platformRange !== range;
+        // A file: declaration means the platform VENDORS the tool inside its
+        // own package; the range to agree with is the vendored copy's real
+        // version — this repo's caret pin must include it.
+        const vendored = JSON.parse(
+          readFileSync(
+            join(repoRoot, 'node_modules', '@pellux', 'goodvibes-sdk', platformRange.slice('file:'.length), 'package.json'),
+            'utf-8',
+          ),
+        ) as { version: string };
+        return range !== `^${vendored.version}`;
+      })
       .map(([name, range]) => `${name}: this repo ${range}, platform ${declared[name]}`);
     expect(drift).toEqual([]);
   });
