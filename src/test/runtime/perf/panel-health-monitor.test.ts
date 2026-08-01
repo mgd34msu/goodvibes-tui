@@ -9,9 +9,7 @@
  */
 
 import { describe, test, expect, beforeEach } from 'bun:test';
-import {
-  ComponentHealthMonitor,
-} from '../../../runtime/perf/panel-health-monitor.ts';
+import { ComponentHealthMonitor } from '@pellux/goodvibes-sdk/platform/runtime/observability';
 import { buildContract } from '../../../runtime/perf/panel-contracts.ts';
 
 // ---------------------------------------------------------------------------

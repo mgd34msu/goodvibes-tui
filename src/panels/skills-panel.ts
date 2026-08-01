@@ -5,7 +5,7 @@ import { createEmptyLine } from '@pellux/goodvibes-sdk/platform/types';
 import { type ConfirmState, handleConfirmInput, renderConfirmLines } from './confirm-state.ts';
 import { getDisplayWidth, truncateDisplay } from '../utils/terminal-width.ts';
 import { ScrollableListPanel } from './scrollable-list-panel.ts';
-import type { ComponentHealthMonitor } from '../runtime/perf/panel-health-monitor.ts';
+import type { ComponentHealthMonitor } from '@pellux/goodvibes-sdk/platform/runtime/observability';
 import { listInstalledEcosystemEntries, type EcosystemCatalogPathOptions, type ShellPathService } from '@/runtime/index.ts';
 import {
   buildPanelLine,

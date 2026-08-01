@@ -23,7 +23,7 @@ import type { ExecutionPlanManager } from '@pellux/goodvibes-sdk/platform/core';
 import type { AdaptivePlanner } from '@pellux/goodvibes-sdk/platform/core';
 import type { ProjectPlanningService } from '@pellux/goodvibes-sdk/platform/knowledge';
 import type { ApiTokenAuditor } from '@pellux/goodvibes-sdk/platform/security';
-import type { ComponentHealthMonitor } from '../../runtime/perf/panel-health-monitor.ts';
+import type { ComponentHealthMonitor } from '@pellux/goodvibes-sdk/platform/runtime/observability';
 import type { WorktreeRegistry } from '@/runtime/index.ts';
 import type { SandboxSessionRegistry } from '@/runtime/index.ts';
 import type { OpsApi, PlanRuntimeService } from '@/runtime/index.ts';

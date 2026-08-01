@@ -19,7 +19,7 @@ import type { FeatureFlagManager } from '@/runtime/index.ts';
 import type { MutableRuntimeState } from '@/runtime/index.ts';
 import type { SessionSnapshot } from '@/runtime/index.ts';
 import type { RuntimeServices } from './services.ts';
-import type { ComponentHealthMonitor } from './perf/panel-health-monitor.ts';
+import type { ComponentHealthMonitor } from '@pellux/goodvibes-sdk/platform/runtime/observability';
 import type { WorktreeRegistry } from '@/runtime/index.ts';
 import type { SandboxSessionRegistry } from '@/runtime/index.ts';
 
