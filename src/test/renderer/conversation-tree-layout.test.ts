@@ -210,7 +210,7 @@ describe('rails are continuous through a subtree', () => {
     }
   });
 
-  test('a collapsed result\'s fragment box carries the rail on every one of its lines', () => {
+  test('a collapsed result is ONE row, and it carries the rail', () => {
     const padded: Record<string, string> = {};
     for (let i = 0; i < 30; i++) padded[`k${i}`] = `value-${i}`;
     const rows = renderRows([
@@ -227,14 +227,16 @@ describe('rails are continuous through a subtree', () => {
     ]).filter((row) => row.length > 0);
 
     const railCol = treeBranchCol(treeIndentCols(1, WIDTH));
-    // The fragment box is the run of rows between the two call rows; every one
-    // of them (top border, preview, bottom border) must carry the rail.
+    // Exactly one row sits between the two call rows: the folded result. No
+    // ▄▄▄/▀▀▀ caps around it, no separate preview line, no blank gap — and that
+    // single row carries the rail down to the next sibling.
     const firstCall = rows.findIndex((row) => row.includes('needle'));
     const secondCall = rows.findIndex((row) => row.includes('second-command'));
-    expect(secondCall - firstCall).toBeGreaterThan(3);
-    for (let i = firstCall + 1; i < secondCall; i++) {
-      expect(rows[i]![railCol], `row ${i}: ${JSON.stringify(rows[i])}`).toBe('│');
-    }
+    expect(secondCall - firstCall).toBe(2);
+    const folded = rows[firstCall + 1]!;
+    expect(folded[railCol]).toBe('│');
+    expect(folded).not.toContain('▄');
+    expect(folded).not.toContain('▀');
   });
 
   test('the last sibling ends the rail — nothing is drawn below its └', () => {
@@ -261,7 +263,7 @@ describe('result rows line up under the call they belong to', () => {
     expect(colOf(bodyRow, 'polled')).toBe(depth2Text);
   });
 
-  test('a collapsed preview\'s ▸ sits in the same column as its header\'s ▸', () => {
+  test('a collapsed result folds its preview onto the badge row, on the depth-2 grid', () => {
     const padded: Record<string, string> = {};
     for (let i = 0; i < 30; i++) padded[`k${i}`] = `value-${i}`;
     const rows = renderRows([
@@ -273,10 +275,14 @@ describe('result rows line up under the call they belong to', () => {
       { role: 'tool', callId: 'c1', toolName: 'find', content: JSON.stringify(padded) },
     ]).filter((row) => row.length > 0);
 
-    const headerRow = rows.find((row) => /▸ \d+ lines/.test(row))!;
-    const previewRow = rows.find((row) => row.includes('hidden]'))!;
-    expect(colOf(previewRow, '▸')).toBe(colOf(headerRow, '▸'));
+    const badgeRows = rows.filter((row) => /▸ \d+ lines/.test(row));
+    expect(badgeRows).toHaveLength(1);
+    const headerRow = badgeRows[0]!;
     expect(colOf(headerRow, '▸')).toBe(treeTextCol(treeIndentCols(2, WIDTH)));
+    // The preview rides on that same row; the count is the badge's job, so the
+    // old standalone `[▸ N hidden]` marker is gone.
+    expect(headerRow).toContain('k0');
+    expect(rows.some((row) => row.includes('hidden]'))).toBe(false);
   });
 });
 

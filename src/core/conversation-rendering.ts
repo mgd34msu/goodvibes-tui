@@ -10,9 +10,9 @@ import { renderSystemMessage } from '../renderer/system-message.ts';
 import { createEmptyLine, type Line, type Cell } from '@pellux/goodvibes-sdk/platform/types';
 import { getSplashLines, type SplashOptions } from '../utils/splash-lines.ts';
 import { interpolateColor, getDisplayWidth, wrapText } from '../utils/terminal-width.ts';
-import { LAYOUT, TOOL_STATUS } from '../renderer/layout.ts';
+import { BORDERS, LAYOUT, TOOL_STATUS } from '../renderer/layout.ts';
 import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
-import { renderConversationCollapsedFragment, renderConversationEventLine } from '../renderer/conversation-surface.ts';
+import { renderConversationEventLine, renderConversationFoldedRow } from '../renderer/conversation-surface.ts';
 import { GLYPHS } from '../renderer/ui-primitives.ts';
 import type { BlockMeta } from './conversation-types.ts';
 import {
@@ -21,6 +21,9 @@ import {
   type ConversationRenderContext,
 } from './conversation-render-context.ts';
 import { renderCompactionContinuationMessage } from './conversation-compaction-render.ts';
+// Which rows fold, and the blank separator that earns — shared verbatim with
+// conversation-line-cache.ts so a warm cache and a cold rebuild space alike.
+import { isToolResultFolded, trailingBlankAfter } from './conversation-fold.ts';
 import { drawTreeRails, treeIndentCols, treeTextCol } from '@pellux/goodvibes-terminal-shell';
 import {
   MAX_NEST_DEPTH,
@@ -209,19 +212,24 @@ export function renderConversationAssistantMessage(
       context.collapseState.set(thinkingCollapseKey, true);
     }
     if (isThinkingCollapsed) {
+      // One row: label plus size badge, no frame and no interior line.
+      //
+      // Deliberately NO preview, unlike a folded tool result. Reasoning text
+      // stays behind the toggle until it is asked for — the fold is the quiet
+      // state of an already-opt-in display, and previewing the first reasoning
+      // line here would disclose content the collapsed form has never shown.
       const thinkingLineCount = message.reasoningContent.split('\n').length;
-      const rendered = renderConversationCollapsedFragment(
-        `thinking · ${thinkingLineCount} line${thinkingLineCount === 1 ? '' : 's'}`,
-        width,
-        {
-          prefix: ' ▌ ',
-          prefixFg: T.reasoningAccent,
-          text: '244',
-          bodyBg: T.collapsedBodyBg,
-          dim: true,
-        },
-      );
-      context.history.addLines(rendered);
+      context.history.addLine(renderConversationFoldedRow(width, {
+        // The same ▌ the EXPANDED block draws (BORDERS.THINKING), so folding
+        // changes the row count without changing what the block reads as.
+        marker: BORDERS.THINKING.char,
+        markerFg: T.reasoningAccent,
+        label: 'thinking',
+        labelFg: T.reasoningAccent,
+        detailFg: '244',
+      }, [
+        { text: ` ${GLYPHS.navigation.collapsed} ${thinkingLineCount} line${thinkingLineCount === 1 ? '' : 's'} `, fg: '244', dim: true },
+      ], ''));
     } else {
       const thinkingLines = renderThinkingBlock(message.reasoningContent, width);
       context.history.addLines(thinkingLines);
@@ -495,17 +503,14 @@ export function renderConversationToolMessage(
     ? summarizeToolResult(message.toolName, message.content)
     : null;
 
-  // A summarizable result is kept collapsed-by-default even when short, so the
-  // one-line summary wins and the raw JSON is tucked behind the expand toggle.
-  const isShort = message.content.length <= 200 && resultSummary === null;
-  const isCollapsed = isShort
-    ? false
-    : context.collapseState.has(collapseKey)
-      ? context.collapseState.get(collapseKey)!
-      : true;
+  const isCollapsed = isToolResultFolded(message, context.collapseState, collapseKey);
 
+  // The fold decision IS the stored default: with nothing stored,
+  // isToolResultFolded() already resolved to exactly the value this key should
+  // hold. Recomputing "is it short?" here would be a second copy of the
+  // threshold that the policy module owns.
   if (!context.collapseState.has(collapseKey)) {
-    context.collapseState.set(collapseKey, isShort ? false : true);
+    context.collapseState.set(collapseKey, isCollapsed);
   }
 
   // A per-call user cancellation settles as a tool result whose content leads
@@ -529,16 +534,24 @@ export function renderConversationToolMessage(
       ? [{ text: ` ${message.toolName} `, fg: T.toolNameFg }]
       : [{ text: ` ${summarizeCallId(message.callId || 'standalone')} `, fg: '244' as const, dim: true }]);
 
-  const headerLine = renderConversationEventLine(width, {
+  // A FOLDED result is exactly one row: this header, with its preview riding on
+  // the same line right after the `▸ N lines` badge (see
+  // renderConversationFoldedRow). The badge is the count — the old fold also
+  // carried a separate `[▸ N hidden]` marker, which restated it.
+  const headerTone = {
     marker: isCancelled ? GLYPHS.status.blocked : (blockType === 'diff' ? GLYPHS.status.dualPane : GLYPHS.status.active),
     markerFg: isCancelled ? warnTone : (blockType === 'diff' ? T.diffAccent : T.toolAccent),
     label,
     labelFg: isCancelled ? warnTone : (blockType === 'diff' ? T.diffAccent : T.toolAccent),
     detailFg: '244',
-  }, [
+  };
+  const headerDetails = [
     ...nameSegments,
     { text: ` ${isCollapsed ? GLYPHS.navigation.collapsed : GLYPHS.navigation.expanded} ${lineCount} line${lineCount === 1 ? '' : 's'} `, fg: '244', dim: true },
-  ], indent);
+  ];
+  const headerLine = isCollapsed
+    ? renderConversationFoldedRow(width, headerTone, headerDetails, resultSummary ?? contentLines[0] ?? '', indent)
+    : renderConversationEventLine(width, headerTone, headerDetails, indent);
   // Every line this row emits, gathered before anything is committed, so the
   // rails can be drawn across all of them in one pass (see drawTreeRails). The
   // result row deliberately carries NO status marker of its own: the call row
@@ -546,32 +559,7 @@ export function renderConversationToolMessage(
   // and a second marker one row down only doubles it.
   const rows: Line[] = [headerLine];
 
-  if (isCollapsed) {
-    const collapseSuffixReserve = 30;
-    const avail = Math.max(0, width - LAYOUT.LEFT_MARGIN - LAYOUT.RIGHT_MARGIN - indent - collapseSuffixReserve);
-    const hiddenCount = lineCount - 1;
-    let collapsedText: string;
-    if (resultSummary !== null) {
-      // Summary line — the header already shows "▸ N lines", so no hidden badge.
-      collapsedText = resultSummary.length > avail
-        ? `${resultSummary.slice(0, Math.max(0, avail - 1))}…`
-        : resultSummary;
-    } else {
-      const preview = contentLines[0].slice(0, avail);
-      collapsedText = hiddenCount > 0
-        ? `${preview}...  [${GLYPHS.navigation.collapsed} ${hiddenCount} hidden]`
-        : preview;
-    }
-    const rendered = renderConversationCollapsedFragment(collapsedText, width, {
-      prefix: blockType === 'diff' ? ` ${GLYPHS.status.dualPane} ` : ` ${GLYPHS.navigation.collapsed} `,
-      prefixFg: blockType === 'diff' ? T.diffAccent : T.toolAccent,
-      text: '244',
-      bodyBg: T.collapsedBodyBg,
-      dim: true,
-      indentCols: indent,
-    });
-    for (const line of rendered) rows.push(line);
-  } else {
+  if (!isCollapsed) {
     // Diff or plain result — either way this is exactly `expandedLines`,
     // already computed above (and already what the header's line count is
     // honest about), so there is nothing left to render here.
@@ -683,8 +671,9 @@ export function appendConversationMessages(
     // Branch rows sit tight under their parent; the blank separator lands only
     // after the last row of a top-level unit, which is what keeps a turn's
     // whole subtree reading as one block instead of a run of spaced-out rows.
-    const next = plan[i + 1];
-    if (!next || next.depth === 0) {
+    // A folded result followed by more tool machinery gets no blank at all —
+    // consecutive folded results stack as adjacent single rows.
+    if (trailingBlankAfter(node, plan[i + 1], turnContext)) {
       turnContext.history.addLine(createEmptyLine(width));
     }
   }

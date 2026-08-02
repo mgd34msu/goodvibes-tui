@@ -37,7 +37,10 @@ describe('thinking block collapse', () => {
   test('renders collapsed by default as one honest summary line, not the full reasoning text', () => {
     const cm = buildWithThinking();
     const text = textOf(cm);
-    expect(text).toContain('thinking · 3 lines');
+    // One row: the label and the ▸ size badge, the same collapse affordance
+    // every other folded block carries. No preview — reasoning text stays
+    // behind the toggle.
+    expect(text).toContain('thinking  ▸ 3 lines');
     expect(text).not.toContain('step one');
   });
 
@@ -54,7 +57,7 @@ describe('thinking block collapse', () => {
     expect(text).toContain('step one');
     expect(text).toContain('step two');
     expect(text).toContain('step three');
-    expect(text).not.toContain('thinking · 3 lines');
+    expect(text).not.toContain('thinking  ▸ 3 lines');
   });
 });
 

@@ -9,7 +9,7 @@
 
 import { activeTheme } from '../renderer/theme.ts';
 import { renderMarkdownTracked } from '../renderer/markdown.ts';
-import { renderConversationCollapsedFragment, renderConversationEventLine } from '../renderer/conversation-surface.ts';
+import { renderConversationEventLine, renderConversationFoldedRow } from '../renderer/conversation-surface.ts';
 import { GLYPHS } from '../renderer/ui-primitives.ts';
 import type { Line } from '@pellux/goodvibes-sdk/platform/types';
 import type { BlockMeta } from './conversation-types.ts';
@@ -49,30 +49,30 @@ export function renderCompactionContinuationMessage(
     context.collapseState.set(collapseKey, true);
   }
 
-  context.history.addLine(renderConversationEventLine(width, {
+  const tone = {
     marker: GLYPHS.status.active,
     markerFg: T.toolAccent,
     label: 'compaction handoff',
     labelFg: T.toolAccent,
     detailFg: '244',
-  }, [
+  };
+  const details = [
     { text: ` ${isCollapsed ? GLYPHS.navigation.collapsed : GLYPHS.navigation.expanded} ${lineCount} line${lineCount === 1 ? '' : 's'} `, fg: '244', dim: true },
-  ]));
+  ];
 
   if (isCollapsed) {
-    const rendered = renderConversationCollapsedFragment(
-      'compacted-context handoff (re-injected instructions + session summary)',
+    // One row. This used to be the header PLUS a framed fragment holding a
+    // single static sentence — three rows of chrome to say what the label and
+    // the badge already said. The distinguishing half of that sentence folds
+    // onto the header instead.
+    context.history.addLine(renderConversationFoldedRow(
       width,
-      {
-        prefix: ` ${GLYPHS.navigation.collapsed} `,
-        prefixFg: T.toolAccent,
-        text: '244',
-        bodyBg: T.collapsedBodyBg,
-        dim: true,
-      },
-    );
-    context.history.addLines(rendered);
+      tone,
+      details,
+      're-injected instructions + session summary',
+    ));
   } else {
+    context.history.addLine(renderConversationEventLine(width, tone, details));
     context.history.addLines(renderMarkdownTracked(content, width).lines);
   }
 

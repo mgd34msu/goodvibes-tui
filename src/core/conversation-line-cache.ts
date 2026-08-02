@@ -58,6 +58,7 @@ import {
   isTurnCollapsed,
   type ToolCallOutcome,
 } from './conversation-rendering.ts';
+import { trailingBlankAfter } from './conversation-fold.ts';
 import {
   buildRenderPlan,
   computeAssistantTurns,
@@ -373,8 +374,9 @@ export class MessageLineCache {
         }
       }
 
-      const next = plan[i + 1];
-      const trailingBlank = !next || next.depth === 0;
+      // Same rule appendConversationMessages uses, from the same function, so a
+      // warm cache and a cold rebuild space rows identically.
+      const trailingBlank = trailingBlankAfter(node, plan[i + 1], renderContext);
       const uncacheable = isRoot && node.kind === 'message' && node.absIdx === streamingPlaceholderAbsIdx;
       const kind = isRoot ? context.messageKindRegistry.get(node.absIdx) : undefined;
       const pendingToolKey = pendingToolKeyOf(node.message, toolCallOutcomes);

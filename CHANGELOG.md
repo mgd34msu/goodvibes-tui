@@ -4,6 +4,25 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [2.0.4] - 2026-08-01
+
+### Changes
+
+- **Collapsed output is compact.** A folded block — tool result, thinking
+  block, or compaction handoff — now renders as exactly one row: its header,
+  with the `▸ N lines` badge as the only count and the head of the content
+  riding the same line (thinking folds keep their content behind the toggle
+  by design). The frame rows, the interior preview row with its second
+  hidden-count marker, and the blank rows between consecutive folded results
+  are gone: three collapsed tool results that took nineteen rows now take
+  ten. Expanded rendering is unchanged. The fold decisions — threshold,
+  default, separators, preview rule — now come from the shared platform
+  policy in `@pellux/goodvibes-terminal-shell` (2.0.3), the same module the
+  Agent reads, so the two renderers cannot drift apart again.
+- Fixed: a client that inherited the daemon's bind host is no longer refused
+  as "insecure PUBLIC transport" when that host is a wildcard (platform
+  runtime 2.0.3).
+
 ## [2.0.3] - 2026-08-01
 
 ### Changes

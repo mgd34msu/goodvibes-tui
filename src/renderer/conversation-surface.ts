@@ -2,7 +2,7 @@ import { type Line, createEmptyLine, createStyledCell } from '@pellux/goodvibes-
 import { getDisplayWidth, wrapText } from '../utils/terminal-width.ts';
 import { LAYOUT } from './layout.ts';
 import { GLYPHS } from './ui-primitives.ts';
-import { treeBranchCol, treeContentCol } from '@pellux/goodvibes-terminal-shell';
+import { foldPreviewText, treeBranchCol, treeContentCol } from '@pellux/goodvibes-terminal-shell';
 
 export interface ConversationSurfacePalette {
   readonly accent: string;
@@ -173,28 +173,49 @@ export function renderConversationFragment(
   return lines;
 }
 
-export function renderConversationCollapsedFragment(
-  content: string,
+/**
+ * A COLLAPSED block, as exactly one row: the event line, with its preview
+ * riding on the same line right after the badges.
+ *
+ * Collapsed blocks used to render as a framed fragment — a `▄▄▄` cap, an
+ * interior line of text, a `▀▀▀` cap — around what was, in every case, a single
+ * line. Four rows of chrome per fold made a screen of collapsed output mostly
+ * frame. The text those rows carried moves onto the event line and the frame
+ * goes; the `▸ N lines` badge is the count, so nothing restates it.
+ *
+ * The preview is TRUNCATED to fit, never wrapped: wrapping would put the row
+ * back to two lines, which is the thing being removed. Whitespace is flattened
+ * by the caller's choice of preview text — a raw tab or newline would blow the
+ * column out.
+ */
+export function renderConversationFoldedRow(
   width: number,
-  options: {
-    readonly prefix?: string;
-    readonly prefixFg?: string;
-    readonly text?: string;
-    readonly bodyBg?: string;
-    readonly dim?: boolean;
-    readonly italic?: boolean;
-    /** Tree-branch indent, in columns (see conversation-tree.ts). */
-    readonly indentCols?: number;
-  } = {},
-): Line[] {
-  return renderConversationFragment(content, width, {
-    prefix: options.prefix ?? ` ${GLYPHS.navigation.selected} `,
-    prefixFg: options.prefixFg ?? '#38bdf8',
-    text: options.text ?? '244',
-    bodyBg: options.bodyBg ?? '#1a1a1a',
-    dim: options.dim ?? true,
-    italic: options.italic ?? false,
-  }, options.indentCols ?? 0);
+  tone: ConversationEventTone,
+  details: readonly ConversationStatusSegment[],
+  preview: string,
+  indentCols = 0,
+): Line {
+  // What is left of the row after the marker, the label and the badges.
+  const usedCols = (tone.label ? getDisplayWidth(` ${tone.label} `) : 0)
+    + details.reduce((sum, segment) => sum + getDisplayWidth(segment.text), 0);
+  const availCols = width - LAYOUT.RIGHT_MARGIN - treeContentCol(Math.max(0, indentCols)) - usedCols - 1;
+  // Whether a preview renders at all, and its flattening, are the policy's call
+  // (foldPreviewText returns null for "no preview"). Only the TRUNCATION is
+  // ours: display width is a product-local rule the policy deliberately leaves
+  // to the caller — and it must truncate, never wrap.
+  const trimmed = foldPreviewText(preview, availCols);
+  if (trimmed === null) {
+    return renderConversationEventLine(width, tone, details, indentCols);
+  }
+  const text = getDisplayWidth(trimmed) > availCols
+    ? `${trimmed.slice(0, Math.max(1, availCols - 1))}…`
+    : trimmed;
+  return renderConversationEventLine(
+    width,
+    tone,
+    [...details, { text: `${text} `, fg: tone.detailFg ?? '244', dim: true }],
+    indentCols,
+  );
 }
 
 export function renderConversationStatusLine(
