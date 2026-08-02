@@ -4,6 +4,19 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [2.0.6] - 2026-08-02
+
+### Changes
+
+- Changed: payment budget settings are plain amounts under their renamed
+  platform keys (`payments.budget.perPurchaseCeiling` and friends, platform
+  runtime 2.0.5) — enter `100`, read back `100`, decimals allowed and never
+  forced. Settings files migrate on load with a receipt; limits are
+  unchanged, only how they are written.
+- Fixed: every platform state store this terminal keeps writes atomically and
+  quarantines a corrupt file with a receipt instead of failing on it
+  (platform runtime 2.0.5).
+
 ## [2.0.5] - 2026-08-02
 
 ### Changes
