@@ -3,6 +3,7 @@ import { RuntimeEventBus } from '@/runtime/index.ts';
 import { HookDispatcher } from '@pellux/goodvibes-sdk/platform/hooks';
 import { startExternalServices } from '@/runtime/index.ts';
 import { getTestRuntimeServices, disposeTestRuntimeServicesAfterAll } from '../helpers/runtime-services.ts';
+import { makeProjectTempDir } from '../helpers/project-temp.ts';
 
 // Stop the shared test runtime graph when this file ends. Called here, not
 // registered inside the helper, for the reason its doc comment gives.
@@ -20,7 +21,6 @@ function createConfig(overrides: {
     get(
       key:
         | 'daemon.enabled'
-        | 'daemon.embedInProcess'
         | 'danger.httpListener'
         | 'controlPlane.host'
         | 'controlPlane.port'
@@ -28,18 +28,29 @@ function createConfig(overrides: {
         | 'httpListener.port',
     ): boolean | string | number {
       if (key === 'daemon.enabled') return overrides.daemon ?? false;
-      // These tests exercise the EMBEDDED daemon/listener path via the
-      // createDaemonServer/createHttpListener factories directly — force
-      // daemon.embedInProcess so startHostServices never attempts its
-      // default detached-spawn path (which would really try to spawn a
-      // goodvibes-daemon subprocess and blow the test's timeout budget).
-      if (key === 'daemon.embedInProcess') return true;
       if (key === 'danger.httpListener') return overrides.httpListener ?? false;
       if (key === 'controlPlane.host') return overrides.controlPlaneHost ?? '127.0.0.1';
       if (key === 'controlPlane.port') return overrides.controlPlanePort ?? 3421;
       if (key === 'httpListener.host') return overrides.httpListenerHost ?? '127.0.0.1';
       return overrides.httpListenerPort ?? 3422;
     },
+  };
+}
+
+/**
+ * Seams that make the detached-daemon spawn+adopt path resolve immediately and
+ * deterministically: no real subprocess, no real sleep. `daemonRuntimeDir` is a
+ * swept per-test directory (see `makeProjectTempDir`'s doc comment) rather than a
+ * raw `tmpdir()` call, per this repo's test-tmp architecture check.
+ */
+function fastDaemonAdoptSeams(overrides: { probeDaemonPortInUse?: () => Promise<boolean> } = {}) {
+  return {
+    probeDaemonPortInUse: overrides.probeDaemonPortInUse ?? (async () => false),
+    spawnDetachedDaemon: mock(() => ({ pid: 1, unref() {} })),
+    daemonRuntimeDir: makeProjectTempDir('bootstrap-daemon-rt'),
+    sleep: async () => {},
+    isDaemonVersionCompatible: () => true,
+    probeDaemonIdentity: async () => ({ kind: 'goodvibes' as const, status: 'running', version: '9.9.9' }),
   };
 }
 
@@ -55,23 +66,15 @@ describe('startExternalServices', () => {
   });
 
   test('starts both daemon and HTTP listener when enabled', async () => {
-    const daemonStart = mock(async () => {});
-    const daemonStop = mock(async () => {});
-    const daemonEnable = mock(() => true);
     const listenerStart = mock(async () => {});
     const listenerStop = mock(async () => {});
     const listenerEnable = mock(() => true);
-    const daemonFactory = mock((_bus: RuntimeEventBus, _userAuth: object) => ({
-      enable: daemonEnable,
-      start: daemonStart,
-      stop: daemonStop,
-      listRecentControlPlaneEvents: mock(() => []),
-    }));
     const listenerFactory = mock((_dispatcher: HookDispatcher, _userAuth: object) => ({
       enable: listenerEnable,
       start: listenerStart,
       stop: listenerStop,
     }));
+    const daemonSeams = fastDaemonAdoptSeams();
 
     const services = await startExternalServices(
       createConfig({ daemon: true, httpListener: true }),
@@ -79,36 +82,29 @@ describe('startExternalServices', () => {
       hookDispatcher,
       runtimeServices,
       {
-        createDaemonServer: daemonFactory,
+        ...daemonSeams,
         createHttpListener: listenerFactory,
-        probeDaemonPortInUse: async () => false,
         probeHttpListenerPortInUse: async () => false,
       },
     );
 
-    expect(daemonFactory).toHaveBeenCalledTimes(1);
+    // Daemon side: detached spawn + successful identity-probe adoption. There is
+    // no in-process daemon object any more — `daemonServer` is always null.
+    expect(daemonSeams.spawnDetachedDaemon).toHaveBeenCalledTimes(1);
+    expect(services.daemonServer).toBeNull();
+    expect(services.daemonStatus.mode).toBe('external');
+
+    // Listener side is unchanged: still an injected in-process factory.
     expect(listenerFactory).toHaveBeenCalledTimes(1);
-    expect(daemonFactory.mock.calls[0]?.[1]).toBe(listenerFactory.mock.calls[0]?.[1]);
-    // sharedDaemonToken / sharedHttpListenerToken default to undefined when
-    // not provided in factories; enable(config, token?) is now called with
-    // the token argument explicitly.
-    expect(daemonEnable).toHaveBeenCalledWith({ daemon: true }, undefined);
-    expect(daemonStart).toHaveBeenCalled();
     expect(listenerEnable).toHaveBeenCalledWith({ httpListener: true }, undefined);
     expect(listenerStart).toHaveBeenCalled();
 
     await services.stop();
-    expect(daemonStop).toHaveBeenCalled();
     expect(listenerStop).toHaveBeenCalled();
   });
 
   test('does not start disabled services', async () => {
-    const daemonFactory = mock(() => ({
-      enable: mock(() => true),
-      start: mock(async () => {}),
-      stop: mock(async () => {}),
-      listRecentControlPlaneEvents: mock(() => []),
-    }));
+    const spawnDetachedDaemon = mock(() => ({ pid: 1, unref() {} }));
     const listenerFactory = mock(() => ({
       enable: mock(() => true),
       start: mock(async () => {}),
@@ -121,12 +117,12 @@ describe('startExternalServices', () => {
       hookDispatcher,
       runtimeServices,
       {
-        createDaemonServer: daemonFactory,
+        spawnDetachedDaemon,
         createHttpListener: listenerFactory,
       },
     );
 
-    expect(daemonFactory).not.toHaveBeenCalled();
+    expect(spawnDetachedDaemon).not.toHaveBeenCalled();
     expect(listenerFactory).not.toHaveBeenCalled();
     expect(services.daemonServer).toBeNull();
     expect(services.httpListener).toBeNull();
@@ -134,22 +130,24 @@ describe('startExternalServices', () => {
 
   test('continues boot when daemon port is already in use', async () => {
     const listenerStart = mock(async () => {});
+    const spawnDetachedDaemon = mock(() => ({ pid: 1, unref() {} }));
+
     const services = await startExternalServices(
       createConfig({ daemon: true, httpListener: true }),
       runtimeBus,
       hookDispatcher,
       runtimeServices,
       {
-        probeDaemonPortInUse: async () => false,
+        probeDaemonPortInUse: async () => true,
         probeHttpListenerPortInUse: async () => false,
-        createDaemonServer: () => ({
-          enable: mock(() => true),
-          start: mock(async () => {
-            throw new Error('listen EADDRINUSE: Address already in use 127.0.0.1:3421');
-          }),
-          stop: mock(async () => {}),
-          listRecentControlPlaneEvents: mock(() => []),
+        // The occupant on the configured port cannot be verified as a
+        // compatible GoodVibes daemon, so it is never spawned into and never
+        // adopted — but the HTTP listener still starts.
+        probeDaemonIdentity: async () => ({
+          kind: 'unknown' as const,
+          reason: 'listen EADDRINUSE: Address already in use 127.0.0.1:3421',
         }),
+        spawnDetachedDaemon,
         createHttpListener: () => ({
           enable: mock(() => true),
           start: listenerStart,
@@ -158,27 +156,23 @@ describe('startExternalServices', () => {
       },
     );
 
+    expect(spawnDetachedDaemon).not.toHaveBeenCalled();
     expect(services.daemonServer).toBeNull();
     expect(services.httpListener).not.toBeNull();
     expect(listenerStart).toHaveBeenCalled();
   });
 
   test('continues boot when listener port is already in use', async () => {
-    const daemonStart = mock(async () => {});
+    const daemonSeams = fastDaemonAdoptSeams();
+
     const services = await startExternalServices(
       createConfig({ daemon: true, httpListener: true }),
       runtimeBus,
       hookDispatcher,
       runtimeServices,
       {
-        probeDaemonPortInUse: async () => false,
+        ...daemonSeams,
         probeHttpListenerPortInUse: async () => false,
-        createDaemonServer: () => ({
-          enable: mock(() => true),
-          start: daemonStart,
-          stop: mock(async () => {}),
-          listRecentControlPlaneEvents: mock(() => []),
-        }),
         createHttpListener: () => ({
           enable: mock(() => true),
           start: mock(async () => {
@@ -189,13 +183,17 @@ describe('startExternalServices', () => {
       },
     );
 
-    expect(services.daemonServer).not.toBeNull();
+    // Daemon side adopted successfully; the listener's own failure did not
+    // reject the whole boot call.
+    expect(daemonSeams.spawnDetachedDaemon).toHaveBeenCalledTimes(1);
+    expect(services.daemonServer).toBeNull();
+    expect(services.daemonStatus.mode).toBe('external');
     expect(services.httpListener).toBeNull();
-    expect(daemonStart).toHaveBeenCalled();
   });
 
   test('skips daemon startup when another process already owns the default port', async () => {
-    const daemonStart = mock(async () => {});
+    const spawnDetachedDaemon = mock(() => ({ pid: 1, unref() {} }));
+
     const services = await startExternalServices(
       createConfig({ daemon: true }),
       runtimeBus,
@@ -203,24 +201,21 @@ describe('startExternalServices', () => {
       runtimeServices,
       {
         probeDaemonPortInUse: async () => true,
-        createDaemonServer: () => ({
-          enable: mock(() => true),
-          start: daemonStart,
-          stop: mock(async () => {}),
-          listRecentControlPlaneEvents: mock(() => []),
+        probeDaemonIdentity: async () => ({
+          kind: 'unknown' as const,
+          reason: 'port occupied by an unverified process',
         }),
+        spawnDetachedDaemon,
       },
     );
 
     expect(services.daemonServer).toBeNull();
-    expect(daemonStart).not.toHaveBeenCalled();
+    expect(spawnDetachedDaemon).not.toHaveBeenCalled();
   });
 
   test('continues boot when daemon startup hangs', async () => {
-    const daemonStart = mock(async () => {
-      await new Promise(() => {});
-    });
     const listenerStart = mock(async () => {});
+    const spawnDetachedDaemon = mock(() => ({ pid: 1, unref() {} }));
 
     const services = await startExternalServices(
       createConfig({ daemon: true, httpListener: true }),
@@ -228,15 +223,17 @@ describe('startExternalServices', () => {
       hookDispatcher,
       runtimeServices,
       {
-        startupTimeoutMs: 20,
         probeDaemonPortInUse: async () => false,
         probeHttpListenerPortInUse: async () => false,
-        createDaemonServer: () => ({
-          enable: mock(() => true),
-          start: daemonStart,
-          stop: mock(async () => {}),
-          listRecentControlPlaneEvents: mock(() => []),
-        }),
+        spawnDetachedDaemon,
+        daemonRuntimeDir: makeProjectTempDir('bootstrap-daemon-rt'),
+        sleep: async () => {},
+        // The detached daemon never becomes reachable within the (zeroed)
+        // probe budget — the analogue of the old "start() never resolves"
+        // hang, expressed through the probe-poll seam instead.
+        detachedSpawnProbeTimeoutMs: 0,
+        detachedSpawnProbeIntervalMs: 1,
+        probeDaemonIdentity: async () => ({ kind: 'unknown' as const, reason: 'daemon never came up' }),
         createHttpListener: () => ({
           enable: mock(() => true),
           start: listenerStart,
@@ -246,6 +243,7 @@ describe('startExternalServices', () => {
     );
 
     expect(services.daemonServer).toBeNull();
+    expect(services.daemonStatus.mode).toBe('unavailable');
     expect(services.httpListener).not.toBeNull();
     expect(listenerStart).toHaveBeenCalled();
   });
@@ -253,6 +251,7 @@ describe('startExternalServices', () => {
   test('uses configured hosts and ports when probing service bindings', async () => {
     const probeDaemonPortInUse = mock(async () => false);
     const probeHttpListenerPortInUse = mock(async () => false);
+    const daemonSeams = fastDaemonAdoptSeams({ probeDaemonPortInUse: async () => false });
 
     await startExternalServices(
       createConfig({
@@ -267,14 +266,9 @@ describe('startExternalServices', () => {
       hookDispatcher,
       runtimeServices,
       {
+        ...daemonSeams,
         probeDaemonPortInUse,
         probeHttpListenerPortInUse,
-        createDaemonServer: () => ({
-          enable: mock(() => true),
-          start: mock(async () => {}),
-          stop: mock(async () => {}),
-          listRecentControlPlaneEvents: mock(() => []),
-        }),
         createHttpListener: () => ({
           enable: mock(() => true),
           start: mock(async () => {}),

@@ -1,6 +1,6 @@
 {
   "name": "@pellux/goodvibes-tui",
-  "version": "2.0.2",
+  "version": "2.0.3",
   "description": "Terminal-native GoodVibes client for coding, operations, knowledge and channel workflows — a pure client of the GoodVibes daemon.",
   "type": "module",
   "main": "src/main.ts",
@@ -95,11 +95,11 @@
     "@anthropic-ai/bedrock-sdk": "^0.29.1",
     "@anthropic-ai/sdk": "^0.92.0",
     "@ast-grep/napi": "^0.42.0",
-    "@pellux/goodvibes-sdk": "2.0.1",
-    "@pellux/goodvibes-terminal-shell": "2.0.1",
+    "@pellux/goodvibes-sdk": "2.0.2",
+    "@pellux/goodvibes-terminal-shell": "2.0.2",
     "bash-language-server": "^5.6.0",
     "fuse.js": "^7.1.0",
-    "@pellux/goodvibes-daemon": "1.28.3",
+    "@pellux/goodvibes-daemon": "1.28.4",
     "graphql": "^16.13.2",
     "jszip": "^3.10.1",
     "node-edge-tts": "^1.2.10",
@@ -124,10 +124,10 @@
     "typescript": "^5.9.3"
   },
   "optionalDependencies": {
-    "@pellux/goodvibes-tui-linux-x64": "2.0.2",
-    "@pellux/goodvibes-tui-linux-arm64": "2.0.2",
-    "@pellux/goodvibes-tui-darwin-x64": "2.0.2",
-    "@pellux/goodvibes-tui-darwin-arm64": "2.0.2"
+    "@pellux/goodvibes-tui-linux-x64": "2.0.3",
+    "@pellux/goodvibes-tui-linux-arm64": "2.0.3",
+    "@pellux/goodvibes-tui-darwin-x64": "2.0.3",
+    "@pellux/goodvibes-tui-darwin-arm64": "2.0.3"
   },
   "trustedDependencies": [],
   "overrides": {

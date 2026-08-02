@@ -4,6 +4,20 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [2.0.3] - 2026-08-01
+
+### Changes
+
+- **Fixed: conversation turns work again.** The 2.0.0-2.0.2 packaged binary
+  crashed on the first message of every conversation — the platform runtime
+  still carried pre-split remnants that lazily imported in-process daemon
+  composition code, which fractured the packaged bundle's module
+  initialization; the turn engine then hit an uninitialized module and died
+  with a swallowed error, leaving the UI frozen at "a turn is running". The
+  runtime is now 2.0.2, which removes those remnants entirely, and this
+  release's gates run a real prompt through the built binary — not just
+  `--version` — before anything ships.
+
 ## [2.0.2] - 2026-08-01
 
 ### Changes
