@@ -4,6 +4,18 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [2.0.5] - 2026-08-02
+
+### Changes
+
+- Fixed: a corrupt watcher snapshot no longer takes down the process that
+  reads it. Snapshots save atomically, and a torn file — the live case was a
+  host freeze leaving valid JSON followed by NUL bytes — is quarantined with
+  a receipt while watcher state rebuilds from live registrations (platform
+  runtime 2.0.4).
+- Fixed: refusing an unknown owner-profile field id names the valid ids
+  instead of citing a documentation section.
+
 ## [2.0.4] - 2026-08-01
 
 ### Changes
