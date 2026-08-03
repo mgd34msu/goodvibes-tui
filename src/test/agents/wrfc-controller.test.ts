@@ -548,10 +548,12 @@ describe('WrfcController', () => {
 
       expect(chain.state).toBe('passed');
       expect(owner.status).toBe('completed');
-      // The completion message states the review outcome and the (non-fatal) commit outcome separately.
-      expect(owner.fullOutput).toContain('review 10/10');
-      expect(owner.fullOutput).toContain('commit failed (non-fatal)');
-      expect(owner.fullOutput).toContain('merge conflict');
+      // Platform runtime 2.0.6: fullOutput carries the ANSWER (what the chain
+      // actually produced); the review and (non-fatal) commit outcomes are
+      // operator-audience status and live on progress.
+      expect(owner.progress).toContain('review 10/10');
+      expect(owner.progress).toContain('commit failed (non-fatal)');
+      expect(owner.progress).toContain('merge conflict');
       expect(workflowCalls('WORKFLOW_CHAIN_FAILED')).toHaveLength(0);
       expect(workflowCalls('WORKFLOW_CHAIN_PASSED')).toHaveLength(1);
     });

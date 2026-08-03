@@ -884,7 +884,10 @@ describe('profile.* keys reach the settings workspace', () => {
     return new ConfigManager({ workingDir: dir, homeDir: dir, surfaceRoot: 'tui' });
   }
 
-  /** The eight keys design §12 specifies, by name rather than by count. */
+  /**
+   * The eight keys design §12 specifies plus the two conversational-capture
+   * keys platform runtime 2.0.6 added, by name rather than by count.
+   */
   const EXPECTED_KEYS = [
     'profile.enabled',
     'profile.autonomousWrites',
@@ -894,6 +897,8 @@ describe('profile.* keys reach the settings workspace', () => {
     'profile.consumerFallback',
     'profile.reloadThrottleMs',
     'profile.path',
+    'profile.conversationalCapture',
+    'profile.ownerChannels',
   ] as const;
 
   test('the SDK schema carries every profile.* key the design specifies', () => {

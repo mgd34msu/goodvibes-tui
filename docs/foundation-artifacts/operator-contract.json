@@ -3,7 +3,7 @@
   "product": {
     "id": "goodvibes",
     "surface": "operator",
-    "version": "2.0.5"
+    "version": "2.0.7"
   },
   "auth": {
     "modes": [
@@ -95946,6 +95946,7 @@
                 "companion-task",
                 "companion-chat",
                 "automation",
+                "channel",
                 "acp",
                 "hosted"
               ]

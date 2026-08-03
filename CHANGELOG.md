@@ -4,6 +4,32 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [2.0.7] - 2026-08-02
+
+### Changes
+
+- **Fixed: a chat message gets an answer, never workflow paperwork.** The
+  conversation gate's decision that a channel message is conversation is now
+  authoritative over the review-wording heuristic, replies carry the agent's
+  answer instead of chain status lines, and duplicate completion replies are
+  gone (platform runtime 2.0.7).
+- **Added: personal information shared in conversation gets captured — and
+  understood.** A conversational channel turn carries the profile capture
+  tool: a pasted itinerary lands in the owner profile's Plans section, the
+  turn infers what it means (the away-span, the travelers, durable facts
+  about the destination), uses it in the answer, and offers the obviously
+  useful next steps once. Anything beyond the conversation is proposed and
+  waits for a yes.
+- **Fixed: a chat session is filed as a chat.** Channel-originated sessions
+  in the cross-visible session list carry the new `channel` kind instead of
+  reading as TUI project sessions rooted in a filesystem path; this client
+  understands the new kind, and a sender on a channel's owner allowlist is
+  attributed as the owner principal.
+- Fixed: the daemon settings file is rewritten only by the daemon — this
+  client migrates its in-memory view of renamed settings and leaves the file
+  bytes untouched, so updating the TUI can no longer rewrite settings out
+  from under an older running daemon (platform runtime 2.0.7).
+
 ## [2.0.6] - 2026-08-02
 
 ### Changes
