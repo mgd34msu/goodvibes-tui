@@ -85,6 +85,30 @@ try {
       writeFileSync(pkgPath, `${JSON.stringify(pkg, null, 2)}\n`);
     }
 
+    if (!dryRun) {
+      // Idempotence: a re-run of a release (tag re-dispatch, remediation
+      // re-push) must not fail on "cannot publish over existing version".
+      // If the registry already serves exactly this name@version, the publish
+      // goal is met — say so and succeed, the same contract as the daemon's
+      // ci-publish. Only a version the registry does not serve gets published.
+      const stagedPkg = JSON.parse(readFileSync(join(stageDir, 'package.json'), 'utf8'));
+      const spec = `${stagedPkg.name}@${stagedPkg.version}`;
+      try {
+        const served = execFileSync('npm', ['view', spec, 'version', '--registry', registry], {
+          cwd: stageDir,
+          stdio: ['inherit', 'pipe', 'pipe'],
+          env: process.env,
+          encoding: 'utf8',
+        }).trim();
+        if (served === String(stagedPkg.version)) {
+          console.log(`[publish-package] ${spec} already on ${registry} — nothing to do`);
+          return;
+        }
+      } catch {
+        // Not served (or registry refused the view) — proceed to publish.
+      }
+    }
+
     const args = dryRun
       ? ['pack', '--json']
       : ['publish', '--access', 'public', '--registry', registry];
