@@ -68,7 +68,7 @@ describe('new SDK settings surfaces — honest descriptions reach the modal', ()
 });
 
 /**
- * Regression coverage for the twelve occasions.* settings the SDK added for
+ * Regression coverage for the eleven occasions.* settings the SDK ships for
  * the proactive occasions/plans loop (docs/occasions.md §8).
  *
  * buildSettingGroups() guards every push with `if (groups.has(cat))`, keyed
@@ -77,20 +77,19 @@ describe('new SDK settings surfaces — honest descriptions reach the modal', ()
  * cluster.* (dropped from the workspace entirely, reachable only by
  * hand-editing a settings file). Before this test, 'occasions' had no entry
  * in SettingsCategory, SETTINGS_CATEGORY_GROUPS, CATEGORY_LABELS or
- * CATEGORY_INFO, so all twelve keys would silently vanish from the settings
+ * CATEGORY_INFO, so all eleven keys would silently vanish from the settings
  * modal despite being real, invokable, schema-declared config. Fixed by
  * adding 'occasions' to all four; this test pins that every key actually
  * lands in a group and that the category has a real label and description
  * (never an empty modal panel — see the "modals show full text" standard).
  */
-describe('occasions settings surface — all twelve keys reach the modal, not dropped', () => {
+describe('occasions settings surface — all eleven keys reach the modal, not dropped', () => {
   const OCCASIONS_SETTING_KEYS = [
     'occasions.enabled',
     'occasions.leadDays',
     'occasions.activeHours',
     'occasions.nudgeChannel',
     'occasions.cadenceDays',
-    'occasions.finalStretchDays',
     'occasions.awayAdjust',
     'occasions.calendarMirror',
     'occasions.suppressMirroredNudges',

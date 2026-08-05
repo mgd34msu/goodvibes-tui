@@ -561,7 +561,9 @@ describe('exec tool — safe mode warnings', () => {
 // ---------------------------------------------------------------------------
 
 describe('exec tool — verbosity', () => {
-  test('count_only returns only exit_code and success', async () => {
+  test('count_only returns exit_code and success, and NAMES what it omitted', async () => {
+    // Platform runtime 2.0.9: output shaping never hides that it dropped
+    // content — even count_only says what was omitted, with a count.
     const result = await execTool.execute(withWorkingDir({
       commands: [{ cmd: 'echo verbosity_test' }],
       verbosity: 'count_only',
@@ -569,17 +571,21 @@ describe('exec tool — verbosity', () => {
     const out = parseOutput(result.output);
     expect(out.exit_code).toBe(0);
     expect(out.success).toBe(true);
-    // stdout should NOT be present
-    expect(out.stdout).toBeUndefined();
+    expect(String(out.stdout)).toMatch(/1 stdout line omitted/);
+    expect(String(out.stdout)).toMatch(/raise verbosity|add a filter/);
   });
 
-  test('minimal returns first line of stdout/stderr', async () => {
+  test('minimal returns the first line PLUS a counted truncation marker', async () => {
+    // The silent one-line truncation manufactured a real incident (the model
+    // treated one line of pactl output as the complete device list). Every
+    // truncation now carries a counted marker.
     const result = await execTool.execute(withWorkingDir({
       commands: [{ cmd: 'printf "line1\nline2\nline3"' }],
       verbosity: 'minimal',
     }));
     const out = parseOutput(result.output);
-    expect(out.stdout).toBe('line1');
+    expect(String(out.stdout).startsWith('line1')).toBe(true);
+    expect(String(out.stdout)).toMatch(/\+2 more stdout lines/);
   });
 
   test('standard returns full stdout/stderr', async () => {

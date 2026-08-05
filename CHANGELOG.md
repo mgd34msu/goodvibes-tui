@@ -4,6 +4,24 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [2.0.9] - 2026-08-05
+
+### Changes
+
+- **Ctrl+V image paste is pinned against the silent-death mode** that shipped
+  in the agent: eight composite tests prove the keystroke, the attachment,
+  and the outgoing image part end to end (this client's guard was already
+  correct — now it can never regress unnoticed).
+- **Reminders respect being heard** (platform runtime 2.0.9): two touches
+  per occasion, acknowledgments mute, the owner's own remember-only dates
+  never push; `occasions.finalStretchDays` is retired with a receipted
+  migration.
+- Exec output marks every truncation with a counted line instead of silently
+  showing one line as if it were everything, and the permission guard stops
+  refusing ordinary diagnostics while catching backtick command assembly.
+- The tool-activity label holds still, wake transcription is daemon-first,
+  and the managed voice installer proves itself with a spoken round trip.
+
 ## [2.0.8] - 2026-08-05
 
 ### Changes
