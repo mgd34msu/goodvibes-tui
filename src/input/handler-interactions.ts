@@ -58,6 +58,45 @@ export async function hydrateOnboardingWizardFromRuntimeForHandler(handler: Inpu
     }
   }
 
+/**
+ * handlePasteForHandler - Shared paste path for Ctrl+V and middle-click.
+ *
+ * Tries the clipboard's image first, then its text. The clipboard itself comes
+ * from `handler.clipboardSource`, so tests can hand in a clipboard without
+ * touching the real one.
+ *
+ * The prompt is edited on the HANDLER here, not on the shortcut route state
+ * that dispatched the key. feedInputTokens snapshots the prompt before
+ * dispatching and would write that snapshot back over this edit, erasing the
+ * paste — it does not, because it only restores a field the action left
+ * untouched (see the promptBefore guard in handler-feed.ts). That guard is the
+ * only reason Ctrl+V works, so it is pinned by test.
+ */
+export function handlePasteForHandler(handler: InputHandler): ReturnType<typeof handleClipboardPaste> {
+  const result = handleClipboardPaste({
+    prompt: handler.prompt,
+    cursorPos: handler.cursorPos,
+    pasteRegistry: handler.pasteRegistry,
+    nextPasteId: handler.nextPasteId,
+    imageRegistry: handler.imageRegistry,
+    nextImageId: handler.nextImageId,
+    saveUndoState: () => handler.saveUndoState(),
+    ensureInputCursorVisible: () => handler.ensureInputCursorVisible(),
+    requestRender: handler.requestRender,
+  }, handler.uiServices.environment.shellPaths.workingDirectory, handler.clipboardSource);
+
+  handler.prompt = result.prompt;
+  handler.cursorPos = result.cursorPos;
+  handler.nextImageId = result.nextImageId;
+  handler.nextPasteId = result.nextPasteId;
+
+  if (!result.pasted) {
+    handler.conversationManager?.log('[Paste: clipboard does not contain supported text or image data]', { fg: '240' });
+    handler.requestRender();
+  }
+  return result;
+}
+
 export function registerPasteForHandler(handler: InputHandler, content: string): string {
     const result = registerPaste({
       pasteRegistry: handler.pasteRegistry,

@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node
 import { dirname } from 'node:path';
 import { InputTokenizer } from '@pellux/goodvibes-sdk/platform/core';
 import { createOAuthLocalListener } from '@pellux/goodvibes-sdk/platform/config';
-import { clearModalStackForHandler, cleanupMarkerRegistryForHandler, executeBlockActionForHandler, expandPromptForHandler, findMarkerAtPosForHandler, getImageAttachmentsForHandler, handleBlockCopyForHandler, handleBlockSaveForHandler, handleBlockToggleForHandler, handleBookmarkForHandler, handleCopyForHandler, handleCtrlCForHandler, handleDiffApplyForHandler, handleEscapeForHandler, hydrateOnboardingWizardFromRuntimeForHandler, modalOpenedForHandler, openOnboardingWizardForHandler, registerPasteForHandler } from './handler-interactions.ts';
+import { clearModalStackForHandler, cleanupMarkerRegistryForHandler, executeBlockActionForHandler, expandPromptForHandler, findMarkerAtPosForHandler, getImageAttachmentsForHandler, handleBlockCopyForHandler, handleBlockSaveForHandler, handleBlockToggleForHandler, handleBookmarkForHandler, handleCopyForHandler, handleCtrlCForHandler, handleDiffApplyForHandler, handleEscapeForHandler, handlePasteForHandler, hydrateOnboardingWizardFromRuntimeForHandler, modalOpenedForHandler, openOnboardingWizardForHandler, registerPasteForHandler } from './handler-interactions.ts';
 import { getViewportBottomLine } from '../renderer/conversation-layout.ts';
 import { clearOnboardingModelPickerCancelStateForHandler, clearOnboardingPendingModelPickerTargetForHandler, completeOpenAiSubscriptionFromListenerForHandler, getOnboardingConfigValueForHandler, getOnboardingRuntimePostureForHandler, handleModelPickerCommitForHandler, handleOnboardingActionForHandler, handleOpenAiSubscriptionFinishForHandler, handleOpenAiSubscriptionStartForHandler, openModelPickerWithTargetForHandler, openProviderModelPickerWithTargetForHandler, refreshOnboardingHydrationForHandler, restartOnboardingExternalServicesIfNeededForHandler, restoreOnboardingModelPickerCancelStateForHandler, saveWizardProgressForHandler, syncRuntimeFromOnboardingRequestForHandler, verifyOnboardingRuntimePostureForHandler, } from './handler-onboarding.ts';
 import type { OnboardingRuntimePosture } from './handler-types.ts';
@@ -53,12 +53,14 @@ import {
   handleBlockToggle,
   handleBookmark,
   handleClipboardPaste,
+  type ClipboardPasteSource,
   handleCopy,
   handleCtrlC,
   handleDiffApply,
   mediaTypeFromExt,
   registerPaste,
 } from './handler-content-actions.ts';
+import { pasteFromClipboard, pasteImageFromClipboard } from '../utils/clipboard.ts';
 import {
   handleIndicatorFocusToken,
   handleMouseToken,
@@ -574,27 +576,14 @@ export class InputHandler implements InputHandlerLike {
    * Tries image clipboard first, falls back to text paste.
    */
   public handlePaste(): ReturnType<typeof handleClipboardPaste> {
-    const result = handleClipboardPaste({
-      prompt: this.prompt,
-      cursorPos: this.cursorPos,
-      pasteRegistry: this.pasteRegistry,
-      nextPasteId: this.nextPasteId,
-      imageRegistry: this.imageRegistry,
-      nextImageId: this.nextImageId,
-      saveUndoState: () => this.saveUndoState(),
-      ensureInputCursorVisible: () => this.ensureInputCursorVisible(),
-      requestRender: this.requestRender,
-    }, this.uiServices.environment.shellPaths.workingDirectory);
-    this.prompt = result.prompt;
-    this.cursorPos = result.cursorPos;
-    this.nextImageId = result.nextImageId;
-    this.nextPasteId = result.nextPasteId;
-    if (!result.pasted) {
-      this.conversationManager?.log('[Paste: clipboard does not contain supported text or image data]', { fg: '240' });
-      this.requestRender();
-    }
-    return result;
+    return handlePasteForHandler(this);
   }
+
+  /**
+   * The clipboard this composer pastes from. Swappable so tests can supply a
+   * clipboard instead of reaching for the machine's real one.
+   */
+  public clipboardSource: ClipboardPasteSource = { pasteImageFromClipboard, pasteFromClipboard };
 
   /** Content width for wrapping — set by main.ts via setContentWidth(). */
   public contentWidth = 76;

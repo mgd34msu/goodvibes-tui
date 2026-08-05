@@ -19,6 +19,7 @@ import type { UiRuntimeServices } from '../runtime/ui-services.ts';
 import type { CommandContext } from './command-registry.ts';
 import type { ConversationManager } from '../core/conversation';
 import type { ModelPickerModal, ModelPickerTarget } from './model-picker.ts';
+import type { ClipboardPasteSource } from './handler-content-actions.ts';
 import type { SelectionManager } from '@pellux/goodvibes-terminal-shell';
 import type { InfiniteBuffer } from '@pellux/goodvibes-terminal-shell';
 import type { AutocompleteEngine } from './autocomplete.ts';
@@ -81,6 +82,11 @@ export interface InputHandlerLike {
   nextPasteId: number;
   imageRegistry: Map<string, { data: string; mediaType: string }>;
   nextImageId: number;
+  /**
+   * The clipboard this composer pastes from. Swappable so tests can supply a
+   * clipboard instead of reaching for the machine's real one.
+   */
+  clipboardSource: ClipboardPasteSource;
 
   // ── Timing ───────────────────────────────────────────────────────────────
   lastCopyTime: number;
@@ -124,6 +130,7 @@ export interface InputHandlerLike {
   // ── Methods: modal lifecycle ──────────────────────────────────────────────
   modalOpened(name: string): void;
   saveUndoState(): void;
+  ensureInputCursorVisible(contentWidth?: number): void;
 
   // ── Methods: block actions (dispatched in executeBlockAction) ────────────
   handleBlockCopy(): void;
