@@ -4,6 +4,24 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [2.0.8] - 2026-08-05
+
+### Changes
+
+- **Fixed: profile reads work against an up-to-date daemon.** The daemon's
+  profile answers carried more than the published contract allowed, so strict
+  clients refused them; the contract and the answers agree now, held together
+  by a conformance test (platform runtime 2.0.8).
+- Changed: session event streams are render-grade and session-scoped, so a
+  session viewed from this client shows what the model said and what it did —
+  including the agent's daemon-hosted conversations, now cross-visible with
+  their messages.
+- Changed: browser automation uses the platform's own managed profile, one
+  live session, capped retries, and hands sign-in pages back as URLs.
+- Changed: the settings catalog carries the connector keys the daemon really
+  reads (calendar, google, email), and catalog search understands plain words
+  (platform runtime 2.0.8).
+
 ## [2.0.7] - 2026-08-02
 
 ### Changes

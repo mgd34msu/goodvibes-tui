@@ -81,6 +81,16 @@ export type SettingsCategory =
   // hostedSessions.* key from the workspace, which is exactly what happened to
   // push.* and cluster.* before them.
   | 'hostedSessions'
+  // email.* / calendar.* / google.* — the connector keys the daemon really
+  // reads for its Google-backed mail and calendar services (platform runtime
+  // 2.0.8 registered them as described schema rows; before that they were
+  // cast onto the live config invisibly and answered "Unknown setting").
+  // Same mandatory-dual-membership rule as profile and hostedSessions above —
+  // without BOTH these entries and the SETTINGS_CATEGORY_GROUPS membership
+  // below, every one of the 22 connector keys is dropped from the workspace.
+  | 'email'
+  | 'calendar'
+  | 'google'
   | 'danger';
 
 export type SettingsFocusPane = 'categories' | 'settings';
@@ -96,7 +106,10 @@ export const SETTINGS_CATEGORY_GROUPS: ReadonlyArray<{
   // answer "where does this conversation actually run, and who can reach it" —
   // the detach policy is a fact about the daemon holding a session open, not
   // about this terminal's presentation of it.
-  { label: 'Surfaces & Cloud', categories: ['surfaces', 'hostedSessions', 'device', 'conversationGate', 'integrations', 'connections', 'mcp', 'cloudflare'] },
+  // 'email', 'calendar' and 'google' sit beside 'surfaces': they configure
+  // the daemon's connections to the owner's mail and calendar — where those
+  // services reach the world, not how this terminal presents anything.
+  { label: 'Surfaces & Cloud', categories: ['surfaces', 'hostedSessions', 'device', 'conversationGate', 'integrations', 'connections', 'email', 'calendar', 'google', 'mcp', 'cloudflare'] },
   // 'occasions' sits beside 'checkin': both are proactive background loops
   // (a cadence, a judgment pass, a conditional channel delivery) rather than
   // facts held about the owner — the data occasions/plans declare lives in

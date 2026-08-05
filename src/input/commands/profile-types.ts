@@ -354,7 +354,9 @@ export function toProfileProvenanceReport(value: unknown): Checked<ProfileProven
   if (provenance === MALFORMED) return MALFORMED;
   const superseded = checkedArray(record.superseded, toSuperseded);
   if (superseded === MALFORMED) return MALFORMED;
-  return { fieldId, present, handEdited, ...(provenance ? { provenance } : {}), superseded };
+  // Platform runtime 2.0.8: the contract declares provenance nullable and
+  // always present — null IS the answer for a hand-edited field.
+  return { fieldId, present, handEdited, provenance: provenance ?? null, superseded };
 }
 
 function toChange(value: unknown): Checked<ProfileChangeView> {

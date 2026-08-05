@@ -108,6 +108,8 @@ export interface RuntimeServicesOptions {
 export interface RuntimeServices {
   readonly workingDirectory: string;
   readonly homeDirectory: string;
+  /** The surface segment this runtime's stores live under (platform runtime 2.0.8 requires it — a blank segment resolved to the unscoped control-plane orphan). */
+  readonly surfaceRoot: string;
   /** The declare-once session-storage handle every session reader and writer threads through — see session-storage-services.ts. */
   readonly surface: SessionSurface;
   readonly shellPaths: ShellPathService;

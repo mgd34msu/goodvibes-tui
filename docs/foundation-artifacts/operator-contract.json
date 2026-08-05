@@ -3,7 +3,7 @@
   "product": {
     "id": "goodvibes",
     "surface": "operator",
-    "version": "2.0.7"
+    "version": "2.0.8"
   },
   "auth": {
     "modes": [
@@ -79225,6 +79225,9 @@
                 "valid": {
                   "type": "boolean"
                 },
+                "section": {
+                  "type": "string"
+                },
                 "invalidReason": {
                   "type": "string"
                 },
@@ -79253,7 +79256,8 @@
                 "fieldId",
                 "label",
                 "value",
-                "valid"
+                "valid",
+                "section"
               ],
               "additionalProperties": false
             },
@@ -79405,24 +79409,31 @@
               "type": "boolean"
             },
             "provenance": {
-              "type": "object",
-              "properties": {
-                "surface": {
-                  "type": "string"
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "surface": {
+                      "type": "string"
+                    },
+                    "date": {
+                      "type": "string"
+                    },
+                    "said": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "surface",
+                    "date",
+                    "said"
+                  ],
+                  "additionalProperties": false
                 },
-                "date": {
-                  "type": "string"
-                },
-                "said": {
-                  "type": "string"
+                {
+                  "type": "null"
                 }
-              },
-              "required": [
-                "surface",
-                "date",
-                "said"
-              ],
-              "additionalProperties": false
+              ]
             },
             "superseded": {
               "type": "array",
@@ -79488,6 +79499,7 @@
             "fieldId",
             "present",
             "handEdited",
+            "provenance",
             "superseded"
           ],
           "additionalProperties": false

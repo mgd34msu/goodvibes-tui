@@ -438,12 +438,56 @@ export const PAYMENTS_LOCAL_SETTINGS = [
   'payments.notifyChannels',
 ] as const;
 
+/**
+ * Connector settings — the daemon's Google-backed mail/calendar keys plus the
+ * connected-host dial switch and the hosted-turn routing switch, declared as
+ * described schema rows by platform runtime 2.0.8 (before that the connector
+ * keys were cast onto the live config invisibly and the settings surface
+ * answered "Unknown setting" for keys the daemon really reads). Counted for
+ * exactly the reason DAEMON_MAILBOX_LOCAL_SETTINGS is: the same four-part
+ * persistence contract runs over every one of them in
+ * src/test/verification/connector-settings-persistence.test.ts, and that test
+ * asserts this list is the complete schema set for the email, calendar and
+ * google prefixes
+ * plus the two switches. Arriving uncounted is what dropped
+ * localBehaviorPercent through its floor when the schema grew. The three
+ * secret-valued keys hold goodvibes://secrets/ references, never values —
+ * same note as the mailbox passwords above.
+ */
+export const CONNECTOR_LOCAL_SETTINGS = [
+  'email.enabled',
+  'email.imapHost',
+  'email.imapPort',
+  'email.imapSecurity',
+  'email.smtpHost',
+  'email.smtpPort',
+  'email.smtpSecurity',
+  'email.username',
+  'email.passwordRef',
+  'email.smtpPasswordRef',
+  'email.fromAddress',
+  'email.mailbox',
+  'email.draftsMailbox',
+  'calendar.google.clientId',
+  'calendar.google.clientSecretRef',
+  'calendar.google.icsUrl',
+  'calendar.microsoft.clientId',
+  'calendar.microsoft.clientSecretRef',
+  'google.oauth.projectId',
+  'google.oauth.publishingStatus',
+  'google.oauth.refreshToken',
+  'google.credentials.migratedFrom',
+  'daemon.connectedHost.enabled',
+  'hostedSessions.routeConversationTurns',
+] as const;
+
 const SETTINGS_BEHAVIOR_VERIFIED = SETTINGS_BEHAVIOR_BASELINE
   + FEATURE_KNOB_LOCAL_SETTINGS.length
   + DEVICE_AND_TRIGGER_LOCAL_SETTINGS.length
   + CLUSTER_GROUP_LOCAL_SETTINGS.length
   + DAEMON_MAILBOX_LOCAL_SETTINGS.length
   + PAYMENTS_LOCAL_SETTINGS.length
+  + CONNECTOR_LOCAL_SETTINGS.length
   + ENABLEMENT_KEYS_BEHAVIOR_VERIFIED;
 
 const EXTERNAL_SLASH_COMMANDS = new Set([

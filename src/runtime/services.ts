@@ -559,6 +559,7 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
   const services: RuntimeServices = {
     workingDirectory,
     homeDirectory,
+    surfaceRoot: GOODVIBES_TUI_SURFACE_ROOT,
     surface,
     shellPaths,
     workspaceTrustManager,
