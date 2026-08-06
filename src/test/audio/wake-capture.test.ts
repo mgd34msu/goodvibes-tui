@@ -702,13 +702,15 @@ describe('a recorder that keeps dying is restarted, then latched', () => {
     await flush();
 
     expect(harness.runtime.status()?.kind).toBe('wake-restarting');
-    expect(harness.timers.length).toBe(1);
+    // The start/first-frame watchdogs schedule their own (much longer) timers,
+    // so the restart backoff is found by its delay, not by being the only timer.
     // restartBackoffMs * attempt, linear: 100 * 1.
-    expect(harness.timers[0]!.ms).toBe(100);
+    const restartTimers = () => harness.timers.filter((timer) => timer.ms === 100);
+    expect(restartTimers().length).toBe(1);
     expect(harness.notices.some((line) => line.includes('restarting the wake-word detector'))).toBe(true);
 
     // Fire the injected backoff timer: the detector comes back on a fresh device.
-    harness.timers[0]!.handler();
+    restartTimers()[0]!.handler();
     await flush();
     expect(harness.spawns.calls.length).toBe(2);
 
@@ -717,8 +719,9 @@ describe('a recorder that keeps dying is restarted, then latched', () => {
     await flush();
 
     expect(harness.runtime.status()?.kind).toBe('wake-latched');
-    // No third attempt was scheduled.
-    expect(harness.timers.length).toBe(1);
+    // No further restart was scheduled at any backoff step.
+    expect(restartTimers().length).toBe(1);
+    expect(harness.timers.filter((timer) => timer.ms === 200).length).toBe(0);
     const latched = harness.notices.join('\n');
     expect(latched).toContain('The wake-word detector stopped');
     expect(latched).toContain('crashed 2 times within 60s');
@@ -733,8 +736,12 @@ describe('a recorder that keeps dying is restarted, then latched', () => {
 
     harness.spawns.processes[0]!.emitClose(1);
     await flush();
-    harness.timers[0]!.handler();
+    // The watchdogs schedule longer timers of their own; the restart backoff is
+    // the 100 ms one (restartBackoffMs * attempt with the budget intact).
+    const restartTimers = () => harness.timers.filter((timer) => timer.ms === 100);
+    restartTimers()[0]!.handler();
     await flush();
+    expect(harness.spawns.calls.length).toBe(2);
 
     // Age the first crash out of the 60s rolling window before the second one.
     harness.now += 61_000;
@@ -742,7 +749,7 @@ describe('a recorder that keeps dying is restarted, then latched', () => {
     await flush();
 
     expect(harness.runtime.status()?.kind).toBe('wake-restarting');
-    expect(harness.timers.length).toBe(2);
+    expect(restartTimers().length).toBe(2);
   });
 });
 

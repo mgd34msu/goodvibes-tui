@@ -4,6 +4,33 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [2.0.10] - 2026-08-05
+
+### Changes
+
+- **No background command skips the checks anymore** (platform runtime
+  2.0.10): a command launched with `background: true` used to return before
+  the sandbox, the terminal-session guard, or the unconditional safety block
+  ever ran. Every path now goes through the same single checkpoint; an
+  ordinary detached command still detaches.
+- **A new turn can no longer be ended by the previous one** (platform runtime
+  2.0.10): the event stream resumes from the position it actually reached
+  instead of replaying the prior turn's tail, and a turn-completion frame for
+  a turn this client did not start is refused — so a fresh turn's real output
+  is never dropped as leftovers.
+- **Concurrent saves cannot eat each other's temp files**: unique temp names
+  per write and an age-gated sweep replace the pid-suffixed names that let a
+  second instance's cleanup unlink a live write mid-rename.
+- **Wake listening tells the truth**: a configured input device is a hint
+  that is validated at bind time and falls back loudly instead of going
+  silent, a recorder backend that produces no bytes is rotated out, and
+  "listening" is only claimed once audio frames actually arrive.
+- **A session hosted for another surface keeps that surface's identity**, so
+  its client-owned settings resolve against the store the user is actually
+  in, and one busy hosted turn no longer freezes every session's heartbeat.
+- Bundled daemon floor moves to 1.28.12, which requires the exec boundary
+  for the conversational sessions it hosts.
+
 ## [2.0.9] - 2026-08-05
 
 ### Changes
