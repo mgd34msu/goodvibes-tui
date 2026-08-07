@@ -4,6 +4,20 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [2.0.11] - 2026-08-06
+
+### Changes
+
+- **An unnamed voice request goes to the provider the user configured**
+  (platform runtime 2.0.11): the provider picker no longer hands unnamed
+  transcription or synthesis requests to the first cloud provider on its
+  internal list while fully provisioned local engines sit unasked.
+  Configured providers win, local engines first — free, offline, no key.
+  This is what made wake-word transcription fail "OpenAI API key missing"
+  on a machine set up for local voice.
+- Bundled daemon floor moves to 1.28.13, which carries the same fix for
+  the sessions it hosts.
+
 ## [2.0.10] - 2026-08-05
 
 ### Changes
