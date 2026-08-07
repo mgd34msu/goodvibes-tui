@@ -6,13 +6,15 @@
  * local import surface used by the app.
  */
 
-import {
-  bootstrap,
-  operations,
-  security,
-  shell,
-  transport,
-} from '@pellux/goodvibes-sdk/platform/runtime';
+// No runtime namespace objects are imported as values here: an eager
+// `export const X = ns.X` compiles to a top-level property read off a lazy
+// namespace object, and Bun's single-file compiler orders module bodies
+// nondeterministically — on some builds the read lands before the defining
+// module and the compiled binary dies at load with a ReferenceError. Every
+// value below is a grouped live re-export from the SDK's registered runtime
+// subpaths instead (exactly how the operations block below fixed the first
+// bite of this class); the toolchain post-build-smoke scans compiled
+// artifacts for the eager pattern and fails the build if one returns.
 import { existsSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import type {
@@ -71,36 +73,39 @@ export type {
   WorkflowEvent,
 } from '@pellux/goodvibes-sdk/events';
 
-// Bootstrap compatibility aliases.
-export const scheduleBackgroundMcpDiscovery = bootstrap.scheduleBackgroundMcpDiscovery;
-export const startBackgroundProviderDiscovery = bootstrap.startBackgroundProviderDiscovery;
-export const startBackgroundProviderRegistration = bootstrap.startBackgroundProviderDiscovery;
-export const loadRuntimeSystemPrompt = bootstrap.loadRuntimeSystemPrompt;
-export const loadBootstrapSystemPrompt = bootstrap.loadRuntimeSystemPrompt;
-export const restoreRuntimeModel = bootstrap.restoreRuntimeModel;
-export const restoreSavedModel = bootstrap.restoreRuntimeModel;
-export const synchronizeConfiguredServices = bootstrap.synchronizeConfiguredServices;
-export const syncConfiguredServices = bootstrap.synchronizeConfiguredServices;
-export const registerBootstrapRuntimeEvents = bootstrap.registerBootstrapRuntimeEvents;
-export const registerHostRuntimeEvents = bootstrap.registerHostRuntimeEvents;
-export const startHostServices = bootstrap.startHostServices;
-export const startExternalServices = bootstrap.startHostServices;
-export const registerBootstrapHookBridge = bootstrap.registerBootstrapHookBridge;
-export const createDeferredStartupCoordinator = bootstrap.createDeferredStartupCoordinator;
-export const shutdownRuntime = bootstrap.shutdownRuntime;
-export const saveSession = bootstrap.saveSession;
-export const fireSessionStart = bootstrap.fireSessionStart;
-export const createDirectTransportServices = bootstrap.createDirectTransportServices;
-export const createOperatorClientServices = bootstrap.createOperatorClientServices;
-export const createPeerClientDependencies = bootstrap.createPeerClientDependencies;
-export const createRuntimeFoundationClients = bootstrap.createRuntimeFoundationClients;
-export const createOperatorClient = bootstrap.createOperatorClient;
-export const createPeerClient = bootstrap.createPeerClient;
-export const createRuntimeProviderApi = bootstrap.createRuntimeProviderApi;
-export const createRuntimeKnowledgeApi = bootstrap.createRuntimeKnowledgeApi;
-export const createRuntimeHookApi = bootstrap.createRuntimeHookApi;
-export const createRuntimeMcpApi = bootstrap.createRuntimeMcpApi;
-export const createRuntimeOpsApi = bootstrap.createRuntimeOpsApi;
+// Bootstrap compatibility aliases — grouped live re-exports (see the header
+// comment for why these must not be eager namespace reads).
+export {
+  scheduleBackgroundMcpDiscovery,
+  startBackgroundProviderDiscovery,
+  startBackgroundProviderDiscovery as startBackgroundProviderRegistration,
+  loadRuntimeSystemPrompt,
+  loadRuntimeSystemPrompt as loadBootstrapSystemPrompt,
+  restoreRuntimeModel,
+  restoreRuntimeModel as restoreSavedModel,
+  synchronizeConfiguredServices,
+  synchronizeConfiguredServices as syncConfiguredServices,
+  registerBootstrapRuntimeEvents,
+  registerHostRuntimeEvents,
+  startHostServices,
+  startHostServices as startExternalServices,
+  registerBootstrapHookBridge,
+  createDeferredStartupCoordinator,
+  shutdownRuntime,
+  saveSession,
+  fireSessionStart,
+  createDirectTransportServices,
+  createOperatorClientServices,
+  createPeerClientDependencies,
+  createRuntimeFoundationClients,
+  createOperatorClient,
+  createPeerClient,
+  createRuntimeProviderApi,
+  createRuntimeKnowledgeApi,
+  createRuntimeHookApi,
+  createRuntimeMcpApi,
+  createRuntimeOpsApi,
+} from '@pellux/goodvibes-sdk/platform/runtime/bootstrap';
 
 export type BackgroundRuntimeTaskHandle = Bootstrap.BackgroundRuntimeTaskHandle;
 export type BackgroundMcpDiscoveryOptions = Bootstrap.BackgroundMcpDiscoveryOptions;
@@ -130,46 +135,48 @@ export type OperatorClient = Bootstrap.OperatorClient;
 export type PeerClient = Bootstrap.PeerClient;
 export type OpsApi = Bootstrap.OpsApi;
 
-// Transport compatibility aliases.
-export const createDirectTransport = transport.createDirectTransport;
-export const createDirectTransportFromServices = transport.createDirectTransportFromServices;
-export const createRuntimeDirectTransport = transport.createRuntimeDirectTransport;
-export const createDirectClientTransport = transport.createDirectClientTransport;
-export const createHttpTransport = transport.createHttpTransport;
-export const createClientTransport = transport.createClientTransport;
-export const buildUrl = transport.buildUrl;
-export const createTransportPaths = transport.createTransportPaths;
-export const normalizeBaseUrl = transport.normalizeBaseUrl;
-export const createFetch = transport.createFetch;
-export const createHttpJsonTransport = transport.createHttpJsonTransport;
-export const createJsonInit = transport.createJsonInit;
-export const createJsonRequestInit = transport.createJsonRequestInit;
-export const readJsonBody = transport.readJsonBody;
-export const requestJsonRaw = transport.requestJsonRaw;
-export const requestJson = transport.requestJsonRaw;
-export const createRealtimeTransport = transport.createRealtimeTransport;
-export const invokeContractRoute = transport.invokeContractRoute;
-export const openContractRouteStream = transport.openContractRouteStream;
-export const requireContractRoute = transport.requireContractRoute;
-export const isAbortError = transport.isAbortError;
-export const openServerSentEventStream = transport.openServerSentEventStream;
+// Transport compatibility aliases — grouped live re-exports.
+export {
+  createDirectTransport,
+  createDirectTransportFromServices,
+  createRuntimeDirectTransport,
+  createDirectClientTransport,
+  createHttpTransport,
+  createClientTransport,
+  buildUrl,
+  createTransportPaths,
+  normalizeBaseUrl,
+  createFetch,
+  createHttpJsonTransport,
+  createJsonInit,
+  createJsonRequestInit,
+  readJsonBody,
+  requestJsonRaw,
+  requestJsonRaw as requestJson,
+  createRealtimeTransport,
+  invokeContractRoute,
+  openContractRouteStream,
+  requireContractRoute,
+  isAbortError,
+  openServerSentEventStream,
+  createOperatorRemoteClient,
+  createPeerRemoteClient,
+  buildEventSourceUrl,
+  buildWebSocketUrl,
+  createEventSourceConnector,
+  createRemoteDomainEvents,
+  createRemoteRuntimeEvents,
+  createRemoteUiRuntimeEvents,
+  createWebSocketConnector,
+  applyOutboundTlsToFetchInit,
+  createNetworkFetch,
+  GlobalNetworkTransportInstaller,
+  inspectOutboundTls,
+} from '@pellux/goodvibes-sdk/platform/runtime/transport';
 // Re-exported here because bootstrap.ts — the one place an exit can await
 // anything — sits on the 800-line per-file gate, so it reaches this through the
 // import block it already has rather than a second import line.
 export { leaveHostedSessionOnExit } from './client/hosted-exit.ts';
-export const createOperatorRemoteClient = transport.createOperatorRemoteClient;
-export const createPeerRemoteClient = transport.createPeerRemoteClient;
-export const buildEventSourceUrl = transport.buildEventSourceUrl;
-export const buildWebSocketUrl = transport.buildWebSocketUrl;
-export const createEventSourceConnector = transport.createEventSourceConnector;
-export const createRemoteDomainEvents = transport.createRemoteDomainEvents;
-export const createRemoteRuntimeEvents = transport.createRemoteRuntimeEvents;
-export const createRemoteUiRuntimeEvents = transport.createRemoteUiRuntimeEvents;
-export const createWebSocketConnector = transport.createWebSocketConnector;
-export const applyOutboundTlsToFetchInit = transport.applyOutboundTlsToFetchInit;
-export const createNetworkFetch = transport.createNetworkFetch;
-export const GlobalNetworkTransportInstaller = transport.GlobalNetworkTransportInstaller;
-export const inspectOutboundTls = transport.inspectOutboundTls;
 
 export type DirectTransport = Transport.DirectTransport;
 export type DirectClientTransport<TOperator = unknown, TPeer = unknown> = Transport.DirectClientTransport<TOperator, TPeer>;
@@ -414,37 +421,41 @@ export type ToolExecutionPhase = Operations.ToolExecutionPhase;
 export type PhaseResult = Operations.PhaseResult;
 export type ToolExecutionRecord = Operations.ToolExecutionRecord;
 
-// Runtime shell compatibility aliases.
-export const createShellPathService = shell.createShellPathService;
-export const createShellPlanRuntime = shell.createShellPlanRuntime;
-export const createShellRemoteCommandService = shell.createShellRemoteCommandService;
-export const createBootstrapCommandShellServices = shell.createBootstrapCommandShellServices;
-export const resolveSurfaceDirectory = shell.resolveSurfaceDirectory;
-export const classifySystemMessageKind = shell.classifySystemMessageKind;
-export const classifySystemMessagePriority = shell.classifySystemMessagePriority;
-export const defaultSystemMessageTarget = shell.defaultSystemMessageTarget;
-export const resolveSystemMessageDelivery = shell.resolveSystemMessageDelivery;
-export const buildProviderAccountSnapshot = shell.buildProviderAccountSnapshot;
-export const loadEcosystemCatalog = shell.loadEcosystemCatalog;
-export const searchEcosystemCatalog = shell.searchEcosystemCatalog;
-export const exportEcosystemCatalogBundle = shell.exportEcosystemCatalogBundle;
-export const importEcosystemCatalogBundle = shell.importEcosystemCatalogBundle;
-export const inspectEcosystemCatalogBundle = shell.inspectEcosystemCatalogBundle;
-export const inspectInstalledEcosystemEntry = shell.inspectInstalledEcosystemEntry;
-export const installEcosystemCatalogEntry = shell.installEcosystemCatalogEntry;
-export const listEcosystemInstallBackups = shell.listEcosystemInstallBackups;
-export const listInstalledEcosystemEntries = shell.listInstalledEcosystemEntries;
-export const removeEcosystemCatalogEntry = shell.removeEcosystemCatalogEntry;
-export const reviewEcosystemCatalogEntry = shell.reviewEcosystemCatalogEntry;
-export const rollbackInstalledEcosystemEntry = shell.rollbackInstalledEcosystemEntry;
-export const uninstallEcosystemCatalogEntry = shell.uninstallEcosystemCatalogEntry;
-export const updateInstalledEcosystemEntry = shell.updateInstalledEcosystemEntry;
-export const upsertEcosystemCatalogEntry = shell.upsertEcosystemCatalogEntry;
-export const summarizeWorktreeOwnership = shell.summarizeWorktreeOwnership;
-export const WorktreeRegistry = shell.WorktreeRegistry;
-export const listPersistedWorktreeMeta = shell.listPersistedWorktreeMeta;
-export const getPersistedWorktreeMeta = shell.getPersistedWorktreeMeta;
-export const reviewWorktreeAttachments = shell.reviewWorktreeAttachments;
+// Runtime shell compatibility aliases — grouped live re-exports.
+// WorktreeRegistry is a class: the value re-export carries its instance type,
+// so the old separate `export type WorktreeRegistry` alias is gone (TS2484).
+export {
+  createShellPathService,
+  createShellPlanRuntime,
+  createShellRemoteCommandService,
+  createBootstrapCommandShellServices,
+  resolveSurfaceDirectory,
+  classifySystemMessageKind,
+  classifySystemMessagePriority,
+  defaultSystemMessageTarget,
+  resolveSystemMessageDelivery,
+  buildProviderAccountSnapshot,
+  loadEcosystemCatalog,
+  searchEcosystemCatalog,
+  exportEcosystemCatalogBundle,
+  importEcosystemCatalogBundle,
+  inspectEcosystemCatalogBundle,
+  inspectInstalledEcosystemEntry,
+  installEcosystemCatalogEntry,
+  listEcosystemInstallBackups,
+  listInstalledEcosystemEntries,
+  removeEcosystemCatalogEntry,
+  reviewEcosystemCatalogEntry,
+  rollbackInstalledEcosystemEntry,
+  uninstallEcosystemCatalogEntry,
+  updateInstalledEcosystemEntry,
+  upsertEcosystemCatalogEntry,
+  summarizeWorktreeOwnership,
+  WorktreeRegistry,
+  listPersistedWorktreeMeta,
+  getPersistedWorktreeMeta,
+  reviewWorktreeAttachments,
+} from '@pellux/goodvibes-sdk/platform/runtime/shell';
 
 export type MutableRuntimeState = Shell.MutableRuntimeState;
 export type ProviderAccountRecord = Shell.ProviderAccountRecord;
@@ -459,7 +470,6 @@ export type CommandPlatformShellServices = Shell.CommandPlatformShellServices;
 export type CommandWorkspaceShellServices = Shell.CommandWorkspaceShellServices;
 export type RemoteCommandService = Shell.RemoteCommandService;
 export type PlanRuntimeService = Shell.PlanRuntimeService;
-export type WorktreeRegistry = Shell.WorktreeRegistry;
 export type WorktreeStatusRecord = Shell.WorktreeStatusRecord;
 export type ManagedWorktreeMeta = Shell.ManagedWorktreeMeta;
 export type ShellAgentManagerService = Shell.ShellAgentManagerService;
@@ -476,51 +486,46 @@ export type EcosystemCatalogBundle = Shell.EcosystemCatalogBundle;
 export type EcosystemCatalogEntry = Shell.EcosystemCatalogEntry;
 export type EcosystemEntryKind = Shell.EcosystemEntryKind;
 
-// Runtime security compatibility aliases.
-export const buildAuthInspectionSnapshot = security.buildAuthInspectionSnapshot;
-export const inspectProviderAuth = security.inspectProviderAuth;
-export const DivergenceDashboard = security.DivergenceDashboard;
-export const DivergenceGateError = security.DivergenceGateError;
-export const LayeredPolicyEvaluator = security.LayeredPolicyEvaluator;
-export const PermissionSimulator = security.PermissionSimulator;
-export const PolicyRegistry = security.PolicyRegistry;
-export const PolicyRuntimeState = security.PolicyRuntimeState;
-export const buildDefaultPolicySimulationScenarios = security.buildDefaultPolicySimulationScenarios;
-export const buildPermissionRuleSuggestions = security.buildPermissionRuleSuggestions;
-export const buildPolicyPreflightReview = security.buildPolicyPreflightReview;
-export const createPermissionEvaluator = security.createPermissionEvaluator;
-export const createPermissionSimulator = security.createPermissionSimulator;
-export const createUnsignedBundle = security.createUnsignedBundle;
-export const lintPolicyConfig = security.lintPolicyConfig;
-export const loadPolicyBundle = security.loadPolicyBundle;
-export const runPolicySimulationScenarios = security.runPolicySimulationScenarios;
-export const buildDenialExplanation = security.buildDenialExplanation;
-export const canonicalize = security.canonicalize;
-export const classifyCommand = security.classifyCommand;
-export const classifySegment = security.classifySegment;
-export const collectCommandNodes = security.collectCommandNodes;
-export const evaluateCommandAST = security.evaluateCommandAST;
-export const evaluateSegmentNode = security.evaluateSegmentNode;
-export const higherPriority = security.higherPriority;
-export const parseAST = security.parseAST;
-export const parseCommandAST = security.parseCommandAST;
-export const tokenize = security.tokenize;
-export const PolicySignatureError = security.PolicySignatureError;
-export const canonicalise = security.canonicalise;
-export const runSafetyChecks = security.runSafetyChecks;
-export const signBundle = security.signBundle;
-export const verifyBundle = security.verifyBundle;
-export const MAX_INPUT_LENGTH = security.MAX_INPUT_LENGTH;
-export const MAX_TOKEN_COUNT = security.MAX_TOKEN_COUNT;
-
-// Instance-type companions for the class aliases above. `export const X = ns.X`
-// re-exports only the value, so `X` is unusable in type position (TS2749/TS2694).
-// These declaration-merge the instance type back onto the same name.
-export type DivergenceDashboard = InstanceType<typeof security.DivergenceDashboard>;
-export type DivergenceGateError = InstanceType<typeof security.DivergenceGateError>;
-export type LayeredPolicyEvaluator = InstanceType<typeof security.LayeredPolicyEvaluator>;
-export type PermissionSimulator = InstanceType<typeof security.PermissionSimulator>;
-export type PolicySignatureError = InstanceType<typeof security.PolicySignatureError>;
+// Runtime security compatibility aliases — grouped live re-exports. The class
+// re-exports (DivergenceDashboard, PolicyRegistry, …) carry their instance
+// types, so the old separate type companions for those names are gone.
+export {
+  buildAuthInspectionSnapshot,
+  inspectProviderAuth,
+  DivergenceDashboard,
+  DivergenceGateError,
+  LayeredPolicyEvaluator,
+  PermissionSimulator,
+  PolicyRegistry,
+  PolicyRuntimeState,
+  buildDefaultPolicySimulationScenarios,
+  buildPermissionRuleSuggestions,
+  buildPolicyPreflightReview,
+  createPermissionEvaluator,
+  createPermissionSimulator,
+  createUnsignedBundle,
+  lintPolicyConfig,
+  loadPolicyBundle,
+  runPolicySimulationScenarios,
+  buildDenialExplanation,
+  canonicalize,
+  classifyCommand,
+  classifySegment,
+  collectCommandNodes,
+  evaluateCommandAST,
+  evaluateSegmentNode,
+  higherPriority,
+  parseAST,
+  parseCommandAST,
+  tokenize,
+  PolicySignatureError,
+  canonicalise,
+  runSafetyChecks,
+  signBundle,
+  verifyBundle,
+  MAX_INPUT_LENGTH,
+  MAX_TOKEN_COUNT,
+} from '@pellux/goodvibes-sdk/platform/runtime/security';
 
 export type AuthInspectionSnapshot = Security.AuthInspectionSnapshot;
 export type ProviderAuthInspection = Security.ProviderAuthInspection;
@@ -533,8 +538,6 @@ export type PolicyDiffResult = Security.PolicyDiffResult;
 export type PolicyLintFinding = Security.PolicyLintFinding;
 export type PolicyPreflightReview = Security.PolicyPreflightReview;
 export type PolicyRule = Security.PolicyRule;
-export type PolicyRegistry = Security.PolicyRegistry;
-export type PolicyRuntimeState = Security.PolicyRuntimeState;
 export type PolicySimulationSummary = Security.PolicySimulationSummary;
 export type PermissionAuditEntry = Security.PermissionAuditEntry;
 export type CommandClassification = Security.CommandClassification;

@@ -4,6 +4,28 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [2.0.12] - 2026-08-07
+
+### Changes
+
+- **Post-wake capture ends when the room goes quiet** (platform runtime
+  2.0.12): the silence floor is measured from the room's own ambient level
+  in the pre-wake window instead of a fixed constant, so steady background
+  noise no longer holds the microphone open to the ceiling. The floor is a
+  real setting (`voice.wake.silenceFloorRms`, 0 = adaptive), and
+  `voice.wake.captureMaxSeconds: 0` genuinely means no hard maximum.
+- **The compiled TUI no longer plays a build-order lottery at load**
+  (platform runtime 2.0.13): the runtime barrel read over a hundred values
+  off the SDK's runtime namespace objects at module scope, and the
+  single-file compiler emits module bodies in an order that varies
+  build-to-build — on some builds such a read landed before the module that
+  defines the binding and the binary died at load with a ReferenceError.
+  Every one of those reads is now a grouped live re-export from the SDK's
+  registered runtime subpaths, and the shared post-build check fails any
+  artifact that carries the eager pattern, even one that happened to boot.
+- Bundled daemon floor moves to 1.28.16; the exec sandbox's
+  self-description now names the built-in daemon and settings tools.
+
 ## [2.0.11] - 2026-08-06
 
 ### Changes
