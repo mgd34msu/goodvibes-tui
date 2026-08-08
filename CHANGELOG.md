@@ -4,6 +4,27 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [2.0.13] - 2026-08-08
+
+### Changes
+
+- **Spoken output reads prose, not markdown** (platform runtime 2.0.14):
+  formatting marks are stripped before synthesis — bold and italic markers,
+  heading hashes, link syntax, list bullets, table pipes — and fenced code
+  blocks are announced ("Code block omitted.") instead of read character by
+  character.
+- **Post-wake capture ends when you stop talking, on real microphones**
+  (platform runtime 2.0.14): the silence floor follows the room through the
+  capture (a headset's automatic gain control no longer holds the microphone
+  open), and breath ticks shorter than `voice.wake.speechRetriggerMs` (new
+  setting, default 150 ms) no longer restart the silence countdown. A natural
+  pause under `voice.wake.silenceStopMs` still never cuts you off, and the
+  floor can never rise into your voice.
+- **Every completed wake capture leaves a receipt** in the voice diagnostics:
+  starting and final floor, stop reason, duration, and absorbed bursts.
+- Bundled daemon floor moves to 1.28.17, which carries the same capture and
+  spoken-output behavior.
+
 ## [2.0.12] - 2026-08-07
 
 ### Changes

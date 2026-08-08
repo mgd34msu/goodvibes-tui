@@ -32,6 +32,7 @@ import {
   encodeWavPcm16,
   resolveManagedWakePaths,
   resolveWakeModelFiles,
+  recordVoiceDiagnostic,
   resolveWakeRuntimeSettings,
   retainedClipFileName,
   utteranceToAudioArtifact,
@@ -238,6 +239,10 @@ export function wireWakeRuntime(deps: WakeRuntimeDeps): WakeRuntime {
       settings,
       openCapture: deps.openCapture,
       ...(deps.createNoiseSuppression !== undefined ? { createNoiseSuppression: deps.createNoiseSuppression } : {}),
+      // Every completed capture leaves a receipt (floor, stop reason, timings)
+      // in the shared voice diagnostics, so "it kept listening" is a number,
+      // not a mystery.
+      recordDiagnostic: (entry) => recordVoiceDiagnostic(deps.managedRoot, entry),
       createEngine: createWakeEngineFactory({
         assetDirectory: deps.assetDirectory,
         embeddingPath: paths.embeddingPath,
