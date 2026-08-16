@@ -4,6 +4,32 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [2.0.14] - 2026-08-15
+
+### Changes
+
+- **A subscription sign-in from this terminal now reaches the whole platform**
+  (platform runtime 2.0.17): ChatGPT/Codex sessions move to the shared tier,
+  so the daemon that runs the turns uses the login you just completed instead
+  of whatever stale session its own store held.
+- **Conversations through strict OpenAI-compatible gateways work again**
+  (platform runtime 2.0.17): the edit tool's schema declared a union with
+  `oneOf`, which gateways like abacus RouteLLM now reject wholesale — every
+  turn through such a provider failed with "Extra inputs are not permitted"
+  regardless of the prompt. The union is `anyOf` now, verified live through
+  this terminal against the gateway that surfaced it, and pinned by a
+  wire-compatibility test across every tool schema the platform ships.
+- **Typing can no longer summon a system authentication prompt over the
+  screen** (platform runtime 2.0.17): on hosts whose polkit rules require
+  authentication for the keep-awake sleep inhibitor — typical for tmux/SSH
+  sessions the login manager does not count as an active seat — systemd's
+  interactive auth agent was registered on the controlling terminal and
+  painted "authentication is required to inhibit system sleep" over the UI
+  on every submitted message. The inhibitor is now requested with
+  `--no-ask-password`; refusal is silent and the platform runs without it.
+  `power.inhibitWhileWorking: false` remains the full opt-out.
+- Bundled daemon floor moves to 1.28.19, which carries both fixes.
+
 ## [2.0.13] - 2026-08-08
 
 ### Changes
