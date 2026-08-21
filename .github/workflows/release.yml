@@ -27,7 +27,7 @@ on:
 
 concurrency:
   group: tui-release-${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.mode == 'release' && github.ref_name) || github.event.inputs.ref || github.ref_name || github.run_id }}
-  # Never cancel an in-progress release — a half-published release is worse than
+  # Never cancel an in-progress release, a half-published release is worse than
   # a duplicate run (publishes are idempotent).
   cancel-in-progress: false
 
@@ -73,7 +73,7 @@ jobs:
       contents: read
       actions: read
       checks: read
-    uses: mgd34msu/goodvibes-sdk/.github/workflows/reusable-release-verify.yml@main
+    uses: mgd34msu/goodvibes-sdk/.github/workflows/reusable-release-verify.yml@ae53b1bb6d584dee66e6934c35591a4ef8317379 # 2026-08-20 hardened reusables
     with:
       sha: ${{ github.sha }}
       workflow: ci.yml
@@ -104,10 +104,10 @@ jobs:
         (github.event_name == 'workflow_dispatch' && github.event.inputs.mode != 'release') ||
         needs.release-verify.result == 'success'
       )
-    uses: mgd34msu/goodvibes-sdk/.github/workflows/reusable-binary-matrix.yml@main
+    uses: mgd34msu/goodvibes-sdk/.github/workflows/reusable-binary-matrix.yml@ae53b1bb6d584dee66e6934c35591a4ef8317379 # 2026-08-20 hardened reusables
     with:
       # Smoke legs must name their own built artifact (binary is required when
-      # smoke is true — each leg only builds its own suffixed artifact, so the
+      # smoke is true, each leg only builds its own suffixed artifact, so the
       # config's smoke.binaryDefault can never serve the matrix path).
       targets: >-
         [{"key":"linux-x64","runner":"ubuntu-latest","smoke":true,"binary":"dist/goodvibes-linux-x64"},
@@ -189,7 +189,7 @@ jobs:
           INPUT_REF: ${{ github.event.inputs.ref }}
         run: |
           # Release-mode dispatch resolves GITHUB_REF_NAME to the dispatched
-          # tag (same as push) — it must NOT fall into the inputs.ref branch,
+          # tag (same as push), it must NOT fall into the inputs.ref branch,
           # whose default is "main" and would resolve no version at all.
           if [ "${GITHUB_EVENT_NAME}" = "push" ] || [ "$INPUT_MODE" = "release" ]; then
             VERSION="${GITHUB_REF_NAME#v}"
@@ -206,7 +206,7 @@ jobs:
           cd "$TMPDIR"
           npm init -y
           # The daemon dependency's postinstall reads the SAME asset-source
-          # variable and copies ITS artifacts from there — stage them beside
+          # variable and copies ITS artifacts from there, stage them beside
           # this app's, in the exact layout that postinstall expects, so the
           # clean-project install needs no network and asserts real bytes.
           DAEMON_VERSION="$(node -e "console.log(require('${GITHUB_WORKSPACE}/package.json').dependencies['@pellux/goodvibes-daemon'])")"
@@ -253,7 +253,7 @@ jobs:
       # what gives it a permanent public URL:
       #   https://github.com/mgd34msu/goodvibes-tui/releases/latest/download/install.sh
       # goodvibes.sh serves /install.sh from that URL, so the site needs no
-      # per-release deployment at all — and because it rides the same
+      # per-release deployment at all, and because it rides the same
       # SHA256SUMS.txt as the binaries, the installer people run is itself
       # checksummed by the release that produced it.
       - name: Stage the suite installer as a release asset
@@ -304,7 +304,7 @@ jobs:
     # The called workflow's job requests contents:write (release creation).
     permissions:
       contents: write
-    uses: mgd34msu/goodvibes-sdk/.github/workflows/reusable-gh-release.yml@main
+    uses: mgd34msu/goodvibes-sdk/.github/workflows/reusable-gh-release.yml@ae53b1bb6d584dee66e6934c35591a4ef8317379 # 2026-08-20 hardened reusables
     with:
       tag: ${{ github.ref_name }}
       artifact-name: release-assets
@@ -313,7 +313,7 @@ jobs:
         dist/sqlite-vec-*
         dist/install.sh
       # Hand-written per-release notes override the changelog excerpt when the
-      # file exists at the tagged ref (docs/releases/<version>.md, no v prefix —
+      # file exists at the tagged ref (docs/releases/<version>.md, no v prefix ,
       # the same resolution the old validate-release used).
       notes-file: docs/releases/${{ needs.stage-release-assets.outputs.version }}.md
       toolchain-spec: "@pellux/goodvibes-toolchain@2.0.17"
@@ -368,7 +368,7 @@ jobs:
     permissions:
       contents: read
       id-token: write
-    uses: mgd34msu/goodvibes-sdk/.github/workflows/reusable-npm-publish.yml@main
+    uses: mgd34msu/goodvibes-sdk/.github/workflows/reusable-npm-publish.yml@ae53b1bb6d584dee66e6934c35591a4ef8317379 # 2026-08-20 hardened reusables
     with:
       package-name: "@pellux/goodvibes-tui"
       environment: production
@@ -472,7 +472,7 @@ jobs:
           REPO_OWNER: ${{ github.repository_owner }}
         run: |
           # Release-mode dispatch resolves GITHUB_REF_NAME to the dispatched
-          # tag (same as push) — it must NOT fall into the inputs.ref branch,
+          # tag (same as push), it must NOT fall into the inputs.ref branch,
           # whose default is "main" and would resolve no version at all.
           if [ "${GITHUB_EVENT_NAME}" = "push" ] || [ "$INPUT_MODE" = "release" ]; then
             VERSION="${GITHUB_REF_NAME#v}"

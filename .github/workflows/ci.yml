@@ -168,7 +168,7 @@ jobs:
   # Why the dispatch (not just the tag push): a tag pushed with GITHUB_TOKEN does
   # NOT trigger workflows, so the tag alone would never start release.yml. The
   # documented exception is that a workflow_dispatch API call made with
-  # GITHUB_TOKEN DOES create a run — so we push the tag (for provenance + the
+  # GITHUB_TOKEN DOES create a run, so we push the tag (for provenance + the
   # manual redo path) and then explicitly dispatch the release at that tag ref.
   # Idempotent: an already-existing tag is a logged no-op.
   # ---------------------------------------------------------------------------
