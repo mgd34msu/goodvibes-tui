@@ -1,5 +1,5 @@
 {
-  "//": "TOOLCHAIN-PIN: @pellux/goodvibes-toolchain is dev-linked from a locally-built tarball (SDK commit 20093d41, packed 1.10.1). It is NOT on npm yet. The next release train must re-pin the PUBLISHED version in package.json (devDependencies + overrides) and the reusable-workflow refs stay at mgd34msu/goodvibes-sdk@main. This file is the repo-specific contract consumed by @pellux/goodvibes-toolchain CLIs; behavior lives in the package.",
+  "//": "TOOLCHAIN-PIN: @pellux/goodvibes-toolchain is published on npm and pinned EXACTLY (2.0.17) in package.json devDependencies, so `bun install --frozen-lockfile` puts the same CLI bins (goodvibes-build-binaries, goodvibes-post-build-smoke) on PATH that release-time bunx invocations name by version. Every release.yml call site that accepts a toolchain-spec input passes @pellux/goodvibes-toolchain@2.0.17; bumping the pin means bumping it in package.json, bun.lock, and those call sites together. The reusable-workflow refs stay at mgd34msu/goodvibes-sdk@main. This file is the repo-specific contract consumed by the toolchain CLIs; behavior lives in the package.",
   "packageName": "@pellux/goodvibes-tui",
   "sdkPin": {
     "sdkPackage": "@pellux/goodvibes-sdk",
@@ -50,6 +50,14 @@
         "appArtifact": "goodvibes-macos-arm64",
         "nativeAddonPackage": "sqlite-vec-darwin-arm64",
         "nativeAddonFile": "vec0.dylib"
+      },
+      {
+        "//": "windows-x64 is BETA and deliberately absent from release.yml's binary matrix; it exists here so windows-beta.yml builds through the same toolchain path as every shipped target instead of a hand-rolled bun build. `goodvibes-build-binaries --all` therefore builds five targets, one more than the release matrix consumes.",
+        "key": "windows-x64",
+        "bunTarget": "bun-windows-x64",
+        "appArtifact": "goodvibes-windows-x64.exe",
+        "nativeAddonPackage": "sqlite-vec-windows-x64",
+        "nativeAddonFile": "vec0.dll"
       }
     ]
   },

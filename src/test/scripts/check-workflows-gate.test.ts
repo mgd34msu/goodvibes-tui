@@ -161,7 +161,107 @@ describe('check-workflows', () => {
     expect(res.output).toContain('job "publish-github-packages" mirrors to GitHub Packages');
     // The job that DOES declare the permission is not reported, so the rule is
     // reading the permission rather than flagging every job in the list.
-    expect(res.output).not.toContain('job "publish-github-platform-packages" mirrors');
+    expect(res.output).not.toContain('job "publish-github-platform-packages" mirrors to GitHub Packages but does not declare');
+  });
+
+  test('rejects a job-level continue-on-error: true', () => {
+    const withMask = [
+      'name: Example',
+      'on:',
+      '  push:',
+      'jobs:',
+      '  build:',
+      '    runs-on: ubuntu-latest',
+      '    continue-on-error: true',
+      '    steps:',
+      '      - run: echo hi',
+      '',
+    ].join('\n');
+    const res = runGate({ 'ci.yml': withMask });
+    expect(res.exitCode).toBe(1);
+    expect(res.output).toContain('continue-on-error');
+  });
+
+  test('accepts a STEP-level continue-on-error (informational, never a false green)', () => {
+    const stepLevel = [
+      'name: Example',
+      'on:',
+      '  push:',
+      'jobs:',
+      '  build:',
+      '    runs-on: ubuntu-latest',
+      '    steps:',
+      '      - run: echo hi',
+      '        continue-on-error: true',
+      '',
+    ].join('\n');
+    expect(runGate({ 'ci.yml': stepLevel }).exitCode).toBe(0);
+  });
+
+  // ---------------------------------------------------------------------------
+  // Release-lane rules. Each pair below builds a release.yml that satisfies
+  // every OTHER rule, then removes exactly one thing.
+  // ---------------------------------------------------------------------------
+  const KILL_SWITCH = "vars.PUBLISH_NPM == 'true'";
+
+  function releaseFixture(overrides: {
+    verifyTagVersion?: boolean;
+    mirrorKillSwitch?: boolean;
+    mirrorNeedsNpm?: boolean;
+  } = {}): string {
+    const {
+      verifyTagVersion = true,
+      mirrorKillSwitch = true,
+      mirrorNeedsNpm = true,
+    } = overrides;
+    const lines = ['name: Release', 'on:', '  workflow_dispatch:', 'jobs:'];
+    if (verifyTagVersion) {
+      lines.push(
+        '  verify-tag-version:',
+        '    runs-on: ubuntu-latest',
+        '    steps:',
+        '      - run: bun scripts/verify-release-tag-version.ts',
+      );
+    }
+    for (const job of ['publish-npm', 'publish-platform-packages']) {
+      lines.push(
+        `  ${job}:`,
+        '    runs-on: ubuntu-latest',
+        `    if: ${KILL_SWITCH}`,
+        '    steps:',
+        `      - run: echo ${job}`,
+      );
+    }
+    for (const job of ['publish-github-packages', 'publish-github-platform-packages']) {
+      lines.push(`  ${job}:`, '    runs-on: ubuntu-latest');
+      if (mirrorNeedsNpm) lines.push('    needs: [publish-npm]');
+      if (mirrorKillSwitch) lines.push(`    if: ${KILL_SWITCH}`);
+      lines.push('    permissions:', '      packages: write', '    steps:', `      - run: echo ${job}`);
+    }
+    return `${lines.join('\n')}\n`;
+  }
+
+  test('accepts a release workflow that satisfies every release rule', () => {
+    const res = runGate({ 'release.yml': releaseFixture() });
+    expect(res.exitCode).toBe(0);
+  });
+
+  test('rejects a release workflow with no tag/version verification job', () => {
+    const res = runGate({ 'release.yml': releaseFixture({ verifyTagVersion: false }) });
+    expect(res.exitCode).toBe(1);
+    expect(res.output).toContain('missing the "verify-tag-version" job');
+  });
+
+  test('rejects a GitHub Packages mirror job without the PUBLISH_NPM kill switch', () => {
+    const res = runGate({ 'release.yml': releaseFixture({ mirrorKillSwitch: false }) });
+    expect(res.exitCode).toBe(1);
+    expect(res.output).toContain('kill switch');
+  });
+
+  test('rejects a GitHub Packages mirror job that does not trail the npmjs publish', () => {
+    const res = runGate({ 'release.yml': releaseFixture({ mirrorNeedsNpm: false }) });
+    expect(res.exitCode).toBe(1);
+    expect(res.output).toContain('must trail the npmjs publish');
   });
 
   test("the repo's own workflows pass", () => {

@@ -83,12 +83,12 @@ describe("all workflows: baseline hygiene", () => {
   });
 });
 
-describe("ci.yml: the eight-job gate graph", () => {
+describe("ci.yml: the gate graph", () => {
   const ci = load("ci.yml");
 
   test("has the expected job set", () => {
     const names = jobs(ci).map(([n]) => n);
-    for (const n of ["typecheck", "test", "coverage", "architecture-check", "perf-check", "eval-gate", "build", "action-self-test"]) {
+    for (const n of ["typecheck", "test", "coverage", "architecture-check", "perf-check", "eval-gate", "build", "package-gate"]) {
       expect(names).toContain(n);
     }
   });
@@ -97,6 +97,36 @@ describe("ci.yml: the eight-job gate graph", () => {
     const build = ci.jobs!["build"]!;
     for (const dep of ["typecheck", "test", "coverage", "architecture-check", "perf-check", "eval-gate"]) {
       expect(needsOf(build)).toContain(dep);
+    }
+  });
+
+  test("the build job runs on pull requests too, not push only", () => {
+    // A push-only build job lets a PR that breaks the compile merge green.
+    const build = ci.jobs!["build"]!;
+    expect(String(build.if ?? "")).not.toContain("github.event_name == 'push'");
+  });
+
+  test("the build job compiles through the toolchain and then EXECUTES the binary", () => {
+    // A bare `bun build --compile` skips the configured prebuild and never
+    // starts the artifact, so a binary that cannot boot still passed CI.
+    const text = stepText(ci.jobs!["build"]!);
+    expect(text).toContain("build:linux-x64");
+    expect(text).toContain("smoke:tui");
+    expect(text).toContain("dist/goodvibes-linux-x64");
+  });
+
+  test("the sdk-pin gate runs pre-tag, in push CI, not for the first time inside release.yml", () => {
+    const text = stepText(ci.jobs!["package-gate"]!);
+    expect(text).toContain("publish:check");
+    expect(text).toContain("package:install-check");
+    expect(text).toContain("verification:ledger");
+  });
+
+  test("no step masks a failing command behind `|| echo`", () => {
+    // `cmd || echo "..."` reports success no matter what cmd did; it is the
+    // step-level shape of continue-on-error.
+    for (const [name, job] of jobs(ci)) {
+      expect(stepText(job), `${name} must not mask a command's exit code`).not.toMatch(/\|\|\s*echo/);
     }
   });
 
@@ -115,7 +145,7 @@ describe("ci.yml: zero-touch auto-release", () => {
     "perf-check",
     "eval-gate",
     "build",
-    "action-self-test",
+    "package-gate",
   ];
 
   test("auto-release needs EVERY other ci.yml job (only runs when all are green)", () => {
@@ -135,6 +165,18 @@ describe("ci.yml: zero-touch auto-release", () => {
     const cond = String(ci.jobs!["auto-release"]!.if);
     expect(cond).toContain("github.ref == 'refs/heads/main'");
     expect(cond).toContain("github.event_name == 'push'");
+  });
+
+  test("the composite-action self-test is not part of ci.yml at all", () => {
+    // It installs the PREVIOUS published release and tests the action wrapper
+    // against it, which says nothing about this commit and cannot pass before
+    // the first release exists. Dropping it from auto-release's `needs` is not
+    // enough to de-gate it: release.yml's release-verify asserts per-job green
+    // over EVERY job of the ci.yml run, so any job living here is
+    // release-gating. It lives in its own workflow file instead.
+    expect(Object.keys(ci.jobs ?? {})).not.toContain("action-self-test");
+    const standalone = load("action-self-test.yml");
+    expect(Object.keys(standalone.jobs ?? {})).toContain("action-self-test");
   });
 
   test("auto-release grants contents:write and actions:write", () => {
@@ -175,6 +217,55 @@ describe("release.yml: by-reference release on the reusable workflows", () => {
     const rv = rel.jobs!["release-verify"]!;
     expect(rv.uses).toBe(`${REUSABLE}/reusable-release-verify.yml@main`);
     expect(String(rv.if)).toContain("github.event_name == 'push'");
+  });
+
+  test("tag/version verification is the FIRST release job and everything chains through it", () => {
+    const verify = rel.jobs!["verify-tag-version"]!;
+    expect(verify).toBeTruthy();
+    expect(needsOf(verify), "verify-tag-version must gate nothing before itself").toEqual([]);
+    expect(stepText(verify)).toContain("scripts/verify-release-tag-version.ts");
+    // Everything downstream reaches it through release-verify.
+    expect(needsOf(rel.jobs!["release-verify"]!)).toContain("verify-tag-version");
+    expect(needsOf(rel.jobs!["binaries"]!)).toContain("release-verify");
+  });
+
+  test("every reusable call site that accepts a toolchain-spec pins an exact version", () => {
+    // An unpinned release-time `bunx @pellux/goodvibes-toolchain` resolves
+    // whatever npm calls latest at that moment, so the tool that validates the
+    // release could change mid-release.
+    const pin = JSON.parse(readFileSync(resolve(ROOT, "package.json"), "utf8")) as {
+      devDependencies?: Record<string, string>;
+    };
+    const pinned = pin.devDependencies?.["@pellux/goodvibes-toolchain"];
+    expect(pinned, "package.json must pin @pellux/goodvibes-toolchain exactly").toMatch(/^\d+\.\d+\.\d+$/);
+    const spec = `@pellux/goodvibes-toolchain@${pinned}`;
+    for (const name of ["release-verify", "binaries", "gh-release"]) {
+      const job = rel.jobs![name]! as Job & { with?: Record<string, unknown> };
+      expect(String(job.with?.["toolchain-spec"] ?? ""), `${name} must pass a versioned toolchain-spec`).toBe(spec);
+    }
+    // reusable-npm-publish takes no toolchain-spec input, so its pin rides in
+    // the publish command instead.
+    const publish = rel.jobs!["publish-npm"]! as Job & { with?: Record<string, unknown> };
+    expect(String(publish.with?.["publish-command"] ?? "")).toContain(spec);
+  });
+
+  test("the GitHub Packages mirror trails npmjs and carries the same kill switch", () => {
+    // Without both, flipping PUBLISH_NPM off (or an npmjs failure) still
+    // published the mirror, splitting one version across two registries.
+    for (const name of ["publish-github-platform-packages", "publish-github-packages"]) {
+      const job = rel.jobs![name]!;
+      expect(String(job.if), `${name} must carry the PUBLISH_NPM kill switch`).toContain("vars.PUBLISH_NPM == 'true'");
+      expect(needsOf(job), `${name} must trail the npmjs publish`).toContain("publish-npm");
+    }
+  });
+
+  test("dispatch inputs are never interpolated into a run: block", () => {
+    // github.event.inputs.* reaches a shell through env:, quoted, so a ref
+    // containing shell syntax is a string that fails to resolve, not a command.
+    for (const [name, job] of jobs(rel)) {
+      expect(stepText(job), `${name} must route dispatch inputs through env:`).not.toContain("github.event.inputs.ref }}");
+      expect(stepText(job), `${name} must route dispatch inputs through env:`).not.toContain("github.event.inputs.mode }}");
+    }
   });
 
   test("caller jobs grant the permissions the called reusable workflows request", () => {
@@ -359,6 +450,44 @@ describe("release.yml: by-reference release on the reusable workflows", () => {
 
   test("concurrency never cancels an in-progress release", () => {
     expect(rel.concurrency?.["cancel-in-progress"]).toBe(false);
+  });
+});
+
+describe("windows-beta.yml: a promotion signal that means what its header claims", () => {
+  const wb = load("windows-beta.yml");
+
+  test("runs on a schedule as well as on demand, so the signal cannot go stale", () => {
+    const on = wb.on as { schedule?: Array<{ cron?: string }>; workflow_dispatch?: unknown };
+    expect(on.workflow_dispatch !== undefined).toBe(true);
+    expect(Array.isArray(on.schedule) && on.schedule.length > 0).toBe(true);
+    expect(String(on.schedule?.[0]?.cron ?? "")).toMatch(/\S/);
+  });
+
+  test("validates the ref (typecheck + tests) before it builds anything", () => {
+    const verify = wb.jobs!["verify-ref"]!;
+    expect(stepText(verify)).toContain("bun run test");
+    expect(stepText(verify)).toContain("tsc --noEmit");
+    expect(needsOf(wb.jobs!["build-windows-beta"]!)).toContain("verify-ref");
+  });
+
+  test("builds through the toolchain and smokes with the shared post-build smoke", () => {
+    // The old lane hand-rolled `bun build --compile` (no prebuild, no addon)
+    // and a pwsh check that asserted only exit 0 plus a banner prefix.
+    const build = stepText(wb.jobs!["build-windows-beta"]!);
+    expect(build).toContain("build:windows");
+    expect(build).not.toContain("bun build src/main.ts");
+    const smoke = stepText(wb.jobs!["smoke-windows-beta"]!);
+    expect(smoke).toContain("goodvibes-post-build-smoke");
+    expect(smoke).toContain("dist/goodvibes-windows-x64.exe");
+  });
+
+  test("the windows target it builds exists in toolchain.config.json", () => {
+    const config = JSON.parse(readFileSync(resolve(ROOT, "toolchain.config.json"), "utf8")) as {
+      build: { outDir: string; targets: Array<{ key: string; appArtifact: string }> };
+    };
+    const windows = config.build.targets.find((t) => t.key === "windows-x64");
+    expect(windows, "build:windows resolves --target windows-x64 from this config").toBeTruthy();
+    expect(`${config.build.outDir}/${windows!.appArtifact}`).toBe("dist/goodvibes-windows-x64.exe");
   });
 });
 

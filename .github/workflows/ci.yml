@@ -29,6 +29,8 @@ jobs:
         run: bun x tsc --noEmit --pretty false
       - name: Type check (tests)
         run: bun x tsc --noEmit -p tsconfig.test.json --pretty false
+      - name: Type check coverage (annotation ratchet)
+        run: bun run typecheck:coverage
 
   test:
     runs-on: ubuntu-latest
@@ -95,46 +97,57 @@ jobs:
       - name: Run eval gate
         run: bun run eval:gate
 
+  # ---------------------------------------------------------------------------
+  # build+smoke: compile the linux-x64 binary through the toolchain
+  # (goodvibes-build-binaries runs the configured prebuild, keeps sqlite-vec
+  # --external, and stages the addon under dist/lib) and then EXECUTE it via
+  # goodvibes-post-build-smoke, which asserts the version banner, rejects the
+  # packaging-failure sentinels from toolchain.config smoke.forbiddenStrings,
+  # and scans the artifact for top-level eager namespace reads. The old job ran
+  # a bare `bun build --compile` and never started the binary at all.
+  #
+  # Runs on pull_request too: a PR that breaks the compile used to merge green
+  # because this job was push-only.
+  # ---------------------------------------------------------------------------
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
-    if: github.event_name == 'push'
+    timeout-minutes: 20
     needs: [typecheck, test, coverage, architecture-check, perf-check, eval-gate]
     steps:
       - name: Checkout
         uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
       - name: Setup
         uses: ./.github/actions/setup
-      - name: Build
-        run: bun run build
+      - name: Build (linux-x64, through the pinned toolchain)
+        run: bun run build:linux-x64
+      - name: Compiled binary smoke (banner, sentinels, placeholder version)
+        run: bun run smoke:tui --binary dist/goodvibes-linux-x64
 
-  action-self-test:
-    name: GitHub Action self-test
+  # ---------------------------------------------------------------------------
+  # Package gate: the pre-tag half of the publish path. publish:check runs the
+  # SDK-pin tri-agreement (overlay absent, exact-semver pin, installed == pin,
+  # lockfile resolves the pin) plus the npm-specifier import sweep, which
+  # otherwise ran for the first time INSIDE release.yml, after the GitHub
+  # Release already existed. GOODVIBES_SKIP_NPM_AUTH_CHECK is the script's own
+  # documented bypass for the one step CI has no credential for (the npm whoami
+  # probe); every other gate in it runs for real here.
+  # ---------------------------------------------------------------------------
+  package-gate:
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    # Runs on push only: it installs the latest published release binary from
-    # GitHub Releases (network) to exercise the composite action end-to-end.
-    if: github.event_name == 'push'
     steps:
       - name: Checkout
         uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
-      - name: Install GoodVibes via the composite action (install + version)
-        id: gv
-        uses: ./
-        with:
-          version: latest
-      - name: Assert the action reported a version
-        run: |
-          test -n "${{ steps.gv.outputs.version }}"
-          echo "action installed: ${{ steps.gv.outputs.version }}"
-      - name: Exercise doctor (findings tolerated in a bare CI workspace)
-        run: goodvibes doctor --json || echo "doctor reported findings (expected without config/daemon in CI)"
-      - name: Note the headless-run gap
-        # A non-interactive one-shot mode exists (goodvibes run --non-interactive),
-        # but it needs a provider credential this self-test does not carry, so the
-        # self-test covers install + version + doctor. Consumers with a credential
-        # can pass the action's `prompt` input to run a real turn.
-        run: echo "goodvibes run --non-interactive exists but requires a provider credential; not exercised here."
+      - name: Setup
+        uses: ./.github/actions/setup
+      - name: Publish check (sdk-pin gate + lockfile agreement + tarball policy)
+        env:
+          GOODVIBES_SKIP_NPM_AUTH_CHECK: "1"
+        run: bun run publish:check
+      - name: Package install check (bin shims + fallback resolution)
+        run: bun run package:install-check
+      - name: Verification ledger
+        run: bun run verification:ledger
 
   # ---------------------------------------------------------------------------
   # Zero-touch release. Runs only after EVERY gating job above is green (its
@@ -142,6 +155,15 @@ jobs:
   # success), and only for pushes to main. When the release commit's version has
   # no tag yet, it creates the annotated tag at this SHA and dispatches
   # release.yml at that tag with mode=release.
+  #
+  # The composite-action self-test is NOT one of those gates and no longer lives
+  # in this workflow at all (.github/workflows/action-self-test.yml). It installs
+  # the PREVIOUS published release and exercises the action wrapper against it,
+  # which says nothing about whether this commit is releasable. Dropping it from
+  # `needs` alone would not have de-gated it: release.yml's release-verify asserts
+  # per-job green over EVERY job of this workflow's run, so any red job here,
+  # relevant or not, blocks the release. Living in its own workflow file is what
+  # makes it genuinely non-gating.
   #
   # Why the dispatch (not just the tag push): a tag pushed with GITHUB_TOKEN does
   # NOT trigger workflows, so the tag alone would never start release.yml. The
@@ -163,7 +185,7 @@ jobs:
       - perf-check
       - eval-gate
       - build
-      - action-self-test
+      - package-gate
     permissions:
       contents: write
       actions: write

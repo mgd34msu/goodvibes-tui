@@ -9,8 +9,14 @@
  *   - every workflow file parses as YAML;
  *   - every workflow declares `name`, `on`, and a non-empty `jobs` map;
  *   - every job declares `runs-on` and either `steps` or `uses` (reusable call);
+ *   - no job carries `continue-on-error: true` (banned across the ecosystem: a
+ *     run that reports success over a failing job is a false green);
  *   - the release workflow carries the publish jobs we expect, and every job that
- *     publishes to GitHub Packages elevates `permissions.packages: write`.
+ *     publishes to GitHub Packages elevates `permissions.packages: write`;
+ *   - the release workflow verifies the tag against package.json before it
+ *     publishes anything (the verify-tag-version job), and every GitHub Packages
+ *     mirror job trails the npmjs publish and carries the same PUBLISH_NPM kill
+ *     switch, so the mirror can never publish a version npmjs did not get.
  *
  * Exit code 0 = green (0 problems), non-zero = the check found problems.
  *
@@ -44,13 +50,34 @@ if (files.length === 0) {
   process.exit(1);
 }
 
-/** Jobs the release workflow must define, and whether they mirror to GitHub Packages. */
-const RELEASE_REQUIRED_JOBS: ReadonlyArray<{ job: string; githubPackages: boolean }> = [
-  { job: 'publish-npm', githubPackages: false },
-  { job: 'publish-platform-packages', githubPackages: false },
-  { job: 'publish-github-packages', githubPackages: true },
-  { job: 'publish-github-platform-packages', githubPackages: true },
+/**
+ * Jobs the release workflow must define.
+ *   - `githubPackages`: the job mirrors to GitHub Packages, so it needs
+ *     `permissions.packages: write` AND must trail the npmjs publish.
+ *   - `killSwitch`: the job writes to a registry, so its `if` must carry the
+ *     PUBLISH_NPM repo-variable kill switch. A publish job without it publishes
+ *     even when releases are switched off.
+ */
+const RELEASE_REQUIRED_JOBS: ReadonlyArray<{ job: string; githubPackages: boolean; killSwitch: boolean }> = [
+  { job: 'verify-tag-version', githubPackages: false, killSwitch: false },
+  { job: 'publish-npm', githubPackages: false, killSwitch: true },
+  { job: 'publish-platform-packages', githubPackages: false, killSwitch: true },
+  { job: 'publish-github-packages', githubPackages: true, killSwitch: true },
+  { job: 'publish-github-platform-packages', githubPackages: true, killSwitch: true },
 ];
+
+/** The kill-switch expression every registry-writing job must carry in its `if`. */
+const PUBLISH_KILL_SWITCH = "vars.PUBLISH_NPM == 'true'";
+
+/** The npmjs publish job every GitHub Packages mirror job must trail. */
+const NPM_PUBLISH_JOB = 'publish-npm';
+
+function needsOf(job: Json): string[] {
+  const needs = job.needs;
+  if (typeof needs === 'string') return [needs];
+  if (Array.isArray(needs)) return needs.filter((n): n is string => typeof n === 'string');
+  return [];
+}
 
 for (const file of files) {
   const raw = readFileSync(join(workflowsDir, file), 'utf8');
@@ -93,20 +120,35 @@ for (const file of files) {
         fail(file, `job "${jobName}" has no steps`);
       }
     }
+    // A step-level continue-on-error is an informational annotation and never
+    // reds a check run; only the JOB-level form is banned here, because that is
+    // the one that reports a run green over a job that failed.
+    if (job['continue-on-error'] === true) {
+      fail(file, `job "${jobName}" declares job-level continue-on-error: true (banned: it hides a failing job behind a green run)`);
+    }
   }
 
   if (file === 'release.yml') {
-    for (const { job, githubPackages } of RELEASE_REQUIRED_JOBS) {
+    for (const { job, githubPackages, killSwitch } of RELEASE_REQUIRED_JOBS) {
       const jobDef = (jobs as Json)[job];
       if (!isObject(jobDef)) {
         fail(file, `release workflow is missing the "${job}" job`);
         continue;
+      }
+      const condition = typeof jobDef.if === 'string' ? jobDef.if : '';
+      if (killSwitch && !condition.includes(PUBLISH_KILL_SWITCH)) {
+        fail(file, `job "${job}" writes to a registry but its \`if\` does not carry the ${PUBLISH_KILL_SWITCH} kill switch`);
       }
       if (githubPackages) {
         const perms = jobDef.permissions;
         const packagesPerm = isObject(perms) ? perms.packages : undefined;
         if (packagesPerm !== 'write') {
           fail(file, `job "${job}" mirrors to GitHub Packages but does not declare permissions.packages: write`);
+        }
+        // npmjs is the source of truth. A mirror that can start before (or
+        // without) the npmjs publish splits one version across two registries.
+        if (!needsOf(jobDef).includes(NPM_PUBLISH_JOB)) {
+          fail(file, `job "${job}" mirrors to GitHub Packages but does not list "${NPM_PUBLISH_JOB}" in needs (the mirror must trail the npmjs publish)`);
         }
       }
     }

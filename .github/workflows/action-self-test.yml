@@ -1,0 +1,61 @@
+name: Action self-test (non-gating)
+
+# Exercises the composite action at ./action.yml end to end: it installs the
+# latest PUBLISHED release from GitHub Releases (network) and runs the installed
+# binary. That makes it a test of the PREVIOUS release's bytes plus the wrapper,
+# not of this commit, so it deliberately lives outside ci.yml.
+#
+# Why its own file: release.yml verifies the release commit by reference, and
+# reusable-release-verify asserts EVERY job of the ci.yml run concluded success.
+# A job in ci.yml is therefore release-gating whether or not auto-release lists
+# it in `needs`. This job cannot even pass before the first release exists, so it
+# belongs in a workflow whose verdict the release path never reads.
+#
+# It is still a real gate for what it covers: no continue-on-error, no masked
+# exit codes. A red run here means the published action wrapper is broken.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+  schedule:
+    # Weekly, so a break in the published install path surfaces even during a
+    # quiet week with no pushes.
+    - cron: "17 5 * * 1"
+
+permissions:
+  contents: read
+
+jobs:
+  action-self-test:
+    name: GitHub Action self-test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+      - name: Install GoodVibes via the composite action (install + version)
+        id: gv
+        uses: ./
+        with:
+          version: latest
+      - name: Assert the action reported a version
+        env:
+          ACTION_VERSION: ${{ steps.gv.outputs.version }}
+        run: |
+          test -n "$ACTION_VERSION"
+          echo "action installed: $ACTION_VERSION"
+      - name: Exercise doctor
+        # No `|| echo` mask: doctor's exit code is already the contract this
+        # step wants. resolveDoctorExitCode (src/cli/status.ts) exits 0 when the
+        # only findings are advisory (`severity: 'warning'`), which is what a
+        # bare CI workspace with no config produces, and exits 1 only on a
+        # must-fix (`severity: 'risk'`) finding. `--strict` is the opposite
+        # posture (any finding at all fails) and is deliberately not used here.
+        run: goodvibes doctor --json
+      - name: Note the headless-run gap
+        # A non-interactive one-shot mode exists (goodvibes run --non-interactive),
+        # but it needs a provider credential this self-test does not carry, so the
+        # self-test covers install + version + doctor. Consumers with a credential
+        # can pass the action's `prompt` input to run a real turn.
+        run: echo "goodvibes run --non-interactive exists but requires a provider credential; not exercised here."

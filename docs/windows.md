@@ -20,14 +20,19 @@ recommended path for all Windows users and requires no beta artifacts.
 
 ## Native Windows: beta, not yet promoted
 
-A native `windows-x64` binary **compiles** today: `bun build --compile
---target=bun-windows-x64` produces a working `goodvibes-windows-x64.exe`
-(PE32+). It is built and smoke-tested by a **separate, non-gating** workflow
-(`.github/workflows/windows-beta.yml`, `workflow_dispatch`), deliberately kept
-out of the release gate until the smoke job is reliably green and the blockers
-below are resolved. That workflow's Windows-runner smoke job is a real
-pass/fail check (never `continue-on-error`); a green run there is the signal to
-promote `windows-x64` into the release matrix.
+A native `windows-x64` binary **compiles** today: `bun run build:windows`
+(`goodvibes-build-binaries --target windows-x64`, the same toolchain path every
+shipped target uses) produces a working `goodvibes-windows-x64.exe` (PE32+) plus
+the matching `sqlite-vec-windows-x64/vec0.dll` addon under `dist/lib`. It is
+built and smoke-tested by a **separate, non-gating** workflow
+(`.github/workflows/windows-beta.yml`, `workflow_dispatch` plus a weekly
+schedule), deliberately kept out of the release gate until the smoke job is
+reliably green and the blockers below are resolved. That workflow typechecks and
+tests the ref before it builds, and its Windows-runner smoke job is the shared
+`goodvibes-post-build-smoke` (version banner, packaging-failure sentinels,
+placeholder-version and eager-namespace-read scans), a real pass/fail check and
+never `continue-on-error`; a green run there is the signal to promote
+`windows-x64` into the release matrix.
 
 Until then, native Windows artifacts are **not** attached to stable GitHub
 Releases, and there is no PowerShell installer (see "Deferred" below).

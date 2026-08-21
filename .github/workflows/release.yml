@@ -35,6 +35,30 @@ permissions:
   contents: read
 
 jobs:
+  # ── Tag must equal package.json version before anything else runs. Every
+  #    downstream job chains through release-verify, which needs this. ───────
+  verify-tag-version:
+    name: Verify tag matches package version
+    if: >-
+      github.event_name == 'push' ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.mode == 'release')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+        with:
+          ref: ${{ github.ref }}
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: "1.3.14"
+      - name: Verify git tag matches package.json version
+        # No dependency install: the script reads package.json and
+        # GITHUB_REF_NAME only, so this stays a ~20s gate in front of the
+        # whole release.
+        run: bun scripts/verify-release-tag-version.ts
+
   # ── By-reference validation (push/tag only). Replaces the serialized
   #    validate-release re-run: verify the tagged commit's push-CI run was
   #    per-job green. ──────────────────────────────────────────────────────
@@ -42,6 +66,7 @@ jobs:
     if: >-
       github.event_name == 'push' ||
       (github.event_name == 'workflow_dispatch' && github.event.inputs.mode == 'release')
+    needs: [verify-tag-version]
     # Caller permissions must be a superset of what the called workflow's jobs
     # request, or GitHub rejects the whole workflow at startup (jobs: []).
     permissions:
@@ -54,6 +79,11 @@ jobs:
       workflow: ci.yml
       event: push
       toolchain-source: registry
+      # Pinned, not floating: release-time `bunx @pellux/goodvibes-toolchain`
+      # would otherwise resolve whatever npm calls latest at that moment, so a
+      # toolchain published mid-release could change the gate that validates it.
+      # Same version as package.json devDependencies (see toolchain.config.json).
+      toolchain-spec: "@pellux/goodvibes-toolchain@2.0.17"
       bun-version: "1.3.14"
     secrets:
       token: ${{ secrets.GITHUB_TOKEN }}
@@ -88,6 +118,7 @@ jobs:
       artifact-glob: |
         dist/goodvibes-*
         dist/lib
+      toolchain-spec: "@pellux/goodvibes-toolchain@2.0.17"
       bun-version: "1.3.14"
 
   # ── TUI-specific native-arm64 banner smoke on macos-14. ───────────────────
@@ -151,14 +182,19 @@ jobs:
       - name: Install tarball in clean temp project
         env:
           GH_TOKEN: ${{ github.token }}
+          # Dispatch inputs reach the shell as environment values, never as text
+          # spliced into the script body; a ref containing shell syntax is then
+          # just a string that fails to resolve, not a command.
+          INPUT_MODE: ${{ github.event.inputs.mode }}
+          INPUT_REF: ${{ github.event.inputs.ref }}
         run: |
           # Release-mode dispatch resolves GITHUB_REF_NAME to the dispatched
           # tag (same as push) — it must NOT fall into the inputs.ref branch,
           # whose default is "main" and would resolve no version at all.
-          if [ "${GITHUB_EVENT_NAME}" = "push" ] || [ "${{ github.event.inputs.mode }}" = "release" ]; then
+          if [ "${GITHUB_EVENT_NAME}" = "push" ] || [ "$INPUT_MODE" = "release" ]; then
             VERSION="${GITHUB_REF_NAME#v}"
           else
-            TAG="${{ github.event.inputs.ref }}"
+            TAG="$INPUT_REF"
             TAG="${TAG#refs/tags/}"
             VERSION="${TAG#v}"
           fi
@@ -280,6 +316,7 @@ jobs:
       # file exists at the tagged ref (docs/releases/<version>.md, no v prefix —
       # the same resolution the old validate-release used).
       notes-file: docs/releases/${{ needs.stage-release-assets.outputs.version }}.md
+      toolchain-spec: "@pellux/goodvibes-toolchain@2.0.17"
       bun-version: "1.3.14"
 
   # ── Publish platform binary packages to npmjs (BEFORE the main package). ──
@@ -336,18 +373,26 @@ jobs:
       package-name: "@pellux/goodvibes-tui"
       environment: production
       registry: "https://registry.npmjs.org"
-      publish-command: "GOODVIBES_SKIP_NPM_AUTH_CHECK=1 bun run publish:check && bunx @pellux/goodvibes-toolchain goodvibes-publish-package --poll"
+      # reusable-npm-publish takes no toolchain-spec input; the pin rides in the
+      # publish command itself so this step cannot float to a newer toolchain.
+      publish-command: "GOODVIBES_SKIP_NPM_AUTH_CHECK=1 bun run publish:check && bun run package:install-check && bunx @pellux/goodvibes-toolchain@2.0.17 goodvibes-publish-package --poll"
       bun-version: "1.3.14"
     secrets:
       npm-token: ${{ secrets.NPM_TOKEN }}
 
-  # ── GitHub Packages mirror: platform packages rescoped to the repo owner. ──
+  # ── GitHub Packages mirror: platform packages rescoped to the repo owner.
+  #    npmjs is the source of truth and publishes FIRST (needs: publish-npm),
+  #    and the same PUBLISH_NPM kill switch that fences the npmjs jobs fences
+  #    the mirror. Without both, flipping the switch off (or an npmjs failure)
+  #    still published the mirror and split one version across two registries. ─
   publish-github-platform-packages:
     name: Publish platform binary packages to GitHub Packages
-    needs: gh-release
+    needs: [gh-release, publish-npm]
     if: >-
-      github.event_name == 'push' ||
-      (github.event_name == 'workflow_dispatch' && github.event.inputs.mode == 'release')
+      (
+        github.event_name == 'push' ||
+        (github.event_name == 'workflow_dispatch' && github.event.inputs.mode == 'release')
+      ) && vars.PUBLISH_NPM == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
@@ -380,13 +425,17 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-  # ── GitHub Packages mirror: main package rescoped to the repo owner. ──────
+  # ── GitHub Packages mirror: main package rescoped to the repo owner. Same
+  #    two guards as the platform mirror above, and it still trails its own
+  #    platform packages so the mirror's install order matches npmjs's. ───────
   publish-github-packages:
     name: Publish to GitHub Packages
-    needs: [gh-release, publish-github-platform-packages]
+    needs: [gh-release, publish-npm, publish-github-platform-packages]
     if: >-
-      github.event_name == 'push' ||
-      (github.event_name == 'workflow_dispatch' && github.event.inputs.mode == 'release')
+      (
+        github.event_name == 'push' ||
+        (github.event_name == 'workflow_dispatch' && github.event.inputs.mode == 'release')
+      ) && vars.PUBLISH_NPM == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
@@ -418,15 +467,18 @@ jobs:
       - name: Verify GitHub Packages publish
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          INPUT_MODE: ${{ github.event.inputs.mode }}
+          INPUT_REF: ${{ github.event.inputs.ref }}
+          REPO_OWNER: ${{ github.repository_owner }}
         run: |
           # Release-mode dispatch resolves GITHUB_REF_NAME to the dispatched
           # tag (same as push) — it must NOT fall into the inputs.ref branch,
           # whose default is "main" and would resolve no version at all.
-          if [ "${GITHUB_EVENT_NAME}" = "push" ] || [ "${{ github.event.inputs.mode }}" = "release" ]; then
+          if [ "${GITHUB_EVENT_NAME}" = "push" ] || [ "$INPUT_MODE" = "release" ]; then
             VERSION="${GITHUB_REF_NAME#v}"
           else
-            TAG="${{ github.event.inputs.ref }}"
+            TAG="$INPUT_REF"
             TAG="${TAG#refs/tags/}"
             VERSION="${TAG#v}"
           fi
-          npm view "@${{ github.repository_owner }}/goodvibes-tui@${VERSION}" version --registry=https://npm.pkg.github.com
+          npm view "@${REPO_OWNER}/goodvibes-tui@${VERSION}" version --registry=https://npm.pkg.github.com
