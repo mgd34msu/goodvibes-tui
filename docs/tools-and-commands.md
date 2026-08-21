@@ -262,7 +262,9 @@ Composer capture markers: a line beginning with `#` saves the rest as a session-
 
 `/schedule add when "<natural language>" <prompt...>` accepts natural-language times parsed locally, for example `every weekday at 9am`, `daily at 6pm`, `every 30 minutes`, `every monday at 08:00`, or `in 2 hours`. The command always echoes back the concrete interpretation (the resulting cron/interval/one-shot schedule) before the job is saved, so you can see exactly what was understood.
 
-`/search <query> [--limit <n>]` runs a provider-backed web search directly (bypassing the agent-tool JSON wrapper) and renders ranked results, an instant answer, and the source label into the transcript; it degrades honestly using the web-search service's own status note. `/imagine <prompt>` is the first production caller of the media-provider registry's image generation. On success it persists the artifact (inline bytes stored directly; a remote-URL-only result is stored as a small JSON pointer record rather than eagerly fetched), and prints the registry's own per-provider status (naming the exact env var) when no image-capable provider is configured. (`/image` is a different, pre-existing command; it attaches a local image file to the next message for multimodal analysis.)
+`/search <query> [--limit <n>]` runs a provider-backed web search directly (bypassing the agent-tool JSON wrapper) and renders ranked results, an instant answer, and the source label into the transcript; it degrades honestly using the web-search service's own status note.
+
+`/imagine <prompt>` is the first production caller of the media-provider registry's image generation. On success it persists the artifact (inline bytes stored directly; a remote-URL-only result is stored as a small JSON pointer record rather than eagerly fetched), and prints the registry's own per-provider status (naming the exact env var) when no image-capable provider is configured. (`/image` is a different, pre-existing command; it attaches a local image file to the next message for multimodal analysis.)
 
 `/session` is the single front-door for all session work. Two domains:
 - Lifecycle: `list`, `rename`, `resume`, `fork`, `save`, `info`, `export <id|.> [format]`, `search <query>`, `delete <id>`, `events [kind]`, `groups [kind]`, `hotspots`
@@ -309,7 +311,7 @@ Five keys are fixed and are not in the rebindable table: `F2` (toggle the Fleet 
 
 `Ctrl+W` uses whitespace-delimited word boundaries (readline/unix-word-rubout semantics), while `Alt+D`, `Alt+B`, and `Alt+F` use Unicode word boundaries (letters, digits, underscore).
 
-`Ctrl+K` is the command palette, not kill-to-end-of-line: the readline kill that historically owned `Ctrl+K` is bound to `Alt+K` instead, so the capability is kept rather than lost. `Ctrl+U` and `Alt+U` are likewise split: `Ctrl+U` kills to the start of the line and pushes the text onto the kill ring (readline convention), while `Alt+U` clears the whole buffer regardless of cursor position and pushes nothing.
+`Ctrl+K` is the command palette, not kill-to-end-of-line. The readline kill that historically owned `Ctrl+K` is bound to `Alt+K` instead, so the capability is kept rather than lost. `Ctrl+U` and `Alt+U` are likewise split. `Ctrl+U` kills to the start of the line and pushes the text onto the kill ring (readline convention), while `Alt+U` clears the whole buffer regardless of cursor position and pushes nothing.
 
 ### Navigation
 

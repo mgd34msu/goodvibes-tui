@@ -148,7 +148,7 @@ After data changes, call `this.clampSelection()` to keep `selectedIndex` in boun
 
 Set `this.filterEnabled = true` in the constructor and override `filterMatches()` to give a
 list panel a `'/'`-to-filter affordance that coexists with single-letter action keys.
-Filtering is modal: action keys work until you press `/`; while the filter is active,
+Filtering is modal. Action keys work until you press `/`; while the filter is active,
 every printable character (including ones that are action keys outside filter mode) extends
 the query instead.
 
@@ -207,12 +207,14 @@ non-list-panel class).
 > `src/renderer/config-modal.ts`); author a new one by implementing the
 > `ConfigModalSurface` contract in `src/input/config-modal-types.ts` and
 > registering it in `src/panels/builtin-modals.ts` (see
-> `src/panels/modals/provider-health-modal.ts` for the live exemplar). The
-> `SkillsPanel` class below is **retained only for its shared non-class exports**
+> `src/panels/modals/provider-health-modal.ts` for the live exemplar).
+>
+> The `SkillsPanel` class below is **retained only for its shared non-class exports**
 > (`discoverSkills`, `SkillRecord`), not as a registered panel. For a still-live
 > registered `BasePanel` + `extendPalette` example, use a KEEP panel such as
 > `src/panels/cost-tracker-panel.ts` or `src/panels/token-budget-panel.ts`
-> (`memory-panel.ts`, referenced below historically, was deleted in the > migration). The rest of this section stays as the reference `BasePanel`
+> (`memory-panel.ts`, referenced below historically, was deleted in the
+> migration). The rest of this section stays as the reference `BasePanel`
 > authoring walk-through for the panels that remain.
 
 Adapted from `src/panels/skills-panel.ts`. See `src/panels/cost-tracker-panel.ts` for the canonical `extendPalette` usage on a still-registered panel.

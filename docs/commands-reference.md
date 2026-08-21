@@ -90,7 +90,7 @@ GoodVibes ships **156** built-in slash commands across **75** categories. Every 
 
 | Command | Aliases | Usage | Description |
 | --- | --- | --- | --- |
-| `/graph` | — | `<workstreamId>` | Show a workstream's task graph: nodes, edges, states, and pool posture |
+| `/graph` | None | `<workstreamId>` | Show a workstream's task graph: nodes, edges, states, and pool posture |
 
 ## Branches
 
@@ -98,7 +98,7 @@ GoodVibes ships **156** built-in slash commands across **75** categories. Every 
 | --- | --- | --- | --- |
 | `/branch` | `/br` | `[name]` | List conversation branches or switch to one |
 | `/fork` | `/branch-save` | `[name]` | Save a named snapshot of the current conversation |
-| `/merge` | — | `<name>` | Append messages from a branch after the fork point |
+| `/merge` | None | `<name>` | Append messages from a branch after the fork point |
 
 ## Channels
 
@@ -110,21 +110,21 @@ GoodVibes ships **156** built-in slash commands across **75** categories. Every 
 
 | Command | Aliases | Usage | Description |
 | --- | --- | --- | --- |
-| `/checkin` | — | `[run]` | Proactive check-in: view config + recent receipts, or trigger one now |
+| `/checkin` | None | `[run]` | Proactive check-in: view config + recent receipts, or trigger one now |
 
 ## Checkpoints
 
 | Command | Aliases | Usage | Description |
 | --- | --- | --- | --- |
-| `/checkpoint` | — | `[label]` | Create a manual workspace checkpoint (forensic retention) |
-| `/checkpoints` | `/ckpts` | — | List workspace checkpoints, newest first |
-| `/rewind` | — | `[<n\|turnId> [files\|conversation\|both]]` | Rewind files, conversation, or both to a completed turn (preview + confirm) |
+| `/checkpoint` | None | `[label]` | Create a manual workspace checkpoint (forensic retention) |
+| `/checkpoints` | `/ckpts` | None | List workspace checkpoints, newest first |
+| `/rewind` | None | `[<n\|turnId> [files\|conversation\|both]]` | Rewind files, conversation, or both to a completed turn (preview + confirm) |
 
 ## CI
 
 | Command | Aliases | Usage | Description |
 | --- | --- | --- | --- |
-| `/ci` | — | `status <repo-or-pr> \| watch <repo-or-pr> <deliveryChannel> [--fix-session] \| watches \| unwatch <id>` | CI-watch: one-shot per-job status and standing watches over the operator panel |
+| `/ci` | None | `status <repo-or-pr> \| watch <repo-or-pr> <deliveryChannel> [--fix-session] \| watches \| unwatch <id>` | CI-watch: one-shot per-job status and standing watches over the operator panel |
 
 ## Cloudflare
 
@@ -136,13 +136,13 @@ GoodVibes ships **156** built-in slash commands across **75** categories. Every 
 
 | Command | Aliases | Usage | Description |
 | --- | --- | --- | --- |
-| `/cluster` | — | `[status\|create\|join\|key\|nodes\|forget\|rotate\|leave\|rename\|groups]: status is the default; add --host/--port/--token to reach a daemon on another machine` | Share inbound channel work with your other goodvibes machines on this network |
+| `/cluster` | None | `[status\|create\|join\|key\|nodes\|forget\|rotate\|leave\|rename\|groups]: status is the default; add --host/--port/--token to reach a daemon on another machine` | Share inbound channel work with your other goodvibes machines on this network |
 
 ## Codebase
 
 | Command | Aliases | Usage | Description |
 | --- | --- | --- | --- |
-| `/codebase` | — | `build \| status \| search <query...> [--limit n]` | Repo source-tree code index: build, inspect, and search |
+| `/codebase` | None | `build \| status \| search <query...> [--limit n]` | Repo source-tree code index: build, inspect, and search |
 
 ## Configuration
 
@@ -154,11 +154,11 @@ GoodVibes ships **156** built-in slash commands across **75** categories. Every 
 
 | Command | Aliases | Usage | Description |
 | --- | --- | --- | --- |
-| `/cockpit` | — | — | Open the unified operator cockpit |
-| `/communication` | `/comms` | — | Inspect structured agent communication routes and recent activity |
+| `/cockpit` | None | None | Open the unified operator cockpit |
+| `/communication` | `/comms` | None | Inspect structured agent communication routes and recent activity |
 | `/orchestration` | `/orch` | `[show [graphId] \| cancel graph <graphId> \| cancel subtree <agentId>]` | Inspect orchestration graphs and cancel active graphs or subtrees |
 | `/project-memory` | `/pmem` | `[open \| queue [limit] \| explain <task...> [--scope <path> ...]]` | Inspect durable project memory: risks, runbooks, and architecture notes |
-| `/security` | — | `[review \| attack-paths \| tokens]` | Inspect security posture, attack paths, and review state |
+| `/security` | None | `[review \| attack-paths \| tokens]` | Inspect security posture, attack paths, and review state |
 
 ## Conversation
 
@@ -170,45 +170,45 @@ GoodVibes ships **156** built-in slash commands across **75** categories. Every 
 
 | Command | Aliases | Usage | Description |
 | --- | --- | --- | --- |
-| `/cost` | — | `[panel\|budget <usd>\|attribution [24h\|7d] [--json]]` | Inspect session/agent cost tracking, windowed cost attribution, and the budget alert threshold |
+| `/cost` | None | `[panel\|budget <usd>\|attribution [24h\|7d] [--json]]` | Inspect session/agent cost tracking, windowed cost attribution, and the budget alert threshold |
 
 ## Diff & Review
 
 | Command | Aliases | Usage | Description |
 | --- | --- | --- | --- |
 | `/diff` | `/d` | `[session\|head\|working\|staged\|<git-ref>]` | Show unified diff of session file changes. Uses git diff HEAD if in a git repo |
-| `/review` | — | — | Review this session's diff hunk-by-hunk, steer comments, or revert a hunk |
+| `/review` | None | None | Review this session's diff hunk-by-hunk, steer comments, or revert a hunk |
 
 ## Discovery
 
 | Command | Aliases | Usage | Description |
 | --- | --- | --- | --- |
-| `/scan` | — | — | Scan localhost and LAN for local LLM servers |
+| `/scan` | None | None | Scan localhost and LAN for local LLM servers |
 
 ## Editor
 
 | Command | Aliases | Usage | Description |
 | --- | --- | --- | --- |
-| `/editor` | `/ed` | — | Edit the current composer draft in your $EDITOR, then resume with the result |
+| `/editor` | `/ed` | None | Edit the current composer draft in your $EDITOR, then resume with the result |
 
 ## Eval
 
 | Command | Aliases | Usage | Description |
 | --- | --- | --- | --- |
-| `/eval` | — | `<subcommand> [args]` | Evaluation harness: run benchmark suites, compare baselines, and gate regressions |
+| `/eval` | None | `<subcommand> [args]` | Evaluation harness: run benchmark suites, compare baselines, and gate regressions |
 
 ## Experience
 
 | Command | Aliases | Usage | Description |
 | --- | --- | --- | --- |
 | `/approval` | `/approvals` | `[matrix\|review <kind>]` | Review action-specific approval classes and the specialized security UX matrix |
-| `/bootstrap` | — | `[export <path>\|inspect <path>]` | Dedicated front-door for remote bootstrap bundle export and inspection |
+| `/bootstrap` | None | `[export <path>\|inspect <path>]` | Dedicated front-door for remote bootstrap bundle export and inspection |
 | `/memory-review` | `/knowledge-review` | `[queue [limit]\|explain <task...> [--scope <path> ...]]` | Dedicated front-door for knowledge review queues and task-specific memory injection explanations |
-| `/remote-env` | — | `[review\|export <path>]` | Dedicated front-door for remote environment snippets and portable env exports |
-| `/remote-setup` | — | `[review\|export <path>]` | Dedicated front-door for remote setup review and portable setup bundles |
+| `/remote-env` | None | `[review\|export <path>]` | Dedicated front-door for remote environment snippets and portable env exports |
+| `/remote-setup` | None | `[review\|export <path>]` | Dedicated front-door for remote setup review and portable setup bundles |
 | `/runner-pool` | `/pool` | `[list\|show <id>\|create <id> <label...>\|assign <pool> <runner>\|unassign <pool> <runner>]` | Dedicated front-door for remote runner pool review and assignment flows |
-| `/tunnel` | — | `[review\|export <path>]` | Dedicated front-door for remote tunnel review and export flows |
-| `/voice` | — | `[review\|status\|setup\|enable\|disable\|wake status\|wake setup\|bundle export <path>\|bundle inspect <path>]` | Review or toggle always-speak mode, provision the managed local voice runtime and the wake-word models (setup/status), and package portable voice metadata |
+| `/tunnel` | None | `[review\|export <path>]` | Dedicated front-door for remote tunnel review and export flows |
+| `/voice` | None | `[review\|status\|setup\|enable\|disable\|wake status\|wake setup\|bundle export <path>\|bundle inspect <path>]` | Review or toggle always-speak mode, provision the managed local voice runtime and the wake-word models (setup/status), and package portable voice metadata |
 
 ## Fleet
 
@@ -226,7 +226,7 @@ GoodVibes ships **156** built-in slash commands across **75** categories. Every 
 
 | Command | Aliases | Usage | Description |
 | --- | --- | --- | --- |
-| `/guidance` | — | `[review\|dismiss <id>\|reset [id]]` | Review contextual operational guidance without interrupting the main conversation flow |
+| `/guidance` | None | `[review\|dismiss <id>\|reset [id]]` | Review contextual operational guidance without interrupting the main conversation flow |
 | `/welcome` | `/guide` | `[open\|print]` | Open the product entry point for the onboarding wizard, security, marketplace, remote, and operator workflows |
 
 ## Health
@@ -239,19 +239,19 @@ GoodVibes ships **156** built-in slash commands across **75** categories. Every 
 
 | Command | Aliases | Usage | Description |
 | --- | --- | --- | --- |
-| `/hooks` | — | `[contracts [filter] \| reload \| scaffold <name> <match> <type> \| chain <name> <event1,event2,...> \| remove <name> \| enable <name> \| disable <name> \| simulate <eventPath> \| inspect <path> \| import <path> [merge\|replace] \| export [path]]` | Inspect, author, simulate, and reload managed hook workflows |
+| `/hooks` | None | `[contracts [filter] \| reload \| scaffold <name> <match> <type> \| chain <name> <event1,event2,...> \| remove <name> \| enable <name> \| disable <name> \| simulate <eventPath> \| inspect <path> \| import <path> [merge\|replace] \| export [path]]` | Inspect, author, simulate, and reload managed hook workflows |
 
 ## Image
 
 | Command | Aliases | Usage | Description |
 | --- | --- | --- | --- |
-| `/imagine` | — | `<prompt>` | Generate an image from a prompt via a configured media provider |
+| `/imagine` | None | `<prompt>` | Generate an image from a prompt via a configured media provider |
 
 ## Incidents
 
 | Command | Aliases | Usage | Description |
 | --- | --- | --- | --- |
-| `/incident` | — | `[open \| latest \| show <id\|latest> \| export <id\|latest> <path> \| capture <id\|latest>]` | Open, export, and capture incident review bundles |
+| `/incident` | None | `[open \| latest \| show <id\|latest> \| export <id\|latest> <path> \| capture <id\|latest>]` | Open, export, and capture incident review bundles |
 
 ## Intelligence
 
@@ -281,16 +281,16 @@ GoodVibes ships **156** built-in slash commands across **75** categories. Every 
 
 | Command | Aliases | Usage | Description |
 | --- | --- | --- | --- |
-| `/bookmarks` | `/bm` | — | List bookmarked blocks |
-| `/collapse` | — | `[all\|thinking\|tool\|code]` | Collapse blocks by type |
-| `/expand` | — | `[all\|thinking\|tool\|code]` | Expand blocks by type |
+| `/bookmarks` | `/bm` | None | List bookmarked blocks |
+| `/collapse` | None | `[all\|thinking\|tool\|code]` | Collapse blocks by type |
+| `/expand` | None | `[all\|thinking\|tool\|code]` | Expand blocks by type |
 | `/image` | `/img` | `<path> [prompt text]` | Attach an image file to the next message |
-| `/incident-review` | — | — | Alias for /incident open |
-| `/pin` | — | `<model-id>` | Pin a model to the favorites list |
-| `/refresh-models` | — | — | Refresh model catalog, benchmarks, and token limits |
-| `/secrets` | — | `set <KEY> <value> [--user\|--project] [--secure\|--plaintext] \| link <KEY> <secret-ref> [--user\|--project] [--secure\|--plaintext] \| get <KEY> \| test <secret-ref> \| providers \| list \| delete <KEY> [--user\|--project] [--secure\|--plaintext]` | Persistent secret storage: hierarchy-aware, external secret refs, providers (a quick one-off masked value instead: /secret) |
+| `/incident-review` | None | None | Alias for /incident open |
+| `/pin` | None | `<model-id>` | Pin a model to the favorites list |
+| `/refresh-models` | None | None | Refresh model catalog, benchmarks, and token limits |
+| `/secrets` | None | `set <KEY> <value> [--user\|--project] [--secure\|--plaintext] \| link <KEY> <secret-ref> [--user\|--project] [--secure\|--plaintext] \| get <KEY> \| test <secret-ref> \| providers \| list \| delete <KEY> [--user\|--project] [--secure\|--plaintext]` | Persistent secret storage: hierarchy-aware, external secret refs, providers (a quick one-off masked value instead: /secret) |
 | `/tools` | `/t` | `[review\|panel]` | List available tools and review compact native tool capabilities |
-| `/unpin` | — | `<model-id>` | Unpin a model from the favorites list |
+| `/unpin` | None | `<model-id>` | Unpin a model from the favorites list |
 
 ## Local Setup
 
@@ -309,7 +309,7 @@ GoodVibes ships **156** built-in slash commands across **75** categories. Every 
 
 | Command | Aliases | Usage | Description |
 | --- | --- | --- | --- |
-| `/managed` | — | `[review\|staged\|rollback-history\|export <profile> <path>\|inspect <path>\|stage <path>\|apply <path> [key ...]\|apply-staged [key ...]\|rollback <token>\|lock <key> <source> <reason...>\|unlock <key>]` | Export, inspect, and apply managed settings bundles |
+| `/managed` | None | `[review\|staged\|rollback-history\|export <profile> <path>\|inspect <path>\|stage <path>\|apply <path> [key ...]\|apply-staged [key ...]\|rollback <token>\|lock <key> <source> <reason...>\|unlock <key>]` | Export, inspect, and apply managed settings bundles |
 
 ## Marketplace
 
@@ -321,29 +321,29 @@ GoodVibes ships **156** built-in slash commands across **75** categories. Every 
 
 | Command | Aliases | Usage | Description |
 | --- | --- | --- | --- |
-| `/mcp` | — | `[add\|remove\|reload\|config\|review\|tools [<server>]\|auth-review\|repair [server]]` | Manage MCP servers and their tools |
+| `/mcp` | None | `[add\|remove\|reload\|config\|review\|tools [<server>]\|auth-review\|repair [server]]` | Manage MCP servers and their tools |
 
 ## Memory
 
 | Command | Aliases | Usage | Description |
 | --- | --- | --- | --- |
-| `/handoff` | — | `[export <path> [scope] \| inspect <path> \| import <path>]` | Dedicated front-door for reviewable memory handoff bundles |
+| `/handoff` | None | `[export <path> [scope] \| inspect <path> \| import <path>]` | Dedicated front-door for reviewable memory handoff bundles |
 | `/memory-sync` | `/memsync` | `[export <path> [scope] \| import <path>]` | Dedicated front-door for durable memory export/import and bundle exchange |
 | `/recall` | `/rc`, `/memory`, `/mem` | `[<subcommand> [args]]: bare opens the modal; report prints the subcommand usage text` | Bare opens the Memory modal; project memory subcommands add decisions, constraints, incidents, and patterns with provenance |
-| `/session-memory` | — | `[queue [limit] \| export <path> \| add <class> <summary...>]` | Dedicated front-door for session-scoped memory capture and review. All subcommands are filtered to scope=session |
-| `/team-memory` | — | `[queue [limit] \| export <path> \| import <path> \| capture policy]` | Dedicated front-door for team/shared memory review and exchange. The queue and export subcommands are filtered to scope=team |
+| `/session-memory` | None | `[queue [limit] \| export <path> \| add <class> <summary...>]` | Dedicated front-door for session-scoped memory capture and review. All subcommands are filtered to scope=session |
+| `/team-memory` | None | `[queue [limit] \| export <path> \| import <path> \| capture policy]` | Dedicated front-door for team/shared memory review and exchange. The queue and export subcommands are filtered to scope=team |
 
 ## Notifications
 
 | Command | Aliases | Usage | Description |
 | --- | --- | --- | --- |
-| `/notify` | — | `add <url> \| remove <url> \| list \| clear \| test` | Manage webhook notification URLs (ntfy.sh format) |
+| `/notify` | None | `add <url> \| remove <url> \| list \| clear \| test` | Manage webhook notification URLs (ntfy.sh format) |
 
 ## Onboarding
 
 | Command | Aliases | Usage | Description |
 | --- | --- | --- | --- |
-| `/onboarding` | — | — | Open the onboarding wizard with current settings preloaded for review and editing |
+| `/onboarding` | None | None | Open the onboarding wizard with current settings preloaded for review and editing |
 
 ## Operator
 
@@ -352,25 +352,25 @@ GoodVibes ships **156** built-in slash commands across **75** categories. Every 
 | `/context` | `/ctx` | `[window [<size>\|clear]]` | Inspect context usage, or set/clear a custom context window for the current model |
 | `/forensics` | `/foren` | `[latest \| show <id> \| export <id>]` | Failure Forensics: view, inspect, and export auto-classified failure reports |
 | `/mode` | `/hitl` | `[quiet\|balanced\|operator\|show\|set-domain <domain> <verbosity>]` | Manage HITL UX notification mode (quiet/balanced/operator) |
-| `/next-error` | `/ne` | — | Jump to the next error message in the conversation |
-| `/ops` | — | `view \| task <cancel\|pause\|resume\|retry> <id> [note] \| agent cancel <id> [note]` | Operator Control Plane: view audit log, cancel/pause/resume/retry tasks and agents |
+| `/next-error` | `/ne` | None | Jump to the next error message in the conversation |
+| `/ops` | None | `view \| task <cancel\|pause\|resume\|retry> <id> [note] \| agent cancel <id> [note]` | Operator Control Plane: view audit log, cancel/pause/resume/retry tasks and agents |
 | `/panel` | `/panels` | `[open <id> [top\|bottom] [--target <id>[:<kind>]]\|close <id>\|list\|toggle\|move <top\|bottom\|other> [id]\|focus <top\|bottom\|toggle>\|split [show\|hide\|toggle]\|width <left\|right\|reset>\|height <up\|down\|reset>]` | Open, place, resize, or list panels. Usage: /panel [open <id> [top\|bottom]\|close <id>\|list\|toggle\|move\|focus\|split\|width\|height] |
-| `/prev-error` | `/pe` | — | Jump to the previous error message in the conversation |
-| `/profiles` | — | — | Browse and load config profiles |
-| `/settings` | `/cfg-ui` | — | Open the fullscreen configuration workspace |
-| `/tool` | — | `verify <name> \| verify-all \| contract show <name>` | Verify registered tool contracts |
+| `/prev-error` | `/pe` | None | Jump to the previous error message in the conversation |
+| `/profiles` | None | None | Browse and load config profiles |
+| `/settings` | `/cfg-ui` | None | Open the fullscreen configuration workspace |
+| `/tool` | None | `verify <name> \| verify-all \| contract show <name>` | Verify registered tool contracts |
 
 ## Owner Profile
 
 | Command | Aliases | Usage | Description |
 | --- | --- | --- | --- |
-| `/profile` | — | `[show\|where <field>\|set <field> <value>\|note [--section <name>] <text>\|forget <field>\|forget --section <name> <text>\|undo <field>\|status]` | What the platform knows about you: read it, correct it, trace where a fact came from, or forget one |
+| `/profile` | None | `[show\|where <field>\|set <field> <value>\|note [--section <name>] <text>\|forget <field>\|forget --section <name> <text>\|undo <field>\|status]` | What the platform knows about you: read it, correct it, trace where a fact came from, or forget one |
 
 ## Payments
 
 | Command | Aliases | Usage | Description |
 | --- | --- | --- | --- |
-| `/payments` | — | `/payments [card]` | Payment card on file for daemon-initiated purchases (card entry is masked input) |
+| `/payments` | None | `/payments [card]` | Payment card on file for daemon-initiated purchases (card entry is masked input) |
 
 ## Permissions
 
@@ -382,23 +382,23 @@ GoodVibes ships **156** built-in slash commands across **75** categories. Every 
 
 | Command | Aliases | Usage | Description |
 | --- | --- | --- | --- |
-| `/plan` | — | `[on \| off \| toggle]` | Enter or exit plan mode, a read-only planning posture where writes, commands, and network calls are blocked |
+| `/plan` | None | `[on \| off \| toggle]` | Enter or exit plan mode, a read-only planning posture where writes, commands, and network calls are blocked |
 | `/project-plan` | `/planning` | `[panel \| approve \| dismiss \| answer <n> <text> \| list \| show <id> \| mode \| explain \| override <strategy> \| status \| clear \| <planning goal>]` | Inspect or seed TUI-owned project planning state |
 
 ## Platform
 
 | Command | Aliases | Usage | Description |
 | --- | --- | --- | --- |
-| `/sandbox` | — | `[open\|review\|recommend\|profiles\|presets\|preset <id>\|apply-preset <id>\|probe\|doctor\|wrapper-test <profile>\|guest-test <profile>\|init-qemu <dir>\|qemu <setup [dir]\|bootstrap [dir] [size-gb]\|recover\|inspect-setup\|apply-setup> ...\|session ...\|bundle ...\|guest-bundle <export\|inspect> <path>\|scaffold-qemu-wrapper <path>\|set-mcp <mode>\|set-repl <mode>\|set-windows <mode>\|set-backend <mode>\|set-qemu-binary <path>\|set-qemu-image <path>\|set-qemu-wrapper <path>\|set-qemu-guest-host <host>\|set-qemu-guest-port <port>\|set-qemu-guest-user <user>\|set-qemu-workspace <path>\|set-qemu-session-mode <attach\|launch-per-command>]` | Review and configure VM isolation policy for MCP and evaluation runtimes |
+| `/sandbox` | None | `[open\|review\|recommend\|profiles\|presets\|preset <id>\|apply-preset <id>\|probe\|doctor\|wrapper-test <profile>\|guest-test <profile>\|init-qemu <dir>\|qemu <setup [dir]\|bootstrap [dir] [size-gb]\|recover\|inspect-setup\|apply-setup> ...\|session ...\|bundle ...\|guest-bundle <export\|inspect> <path>\|scaffold-qemu-wrapper <path>\|set-mcp <mode>\|set-repl <mode>\|set-windows <mode>\|set-backend <mode>\|set-qemu-binary <path>\|set-qemu-image <path>\|set-qemu-wrapper <path>\|set-qemu-guest-host <host>\|set-qemu-guest-port <port>\|set-qemu-guest-user <user>\|set-qemu-workspace <path>\|set-qemu-session-mode <attach\|launch-per-command>]` | Review and configure VM isolation policy for MCP and evaluation runtimes |
 
 ## Platform Access
 
 | Command | Aliases | Usage | Description |
 | --- | --- | --- | --- |
-| `/auth` | — | `[review\|show <provider>\|repair <provider>\|bundle export <path>\|bundle inspect <path>\|login <daemon\|listener> <baseUrl> <username> <password> [secretKey]\|local <review\|panel\|add-user\|delete-user\|rotate-password\|revoke-session\|clear-bootstrap-file>]` | Review auth posture and exchange session login tokens with local services |
-| `/install` | — | `[review\|bundle export <path>\|bundle inspect <path>]` | Review install posture and export portable install bundles |
-| `/login` | — | `[provider <name> start\|finish <code>\|service <daemon\|listener> <baseUrl> <username> <password> [secretKey]]` | Front-door login flow for provider subscriptions and local service sessions |
-| `/logout` | — | `provider <name>` | Front-door logout flow for provider subscription sessions and supported overrides |
+| `/auth` | None | `[review\|show <provider>\|repair <provider>\|bundle export <path>\|bundle inspect <path>\|login <daemon\|listener> <baseUrl> <username> <password> [secretKey]\|local <review\|panel\|add-user\|delete-user\|rotate-password\|revoke-session\|clear-bootstrap-file>]` | Review auth posture and exchange session login tokens with local services |
+| `/install` | None | `[review\|bundle export <path>\|bundle inspect <path>]` | Review install posture and export portable install bundles |
+| `/login` | None | `[provider <name> start\|finish <code>\|service <daemon\|listener> <baseUrl> <username> <password> [secretKey]]` | Front-door login flow for provider subscriptions and local service sessions |
+| `/logout` | None | `provider <name>` | Front-door logout flow for provider subscription sessions and supported overrides |
 | `/update` | `/upgrade` | `[check\|apply\|rollback\|review\|bundle export <path>\|bundle inspect <path>]` | Check for a newer GoodVibes release and, for binary installs, download/verify/apply it or roll back to the kept previous version |
 
 ## Platform Services
@@ -407,13 +407,13 @@ GoodVibes ships **156** built-in slash commands across **75** categories. Every 
 | --- | --- | --- | --- |
 | `/deeplink` | `/link` | `[review\|open <surface> [target]\|bundle export <path>\|bundle inspect <path>]` | Review and package deep-link entrypoints for setup and operator screens |
 | `/helpers` | `/integration-api` | `[review\|bundle export <path>\|bundle inspect <path>]` | Review local integration helper APIs for remote clients and future web frontends |
-| `/storage` | — | `[review\|list\|delete <key>\|bundle export <path>\|bundle inspect <path>]` | Review secure storage posture and export portable storage metadata bundles |
+| `/storage` | None | `[review\|list\|delete <key>\|bundle export <path>\|bundle inspect <path>]` | Review secure storage posture and export portable storage metadata bundles |
 
 ## Plugins
 
 | Command | Aliases | Usage | Description |
 | --- | --- | --- | --- |
-| `/plugin` | — | `list \| dirs \| inspect <name> \| review \| installed \| catalog-review <id> \| publish-local <id> <path> <summary...> \| unpublish <id> \| install <id> [project\|user] \| update <id> [project\|user] \| uninstall <id> [project\|user] \| enable <name> \| disable <name> \| reload` | Manage plugins, trust, review, and ecosystem paths |
+| `/plugin` | None | `list \| dirs \| inspect <name> \| review \| installed \| catalog-review <id> \| publish-local <id> <path> <summary...> \| unpublish <id> \| install <id> [project\|user] \| update <id> [project\|user] \| uninstall <id> [project\|user] \| enable <name> \| disable <name> \| reload` | Manage plugins, trust, review, and ecosystem paths |
 
 ## Policy
 
@@ -425,15 +425,15 @@ GoodVibes ships **156** built-in slash commands across **75** categories. Every 
 
 | Command | Aliases | Usage | Description |
 | --- | --- | --- | --- |
-| `/principals` | — | `[list\|get <id>\|create <name> <kind> [channel:value...]\|update <id> [--name x] [--kind x] [--identities c:v,c:v]\|delete <id>\|resolve <channel> <value>]` | Identity mappings: named principals and their channel identities |
+| `/principals` | None | `[list\|get <id>\|create <name> <kind> [channel:value...]\|update <id> [--name x] [--kind x] [--identities c:v,c:v]\|delete <id>\|resolve <channel> <value>]` | Identity mappings: named principals and their channel identities |
 
 ## Product
 
 | Command | Aliases | Usage | Description |
 | --- | --- | --- | --- |
-| `/bridge` | — | `[status\|pools\|assign <pool> <runner>\|runner <id>\|review <artifactId>\|export <artifactId> [path]\|import <path>]` | Review and operate self-hosted bridge and remote runner flows |
-| `/release` | — | `[review\|checklist\|bundle export <path>\|bundle inspect <path>]` | Package certification and release-readiness operations |
-| `/trust` | — | `[review\|workspace [trusted\|restricted]\|bundle export <path>\|bundle inspect <path>]` | Review trust posture, set this workspace's trust level, or export trust bundles |
+| `/bridge` | None | `[status\|pools\|assign <pool> <runner>\|runner <id>\|review <artifactId>\|export <artifactId> [path]\|import <path>]` | Review and operate self-hosted bridge and remote runner flows |
+| `/release` | None | `[review\|checklist\|bundle export <path>\|bundle inspect <path>]` | Package certification and release-readiness operations |
+| `/trust` | None | `[review\|workspace [trusted\|restricted]\|bundle export <path>\|bundle inspect <path>]` | Review trust posture, set this workspace's trust level, or export trust bundles |
 
 ## Profiles
 
@@ -463,14 +463,14 @@ GoodVibes ships **156** built-in slash commands across **75** categories. Every 
 
 | Command | Aliases | Usage | Description |
 | --- | --- | --- | --- |
-| `/relay` | — | `[status\|pair]` | Outbound relay reachability status, or mint a QR-encodable pairing payload |
+| `/relay` | None | `[status\|pair]` | Outbound relay reachability status, or mint a QR-encodable pairing payload |
 
 ## Remote
 
 | Command | Aliases | Usage | Description |
 | --- | --- | --- | --- |
-| `/remote` | — | `[list \| show [agentId] \| supervisor [runnerId] \| capabilities [runnerId] \| recover [runnerId] \| setup [export <path>] \| env [export <path>] \| tunnel [review\|export <path>] \| bootstrap [export <path>\|inspect <path>] \| session <export\|inspect\|import> <path> \| pool <list\|show\|create\|assign\|unassign> ... \| dispatch [template] <description> \| dispatch-pool <pool> [template] <description> \| contract [agentId] \| cancel <agentId> \| export <agentId> [path] \| artifact list \| artifact show <id> \| artifact export <id> [path] \| review <id> \| rerun-local <id> \| import <path>]` | Inspect, dispatch, and review self-hosted remote runners and artifacts |
-| `/teleport` | — | `[export <path>\|inspect <path>\|import <path>]` | Package, inspect, and import portable remote-session handoff bundles |
+| `/remote` | None | `[list \| show [agentId] \| supervisor [runnerId] \| capabilities [runnerId] \| recover [runnerId] \| setup [export <path>] \| env [export <path>] \| tunnel [review\|export <path>] \| bootstrap [export <path>\|inspect <path>] \| session <export\|inspect\|import> <path> \| pool <list\|show\|create\|assign\|unassign> ... \| dispatch [template] <description> \| dispatch-pool <pool> [template] <description> \| contract [agentId] \| cancel <agentId> \| export <agentId> [path] \| artifact list \| artifact show <id> \| artifact export <id> [path] \| review <id> \| rerun-local <id> \| import <path>]` | Inspect, dispatch, and review self-hosted remote runners and artifacts |
+| `/teleport` | None | `[export <path>\|inspect <path>\|import <path>]` | Package, inspect, and import portable remote-session handoff bundles |
 
 ## Scheduling
 
@@ -482,7 +482,7 @@ GoodVibes ships **156** built-in slash commands across **75** categories. Every 
 
 | Command | Aliases | Usage | Description |
 | --- | --- | --- | --- |
-| `/secret` | — | `/secret <NAME>` | Quick one-off: type a value with masked input, stored as an env var for THIS session only (persistent storage + providers: /secrets) |
+| `/secret` | None | `/secret <NAME>` | Quick one-off: type a value with masked input, stored as an env var for THIS session only (persistent storage + providers: /secrets) |
 
 ## Security
 
@@ -500,24 +500,24 @@ GoodVibes ships **156** built-in slash commands across **75** categories. Every 
 
 | Command | Aliases | Usage | Description |
 | --- | --- | --- | --- |
-| `/export` | — | `[format] [path]` | Export conversation to a Markdown file |
-| `/load` | — | `<name>` | Load a saved session |
-| `/note` | — | `[list\|add <text>\|remove <id>]` | Manage session notes (pinned across context compaction) |
-| `/redo` | — | `[rewind\|file]` | Redo last undone action. /redo rewind re-applies the last undone /rewind. /redo file re-applies the last reverted file. /redo alone restores a conversation turn |
+| `/export` | None | `[format] [path]` | Export conversation to a Markdown file |
+| `/load` | None | `<name>` | Load a saved session |
+| `/note` | None | `[list\|add <text>\|remove <id>]` | Manage session notes (pinned across context compaction) |
+| `/redo` | None | `[rewind\|file]` | Redo last undone action. /redo rewind re-applies the last undone /rewind. /redo file re-applies the last reverted file. /redo alone restores a conversation turn |
 | `/retry` | `/r` | `[modified text]` | Re-send the last user message |
-| `/save` | — | `[name]` | Save current session to .goodvibes/tui/sessions/ |
-| `/sessions` | — | `[resume <id\|name>]` | List saved sessions |
+| `/save` | None | `[name]` | Save current session to .goodvibes/tui/sessions/ |
+| `/sessions` | None | `[resume <id\|name>]` | List saved sessions |
 | `/template` | `/tmpl` | `save <name> \| use <name> [args] \| list \| edit <name> \| delete <name>` | Manage and use prompt templates |
-| `/title` | — | `[text]` | Show or set the conversation title |
-| `/undo` | — | `[rewind\|file]` | Undo last action. /undo rewind reverses the last /rewind. /undo file reverts the last file write/edit. /undo alone removes the last conversation turn |
+| `/title` | None | `[text]` | Show or set the conversation title |
+| `/undo` | None | `[rewind\|file]` | Undo last action. /undo rewind reverses the last /rewind. /undo file reverts the last file write/edit. /undo alone removes the last conversation turn |
 
 ## Sessions & Replay
 
 | Command | Aliases | Usage | Description |
 | --- | --- | --- | --- |
-| `/hosted` | — | `[new\|list\|attach\|say\|later\|cancel\|detach\|kill] [args]` | Daemon-hosted sessions: start, join, steer and leave a conversation whose loop runs in the daemon |
+| `/hosted` | None | `[new\|list\|attach\|say\|later\|cancel\|detach\|kill] [args]` | Daemon-hosted sessions: start, join, steer and leave a conversation whose loop runs in the daemon |
 | `/replay` | `/rep` | `[load [runId] \| step [n] \| seek <rev> \| diff \| export <path>]` | Deterministic replay: load, step, seek, diff, and export recorded runs |
-| `/resume` | — | `[session-id-or-name]` | Resume a previous session, pick from a list or pass an id/name |
+| `/resume` | None | `[session-id-or-name]` | Resume a previous session, pick from a list or pass an id/name |
 | `/session` | `/sess` | `<subcommand> [args]` | Session lifecycle and orchestration: list, resume, fork, save, export, link-task, handoff, graph, cancel |
 
 ## Settings Sync
@@ -530,32 +530,32 @@ GoodVibes ships **156** built-in slash commands across **75** categories. Every 
 
 | Command | Aliases | Usage | Description |
 | --- | --- | --- | --- |
-| `/share` | — | `<html\|json\|md> [path] [--redact] [--upload] [--copy] [--open]` | Export the current session to a shareable format (html, json, md) |
+| `/share` | None | `<html\|json\|md> [path] [--redact] [--upload] [--copy] [--open]` | Export the current session to a shareable format (html, json, md) |
 
 ## Shell & Session
 
 | Command | Aliases | Usage | Description |
 | --- | --- | --- | --- |
-| `/clear` | `/cls` | — | Clear the conversation display (keeps LLM context) |
-| `/commands` | `/cmds` | — | Browse all commands in a scrollable list |
-| `/compact` | — | — | Summarize conversation to free context window |
-| `/compact-history` | `/compaction-history` | — | Show compaction history for this session |
-| `/debug` | — | — | Toggle debug mode |
+| `/clear` | `/cls` | None | Clear the conversation display (keeps LLM context) |
+| `/commands` | `/cmds` | None | Browse all commands in a scrollable list |
+| `/compact` | None | None | Summarize conversation to free context window |
+| `/compact-history` | `/compaction-history` | None | Show compaction history for this session |
+| `/debug` | None | None | Toggle debug mode |
 | `/effort` | `/e` | `[level]` | Show or set reasoning effort level |
-| `/find` | `/findtext` | — | Search THIS conversation transcript (same as Ctrl+F). Searching the web instead? Use /search |
-| `/help` | `/h`, `/?` | — | Browse every command with its description; picking one runs it |
-| `/keep` | — | `<text>` | Pin text to session memory (survives compaction) |
-| `/keybindings` | `/kb` | — | List current keyboard bindings and their config file path |
+| `/find` | `/findtext` | None | Search THIS conversation transcript (same as Ctrl+F). Searching the web instead? Use /search |
+| `/help` | `/h`, `/?` | None | Browse every command with its description; picking one runs it |
+| `/keep` | None | `<text>` | Pin text to session memory (survives compaction) |
+| `/keybindings` | `/kb` | None | List current keyboard bindings and their config file path |
 | `/model` | `/m` | `[model-id]` | Select or display the current LLM model |
-| `/palette` | `/k` | — | Open the command palette to search and run any slash command |
-| `/paste` | `/clip` | — | Insert clipboard text or image into the prompt |
+| `/palette` | `/k` | None | Open the command palette to search and run any slash command |
+| `/paste` | `/clip` | None | Insert clipboard text or image into the prompt |
 | `/pastes` | `/pending-pastes` | `[pN]` | Preview the actual content behind each [TEXT: pN, M lines] fold in the composer, before you submit |
-| `/power` | — | `[status \| on \| off \| toggle]` | Host sleep ownership: show status and toggle keep-awake |
+| `/power` | None | `[status \| on \| off \| toggle]` | Host sleep ownership: show status and toggle keep-awake |
 | `/queue` | `/q` | `[list \| edit <n> <text> \| delete <n>]` | Mid-turn message queue: list, edit, or delete still-undelivered messages |
-| `/quit` | `/:q` | — | Exit the application |
-| `/reset` | — | — | Full reset: clear display and conversation context |
-| `/shortcuts` | `/keys`, `/keybinds` | — | Show keyboard shortcuts reference |
-| `/wq` | `/:wq` | — | Commit all git changes and then exit |
+| `/quit` | `/:q` | None | Exit the application |
+| `/reset` | None | None | Full reset: clear display and conversation context |
+| `/shortcuts` | `/keys`, `/keybinds` | None | Show keyboard shortcuts reference |
+| `/wq` | `/:wq` | None | Commit all git changes and then exit |
 
 ## Skills
 
@@ -585,19 +585,19 @@ GoodVibes ships **156** built-in slash commands across **75** categories. Every 
 
 | Command | Aliases | Usage | Description |
 | --- | --- | --- | --- |
-| `/test` | — | `[pattern]` | Run the project test script and show pass/fail results |
+| `/test` | None | `[pattern]` | Run the project test script and show pass/fail results |
 
 ## Voice & TTS
 
 | Command | Aliases | Usage | Description |
 | --- | --- | --- | --- |
-| `/tts` | — | `<prompt>\|stop\|on\|off` | Submit a prompt for live TTS playback, or control always-speak mode |
+| `/tts` | None | `<prompt>\|stop\|on\|off` | Submit a prompt for live TTS playback, or control always-speak mode |
 
 ## Web Search
 
 | Command | Aliases | Usage | Description |
 | --- | --- | --- | --- |
-| `/search` | — | `<query> [--limit <n>]` | Web search, ranked results with source labels (searching THIS transcript? use /find) |
+| `/search` | None | `<query> [--limit <n>]` | Web search, ranked results with source labels (searching THIS transcript? use /find) |
 
 ## Work Plans
 
@@ -609,7 +609,7 @@ GoodVibes ships **156** built-in slash commands across **75** categories. Every 
 
 | Command | Aliases | Usage | Description |
 | --- | --- | --- | --- |
-| `/workstream` | — | `create [--isolation shared\|worktree] <task...> \| list \| status [id] \| insert-phase <id> <description...> \| edit-item <id> <item#> <brief...> \| remove-item <id> <item#> \| move-item <id> <item#> <pos> \| approve <id> [--no-launch] [--force] \| edit <id> [--isolation shared\|worktree] <task...> \| launch <id> [--force] \| cancel <id> \| attempts list\|diff\|judge\|pick` | Author and oversee multi-phase agent workstreams (orchestration engine) |
+| `/workstream` | None | `create [--isolation shared\|worktree] <task...> \| list \| status [id] \| insert-phase <id> <description...> \| edit-item <id> <item#> <brief...> \| remove-item <id> <item#> \| move-item <id> <item#> <pos> \| approve <id> [--no-launch] [--force] \| edit <id> [--isolation shared\|worktree] <task...> \| launch <id> [--force] \| cancel <id> \| attempts list\|diff\|judge\|pick` | Author and oversee multi-phase agent workstreams (orchestration engine) |
 
 ## Worktrees
 

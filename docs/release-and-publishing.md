@@ -91,7 +91,7 @@ Install behavior:
   bun pm trust -g @pellux/goodvibes-tui goodvibes-daemon
   ```
 
-  No other dependency needs trusting: the TUI binary arrives through the platform-specific `@pellux/goodvibes-tui-<os>-<arch>` package (registry integrity, no lifecycle script), and the tree-sitter grammar packages contribute only their prebuilt `.wasm` files. `@pellux/goodvibes-daemon` is a regular dependency, so installing this package always brings the daemon along, and its own postinstall places the `goodvibes-daemon` binary the same way this package's postinstall places `goodvibes`.
+  No other dependency needs trusting. The TUI binary arrives through the platform-specific `@pellux/goodvibes-tui-<os>-<arch>` package (registry integrity, no lifecycle script), and the tree-sitter grammar packages contribute only their prebuilt `.wasm` files. `@pellux/goodvibes-daemon` is a regular dependency, so installing this package always brings the daemon along, and its own postinstall places the `goodvibes-daemon` binary the same way this package's postinstall places `goodvibes`.
 
 - `bun pm -g untrusted` should report `Found 0 untrusted dependencies with scripts`.
 - the main package declares four `@pellux/goodvibes-tui-<os>-<arch>` payload packages as `optionalDependencies` with `os`/`cpu` fields (the esbuild pattern), so the package manager installs exactly the one that matches the host, verified against the registry integrity hash. This is why plain `npm`/`pnpm` installs work, not just Bun.

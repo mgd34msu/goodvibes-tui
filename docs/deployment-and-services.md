@@ -190,9 +190,9 @@ The two `trustProxy` keys let the login rate-limiter key on the client address t
 
 **What `X-Forwarded-For` alone leaves open:** it is a header any client can set. A client that reaches the port directly, bypassing the tunnel, sets its own rate-limit bucket key and can rotate it at will.
 
-`httpListener.trustCloudflare` is what closes it for the HTTP listener: the client address comes from `CF-Connecting-IP`, and only when the connecting peer is itself inside Cloudflare's published ranges (`isCloudflareIp`); otherwise the header is ignored. It requires `httpListener.trustProxy`. With that off, `CF-Connecting-IP` is ignored whatever this says, and the onboarding wizard's Zero Trust Tunnel step writes both, so this route arrives with the narrower read already on.
+`httpListener.trustCloudflare` closes that gap for the HTTP listener. The client address comes from `CF-Connecting-IP`, and only when the connecting peer is itself inside Cloudflare's published ranges (`isCloudflareIp`); otherwise the header is ignored. It requires `httpListener.trustProxy`. With that off, `CF-Connecting-IP` is ignored whatever this says, and the onboarding wizard's Zero Trust Tunnel step writes both, so this route arrives with the narrower read already on.
 
-**What is still open:** the control plane has no `trustCloudflare` equivalent, so its rate-limiter is still keyed on `X-Forwarded-For`. Keep both ports reachable only through the tunnel: restrict inbound traffic to Cloudflare egress IPs, which is what you want regardless, since direct exposure also bypasses tunnel-level access policies.
+**What is still open:** the control plane has no `trustCloudflare` equivalent, so its rate-limiter is still keyed on `X-Forwarded-For`. Keep both ports reachable only through the tunnel. Restrict inbound traffic to Cloudflare egress IPs, which is what you want regardless, since direct exposure also bypasses tunnel-level access policies.
 
 ### CORS configuration
 

@@ -2,9 +2,11 @@
 
 [![CI](https://github.com/mgd34msu/goodvibes-tui/actions/workflows/ci.yml/badge.svg)](https://github.com/mgd34msu/goodvibes-tui/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Version](https://img.shields.io/badge/version-2.0.14-blue.svg)](https://github.com/mgd34msu/goodvibes-tui)
+[![Version](https://img.shields.io/badge/version-2.0.15-blue.svg)](https://github.com/mgd34msu/goodvibes-tui)
 
-GoodVibes is a terminal console for coding and operations work with an AI model. You run `goodvibes` in a project directory and get a full-screen terminal app where you talk to a model that can read and edit your files, run shell commands, search the web, and hand work off to background agents, asking your permission before anything that writes or executes. It talks to many model providers (OpenAI, Anthropic, Gemini, Bedrock, Copilot, OpenRouter and other OpenAI-compatible gateways, plus local servers like Ollama and LM Studio that it finds on startup), keeps its settings, sessions, and secrets on your own machine, and shows you the token count and running cost of every turn. Alongside the conversation, panels turn background work into live control rooms: running agents, git state, diffs, tokens, cost.
+GoodVibes is a terminal console for coding and operations work with an AI model. You run `goodvibes` in a project directory and get a full-screen terminal app where you talk to a model that can read and edit your files, run shell commands, search the web, and hand work off to background agents, asking your permission before anything that writes or executes.
+
+It talks to many model providers (OpenAI, Anthropic, Gemini, Bedrock, Copilot, OpenRouter and other OpenAI-compatible gateways, plus local servers like Ollama and LM Studio that it finds on startup), keeps its settings, sessions, and secrets on your own machine, and shows you the token count and running cost of every turn. Alongside the conversation, panels turn background work into live control rooms: running agents, git state, diffs, tokens, cost.
 
 <img src="docs/assets/splash.png" alt="GoodVibes starting up in a terminal: a glitch-art GOODVIBES wordmark in cyan-to-magenta gradient, the version and tagline beneath it, the active model and tool count, the working directory, a line offering to resume the last session, and a hint line reading Ctrl+P panels / ? help / F2 fleet. A status footer shows mode, token usage, context usage, and the daemon and web listener addresses." width="900">
 
@@ -59,7 +61,16 @@ The first time you open a directory, GoodVibes asks how much it is allowed to do
 
 <img src="docs/assets/permission-prompt.png" alt="An execution approval prompt. A header reads EXECUTE, Shell Execution Approval, one more waiting. Fields list the requesting session, the tool exec, the full command mkdir -p build, the working directory, a Risk line reading HIGH write in red, the surface and radius, a summary, the decision class, the effects: process execution, filesystem mutation, possible network access, a reviewer checklist, and the raw tool arguments. Below, four numbered remember options scope an approval to this exact command, to every mkdir command, to every exec call in this project, or to the rest of the session in memory only. The action line reads: Y Allow once, 1-4 Allow and remember, N Deny, or type a reason to deny." width="900">
 
-After that, the default permission mode is `prompt`: writes, edits, shell commands, network fetches, agent spawns, and MCP calls each stop and ask. The prompt shows what will run, in which directory, its assessed risk, and what it can affect. You can allow it once, deny it (optionally typing a reason the model sees), or remember the decision at whichever scope fits: this exact command, this command shape, this tool for the whole project, or just for the rest of the session. Four other modes are available when prompting is not what you want: `accept-edits` auto-approves file writes and edits while exec and the other risky classes still ask, `plan` allows read-only tools and refuses every mutating or exec call, `allow-all` approves everything, and `custom` takes per-tool `allow` / `prompt` / `deny` overrides. `Shift+Tab` cycles the four session postures: normal, accept-edits, plan, and auto. `/plan` toggles plan mode directly.
+After that, the default permission mode is `prompt`: writes, edits, shell commands, network fetches, agent spawns, and MCP calls each stop and ask. The prompt shows what will run, in which directory, its assessed risk, and what it can affect. You can allow it once, deny it (optionally typing a reason the model sees), or remember the decision at whichever scope fits: this exact command, this command shape, this tool for the whole project, or just for the rest of the session.
+
+Four other modes are available when prompting is not what you want:
+
+- `accept-edits` auto-approves file writes and edits while exec and the other risky classes still ask
+- `plan` allows read-only tools and refuses every mutating or exec call
+- `allow-all` approves everything
+- `custom` takes per-tool `allow` / `prompt` / `deny` overrides
+
+`Shift+Tab` cycles the four session postures: normal, accept-edits, plan, and auto. `/plan` toggles plan mode directly.
 
 ### Models and providers
 
