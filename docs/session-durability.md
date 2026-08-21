@@ -6,8 +6,11 @@ GoodVibes TUI uses a two-layer durability strategy to protect conversation histo
 
 After every completed assistant turn (`TURN_COMPLETED`), `persistConversation` writes a full
 conversation snapshot via `SessionManager`. A periodic recovery file is also written every 60
-seconds via `writeRecoveryFile`. On the next startup, if a recovery file exists, the TUI offers
-to restore the previous session.
+seconds via `writeRecoveryFile` (`src/runtime/recovery-autosave.ts`), on the same 60-second tick
+as a liveness marker that records this session as actively open. On the next startup the TUI
+checks for a recovery file and offers to restore it, unless the marker shows the session is
+still live in another terminal right now, in which case the file belongs to that other terminal's
+live state rather than to a crash, and the offer is skipped.
 
 **Gap**: between the last periodic recovery file and a SIGKILL, any turns that completed without
 triggering a recovery-file write would be lost.
@@ -40,9 +43,20 @@ fills this gap with a per-session append-only NDJSON file that records durable c
    the loaded snapshot, applies the final record's messages to the live conversation (each
    record carries the full snapshot, so the last record is authoritative), writes a fresh
    snapshot via the SessionManager, and calls `journal.rotate()`. Only the `session-workflow.ts`
-   seam prints the replay notice to the conversation (`[Recovery] Replayed N journal record(s) —
+   seam prints the replay notice to the conversation (`[Recovery] Replayed N journal record(s):
    restored turns since last snapshot.`); the startup-modal and panel-resume seam replays
-   silently.
+   silently. When the journal tail was quarantined as corrupt, `session-workflow.ts` also prints
+   one of two follow-up lines. When no record could be replayed, it prints a "journal tail was
+   corrupt or unrecognised, proceeding with snapshot only" notice. When at least one record did
+   survive, it prints a "journal tail was partially corrupt, replay stopped at last good record"
+   notice instead.
+
+The journal that `turn-event-wiring.ts` opens for the running session is wrapped so that a
+session switch (`/session resume` or `/session fork` reassigning `runtime.sessionId` on the live
+`MutableRuntimeState`) re-checks the session id before every append and, if it changed, calls
+`journal.rebind()` to point at the new session's file. Without this, a session switch would keep
+appending the new session's records into the old session's journal file, and a later resume of
+the old session would replay the wrong conversation into it.
 
 ### File format
 
@@ -83,10 +97,26 @@ batch, compaction). It does **not** fsync per streaming token. The streaming pat
 At typical usage (2–6 events per minute), the write amplification is negligible on any modern
 filesystem.
 
+### Orphaned journal cleanup
+
+`journal.rotate()` deletes a journal once its records have been folded into a snapshot or
+replayed, but a session that crashes and is never resumed never reaches either step, so its
+journal would otherwise stay on disk forever. A reaper (`reapOrphanedJournals`, wired into the
+TUI's bootstrap at `src/runtime/services.ts` through the SDK's `createDurabilityServices`, which
+runs it once at startup and then every six hours) sweeps the journal directory and deletes a
+file that is neither the current process's own session nor apparently open in another running
+process, provided it is either empty or has gone untouched for longer than seven days. Whatever
+survives those two rules is then capped at 50 files, oldest deleted first.
+
+The rules are based on modification time and liveness, never on whether the file parses, because
+an unparseable tail is the normal, expected shape of a journal killed mid-append, exactly the
+data replay exists to salvage. A parse failure alone never makes a journal eligible for deletion.
+
 ### schemaVersion gate
 
-The journal header carries `"version": 1`. If a future process writes a higher version,
-`replayJournal` quarantines the file rather than crashing (the same convention as `readVersioned`).
+The journal header carries `"version": 1`. `replayJournal` checks for an exact match, so any
+header that carries a different version, from a future process or a corrupted write, is
+quarantined rather than partially trusted or crashed on (the same convention as `readVersioned`).
 
 ## Summary
 

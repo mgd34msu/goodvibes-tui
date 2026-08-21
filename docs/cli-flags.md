@@ -27,8 +27,8 @@ goodvibes --resume=user-sess-1234   # inline-value form
 
 Fork a session into a new branch.
 
-- **Bare `--fork`** (no id): forks the session that is already active when the TUI starts.
-- **`--fork <id>`**: resumes the named session first, then forks it.
+- **Bare `--fork`** (no id) forks the session that is already active when the TUI starts.
+- **`--fork <id>`** resumes the named session first, then forks it.
 
 Sessions whose id happens to be the string `current` can be forked by passing the id explicitly (`--fork current`), which is distinct from the bare `--fork` form.
 
@@ -50,20 +50,20 @@ goodvibes --session user-sess-1234
 goodvibes -s user-sess-1234
 ```
 
-## Confirmation bypass
+## Commit gate
 
 ### `--yes`, `-y`
 
-Auto-confirm interactive prompts. Applies to destructive operations (deletes, resets) that would otherwise require confirmation.
+Most CLI commands act immediately and never ask for confirmation, so this flag has no effect on them. Its one concrete effect today is on `plugin bundles install`, where without it the command only verifies the bundle manifest and prints the activation plan, and with it the plan is committed and the bundle is recorded as installed.
 
 ```sh
-goodvibes --yes secrets delete MY_KEY
-goodvibes -y sessions delete user-sess-1234
+goodvibes plugin bundles install <ref> --sha256 <pin>          # preview only
+goodvibes plugin bundles install <ref> --sha256 <pin> --yes    # commits the install
 ```
 
 ### `--non-interactive`
 
-Disable all interactive prompts. Implies `--yes`. Useful for scripted or CI contexts where no TTY is available.
+Sets `--yes` and additionally suppresses any interactive prompt a command might otherwise open. Useful for scripted or CI contexts where no TTY is available.
 
 ```sh
 goodvibes --non-interactive run 'do something'
@@ -75,7 +75,7 @@ goodvibes --non-interactive run 'do something'
 
 Set the output encoding for `run` and other machine-readable commands.
 
-Valid values: `text` (default), `json`, `stream-json`.
+Valid values are `text` (default), `json`, and `stream-json`.
 
 ```sh
 goodvibes run 'list files' --output json
@@ -146,7 +146,7 @@ Disable the alternate screen buffer. Useful for terminals that do not support it
 
 ### `--daemon-home <path>`
 
-Override the daemon home directory (default: `~/.goodvibes/daemon`).
+Override the daemon home directory (default `~/.goodvibes/daemon`).
 
 ### `--working-dir <path>`, `--cd <path>`, `-C <path>`
 

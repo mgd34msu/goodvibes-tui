@@ -4,7 +4,7 @@
 
 GoodVibes ships a broad built-in tool set. Current tool families include:
 
-- file and code operations: `read`, `write`, `edit`, `find`
+- file and code operations: `read`, `write`, `edit`, `find`, `repo_map`
 - execution and inspection: `exec`, `analyze`, `inspect`
 - network and research: `fetch`, `web_search`
 - orchestration: `agent`, `workflow`, `task`, `team`, `worklist`
@@ -22,6 +22,7 @@ The tool registry is part of the main runtime and is shared across the TUI, agen
 - `write` for atomic writes, overwrite modes, and auto-heal pipelines
 - `edit` for structural code edits with validation and rollback
 - `find` for files, content, symbols, references, and structural search
+- `repo_map` for a token-budgeted orientation map of an unfamiliar codebase
 
 ### Execution and analysis
 
@@ -99,6 +100,15 @@ Multi-mode search across files, content, symbols, references, and structural AST
 - Scope expansion: expand content matches to their enclosing `function` or `class` using tree-sitter
 - Multiple queries per call, executed in parallel
 - Progressive output: `count_only` -> `files_only` -> `locations` -> `matches` -> `context`
+
+### repo_map
+
+A model-invoked orientation tool, not passive always-on context injection. It returns a token-budgeted map of the repository: a per-directory source-file count plus the highest-centrality source files, ranked by import-graph centrality with file size as a tie-break, each with its top-level exported symbols. Call it to get oriented in an unfamiliar codebase before reading individual files.
+
+- Optional `path` argument scopes the map to a subdirectory; default is the whole project
+- Optional `budgetTokens` argument controls map size (default 2,000, clamped between 200 and 32,000); a lower budget returns fewer key files
+- Read-only, safe to run in parallel with other tool calls
+- Covers TypeScript and JavaScript source files
 
 ### exec
 
@@ -226,35 +236,36 @@ Discover and introspect skills, agents, and tools.
 
 ## Slash-command families
 
-Representative slash-command families include:
+Representative slash-command families, with a one-line summary of each:
 
-- `/model`
-- `/settings`
-- `/config`
-- `/recall`
-- `/knowledge`
-- `/remote`
-- `/sandbox`
-- `/plugin`
-- `/marketplace`
-- `/share`
-- `/workflow`
-- `/schedule`
-- `/voice`
-- `/tts`
-- `/cloudflare`
-- `/mcp`
-- `/incident`
-- `/replay`
-- `/eval`
-- `/session`
-- `/work-plan`
-- `/search`
-- `/imagine`
-- `/codebase`
-- `/workstream`
-- `/checkpoint`
-- `/editor`
+| Command | Summary |
+| --- | --- |
+| `/model` | Select or display the current LLM model |
+| `/settings` | Open the fullscreen configuration workspace |
+| `/config` | Open the fullscreen configuration workspace, or set a key directly |
+| `/recall` | Project memory: bare opens the Memory modal, subcommands add decisions, constraints, incidents, and patterns with provenance |
+| `/knowledge` | Structured knowledge graph: ingest URLs and bookmarks, inspect issues, and build compact prompt packets |
+| `/remote` | Inspect, dispatch, and review self-hosted remote runners and artifacts |
+| `/sandbox` | Review and configure VM isolation policy for MCP and evaluation runtimes |
+| `/plugin` | Manage plugins, trust, review, and ecosystem paths |
+| `/marketplace` | Browse the unified plugin and skill marketplace |
+| `/share` | Export the current session to a shareable HTML, JSON, or Markdown file |
+| `/schedule` | Manage automation jobs and scheduled runs |
+| `/voice` | Toggle always-speak mode and provision the managed local voice runtime and wake-word models |
+| `/tts` | Submit a prompt for live TTS playback, or control always-speak mode |
+| `/cloudflare` | Inspect and manage optional Cloudflare batch and control-plane integration |
+| `/mcp` | Manage MCP servers and their tools |
+| `/incident` | Open, export, and capture incident review bundles |
+| `/replay` | Deterministic replay: load, step, seek, diff, and export recorded runs |
+| `/eval` | Evaluation harness: run benchmark suites, compare baselines, and gate regressions |
+| `/session` | Session lifecycle and orchestration: list, resume, fork, save, export, and cross-session task handoff |
+| `/work-plan` | Track a persistent, workspace-scoped work plan |
+| `/search` | Provider-backed web search with ranked results and source labels |
+| `/imagine` | Generate an image from a prompt through a configured media provider |
+| `/codebase` | Build, inspect, and search the repo source-tree code index |
+| `/workstream` | Author and oversee multi-phase agent workstreams (orchestration engine) |
+| `/checkpoint` | Create a manual workspace checkpoint for forensic retention |
+| `/editor` | Edit the current composer draft in your `$EDITOR`, then resume with the result |
 
 `/editor` (alias `/ed`) opens the current composer draft in your `$VISUAL`/`$EDITOR`, suspends the TUI while the editor runs, and loads the edited text back into the composer when you save and quit. Set `$EDITOR` (e.g. `export EDITOR=nvim`) for it to work.
 
@@ -274,7 +285,7 @@ Alias: `/sess`. Run `/session` with no arguments to see current session info.
 
 `/model` opens the fullscreen provider/model workspace. The left rail chooses the target route (`Main Chat`, `Helper Model`, `Tool LLM`, or `TTS LLM`), and the main table filters large model catalogs by search, price tier, capability, availability, benchmark sort, and grouping. `/provider` opens the same workspace in provider-first mode so users can choose a provider and then a model for the active target.
 
-`/plan` now inspects or seeds the TUI-owned project-planning state. The primary planning UX is natural conversation in the TUI; daemon and companion surfaces only get passive SDK storage/evaluation routes. Use `/plan panel` to open the Planning panel, `/plan approve` to record explicit execution approval, or `/plan <goal>` to seed the current workspace planning artifact.
+`/project-plan` (alias `/planning`) inspects or seeds the TUI-owned project-planning state. The primary planning UX is natural conversation in the TUI; daemon and companion surfaces only get passive SDK storage/evaluation routes. Use `/project-plan panel` to open the Planning panel, `/project-plan approve` to record explicit execution approval, or `/project-plan <goal>` to seed the current workspace planning artifact. This is a distinct command from `/plan`, which only toggles the read-only permission plan mode (see [Keyboard shortcuts](#keyboard-shortcuts) below, `Shift+Tab`); it does not touch project-planning state.
 
 `/paste` (`/clip`) explicitly reads the system clipboard and inserts supported text or image data into the prompt. Use this when terminal paste does not deliver image clipboard contents to the TUI; the command uses the clipboard helper path instead of relying on the terminal paste stream.
 
@@ -378,6 +389,7 @@ In a searchable modal, `/` focuses the filter, and any keystroke that no row hot
 | `Alt+C` | Cancel the running tool call (the turn continues) |
 | `Alt+A` | Toggle keep-awake (the "sleep disabled" chip) |
 | `Alt+M` | List or hide the memories a turn used (provenance chip drill-in) |
+| `Alt+V` | Voice input: press to start recording, press again to stop and transcribe into the composer |
 
 A single `Ctrl+C` on an empty composer arms a roughly one-second "press again to exit" confirmation; the footer shows this as `Ctrl+C x2 quit`.
 
@@ -436,7 +448,7 @@ Phase:Category:Specific
 ```
 
 - Phases: `Pre`, `Post`, `Fail`, `Change`, `Lifecycle`
-- Categories: `tool`, `file`, `git`, `agent`, `compact`, `llm`, `mcp`, `config`, `budget`, `session`, `workflow`
+- Categories: `tool`, `file`, `git`, `agent`, `compact`, `llm`, `mcp`, `config`, `budget`, `session`, `workflow`, `orchestration`, `communication`, `permission`, `transport`
 - Wildcards are supported: `Pre:tool:*` matches all pre-tool events
 
 ### Hook types
@@ -513,6 +525,8 @@ Project planning and the persistent `/work-plan` checklist are a related but sep
 
 Connect to any MCP-compatible server from inside the running TUI. Project-scoped servers live in `.goodvibes/mcp.json`; global servers live in `~/.config/mcp/mcp.json`. You can also edit either file directly:
 
+GoodVibes also reads MCP servers already configured for other tools, read-only: a project's `.mcp/mcp.json`, a user's `~/.mcp/mcp.json`, and Claude Desktop's `~/.config/claude/claude_desktop_config.json`. Servers found there show up alongside your GoodVibes-configured servers, but `/mcp add` and `/mcp remove` only write to the two GoodVibes-owned files above.
+
 ```json
 {
   "servers": [
@@ -552,7 +566,7 @@ Extend goodvibes-tui with custom plugins, and optionally distribute or install p
 
 ### Plugin folder layout
 
-Place plugin folders in `~/.goodvibes/tui/plugins/`. Each plugin has a `manifest.json` and an entry file (default `index.ts`):
+Place plugin folders in `~/.goodvibes/plugins/` (global) or `.goodvibes/plugins/` in the project directory (project-local; overrides a global plugin with the same manifest name). Each plugin has a `manifest.json` and an entry file (default `index.js`, or a relative path given in the manifest's `main` field):
 
 ```json
 {
@@ -590,7 +604,7 @@ Manage installed plugins via `/plugin enable|disable|reload|list`.
 Beyond direct local plugins, a local-first curated distribution channel covers plugins, skills, hook-packs, and policy-packs:
 
 - curated ecosystem catalogs with publish-local, unpublish, catalog review, install, update, uninstall, and installed-receipt flows
-- local-first curated plugin distribution via `.goodvibes/tui/ecosystem/*.json`
+- local-first curated plugin distribution via `.goodvibes/ecosystem/*.json` (global under `~/.goodvibes/ecosystem/`, project-local under `.goodvibes/ecosystem/` in the workspace), shared across GoodVibes surfaces rather than scoped to the TUI
 - recommendations tied to installed state, denials, and missing capabilities
 - `/marketplace` browses the curated plugin, skill, hook-pack, and policy-pack surfaces
 
@@ -640,7 +654,7 @@ Project planning is TUI-owned. When a normal chat turn clearly asks for an imple
 
 Planning artifacts are stored in a project knowledge space named `project:<projectId>`, where the project id is derived from the workspace path. The SDK supplies passive daemon routes and operator methods, but daemon/non-TUI surfaces do not enter planning loops.
 
-See [Project planning](project-planning.md) for the panel layout, `/plan` behavior, and route/method list.
+See [Project planning](project-planning.md) for the panel layout, `/project-plan` behavior, and route/method list.
 
 `/work-plan` is the separate persistent checklist surface. Use it when the work already has concrete tasks and you want durable status tracking rather than another planning interview.
 
@@ -670,7 +684,7 @@ The WRFC panel surfaces constraint state at every level of a running chain:
 - The agent-detail modal surfaces the `systemPromptAddendum` field from the agent record when it contains a WRFC engineer addendum, so the full constraint injection is visible without leaving the TUI.
 - When constraints are loaded, the system-message router emits a `WORKFLOW_CONSTRAINTS_ENUMERATED` operator-visible message. This is routed through the standard `ui.wrfcMessages` setting (`panel`, `conversation`, or `both`).
 
-The `/wrfc` command opens the chain-status view directly. Constraint counts are also visible in the orchestration panel and in `/wrfc` output without opening the full panel.
+There is no dedicated `/wrfc` command. Open the chain-status view through the Fleet panel (`F2` or `Ctrl+O`), where WRFC chains are one of the tracked process kinds alongside agents, workstreams, workflows, and scheduled or triggered work.
 
 Each chain row and the selected-chain summary also show elapsed time (active chains, since `createdAt`) or total duration (terminal chains, `createdAt` to `completedAt`). Press `a` on a selected chain to jump straight to its owner agent in the Inspector panel. When an expanded chain's detail exceeds the panel's per-chain line cap, the truncated tail is replaced with a `+N more` indicator instead of being silently dropped.
 
@@ -712,11 +726,13 @@ The TUI calls SDK daemon routes only. It does not call Cloudflare APIs directly.
 
 Some command families are especially important when you are running GoodVibes as an operational console rather than just a chat surface:
 
-- `/workflow` for WRFC and related execution chains
+- `/teamwork` for the packaged task modes and orchestration recipes that produce WRFC and related execution chains
 - `/schedule` for cron-like and interval-based automation
 - `/hooks` for managed hook inspection and simulation
 - `/remote` for dispatching and recovering distributed work
 - `/sandbox` for isolation review and QEMU/bootstrap flows
+
+There is no standalone `/wrfc` or `/workflow` command; WRFC chain state is visible in the Fleet panel (see [WRFC constraint visibility](#wrfc-constraint-visibility) below).
 
 For QEMU guest bootstrapping details, including the generated image script and guest runtime package list, see [QEMU sandbox bootstrapping](qemu-sandbox.md).
 

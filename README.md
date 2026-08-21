@@ -6,7 +6,7 @@
 
 GoodVibes is a terminal console for coding and operations work with an AI model. You run `goodvibes` in a project directory and get a full-screen terminal app where you talk to a model that can read and edit your files, run shell commands, search the web, and hand work off to background agents, asking your permission before anything that writes or executes.
 
-It talks to many model providers (OpenAI, Anthropic, Gemini, Bedrock, Copilot, OpenRouter and other OpenAI-compatible gateways, plus local servers like Ollama and LM Studio that it finds on startup), keeps its settings, sessions, and secrets on your own machine, and shows you the token count and running cost of every turn. Alongside the conversation, panels turn background work into live control rooms: running agents, git state, diffs, tokens, cost.
+It talks to many model providers (OpenAI, Anthropic, Gemini, Bedrock, Copilot, OpenRouter and other OpenAI-compatible gateways, plus local servers like Ollama and LM Studio that `/scan` finds on your machine and LAN), keeps its settings, sessions, and secrets on your own machine, and shows you the token count and running cost of every turn. Alongside the conversation, panels turn background work into live control rooms: running agents, git state, diffs, tokens, cost.
 
 <img src="docs/assets/splash.png" alt="GoodVibes starting up in a terminal: a glitch-art GOODVIBES wordmark in cyan-to-magenta gradient, the version and tagline beneath it, the active model and tool count, the working directory, a line offering to resume the last session, and a hint line reading Ctrl+P panels / ? help / F2 fleet. A status footer shows mode, token usage, context usage, and the daemon and web listener addresses." width="900">
 
@@ -57,7 +57,7 @@ The footer keeps an honest running total: fresh input tokens separated from cach
 
 <img src="docs/assets/workspace-trust.png" alt="A modal titled New workspace, choose a trust level, offering two options: Trust this workspace, full capability, all tools may run; and Keep restricted, read-only, explore safely, writes and commands are denied until trusted. Navigation hints read Up/Down Navigate, Enter Choose, Esc Close." width="820">
 
-The first time you open a directory, GoodVibes asks how much it is allowed to do there. Restricted is read-only: the model can look around, but writes and commands are refused until you trust the workspace.
+The first time you open a directory, GoodVibes asks how much it is allowed to do there. Restricted is read-only. The model can look around, but writes and commands are refused until you trust the workspace.
 
 <img src="docs/assets/permission-prompt.png" alt="An execution approval prompt. A header reads EXECUTE, Shell Execution Approval, one more waiting. Fields list the requesting session, the tool exec, the full command mkdir -p build, the working directory, a Risk line reading HIGH write in red, the surface and radius, a summary, the decision class, the effects: process execution, filesystem mutation, possible network access, a reviewer checklist, and the raw tool arguments. Below, four numbered remember options scope an approval to this exact command, to every mkdir command, to every exec call in this project, or to the rest of the session in memory only. The action line reads: Y Allow once, 1-4 Allow and remember, N Deny, or type a reason to deny." width="900">
 
@@ -165,7 +165,7 @@ Edit them live with `/settings` or the fullscreen `/config` workspace rather tha
 | `display.showThinking` | `false` | Show model thinking traces |
 | `behavior.autoCompactThreshold` | `80` | Context percentage before auto-compact runs |
 | `helper.enabled` | `false` | Route grunt work to a cheaper helper model |
-| `daemon.enabled` | `true` | Spawn or adopt a detached local session daemon, bound to loopback |
+| `daemon.enabled` | `true` | Adopt a local session daemon on loopback; off makes no adoption attempt |
 
 The wider key table, the permission modes, and the hand-edited TUI namespaces (checkpoint root guard, scriptable statusline, session behavior, launch-time self-update) are in [docs/configuration.md](docs/configuration.md).
 
@@ -174,7 +174,7 @@ The wider key table, the permission modes, and the hand-edited TUI namespaces (c
 - global settings `~/.goodvibes/tui/settings.json`, project settings `.goodvibes/tui/settings.json`
 - encrypted secrets `~/.goodvibes/tui/secrets.enc` or `.goodvibes/tui/secrets.enc`
 - custom providers `~/.goodvibes/tui/providers/*.json`, keybindings `~/.goodvibes/tui/keybindings.json`
-- service registry `.goodvibes/tui/services.json`, schedules `.goodvibes/tui/schedules.json`
+- service registry `.goodvibes/tui/services.json`, scheduled jobs and automation `.goodvibes/tui/automation-*.json`
 - agent archetypes `.goodvibes/agents/*.md`, MCP servers `.goodvibes/mcp.json`, hooks `.goodvibes/hooks.json`
 - sessions, artifacts, and other project runtime state under `.goodvibes/` in the working directory
 
@@ -204,10 +204,10 @@ bun run dev
 | Command | Does |
 | --- | --- |
 | `bun run dev` | Run the TUI from source |
-| `bun test` | Run the suite through the parallel per-file runner |
+| `bun run test` | Run the suite through the parallel per-file runner |
 | `bun run build` | Compile `src/main.ts` into `dist/goodvibes` |
 
-The compiled binary is the TUI entrypoint. It adopts a running standalone GoodVibes daemon, or starts one already installed as a stopped service, and hosts the HTTP listener when `danger.httpListener` is enabled. It never spawns a new daemon process itself (`daemon.enabled`, on by default, loopback-bound).
+The compiled binary is the TUI entrypoint. With `daemon.enabled` on (the default) it adopts a running standalone GoodVibes daemon over loopback, and when a daemon is installed as a service but stopped, it starts that service once and waits for it to come online. It never embeds or constructs a daemon of its own. The control plane, HTTP listener (`danger.httpListener`), and web surface are all hosted by the daemon; the TUI configures them and reports their bindings.
 
 Tests live under `src/test/`, mirroring the source tree, and cover contract, security, release-gate, runtime, renderer, panel, integration, and anti-regression cases. Several gates run alongside them in CI: byte-exact golden renderer frames, performance budgets for startup and frame composition and line production (`scripts/perf-baseline.json`), and architecture rules for import cycles, layer boundaries, source-file size, and unused renderer exports (`scripts/check-architecture.ts`).
 
@@ -237,10 +237,10 @@ src/
 ├── config/                 settings layering, surface roots, secrets, credential availability
 ├── permissions/            approval cards, hunk selection, sandbox exec gate
 ├── cli/                    flag parsing, management verbs, doctor, launch-time self-update
-├── tools/, mcp/, plugins/  TUI-local tool guards, MCP hot reload, plugin loader
-├── audio/, export/         turn playback and speech routing, cost pricing and gist upload
-├── verification/, work-plans/, widget/    live verifier and ledger, work-plan store, widget module
-├── utils/, types/, scripts/               formatting and clipboard helpers, local types, message script
+├── tools/, mcp/            TUI-local tool guards, MCP runtime reload
+├── audio/, export/         voice capture, wake word, playback and speech routing; gist upload
+├── verification/, widget/  live verifier and its ledger, the terminal widget module
+├── utils/, scripts/        formatting and clipboard helpers, message processing script
 └── test/                   the suite, mirroring the tree above
 ```
 

@@ -37,11 +37,11 @@ does on this side:
 - adopt a compatible daemon already listening at the configured `controlPlane.host`/`controlPlane.port`
 - if none is reachable but a daemon service is installed on this machine and simply stopped, start
   that installed service and wait for it to answer
-- otherwise, run with no daemon: this surface still gives you the full TUI, tools, providers,
+- otherwise, run with no daemon. This surface still gives you the full TUI, tools, providers,
   knowledge system, artifacts, and local runtime surfaces. Cross-surface session visibility and
   daemon-hosted capabilities are simply unavailable until a daemon appears
 
-The HTTP listener is different: it genuinely runs in-process in this app when enabled:
+The HTTP listener is different. It genuinely runs in-process in this app when enabled, controlled by:
 
 - `danger.httpListener` (default `false`)
 
@@ -74,13 +74,13 @@ Two ways to point a TUI instance at a daemon it did not start itself:
 # Start the daemon once, with a fixed, known token:
 GOODVIBES_DAEMON_TOKEN=gv_shared_token goodvibes-daemon --hostname 0.0.0.0 --port 3421
 
-# Point a TUI at it (any home directory — no shared operator-tokens.json needed):
+# Point a TUI at it (any home directory, no shared operator-tokens.json needed):
 GOODVIBES_DAEMON_TOKEN=gv_shared_token bun run dev \
   --config controlPlane.host=<daemon-host> \
   --config controlPlane.port=3421
 ```
 
-`GOODVIBES_DAEMON_TOKEN` is read by both sides: the daemon uses it as the bearer token every route requires, and the TUI runtime uses it to install (or confirm) the matching entry in its own `operator-tokens.json` before probing that host/port, so adoption succeeds without hand-editing any files. This mirrors `src/verification/live-verifier.ts`'s existing fallback to the same variable when probing a daemon's HTTP surface from the outside.
+`GOODVIBES_DAEMON_TOKEN` is read by both sides. The daemon uses it as the bearer token every route requires, and the TUI runtime uses it to install (or confirm) the matching entry in its own `operator-tokens.json` before probing that host/port, so adoption succeeds without hand-editing any files. This mirrors `src/verification/live-verifier.ts`'s existing fallback to the same variable when probing a daemon's HTTP surface from the outside.
 
 ## Background service and autostart
 
@@ -123,7 +123,7 @@ Host modes resolve as:
 - `network`: bind all interfaces (`0.0.0.0`)
 - `custom`: bind the configured host
 
-When the WebUI is launched by external tooling rather than by the TUI, it should read the same TUI settings file or be launched with matching env overrides. The canonical setting file is `~/.goodvibes/tui/settings.json` unless `GOODVIBES_TUI_SETTINGS_PATH` points elsewhere.
+When the WebUI is launched by external tooling rather than by the TUI, it should read the same TUI settings file or be launched with matching env overrides. The canonical setting file is `~/.goodvibes/tui/settings.json`; setting `GOODVIBES_HOME` relocates the whole `.goodvibes` tree root, which moves that file to `<GOODVIBES_HOME>/.goodvibes/tui/settings.json`.
 
 ## Inbound TLS
 
@@ -176,7 +176,7 @@ If `direct` is enabled and the certificate files are missing or invalid, GoodVib
 
 If a control plane or HTTP listener is configured with `hostMode` other than `local` and `tls.mode = off`, GoodVibes emits a `[SECURITY]` warning in the WRFC panel at startup. The same warning appears in the onboarding wizard network step whenever a network-facing service is selected without TLS.
 
-To suppress the warning: set `controlPlane.tls.mode` or `httpListener.tls.mode` to `direct` (or use the `proxy` deployment shape with a terminating reverse proxy).
+To suppress the warning, set `controlPlane.tls.mode` or `httpListener.tls.mode` to `direct` (or use the `proxy` deployment shape with a terminating reverse proxy).
 
 ### Cloudflare Zero Trust Tunnel and trustProxy
 

@@ -2,11 +2,11 @@
 
 ## Prerequisites
 
-- For the recommended global install: [Bun](https://bun.sh) v1.3.10 or later
-- For npm install: Node.js 20+ and npm, plus `bun` on `PATH`
-- For source/dev workflows: Bun v1.3.10 or later
-- Optional: [Go](https://go.dev) for Go language-server support
-- Optional: `rust-analyzer` for Rust work; GoodVibes can download it automatically on first use
+- The recommended global install needs [Bun](https://bun.sh) v1.3.10 or later.
+- An npm install needs Node.js 20+ and npm, plus `bun` on `PATH`.
+- Source and dev workflows need Bun v1.3.10 or later.
+- [Go](https://go.dev) is optional, for Go language-server support.
+- `rust-analyzer` is optional for Rust work; GoodVibes can download it automatically on first use.
 
 ## Install
 
@@ -18,7 +18,7 @@ bun pm trust -g @pellux/goodvibes-tui goodvibes-daemon
 goodvibes
 ```
 
-Bun blocks lifecycle scripts for untrusted global packages. `@pellux/goodvibes-tui` needs trusting so its postinstall can place the matching TUI binary, and `goodvibes-daemon` needs trusting so its postinstall can place the daemon binary. `goodvibes-daemon` is a dependency of this package, so one install brings both commands. Nothing else needs trusting: the TUI binary comes from the platform-specific `@pellux/goodvibes-tui-<os>-<arch>` package with registry integrity, and the tree-sitter grammar packages ship their `.wasm` files as plain files (the app never loads the native bindings their `install` scripts would build). Verify the install with:
+Bun blocks lifecycle scripts for untrusted global packages. `@pellux/goodvibes-tui` needs trusting so its postinstall can place the matching TUI binary, and `goodvibes-daemon` needs trusting so its postinstall can place the daemon binary. `goodvibes-daemon` is a dependency of this package, so one install brings both commands. Nothing else needs trusting. The TUI binary comes from the platform-specific `@pellux/goodvibes-tui-<os>-<arch>` package with registry integrity, and the tree-sitter grammar packages ship their `.wasm` files as plain files (the app never loads the native bindings their `install` scripts would build). Verify the install with:
 
 ```sh
 bun pm -g untrusted
@@ -37,16 +37,15 @@ goodvibes
 
 The package downloads the matching prebuilt TUI and daemon binaries for the current Linux or macOS platform during `postinstall`. If `bun` is missing, the preinstall check fails with a clear message instead of installing a broken launcher.
 
-On Windows, use WSL2: inside a WSL2 distribution GoodVibes is an ordinary Linux install and the Linux binaries apply unchanged (`wsl --install`, then run the install command in your WSL2 shell). Native Windows is beta and not yet a supported path. See [windows.md](windows.md).
+On Windows, use WSL2. Inside a WSL2 distribution GoodVibes is an ordinary Linux install and the Linux binaries apply unchanged (`wsl --install`, then run the install command in your WSL2 shell). Native Windows is beta and not yet a supported path. See [windows.md](windows.md).
 
 ### Pure-binary installer (`goodvibes.sh/install.sh`)
 
 The one-line installer downloads the checksum-verified TUI, daemon, and agent
 binaries plus the browser operator surface's bundle without a package manager,
-and doubles as the upgrade path. It lives in the daemon's repository
-(`goodvibes-daemon` `scripts/install.sh`), one copy for the whole suite,
-and resolves a release tag per repository, verifying every file against that
-repository's own `SHA256SUMS.txt`:
+and doubles as the upgrade path. It lives in this repository (`scripts/install.sh`),
+one copy for the whole suite, and resolves a release tag per repository,
+verifying every file against that repository's own `SHA256SUMS.txt`:
 
 ```sh
 curl -fsSL https://goodvibes.sh/install.sh | sh
@@ -76,12 +75,12 @@ It never overwrites an existing unit. An already-running daemon is restarted in 
 | `GOODVIBES_DAEMON_SERVICE` | `1` | Set to `0` to skip first-run daemon service setup |
 | `GOODVIBES_UNINSTALL` | `0` | Set to `1` to uninstall (see below) |
 
-The browser surface is not a fourth binary and not a fourth service: its bundle
+The browser surface is not a fourth binary and not a fourth service. Its bundle
 unpacks to `<install dir>/webui/<version>` and the daemon serves it on its own
 listener. Installing it exposes nothing new to your network. The daemon's
 shipped binding is loopback and the installer does not change it, so the URL in
 the install receipt works on that machine only. Reaching it from another device
-is a deliberate separate act: `goodvibes-daemon webui enable --lan`.
+is a deliberate separate act, `goodvibes-daemon webui enable --lan`.
 
 **Uninstall:**
 
@@ -89,7 +88,7 @@ is a deliberate separate act: `goodvibes-daemon webui enable --lan`.
 curl -fsSL https://goodvibes.sh/install.sh | GOODVIBES_UNINSTALL=1 sh
 ```
 
-Uninstall mode takes precedence over everything else (no downloads happen). It stops the running daemon/agent, then removes only what the installer manages: the three binaries in the install dir, the sqlite-vec addon directories, the unpacked web UI bundles, and the service unit/plist **only when it carries the installer-managed marker**. A hand-written unit is never deleted; it is reported with the manual removal command instead. Your `~/.goodvibes` data (settings, sessions, memory) is deliberately preserved, and the summary prints the `rm -rf ~/.goodvibes` command if you want to erase it too.
+Uninstall mode takes precedence over everything else (no downloads happen). It stops the running daemon/agent, then removes only what the installer manages, which is the three binaries in the install dir, the sqlite-vec addon directories, the unpacked web UI bundles, and the service unit/plist **only when it carries the installer-managed marker**. A hand-written unit is never deleted; it is reported with the manual removal command instead. Your `~/.goodvibes` data (settings, sessions, memory) is deliberately preserved, and the summary prints the `rm -rf ~/.goodvibes` command if you want to erase it too.
 
 Or install from source:
 
@@ -117,16 +116,16 @@ export OPENAI_API_KEY=...
 | Anthropic | `ANTHROPIC_API_KEY` | `CLAUDE_API_KEY` | Paid |
 | OpenAI | `OPENAI_API_KEY` | `OPENAI_KEY` | Paid |
 | Google Gemini | `GEMINI_API_KEY` | `GOOGLE_API_KEY`, `GOOGLE_GEMINI_API_KEY` | Paid |
-| InceptionLabs | `INCEPTION_API_KEY` | — | Paid |
-| Mistral | `MISTRAL_API_KEY` | — | Paid |
-| OpenRouter | `OPENROUTER_API_KEY` | — | Free tier available |
-| Groq | `GROQ_API_KEY` | — | Free (LPU inference) |
-| Cerebras | `CEREBRAS_API_KEY` | — | Free (wafer-scale inference) |
-| AIHubMix | `AIHUBMIX_API_KEY` | — | Free tier (rate-limited) |
+| InceptionLabs | `INCEPTION_API_KEY` | none | Paid |
+| Mistral | `MISTRAL_API_KEY` | none | Paid |
+| OpenRouter | `OPENROUTER_API_KEY` | none | Free tier available |
+| Groq | `GROQ_API_KEY` | none | Free (LPU inference) |
+| Cerebras | `CEREBRAS_API_KEY` | none | Free (wafer-scale inference) |
+| AIHubMix | `AIHUBMIX_API_KEY` | none | Free tier (rate-limited) |
 | HuggingFace | `HF_API_KEY` | `HUGGINGFACE_API_KEY`, `HF_TOKEN` | Free tier (rate-limited) |
 | Ollama Cloud | `OLLAMA_CLOUD_API_KEY` | `OLLAMA_API_KEY` | Free |
-| NVIDIA NIM | `NVIDIA_API_KEY` | — | 1000 free credits |
-| LLM7 | `LLM7_API_KEY` | — | Free |
+| NVIDIA NIM | `NVIDIA_API_KEY` | none | 1000 free credits |
+| LLM7 | `LLM7_API_KEY` | none | Free |
 
 Additional built-in integrations resolve from the same env/secrets path:
 
@@ -160,7 +159,7 @@ bun run dev
 ```
 
 That starts the full TUI runtime from `src/main.ts`. It connects to the daemon the same way the
-compiled binary does: adopting one already running, or starting an installed-but-stopped daemon
+compiled binary does, adopting one already running, or starting an installed-but-stopped daemon
 service, and never running the daemon itself. To run the daemon/API host from source instead, clone
 and run `goodvibes-daemon` from its own repository.
 
@@ -177,7 +176,7 @@ can also host the HTTP listener in-process when `danger.httpListener` is enabled
 ## Launch and resume
 
 Opening the TUI in a workspace starts a fresh session. Previous work is reached
-deliberately: `--continue` reopens the most recently active session for the
+only deliberately. `--continue` reopens the most recently active session for the
 working directory, `--resume [id]` reopens a named one, and `--fork [id]`
 branches from one. See [CLI session lifecycle flags](tools-and-commands.md#cli-session-lifecycle-flags).
 After the splash, a short notice summarizes the resumable state that actually
@@ -196,23 +195,23 @@ The ask is two steps:
 1. **Recovery snapshot found.** `Resume it` loads the snapshot into the current
    session and retires the recovery point once the load succeeds. `Not now`
    starts fresh. The row detail names the facts actually known about the
-   snapshot: session id, age, the title when it carries one, and the file size
-   when it can be read.
+   snapshot, namely session id, age, the title when it carries one, and the
+   file size when it can be read.
 2. **Remove recovery point?** Asked only after you decline. `Keep it` is first
-   and preselected: the snapshot stays on disk and is offered again the next
+   and preselected, so the snapshot stays on disk and is offered again the next
    time the workspace opens. `Remove it` deletes it, and the conversation it
    holds cannot be recovered afterwards.
 
 Escape is not an answer. Dismissing either modal leaves the snapshot exactly
 where it is. Only `Remove it` deletes anything, and a failed load leaves the
 file in place to be offered again next launch. A snapshot whose session still
-has a live process marker is never offered at all: another terminal is
+has a live process marker is never offered at all, because another terminal is
 refreshing it, so it is that instance's live state rather than an orphaned
 crash. Keeping (or dismissing) stays quiet for the rest of the run.
 
 ## Common paths
 
-Project runtime data lives under `.goodvibes/` in the working directory: sessions, hooks, MCP config, artifacts, and local state.
+Project runtime data lives under `.goodvibes/` in the working directory, holding sessions, hooks, MCP config, artifacts, and local state.
 
 - global settings: `~/.goodvibes/tui/settings.json`
 - project settings: `.goodvibes/tui/settings.json`
@@ -222,7 +221,7 @@ Project runtime data lives under `.goodvibes/` in the working directory: session
 - daemon home: `~/.goodvibes/daemon`
 - QEMU sandbox bundle: `~/.goodvibes/tui/sandbox`
 - custom providers: `~/.goodvibes/tui/providers/*.json`
-- schedules: `.goodvibes/tui/schedules.json`
+- scheduled/automation jobs: `.goodvibes/tui/automation-jobs.json`
 - REPL history: `.goodvibes/tui/repl-history.json`
 - keybindings: `~/.goodvibes/tui/keybindings.json`
 - agent archetypes: `.goodvibes/agents/*.md`
@@ -230,6 +229,8 @@ Project runtime data lives under `.goodvibes/` in the working directory: session
 - hook config: `.goodvibes/hooks.json` (or the file named by `tools.hooksFile`)
 
 ## First things to open in the product
+
+These slash commands are the fastest way to get oriented once the TUI is running.
 
 - `/model` to open the fullscreen provider/model workspace for main chat, helper, tool LLM, and TTS LLM routing
 - `/settings` or `/config` to inspect and edit runtime settings in the fullscreen configuration workspace
@@ -241,17 +242,18 @@ Project runtime data lives under `.goodvibes/` in the working directory: session
 
 ## Local server discovery
 
-On startup, GoodVibes can auto-discover local inference servers and register them as OpenAI-compatible providers. Built-in discovery covers:
+On startup, GoodVibes can auto-discover local inference servers and register them as OpenAI-compatible providers, probing well-known ports and, where a fixed port is not enough, the server's own response headers. Built-in discovery covers:
 
-- Ollama
-- LM Studio
-- vLLM
-- llama.cpp / LocalAI
-- Text Generation Inference
-- Jan
-- GPT4All
-- KoboldCpp
-- Aphrodite
+- Ollama, on its default port
+- LM Studio, on its default OpenAI-compatible server port
+- vLLM, identified from its response headers
+- llama.cpp, identified from its server header
+- LocalAI, an OpenAI-compatible server also identified from its server header
+- Text Generation Inference (TGI), Hugging Face's serving stack, identified from its server header
+- Jan, on its default port
+- GPT4All, on its default port
+- KoboldCpp, on its default port
+- Aphrodite, on its default port
 
 ## Related docs
 

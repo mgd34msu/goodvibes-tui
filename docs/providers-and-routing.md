@@ -31,6 +31,7 @@ Current built-in native providers include:
 
 The runtime also supports a broad compatible/gateway layer. Current built-ins include:
 
+- `inceptionlabs`
 - `openrouter`
 - `aihubmix`
 - `groq`
@@ -68,7 +69,7 @@ The runtime also supports a broad compatible/gateway layer. Current built-ins in
 
 ## Local discovery
 
-At startup, GoodVibes can discover local inference servers and register them automatically as OpenAI-compatible providers. Discovery covers:
+Run `/scan` to probe localhost and the LAN for local inference servers and register whatever answers as OpenAI-compatible providers; discovery is not run automatically at startup. The scan checks the well-known ports for:
 
 - Ollama
 - LM Studio
@@ -79,6 +80,8 @@ At startup, GoodVibes can discover local inference servers and register them aut
 - GPT4All
 - KoboldCpp
 - Aphrodite
+
+Ollama, LM Studio, vLLM, llama.cpp, and Text Generation Inference get dedicated adapters with server-specific capability traits (tool calling, streaming, and, for Ollama/LM Studio/llama.cpp, a four-level `instant/low/medium/high` reasoning ladder). Jan, GPT4All, KoboldCpp, and Aphrodite are fingerprinted by port but registered through the generic OpenAI-compatible adapter, with no server-specific reasoning support. Use `/provider add <name> <baseURL>` to register a server manually instead, which probes its `/models` endpoint directly rather than scanning ports.
 
 ## Synthetic failover
 
@@ -116,10 +119,13 @@ Models with different naming across providers (for example `GPT-4o` vs `gpt 4o`)
 
 ### Transparent failover rules
 
-- **Rate limit (429).** Retries the next provider in the pool immediately.
-- **Server error (500) or network error.** Retries the next provider after a five-second cooldown.
-- **Client error (400).** Does not trigger failover. A 400 means the request itself is at fault, not the provider, so switching providers would not help.
-- **All providers cooling down with short cooldowns (120 seconds or less).** The system waits for the shortest cooldown to expire and retries.
+Within a single synthetic model, backends are tried in order (best context window first, then best max output tokens as a tiebreaker), skipping any backend without a configured key. A failed backend is marked on a cooldown and the next backend in the list is tried immediately, in the same call, with no wait:
+
+- **Rate limit (429) or an out-of-credit/billing error.** The failed backend is put on cooldown (the provider's own retry-after when it sends one, otherwise 60 seconds by default) and the next backend is tried right away.
+- **Other 4xx errors from the provider (401, 403, 404, and similar).** Treated as provider-specific rather than the caller's fault: the backend gets a 60-second cooldown and the next backend is tried.
+- **Server error (500) or network error.** Treated as transient: the backend gets a short five-second cooldown and the next backend is tried immediately, without waiting out that cooldown first.
+- **Client error (400).** Does not trigger failover. A 400 means the request itself is malformed, not the provider, so switching providers would not help.
+- **All backends cooling down, shortest remaining cooldown 120 seconds or less.** The turn waits out that cooldown and makes one retry attempt on the backend that just came off it. Longer cooldowns are not waited out; the error surfaces immediately instead.
 
 Failover is silent by default: the model name in the status bar does not change when the runtime switches backends for the same synthetic model.
 
@@ -143,13 +149,15 @@ Synthetic models are split into **Top Models** (S-tier or A-tier by benchmark) a
 
 ### Failover notices and cost delta
 
-When a turn fails over to another provider, the transcript shows a notice naming both the source and destination providers alongside the error class. If the catalog contains per-1M-token pricing for both models, the notice also includes the cost delta in the form:
+Besides the backend rotation inside a single synthetic model described above, the TUI has a second, broader failover path. When any turn ends in `TURN_ERROR` and an optimizer-driven fallback chain has a viable next provider that has not already been tried this turn, the TUI switches to it and resubmits the turn, whether or not the original model was synthetic. A synthetic model is itself a fallback ladder over real backends, so this broader path never fails over *into* a synthetic model after a real one failed, only between real providers.
+
+When this happens, the transcript shows a notice naming both the source and destination providers alongside the full user-facing error description (the same message-and-action text a plain `[Error]` line would show). If the catalog contains per-1M-token pricing for both models, the notice also includes the cost delta in the form:
 
 ```
-[Failover] anthropic -> openai (transient) [cost/1M: input 3.00→10.00, output 15.00→30.00]
+[Failover] anthropic -> openai (Network error: could not reach the provider. Check your connection and retry, or switch models with /model.) [cost/1M: input $3.00→$10.00, output $15.00→$30.00]
 ```
 
-If pricing data is unavailable for either model, the notice says `[cost data unavailable]` instead of fabricating a number.
+If pricing data is unavailable for either model, the notice says `[cost data unavailable]` instead of fabricating a number. When the fallback chain is exhausted (every candidate already tried this turn, or none exist), the transcript shows `[Failover] Chain exhausted: no alternative provider available.` followed by the original error, and the model selection reverts to what the user had configured for the next turn.
 
 ### Chain visibility in the model picker
 
@@ -167,7 +175,23 @@ goodvibes models chain --json        # JSON output for scripting
 
 Each entry shows the model id, tier, configured/total backend count, and a position-numbered list of `provider/model` rungs.
 
-Many model providers also support configurable reasoning effort levels. Selectable options include `instant`, `low`, `medium`, and `high`.
+Many model providers also support configurable reasoning effort, but the levels a given model actually offers are resolved per model rather than fixed. The runtime checks the live catalog entry for that exact model first, then a declaration attached to it (a plugin, a custom-model file, or a local server's traits), then a curated per-family table, and only falls back to a labelled best guess when nothing else matches.
+
+Depending on the model, offered levels are drawn from `none`, `instant`, `minimal`, `low`, `medium`, `high`, `xhigh`, and `max`; some models instead take a thinking-token budget, or only expose reasoning as an on/off toggle, or have no configurable reasoning at all. `/effort` shows exactly which of these the current model accepts.
+
+## Per-role routing
+
+`/model` opens a picker with five routing targets, each writing its own config keys, so a provider/model choice for one role never overwrites another:
+
+| Target | Label | Config keys | Notes |
+| --- | --- | --- | --- |
+| `main` | Main Chat | `provider.provider` + `provider.model` | Default provider and model for normal chat turns. |
+| `helper` | Helper Model | `helper.globalProvider` + `helper.globalModel` (+ `helper.enabled`) | Optional route for supporting work; empty values inherit Main Chat. |
+| `tool` | Tool LLM | `tools.llmProvider` + `tools.llmModel` (+ `tools.llmEnabled`) | Optional route for tool-specific reasoning; selecting a model enables it. |
+| `tts` | TTS LLM | `tts.llmProvider` + `tts.llmModel` | Optional override for `/tts` response generation; empty values use the current chat model. |
+| `embeddings` | Embeddings | `provider.embeddingProvider` | Not an LLM route: an embedding provider id only, no model concept, used for memory search and the code index. |
+
+The embeddings target has no model to pick, only a provider, so it opens a dedicated embedding-provider list instead of the model list the other four targets share.
 
 ## Custom providers
 
@@ -212,7 +236,7 @@ GET  /v1/models
 POST /v1/chat/completions
 ```
 
-Use the normal daemon base URL and bearer token. Model ids include `goodvibes/current`, `goodvibes/default`, provider-qualified registry keys such as `openai:gpt-5.5`, and unambiguous plain model ids. Chat completions accept standard `messages`, optional `tools`, `max_tokens` or `max_completion_tokens`, and `stream: true` for SSE chunks.
+Use the normal daemon base URL and bearer token. Model ids include the special id `goodvibes/current` (routes to whatever model the TUI session is currently serving), provider-qualified registry keys such as `openai:gpt-5.5`, and unambiguous plain model ids. Chat completions accept standard `messages`, optional `tools`, `max_tokens` or `max_completion_tokens`, and `stream: true` for SSE chunks.
 
 The surface is enabled by default and gated by `controlPlane.openaiCompatible.enabled`; the path prefix is configurable via `controlPlane.openaiCompatible.pathPrefix` (default `/v1`).
 
@@ -242,7 +266,7 @@ Current voice providers include:
 - `google` for `stt`
 - `microsoft`
 - `vydra`
-- `local` for `tts`, `tts-stream`, and `stt`: free, offline engines (whisper.cpp/faster-whisper for STT, Piper/Kokoro for TTS). Nothing auto-downloads; it reports `unconfigured` until `voice.local.*` keys point at an installed engine and model. See [voice-and-live-tts.md](voice-and-live-tts.md).
+- `local` for `tts`, `tts-stream`, and `stt`: free, offline engines (whisper.cpp/faster-whisper for STT, Piper/Kokoro for TTS). Pointing `voice.local.*` at engine and model paths you installed yourself never downloads anything; it reports `unconfigured` until all three keys for a direction (engine, binary, model path) are set. Running `/voice setup` instead performs a managed one-act install that fetches the Piper TTS engine and a default voice automatically, and the whisper STT engine and model where a bundle is hosted for your platform. See [voice-and-live-tts.md](voice-and-live-tts.md).
 
 The TUI `/tts` command uses providers that advertise `tts-stream` for live local playback. Configure defaults through `/config tts`: `tts.provider` chooses the streaming provider, `tts.voice` chooses a provider voice, and `tts.llmProvider` / `tts.llmModel` optionally override the response model. `/tts` uses the active chat model by default when the TTS LLM override is empty. See [Voice and live TTS](voice-and-live-tts.md) for command usage and playback requirements.
 

@@ -8,13 +8,13 @@ This directory contains the current product documentation for `goodvibes-tui`.
   Installation, first-run setup, provider configuration, common paths, and basic run/build flows.
 
 - [Configuration reference](configuration.md)
-  The layered settings model, the key-settings table, permission modes and the policy/trust system, plus the TUI-owned namespaces you add by hand to settings.json: checkpoint root guard, the scriptable statusline, session behavior, and launch-time self-update.
+  The layered settings model, a curated key-settings table, permission modes and the policy/trust system, plus the TUI-owned namespaces you add by hand to settings.json, covering the checkpoint root guard, the scriptable statusline, session behavior, notification alert classes, and launch-time self-update.
 
 - [Deployment and services](deployment-and-services.md)
   TUI-only mode, compiled binary behavior, adopting or autostarting the daemon, the in-process HTTP listener, inbound TLS, outbound trust configuration, control-plane entrypoints, the service registry and secret references, profiles and setup transfer, and integration helpers.
 
 - [Remote access: a home server setup](remote-access.md)
-  Step-by-step continuity setup: daemon on an always-on box, webui from any browser, TUI over SSH, Tailscale for reachability and TLS, validated by `goodvibes doctor`.
+  Step-by-step continuity setup covering the daemon on an always-on box, webui from any browser, TUI over SSH, Tailscale for reachability and TLS, and validation with `goodvibes doctor`.
 
 - [Providers and routing](providers-and-routing.md)
   Native providers, compatible/gateway providers, local discovery, synthetic failover, search providers, voice providers, and media providers.
@@ -38,13 +38,13 @@ This directory contains the current product documentation for `goodvibes-tui`.
   Omnichannel surfaces, reply routing, remote peers, node-host contracts, and the daemon/control-plane HTTP + streaming surfaces.
 
 - [Session durability](session-durability.md)
-  Two-layer durability: post-turn snapshots plus periodic recovery files, and the fsync-per-record transcript journal replayed at every resume seam.
+  Two-layer durability, combining post-turn snapshots plus periodic recovery files with the fsync-per-record transcript journal replayed at every resume seam.
 
 - [Share command](share-command.md)
   `/share` session export to HTML/JSON/Markdown with redaction, upload, clipboard, and open options.
 
 - [CLI flags](cli-flags.md)
-  Global flags reference: session lifecycle (`--continue`, `--resume`, `--fork`), confirmation bypass (`-y`/`--non-interactive`), output format consolidation, `--host` alias, and all other startup and command-specific flags.
+  Global flags reference covering session lifecycle (`--continue`, `--resume`, `--fork`), the `-y`/`--non-interactive` commit gate for plugin bundle installs, output format consolidation, the `--host` alias, and all other startup and command-specific flags.
 
 - [Commands reference](commands-reference.md)
   The generated, categorized list of every slash command, its arguments, and its description. It is the same list `?` renders in the product.
@@ -74,4 +74,4 @@ This directory contains the current product documentation for `goodvibes-tui`.
   Checked-in operator and peer contract manifests plus canonical knowledge GraphQL and SQL artifacts for release-gate and SDK extraction work.
 
 - [GitHub Action](github-action.md)
-  The `run-goodvibes` composite action: installing a pinned, checksum-verified release in CI and running a non-interactive command or prompt against a workspace.
+  The `run-goodvibes` composite action, which installs a pinned, checksum-verified release in CI and runs a non-interactive command or prompt against a workspace.

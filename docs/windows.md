@@ -20,7 +20,7 @@ recommended path for all Windows users and requires no beta artifacts.
 
 ## Native Windows: beta, not yet promoted
 
-A native `windows-x64` binary **compiles** today: `bun run build:windows`
+A native `windows-x64` binary **compiles** today. `bun run build:windows`
 (`goodvibes-build-binaries --target windows-x64`, the same toolchain path every
 shipped target uses) produces a working `goodvibes-windows-x64.exe` (PE32+) plus
 the matching `sqlite-vec-windows-x64/vec0.dll` addon under `dist/lib`. It is
@@ -81,8 +81,8 @@ Each must be addressed (or explicitly gated off on Windows) before promotion:
 
 ## Deferred: PowerShell installer
 
-`scripts/install.ps1` (a PowerShell twin of the suite installer,
-`goodvibes-daemon` `scripts/install.sh`) is
+`scripts/install.ps1` (a PowerShell twin of this repository's suite
+installer, `scripts/install.sh`) is
 **deferred**. Although the `windows-x64` exe compiles, it is not published as a
 stable release asset and its Windows runtime is unverified, so an installer
 that downloads and runs it would be installing an unverified beta from assets

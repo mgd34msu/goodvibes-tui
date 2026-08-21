@@ -2,34 +2,34 @@
 
 ## Channels
 
-GoodVibes includes a shared channel/runtime layer with current surfaces for:
+GoodVibes includes a shared channel/runtime layer. Every surface it drives
+(the SDK's `ChannelSurface` type) is one of the following:
 
-- `tui`
-- `web`
-- `slack`
-- `discord`
-- `ntfy`
-- `webhook`
-- `homeassistant`
-- `telegram`
-- `google-chat`
-- `signal`
-- `whatsapp`
-- `telephony` (SMS/voice via Twilio or a bridge)
-- `imessage`
-- `msteams`
-- `bluebubbles`
-- `mattermost`
-- `matrix`
+| Surface | What it is |
+| --- | --- |
+| `tui` | This terminal app itself. |
+| `web` | The browser cockpit surface. |
+| `slack` | Slack workspace integration. |
+| `discord` | Discord surface integration. |
+| `ntfy` | ntfy push-notification topics. |
+| `webhook` | The generic inbound/outbound webhook surface. |
+| `homeassistant` | The Home Assistant daemon surface (see below). |
+| `telegram` | Telegram bot integration. |
+| `google-chat` | Google Chat surface integration. |
+| `signal` | Signal bridge integration. |
+| `whatsapp` | WhatsApp surface integration. |
+| `telephony` | SMS/voice via Twilio or a bridge. |
+| `imessage` | The iMessage bridge surface. |
+| `msteams` | Microsoft Teams surface integration. |
+| `bluebubbles` | BlueBubbles (an iMessage server) integration. |
+| `mattermost` | Mattermost surface integration. |
+| `matrix` | Matrix surface integration. |
 
-The channel runtime owns:
-
-- inbound adapters
-- setup and account metadata
-- doctor hooks
-- route bindings
-- delivery strategy selection
-- reply rendering and delivery
+Every one of those surfaces is driven by the same channel runtime, which owns
+inbound adapters, setup and account metadata, doctor hooks, route bindings,
+delivery strategy selection, and reply rendering and delivery. That shared
+ownership is what keeps a new surface from needing its own copy of routing,
+delivery, or reply logic.
 
 ## Home Assistant
 
@@ -62,20 +62,15 @@ That keeps TUI, web, webhook, and channel-native surfaces aligned around the sam
 
 ## Daemon and control plane
 
-The daemon is the backend surface for:
-
-- tasks
-- sessions
-- control-plane snapshots and messages
-- method catalog
-- SSE and WebSocket event streams
-- knowledge
-- voice
-- web search
-- artifacts
-- multimodal
-- channel status and delivery surfaces
-- remote peers and node-host contracts
+The daemon is the backend surface behind everything the TUI and other
+clients do. It runs tasks and sessions, holds the control-plane snapshots
+and messages that keep every connected surface in sync, and publishes the
+method catalog those surfaces read to know what they can call. It streams
+events over SSE and WebSocket, and it fronts the product-domain APIs
+covered below (knowledge, voice, web search, artifacts, and multimodal). It
+also carries channel status and delivery surfaces, and remote peer and
+node-host contracts for the distributed runtime described later in this
+document.
 
 Key entrypoints include:
 
@@ -149,12 +144,16 @@ The `/channel` command gives in-session visibility into the channel runtime stat
 |---|---|
 | `/channel` | Opens the Routes panel in the TUI |
 | `/channel panel` | Same as above |
+| `/channel pair [surface]` | Guided channel pairing: lists adapters, collects declared credentials, verifies them |
 | `/channel status` | Builds a full integration review (routes, delivery, sessions, tasks, pending approvals) |
 | `/channel routes` | Raw route binding snapshot from the integration helper service |
 | `/channel delivery` | Current delivery snapshot: per-route delivery counts and last-error state |
 | `/channel policy` | Configured channel surfaces (enabled/disabled) and the location of fine-grained ingress policies |
+| `/channel profiles [list\|get\|set\|delete]` | Per-channel model and permission-mode profile bindings |
 
-All subcommands accept `--json` for machine-readable output.
+`status`, `routes`, `delivery`, and `policy` accept `--json` for
+machine-readable output; `pair` and `profiles` are interactive/CRUD
+subcommands and do not take it.
 
 Examples:
 
@@ -217,11 +216,11 @@ Notifications are delivered in this order:
 
 ### Notification content
 
-Notification text contains only structural metadata: task kind, elapsed time, ok/fail status, and the first 8 characters of the session ID. Conversation content (user messages, assistant replies, tool outputs) is **never included**.
+Notification text contains only structural metadata (task kind, elapsed time, ok/fail status, and the first 8 characters of the session ID). Conversation content (user messages, assistant replies, tool outputs) is **never included**.
 
 ### Focus state
 
-Notifications are gated by `behavior.notifyOnlyWhenUnfocused` (on by default): they fire only when the terminal is unfocused, or when focus state was never observed. Set it to `false` to fire regardless of focus.
+Notifications are gated by `behavior.notifyOnlyWhenUnfocused` (on by default). They fire only when the terminal is unfocused, or when focus state was never observed. Set it to `false` to fire regardless of focus.
 
 ### Wiring
 

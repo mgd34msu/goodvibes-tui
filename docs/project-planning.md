@@ -40,7 +40,7 @@ The planning loop can be paused with natural language such as "stop planning" or
 
 ## Planning panel
 
-Open the panel through the panel picker or with `/plan panel`.
+Open the panel through the panel picker or with `/project-plan panel`.
 
 The panel shows:
 
@@ -65,41 +65,49 @@ Panel keys:
 - The answer list includes a dismiss action that pauses planning for the workspace and returns focus to normal chat.
 - Keyword-matched canned answer suggestions (scope/task/verification/recommended) are de-duplicated by answer text, so a question that matches more than one category never shows the same suggested answer twice.
 
-## `/plan`
+## `/project-plan`
 
-`/plan` is retained as a command surface for inspection and seeding, but it is no longer the primary planning UX.
+`/project-plan` (alias `/planning`) is the command surface for inspection and seeding, but it is no longer the primary planning UX; natural conversation is.
 
-- `/plan` prints current project-planning readiness and opens the panel.
-- `/plan panel` opens the panel.
-- `/plan approve` records explicit execution approval.
-- `/plan <goal>` seeds project planning state.
-- `/plan list` and `/plan show <id>` still inspect older execution-plan records.
-- `/plan mode|explain|override|status|clear` still route to the adaptive runtime controls.
+- `/project-plan` prints current project-planning readiness and opens the panel.
+- `/project-plan panel` opens the panel.
+- `/project-plan approve` records explicit execution approval.
+- `/project-plan dismiss` archives the active plan and marks the planning interview inactive so the next `/project-plan <goal>` starts fresh. Refused while a plan is mid-execution; run `/workstream cancel` first.
+- `/project-plan answer <question-number|question-id> <text>` records an answer to an open planning question outside the panel.
+- `/project-plan <goal>` seeds project planning state.
+- `/project-plan list` and `/project-plan show <id>` still inspect older execution-plan records.
+- `/project-plan mode|explain|override|status|clear` still route to the adaptive runtime controls.
 
 Use natural language such as "stop planning" or the panel dismiss action when the TUI has entered planning but the current work should continue as normal chat.
+
+`/project-plan` is unrelated to the plain `/plan` command, which only toggles the session's read-only permission plan mode (writes, commands, and network calls blocked until you exit). `/plan` never touches project-planning state; `Shift+Tab` cycles the same permission mode.
 
 ## Work Plan
 
 GoodVibes also has a lightweight persistent work-plan tracker for concrete implementation tasks. It is separate from the planning interview state and is intended for visible, durable checklists while work is in progress.
 
-Commands:
+Commands (aliases `/wp`, `/todo`, `/workplan`):
 
 - `/work-plan` or `/work-plan panel`
 - `/work-plan add <title> [--owner name] [--source label] [--notes text]`
+- `/work-plan edit <id> [<new title>] [--owner name] [--source label] [--notes text]`
 - `/work-plan list`
+- `/work-plan show` (alias `/work-plan markdown`) prints the plan rendered as Markdown
+- `/work-plan export` writes that same Markdown rendering to a file next to the JSON store
 - `/work-plan done|start|block|fail|cancel|pending <id>`
+- `/work-plan cycle <id>` (alias `toggle`) advances the item to its next status
 - `/work-plan remove <id>`
 - `/work-plan clear-done`
 
-The TUI stores work-plan state under `~/.goodvibes/tui/work-plans/` and renders it in the `Work Plan` panel.
+The TUI stores work-plan state under `~/.goodvibes/tui/work-plans/<projectId>.json` and renders it in the `Work Plan` panel. Terminal items (done or cancelled) age out automatically once they pass a time and count bound; open, in-progress, blocked, and failed items are never reclaimed. Anything a sweep removes is recorded on the plan as a housekeeping note rather than deleted silently, and a plan file that is unreadable (for example torn by a crash) is quarantined alongside the original rather than overwritten, so the list can still be recovered by hand.
 
 Panel keys:
 
 - Up/Down navigates items; `Enter`/`Space` cycles status; `1`-`6` set status directly (pending/active/blocked/done/failed/cancelled).
 - `a` opens an inline add form (title/owner/notes fields); `e` opens the same form pre-filled to edit the selected item. `Tab` cycles fields, `Enter` saves, `Esc` cancels.
 - `d`/`Delete` removes the selected item; `c` clears completed (done/cancelled) items; `r` refreshes from disk.
-- `x` exports the current plan to a Markdown file next to the JSON store (`<store-file>.md`) using the same rendering `/work-plan list` and `toMarkdown()` share.
-- When the selected item has linked ids (`item.linked`: `agentId`/`wrfcId`/`taskId`/`sessionId`), the detail block shows them with their jump key: `i` opens the Inspector on the linked agent, `w` opens the WRFC panel on the linked chain.
+- `x` exports the current plan to a Markdown file next to the JSON store (`<store-file>.md`), the same rendering `/work-plan show` prints.
+- When the selected item has linked ids (`item.linked` holds any of `agentId`, `wrfcId`, `taskId`, `sessionId`), the detail block shows them with their jump key; `i` opens the Inspector on the linked agent, and `w` opens the WRFC panel on the linked chain.
 
 ## SDK routes and operator methods
 
@@ -118,3 +126,15 @@ The TUI does not need to call daemon routes for its own local planning loop, but
 - `projectPlanning.decisions.record`
 - `projectPlanning.language.get`
 - `projectPlanning.language.upsert`
+
+A separate set of routes covers the task graph shown in the panel:
+
+- `GET /api/projects/planning/work-plan` (`projectPlanning.workPlan.snapshot`)
+- `GET /api/projects/planning/work-plan/tasks` (`projectPlanning.workPlan.tasks.list`)
+- `GET /api/projects/planning/work-plan/tasks/{taskId}` (`projectPlanning.workPlan.task.get`)
+- `POST /api/projects/planning/work-plan/tasks` (`projectPlanning.workPlan.task.create`)
+- `PATCH /api/projects/planning/work-plan/tasks/{taskId}` (`projectPlanning.workPlan.task.update`)
+- `POST /api/projects/planning/work-plan/tasks/{taskId}/status` (`projectPlanning.workPlan.task.status`)
+- `POST /api/projects/planning/work-plan/tasks/reorder` (`projectPlanning.workPlan.tasks.reorder`)
+- `DELETE /api/projects/planning/work-plan/tasks/{taskId}` (`projectPlanning.workPlan.task.delete`)
+- `POST /api/projects/planning/work-plan/clear-completed` (`projectPlanning.workPlan.clearCompleted`)

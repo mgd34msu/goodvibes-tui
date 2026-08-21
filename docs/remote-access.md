@@ -1,14 +1,15 @@
 # Remote access: a home server setup
 
-The continuity setup this guide builds: the GoodVibes daemon runs on one
+This guide builds a continuity setup where the GoodVibes daemon runs on one
 always-on box (a home server, an old laptop, a NAS with a shell), your
-sessions live there, and you reach them from anywhere: the webui from any
-browser, the TUI over SSH. [Tailscale](https://tailscale.com) (or a
-similar mesh VPN) provides reachability beyond your LAN.
+sessions live there, and you reach them from anywhere, whether that is the
+webui from any browser or the TUI over SSH.
+[Tailscale](https://tailscale.com) (or a similar mesh VPN) provides
+reachability beyond your LAN.
 
-Every command below is real in the current release; the last step validates
-the finished setup with `goodvibes doctor`, whose exit code is honest: `0`
-when the install is usable, non-zero only for a must-fix finding.
+Every command below is real in the current release. The last step validates
+the finished setup with `goodvibes doctor`, whose exit code is honest, `0`
+when the install is usable and non-zero only for a must-fix finding.
 
 ## TLS, stated plainly, in both directions
 
@@ -19,7 +20,7 @@ computes, so it is stated where you pair a device and never repeated as a nag.
 - **Plain `http` on your LAN works, and is a supported posture.** A phone or
   laptop on the same private network (a `10.x` / `172.16-31.x` / `192.168.x`
   address, a `.local` mDNS name, or localhost) uses the full cockpit over
-  `http://<server>:3423`: browsing sessions, watching agents, and steering
+  `http://<server>:3423` for browsing sessions, watching agents, and steering
   them. The transport does not refuse private-network origins. Two things are
   true about it:
   1. The connection is unencrypted on your local network. Anyone who can
@@ -32,7 +33,7 @@ computes, so it is stated where you pair a device and never repeated as a nag.
      The daemon reports each one in the pairing/posture contract
      (`pairing.posture.get`, and the `posture` field of
      `pairing.handoff.create`), so surfaces render a
-     "needs https — available via tailscale" label next to each capability
+     "needs https, available via tailscale" label next to each capability
      instead of a dead button. Localhost keeps all three.
 - **The full progressive-web-app feature set needs TLS, and TLS on a home
   network is your responsibility.** The daemon never mints certificates and
@@ -67,7 +68,7 @@ that one manual command, an explicit note saying so).
 goodvibes service status
 ```
 
-(or, equivalently: `systemctl --user status goodvibes.service`)
+(or, equivalently, `systemctl --user status goodvibes.service`)
 
 **You should now see** the service reported as installed and running. If it
 is not, `goodvibes service check` prints what is wrong and exits non-zero.
@@ -82,7 +83,7 @@ goodvibes auth add-user admin --password-stdin
 goodvibes auth clear-bootstrap
 ```
 
-Skipping this is not cosmetic: `goodvibes doctor` reports a network-bound
+Skipping this is not cosmetic. `goodvibes doctor` reports a network-bound
 surface without local users as a must-fix finding and exits non-zero in step 7.
 
 **You should now see** the new user listed by `goodvibes auth users`, and
@@ -115,7 +116,7 @@ for the control plane and `3423` for the webui. Restart to apply:
 goodvibes service restart
 ```
 
-**You should now see** the surfaces reported network-bound:
+**You should now see** the surfaces reported network-bound.
 `goodvibes web` prints the browser surface URL (e.g. `http://0.0.0.0:3423`)
 and `goodvibes control-plane status` shows the control-plane bind, local
 admin, and token posture.
@@ -135,9 +136,9 @@ http://<server-lan-address>:3423
 
 Log in with the user from step 3.
 
-**You should now see** the webui cockpit over plain `http`: sessions,
-agents, steering. This is the honest plain-`http` tier: everything works
-except the secure-context features listed at the top.
+**You should now see** the webui cockpit over plain `http`, covering
+sessions, agents, and steering. This is the honest plain-`http` tier;
+everything works except the secure-context features listed at the top.
 
 ## Step 6: reachability beyond the LAN, and TLS: Tailscale
 
@@ -149,8 +150,8 @@ sudo tailscale up
 ```
 
 Every device in your tailnet can now reach the box by its Tailscale address or
-MagicDNS name: the webui at `http://<server-tailscale-name>:3423`, still
-plain `http`.
+MagicDNS name, at the webui address `http://<server-tailscale-name>:3423`,
+still plain `http`.
 
 For TLS (and with it the full webui feature set), serve the browser surface
 through Tailscale's built-in reverse proxy, which terminates HTTPS with a
@@ -162,15 +163,16 @@ sudo tailscale serve --bg 3423
 
 **You should now see** `tailscale serve` print the public-to-your-tailnet
 URL it now serves, e.g. `https://myserver.tail1234.ts.net/`. Open it from
-any tailnet device: the webui over real TLS, secure-context features
-available, no certificate work on your part.
+any tailnet device to reach the webui over real TLS, with secure-context
+features available and no certificate work on your part.
 
 GoodVibes offers this as a one-action affordance so you need not run the
-command by hand: `goodvibes` detects tailscale read-only (`tailscale.get`:
-binary, logged-in state, MagicDNS name; where tailscale is absent, nothing
-nags), and the pairing modal offers a single confirmed action to run the serve
-for you (`tailscale.serve.run`), which records an honest receipt and updates
-`web.publicBaseUrl` to the resulting `https` MagicDNS URL.
+command by hand. `goodvibes` detects tailscale read-only (`tailscale.get`
+reports the binary, logged-in state, and MagicDNS name; where tailscale is
+absent, nothing nags), and the pairing modal offers a single confirmed action
+to run the serve for you (`tailscale.serve.run`), which records an honest
+receipt and updates `web.publicBaseUrl` to the resulting `https` MagicDNS
+URL.
 
 ## Step 7: the TUI over SSH, or cross-machine
 
@@ -206,7 +208,7 @@ goodvibes doctor
 ```
 
 `doctor` prints provider, auth, service, surface, trust, and exposure
-findings. Its exit code is the validation: `0` means the install is usable
+findings. Its exit code is the validation. `0` means the install is usable
 (advisory findings render as notes); non-zero means a must-fix finding. For
 this setup, the ones to care about are a network-bound surface with no local
 users or a still-present bootstrap credential (step 3 prevents both). For

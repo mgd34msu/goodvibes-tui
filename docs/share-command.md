@@ -33,11 +33,19 @@ Flags can be combined:
 
 ## Cost summary
 
-Every export includes a token-usage and cost summary derived from the live session.
-Cost is computed using the same per-model pricing table as the Cost Tracker panel
-(USD per 1 M tokens). Unknown models default to $0. The cost field is always present
-in JSON exports (`metadata.costUsd`) and in HTML exports (visible in the usage section).
-For Markdown, a `## Cost` section is appended when cost > $0.
+Every export includes a token-usage summary derived from the live session. Cost is
+computed with the same pricing formula the Cost Tracker panel uses (USD per 1M
+tokens), applied to the session's accumulated input, output, and cache token counts.
+
+When the active model has no pricing data, cost is left out entirely rather than
+shown as $0. The `/share` command prints an inline note (`Note: cost omitted from
+export; no pricing data for model "<model>".`) and the export itself carries no cost
+field: `metadata.costUsd` is absent from JSON, no cost row appears in the HTML usage
+table, and no `## Cost` section is appended to Markdown.
+
+When the model is priced, `metadata.costUsd` is always present in JSON exports. The
+HTML cost row and the Markdown `## Cost` section only appear when the computed cost
+is greater than $0.
 
 ## Redaction guarantees
 

@@ -68,7 +68,7 @@ constructor(
 |--------|-------------|--------|
 | `onActivate()` | Panel becomes the active view | Sets `needsRender = true` |
 | `onDeactivate()` | Panel loses focus | No-op |
-| `onDestroy()` | Panel is removed from the manager | No-op |
+| `onDestroy()` | Panel is removed from the manager | Clears every timer registered via `registerTimer()` |
 
 **Required abstract:**
 ```ts
@@ -92,6 +92,13 @@ abstract render(width: number, height: number): Line[];
 - `this.startLoading(label?)` / `this.stopLoading()`: control visibility.
 - `await this.withLoading(label, fn)`: run an async operation under the spinner (clears on success or throw).
 - `this.renderLoadingLine(width, frame?)`: returns a `Line | null`.
+
+**Timer registry:**
+
+- `this.registerTimer(setInterval(...))` / `this.registerTimer(setTimeout(...))`: wrap any timer id in this call and it is cleared automatically when the panel is destroyed, so you do not need to track and clear it yourself in `onDestroy()`. The call returns the id unchanged, so it composes inline with the `setInterval`/`setTimeout` call.
+- `this.clearTimer(id)`: clear one specific timer early and drop it from the registry. Safe to call with an id that was never registered or was already cleared.
+
+If you override `onDestroy()`, call `super.onDestroy()` so the timer registry is still swept; the base implementation is not a no-op.
 
 ---
 
@@ -158,9 +165,18 @@ protected filterMatches(item: T, q: string): boolean;
 
 `q` arrives already trimmed and lower-cased. `getItems()` stays the **unfiltered** list. Do
 not filter inside it. `getVisibleItems()` (inherited, not overridable) applies `filterMatches()`
-against `getItems()` and is what `renderList()` and navigation actually read; anywhere your own
-code previously read a filtered list (e.g. computing counts, or looking up "the selected item"
-for an action key), call `this.getVisibleItems()[this.selectedIndex]`, not `getItems()[...]`.
+against `getItems()` and is what `renderList()` and navigation actually read. Anywhere your own
+code needs the row under the cursor (an action key, a detail footer, a delete confirmation),
+call `this.getSelectedItem()` rather than indexing an array by hand. That method indexes
+`getVisibleItems()` with `selectedIndex` for you, and it is the only sanctioned way to do that
+read.
+
+The raw token `[this.selectedIndex]` is banned outside `scrollable-list-panel.ts` and
+`expandable-list-panel.ts` by an architecture gate (`scripts/selected-index-rule.ts`, enforced in
+`src/test/scripts/selected-index-gate.test.ts`), because four real bugs shipped from code that
+indexed a raw item array by the list cursor while navigation moved that cursor over the filtered
+list. `getItems()[this.selectedIndex]` silently returns the wrong row the moment a filter is
+active.
 
 A filter input line is auto-rendered at the top of `renderList()`'s header for free. You do
 not need to build or pass it yourself. Set `this.filterLabel` (default `'Filter'`) for a
@@ -183,23 +199,21 @@ while it's active:
 
 ```ts
 if (!this.filterActive && key === 'd') {
-  const item = this.getVisibleItems()[this.selectedIndex];
+  const item = this.getSelectedItem();
   // ...
 }
 ```
 
 **Pinned rendering contract:** `Filter: query` when inactive, `[Filter] query_` when active
 (literal trailing `_`, not a block-glyph cursor substitution). This is `buildFilterLine()`.
-Call it directly only if you need the line somewhere other than the auto-injected header slot
-(e.g. `PanelListPanel`, `DocsPanel`, and `FileExplorerPanel` build their own equivalent because
-they don't extend `ScrollableListPanel`; see those files for the pattern to mirror in a
-non-list-panel class).
+Call it directly only if you need the line somewhere other than the auto-injected header slot;
+every current filterable panel extends `ScrollableListPanel` and gets it there for free.
 
 ---
 
 ## Canonical example: SkillsPanel
 
-> **note (the panel purge).** Most read/navigate surfaces, including
+> **note (panel-to-modal migration).** Most read/navigate surfaces, including
 > Skills, Memory, Marketplace, Security, Hooks, Policy, Knowledge, Providers,
 > Services, Remote, Sandbox, and Settings-Sync, no longer render as standalone
 > registered panels. They migrated to **config-modal surfaces** rendered through
@@ -239,7 +253,7 @@ const C = extendPalette(DEFAULT_PANEL_PALETTE, {
 } as const);
 ```
 
-`extendPalette` merges domain keys into a copy of `DEFAULT_PANEL_PALETTE` and preserves the `Readonly<Required<PanelPalette>>` shape that rendering utilities expect.
+`extendPalette` merges domain keys into a copy of `DEFAULT_PANEL_PALETTE` and preserves the `Readonly<Required<PanelPalette>>` shape that rendering utilities expect. It also registers the merged palette with the theme refresher, so when the user switches between light and dark mode, every panel palette built with `extendPalette` is rebuilt in place with the new mode's values. This is why the "never inline raw hex" convention below is not just a style rule: a hex literal typed directly into `renderItem()` will not update when the theme changes, while a color pulled from a `const C = extendPalette(...)` palette will.
 
 ### Step 2: type and class declaration
 
@@ -331,10 +345,10 @@ public render(width: number, height: number): Line[] {
   return this.trackedRender(() => {
     this.needsRender = false;
 
-    // Detail footer for currently selected item. getVisibleItems() applies
-    // the active filter — getItems() above stays the unfiltered full list.
-    const items = this.getVisibleItems();
-    const selected = items[this.selectedIndex];
+    // Detail footer for the currently selected item. getSelectedItem() reads
+    // the row under the cursor from getVisibleItems() (the filtered list);
+    // getItems() above stays the unfiltered full list.
+    const selected = this.getSelectedItem();
     const footerLines: Line[] = [];
     if (selected) {
       footerLines.push(
@@ -449,9 +463,11 @@ Valid `state` values: `'good'` | `'warn'` | `'bad'` | `'idle'` | `'loading'`.
 
 Renders the filter input row from `this.filterLabel` / `this.filterActive` / `this.filterQuery`.
 `renderList()` calls this automatically and prepends it to the header when
-`this.filterEnabled = true`. You normally never call it directly. Panels that don't extend
-`ScrollableListPanel` (`PanelListPanel`, `DocsPanel`, `FileExplorerPanel`) build the equivalent
-line by hand; copy their `_buildFilterLine` private helper rather than reinventing the format.
+`this.filterEnabled = true`. You normally never call it directly. Every current filterable panel
+(`skills-panel.ts`, `plugins-panel.ts`) extends `ScrollableListPanel` and gets this for free; if a
+future bespoke `BasePanel` subclass needs the same modal filter without extending
+`ScrollableListPanel`, mirror `_handleFilterKey`/`buildFilterLine` from `scrollable-list-panel.ts`
+rather than inventing a new filter format.
 
 - Active: `[Filter] query_`, bracketed, literal trailing `_` cursor.
 - Inactive: `Filter: query`, dim, no cursor.
@@ -580,55 +596,65 @@ public handleInput(key: string): boolean {
 
 **Auto-clear error contract:** `ScrollableListPanel.handleInput()` calls `this.clearError()` at the top of every invocation. If you override `handleInput()` without calling `super.handleInput()`, call `this.clearError()` manually at the top of your handler to maintain this contract.
 
-**Panels that don't extend `ScrollableListPanel`:** if you need the same modal filter contract
-in a `BasePanel` subclass, mirror the private `_handleFilterKey(key): boolean | null` helper in
-`PanelListPanel` / `DocsPanel` / `FileExplorerPanel`. It returns `true`/`false` when the key is
-consumed/ignored in filter context, or `null` to fall through to your panel's own navigation and
-action keys.
+**Panels that don't extend `ScrollableListPanel`:** every panel that currently offers the modal
+filter extends `ScrollableListPanel` and inherits it for free. If a future `BasePanel` subclass
+needs the same contract without extending `ScrollableListPanel`, mirror the private
+`_handleFilterKey(key): boolean | null` helper in `scrollable-list-panel.ts`. It returns
+`true`/`false` when the key is consumed/ignored in filter context, or `null` to fall through to
+your panel's own navigation and action keys.
 
 ### Action-callback plumbing pattern
 
 Panels get real services (not just read-only snapshots) through `ResolvedBuiltinPanelDeps`
-(`src/panels/builtin/shared.ts`). Bootstrap wires the already-constructed runtime singletons,
-`opsApi`, `planRuntime`, `watcherRegistry`, `runtimeStore`, `approvalBroker`, `sessionBroker`,
-`automationManager`, `openAgentDetail`, `openPanel`, etc., onto this single deps object, and
-each `registerXPanels(manager, deps)` factory forwards exactly the slice a panel needs into its
-constructor (see `CockpitPanel`'s `openAgentDetail` forwarding in
-`src/panels/builtin/operations.ts` for the established shape).
+(`src/panels/builtin/shared.ts`), a large optional-field bag that includes `configManager`,
+`sessionManager`, `automationManager`, `opsApi`, `planRuntime`, `watcherRegistry`, `runtimeStore`,
+`approvalBroker`, `sessionBroker`, `openPanel`, and many more. It is assembled once at bootstrap
+and passed into every `registerXPanels(manager, deps)` factory under `src/panels/builtin/`.
 
-**Rule: no signpost where an action is possible.** If a real service reachable from `deps` can
-perform the action, bind a key to it directly. Never render a panel line like
-`Run: /automation run <id>` when `deps.opsApi`/`deps.automationManager` (or the panel-specific
-manager method) is already available in the factory closure.
+Most of the surfaces that used to consume the operator-facing fields (`opsApi`, `planRuntime`,
+`watcherRegistry`, `runtimeStore`, `approvalBroker`, `sessionBroker`, `automationManager`) were
+folded into the Fleet panel, so none of the current registrars forward those particular fields
+into a panel constructor. Treat their presence on the type as "available if a future panel needs
+them," not as evidence of an established forwarding pattern. Check the current contents of
+`src/panels/builtin/operations.ts`, `agent.ts`, `development.ts`, `knowledge.ts`, and `session.ts`
+before assuming a field is wired anywhere.
+
+**Rule: no signpost where an action is possible.** If a real service reachable from `deps`, or
+bound directly into your panel's constructor, can perform the action, bind a key to it. Never
+render a panel line like `Run: /automation run <id>` when the same effect is one constructor
+argument away.
 
 Two dispatch paths cover nearly every case:
 
-1. **Direct service call.** Call the bound service method straight from `handleInput()`:
+1. **Direct service call, bound in the constructor.** The Fleet panel is the live example. Its
+   factory in `registerOperationsPanels` (`src/panels/builtin/operations.ts`) builds an
+   `actions` object straight from the shared `fleetReadModel` (`interrupt`, `resume`, `kill`,
+   `steer`) and passes it into `new FleetPanel(fleetReadModel, actions, ...)`. Inside the panel,
+   `handleInput()` calls those bound callbacks directly instead of reaching for a generic deps
+   field:
 
    ```ts
    public handleInput(key: string): boolean {
-     if (key === 'c') { this.deps.opsApi?.cancel(this.selectedId); return true; }
+     if (key === 'x') { this.actions.kill(selected.node.id, { cascade: true }); return true; }
      return super.handleInput(key);
    }
    ```
 
 2. **`handlePanelIntegrationAction(key, ctx)`.** For cross-panel navigation or dispatching a
    command through the shared command pipeline. Implement this optional `Panel` hook
-   (`src/panels/types.ts`); the router in `src/input/panel-integration-actions.ts` calls it
-   BEFORE its own `instanceof` fallback chain, so new panels never need an `instanceof` addition
-   there:
+   (`src/panels/types.ts`); the router in `src/input/panel-integration-actions.ts` calls it and,
+   if it returns `true`, stops there. There is no further `instanceof` routing to fall back on;
+   that chain was removed once every panel it targeted had migrated onto this hook or been
+   retired, so a new panel needs nothing added to the router itself. `plugins-panel.ts` is the
+   current live example:
 
    ```ts
    public handlePanelIntegrationAction(key: string, ctx: PanelIntegrationContext): boolean {
-     if (key === 'enter') {
-       ctx.panelManager.open('agent-inspector'); // direct panel jump — never print "/panel open …"
-       return true;
-     }
-     if (key === 'r' && ctx.executeCommand) {
-       void ctx.executeCommand('automation', ['run', this.selectedJobId]);
-       return true;
-     }
-     return false;
+     if (key !== 'm' || !ctx.executeCommand) return false;
+     const plugin = this.getSelectedItem();
+     if (!plugin?.quarantined) return false;
+     void ctx.executeCommand('recall', ['capture', 'plugin', plugin.name]).catch(() => {});
+     return true;
    }
    ```
 
@@ -641,46 +667,56 @@ Two dispatch paths cover nearly every case:
 
 ## Contract test registration
 
-Every new panel must be added to `src/test/panels/migrated-panels-contract.test.ts`.
+Every new panel needs its own module under `src/test/panels/contract/<panel-id>.contract.ts`.
+`src/test/panels/migrated-panels-contract.test.ts` is a thin runner. It imports every contract
+module (which registers that module's `describe`/`test` blocks with `bun:test` as a side effect
+of the import) and asserts that the number of files under `contract/` matches an explicit
+`CONTRACT_MODULE_COUNT` constant, so a contract module left out of the import list fails the
+parity check instead of silently losing coverage.
 
-The test parameterizes over a `PANELS` array of `PanelEntry` objects:
+The shared runner and its `PanelEntry` type live in `src/test/panels/contract/_shared.ts`:
 
 ```ts
-type PanelEntry = {
+export type PanelEntry = {
   readonly label: string;
   readonly factory: () => BasePanel;
   readonly hasSelectionGutter?: boolean;
+  readonly skipHandleInput?: boolean;
 };
+
+export function runBasePanelContractSuite(entry: PanelEntry): void { /* ... */ }
 ```
 
-For each entry, the test suite verifies:
+For each entry, `runBasePanelContractSuite` verifies:
 
-1. `render(W, H)` returns exactly `H` lines.
+1. `render(W, H)` returns exactly `H` lines (`W` and `H` are exported constants, `80` and `24`).
 2. Every line in the result has exactly `W` cells.
 3. `needsRender` starts `true`.
-4. `handleInput()` with navigation keys returns a `boolean`.
-5. `loadingState` starts `'idle'`.
+4. `loadingState` starts `'idle'`.
+5. (Unless `skipHandleInput: true`) `handleInput()` with `'ArrowDown'`, `'ArrowUp'`, `'j'`, `'k'` each returns a `boolean`.
 6. (If `hasSelectionGutter: true`) `showSelectionGutter` is `true`.
 
-**Minimum scaffolding for a simple panel:**
+**Minimum scaffolding for a simple panel**, following `src/test/panels/contract/skills-panel.contract.ts`:
 
 ```ts
-// Add to the PANELS array:
-{
+// src/test/panels/contract/my-panel.contract.ts
+import { MyPanel } from '../../../panels/my-panel.ts';
+import { runBasePanelContractSuite } from './_shared.ts';
+
+runBasePanelContractSuite({
   label: 'MyPanel',
   factory: () => new MyPanel({ someService: EMPTY_SOME_SERVICE }),
   hasSelectionGutter: true,
-},
+});
 ```
 
-For panels with complex dependencies, define a minimal mock constant above the `PANELS` array following the pattern already in the file (shape-only mocks using `as unknown as ImportedType`):
+Then add `import './contract/my-panel.contract.ts';` to `migrated-panels-contract.test.ts` and
+bump `CONTRACT_MODULE_COUNT` by one.
 
-```ts
-const EMPTY_SOME_SERVICE = {
-  list: () => [],
-  subscribe: (_cb: () => void) => () => {},
-} as unknown as import('../../runtime/my-service.ts').MyService;
-```
+For panels with complex dependencies, `_shared.ts` already exports a set of `EMPTY_*` shape-only
+mocks (`EMPTY_CONFIG_MANAGER`, `EMPTY_PLUGIN_MANAGER`, `EMPTY_KNOWLEDGE_API`, and others) built
+with `as unknown as ImportedType`; reuse one if it fits, or add a new one there following the
+same pattern rather than hand-rolling a mock inside your panel's own contract module.
 
 ---
 
@@ -693,9 +729,10 @@ const EMPTY_SOME_SERVICE = {
 | Calling `render()` directly from `handleInput()` | Never. Set `this.needsRender = true` (or call `this.markDirty()`) and let the compositor schedule the render. |
 | Not wrapping expensive renders with `trackedRender` | Panels that read large data structures on every render will be throttled aggressively without health instrumentation. |
 | Subscribing to registry events in the constructor | Subscribe in `onActivate()` and unsubscribe in `onDeactivate()` to avoid zombie listeners. |
-| Reading `getItems()` where you want the filtered list | `getItems()` is always the unfiltered full list. Read `getVisibleItems()` for the filtered/displayed set (used by `renderList()`, navigation, and any "selected item" lookup for an action key). |
-| Forgetting to add the panel to the contract test | All panels in `src/panels/` must have a corresponding entry in `migrated-panels-contract.test.ts`. |
-| Rendering an action as printed text (e.g. `Run: /automation run <id>`) instead of binding a key to the real service already in `deps` | Bind the key directly, or implement `handlePanelIntegrationAction` to dispatch via `ctx.executeCommand` / `ctx.panelManager.open`. See "Action-callback plumbing pattern" under Input handling. |
+| Reading `getItems()` where you want the filtered list | `getItems()` is always the unfiltered full list. Read `getVisibleItems()` for the filtered/displayed set (used by `renderList()` and navigation). |
+| Indexing an item array with the raw `[this.selectedIndex]` token | Call `this.getSelectedItem()` instead. An architecture gate (`scripts/selected-index-rule.ts`) bans the raw token in every `src/panels/**/*.ts` file except the two base classes that own the list cursor, because it silently reads the wrong row once a filter is active. |
+| Forgetting to add the panel to the contract test suite | Add a new module under `src/test/panels/contract/<panel-id>.contract.ts` calling `runBasePanelContractSuite(...)`, import it from `migrated-panels-contract.test.ts`, and bump `CONTRACT_MODULE_COUNT`. |
+| Rendering an action as printed text (e.g. `Run: /automation run <id>`) instead of binding a key to a real service | Bind the key directly to a constructor-injected callback, or implement `handlePanelIntegrationAction` to dispatch via `ctx.executeCommand` / `ctx.panelManager.open`. See "Action-callback plumbing pattern" under Input handling. |
 
 ---
 
@@ -704,10 +741,11 @@ const EMPTY_SOME_SERVICE = {
 - `src/panels/base-panel.ts`: `BasePanel` source with inline JSDoc for all lifecycle and render helpers.
 - `src/panels/scrollable-list-panel.ts`: `ScrollableListPanel<T>` source, including the opt-in modal filter (`filterEnabled`, `_handleFilterKey`, `buildFilterLine`).
 - `src/panels/polish.ts`: all rendering utility functions and `PanelPalette` type definition.
-- `src/panels/skills-panel.ts`: canonical `ScrollableListPanel` + opt-in filter implementation used throughout this guide.
-- `src/panels/memory-panel.ts`: a `ScrollableListPanel` example where the filter is only enabled in one of two view modes (`filterEnabled` toggled per mode).
-- `src/panels/panel-list-panel.ts`, `src/panels/docs-panel.ts`, `src/panels/file-explorer-panel.ts`: panels that mirror the same modal filter contract without extending `ScrollableListPanel` (each has its own private `_handleFilterKey` / `_buildFilterLine`).
+- `src/panels/skills-panel.ts`: canonical `ScrollableListPanel` + opt-in filter implementation used throughout this guide (retained for its shared `discoverSkills`/`SkillRecord` exports even though it is no longer a registered panel; see the panel-purge note above).
+- `src/panels/plugins-panel.ts`: a still-registered `ScrollableListPanel` with the opt-in filter, and the current live example of `handlePanelIntegrationAction`.
+- `src/panels/fleet-panel.ts` + `src/panels/builtin/operations.ts`: the current example of constructor-injected action callbacks (`interrupt`/`resume`/`kill`/`steer`) driving `handleInput()` directly, see "Action-callback plumbing pattern."
 - `src/panels/confirm-state.ts`: `ConfirmState`, `handleConfirmInput`, `renderConfirmLines`.
-- `src/panels/search-focus.ts`: `isPanelSearchBackspace`, `isPanelSearchPrintable`, plus `isPanelSearchCancel`/`isPanelSearchCommit`/`getPanelSearchFocusTransition` (retained for panels outside the filter convergence, e.g. `knowledge-graph-panel.ts`, `session-browser-panel.ts`, `git-panel.ts`).
+- `src/panels/search-focus.ts`: `isPanelSearchBackspace`, `isPanelSearchPrintable`, plus `isPanelSearchCancel`/`isPanelSearchCommit`/`getPanelSearchFocusTransition` (retained for panels outside the filter convergence; `git-panel.ts` is the current consumer).
 - `src/panels/builtin-panels.ts`: how built-in panels are grouped into categories and registered with the `PanelManager`.
-- `src/test/panels/migrated-panels-contract.test.ts`: contract test suite; add a `PanelEntry` here for every new panel.
+- `src/test/panels/contract/_shared.ts`: the `PanelEntry` type, `runBasePanelContractSuite`, and the shared `EMPTY_*` mocks; add a new `contract/<panel-id>.contract.ts` module here for every new panel.
+- `scripts/selected-index-rule.ts`: the architecture gate banning raw `[this.selectedIndex]` reads outside the two base list classes; read the selected row through `getSelectedItem()` instead.

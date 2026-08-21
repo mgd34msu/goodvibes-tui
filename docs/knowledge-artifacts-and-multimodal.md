@@ -2,55 +2,32 @@
 
 ## Context layers
 
-GoodVibes uses three distinct context layers:
-
-- session memory for lightweight current-session notes
-- durable reviewed memory in SQLite for reuse, review, export, and task-time injection
-- a structured knowledge store with sources, nodes, edges, issues, extractions, usage records, consolidation candidates and reports, schedules, GraphQL, and projections
+GoodVibes uses three distinct context layers. Session memory holds lightweight notes scoped to
+the current session only. Durable memory is reviewed and stored in SQLite so it survives across
+sessions, and it supports reuse, review, export, and injection into future tasks. A structured
+knowledge store sits alongside both, holding sources, nodes, edges, issues, extractions, usage
+records, consolidation candidates and reports, schedules, a GraphQL surface, and projections.
 
 These layers work together rather than collapsing everything into transcript history.
 
 ## Durable memory
 
-Durable memory records support:
+Durable memory records carry review state, a confidence score, and provenance, and they can link
+to other records. They support scoped reuse across session, project, and team contexts, and move
+through queue, review, and promote workflows on their way to being treated as reviewed.
 
-- review state
-- confidence
-- provenance
-- links between records
-- scoped reuse across session, project, and team contexts
-- queue/review/promote workflows
-
-Representative record classes include:
-
-- decisions
-- constraints
-- incidents
-- patterns
-- facts
-- risks
-- runbooks
-- architecture
-- ownership
+Representative record classes include decisions, constraints, incidents, patterns, facts, risks,
+runbooks, architecture, and ownership.
 
 ## Structured knowledge
 
-The knowledge runtime supports:
-
-- URL ingest
-- bookmark import
-- browser-local history/bookmark ingest, only after explicit user consent
-- URL-list import
-- artifact ingest
-- connector-based ingest
-- search
-- packet building
-- linting
-- reindex
-- projection rendering/materialization
-- scheduled jobs
-- consolidation candidates and reports
-- source-backed semantic ask answers with returned sources, facts, linked objects, gaps, confidence, and synthesized state
+The knowledge runtime supports ingest from several sources, including single URLs, bookmark
+imports, browser-local history and bookmark profiles (only after explicit user consent), URL
+lists, existing artifacts, and connector-based sources. Once content is ingested, it can be searched,
+assembled into packets, linted, reindexed, and rendered or materialized as projections, and any
+of that work can be saved as a schedule. The store also tracks consolidation candidates and
+reports, and it answers semantic questions ("ask") with source-backed responses that return
+sources, facts, linked objects, gaps, a confidence score, and whether the answer was synthesized.
 
 The system is designed as a reviewed, self-improving knowledge store for future task context.
 
@@ -115,46 +92,19 @@ Review actions update the issue state through the SDK. `accept`, `reject`, `reso
 
 ## Connectors and extractors
 
-Connectors provide the front door for ingest ideas such as:
+Connectors are the front door for ingest, covering single URLs, bookmark exports, browser-local
+history and bookmark profiles, URL lists, artifacts, and future source-specific connectors as
+they are added.
 
-- single URLs
-- bookmark exports
-- browser-local history and bookmark profiles
-- URL lists
-- artifacts
-- future source-specific connectors
-
-Built-in extractors cover:
-
-- HTML
-- Readability-backed article extraction for suitable HTML pages
-- text
-- markdown
-- JSON
-- CSV / TSV
-- XML
-- YAML
-- PDF text
-- DOCX
-- XLSX
-- PPTX
+Built-in extractors cover HTML (including Readability-backed article extraction for suitable
+pages), plain text, markdown, JSON, CSV and TSV, XML, YAML, PDF text, DOCX, XLSX, and PPTX.
 
 ## Embeddings and retrieval
 
-The knowledge/memory runtime uses sqlite-vec with a pluggable embedding registry. Current embedding providers include:
-
-- local hashed embeddings
-- OpenAI
-- OpenAI-compatible / LM Studio
-- Gemini
-- Mistral
-- Ollama
-
-The runtime uses these for:
-
-- semantic recall
-- knowledge packet selection
-- review and search support
+The knowledge/memory runtime uses sqlite-vec with a pluggable embedding registry. Current
+embedding providers include local hashed embeddings, OpenAI, OpenAI-compatible and LM Studio
+endpoints, Gemini, Mistral, and Ollama. Whichever provider is configured is used for semantic
+recall, knowledge packet selection, and review and search support.
 
 ### The sqlite-vec native addon
 
@@ -182,40 +132,17 @@ packaging defect. `/recall vector status` names the reason plainly. Linux
 
 ## GraphQL and projections
 
-The knowledge domain exposes:
-
-- GraphQL schema and execution surfaces
-- projection targets
-- overview pages
-- rollups
-- backlinks
-- source-health views
-- exportable markdown/wiki-style materializations
+The knowledge domain exposes a GraphQL schema and execution surface, alongside projection
+targets such as overview pages, rollups, backlinks, source-health views, and exportable markdown
+or wiki-style materializations.
 
 The canonical store is the structured knowledge database. GraphQL and projections are query and presentation surfaces on top of it.
 
 ## Artifacts
 
-Artifacts are first-class runtime objects. The artifact store handles:
-
-- markdown
-- text
-- JSON
-- CSV
-- spreadsheets
-- PDFs
-- images
-- audio
-- video
-- generated outputs
-
-Artifacts can be:
-
-- ingested
-- stored
-- retrieved
-- delivered through channels
-- reused by knowledge and multimodal pipelines
+Artifacts are first-class runtime objects. The artifact store handles markdown, text, JSON, CSV,
+spreadsheets, PDFs, images, audio, video, and generated outputs. Artifacts can be ingested,
+stored, retrieved, delivered through channels, and reused by knowledge and multimodal pipelines.
 
 Large file uploads should use daemon upload bodies rather than JSON inline data:
 
@@ -228,38 +155,22 @@ The host-side artifact storage cap is configured with `storage.artifacts.maxByte
 
 ## Multimodal
 
-The unified multimodal runtime handles:
-
-- image analysis
-- audio analysis through STT-backed paths
-- video analysis through keyframe/transcript fusion
-- document analysis through extractors and packet building
-
-It also supports:
-
-- packet building
-- optional write-back into structured knowledge
-- provider routing across media and voice subsystems
+The unified multimodal runtime handles image analysis, audio analysis through speech-to-text
+(STT) backed paths, video analysis through keyframe and transcript fusion, and document analysis
+through the extractors and packet building described above. It also supports packet building on
+its own, optional write-back of results into structured knowledge, and provider routing across
+the media and voice subsystems.
 
 ## Jobs and schedules
 
-Knowledge jobs include:
-
-- `lint`
-- `reindex`
-- `refresh-stale`
-- `refresh-bookmarks`
-- `rebuild-projections`
-- `semantic-self-improvement`
-- `light-consolidation`
-- `deep-consolidation`
-
-These can be run directly or saved as schedules through the runtime.
+Knowledge jobs include `lint`, `reindex`, `refresh-stale`, `refresh-bookmarks`,
+`rebuild-projections`, `semantic-self-improvement`, `light-consolidation`, and
+`deep-consolidation`. These can be run directly or saved as schedules through the runtime.
 
 ## High-signal commands
 
-- `/recall add|search|queue|review|explain|promote|capture`
-- `/knowledge status|ask|ingest-url|import-bookmarks|import-urls|search|get|queue|review-issue|candidates|reports|schedules|lint|packet|explain|reindex|consolidate`
+- `/recall add|search|vector|queue|review|explain|injections|promote|capture` (`/recall` has more subcommands than this; these are the ones most tasks reach for)
+- `/knowledge status|ask|ingest-url|import-bookmarks|import-urls|list|search|get|queue|review-issue|candidates|reports|schedules|lint|packet|explain|reindex|consolidate`
 - `/memory-sync`
 - `/handoff`
 - `/session-memory`

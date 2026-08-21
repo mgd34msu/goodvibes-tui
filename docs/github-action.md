@@ -13,18 +13,23 @@ one per consumer.
 
 ## Usage
 
+Every release is tagged with its exact version (`v2.0.9`, and so on); there is
+no moving major-version tag to pin against. Pin the `uses:` line itself to the
+exact release tag you want, the same way the `version` input below pins the
+binary that tag's release step downloads.
+
 Install and print the version:
 
 ```yaml
-- uses: mgd34msu/goodvibes-tui@v1
+- uses: mgd34msu/goodvibes-tui@v2.0.9
   with:
-    version: v1.13.1   # or "latest"
+    version: v2.0.9   # or "latest"
 ```
 
 Run a health check:
 
 ```yaml
-- uses: mgd34msu/goodvibes-tui@v1
+- uses: mgd34msu/goodvibes-tui@v2.0.9
   with:
     version: latest
     command: doctor
@@ -34,7 +39,7 @@ Run a health check:
 Run a non-interactive prompt (needs a provider credential in the job env):
 
 ```yaml
-- uses: mgd34msu/goodvibes-tui@v1
+- uses: mgd34msu/goodvibes-tui@v2.0.9
   with:
     version: latest
     prompt: "summarize the changes in this workspace"
@@ -48,7 +53,7 @@ Run a non-interactive prompt (needs a provider credential in the job env):
 
 | input | default | description |
 | --- | --- | --- |
-| `version` | `latest` | Release tag (`v1.13.1`) or `latest`. |
+| `version` | `latest` | Release tag (`v2.0.9`) or `latest`. |
 | `prompt` | `""` | Non-interactive prompt for `goodvibes run`. Needs a provider credential. |
 | `command` | `""` | A subcommand to run instead (e.g. `doctor`, `status`). Ignored when `prompt` is set. |
 | `args` | `""` | Extra arguments appended after the command. |
@@ -67,8 +72,12 @@ Run a non-interactive prompt (needs a provider credential in the job env):
 
 - A non-interactive one-shot mode exists (`goodvibes run --non-interactive`),
   but it requires a provider credential (e.g. `OPENAI_API_KEY`). The repo's own
-  self-test job (`.github/workflows/ci.yml` → `action-self-test`) therefore
-  exercises install + `--version` + `doctor`; a real `run` turn is a consumer
-  step that supplies a credential.
+  self-test job (`.github/workflows/action-self-test.yml`) therefore exercises
+  install + `--version` + `doctor`; a real `run` turn is a consumer step that
+  supplies a credential. That self-test deliberately lives in its own workflow
+  file rather than as a job inside `ci.yml`. It installs the previous
+  published release to exercise the action wrapper, which says nothing about
+  whether the current commit is releasable, and any job inside `ci.yml` is
+  release-gating whether or not the release path lists it as a dependency.
 - Publishing this action to the GitHub Marketplace is the repository owner's
   step and is out of scope here.

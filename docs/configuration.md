@@ -13,11 +13,11 @@ cross-app state; TUI settings do not live there.
 
 Most settings live under the schema owned by the platform config system and
 are editable live from the fullscreen `/config` workspace or `/settings`. See
-[Key settings](#key-settings) below for the full table. This page also
-documents the additional TUI-owned namespaces you can add by hand to your
-settings file (further down): these are read directly from the settings file,
-and a missing or malformed value falls back to the built-in default rather
-than erroring.
+[Key settings](#key-settings) below for a curated reference table of the most
+commonly used ones. This page also documents the additional TUI-owned
+namespaces you can add by hand to your settings file (further down). Those are
+read directly from the settings file, and a missing or malformed value falls
+back to the built-in default rather than erroring.
 
 Related storage paths:
 
@@ -27,7 +27,7 @@ Related storage paths:
 - custom provider JSON: `~/.goodvibes/tui/providers/*.json`
 - keybindings: `~/.goodvibes/tui/keybindings.json`
 - REPL history: `.goodvibes/tui/repl-history.json`
-- schedules: `.goodvibes/tui/schedules.json`
+- scheduled/automation jobs: `.goodvibes/tui/automation-jobs.json`
 
 ## Key settings
 
@@ -41,7 +41,8 @@ for reference.
 | `display.stream` | `true` | Stream responses token by token |
 | `display.lineNumbers` | `off` | Line-number mode: `off`, `code`, or `all` |
 | `display.collapseThreshold` | `30` | Lines before a block auto-collapses |
-| `display.theme` | `vaporwave` | Color theme |
+| `display.theme` | `vaporwave` | Color palette name |
+| `display.themeMode` | `auto` | Light/dark appearance: `auto` probes the terminal background once at startup, `dark`/`light` force a fixed appearance. Independent of `display.theme` |
 | `display.showThinking` | `false` | Show model thinking traces |
 | `display.showTokenSpeed` | `false` | Show tokens/sec in status bar |
 | `provider.model` | `openrouter:openrouter/free` | Active model ID, provider-qualified as `<provider>:<model>` |
@@ -85,15 +86,15 @@ for reference.
 
 `permissions.mode` takes five values:
 
-- **`prompt`** (default, shown as `normal`): auto-approve reads, ask before write, edit, exec, fetch, agent, workflow, and MCP calls
-- **`accept-edits`**: file write and edit tools auto-approve; exec and the other risky classes still ask
-- **`plan`**: read-only tools are allowed and every mutating or exec tool is refused with a structured plan-mode denial
-- **`allow-all`** (shown as `auto`): never prompt, allow everything
-- **`custom`**: per-tool overrides using `permissions.tools.<name>` keys
+- **`prompt`** (default, shown as `normal`) auto-approves reads and asks before write, edit, exec, fetch, agent, workflow, and MCP calls
+- **`accept-edits`** auto-approves file write and edit tools; exec and the other risky classes still ask
+- **`plan`** allows read-only tools and refuses every mutating or exec tool with a structured plan-mode denial
+- **`allow-all`** (shown as `auto`) never prompts and allows everything
+- **`custom`** applies per-tool overrides using `permissions.tools.<name>` keys
 
-Per-tool values: `allow`, `prompt`, `deny`.
+Per-tool values are `allow`, `prompt`, or `deny`.
 
-`Shift+Tab` cycles the four session postures in order: `normal` → `accept-edits`
+`Shift+Tab` cycles the four session postures in this order, `normal` → `accept-edits`
 → `plan` → `auto` → `normal`. `/plan` toggles plan mode directly. `custom`
 is a per-rule policy rather than a session posture, so it is left out of the
 cycle; cycling from `custom` starts again at `normal`.
@@ -158,7 +159,7 @@ Example (`.goodvibes/tui/settings.json`):
 }
 ```
 
-> Compatibility note: these root-guard keys take effect only with a platform
+> **Compatibility note.** These root-guard keys take effect only with a platform
 > build whose checkpoint manager exposes them. On an older pinned build the
 > keys are read and validated but ignored by the manager until it is upgraded.
 
@@ -198,15 +199,25 @@ Example (`.goodvibes/tui/settings.json`):
 
 ## `behavior.*`: TUI-local notification keys
 
-These two keys are read directly by the TUI's notifier modules rather than by
+These keys are read directly by the TUI's notifier modules rather than by
 the platform schema, so they do not appear in the Key Settings table above.
 They are still editable from `/config behavior`, which injects them into the
 behavior group alongside the schema-owned keys.
 
+`behavior.notifyAfterSeconds` gates the long-running-turn notification, and
+four separate boolean keys gate point-in-time alert classes covering a budget
+breach, an agent failure, a WRFC chain failure, and a tool call blocked on
+your approval. `behavior.notifyOnlyWhenUnfocused` is the master gate over all
+of them.
+
 | Key | Type | Default | Meaning |
 | --- | --- | --- | --- |
 | `behavior.notifyAfterSeconds` | number | `60` | Seconds a turn must run before a push notification fires; `0` turns it off. Delivers to the desktop (`notify-send` / `osascript`) and to any configured ntfy/webhook URLs. Notification text is metadata only: task kind, elapsed time, ok/fail, session id. Never conversation content. |
-| `behavior.notifyOnlyWhenUnfocused` | boolean | `true` | Master gate over every alert class: alerts fire only when the terminal is unfocused, or when focus state was never observed. Set `false` to fire regardless of focus. |
+| `behavior.notifyOnBudgetBreach` | boolean | `true` | Alert when session cost crosses the configured budget (set via the Cost panel's `b` key). |
+| `behavior.notifyOnAgentFailure` | boolean | `true` | Alert when a delegated or background agent fails. |
+| `behavior.notifyOnChainFailure` | boolean | `true` | Alert when a WRFC review chain fails. |
+| `behavior.notifyOnApprovalPending` | boolean | `true` | Alert the moment a tool call becomes a real, user-blocking permission prompt. Message text is tool name and permission category only, never the call's arguments. |
+| `behavior.notifyOnlyWhenUnfocused` | boolean | `true` | Master gate over the four alert-class keys above and over `notifyAfterSeconds`: alerts fire only when the terminal is unfocused, or when focus state was never observed. Set `false` to fire regardless of focus. |
 
 ## `session.*`: session behavior
 
@@ -227,7 +238,7 @@ every TUI launch and, when one exists, install it through the same
 checksum-verified download/verify/swap path as `/update apply`, then restart
 onto the new binary with a receipt line naming both versions. When the check
 cannot complete quickly (offline, slow network) the current version starts
-with one line: `update check skipped: offline`. Every swap keeps the outgoing
+with a single line reading `update check skipped: offline`. Every swap keeps the outgoing
 file at `<path>.previous`; `/update rollback` restores it in one command.
 Package-manager and from-source runs never self-update at launch.
 
@@ -235,6 +246,7 @@ Package-manager and from-source runs never self-update at launch.
 | --- | --- | --- | --- |
 | `update.autoUpdateAtLaunch` | boolean | `true` | Check for and install a newer release at TUI launch. Set `false` to only update when you run `/update apply` yourself. |
 | `update.launchCheckTimeoutMs` | number | `2500` | Budget for the launch-time version check. Clamped to `[250, 30000]`. A check that outlives it is skipped and the current version starts. |
+| `update.applyTimeoutMs` | number | `45000` | Budget for the launch-time download, verify, and swap. Clamped to `[5000, 300000]`. An apply that outlives it is deferred to the next launch. |
 
 ```json
 {

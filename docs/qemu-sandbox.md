@@ -11,7 +11,11 @@ QEMU is one option within a broader sandbox control plane that governs both eval
 - host posture on Windows: `native-basic` or `require-wsl`
 - VM backend: `local` or `qemu`
 
-The rest of this document covers the `qemu` VM backend specifically: bootstrapping the guest, generated files, guest runtime packages, and troubleshooting.
+The rest of this document covers the `qemu` VM backend specifically, bootstrapping the guest, generated files, guest runtime packages, and troubleshooting.
+
+The QEMU backend governs REPL and MCP tool isolation only. A separate mechanism, the per-command exec sandbox, governs the `exec` tool's own OS-level boundary and is not part of the QEMU setup at all. On Linux, when `sandbox.enabled` is true and a feature flag is on, shell commands the `exec` tool would otherwise ask permission for instead run inside a bubblewrap (`bwrap`) boundary. The workspace stays writable, the rest of the filesystem is read-only, `/tmp` is isolated, and network access is off by default.
+
+A command whose base name appears in `sandbox.egressAllowlist` (or `*` for all commands) gets its network access back as a named, visible escalation; everything else runs fully offline inside the boundary. This exec sandbox has no VM backend choice and is unavailable on non-Linux hosts; it never claims a boundary it cannot deliver, and it composes with, but does not require, the QEMU setup described below.
 
 ## When to use it
 
@@ -60,7 +64,7 @@ From inside a project:
 
 That command generates the setup bundle in `~/.goodvibes/tui/sandbox`, applies the QEMU settings, builds the qcow2 image, launches the guest, and provisions the REPL/MCP runtime set listed below. First boot can take several minutes because cloud-init and package installation run inside the guest.
 
-The bootstrap runs as a background TUI process. The prompt should clear immediately, progress should be visible in the background process surface, and the TUI should remain usable while the image build and guest provisioning continue. If QEMU exits before SSH becomes available, the generated wrapper fails fast and includes the tail of the QEMU log so port conflicts and startup failures are visible instead of hanging until the SSH timeout.
+The command runs its steps in order and waits for each to finish. It prints a progress line as the image build starts, prints another as guest provisioning starts, then prints a final summary once both are done. The image build step is allowed up to 30 minutes and guest provisioning up to 45 minutes before the command gives up and reports a timeout, since first boot can take several minutes even on a fast host. If QEMU exits before SSH becomes available, the generated wrapper fails fast and includes the tail of the QEMU log so port conflicts and startup failures are visible instead of hanging until the SSH timeout.
 
 If you only want to generate/review the bundle without building the image or provisioning the guest:
 
@@ -97,7 +101,12 @@ The setup bundle creates:
 ~/.goodvibes/tui/sandbox/logs/
 ~/.goodvibes/tui/sandbox/run/
 ~/.goodvibes/tui/sandbox/setup-manifest.json
+~/.goodvibes/tui/sandbox/projection-policy.json
+~/.goodvibes/tui/sandbox/ssh-config
+~/.goodvibes/tui/sandbox/README.txt
 ```
+
+`projection-policy.json` records the workspace projection (currently just the guest workspace path, `/workspace`). `ssh-config` is a ready-to-use OpenSSH client stanza (`Host goodvibes-qemu`) pointing at the generated key and port, so `ssh -F ~/.goodvibes/tui/sandbox/ssh-config goodvibes-qemu` reaches the guest directly for manual debugging outside the wrapper. `README.txt` is a copy of the same first-run instructions summarized in this document.
 
 `create-image.sh` is generated as a bootstrap implementation detail. Normal setup should use `/sandbox qemu bootstrap` so image creation, settings application, guest launch, and runtime provisioning stay in one recoverable TUI-managed flow.
 
@@ -197,7 +206,7 @@ GOODVIBES_QEMU_INSTALL_UV=0
 GOODVIBES_QEMU_INSTALL_DUCKDB=0
 ```
 
-The bootstrap runs guest provisioning automatically before the sandbox is considered ready. If a runtime is missing, rerun `/sandbox qemu bootstrap` and inspect the background-process output plus `~/.goodvibes/tui/sandbox/logs/`.
+The bootstrap runs guest provisioning automatically before the sandbox is considered ready. If a runtime is missing, rerun `/sandbox qemu bootstrap` and inspect its printed output plus `~/.goodvibes/tui/sandbox/logs/`.
 
 ## Troubleshooting
 

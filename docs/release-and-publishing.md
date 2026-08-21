@@ -25,8 +25,11 @@ what a reader sees on the release page.
   older than `1.28.0`, the release where the daemon became its own product,
   and reports it as an unadopted, incompatible service rather than adopting
   it. The floor is declared as `TUI_DAEMON_BUILD_FLOOR` in
-  `src/runtime/client/build-floors.ts`; see `CHANGELOG.md`'s `[Unreleased]`
-  entry for the full account of what a user sees and the remedy.
+  `src/runtime/client/build-floors.ts`; see the `[2.0.0]` entry in
+  `CHANGELOG.md` for the full account of what a user sees and the remedy.
+  It shipped as a bold-prefixed `### Changes` entry under `[Unreleased]`
+  before that release cut it into its own version section, which is the
+  path a new breaking-change entry follows today.
 
 ## Local release checks
 
@@ -57,6 +60,17 @@ Or preview it without writing:
 bun run release:dry
 ```
 
+`bun run release` bumps the version, prepends the CHANGELOG section, commits,
+and creates an annotated tag locally; it does not push. Pushing the commit
+and tag is what starts the release, because `release.yml` triggers on tag
+pushes matching `v*`.
+
+A version bump can also reach `main` without ever being tagged by hand. In
+that case CI's `auto-release` job in `.github/workflows/ci.yml` (a zero-touch
+release step that runs only after every other CI gate on that push is green)
+tags `package.json`'s current version and dispatches `release.yml` in release
+mode itself, so the release still ships without anyone pushing a tag.
+
 ## GitHub CD
 
 The repo includes:
@@ -64,15 +78,26 @@ The repo includes:
 - `.github/workflows/ci.yml`
 - `.github/workflows/release.yml`
 
+`release.yml` is a by-reference release. Instead of re-running the CI gates,
+its `release-verify` job checks that the tagged commit's own `ci.yml` push
+run already finished green, per job, and only then lets the binary matrix
+build. `verify-tag-version` runs first and fails the whole run if the pushed
+git tag does not equal `v` followed by `package.json`'s version.
+
 Release workflow behavior:
 
-- tag pushes matching `v*` create compiled binary artifacts
-- the release workflow re-runs the same core validation gates used for normal CI before building release assets
+- tag pushes matching `v*` (or a `workflow_dispatch` with `mode: release` at
+  a tag ref) build the 4-target binary matrix (`linux-x64`, `linux-arm64`,
+  `darwin-x64`, `darwin-arm64`); a plain `workflow_dispatch` with the default
+  `mode: dry-run` builds the same matrix for preview without publishing
+- a native `darwin-arm64` banner smoke runs on `macos-14`, and a separate
+  job installs the packed npm tarball into a clean project and asserts the
+  `goodvibes` and `goodvibes-daemon` bin shims both work
 - npm publish targets `@pellux/goodvibes-tui`
 - GitHub Packages publish targets `@mgd34msu/goodvibes-tui`
 - the GitHub Release is created from `docs/releases/<version>.md` when present, otherwise it falls back to the matching `CHANGELOG.md` section
 - the GitHub Release is created before the registry publish jobs so the package install script can fetch version-matched release assets immediately
-- npm publishing runs when repository variable `PUBLISH_NPM=true` is set; the GitHub Release is still created for release tags so compiled assets are available before registry install smoke runs
+- npm publishing runs when repository variable `PUBLISH_NPM=true` is set; the GitHub Release is still created for release tags even when that variable is unset, so compiled assets stay available to anyone downloading them directly
 
 ## npm distribution
 
@@ -116,15 +141,28 @@ bun run publish:dry-run
 bun run publish:check
 ```
 
-What `publish:check` verifies:
+`publish:check` runs four gates, in order:
 
-- package metadata is present
-- the published tarball exposes the `goodvibes` bin
-- the publish bin is executable
-- the tarball does not accidentally include CI/workflow or test-only paths
-- the tarball includes the required runtime and bootstrap files
-- the tarball does not accidentally include vendored release binaries
-- the tarball stays under the package-size guardrail for registry publishing
+- The SDK-pin gate confirms `@pellux/goodvibes-sdk` is pinned to an exact
+  version in `package.json`, that no local SDK overlay is active, that the
+  installed copy matches the pin, and that `bun.lock` resolves that same
+  pin, then sweeps source imports for anything that reaches into the SDK by
+  a path other than its published npm specifier.
+- The package-metadata check confirms `name`, `version`, `description`,
+  `license`, `homepage`, `repository.url`, and the `goodvibes` bin entry are
+  all present in `package.json`.
+- The tarball-policy gate packs the publish staging directory and checks
+  it. The `goodvibes` bin shim must exist, be executable, and start with
+  the right shebang; the tarball must exclude CI/workflow and test-only
+  paths (`.github/`, `src/test/`, `src/.test/`, `.goodvibes/memory/`,
+  `vendor/`); it must include every required runtime and bootstrap file
+  (`README.md`, `CHANGELOG.md`, `package.json`, `src/main.ts`,
+  `bin/goodvibes`, `scripts/check-bun.sh`, `scripts/postinstall.js`,
+  `.goodvibes/GOODVIBES.md`); and it must stay under the 50 MB
+  package-size guardrail.
+- Unless `GOODVIBES_SKIP_NPM_AUTH_CHECK=1` is set, a registry-auth probe
+  (`npm whoami`) confirms the current npm token can actually publish before
+  any binaries or the GitHub Release are produced.
 
 If npm publishing is enabled in GitHub Actions, the workflow expects:
 
@@ -143,6 +181,17 @@ The release workflow publishes these release assets before registry publishing:
 - `sqlite-vec-darwin-x64.dylib`
 - `sqlite-vec-darwin-arm64.dylib`
 - `SHA256SUMS.txt`
+- `install.sh`
+
+`install.sh` is the suite installer (`scripts/install.sh` in this
+repository, staged as a release asset by the same `release.yml` run). It is
+what `curl -fsSL https://goodvibes.sh/install.sh | sh` fetches, and it
+installs all four GoodVibes products from their own repositories in one
+command, the daemon, this terminal client, the agent with its browser
+driver, and the web UI bundle that the daemon serves. Every file it places is
+verified against its own repository's `SHA256SUMS.txt` first, so riding the
+same manifest as the binaries above means the installer people run is
+checksummed by the release that produced it.
 
 The `goodvibes-daemon-*` binaries are a separate release, built and published by the `goodvibes-daemon` repository's own release workflow.
 
