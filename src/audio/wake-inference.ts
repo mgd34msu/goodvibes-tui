@@ -24,7 +24,7 @@
  * rather than trusting a stale extraction from a previous version.
  */
 
-import { mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import * as ort from 'onnxruntime-web/wasm';
 import glueAssetPath from 'onnxruntime-web/ort-wasm-simd-threaded.mjs' with { type: 'file' };
@@ -36,6 +36,7 @@ import type {
   WakeTensor,
 } from '@pellux/goodvibes-sdk/platform/voice';
 import { WakeWordEngine } from '@pellux/goodvibes-sdk/platform/voice';
+import { atomicWriteFileSync } from '@pellux/goodvibes-sdk/platform/config';
 
 /**
  * The runtime asks for its glue and its wasm by these exact names, relative to
@@ -69,16 +70,9 @@ export function extractOnnxRuntimeAssets(directory: string): string {
     if (existing !== null && existing.equals(bytes)) continue;
     // The directory is shared by every TUI process for this user; a plain
     // write can leave a torn file for a concurrent process's WASM loader.
-    // The SDK's atomicWriteFileSync is string-only, so binary assets get
-    // the same temp-then-rename inline.
-    const temp = `${target}.${process.pid}.tmp`;
-    try {
-      writeFileSync(temp, bytes);
-      renameSync(temp, target);
-    } catch (error) {
-      rmSync(temp, { force: true });
-      throw error;
-    }
+    // The SDK's atomicWriteFileSync now accepts raw bytes directly (sdk
+    // 2.0.18), so it does the temp-then-rename instead of this file inlining it.
+    atomicWriteFileSync(target, bytes, { mkdirp: true });
   }
   return `${directory}/`;
 }

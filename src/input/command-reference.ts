@@ -83,10 +83,10 @@ export function renderCommandReferenceMarkdown(entries: readonly CategorizedComm
       const name = `\`/${escapeCell(cmd.name)}\``;
       const aliases = (cmd.aliases ?? []).length > 0
         ? (cmd.aliases ?? []).map((a) => `\`/${escapeCell(a)}\``).join(', ')
-        : '—';
+        : 'None';
       const usageText = cmd.usage ?? cmd.argsHint ?? '';
-      const usage = usageText ? `\`${escapeCell(usageText)}\`` : '—';
-      const description = cmd.description ? escapeCell(cmd.description) : '—';
+      const usage = usageText ? `\`${escapeCell(usageText)}\`` : 'None';
+      const description = cmd.description ? escapeCell(cmd.description) : 'None';
       lines.push(`| ${name} | ${aliases} | ${usage} | ${description} |`);
     }
     lines.push('');

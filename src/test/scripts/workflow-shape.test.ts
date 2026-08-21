@@ -5,7 +5,7 @@
  * hand-authored workflow YAML is well-formed: the job graphs, needs edges, no
  * continue-on-error on any job, timeout caps, pinned action SHAs, and the
  * by-reference release wiring, including that release.yml consumes the SDK's
- * reusable workflows at mgd34msu/goodvibes-sdk@main.
+ * reusable workflows at a pinned mgd34msu/goodvibes-sdk commit.
  */
 import { describe, expect, test } from "bun:test";
 import { readFileSync, readdirSync } from "node:fs";
@@ -208,14 +208,19 @@ describe("ci.yml: zero-touch auto-release", () => {
 describe("release.yml: by-reference release on the reusable workflows", () => {
   const rel = load("release.yml");
   const REUSABLE = "mgd34msu/goodvibes-sdk/.github/workflows";
+  // release.yml pins every reusable-workflow call to this sdk commit instead
+  // of floating on @main (see "Pin the sdk reusable workflows to a commit
+  // SHA"); bumping the pin is a deliberate one-line change in release.yml,
+  // mirrored here.
+  const SDK_PIN = "2d2056dc3c3905694a02bd5c7144fad9a63a038c";
 
   test("the serialized validate-release re-run is gone", () => {
     expect(Object.keys(rel.jobs ?? {})).not.toContain("validate-release");
   });
 
-  test("release-verify calls the reusable by-reference workflow at @main", () => {
+  test("release-verify calls the reusable by-reference workflow at the pinned sdk commit", () => {
     const rv = rel.jobs!["release-verify"]!;
-    expect(rv.uses).toBe(`${REUSABLE}/reusable-release-verify.yml@main`);
+    expect(rv.uses).toBe(`${REUSABLE}/reusable-release-verify.yml@${SDK_PIN}`);
     expect(String(rv.if)).toContain("github.event_name == 'push'");
   });
 
@@ -289,8 +294,8 @@ describe("release.yml: by-reference release on the reusable workflows", () => {
     }
   });
 
-  test("the binary matrix calls the reusable workflow at @main", () => {
-    expect(rel.jobs!["binaries"]!.uses).toBe(`${REUSABLE}/reusable-binary-matrix.yml@main`);
+  test("the binary matrix calls the reusable workflow at the pinned sdk commit", () => {
+    expect(rel.jobs!["binaries"]!.uses).toBe(`${REUSABLE}/reusable-binary-matrix.yml@${SDK_PIN}`);
   });
 
   test("every smoke:true matrix leg carries its own binary path matching the config's appArtifact", () => {
@@ -322,9 +327,9 @@ describe("release.yml: by-reference release on the reusable workflows", () => {
     expect(smokeLegs).toBeGreaterThan(0);
   });
 
-  test("gh-release calls the reusable workflow at @main and gates on staged assets", () => {
+  test("gh-release calls the reusable workflow at the pinned sdk commit and gates on staged assets", () => {
     const gh = rel.jobs!["gh-release"]!;
-    expect(gh.uses).toBe(`${REUSABLE}/reusable-gh-release.yml@main`);
+    expect(gh.uses).toBe(`${REUSABLE}/reusable-gh-release.yml@${SDK_PIN}`);
     expect(needsOf(gh)).toContain("stage-release-assets");
   });
 
@@ -342,9 +347,9 @@ describe("release.yml: by-reference release on the reusable workflows", () => {
     expect(String(stage.outputs?.["version"] ?? "")).toContain("steps.version.outputs.version");
   });
 
-  test("publish-npm calls the reusable npm-publish at @main and is push-gated", () => {
+  test("publish-npm calls the reusable npm-publish at the pinned sdk commit and is push-gated", () => {
     const pub = rel.jobs!["publish-npm"]!;
-    expect(pub.uses).toBe(`${REUSABLE}/reusable-npm-publish.yml@main`);
+    expect(pub.uses).toBe(`${REUSABLE}/reusable-npm-publish.yml@${SDK_PIN}`);
     expect(String(pub.if)).toContain("github.event_name == 'push'");
   });
 

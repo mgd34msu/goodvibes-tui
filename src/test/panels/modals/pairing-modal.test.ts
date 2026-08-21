@@ -61,11 +61,11 @@ describe('pairing modal surface', () => {
     expect(text).not.toContain('"token"');
     expect(text).not.toContain('daemonUrl');
     // Offer set with plain-language consequence lines.
-    expect(text).toContain('Notifications —');
-    expect(text).toContain('Relay —');
+    expect(text).toContain('Notifications,');
+    expect(text).toContain('Relay,');
     // The labeled capability list (what the device will get), from the posture.
     expect(text).toContain('This device will get:');
-    expect(text).toContain('Push notifications — needs https — available via tailscale');
+    expect(text).toContain('Push notifications, needs https, available via tailscale');
     // The ONE honest LAN line is the SDK export verbatim, never a local rewording.
     expect(text).toContain(LAN_PLAIN_HTTP_NOTICE);
   });
@@ -73,7 +73,7 @@ describe('pairing modal surface', () => {
   test('a secure-context origin shows every capability available and NO LAN nag', () => {
     const secure: PairingModalConnectionInfo = { ...FIXED_INFO, url: 'https://app.example', deepLink: 'https://app.example/#pair=x', posture: describeOriginPosture('https://app.example') };
     const text = tabText(open(createPairingModalSurface({ getConnectionInfo: () => secure })), 'pairing');
-    expect(text).toContain('Push notifications — available');
+    expect(text).toContain('Push notifications, available');
     expect(text).not.toContain(LAN_PLAIN_HTTP_NOTICE);
     expect(text).not.toContain('needs https');
   });
@@ -142,9 +142,9 @@ describe('pairing modal: full-text render (no clipping)', () => {
     test(`${label}: the full LAN notice and all capabilities are present, unabridged`, () => {
       const rows = tabRows(open(createPairingModalSurface({ getConnectionInfo: () => FIXED_INFO })), 'pairing').map((r) => r.label);
       expect(rows).toContain(LAN_PLAIN_HTTP_NOTICE);
-      expect(rows).toContain('  Offline app (installable / background sync) — needs https — available via tailscale');
-      expect(rows).toContain('  Push notifications — needs https — available via tailscale');
-      expect(rows).toContain('  Voice input (microphone) — needs https — available via tailscale');
+      expect(rows).toContain('  Offline app (installable / background sync), needs https, available via tailscale');
+      expect(rows).toContain('  Push notifications, needs https, available via tailscale');
+      expect(rows).toContain('  Voice input (microphone), needs https, available via tailscale');
       // Every posture row, once box-wrapped at this width, stays within it.
       for (const row of renderRows(createPairingModalSurface({ getConnectionInfo: () => FIXED_INFO }), width, 24)) {
         expect(row.length).toBeLessThanOrEqual(width);

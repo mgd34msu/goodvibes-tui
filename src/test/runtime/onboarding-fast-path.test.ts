@@ -136,9 +136,9 @@ describe('onboarding fast path', () => {
     startOnboardingFastPath({ input: h.input, commandContext: h.ctx, shellPaths, render: () => {} });
     const startItem = h.offeredItems.find((i) => i.id === 'start-now')!;
     expect(startItem.label).toBe('Start now');
-    expect(startItem.detail).toBe('Use the default model (openrouter:openrouter/free) — no API key needed');
+    expect(startItem.detail).toBe('Use the default model (openrouter:openrouter/free), no API key needed');
     expect(h.printed).toEqual([
-      'Use the default model (openrouter:openrouter/free) — no API key needed. Add a provider key anytime with /provider, or run /onboarding for full setup.',
+      'Use the default model (openrouter:openrouter/free), no API key needed. Add a provider key anytime with /provider, or run /onboarding for full setup.',
     ]);
   });
 

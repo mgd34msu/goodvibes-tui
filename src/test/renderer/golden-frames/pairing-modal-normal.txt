@@ -8,12 +8,12 @@
 |    │   Link      ••••••••••••                                                 │                    |
 |    │   Devices connected: 1                                                   │                    |
 |    │   Offers (each declinable when you pair):                                │                    |
-|    │   Notifications — This device gets a push when an agent needs your input │                    |
+|    │   Notifications, This device gets a push when an agent needs your input  │                    |
 |    │   or a run finishes. Decline and it pairs without push.                  │                    |
-|    │   Relay — Reach this daemon from off the LAN through the rendezvous      │                    |
+|    │   Relay, Reach this daemon from off the LAN through the rendezvous       │                    |
 |    │   relay, which sees only ciphertext and connection metadata. Decline to  │                    |
 |    │   stay LAN-only.                                                         │                    |
-|    │   Passkey — Register a passkey on this device to confirm sensitive       │                    |
+|    │   Passkey, Register a passkey on this device to confirm sensitive        │                    |
 |    │   actions with a tap. Decline and sensitive actions ask another way.     │                    |
 |    │   This device will get:                                                  │                    |
 |    └─v reveal token · v reveal token · c copy link · r new device token · Es…─┘                    |

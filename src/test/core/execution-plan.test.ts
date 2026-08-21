@@ -283,7 +283,7 @@ describe('ExecutionPlanManager.toMarkdown', () => {
       { phase: 'P1', description: 'Do it' },
     ]);
     const md = manager.toMarkdown(plan);
-    expect(md).toContain('- [ ] Do it — PENDING');
+    expect(md).toContain('- [ ] Do it -- PENDING');
   });
 
   test('renders complete item with [x] checkbox and COMPLETE label', () => {
@@ -293,7 +293,7 @@ describe('ExecutionPlanManager.toMarkdown', () => {
     manager.updateItem(plan.id, plan.items[0].id, 'complete', 'agent-abc');
     const updated = manager.load(plan.id)!;
     const md = manager.toMarkdown(updated);
-    expect(md).toContain('[x] Done step — COMPLETE (agent-abc)');
+    expect(md).toContain('[x] Done step -- COMPLETE (agent-abc)');
   });
 
   test('renders in_progress item with [~] checkbox', () => {
@@ -303,7 +303,7 @@ describe('ExecutionPlanManager.toMarkdown', () => {
     manager.updateItem(plan.id, plan.items[0].id, 'in_progress');
     const updated = manager.load(plan.id)!;
     const md = manager.toMarkdown(updated);
-    expect(md).toContain('[~] Active step — IN_PROGRESS');
+    expect(md).toContain('[~] Active step -- IN_PROGRESS');
   });
 
   test('renders dependency reference using description', () => {
@@ -331,7 +331,7 @@ describe('ExecutionPlanManager.toMarkdown', () => {
     manager.updateItem(plan.id, plan.items[0].id, 'failed');
     const updated = manager.load(plan.id)!;
     const md = manager.toMarkdown(updated);
-    expect(md).toContain('[!] Bad step — FAILED');
+    expect(md).toContain('[!] Bad step -- FAILED');
   });
 
   test('phase shows COMPLETE when all items complete', () => {
@@ -427,6 +427,16 @@ describe('ExecutionPlanManager.parseFromMarkdown', () => {
     expect(result.items![1].dependencies).toEqual(['Step A']);
   });
 
+  // Regression guard for an SDK defect that is now fixed. In 2.0.18,
+  // toMarkdown() separated the description from the status label with ", "
+  // (comma), but parseFromMarkdown's findLastSeparator() only recognized an
+  // em-dash, en-dash, or double-hyphen, so it could no longer find the split
+  // point in the sdk's own output: the status label, agent id, and any
+  // dependency parenthetical all got swallowed into the description field
+  // instead of being stripped. SDK 2.0.19 fixes this at the emitter, not the
+  // parser: toMarkdown() writes the ASCII double-hyphen the parser has
+  // always accepted, so this round-trip passes again. This test now guards
+  // against a future regression of either side of that contract.
   test('markdown round-trip: toMarkdown then parseFromMarkdown preserves structure', () => {
     const original = manager.create('Round Trip Plan', [
       { phase: 'Phase 1', description: 'First step' },

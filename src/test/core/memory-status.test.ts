@@ -59,7 +59,7 @@ describe('formatMb / formatMemoryBytes', () => {
 describe('memoryStatusLines: populated (normal tier)', () => {
   test('renders tier, budget/rss, heap, thresholds, cache footprints, no paused jobs, disarmed tripwire', () => {
     const text = memoryStatusLines(snapshot()).join('\n');
-    expect(text).toContain('tier: normal — footprint is comfortably within budget');
+    expect(text).toContain('tier: normal, footprint is comfortably within budget');
     expect(text).toContain('budget: 512 MB rss / 4096 MB budget (13%)');
     expect(text).toContain('heap: 210 MB used / 300 MB total');
     expect(text).toContain('tiers: elevated 60% · high 80% · critical 95%');
@@ -80,7 +80,7 @@ describe('memoryStatusLines: high/critical tiers', () => {
       pausedJobs: ['knowledge-self-improvement', 'code-index-reindex'],
       tripwire: { armed: true, sustainedSec: 12, rateMbPerSec: 25 },
     })).join('\n');
-    expect(text).toContain('tier: critical — refusing new expensive work');
+    expect(text).toContain('tier: critical, refusing new expensive work');
     expect(text).toContain('expensive work: REFUSED (critical tier)');
     expect(text).toContain('paused jobs: knowledge-self-improvement, code-index-reindex');
     expect(text).toContain('tripwire: ARMED');
