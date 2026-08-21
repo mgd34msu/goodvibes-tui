@@ -77,26 +77,34 @@ abstract render(width: number, height: number): Line[];
 
 **Dirt / invalidation helpers:**
 
-- `this.needsRender = true` / `this.markDirty()`: request a re-render.
-- `this.invalidate()`: same, callable from outside (compositor contract).
-- `this.markRendered()`: called by compositor after a successful render.
+| Method | Does |
+| --- | --- |
+| `this.needsRender = true` / `this.markDirty()` | Request a re-render |
+| `this.invalidate()` | Same, callable from outside (compositor contract) |
+| `this.markRendered()` | Called by the compositor after a successful render |
 
 **Error surface (I2 slot):**
 
-- `this.setError(msg)`: surface a transient error (bold red, auto-cleared on next keystroke when using `ScrollableListPanel`).
-- `this.clearError()`: clear manually.
-- `this.renderErrorLine(width)`: returns a `Line | null` for use in your footer.
+| Method | Does |
+| --- | --- |
+| `this.setError(msg)` | Surface a transient error (bold red, auto-cleared on next keystroke when using `ScrollableListPanel`) |
+| `this.clearError()` | Clear manually |
+| `this.renderErrorLine(width)` | Return a `Line \| null` for use in your footer |
 
 **Loading spinner (I3 slot):**
 
-- `this.startLoading(label?)` / `this.stopLoading()`: control visibility.
-- `await this.withLoading(label, fn)`: run an async operation under the spinner (clears on success or throw).
-- `this.renderLoadingLine(width, frame?)`: returns a `Line | null`.
+| Method | Does |
+| --- | --- |
+| `this.startLoading(label?)` / `this.stopLoading()` | Control visibility |
+| `await this.withLoading(label, fn)` | Run an async operation under the spinner (clears on success or throw) |
+| `this.renderLoadingLine(width, frame?)` | Return a `Line \| null` |
 
 **Timer registry:**
 
-- `this.registerTimer(setInterval(...))` / `this.registerTimer(setTimeout(...))`: wrap any timer id in this call and it is cleared automatically when the panel is destroyed, so you do not need to track and clear it yourself in `onDestroy()`. The call returns the id unchanged, so it composes inline with the `setInterval`/`setTimeout` call.
-- `this.clearTimer(id)`: clear one specific timer early and drop it from the registry. Safe to call with an id that was never registered or was already cleared.
+| Method | Does |
+| --- | --- |
+| `this.registerTimer(setInterval(...))` / `this.registerTimer(setTimeout(...))` | Wrap any timer id and it is cleared automatically when the panel is destroyed, so you do not track and clear it yourself in `onDestroy()`. Returns the id unchanged, so it composes inline with the `setInterval`/`setTimeout` call |
+| `this.clearTimer(id)` | Clear one specific timer early and drop it from the registry. Safe to call with an id that was never registered or was already cleared |
 
 If you override `onDestroy()`, call `super.onDestroy()` so the timer registry is still swept; the base implementation is not a no-op.
 

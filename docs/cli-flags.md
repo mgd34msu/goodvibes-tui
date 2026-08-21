@@ -73,9 +73,13 @@ goodvibes --non-interactive run 'do something'
 
 ### `--output <format>`, `-o <format>` (canonical)
 
-Set the output encoding for `run` and other machine-readable commands.
+Set the output encoding for `run` and other machine-readable commands. Three formats are valid, each with its own shape:
 
-Valid values are `text` (default), `json`, and `stream-json`.
+| Format | What it prints |
+| --- | --- |
+| `text` (default) | The final assistant response (or the error) as plain text |
+| `json` | One pretty-printed JSON object at the end: `ok`, `response`, `error`, `stopReason`, `sessionId`, `model`, `provider`, and the event count |
+| `stream-json` | Newline-delimited JSON: one object per streaming delta as it arrives, then a final completed-or-error object |
 
 ```sh
 goodvibes run 'list files' --output json

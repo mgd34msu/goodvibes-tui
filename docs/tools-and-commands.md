@@ -2,15 +2,17 @@
 
 ## Built-in tools
 
-GoodVibes ships a broad built-in tool set. Current tool families include:
+GoodVibes ships a broad built-in tool set, organized into families. Every tool named here has its own entry in the [Tool reference](#tool-reference) below:
 
-- file and code operations: `read`, `write`, `edit`, `find`, `repo_map`
-- execution and inspection: `exec`, `analyze`, `inspect`
-- network and research: `fetch`, `web_search`
-- orchestration: `agent`, `workflow`, `task`, `team`, `worklist`
-- runtime/control surfaces: `state`, `registry`, `control`, `channel`, `remote`
-- external integration surfaces: `mcp`
-- structured query/eval surfaces: `repl`, `query`, `packet`
+| Family | Tools |
+| --- | --- |
+| File and code operations | `read`, `write`, `edit`, `find`, `repo_map` |
+| Execution and inspection | `exec`, `analyze`, `inspect` |
+| Network and research | `fetch`, `web_search` |
+| Orchestration | `agent`, `workflow`, `task`, `team`, `worklist` |
+| Runtime/control surfaces | `state`, `registry`, `control`, `channel`, `remote` |
+| External integration surfaces | `mcp` |
+| Structured query/eval surfaces | `repl`, `query`, `packet` |
 
 The tool registry is part of the main runtime and is shared across the TUI, agents, automation, and daemon-backed flows.
 
@@ -18,32 +20,40 @@ The tool registry is part of the main runtime and is shared across the TUI, agen
 
 ### File and code work
 
-- `read` for token-efficient file reading, outlines, symbols, AST views, and paginated batch reads
-- `write` for atomic writes, overwrite modes, and auto-heal pipelines
-- `edit` for structural code edits with validation and rollback
-- `find` for files, content, symbols, references, and structural search
-- `repo_map` for a token-budgeted orientation map of an unfamiliar codebase
+| Tool | What it does |
+| --- | --- |
+| `read` | Token-efficient file reading, outlines, symbols, AST views, and paginated batch reads |
+| `write` | Atomic writes, overwrite modes, and auto-heal pipelines |
+| `edit` | Structural code edits with validation and rollback |
+| `find` | Files, content, symbols, references, and structural search |
+| `repo_map` | A token-budgeted orientation map of an unfamiliar codebase |
 
 ### Execution and analysis
 
-- `exec` for shell execution, background processes, retries, and process tracking
-- `analyze` for impact, dependencies, dead code, upgrade, semantic diff, and security checks
-- `inspect` for project/frontend/runtime inspection
+| Tool | What it does |
+| --- | --- |
+| `exec` | Shell execution, background processes, retries, and process tracking |
+| `analyze` | Impact, dependencies, dead code, upgrade, semantic diff, and security checks |
+| `inspect` | Project/frontend/runtime inspection |
 
 ### Research and retrieval
 
-- `fetch` for HTTP retrieval and extraction
-- `web_search` for provider-backed search and evidence shaping
-- `packet` for compact knowledge/context packets
-- `query` and `repl` for bounded query/eval work
+| Tool | What it does |
+| --- | --- |
+| `fetch` | HTTP retrieval and extraction |
+| `web_search` | Provider-backed search and evidence shaping |
+| `packet` | Compact knowledge/context packets |
+| `query` and `repl` | Bounded query/eval work |
 
 ### Coordination and product control
 
-- `agent` for in-process agent work
-- `workflow` for WRFC and related execution flows
-- `remote` for distributed runtime control
-- `channel` for channel-aware runtime and delivery surfaces
-- `control` and `state` for product/runtime introspection
+| Tool | What it does |
+| --- | --- |
+| `agent` | In-process agent work |
+| `workflow` | WRFC and related execution flows |
+| `remote` | Distributed runtime control |
+| `channel` | Channel-aware runtime and delivery surfaces |
+| `control` and `state` | Product/runtime introspection |
 
 ## Tool reference
 
@@ -277,9 +287,31 @@ Composer capture markers: a line beginning with `#` saves the rest as a session-
 
 `/imagine <prompt>` is the first production caller of the media-provider registry's image generation. On success it persists the artifact (inline bytes stored directly; a remote-URL-only result is stored as a small JSON pointer record rather than eagerly fetched), and prints the registry's own per-provider status (naming the exact env var) when no image-capable provider is configured. (`/image` is a different, pre-existing command; it attaches a local image file to the next message for multimodal analysis.)
 
-`/session` is the single front-door for all session work. Two domains:
-- Lifecycle: `list`, `rename`, `resume`, `fork`, `save`, `info`, `export <id|.> [format]`, `search <query>`, `delete <id>`, `events [kind]`, `groups [kind]`, `hotspots`
-- Orchestration (cross-session task DAG with cycle detection): `link-task <taskId> [--session <sid>] [--depends-on <sid:taskId>] [--label <label>]`, `handoff <taskId> --to <sid>`, `graph [--session <sid>] [--format text|json]`, `cancel <taskId> [--scope task|subtree|session]`
+`/session` is the single front-door for all session work, split across two domains. The lifecycle subcommands operate on sessions themselves:
+
+| Subcommand | Does |
+| --- | --- |
+| `list` | List saved sessions for the workspace |
+| `rename` | Rename the current or a named session |
+| `resume` | Reopen a saved session |
+| `fork` | Branch a session into a new one |
+| `save` | Save the current session |
+| `info` | Show the current session's details |
+| `export <id\|.> [format]` | Export a session (`.` is the current one) |
+| `search <query>` | Search saved sessions |
+| `delete <id>` | Delete a saved session |
+| `events [kind]` | List transcript events, optionally filtered to one kind |
+| `groups [kind]` | List transcript events grouped, with per-group event counts and message ranges |
+| `hotspots` | Show per-kind event counts and the busiest transcript groups |
+
+The orchestration subcommands manage a cross-session task DAG with cycle detection:
+
+| Subcommand | Does |
+| --- | --- |
+| `link-task <taskId> [--session <sid>] [--depends-on <sid:taskId>] [--label <label>]` | Register a task in the graph, optionally with a dependency edge |
+| `handoff <taskId> --to <sid>` | Hand a task off to another session |
+| `graph [--session <sid>] [--format text\|json]` | Render the task graph |
+| `cancel <taskId> [--scope task\|subtree\|session]` | Cancel a task, its subtree, or the session's tasks |
 
 Alias: `/sess`. Run `/session` with no arguments to see current session info.
 
@@ -447,9 +479,37 @@ Hooks fire on lifecycle events throughout a session. They are configured in `.go
 Phase:Category:Specific
 ```
 
-- Phases: `Pre`, `Post`, `Fail`, `Change`, `Lifecycle`
-- Categories: `tool`, `file`, `git`, `agent`, `compact`, `llm`, `mcp`, `config`, `budget`, `session`, `workflow`, `orchestration`, `communication`, `permission`, `transport`
-- Wildcards are supported: `Pre:tool:*` matches all pre-tool events
+The phase says when the hook fires relative to the event, and what authority it has:
+
+| Phase | Fires | Authority |
+| --- | --- | --- |
+| `Pre` | Before the operation runs | Blocking intercept; can deny the operation or mutate its input |
+| `Post` | After the operation succeeds | Observe only, non-blocking |
+| `Fail` | When the operation fails | Observe only |
+| `Change` | When tracked state changes (config, budget, files, and similar) | Observe only |
+| `Lifecycle` | On lifecycle transitions (spawned, completed, connected, and similar) | Observe only |
+
+The category names which subsystem's events the hook watches:
+
+| Category | Covers |
+| --- | --- |
+| `tool` | Built-in tool calls |
+| `file` | File writes and edits |
+| `git` | Git operations |
+| `agent` | Agent lifecycle events |
+| `compact` | Context compaction |
+| `llm` | Chat/model calls |
+| `mcp` | MCP calls and server lifecycle |
+| `config` | Config changes |
+| `budget` | Budget changes and breaches |
+| `session` | Session lifecycle |
+| `workflow` | Workflow lifecycle |
+| `orchestration` | Orchestration state and lifecycle |
+| `communication` | Communication state and lifecycle |
+| `permission` | Permission requests and decisions |
+| `transport` | Transport lifecycle |
+
+Wildcards are supported: `Pre:tool:*` matches all pre-tool events.
 
 ### Hook types
 
@@ -508,7 +568,27 @@ Chains trigger an action only after a sequence of events occurs, with optional t
 }
 ```
 
-Hook properties: `match`, `type`, `command`/`prompt`/`url`/`path`, `async`, `once`, `timeout`, `enabled`, `name`.
+A hook definition supports these properties:
+
+| Property | Meaning |
+| --- | --- |
+| `match` | The event path to match; wildcards supported |
+| `matcher` | A further filter within the match, such as a specific tool name |
+| `type` | One of the five hook types above |
+| `command` / `prompt` / `url` / `path` | The action payload for `command`, `prompt`/`agent`, `http`, and `ts` hooks respectively |
+| `headers` | Custom headers for `http` hooks |
+| `model` | The LLM model for `prompt`/`agent` hooks |
+| `timeout` | Timeout in seconds (default 30; 60 for `agent` hooks) |
+| `statusMessage` | Custom status text shown while the hook runs |
+| `async` | Run in the background without blocking |
+| `once` | Run once, then auto-remove |
+| `description` | Documentation text |
+
+The `HookDefinition` type in `src/hooks/types.ts` is the authoritative field
+set and carries a small number of advanced, situational fields beyond this
+table.
+| `name` | Optional name for programmatic enable/disable/remove |
+| `enabled` | Whether the hook is active (default `true`) |
 
 ## Automation and scheduling
 
@@ -621,7 +701,7 @@ Beyond direct local plugins, a local-first curated distribution channel covers p
 
 Many commands also have matching panels and control rooms. High-signal examples:
 
-- provider accounts and health (`/health` pillars include `setup`, `services`, `sandbox`, `accounts`, `auth`, `settings`, `remote`, `continuity`, `worktrees`, `maintenance`, and `term` for terminal-capability posture)
+- provider accounts and health: `/health <pillar>` reviews one domain at a time, with pillars for `setup` (install/setup issues), `services` (service registry inspections), `sandbox` (isolation posture), `accounts` and `auth` (provider accounts and auth users), `settings` (settings integrity), `remote` (remote runtime), `continuity` (last-session pointer and recovery-file state), `worktrees` (tracked worktree cleanup state), `maintenance` (context usage and session upkeep), and `term` (terminal capability posture such as color depth and synchronized output)
 - knowledge and memory review
 - remote peers and work queues
 - channels and deliveries
@@ -698,27 +778,30 @@ The panel's empty state points at the actual chain producer, `/teamwork create-m
 
 `/config tts` opens the TTS category in the fullscreen configuration workspace. It manages the defaults used by spoken-output clients:
 
-- `tts.provider`
-- `tts.voice`
-- `tts.llmProvider`
-- `tts.llmModel`
+| Key | What its row does |
+| --- | --- |
+| `tts.provider` | Choose a provider with streaming TTS support |
+| `tts.voice` | Choose a voice from that provider |
+| `tts.llmProvider` / `tts.llmModel` | Choose an optional `/tts` response model override through the fullscreen provider/model workspace |
 
-Use the `tts.provider` row to choose a provider with streaming TTS support, the `tts.voice` row to choose a voice, and the `tts.llmProvider` / `tts.llmModel` rows to choose an optional `/tts` response model override through the fullscreen provider/model workspace. Without that override, `/tts` uses the current chat provider/model. Live local playback requires `mpv` or `ffplay` on `PATH`.
+Without that override, `/tts` uses the current chat provider/model. Live local playback requires `mpv` or `ffplay` on `PATH`.
 
 ## Cloudflare batch commands
 
 Cloudflare integration is optional and keeps local immediate daemon behavior by default. Select `Use Cloudflare for batch or remote daemon work` in onboarding to configure it visually, or use `/cloudflare` for runtime actions.
 
-High-signal commands:
+The high-signal subcommands, in the order a setup normally uses them:
 
-- `/cloudflare status`
-- `/cloudflare requirements`
-- `/cloudflare create-token --account <account-id> --bootstrap-env <ENV_NAME>`
-- `/cloudflare discover`
-- `/cloudflare validate`
-- `/cloudflare provision --batch-mode explicit`
-- `/cloudflare verify`
-- `/cloudflare disable`
+| Command | Does |
+| --- | --- |
+| `/cloudflare status` | Show the integration's enabled/ready posture and every configured resource |
+| `/cloudflare requirements` | List the API-token permissions the integration needs |
+| `/cloudflare create-token --account <account-id> --bootstrap-env <ENV_NAME>` | Create the scoped API token from a bootstrap token |
+| `/cloudflare discover` | Discover existing account resources usable by the integration |
+| `/cloudflare validate` | Validate the token and configuration without changing anything |
+| `/cloudflare provision --batch-mode explicit` | Provision the Workers/Queues resources |
+| `/cloudflare verify` | Verify the provisioned resources end to end |
+| `/cloudflare disable` | Turn the integration off |
 
 The TUI calls SDK daemon routes only. It does not call Cloudflare APIs directly. See [Cloudflare batch and control plane](cloudflare-batch.md) for token setup, supported components, and provisioning behavior.
 

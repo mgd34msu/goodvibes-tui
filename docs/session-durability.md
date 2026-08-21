@@ -67,7 +67,14 @@ line 0  — header:  { "version": 1, "sessionId": "...", "createdAt": <epochMs> 
 line 1+ — records: { "type": "...", "seq": <n>, "ts": <epochMs>, "messages": [...] }
 ```
 
-Record types: `user_message`, `assistant_turn`, `tool_results`, `compaction`.
+Four record types appear in a journal, each written at a different durable moment:
+
+| Type | Written when |
+| --- | --- |
+| `user_message` | A turn is submitted, so the user's message survives a kill during the stream |
+| `assistant_turn` | The post-turn snapshot fails, so recovery can still reconstruct the turn |
+| `tool_results` | A batch of tool results lands |
+| `compaction` | Context compaction rewrites the conversation |
 
 The `seq` field is monotonically increasing within each journal file (resets to 0 after rotation).
 The `ts` field is the wall-clock time (`Date.now()`) at the moment of the append.

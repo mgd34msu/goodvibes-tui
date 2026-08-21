@@ -2,24 +2,26 @@
 
 GoodVibes can optionally use Cloudflare Workers and Queues for batch-capable daemon work. This is opt-in. By default the TUI keeps immediate local daemon behavior:
 
-- `batch.mode = off`
-- `batch.queueBackend = local`
-- `cloudflare.enabled = false`
+| Key | Default | Meaning |
+| --- | --- | --- |
+| `batch.mode` | `off` | No work uses the batch path (the three modes are explained under Batch modes below) |
+| `batch.queueBackend` | `local` | Queued work stays on the local backend |
+| `cloudflare.enabled` | `false` | The Cloudflare integration is off entirely |
 
 The TUI owns the user flow. The SDK daemon owns all Cloudflare API calls, token creation, validation, discovery, provisioning, verification, repair paths, and secret persistence. The TUI never calls Cloudflare APIs directly.
 
 ## Onboarding
 
-Select `Use Cloudflare for batch or remote daemon work` on the first onboarding screen. The Cloudflare screen lets you configure:
+Select `Use Cloudflare for batch or remote daemon work` on the first onboarding screen. The Cloudflare screen configures:
 
-- Cloudflare enabled/disabled
-- Batch mode: `off`, `explicit`, or `eligible-by-default`
-- Components: Workers, Queues, Tunnel, Access, DNS, KV, Durable Objects, Secrets Store, and R2
-- Account, zone/domain, worker, queue, tunnel, Access, KV, DO, R2, and Secrets Store names/refs
-- Token setup path
-- Whether final onboarding apply should provision resources immediately
-
-Workers and Queues are the normal default components. Tunnel, Access, DNS, KV, Durable Objects, Secrets Store, and R2 are advanced optional components.
+| Field | Choices / notes |
+| --- | --- |
+| Cloudflare enabled/disabled | The master switch |
+| Batch mode | `off`, `explicit`, or `eligible-by-default` (explained under Batch modes below) |
+| Components | Workers and Queues are the normal defaults; Tunnel, Access, DNS, KV, Durable Objects, Secrets Store, and R2 are advanced optional components |
+| Resource names/refs | Account, zone/domain, worker, queue, tunnel, Access, KV, DO, R2, and Secrets Store identifiers |
+| Token setup path | One of the five paths in the next section |
+| Provision on apply | Whether the final onboarding apply provisions resources immediately |
 
 ## Token setup
 
@@ -55,19 +57,19 @@ Use `/cloudflare` for runtime inspection and daemon actions:
 
 ## Daemon routes
 
-The TUI integrates with these daemon routes:
+The TUI integrates with these daemon routes, each backing the matching `/cloudflare` subcommand:
 
-```text
-GET  /api/cloudflare
-GET  /api/cloudflare/status
-POST /api/cloudflare/token/requirements
-POST /api/cloudflare/token/create
-POST /api/cloudflare/discover
-POST /api/cloudflare/validate
-POST /api/cloudflare/provision
-POST /api/cloudflare/verify
-POST /api/cloudflare/disable
-```
+| Route | Does |
+| --- | --- |
+| `GET /api/cloudflare` | The integration descriptor |
+| `GET /api/cloudflare/status` | Enabled/ready posture and configured resources |
+| `POST /api/cloudflare/token/requirements` | List required API-token permissions |
+| `POST /api/cloudflare/token/create` | Create the scoped operational token from a bootstrap token |
+| `POST /api/cloudflare/discover` | Discover existing account resources |
+| `POST /api/cloudflare/validate` | Validate the token and configuration |
+| `POST /api/cloudflare/provision` | Provision the configured resources |
+| `POST /api/cloudflare/verify` | Verify the provisioned resources |
+| `POST /api/cloudflare/disable` | Turn the integration off |
 
 Errors return JSON with `error` and `code`. The TUI displays route failures as actionable wizard or command output and does not block normal local daemon usage unless the user explicitly depends on Cloudflare provisioning.
 

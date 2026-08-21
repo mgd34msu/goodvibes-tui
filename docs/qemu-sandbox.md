@@ -4,12 +4,14 @@ GoodVibes can run REPL and MCP isolation through a local QEMU guest. The TUI own
 
 ## Isolation modes
 
-QEMU is one option within a broader sandbox control plane that governs both evaluation runtimes and MCP isolation. The available modes are:
+QEMU is one option within a broader sandbox control plane that governs both evaluation runtimes and MCP isolation. Four config keys select the posture, each with its own set of values:
 
-- REPL isolation: `shared-vm` or `per-runtime-vm`
-- MCP isolation: `disabled`, `shared-vm`, `hybrid`, or `per-server-vm`
-- host posture on Windows: `native-basic` or `require-wsl`
-- VM backend: `local` or `qemu`
+| Key | Values | What each value means |
+| --- | --- | --- |
+| `sandbox.replIsolation` | `shared-vm` (default), `per-runtime-vm` | Evaluation runtimes share one VM substrate, or each runtime gets a dedicated VM |
+| `sandbox.mcpIsolation` | `disabled` (default), `shared-vm`, `hybrid`, `per-server-vm` | MCP servers run unvirtualized; share one sandbox (lower overhead, weaker cross-server isolation); mix shared and dedicated; or each get a dedicated VM (strongest isolation, higher memory and startup cost) |
+| `sandbox.windowsMode` | `native-basic` (default), `require-wsl` | On Windows, allow basic native sandboxing, or require WSL before virtualized sandboxing enables |
+| `sandbox.vmBackend` | `local` (default), `qemu` | Sandboxed work executes on the host, or inside the QEMU guest this document sets up |
 
 The rest of this document covers the `qemu` VM backend specifically, bootstrapping the guest, generated files, guest runtime packages, and troubleshooting.
 
@@ -40,17 +42,17 @@ sandbox.mcpIsolation = shared-vm
 
 ## Host prerequisites
 
-Install these on the host before building the image:
+Install these on the host before building the image. Each one has a specific job in the bootstrap:
 
-```sh
-qemu-system-x86_64
-qemu-img
-ssh
-ssh-keygen
-curl or wget
-xorriso, genisoimage, or mkisofs
-tar
-```
+| Tool | Used for |
+| --- | --- |
+| `qemu-system-x86_64` | Running the guest VM |
+| `qemu-img` | Building the qcow2 disk image in `create-image.sh` |
+| `ssh` | Reaching the guest; the wrapper runs commands and syncs the workspace over it |
+| `ssh-keygen` | Generating the dedicated ed25519 keypair the guest trusts |
+| `curl` or `wget` | Downloading the Debian cloud base image (either works) |
+| `xorriso`, `genisoimage`, or `mkisofs` | Building the cloud-init NoCloud seed ISO (first one found wins) |
+| `tar` | Streaming the host workspace into the guest's `/workspace` over SSH |
 
 KVM is optional but strongly recommended. On Linux, `/dev/kvm` should exist and be readable/writable by the user running GoodVibes.
 
@@ -84,31 +86,28 @@ Use `/sandbox qemu setup [dir]` when you want to scaffold and inspect the bundle
 
 ## Generated files
 
-The setup bundle creates:
+The setup bundle creates everything under `~/.goodvibes/tui/sandbox/`. Each entry has one job:
 
-```text
-~/.goodvibes/tui/sandbox/qemu-wrapper.sh
-~/.goodvibes/tui/sandbox/create-image.sh
-~/.goodvibes/tui/sandbox/guest-bootstrap.sh
-~/.goodvibes/tui/sandbox/goodvibes-sandbox.qcow2
-~/.goodvibes/tui/sandbox/images/debian-12-genericcloud-amd64.qcow2
-~/.goodvibes/tui/sandbox/keys/goodvibes_qemu_ed25519
-~/.goodvibes/tui/sandbox/keys/goodvibes_qemu_ed25519.pub
-~/.goodvibes/tui/sandbox/seed/user-data
-~/.goodvibes/tui/sandbox/seed/meta-data
-~/.goodvibes/tui/sandbox/seed/network-config
-~/.goodvibes/tui/sandbox/seed/nocloud.iso
-~/.goodvibes/tui/sandbox/logs/
-~/.goodvibes/tui/sandbox/run/
-~/.goodvibes/tui/sandbox/setup-manifest.json
-~/.goodvibes/tui/sandbox/projection-policy.json
-~/.goodvibes/tui/sandbox/ssh-config
-~/.goodvibes/tui/sandbox/README.txt
-```
+| File or directory | What it is |
+| --- | --- |
+| `qemu-wrapper.sh` | The exec wrapper the sandbox runtime invokes; launches or attaches to the guest and runs commands over SSH |
+| `create-image.sh` | Builds `goodvibes-sandbox.qcow2` from the base image plus the seed ISO; a bootstrap implementation detail |
+| `guest-bootstrap.sh` | Installs the guest runtime packages listed below, streamed into the guest over SSH |
+| `goodvibes-sandbox.qcow2` | The sandbox's own disk image, the one QEMU boots |
+| `images/debian-12-genericcloud-amd64.qcow2` | The downloaded Debian cloud base image |
+| `keys/goodvibes_qemu_ed25519`, `keys/goodvibes_qemu_ed25519.pub` | The generated SSH keypair; the public half is injected into the guest |
+| `seed/user-data` | Cloud-init config creating the `goodvibes` sudo user, key, `/workspace`, and SSH |
+| `seed/meta-data` | Cloud-init instance identity (`goodvibes-qemu-sandbox`) |
+| `seed/network-config` | Cloud-init DHCP config for the guest's `ens3` NIC |
+| `seed/nocloud.iso` | The NoCloud seed ISO built from the three seed files |
+| `logs/` | Serial and QEMU logs per guest port (see Troubleshooting) |
+| `run/` | The running guest's pid file and monitor socket |
+| `setup-manifest.json` | The manifest `/sandbox qemu inspect-setup` and `apply-setup` operate on |
+| `projection-policy.json` | Records the workspace projection (currently just the guest workspace path, `/workspace`) |
+| `ssh-config` | A ready-to-use OpenSSH client stanza (`Host goodvibes-qemu`) pointing at the generated key and port |
+| `README.txt` | A copy of the same first-run instructions summarized in this document |
 
-`projection-policy.json` records the workspace projection (currently just the guest workspace path, `/workspace`). `ssh-config` is a ready-to-use OpenSSH client stanza (`Host goodvibes-qemu`) pointing at the generated key and port, so `ssh -F ~/.goodvibes/tui/sandbox/ssh-config goodvibes-qemu` reaches the guest directly for manual debugging outside the wrapper. `README.txt` is a copy of the same first-run instructions summarized in this document.
-
-`create-image.sh` is generated as a bootstrap implementation detail. Normal setup should use `/sandbox qemu bootstrap` so image creation, settings application, guest launch, and runtime provisioning stay in one recoverable TUI-managed flow.
+`ssh -F ~/.goodvibes/tui/sandbox/ssh-config goodvibes-qemu` reaches the guest directly for manual debugging outside the wrapper. Normal setup should use `/sandbox qemu bootstrap` rather than running `create-image.sh` by hand, so image creation, settings application, guest launch, and runtime provisioning stay in one recoverable TUI-managed flow.
 
 ## Guest boot details
 
@@ -139,15 +138,13 @@ The wrapper waits up to `GOODVIBES_QEMU_SSH_TIMEOUT` seconds for SSH. The defaul
 
 ## Wrapper modes
 
-The generated wrapper supports:
+The generated wrapper's behavior is selected with the `GV_SANDBOX_WRAPPER_MODE` environment variable:
 
-```text
-GV_SANDBOX_WRAPPER_MODE=host-exec
-GV_SANDBOX_WRAPPER_MODE=ssh-guest
-GV_SANDBOX_WRAPPER_MODE=launch-qemu-ssh
-```
-
-`launch-qemu-ssh` starts QEMU, waits for SSH, syncs the host workspace into guest `/workspace`, runs the requested command, and cleans up the QEMU process. `ssh-guest` attaches to an already-running guest. `host-exec` is only for wrapper bridge testing.
+| Mode | What it does |
+| --- | --- |
+| `launch-qemu-ssh` | Starts QEMU, waits for SSH, syncs the host workspace into guest `/workspace`, runs the requested command, and cleans up the QEMU process |
+| `ssh-guest` | Attaches to an already-running guest over SSH without launching anything |
+| `host-exec` | Runs the command on the host; only for wrapper bridge testing |
 
 The wrapper prepends `$HOME/.bun/bin`, `$HOME/.deno/bin`, and `$HOME/.local/bin` to the guest command PATH before execution. The setup manifest also sets `sandbox.replJavaScriptCommand` to `/home/goodvibes/.bun/bin/bun`, so JavaScript-family REPL snippets use the guest Bun runtime instead of a host absolute executable path.
 
@@ -210,14 +207,14 @@ The bootstrap runs guest provisioning automatically before the sandbox is consid
 
 ## Troubleshooting
 
-Useful files:
+Four files carry the evidence when a boot goes wrong (the `2222` in each name is the configured SSH forward port):
 
-```text
-~/.goodvibes/tui/sandbox/logs/serial-2222.log
-~/.goodvibes/tui/sandbox/logs/qemu-2222.log
-~/.goodvibes/tui/sandbox/run/qemu-2222.pid
-~/.goodvibes/tui/sandbox/run/monitor-2222.sock
-```
+| File | What it holds |
+| --- | --- |
+| `logs/serial-2222.log` | The guest's serial console, including cloud-init output during first boot |
+| `logs/qemu-2222.log` | The QEMU process's own output; startup failures and port conflicts land here |
+| `run/qemu-2222.pid` | The running QEMU process id, for finding or stopping a stale guest |
+| `run/monitor-2222.sock` | The QEMU monitor socket for the running guest |
 
 If SSH never comes up, inspect the serial log first. The usual causes are cloud-init not seeing the NoCloud ISO, the NIC name not matching `ens3`, or first-boot package/network work exceeding the SSH timeout.
 

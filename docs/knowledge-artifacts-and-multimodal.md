@@ -43,15 +43,17 @@ The SDK owns semantic question answering through:
 
 SDK-owned semantic enrichment supports provider-backed LLM extraction with timeout, abort, and concurrency controls. Broad reindex caps LLM attempts and then continues with deterministic extraction, so hosts should wire the SDK semantic service rather than implementing their own timeout or concurrency shim.
 
-TUI rendering should display the answer object returned by the SDK:
+TUI rendering should display the answer object returned by the SDK, every field of it:
 
-- `answer.text`
-- `answer.sources`
-- `answer.facts`
-- `answer.linkedObjects`
-- `answer.gaps`
-- `answer.confidence`
-- `answer.synthesized`
+| Field | Holds |
+| --- | --- |
+| `answer.text` | The answer text itself |
+| `answer.sources` | The source records backing the answer |
+| `answer.facts` | The facts the answer draws on |
+| `answer.linkedObjects` | Knowledge objects linked from the answer |
+| `answer.gaps` | Gaps the system identified while answering |
+| `answer.confidence` | The confidence score |
+| `answer.synthesized` | Whether the answer was synthesized rather than directly sourced |
 
 Do not reformat search results into local answer snippets. The SDK response is the answer contract; the TUI only presents it.
 
@@ -163,18 +165,31 @@ the media and voice subsystems.
 
 ## Jobs and schedules
 
-Knowledge jobs include `lint`, `reindex`, `refresh-stale`, `refresh-bookmarks`,
-`rebuild-projections`, `semantic-self-improvement`, `light-consolidation`, and
-`deep-consolidation`. These can be run directly or saved as schedules through the runtime.
+Eight knowledge job kinds can be run directly or saved as schedules through the runtime:
+
+| Job | What it does |
+| --- | --- |
+| `lint` | Run knowledge health checks and refresh the issue queue |
+| `reindex` | Re-run compile and structured memory sync across the current store |
+| `refresh-stale` | Recrawl stale, failed, or aging remote sources |
+| `refresh-bookmarks` | Recrawl bookmark and URL-list sources to refresh summaries and links |
+| `rebuild-projections` | Render and materialize the major derived markdown/wiki projections |
+| `semantic-self-improvement` | Classify semantic gaps and repair eligible concrete subjects with corroborated source-backed ingest |
+| `light-consolidation` | Score recent usage, refresh candidate promotions, and write a deterministic consolidation report |
+| `deep-consolidation` | Run the full consolidation loop, including high-confidence memory promotion and deterministic reporting |
 
 ## High-signal commands
 
-- `/recall add|search|vector|queue|review|explain|injections|promote|capture` (`/recall` has more subcommands than this; these are the ones most tasks reach for)
-- `/knowledge status|ask|ingest-url|import-bookmarks|import-urls|list|search|get|queue|review-issue|candidates|reports|schedules|lint|packet|explain|reindex|consolidate`
-- `/memory-sync`
-- `/handoff`
-- `/session-memory`
-- `/team-memory`
+Six command families front this whole subsystem:
+
+| Command | Does |
+| --- | --- |
+| `/recall add\|search\|vector\|queue\|review\|explain\|injections\|promote\|capture` | Durable project memory; these are the subcommands most tasks reach for, and `/recall` has more |
+| `/knowledge status\|ask\|ingest-url\|import-bookmarks\|import-urls\|list\|search\|get\|queue\|review-issue\|candidates\|reports\|schedules\|lint\|packet\|explain\|reindex\|consolidate` | The structured knowledge store's full command surface |
+| `/memory-sync` | Durable memory export/import and bundle exchange |
+| `/handoff` | Reviewable memory handoff bundles (export, inspect, import) |
+| `/session-memory` | Session-scoped memory capture and review; all subcommands filtered to session scope |
+| `/team-memory` | Team/shared memory review and exchange; queue and export filtered to team scope |
 
 ## Related docs
 

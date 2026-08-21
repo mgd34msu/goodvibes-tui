@@ -101,9 +101,20 @@ bun install
 ## Configure a model provider
 
 API keys resolve from environment variables first, then from the GoodVibes
-secret store. The local store can hold encrypted values directly or
-provider-backed secret references for Bitwarden, Vaultwarden, Bitwarden
-Secrets Manager, 1Password, files, and command-backed resolvers.
+secret store. The local store can hold encrypted values directly, or a stored
+key can be a reference that resolves through one of eight source kinds at
+lookup time:
+
+| Source | Where the value comes from |
+| --- | --- |
+| `env` | An environment variable, read at resolution time |
+| `goodvibes` | The encrypted local secret store itself |
+| `file` | A file on disk whose contents are the secret |
+| `exec` | A command whose output is the secret |
+| `1password` | A 1Password vault item, through the `op` CLI |
+| `bitwarden` | A Bitwarden item, through the `bw` CLI |
+| `vaultwarden` | A self-hosted Vaultwarden server, through the same `bw` CLI with a `server` parameter |
+| `bitwarden-secrets-manager` | Bitwarden Secrets Manager (`bws`), addressed by secret id |
 
 The fastest path is an environment variable:
 
@@ -127,10 +138,22 @@ export OPENAI_API_KEY=...
 | NVIDIA NIM | `NVIDIA_API_KEY` | none | 1000 free credits |
 | LLM7 | `LLM7_API_KEY` | none | Free |
 
-Additional built-in integrations resolve from the same env/secrets path:
+Additional built-in integrations resolve from the same env/secrets path. The cloud-platform and subscription providers use their platforms' own credential variables, and the voice, search, and media providers each take an API key:
 
-- LLM/gateway providers: `AWS_BEARER_TOKEN_BEDROCK`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `GOOGLE_APPLICATION_CREDENTIALS`, `ANTHROPIC_VERTEX_PROJECT_ID`, `GOOGLE_CLOUD_PROJECT`, `COPILOT_GITHUB_TOKEN`, `GH_TOKEN`, `GITHUB_TOKEN`, `DEEPSEEK_API_KEY`, `FIREWORKS_API_KEY`, `AZURE_OPENAI_API_KEY`, `MINIMAX_API_KEY`, `MOONSHOT_API_KEY`, `QIANFAN_API_KEY`, `QWEN_API_KEY`, `DASHSCOPE_API_KEY`, `MODELSTUDIO_API_KEY`, `SGLANG_API_KEY`, `STEPFUN_API_KEY`, `TOGETHER_API_KEY`, `VENICE_API_KEY`, `VOLCANO_ENGINE_API_KEY`, `XAI_API_KEY`, `XIAOMI_API_KEY`, `ZAI_API_KEY`, `CLOUDFLARE_AI_GATEWAY_API_KEY`, `AI_GATEWAY_API_KEY`, `LITELLM_API_KEY`, `COPILOT_PROXY_API_KEY`
-- Search and media: `PERPLEXITY_API_KEY`, `DEEPGRAM_API_KEY`, `ELEVENLABS_API_KEY`, `XI_API_KEY`, `VYDRA_API_KEY`, `BYTEPLUS_API_KEY`, `FAL_KEY`, `FAL_API_KEY`, `COMFY_API_KEY`, `RUNWAYML_API_SECRET`, `RUNWAY_API_KEY`
+| Integration | Variables |
+| --- | --- |
+| AWS Bedrock | `AWS_BEARER_TOKEN_BEDROCK`, or `AWS_ACCESS_KEY_ID` + `AWS_SECRET_ACCESS_KEY` |
+| Anthropic on Vertex AI | `GOOGLE_APPLICATION_CREDENTIALS`, `ANTHROPIC_VERTEX_PROJECT_ID` or `GOOGLE_CLOUD_PROJECT` |
+| GitHub Copilot | `COPILOT_GITHUB_TOKEN`, `GH_TOKEN`, or `GITHUB_TOKEN` |
+| Every compatible/gateway provider | Its API key variable, listed per provider in [providers-and-routing.md](providers-and-routing.md) (for example `DEEPSEEK_API_KEY`, `TOGETHER_API_KEY`, `XAI_API_KEY`) |
+| Perplexity search | `PERPLEXITY_API_KEY` |
+| Deepgram voice | `DEEPGRAM_API_KEY` |
+| ElevenLabs voice | `ELEVENLABS_API_KEY` or `XI_API_KEY` |
+| Vydra voice | `VYDRA_API_KEY` |
+| BytePlus media | `BYTEPLUS_API_KEY` |
+| Fal media | `FAL_KEY` or `FAL_API_KEY` |
+| Comfy media | `COMFY_API_KEY` (optional, for cloud ComfyUI) |
+| Runway media | `RUNWAYML_API_SECRET` or `RUNWAY_API_KEY` |
 
 Alternatively, store keys encrypted using the `/secrets` command:
 
@@ -211,49 +234,57 @@ crash. Keeping (or dismissing) stays quiet for the rest of the run.
 
 ## Common paths
 
-Project runtime data lives under `.goodvibes/` in the working directory, holding sessions, hooks, MCP config, artifacts, and local state.
+Project runtime data lives under `.goodvibes/` in the working directory, holding sessions, hooks, MCP config, artifacts, and local state. The specific files worth knowing:
 
-- global settings: `~/.goodvibes/tui/settings.json`
-- project settings: `.goodvibes/tui/settings.json`
-- secure secrets: `~/.goodvibes/tui/secrets.enc` or `.goodvibes/tui/secrets.enc`
-- compatibility secrets: `~/.goodvibes/goodvibes.secrets.json`
-- service registry: `.goodvibes/tui/services.json`
-- daemon home: `~/.goodvibes/daemon`
-- QEMU sandbox bundle: `~/.goodvibes/tui/sandbox`
-- custom providers: `~/.goodvibes/tui/providers/*.json`
-- scheduled/automation jobs: `.goodvibes/tui/automation-jobs.json`
-- REPL history: `.goodvibes/tui/repl-history.json`
-- keybindings: `~/.goodvibes/tui/keybindings.json`
-- agent archetypes: `.goodvibes/agents/*.md`
-- MCP server config: `.goodvibes/mcp.json`
-- hook config: `.goodvibes/hooks.json` (or the file named by `tools.hooksFile`)
+| Path | What it holds |
+| --- | --- |
+| `~/.goodvibes/tui/settings.json` | Global settings |
+| `.goodvibes/tui/settings.json` | Project settings overriding the global layer |
+| `~/.goodvibes/tui/secrets.enc` or `.goodvibes/tui/secrets.enc` | Encrypted secrets, global or per project |
+| `~/.goodvibes/goodvibes.secrets.json` | Compatibility secrets read by older suite components |
+| `.goodvibes/tui/services.json` | The service registry |
+| `~/.goodvibes/daemon` | The daemon's own home and state directory |
+| `~/.goodvibes/tui/sandbox` | The QEMU sandbox setup bundle |
+| `~/.goodvibes/tui/providers/*.json` | Custom provider definitions, hot-reloaded |
+| `.goodvibes/tui/automation-jobs.json` | Scheduled and automation jobs |
+| `.goodvibes/tui/repl-history.json` | REPL history |
+| `~/.goodvibes/tui/keybindings.json` | Keybinding overrides |
+| `.goodvibes/agents/*.md` | Agent archetypes |
+| `.goodvibes/mcp.json` | MCP server config |
+| `.goodvibes/hooks.json` | Hook config (or the file named by `tools.hooksFile`) |
 
 ## First things to open in the product
 
-These slash commands are the fastest way to get oriented once the TUI is running.
+These slash commands are the fastest way to get oriented once the TUI is running:
 
-- `/model` to open the fullscreen provider/model workspace for main chat, helper, tool LLM, and TTS LLM routing
-- `/settings` or `/config` to inspect and edit runtime settings in the fullscreen configuration workspace
-- `/knowledge status` to inspect the knowledge runtime
-- `/plugin browse` and `/marketplace` to inspect the plugin ecosystem
-- `/remote` if you are using remote peers or node-host runners
-- `/mcp` to add, edit, remove, reload, and inspect MCP servers while the TUI is running
-- `/sandbox review` if you plan to use bounded eval or isolated MCP/repl execution
+| Command | What it opens |
+| --- | --- |
+| `/model` | The fullscreen provider/model workspace for main chat, helper, tool LLM, and TTS LLM routing |
+| `/settings` or `/config` | The fullscreen configuration workspace for inspecting and editing runtime settings |
+| `/knowledge status` | The knowledge runtime's current posture |
+| `/plugin browse` and `/marketplace` | The plugin ecosystem and the curated marketplace |
+| `/remote` | Remote peers and node-host runners, if you use them |
+| `/mcp` | Add, edit, remove, reload, and inspect MCP servers while the TUI is running |
+| `/sandbox review` | The sandbox posture, if you plan to use bounded eval or isolated MCP/REPL execution |
 
 ## Local server discovery
 
-On startup, GoodVibes can auto-discover local inference servers and register them as OpenAI-compatible providers, probing well-known ports and, where a fixed port is not enough, the server's own response headers. Built-in discovery covers:
+Run `/scan` to discover local inference servers and register them as OpenAI-compatible providers. Discovery does not run automatically at startup; the scan probes well-known ports and, where a fixed port is not enough, the server's own response headers. Built-in discovery covers:
 
-- Ollama, on its default port
-- LM Studio, on its default OpenAI-compatible server port
-- vLLM, identified from its response headers
-- llama.cpp, identified from its server header
-- LocalAI, an OpenAI-compatible server also identified from its server header
-- Text Generation Inference (TGI), Hugging Face's serving stack, identified from its server header
-- Jan, on its default port
-- GPT4All, on its default port
-- KoboldCpp, on its default port
-- Aphrodite, on its default port
+| Server | Identified by |
+| --- | --- |
+| Ollama | Port 11434 |
+| LM Studio | Port 1234, or its fingerprint in headers or model ids |
+| vLLM | `x-vllm-*` response headers |
+| llama.cpp | `llama` in the `server` response header |
+| LocalAI | `localai` in the `server` response header |
+| Text Generation Inference (TGI) | `text-generation-inference` in response headers |
+| Jan | Port 1337 |
+| GPT4All | Port 4891 |
+| KoboldCpp | Port 5001 |
+| Aphrodite | Port 2242 |
+
+Which servers get a dedicated adapter versus the generic OpenAI-compatible one is covered in [providers-and-routing.md](providers-and-routing.md).
 
 ## Related docs
 

@@ -172,16 +172,12 @@ If npm publishing is enabled in GitHub Actions, the workflow expects:
 
 The release workflow publishes these release assets before registry publishing:
 
-- `goodvibes-linux-x64`
-- `goodvibes-linux-arm64`
-- `goodvibes-macos-x64`
-- `goodvibes-macos-arm64`
-- `sqlite-vec-linux-x64.so`
-- `sqlite-vec-linux-arm64.so`
-- `sqlite-vec-darwin-x64.dylib`
-- `sqlite-vec-darwin-arm64.dylib`
-- `SHA256SUMS.txt`
-- `install.sh`
+| Asset | What it is |
+| --- | --- |
+| `goodvibes-linux-x64`, `goodvibes-linux-arm64`, `goodvibes-macos-x64`, `goodvibes-macos-arm64` | The compiled TUI binary, one per supported target |
+| `sqlite-vec-linux-x64.so`, `sqlite-vec-linux-arm64.so`, `sqlite-vec-darwin-x64.dylib`, `sqlite-vec-darwin-arm64.dylib` | The sqlite-vec native addon powering semantic memory search, one per target |
+| `SHA256SUMS.txt` | The checksum manifest every downloaded file is verified against |
+| `install.sh` | The suite installer, described below |
 
 `install.sh` is the suite installer (`scripts/install.sh` in this
 repository, staged as a release asset by the same `release.yml` run). It is

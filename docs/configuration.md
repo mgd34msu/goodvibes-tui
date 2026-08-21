@@ -1,14 +1,13 @@
 # Configuration reference
 
-Settings are layered, not stored in a single working-directory file:
+Settings are layered, not stored in a single working-directory file. Four layers apply in order, and each later layer wins over the ones before it:
 
-- defaults
-- global TUI settings: `~/.goodvibes/tui/settings.json`
-- project settings: `.goodvibes/tui/settings.json`
-- CLI/runtime overrides
-
-Project settings win over global settings, and CLI/runtime overrides win over
-both. The shared file `~/.goodvibes/goodvibes.json` is reserved for future
+| Layer | Source |
+| --- | --- |
+| 1. Defaults | Built into the platform config schema |
+| 2. Global TUI settings | `~/.goodvibes/tui/settings.json` |
+| 3. Project settings | `.goodvibes/tui/settings.json` in the working directory |
+| 4. CLI/runtime overrides | Flags at launch and live changes made during the session | The shared file `~/.goodvibes/goodvibes.json` is reserved for future
 cross-app state; TUI settings do not live there.
 
 Most settings live under the schema owned by the platform config system and
@@ -19,15 +18,17 @@ namespaces you can add by hand to your settings file (further down). Those are
 read directly from the settings file, and a missing or malformed value falls
 back to the built-in default rather than erroring.
 
-Related storage paths:
+Settings sit next to several other stores that follow the same global-versus-project split:
 
-- secure secrets: `~/.goodvibes/tui/secrets.enc` and project/ancestor `.goodvibes/tui/secrets.enc`
-- plaintext compatibility secrets: `~/.goodvibes/goodvibes.secrets.json` and project/ancestor `.goodvibes/goodvibes.secrets.json`
-- service registry: `.goodvibes/tui/services.json`, with service-backed auth/account surfaces in the TUI and daemon
-- custom provider JSON: `~/.goodvibes/tui/providers/*.json`
-- keybindings: `~/.goodvibes/tui/keybindings.json`
-- REPL history: `.goodvibes/tui/repl-history.json`
-- scheduled/automation jobs: `.goodvibes/tui/automation-jobs.json`
+| Path | What it holds |
+| --- | --- |
+| `~/.goodvibes/tui/secrets.enc` and project/ancestor `.goodvibes/tui/secrets.enc` | Secure encrypted secrets |
+| `~/.goodvibes/goodvibes.secrets.json` and project/ancestor `.goodvibes/goodvibes.secrets.json` | Plaintext compatibility secrets |
+| `.goodvibes/tui/services.json` | The service registry, backing auth/account surfaces in the TUI and daemon |
+| `~/.goodvibes/tui/providers/*.json` | Custom provider JSON |
+| `~/.goodvibes/tui/keybindings.json` | Keybinding overrides |
+| `.goodvibes/tui/repl-history.json` | REPL history |
+| `.goodvibes/tui/automation-jobs.json` | Scheduled and automation jobs |
 
 ## Key settings
 
@@ -84,15 +85,15 @@ for reference.
 
 ## Permission modes
 
-`permissions.mode` takes five values:
+`permissions.mode` takes five values. Two of them display under a different label in the UI than the value stored in config:
 
-- **`prompt`** (default, shown as `normal`) auto-approves reads and asks before write, edit, exec, fetch, agent, workflow, and MCP calls
-- **`accept-edits`** auto-approves file write and edit tools; exec and the other risky classes still ask
-- **`plan`** allows read-only tools and refuses every mutating or exec tool with a structured plan-mode denial
-- **`allow-all`** (shown as `auto`) never prompts and allows everything
-- **`custom`** applies per-tool overrides using `permissions.tools.<name>` keys
-
-Per-tool values are `allow`, `prompt`, or `deny`.
+| Value | Shown as | Behavior |
+| --- | --- | --- |
+| `prompt` (default) | `normal` | Auto-approves reads and asks before write, edit, exec, fetch, agent, workflow, and MCP calls |
+| `accept-edits` | `accept-edits` | Auto-approves file write and edit tools; exec and the other risky classes still ask |
+| `plan` | `plan` | Allows read-only tools and refuses every mutating or exec tool with a structured plan-mode denial |
+| `allow-all` | `auto` | Never prompts and allows everything |
+| `custom` | `custom` | Applies per-tool overrides using `permissions.tools.<name>` keys, each set to `allow`, `prompt`, or `deny` |
 
 `Shift+Tab` cycles the four session postures in this order, `normal` → `accept-edits`
 → `plan` → `auto` → `normal`. `/plan` toggles plan mode directly. `custom`
@@ -112,25 +113,9 @@ instead of only changing JSON.
 
 ## Policy, permissions, and trust
 
-The permission system is more than a prompt toggle. The runtime includes:
+The permission system is more than a prompt toggle. Policy evaluation is layered, matching prefix rules, arg-shape rules, path scope, network scope, and mode constraints, and every decision lands in a log for audit and review. Policy changes travel as bundles: a preflight review runs before a bundle applies, candidate bundles can be simulated with a divergence report before promotion, bundles are signed and their signatures verified, and the policy runtime tracks bundle lifecycle with promote, rollback, and diff support. The system can also generate rule suggestions from your actual approval decisions.
 
-- layered policy evaluation for prefix rules, arg-shape rules, path scope, network scope, and mode constraints
-- decision logs for audit and review
-- policy preflight review before applying bundles
-- rule suggestion generation from actual approval decisions
-- policy signing and signature verification
-- simulation and divergence reporting for candidate policy bundles before promotion
-- policy runtime state with bundle lifecycle, promote, rollback, and diff support
-
-The adjacent trust layer covers:
-
-- plugin trust tiers
-- quarantine and degraded posture
-- marketplace and MCP trust review
-- security/policy control-room surfaces for review and remediation
-
-The result is that approvals, policy rollout, trust posture, and plugin
-degradation are inspectable product behavior.
+An adjacent trust layer grades plugins into trust tiers, can quarantine a plugin or degrade its posture, subjects marketplace entries and MCP servers to trust review, and exposes security and policy control-room surfaces for review and remediation. The result is that approvals, policy rollout, trust posture, and plugin degradation are inspectable product behavior.
 
 ## `checkpoints.*`: workspace checkpoint root guard
 

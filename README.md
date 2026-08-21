@@ -70,7 +70,7 @@ Four other modes are available when prompting is not what you want:
 - `allow-all` approves everything
 - `custom` takes per-tool `allow` / `prompt` / `deny` overrides
 
-`Shift+Tab` cycles the four session postures: normal, accept-edits, plan, and auto. `/plan` toggles plan mode directly.
+`Shift+Tab` cycles the four session postures: normal (the `prompt` mode), accept-edits, plan, and auto (the `allow-all` mode). `/plan` toggles plan mode directly.
 
 ### Models and providers
 
@@ -109,7 +109,7 @@ Press `?` for a searchable, categorized list of every slash command with its arg
 | `Esc` | Leave the current mode: search, command, or modal |
 | `Ctrl+C` | Clear input, cancel a running turn. Press twice to quit |
 
-Most bindings are customizable in `~/.goodvibes/tui/keybindings.json`, and `/keybindings` shows what is currently bound. Five keys are fixed and stay out of that file: `F2`, `Shift+Tab`, `Esc`, `?`, and `@`. The full reference is in [docs/tools-and-commands.md](docs/tools-and-commands.md).
+Most bindings are customizable in `~/.goodvibes/tui/keybindings.json`, and `/keybindings` shows what is currently bound. Five keys are fixed and stay out of that file: `F2` (Fleet), `Shift+Tab` (permission-mode cycle), `Esc` (leave the current mode), `?` (help), and `@` (file picker). The full reference is in [docs/tools-and-commands.md](docs/tools-and-commands.md).
 
 ---
 
@@ -171,12 +171,21 @@ The wider key table, the permission modes, and the hand-edited TUI namespaces (c
 
 ### Where things are stored
 
-- global settings `~/.goodvibes/tui/settings.json`, project settings `.goodvibes/tui/settings.json`
-- encrypted secrets `~/.goodvibes/tui/secrets.enc` or `.goodvibes/tui/secrets.enc`
-- custom providers `~/.goodvibes/tui/providers/*.json`, keybindings `~/.goodvibes/tui/keybindings.json`
-- service registry `.goodvibes/tui/services.json`, scheduled jobs and automation `.goodvibes/tui/automation-*.json`
-- agent archetypes `.goodvibes/agents/*.md`, MCP servers `.goodvibes/mcp.json`, hooks `.goodvibes/hooks.json`
-- sessions, artifacts, and other project runtime state under `.goodvibes/` in the working directory
+Everything lives in plain files, split between the per-user `~/.goodvibes/tui/` tree and the project's own `.goodvibes/` directory:
+
+| Path | What lives there |
+| --- | --- |
+| `~/.goodvibes/tui/settings.json` | Global settings |
+| `.goodvibes/tui/settings.json` | Project settings overriding the global layer |
+| `~/.goodvibes/tui/secrets.enc` or `.goodvibes/tui/secrets.enc` | Encrypted secrets, global or per project |
+| `~/.goodvibes/tui/providers/*.json` | Custom provider definitions, hot-reloaded |
+| `~/.goodvibes/tui/keybindings.json` | Keybinding overrides |
+| `.goodvibes/tui/services.json` | The service registry |
+| `.goodvibes/tui/automation-*.json` | Scheduled jobs and the rest of the automation store |
+| `.goodvibes/agents/*.md` | Agent archetypes |
+| `.goodvibes/mcp.json` | MCP server definitions |
+| `.goodvibes/hooks.json` | Hooks and hook chains |
+| `.goodvibes/` (rest) | Sessions, artifacts, and other project runtime state in the working directory |
 
 ---
 

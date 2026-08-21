@@ -2,99 +2,100 @@
 
 ## Provider model
 
-GoodVibes has a layered provider system:
+GoodVibes has a layered provider system. Each layer registers providers in a different way, and the sections below cover them in this order:
 
-- native runtime providers
-- compatible/gateway providers
-- synthetic failover groups
-- local discovered providers
-- search providers
-- voice providers
-- media and multimodal providers
+| Layer | What it is |
+| --- | --- |
+| Native runtime providers | First-party adapters that speak each vendor's own API and auth scheme |
+| Compatible and gateway providers | OpenAI- or Anthropic-compatible endpoints and aggregator gateways, registered through a shared adapter with a base URL and an API key |
+| Synthetic failover groups | The `synthetic` provider, which groups one model across every backend that serves it and fails over between them |
+| Local discovered providers | Inference servers on your machine or LAN that `/scan` finds and registers as OpenAI-compatible providers |
+| Search providers | Web-search backends behind the single `web_search` tool surface |
+| Voice providers | Text-to-speech, speech-to-text, and realtime audio backends used by `/tts` and voice input |
+| Media and multimodal providers | Image-understanding and media-generation backends |
 
 All of these flow into the same runtime routing, picker, metadata, and health surfaces.
 
 ## Native chat/runtime providers
 
-Current built-in native providers include:
+Native providers carry their own client for a vendor's first-party API, rather than going through the shared OpenAI-compatible adapter. The current built-ins:
 
-- `openai`
-- `anthropic`
-- `openai-codex`
-- `gemini`
-- `amazon-bedrock`
-- `amazon-bedrock-mantle`
-- `anthropic-vertex`
-- `github-copilot`
+| Provider | What it talks to |
+| --- | --- |
+| `openai` | OpenAI's own API with an OpenAI API key |
+| `anthropic` | The Anthropic Messages API with an Anthropic API key |
+| `openai-codex` | The ChatGPT/Codex subscription surface, authenticated with a subscription token instead of an API key |
+| `gemini` | The Google Gemini API |
+| `amazon-bedrock` | AWS Bedrock, authenticated with AWS credentials; the live model list comes from Bedrock's own catalog call |
+| `amazon-bedrock-mantle` | Bedrock Mantle, the Anthropic-shaped surface of the same AWS account, sharing its Bedrock control plane |
+| `anthropic-vertex` | Claude models served through Google Cloud Vertex AI |
+| `github-copilot` | The GitHub Copilot subscription, with a cached Copilot token exchange |
 
 ## Compatible and gateway providers
 
-The runtime also supports a broad compatible/gateway layer. Current built-ins include:
+The runtime also supports a broad compatible/gateway layer. Each entry below is registered with a fixed base URL and activates when its API key is present, in the environment variable shown or in `/secrets`. The current built-ins:
 
-- `inceptionlabs`
-- `openrouter`
-- `aihubmix`
-- `groq`
-- `cerebras`
-- `mistral`
-- `ollama-cloud`
-- `huggingface`
-- `nvidia`
-- `llm7`
-- `deepseek`
-- `fireworks`
-- `microsoft-foundry`
-- `minimax`
-- `moonshot`
-- `qianfan`
-- `qwen`
-- `sglang`
-- `stepfun`
-- `together`
-- `venice`
-- `volcengine`
-- `xai`
-- `xiaomi`
-- `zai`
-- `cloudflare-ai-gateway`
-- `vercel-ai-gateway`
-- `litellm`
-- `copilot-proxy`
-- `cohere`
-- `deepinfra`
-- `perplexity` (chat completions; distinct from the search provider of the same name below)
-- `sambanova`
-- `opencode-zen`
-- `zenmux` and `zenmux-anthropic` (two endpoints of the same provider, both keyed off `ZENMUX_API_KEY`)
+| Provider | Display name | API key variable |
+| --- | --- | --- |
+| `inceptionlabs` | Inception Labs (Mercury models) | `INCEPTION_API_KEY` |
+| `openrouter` | OpenRouter | `OPENROUTER_API_KEY` |
+| `aihubmix` | AiHubMix | `AIHUBMIX_API_KEY` |
+| `groq` | Groq | `GROQ_API_KEY` |
+| `cerebras` | Cerebras | `CEREBRAS_API_KEY` |
+| `mistral` | Mistral | `MISTRAL_API_KEY` |
+| `ollama-cloud` | Ollama Cloud | `OLLAMA_CLOUD_API_KEY` or `OLLAMA_API_KEY` |
+| `huggingface` | HuggingFace | `HF_API_KEY`, `HUGGINGFACE_API_KEY`, or `HF_TOKEN` |
+| `nvidia` | NVIDIA | `NVIDIA_API_KEY` |
+| `llm7` | LLM7 | `LLM7_API_KEY` |
+| `deepseek` | DeepSeek | `DEEPSEEK_API_KEY` |
+| `fireworks` | Fireworks | `FIREWORKS_API_KEY` |
+| `microsoft-foundry` | Microsoft Foundry | `AZURE_OPENAI_API_KEY` |
+| `minimax` | MiniMax (Anthropic-compatible endpoint) | `MINIMAX_API_KEY` |
+| `moonshot` | Moonshot | `MOONSHOT_API_KEY` |
+| `qianfan` | Qianfan | `QIANFAN_API_KEY` |
+| `qwen` | Qwen | `QWEN_API_KEY`, `DASHSCOPE_API_KEY`, or `MODELSTUDIO_API_KEY` |
+| `sglang` | SGLang (local server, port 30000) | `SGLANG_API_KEY` |
+| `stepfun` | StepFun | `STEPFUN_API_KEY` |
+| `together` | Together AI | `TOGETHER_API_KEY` |
+| `venice` | Venice | `VENICE_API_KEY` |
+| `volcengine` | Volcengine | `VOLCANO_ENGINE_API_KEY` |
+| `xai` | xAI | `XAI_API_KEY` |
+| `xiaomi` | Xiaomi MiMo | `XIAOMI_API_KEY` |
+| `zai` | Z.ai | `ZAI_API_KEY` or `Z_AI_API_KEY` |
+| `cloudflare-ai-gateway` | Cloudflare AI Gateway | `CLOUDFLARE_AI_GATEWAY_API_KEY` |
+| `vercel-ai-gateway` | Vercel AI Gateway | `AI_GATEWAY_API_KEY` |
+| `litellm` | LiteLLM (local gateway, port 4000) | `LITELLM_API_KEY` |
+| `copilot-proxy` | Copilot Proxy (local gateway, port 3000) | `COPILOT_PROXY_API_KEY` |
+| `cohere` | Cohere | `COHERE_API_KEY` or `CO_API_KEY` |
+| `deepinfra` | DeepInfra | `DEEPINFRA_API_KEY` |
+| `perplexity` | Perplexity chat completions, distinct from the search provider of the same name below | `PERPLEXITY_API_KEY` |
+| `sambanova` | SambaNova | `SAMBANOVA_API_KEY` |
+| `opencode-zen` | OpenCode Zen | `OPENCODE_ZEN_API_KEY` or `ZEN_API_KEY` |
+| `zenmux` | ZenMux | `ZENMUX_API_KEY` |
+| `zenmux-anthropic` | ZenMux (Anthropic-compatible endpoint of the same provider) | `ZENMUX_API_KEY` |
 
 ## Local discovery
 
-Run `/scan` to probe localhost and the LAN for local inference servers and register whatever answers as OpenAI-compatible providers; discovery is not run automatically at startup. The scan checks the well-known ports for:
+Run `/scan` to probe localhost and the LAN for local inference servers and register whatever answers as OpenAI-compatible providers; discovery is not run automatically at startup. The scan probes each candidate's `/v1/models` endpoint and identifies the server either by its well-known port or by fingerprinting its response headers. Servers with a dedicated adapter get server-specific capability traits (tool calling, streaming, and, for Ollama, LM Studio, and llama.cpp, a four-level `instant/low/medium/high` reasoning ladder); the rest register through the generic OpenAI-compatible adapter with no server-specific reasoning support.
 
-- Ollama
-- LM Studio
-- vLLM
-- llama.cpp / LocalAI
-- Text Generation Inference
-- Jan
-- GPT4All
-- KoboldCpp
-- Aphrodite
+| Server | Identified by | Adapter |
+| --- | --- | --- |
+| Ollama | Port 11434 | Dedicated |
+| LM Studio | Port 1234, or an `lmstudio` fingerprint in headers or model ids on any port | Dedicated |
+| vLLM | `x-vllm-*` response headers on any port | Dedicated |
+| llama.cpp | `llama` in the `server` response header on any port | Dedicated |
+| Text Generation Inference | `text-generation-inference` in response headers | Dedicated |
+| LocalAI | `localai` in the `server` response header on any port | Generic |
+| Jan | Port 1337 | Generic |
+| GPT4All | Port 4891 | Generic |
+| KoboldCpp | Port 5001 | Generic |
+| Aphrodite | Port 2242 | Generic |
 
-Ollama, LM Studio, vLLM, llama.cpp, and Text Generation Inference get dedicated adapters with server-specific capability traits (tool calling, streaming, and, for Ollama/LM Studio/llama.cpp, a four-level `instant/low/medium/high` reasoning ladder). Jan, GPT4All, KoboldCpp, and Aphrodite are fingerprinted by port but registered through the generic OpenAI-compatible adapter, with no server-specific reasoning support. Use `/provider add <name> <baseURL>` to register a server manually instead, which probes its `/models` endpoint directly rather than scanning ports.
+Use `/provider add <name> <baseURL>` to register a server manually instead, which probes its `/models` endpoint directly rather than scanning ports.
 
 ## Synthetic failover
 
-The `synthetic` provider groups the same model across multiple backends under a single selectable entry.
-
-Key properties:
-
-- rate-limit and transient-error failover across backends
-- free / paid / subscription boundary preservation
-- model grouping with provider counts in the picker
-- benchmark-aware ranking from the catalog
-
-For free-tier synthetic models, the runtime can also cascade to the next-best free model when every backend for the current synthetic model is exhausted.
+The `synthetic` provider groups the same model across multiple backends under a single selectable entry. It fails over between those backends on rate limits and transient errors (the exact rules are under "Transparent failover rules" below), never crosses the free, paid, and subscription boundary, shows each grouped model with its provider count in the picker, and ranks backends using benchmark data from the catalog. For free-tier synthetic models, the runtime can also cascade to the next-best free model when every backend for the current synthetic model is exhausted.
 
 ### Setting up failover
 
@@ -177,7 +178,20 @@ Each entry shows the model id, tier, configured/total backend count, and a posit
 
 Many model providers also support configurable reasoning effort, but the levels a given model actually offers are resolved per model rather than fixed. The runtime checks the live catalog entry for that exact model first, then a declaration attached to it (a plugin, a custom-model file, or a local server's traits), then a curated per-family table, and only falls back to a labelled best guess when nothing else matches.
 
-Depending on the model, offered levels are drawn from `none`, `instant`, `minimal`, `low`, `medium`, `high`, `xhigh`, and `max`; some models instead take a thinking-token budget, or only expose reasoning as an on/off toggle, or have no configurable reasoning at all. `/effort` shows exactly which of these the current model accepts.
+Depending on the model, offered levels are drawn from a fixed ladder ordered from least to most reasoning spend. For models whose only control is a thinking-token budget (Claude 4.5 and earlier, Gemini 2.5.x), each level maps to a fixed budget:
+
+| Level | Token budget on budget-controlled models |
+| --- | --- |
+| `none` | 0 (offered only when the model can genuinely disable reasoning) |
+| `instant` | 0 |
+| `minimal` | 1024 |
+| `low` | 2048 |
+| `medium` | 8192 |
+| `high` | 32768 |
+| `xhigh` | 49152 |
+| `max` | 63999 |
+
+Models that only expose reasoning as an on/off toggle treat any level above `none` as on, at the model's own depth. Models with no configurable reasoning offer no levels at all. `/effort` shows exactly which of these the current model accepts.
 
 ## Per-role routing
 
@@ -244,39 +258,47 @@ This surface is a compatibility adapter over the current GoodVibes provider regi
 
 ## Search providers
 
-Built-in search surfaces include:
+Web search runs behind a single `web_search` surface with normalized results, evidence shaping, verbosity controls, optional source fetches, and provider selection. Seven backends are built in; all but DuckDuckGo activate when their key or base URL is configured:
 
-- `duckduckgo`
-- `searxng`
-- `brave`
-- `exa`
-- `firecrawl`
-- `tavily`
-- `perplexity`
-
-The search runtime exposes normalized results, evidence shaping, verbosity controls, optional source fetches, and provider selection behind a single `web_search` surface.
+| Provider | What it is | Configured by |
+| --- | --- | --- |
+| `duckduckgo` | Keyless web search, available with no configuration | Nothing |
+| `searxng` | A SearXNG metasearch instance you host yourself | `SEARXNG_BASE_URL` or a `searxng` service entry |
+| `brave` | The Brave Search API | `BRAVE_SEARCH_API_KEY` or `BRAVE_API_KEY` |
+| `exa` | The Exa search API | `EXA_API_KEY` |
+| `firecrawl` | The Firecrawl search and scrape API | `FIRECRAWL_API_KEY` |
+| `tavily` | The Tavily search API | `TAVILY_API_KEY` |
+| `perplexity` | Perplexity's search-backed answers, distinct from the chat provider of the same name above | `PERPLEXITY_API_KEY` |
 
 ## Voice providers
 
-Current voice providers include:
+Seven voice providers are built in. Each declares which directions it supports: `tts` (synthesize speech), `tts-stream` (stream synthesized audio for live playback), `stt` (transcribe speech), and `realtime` (bidirectional realtime audio). Providers marked "voice list" can also enumerate their available voices for the picker.
 
-- `openai` for `tts`, `stt`, and `realtime`
-- `elevenlabs` for `tts`, `tts-stream`, `stt`, and `realtime`
-- `deepgram` for `stt`
-- `google` for `stt`
-- `microsoft`
-- `vydra`
-- `local` for `tts`, `tts-stream`, and `stt`: free, offline engines (whisper.cpp/faster-whisper for STT, Piper/Kokoro for TTS). Pointing `voice.local.*` at engine and model paths you installed yourself never downloads anything; it reports `unconfigured` until all three keys for a direction (engine, binary, model path) are set. Running `/voice setup` instead performs a managed one-act install that fetches the Piper TTS engine and a default voice automatically, and the whisper STT engine and model where a bundle is hosted for your platform. See [voice-and-live-tts.md](voice-and-live-tts.md).
+| Provider | Directions | Voice list |
+| --- | --- | --- |
+| `openai` | `tts`, `stt`, `realtime` | Yes |
+| `elevenlabs` | `tts`, `tts-stream`, `stt`, `realtime` | Yes |
+| `deepgram` | `stt` | No |
+| `google` | `stt` | No |
+| `microsoft` | `tts` | Yes |
+| `vydra` | `tts` | Yes |
+| `local` | `tts`, `tts-stream`, `stt` | No |
+
+The `local` provider runs free, offline engines: whisper.cpp or faster-whisper for STT, and Piper or Kokoro for TTS. Pointing `voice.local.*` at engine and model paths you installed yourself never downloads anything; it reports `unconfigured` until all three keys for a direction (engine, binary, model path) are set. Running `/voice setup` instead performs a managed one-act install that fetches the Piper TTS engine and a default voice automatically, and the whisper STT engine and model where a bundle is hosted for your platform. See [voice-and-live-tts.md](voice-and-live-tts.md).
 
 The TUI `/tts` command uses providers that advertise `tts-stream` for live local playback. Configure defaults through `/config tts`: `tts.provider` chooses the streaming provider, `tts.voice` chooses a provider voice, and `tts.llmProvider` / `tts.llmModel` optionally override the response model. `/tts` uses the active chat model by default when the TTS LLM override is empty. See [Voice and live TTS](voice-and-live-tts.md) for command usage and playback requirements.
 
 ## Media and multimodal providers
 
-Current media and multimodal coverage includes:
+A unified multimodal runtime handles image, audio, video, and document analysis. Image understanding routes to the OpenAI, Gemini, or Anthropic vision APIs, or to a local OpenAI-compatible multimodal backend. Media generation has five built-in providers, each activating when its credentials are configured:
 
-- image understanding: OpenAI, Gemini, Anthropic, and local OpenAI-compatible multimodal backends
-- generation providers: BytePlus, Runway, Alibaba, Fal, and Comfy
-- unified multimodal runtime for image, audio, video, and document analysis
+| Provider | What it is |
+| --- | --- |
+| `byteplus` | The BytePlus hosted generation API |
+| `runway` | The Runway hosted generation API |
+| `alibaba` | Alibaba Model Studio's generation API |
+| `fal` | The fal hosted generation API |
+| `comfy` | A ComfyUI server you point at via `COMFY_BASE_URL`, with your own workflow; `COMFY_API_KEY` is optional for cloud deployments |
 
 ## Related docs
 

@@ -4,16 +4,18 @@ GoodVibes can expose a Home Assistant companion surface through the daemon. The 
 
 ## Onboarding
 
-Select `Connect GoodVibes to external apps and services`, then select `Home Assistant surface`. The dedicated Home Assistant setup screen includes:
+Select `Connect GoodVibes to external apps and services`, then select `Home Assistant surface`. Each field on the dedicated setup screen writes one config key:
 
-- Auto-start this surface: writes `surfaces.homeassistant.enabled`.
-- Home Assistant URL: writes `surfaces.homeassistant.instanceUrl`.
-- Home Assistant access token: writes `surfaces.homeassistant.accessToken`; raw values are stored as `goodvibes://` secret refs through the wizard secret policy.
-- Home Assistant webhook secret: writes `surfaces.homeassistant.webhookSecret`.
-- Default conversation ID: writes `surfaces.homeassistant.defaultConversationId`.
-- Remote session idle TTL: writes `surfaces.homeassistant.remoteSessionTtlMs`, defaulting to 20 minutes.
-- Device ID and device name: identify the GoodVibes daemon inside Home Assistant metadata.
-- Event type: defaults to `goodvibes_message` for daemon-to-Home Assistant events.
+| Field | Writes | Notes |
+| --- | --- | --- |
+| Auto-start this surface | `surfaces.homeassistant.enabled` | |
+| Home Assistant URL | `surfaces.homeassistant.instanceUrl` | |
+| Home Assistant access token | `surfaces.homeassistant.accessToken` | Raw values are stored as `goodvibes://` secret refs through the wizard secret policy |
+| Home Assistant webhook secret | `surfaces.homeassistant.webhookSecret` | |
+| Default conversation ID | `surfaces.homeassistant.defaultConversationId` | |
+| Remote session idle TTL | `surfaces.homeassistant.remoteSessionTtlMs` | Defaults to 20 minutes |
+| Device ID and device name | `surfaces.homeassistant.deviceId` / `deviceName` | Identify the GoodVibes daemon inside Home Assistant metadata |
+| Event type | `surfaces.homeassistant.eventType` | Defaults to `goodvibes_message` for daemon-to-Home Assistant events |
 
 If auto-start is set to `No`, the setup values are saved but the surface stays idle until `surfaces.homeassistant.enabled` is turned on from Settings > Surfaces.
 
@@ -49,18 +51,14 @@ POST /api/homeassistant/conversation/cancel
 
 Home Assistant conversation responses use the SDK-owned remote-chat contract:
 
-```text
-mode: "remote-chat"
-assistant.text
-assistant.speechText
-sessionId
-messageId
-replyToMessageId
-conversationId
-routeId
-```
+| Field | Holds |
+| --- | --- |
+| `mode` | Always `"remote-chat"` |
+| `assistant.text` | The assistant's display text |
+| `assistant.speechText` | The speech-oriented rendering of the same reply |
+| `sessionId`, `messageId`, `replyToMessageId`, `conversationId`, `routeId` | Correlation identifiers |
 
-Home Assistant clients should not expect `agentId` for Assist chat. Use `sessionId`, `messageId`, `replyToMessageId`, `conversationId`, and `routeId` for correlation.
+Home Assistant clients should not expect `agentId` for Assist chat; the correlation identifiers above are the way to tie responses together.
 
 The SDK advertises Home Assistant account, setup, capabilities, tools, actions, directory, target-resolution metadata, and direct conversation routes through the channel daemon routes. The TUI should not call Home Assistant APIs directly.
 
@@ -88,40 +86,35 @@ The Home Graph namespace is isolated per Home Assistant installation:
 homeassistant:<installationId>
 ```
 
-Read routes:
+Read routes (all under `/api/homeassistant/home-graph`):
 
-```text
-GET  /api/homeassistant/home-graph/status
-GET  /api/homeassistant/home-graph/issues
-GET  /api/homeassistant/home-graph/sources
-GET  /api/homeassistant/home-graph/browse
-GET  /api/homeassistant/home-graph/map
-GET  /api/homeassistant/home-graph/pages
-GET  /api/homeassistant/home-graph/refinement/tasks
-GET  /api/homeassistant/home-graph/refinement/tasks/{id}
-POST /api/homeassistant/home-graph/export
-POST /api/homeassistant/home-graph/ask
-```
+| Route | Serves |
+| --- | --- |
+| `GET .../status` | Graph readiness and refinement counts |
+| `GET .../issues` | The issue list |
+| `GET .../sources` | The source inventory |
+| `GET .../browse` | Graph browsing |
+| `GET .../map` | The graph map (nodes, edges, facets) |
+| `GET .../pages` | Generated pages |
+| `GET .../refinement/tasks` and `GET .../refinement/tasks/{id}` | Refinement task list and detail |
+| `POST .../export` | Graph export |
+| `POST .../ask` | Source-backed semantic answers |
 
-Admin routes:
+Admin routes (same prefix):
 
-```text
-POST /api/homeassistant/home-graph/sync
-POST /api/homeassistant/home-graph/ingest/url
-POST /api/homeassistant/home-graph/ingest/note
-POST /api/homeassistant/home-graph/ingest/artifact
-POST /api/homeassistant/home-graph/link
-POST /api/homeassistant/home-graph/unlink
-POST /api/homeassistant/home-graph/device-passport
-POST /api/homeassistant/home-graph/room-page
-POST /api/homeassistant/home-graph/packet
-POST /api/homeassistant/home-graph/facts/review
-POST /api/homeassistant/home-graph/import
-POST /api/homeassistant/home-graph/reindex
-POST /api/homeassistant/home-graph/reset
-POST /api/homeassistant/home-graph/refinement/run
-POST /api/homeassistant/home-graph/refinement/tasks/{id}/cancel
-```
+| Route | Does |
+| --- | --- |
+| `POST .../sync` | Sync a Home Assistant snapshot into the graph |
+| `POST .../ingest/url`, `.../ingest/note`, `.../ingest/artifact` | Ingest a URL, a note, or an artifact |
+| `POST .../link` and `POST .../unlink` | Link or unlink graph objects |
+| `POST .../device-passport` | Generate a device passport page |
+| `POST .../room-page` | Generate a room page |
+| `POST .../packet` | Build a context packet from the graph |
+| `POST .../facts/review` | Review queued facts |
+| `POST .../import` | Import a graph export |
+| `POST .../reindex` | Reparse stored sources and regenerate projections |
+| `POST .../reset` | Reset the graph store |
+| `POST .../refinement/run` and `POST .../refinement/tasks/{id}/cancel` | Run or cancel refinement work |
 
 Read routes accept `installationId` or `knowledgeSpaceId`. List and browse routes also accept `limit`; issue listing also accepts `status`, `severity`, and `code`. `GET /api/homeassistant/home-graph/status` includes Home Graph readiness and refinement counts so clients can show whether the graph is ready, needs source work, has active repair tasks, or has review-needed tasks.
 

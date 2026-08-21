@@ -37,28 +37,23 @@ The Home Assistant surface is configured from onboarding or Settings > Surfaces.
 
 Relevant settings:
 
-- `surfaces.homeassistant.enabled`
-- `surfaces.homeassistant.instanceUrl`
-- `surfaces.homeassistant.accessToken`
-- `surfaces.homeassistant.webhookSecret`
-- `surfaces.homeassistant.defaultConversationId`
-- `surfaces.homeassistant.remoteSessionTtlMs`
-- `surfaces.homeassistant.deviceId`
-- `surfaces.homeassistant.deviceName`
-- `surfaces.homeassistant.eventType`
+| Key | Default | What it does |
+| --- | --- | --- |
+| `surfaces.homeassistant.enabled` | `false` | Enable the Home Assistant daemon surface |
+| `surfaces.homeassistant.instanceUrl` | *(empty)* | Home Assistant base URL, for example `http://homeassistant.local:8123` |
+| `surfaces.homeassistant.accessToken` | *(empty)* | Long-lived access token or `goodvibes://` secret URI |
+| `surfaces.homeassistant.webhookSecret` | *(empty)* | Shared secret used to verify inbound Home Assistant callbacks |
+| `surfaces.homeassistant.defaultConversationId` | `goodvibes` | Default conversation id used for route binding |
+| `surfaces.homeassistant.remoteSessionTtlMs` | `1200000` | Idle TTL before the daemon closes a remote conversation session (20 minutes) |
+| `surfaces.homeassistant.deviceId` | `goodvibes-daemon` | Stable Home Assistant device identifier for this daemon |
+| `surfaces.homeassistant.deviceName` | `GoodVibes Daemon` | Device display name |
+| `surfaces.homeassistant.eventType` | `goodvibes_message` | Event type used for daemon-to-Home Assistant deliveries |
 
 The inbound daemon callback path is `/webhook/homeassistant`. Authenticated Home Assistant Assist clients can also use `GET /api/homeassistant/health`, `POST /api/homeassistant/conversation`, `POST /api/homeassistant/conversation/stream`, and `POST /api/homeassistant/conversation/cancel`. These routes are SDK-owned isolated remote-chat paths with daemon-owned sessions. Responses report `mode: "remote-chat"` and expose `assistant.text` / `assistant.speechText`; Home Assistant clients should not expect `agentId`. Use a `goodvibes://` secret reference or an environment-backed secret for tokens when possible.
 
 ## Shared reply pipeline
 
-The same runtime pipeline is used to render and deliver:
-
-- progress updates
-- reasoning updates
-- tool output
-- final replies
-
-That keeps TUI, web, webhook, and channel-native surfaces aligned around the same runtime events.
+The same runtime pipeline renders and delivers progress updates, reasoning updates, tool output, and final replies. That keeps TUI, web, webhook, and channel-native surfaces aligned around the same runtime events.
 
 ## Daemon and control plane
 
@@ -74,27 +69,31 @@ document.
 
 Key entrypoints include:
 
-- `GET /status`
-- `GET /api/control-plane`
-- `GET /api/control-plane/web`
-- `GET /api/control-plane/methods`
-- `GET /api/control-plane/events/catalog`
-- `GET /api/control-plane/events`
-- `GET /api/control-plane/ws`
-- `POST /task`
-- `GET /api/tasks`
+| Entrypoint | Serves |
+| --- | --- |
+| `GET /status` | Daemon liveness and posture |
+| `GET /api/control-plane` | The control-plane descriptor |
+| `GET /api/control-plane/web` | The web-surface descriptor |
+| `GET /api/control-plane/methods` | The typed method catalog |
+| `GET /api/control-plane/events/catalog` | The event catalog |
+| `GET /api/control-plane/events` | The SSE event stream |
+| `GET /api/control-plane/ws` | The WebSocket transport |
+| `POST /task` | Task submission |
+| `GET /api/tasks` | The task list |
 
 The control-plane method catalog is the canonical external-client contract. External clients can use it to inspect method metadata, scopes, schemas, and transport information.
 
 ## Knowledge, media, and search APIs
 
-The daemon also exposes dedicated product-domain APIs for:
+The daemon also exposes dedicated product-domain APIs:
 
-- knowledge status, ingest, search, packets, jobs, schedules, projections, GraphQL, and reports
-- voice status, providers, voices, TTS, streaming TTS, STT, and realtime sessions
-- web-search providers and queries
-- artifacts and artifact content
-- multimodal status, providers, analyze, packet, and writeback
+| Domain | Covers |
+| --- | --- |
+| Knowledge | Status, ingest, search, packets, jobs, schedules, projections, GraphQL, and reports |
+| Voice | Status, providers, voices, TTS, streaming TTS, STT, and realtime sessions |
+| Web search | Providers and queries |
+| Artifacts | Artifact records and their content |
+| Multimodal | Status, providers, analyze, packet, and writeback |
 
 These surfaces are what make future web clients and companion apps straightforward to build without duplicating runtime logic.
 
@@ -102,39 +101,37 @@ Streaming TTS is exposed at `POST /api/voice/tts/stream` and returns raw binary 
 
 ## Remote runtime
 
-The remote runtime is a distributed peer system with:
+The remote runtime is a distributed peer system. A peer joins through a pair request with challenge verification and receives a scoped peer token, then heartbeats while connected. Work moves through pull, claim, lease, and complete steps, with direct remote invoke alongside, and peers can be disconnected, revoked, or have their tokens rotated. Node hosts additionally expose an inspectable contract describing what they will run.
 
-- pair request and challenge verification
-- scoped peer tokens
-- heartbeat
-- work pull / claim / lease / complete
-- remote invoke
-- disconnect, revoke, and rotate flows
-- node-host contract inspection
+Key remote API paths:
 
-Key remote API paths include:
-
-- `POST /api/remote/pair/request`
-- `POST /api/remote/pair/verify`
-- `POST /api/remote/heartbeat`
-- `POST /api/remote/work/pull`
-- `POST /api/remote/work/{workId}/complete`
-- `GET /api/remote/peers`
-- `GET /api/remote/work`
-- `GET /api/remote/node-host/contract`
+| Path | Purpose |
+| --- | --- |
+| `POST /api/remote/pair/request` | Start a pairing request |
+| `POST /api/remote/pair/verify` | Answer the pairing challenge |
+| `POST /api/remote/heartbeat` | Peer liveness heartbeat |
+| `POST /api/remote/work/pull` | Pull available work |
+| `POST /api/remote/work/{workId}/complete` | Report a work item complete |
+| `GET /api/remote/peers` | List paired peers |
+| `GET /api/remote/work` | List work items |
+| `GET /api/remote/node-host/contract` | Inspect a node host's contract |
 
 ## High-signal commands
 
-- `/remote`
-- `/remote show <runner>`
-- `/remote capabilities [runner]`
-- `/remote recover [runner]`
-- `/remote dispatch ...`
-- `/remote dispatch-pool <pool> ...`
-- `/remote export <runner>`
-- `/remote artifact show <id>`
-- `/remote import <path>`
-- `/remote setup`
+`/remote` inspects, dispatches, and reviews self-hosted remote runners and artifacts. The subcommands most work reaches for:
+
+| Command | Does |
+| --- | --- |
+| `/remote` | List runners and their state |
+| `/remote show <runner>` | Show one runner in detail |
+| `/remote capabilities [runner]` | Show what a runner can execute |
+| `/remote recover [runner]` | Recover a runner's stalled work |
+| `/remote dispatch ...` | Dispatch work to a runner |
+| `/remote dispatch-pool <pool> ...` | Dispatch work to a runner pool |
+| `/remote export <runner>` | Export a runner's work record |
+| `/remote artifact show <id>` | Show a produced artifact |
+| `/remote import <path>` | Import an exported record |
+| `/remote setup` | Review or export the remote setup |
 
 ## /channel command
 

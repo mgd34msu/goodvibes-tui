@@ -2,9 +2,11 @@
 
 GoodVibes has three verification layers:
 
-- `local signal`: schema, routing, rendering, persistence, CLI, daemon, and real-state checks that can run without proving an external SaaS or device outcome.
-- `local behavior`: behavior that completes locally through in-process tests, the compiled CLI, a daemon smoke, or controlled persisted state.
-- `external outcome`: real delivery/provisioning checks such as Slack delivery, Cloudflare provisioning, Home Assistant device behavior, or a remote runner.
+| Layer | What it covers |
+| --- | --- |
+| `local signal` | Schema, routing, rendering, persistence, CLI, daemon, and real-state checks that can run without proving an external SaaS or device outcome |
+| `local behavior` | Behavior that completes locally through in-process tests, the compiled CLI, a daemon smoke, or controlled persisted state |
+| `external outcome` | Real delivery/provisioning checks such as Slack delivery, Cloudflare provisioning, Home Assistant device behavior, or a remote runner |
 
 ## Verification ledger
 

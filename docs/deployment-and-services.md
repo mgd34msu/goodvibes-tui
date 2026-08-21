@@ -86,12 +86,14 @@ GOODVIBES_DAEMON_TOKEN=gv_shared_token bun run dev \
 
 The fullscreen `/config` workspace exposes service settings under `Service`:
 
-- `service.enabled`
-- `service.autostart`
-- `service.restartOnFailure`
-- `service.platform`
-- `service.serviceName`
-- `service.logPath`
+| Key | Default | What it does |
+| --- | --- | --- |
+| `service.enabled` | `true` | Enable the service-install and daemon-management verbs |
+| `service.autostart` | `false` | Install/enable or disable/remove the OS autostart service |
+| `service.restartOnFailure` | `true` | Restart the managed daemon service after failure |
+| `service.platform` | `auto` | Target service manager platform |
+| `service.serviceName` | `goodvibes` | Service name used for host integration and install scripts |
+| `service.logPath` | *(empty)* | File path for daemon/service logs; empty means the platform default under the configured service directory |
 
 Changing `service.autostart` from the TUI is intended to reconcile the OS service, not just update JSON. On Linux this means writing/enabling/disabling the user `systemd` service. When service mode is enabled for the first time, the TUI installs the service definition, reloads user units, and starts/enables the daemon service if autostart is on. Disabling service mode or autostart removes/disables the OS-level autostart path.
 
@@ -108,12 +110,14 @@ The daemon uses the daemon home under `~/.goodvibes/daemon` for daemon-owned run
 
 The browser operator surface is controlled separately from the daemon control plane:
 
-- `web.enabled`
-- `web.hostMode = local | network | custom`
-- `web.host`
-- `web.port` (default `3423`)
-- `web.publicBaseUrl`
-- `web.staticAssetsDir`
+| Key | Default | What it does |
+| --- | --- | --- |
+| `web.enabled` | `true` | Enable the browser operator surface, bound to loopback until `web.hostMode` widens it |
+| `web.hostMode` | `local` | Bind mode: `local`, `network`, or `custom` |
+| `web.host` | `127.0.0.1` | Bind host for the web surface |
+| `web.port` | `3423` | Bind port for the web surface |
+| `web.publicBaseUrl` | `http://127.0.0.1:3423` | Public base URL for web links and notification deep links |
+| `web.staticAssetsDir` | `dist/web` | Static asset directory for the embedded web surface |
 
 The daemon/control-plane backend defaults to port `3421`, the webhook/event listener defaults to `3422`, and the browser surface defaults to `3423`.
 
@@ -129,25 +133,15 @@ When the WebUI is launched by external tooling rather than by the TUI, it should
 
 GoodVibes now treats inbound TLS as an explicit server concern.
 
-For the control-plane daemon:
+The control-plane daemon and the webhook listener each carry the same shape of TLS keys, under their own prefixes:
 
-- `controlPlane.hostMode = local | network | custom`
-- `controlPlane.host`
-- `controlPlane.port`
-- `controlPlane.enabled`
-- `controlPlane.tls.mode = off | proxy | direct`
-- `controlPlane.trustProxy = true | false`
-- `controlPlane.tls.certFile`
-- `controlPlane.tls.keyFile`
-
-For the webhook listener:
-
-- `httpListener.host`
-- `httpListener.port`
-- `httpListener.tls.mode = off | proxy | direct`
-- `httpListener.trustProxy = true | false`
-- `httpListener.tls.certFile`
-- `httpListener.tls.keyFile`
+| Key (per prefix) | What it does |
+| --- | --- |
+| `controlPlane.hostMode` / `controlPlane.host` / `controlPlane.port`, `httpListener.host` / `httpListener.port` | The bind address and port; `hostMode` takes `local`, `network`, or `custom` |
+| `controlPlane.enabled` | Whether the control plane serves at all |
+| `<prefix>.tls.mode` | `off` (plain HTTP), `proxy` (a reverse proxy terminates HTTPS), or `direct` (GoodVibes terminates HTTPS itself) |
+| `<prefix>.trustProxy` | Trust proxy forwarding headers such as `X-Forwarded-For` |
+| `<prefix>.tls.certFile` / `<prefix>.tls.keyFile` | Certificate chain and private key PEM paths for `direct` mode; empty falls back to the default cert directory below |
 
 ### Proxy mode
 
@@ -217,19 +211,14 @@ The listener takes `enforceCors` and `allowedOrigins` as constructor parameters,
 
 GoodVibes now centralizes outbound trust handling for Bun `fetch` traffic. Provider calls, search, webhooks, downloads, telemetry, artifacts, and other fetch-based integrations inherit the same trust policy automatically.
 
-Relevant config:
+Four keys configure it:
 
-- `network.outboundTls.mode = bundled | bundled+custom | custom`
-- `network.outboundTls.customCaFile`
-- `network.outboundTls.customCaDir`
-- `network.outboundTls.allowInsecureLocalhost`
-
-Behavior:
-
-- `bundled` uses Bun's default bundled root certificates
-- `bundled+custom` adds operator-provided PEM roots on top of the bundled roots
-- `custom` trusts only the configured custom PEM roots
-- `allowInsecureLocalhost` disables certificate verification only for loopback HTTPS targets and is intended for local development
+| Key | Default | What it does |
+| --- | --- | --- |
+| `network.outboundTls.mode` | `bundled` | `bundled` uses Bun's default bundled root certificates; `bundled+custom` adds operator-provided PEM roots on top; `custom` trusts only the configured custom roots |
+| `network.outboundTls.customCaFile` | *(empty)* | Additional PEM file to trust in `bundled+custom` or `custom` mode |
+| `network.outboundTls.customCaDir` | *(empty)* | Directory of PEM/CRT/CER files to trust in `bundled+custom` or `custom` mode |
+| `network.outboundTls.allowInsecureLocalhost` | `false` | Disable certificate verification only for loopback HTTPS targets; intended for local development |
 
 This is the right place to add enterprise or internal roots for outbound HTTPS access to providers, registries, proxies, or internal services.
 
@@ -246,18 +235,9 @@ This build does not produce a daemon executable. The daemon binary is built and 
 
 The daemon and listener are protected by local auth plus optional service tokens.
 
-Key environment variables:
+Two environment variables carry the tokens: `GOODVIBES_DAEMON_TOKEN` is the bearer token every daemon route requires, and `GOODVIBES_HTTP_TOKEN` protects the webhook HTTP listener.
 
-- `GOODVIBES_DAEMON_TOKEN`
-- `GOODVIBES_HTTP_TOKEN`
-
-The runtime also supports:
-
-- bootstrap credentials
-- local user management
-- password rotation
-- session revocation
-- local-auth review surfaces in the TUI and operator APIs
+Beyond fixed tokens, the runtime supports bootstrap credentials for first contact, local user management with password rotation (`goodvibes auth add-user` / `auth rotate-password`), session revocation, and local-auth review surfaces in the TUI and operator APIs.
 
 ## Services, profiles, and setup transfer
 
@@ -270,10 +250,12 @@ The services/config side is productized beyond a flat JSON file. It includes:
 
 Key commands:
 
-- `/services inspect|test|resolve|auth|auth-review|doctor|export|import`
-- `/profiles`
-- `/profile-sync` (alias: `/profilesync`)
-- `/setup transfer export|inspect|import`
+| Command | Does |
+| --- | --- |
+| `/services inspect\|test\|resolve\|auth\|auth-review\|doctor\|export\|import` | Manage API service configurations |
+| `/profiles` | Browse and load config profiles |
+| `/profile-sync` (alias `/profilesync`) | Export, import, and inspect profile sync bundles |
+| `/setup transfer export\|inspect\|import` | Move setup-transfer bundles between environments |
 
 Service entries can use an existing `tokenKey` field, a SecretRef in the key field, or explicit `tokenRef` / `passwordRef` / `webhookUrlRef` / `signingSecretRef` / `publicKeyRef` / `appTokenRef` fields:
 
@@ -304,46 +286,28 @@ Service entries can use an existing `tokenKey` field, a SecretRef in the key fie
 
 GoodVibes exposes integration-helper and control/state APIs for external clients and helpers. This layer is explicitly control/state APIs, not a UI protocol. It is meant for callers like another GoodVibes instance, a future web frontend or companion app, setup/auth helpers, and operational integrations that need session, approval, account, health, knowledge, search, artifact, or delivery posture.
 
-The front doors into this layer:
+The front doors into this layer cover provider login/logout flows, install and update posture review, trust review bundles, bridge status/review/export/import paths, setup deep links, and portable install/update/auth review bundles with deeplink review and bundle packaging for operator surfaces.
 
-- provider login/logout flows
-- install and update posture review
-- trust review bundles
-- bridge status/review/export/import paths
-- setup deep links and portable install/update/auth review bundles
-- deeplink review and bundle packaging for operator surfaces
-
-The setup surface is broader than a single readiness screen, and also covers:
-
-- onboarding and doctor flows
-- service, hook, remote, and sandbox review
-- support-bundle export
-- setup-transfer export / inspect / import
-- deep links into the cockpit, security, remote, knowledge, incident, hooks, orchestration, and tasks operator surfaces
+The setup surface is broader than a single readiness screen. It also covers onboarding and doctor flows, review of services, hooks, remote, and sandbox posture, support-bundle export, setup-transfer export/inspect/import, and deep links into the cockpit, security, remote, knowledge, incident, hooks, orchestration, and tasks operator surfaces.
 
 ## Core control-plane entrypoints
 
-The daemon exposes broad HTTP and streaming surfaces. The most important entrypoints are:
+The daemon exposes broad HTTP and streaming surfaces. The most important entrypoints:
 
-- `GET /status`
-- `GET /api/control-plane`
-- `GET /api/control-plane/web`
-- `GET /api/control-plane/methods`
-- `GET /api/control-plane/events/catalog`
-- `GET /api/control-plane/events`
-- `GET /api/control-plane/ws`
-- `POST /task`
-- `GET /api/tasks`
-- `GET /api/service/status`
+| Entrypoint | Serves |
+| --- | --- |
+| `GET /status` | Daemon liveness and posture |
+| `GET /api/control-plane` | The control-plane descriptor |
+| `GET /api/control-plane/web` | The web-surface descriptor |
+| `GET /api/control-plane/methods` | The typed method catalog |
+| `GET /api/control-plane/events/catalog` | The event catalog |
+| `GET /api/control-plane/events` | The event stream |
+| `GET /api/control-plane/ws` | The WebSocket transport |
+| `POST /task` | Task submission |
+| `GET /api/tasks` | The task list |
+| `GET /api/service/status` | Managed-service status |
 
-The control-plane method catalog is the canonical typed surface for external clients. It describes:
-
-- methods
-- categories
-- scopes
-- input/output schemas
-- event domains
-- transport metadata
+The control-plane method catalog is the canonical typed surface for external clients. For every method it describes the method itself, its category and scopes, its input and output schemas, its event domains, and its transport metadata.
 
 ## Service startup behavior inside the TUI
 

@@ -24,7 +24,21 @@ The `/tts` command does not replace text output. The normal assistant response s
 
 `/tts <prompt>` submits the prompt through the normal conversation path. It uses the active chat provider/model by default, unless a separate TTS response model override is configured. Assistant deltas are chunked at sentence or phrase boundaries (a minimum of roughly 24 characters before a boundary is accepted, a hard cap around 320 characters, and a fallback flush after about a second of buffering) and sent to streaming TTS in order. Audio failures are reported as non-blocking TUI status messages and do not cancel the text turn.
 
-Before a chunk reaches the synthesizer, markdown formatting is stripped so the voice does not read punctuation aloud. Headings, list bullets, blockquote markers, bold/italic/strikethrough markers, links (spoken as their link text), images, inline code backticks, code fences, horizontal rules, and table separator rows are all removed or unwrapped. The text response shown in the TUI is unaffected; only the audio synthesis input is cleaned up this way.
+Before a chunk reaches the synthesizer, markdown formatting is stripped so the voice does not read punctuation aloud. Each construct has its own spoken form:
+
+| Markdown construct | Spoken as |
+| --- | --- |
+| Headings, list bullets, blockquote markers | The line's text with the prefix removed |
+| Bold, italic, strikethrough | The wrapped text with the markers removed |
+| Links | The link text; bare autolink URLs get a speakable form |
+| Images | The alt text |
+| Inline code | The code content with the backticks removed |
+| Fenced code blocks (``` or ~~~) | Skipped entirely; code is unreadable aloud |
+| Raw HTML tags | Removed |
+| Horizontal rules and table separator rows | Skipped entirely |
+| Table data rows | The cells joined by commas; pipes carry no spoken meaning |
+
+The text response shown in the TUI is unaffected; only the audio synthesis input is cleaned up this way.
 
 `/tts stop` cancels pending TTS requests, kills active playback, and clears the queued audio chunks.
 
@@ -46,12 +60,14 @@ The **Always Speak** row appears at the top of the TTS settings tab. Toggle it t
 
 The modal and direct commands write the SDK TTS config keys:
 
-- `ui.voiceEnabled`, the always-speak toggle (boolean)
-- `tts.provider`
-- `tts.voice`
-- `tts.llmProvider`
-- `tts.llmModel`
-- `tts.speed`, the playback speed multiplier (see Speed section below)
+| Key | What it sets |
+| --- | --- |
+| `ui.voiceEnabled` | The always-speak toggle (boolean, default `false`) |
+| `tts.provider` | The streaming TTS provider used for playback |
+| `tts.voice` | A provider-specific voice id; empty lets the provider choose its default |
+| `tts.llmProvider` | Provider override for the spoken-turn response model |
+| `tts.llmModel` | Model override for the spoken-turn response model; empty uses the active chat model |
+| `tts.speed` | The playback speed multiplier (see the Speed section below) |
 
 By default, `/tts` uses the active chat provider/model for text generation. If `tts.llmProvider` and `tts.llmModel` are set through `/config`, `/tts` uses that configured spoken-turn model for `/tts` turns without changing the main chat model. Selecting either TTS LLM row opens the same fullscreen provider/model workspace used by the main model/provider commands, with the target route set to `TTS LLM`.
 
@@ -71,12 +87,7 @@ The SDK defines `tts.speed` in the config schema (default `1`, supported range 0
 
 ## Playback requirements
 
-Live TTS playback streams audio bytes to a local player over stdin. Install one of:
-
-- `mpv` (preferred)
-- `ffplay`
-
-If neither player is on `PATH`, `/tts` still submits and renders the normal text response, but live audio is skipped with a non-blocking status message.
+Live TTS playback streams audio bytes to a local player over stdin. Install `mpv`, which is checked first and preferred for its read-ahead pipe buffering, or `ffplay`, which is used as the fallback when `mpv` is not found. If neither player is on `PATH`, `/tts` still submits and renders the normal text response, but live audio is skipped with a non-blocking status message.
 
 ## Providers and voices
 

@@ -50,15 +50,21 @@ is greater than $0.
 ## Redaction guarantees
 
 With `--redact` the exporter applies server-side redaction patterns to every message
-before serialising:
+before serialising. Each pattern class is replaced with its own typed placeholder, so
+a redacted export still shows what kind of value was removed:
 
-- API key prefixes: `sk-`, `key-`, `ghp_`, `gho_`, `github_pat_`, `glpat-`, `xoxb-`, `xoxp-`, AWS `AKIA*`
-- Bearer and raw tokens in Authorization headers
-- Filesystem paths under `/home/`, `/Users/`, and `C:\\Users\\`
+| Matches | Replaced with |
+| --- | --- |
+| `sk-` and `key-` prefixed API keys | `[REDACTED_API_KEY]` |
+| `Bearer` tokens in Authorization headers | `[REDACTED_TOKEN]` (the `Bearer` prefix is kept) |
+| `ghp_`, `gho_`, and `github_pat_` GitHub tokens | `[REDACTED_GITHUB_TOKEN]` |
+| `glpat-` GitLab tokens | `[REDACTED_GITLAB_TOKEN]` |
+| `xoxb-` and `xoxp-` Slack tokens | `[REDACTED_SLACK_TOKEN]` |
+| `AKIA*` AWS access key ids | `[REDACTED_AWS_KEY]` |
+| Home-directory paths under `/home/`, `/Users/`, and `C:\Users\` | The same path with the username as `[REDACTED]` |
 
-Redacted tokens are replaced with typed placeholders (`[REDACTED_API_KEY]`,
-`[REDACTED_GITHUB_TOKEN]`, etc.). Tool-call arguments and reasoning content are
-also redacted. The original conversation is never modified.
+Tool-call arguments and reasoning content are also redacted. The original
+conversation is never modified.
 
 ## Upload privacy
 
