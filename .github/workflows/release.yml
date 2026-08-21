@@ -73,7 +73,7 @@ jobs:
       contents: read
       actions: read
       checks: read
-    uses: mgd34msu/goodvibes-sdk/.github/workflows/reusable-release-verify.yml@ae53b1bb6d584dee66e6934c35591a4ef8317379 # 2026-08-20 hardened reusables
+    uses: mgd34msu/goodvibes-sdk/.github/workflows/reusable-release-verify.yml@e6475abe6d7a06ab5ea6ae600d9c4c7049f412c1 # sdk 2.0.18 release
     with:
       sha: ${{ github.sha }}
       workflow: ci.yml
@@ -104,7 +104,7 @@ jobs:
         (github.event_name == 'workflow_dispatch' && github.event.inputs.mode != 'release') ||
         needs.release-verify.result == 'success'
       )
-    uses: mgd34msu/goodvibes-sdk/.github/workflows/reusable-binary-matrix.yml@ae53b1bb6d584dee66e6934c35591a4ef8317379 # 2026-08-20 hardened reusables
+    uses: mgd34msu/goodvibes-sdk/.github/workflows/reusable-binary-matrix.yml@e6475abe6d7a06ab5ea6ae600d9c4c7049f412c1 # sdk 2.0.18 release
     with:
       # Smoke legs must name their own built artifact (binary is required when
       # smoke is true, each leg only builds its own suffixed artifact, so the
@@ -304,7 +304,7 @@ jobs:
     # The called workflow's job requests contents:write (release creation).
     permissions:
       contents: write
-    uses: mgd34msu/goodvibes-sdk/.github/workflows/reusable-gh-release.yml@ae53b1bb6d584dee66e6934c35591a4ef8317379 # 2026-08-20 hardened reusables
+    uses: mgd34msu/goodvibes-sdk/.github/workflows/reusable-gh-release.yml@e6475abe6d7a06ab5ea6ae600d9c4c7049f412c1 # sdk 2.0.18 release
     with:
       tag: ${{ github.ref_name }}
       artifact-name: release-assets
@@ -368,7 +368,7 @@ jobs:
     permissions:
       contents: read
       id-token: write
-    uses: mgd34msu/goodvibes-sdk/.github/workflows/reusable-npm-publish.yml@ae53b1bb6d584dee66e6934c35591a4ef8317379 # 2026-08-20 hardened reusables
+    uses: mgd34msu/goodvibes-sdk/.github/workflows/reusable-npm-publish.yml@e6475abe6d7a06ab5ea6ae600d9c4c7049f412c1 # sdk 2.0.18 release
     with:
       package-name: "@pellux/goodvibes-tui"
       environment: production
